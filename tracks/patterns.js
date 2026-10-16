@@ -537,7 +537,7 @@ val retrofit = Retrofit.Builder()
               h('span', { class: 'pt-row' }, on.prio ? tag('heads-up', 'pt-acc') : null, on.action ? h('span', { class: 'pt-act' }, 'READ') : null));
             shade.prepend(n);
             while (shade.children.length > 4) shade.lastElementChild.remove();
-            say(o, `<span class="good">posted</span> with ${opts.filter(x => on[x.k]).length} setters ${on.prio ? '<span class="muted">// high priority shows as heads-up</span>' : ''}`);
+            say(o, `<span class="good">posted</span> with ${opts.filter(x => on[x.k]).length} setters ${on.prio ? '<span class="muted">// priority sets heads-up only on Android 7.1 and lower; 8.0+ uses the channel importance</span>' : ''}`);
             await sleep(450); busy = false;
           }
           paint();

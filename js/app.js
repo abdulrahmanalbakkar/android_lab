@@ -2,7 +2,9 @@
    To add a topic: create tracks/<id>.js that calls Lab.addTrack({...}) (see tracks/kotlin.js)
    and add one <script> tag for it in index.html. Nothing in this file needs to change.
    Optional track fields: group ('Foundations' | 'Building apps' | 'Going deeper' | 'Shipping'),
-   requires (array of track ids, a soft "recommended first"), hue (0-360, overrides the line color). */
+   requires (array of track ids, a soft "recommended first"), hue (0-360, overrides the line color).
+   Capstone projects are tracks with kind: 'project' and builds ('what you have at the end'); their lessons are
+   build steps and may carry refs: ['track.lesson', ...], shown as "Review first" links. */
 const Lab = (() => {
   const tracks = [];
   const DAY = 864e5;
@@ -16,11 +18,12 @@ const Lab = (() => {
 
   // ponytail: progress lives in this browser only. Move to a backend when accounts exist.
   const KEY = 'android-lab:v1';
-  let state = { done: {}, cards: {}, level: 'all', last: null, hide: {} };
+  // iv: interview mode, { setup, best: { [setupKey]: run }, history: [run] }. Added later; older saves simply lack it.
+  let state = { done: {}, cards: {}, level: 'all', last: null, hide: {}, iv: {} };
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {} };
+      if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {}, iv: s.iv || {} };
     } catch (e) { /* storage blocked: run without saving */ }
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* same */ } }
@@ -68,7 +71,15 @@ const Lab = (() => {
   // Requires pointing at a track that isn't loaded are ignored.
   const reqs = t => (Array.isArray(t.requires) ? t.requires : []).map(trackById).filter(x => x && x !== t);
   const missing = t => reqs(t).filter(r => !doneCount(r));
-  const RESERVED = ['home', 'review', 'glossary'];
+  const RESERVED = ['home', 'review', 'glossary', 'interview'];
+  const isProject = t => t.kind === 'project';
+  // 'track.lesson' -> { t, l }, or null when either id doesn't resolve.
+  function lessonRef(id) {
+    const s = String(id), dot = s.indexOf('.');
+    const t = dot > 0 && trackById(s.slice(0, dot));
+    const l = t && t.lessons.find(x => x.id === s.slice(dot + 1));
+    return l ? { t, l } : null;
+  }
 
   // Line colors: curated hues (OKLCH degrees) spaced so neighbours differ; lightness/chroma come from theme tokens.
   const HUES = [300, 150, 250, 45, 195, 350, 95, 270, 20, 170, 325, 125, 225, 70, 285, 5, 140, 210];
@@ -77,20 +88,22 @@ const Lab = (() => {
   function grouped() {
     const map = new Map(GROUPS.map(g => [g, []]));
     for (const t of tracks) { const g = t.group || 'More'; if (!map.has(g)) map.set(g, []); map.get(g).push(t); }
-    return [...map].filter(([, ts]) => ts.length);
+    // Capstone projects close their group, whatever order the scripts loaded in.
+    return [...map].filter(([, ts]) => ts.length).map(([g, ts]) => [g, ts.filter(t => !isProject(t)).concat(ts.filter(isProject))]);
   }
   const andList = xs => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
   const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------- views ----------
-  let flashTimer;
-  let here = {}; // { t, l } of the current page, used by shortcuts and the reading bar
+  let flashTimer, ivTimer;
+  let here = {}; // { t, l } of the current page, used by shortcuts and the reading bar; onKey lets a view take keys first
   function render() {
-    clearInterval(flashTimer);
+    clearInterval(flashTimer); clearInterval(ivTimer);
     const route = decodeURIComponent(location.hash.slice(1));
     let view; here = {};
     if (route === 'review') view = reviewView();
     else if (route === 'glossary') view = glossaryView();
+    else if (route === 'interview') view = interviewView();
     else {
       const [tid, lid] = route.split('.');
       const t = !RESERVED.includes(tid) && trackById(tid);
@@ -100,7 +113,7 @@ const Lab = (() => {
       else view = homeView();
     }
     document.getElementById('app').replaceChildren(view);
-    document.title = [here.l && here.l.title, here.t && here.t.title, route === 'review' && 'Review', route === 'glossary' && 'Glossary', 'Android Lab'].filter(Boolean).join(' · ');
+    document.title = [here.l && here.l.title, here.t && here.t.title, route === 'review' && 'Review', route === 'glossary' && 'Glossary', route === 'interview' && 'Interview', 'Android Lab'].filter(Boolean).join(' · ');
     updateNav(route);
     window.scrollTo(0, 0);
     paintReadbar();
@@ -110,7 +123,7 @@ const Lab = (() => {
     const due = dueCards().length;
     const b = document.getElementById('due-badge');
     if (b) { b.textContent = due; b.hidden = !due; }
-    const cur = route === 'review' || route === 'glossary' ? '#' + route : '#home';
+    const cur = ['review', 'glossary', 'interview'].includes(route) ? '#' + route : '#home';
     document.querySelectorAll('.top nav a').forEach(a => {
       const on = a.getAttribute('href') === cur;
       a.classList.toggle('on', on);
@@ -136,13 +149,13 @@ const Lab = (() => {
     if (pins.length) show();
     if (pins.length > 1) flashTimer = setInterval(() => { i = (i + 1) % pins.length; replay(card, 'turn'); setTimeout(show, 300); }, 4500);
 
-    const lessons = pins.length;
+    const lessons = pins.length, projects = tracks.filter(isProject).length;
     return h('div', { class: 'wrap home' },
       h('section', { class: 'hero' },
         h('div', { class: 'hero-copy' },
           h('h1', {}, 'Android Lab'),
           h('p', { class: 'lede' }, 'Learn Kotlin and Android one live demo at a time, then keep it with spaced review.'),
-          h('p', { class: 'hero-meta' }, `${tracks.length} lines · ${lessons} stations`)),
+          h('p', { class: 'hero-meta' }, [`${tracks.length - projects} lines`, projects && `${projects} capstone${projects > 1 ? 's' : ''}`, `${lessons} stations`].filter(Boolean).join(' · '))),
         h('div', { class: 'flash', 'aria-label': 'Rules from each lesson' }, card)),
       mapView());
   }
@@ -157,7 +170,8 @@ const Lab = (() => {
           h('li', {}, h('span', { class: 'mdot done', 'aria-hidden': 'true' }), 'Done'),
           h('li', {}, h('span', { class: 'mdot', 'aria-hidden': 'true' }), 'Not started'),
           h('li', {}, h('span', { class: 'mdot here', 'aria-hidden': 'true' }), 'You are here'),
-          h('li', {}, h('span', { class: 'xring', 'aria-hidden': 'true' }), 'Transfer'))),
+          h('li', {}, h('span', { class: 'xring', 'aria-hidden': 'true' }), 'Transfer'),
+          tracks.some(isProject) ? h('li', {}, h('span', { class: 'xrail', 'aria-hidden': 'true' }), 'Capstone project') : null)),
       grouped().map(([g, ts]) => h('section', { class: 'mgroup', 'aria-label': g },
         h('h3', { class: 'mgroup-h' }, g),
         h('ol', { class: 'mlines' }, ts.map(t => lineRow(t, i++))))));
@@ -165,14 +179,15 @@ const Lab = (() => {
 
   function lineRow(t, i) {
     const miss = missing(t), rs = reqs(t), done = doneCount(t), n = t.lessons.length;
-    return h('li', { class: 'mline' + (miss.length ? ' soft' : ''), style: `--hue:${hue(t)};--i:${i}` },
+    const proj = isProject(t);
+    return h('li', { class: 'mline' + (proj ? ' project' : '') + (miss.length ? ' soft' : ''), style: `--hue:${hue(t)};--i:${i}` },
       h('div', { class: 'mline-head' },
-        h('a', { class: 'mpill', href: '#' + t.id }, t.title),
+        h('a', { class: 'mpill', href: '#' + t.id }, proj ? [h('span', { class: 'mtag' }, 'Capstone'), ' '] : null, t.title),
         h('span', { class: 'mcount', 'aria-label': `${done} of ${n} done` }, `${done}/${n}`),
         rs.length ? h('p', { class: 'xfers' + (miss.length ? ' mnote' : '') },
           h('span', { class: 'xfers-label' }, miss.length ? 'Recommended after' : 'Transfer from'),
           rs.map(r => h('span', { class: 'xchip', style: `--hue:${hue(r)}` }, h('span', { class: 'xring', 'aria-hidden': 'true' }), r.title))) : null),
-      h('ol', { class: 'mrail', 'aria-label': `${t.title} stations` }, t.lessons.map((l, j) => {
+      h('ol', { class: 'mrail', 'aria-label': `${t.title} ${proj ? 'steps' : 'stations'}` }, t.lessons.map((l, j) => {
         const k = key(t, l), d = state.done[k], at = state.last === k;
         const side = j < n / 3 ? 'tip-l' : j >= (n * 2) / 3 ? 'tip-r' : null;
         return h('li', { class: ['mstop', d && 'done', at && 'here'].filter(Boolean).join(' '), style: `--j:${j}` },
@@ -209,34 +224,40 @@ const Lab = (() => {
   function progressBar(done, n) {
     return h('div', { class: 'progress' },
       h('span', { class: 'progress-num' }, `${done} of ${n} done`),
-      h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': n, 'aria-valuenow': done, 'aria-label': 'Track progress' },
+      h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': n, 'aria-valuenow': done, 'aria-label': 'Progress' },
         h('span', { style: `width:${n ? (done / n) * 100 : 0}%` })));
   }
 
   function trackView(t) {
-    const n = t.lessons.length, done = doneCount(t), nxt = nextLesson(t);
-    const wrap = h('div', { class: 'wrap track-page', style: `--hue:${hue(t)}` });
+    const n = t.lessons.length, done = doneCount(t), nxt = nextLesson(t), proj = isProject(t);
+    const wrap = h('div', { class: 'wrap track-page' + (proj ? ' project' : ''), style: `--hue:${hue(t)}` });
     const empty = h('p', { class: 'muted-text tline-empty', hidden: true }, 'No lessons at this level in this track.');
-    const syncEmpty = () => { empty.hidden = state.level === 'all' || t.lessons.some(l => l.level === state.level); };
-    const label = !nxt ? null : done === n ? `Start again: ${nxt.title}` : `${done ? 'Continue' : 'Start'}: ${nxt.title}`;
+    const syncEmpty = () => { empty.hidden = proj || state.level === 'all' || t.lessons.some(l => l.level === state.level); };
+    const label = !nxt ? null : done === n ? `Start again: ${nxt.title}` : `${done ? 'Continue' : proj ? 'Start building' : 'Start'}: ${nxt.title}`;
+    const builds = proj && t.builds ? h('section', { class: 'builds', 'aria-labelledby': 'builds-h' },
+      h('h2', { id: 'builds-h' }, 'What you’ll build'),
+      h('p', {}, t.builds),
+      reqs(t).length ? h('p', { class: 'builds-uses' }, h('span', { class: 'builds-k' }, 'Builds on'),
+        reqs(t).map(r => h('a', { href: '#' + r.id, class: 'xlink', style: `--hue:${hue(r)}` }, h('span', { class: 'xring', 'aria-hidden': 'true' }), r.title))) : null) : null;
     wrap.append(
       crumbs([['Map', '#home'], [t.title]]),
       h('header', { class: 'lesson-head track-head' },
-        h('p', { class: 'eyebrow' }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), `${t.group || 'Track'} · ${n} lessons`),
+        h('p', { class: 'eyebrow' }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), proj ? `Capstone project · ${t.group || 'Project'} · ${n} steps` : `${t.group || 'Track'} · ${n} lessons`),
         h('h1', {}, t.title),
         h('p', { class: 'lede' }, t.description),
         progressBar(done, n),
         softNote(t),
         nxt ? h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#' + key(t, nxt) }, label, ' →')) : null),
-      h('section', { class: 'track-lessons', 'aria-label': 'Lessons' },
-        levelFilter(wrap, t.lessons, syncEmpty),
+      builds,
+      h('section', { class: 'track-lessons', 'aria-label': proj ? 'Steps' : 'Lessons' },
+        proj ? h('h2', { class: 'steps-h' }, 'The steps') : levelFilter(wrap, t.lessons, syncEmpty),
         h('ol', { class: 'tline' }, t.lessons.map((l, j) => {
           const k = key(t, l), d = state.done[k], at = state.last === k;
           return h('li', { class: [d && 'done', at && 'here'].filter(Boolean).join(' ') || null, 'data-level': l.level || null },
             h('a', { href: '#' + k },
               h('span', { class: ['mdot', d && 'done', at && 'here'].filter(Boolean).join(' '), 'aria-hidden': 'true' }),
               h('span', { class: 'tbody' },
-                h('span', { class: 'tnum' }, `${String(j + 1).padStart(2, '0')}${d ? ' · done' : ''}${at ? ' · you are here' : ''}`),
+                h('span', { class: 'tnum' }, `${proj ? 'Step ' : ''}${String(j + 1).padStart(2, '0')}${d ? ' · done' : ''}${at ? ' · you are here' : ''}`),
                 h('b', {}, l.title),
                 h('small', {}, l.tagline)),
               levelBadge(l)));
@@ -265,7 +286,7 @@ const Lab = (() => {
   }
 
   function lessonView(t, l) {
-    const idx = t.lessons.indexOf(l);
+    const idx = t.lessons.indexOf(l), proj = isProject(t);
     const prev = t.lessons[idx - 1], next = t.lessons[idx + 1];
     state.last = key(t, l); save();
     const items = t.lessons.map(x => h('li', { class: [x === l && 'cur', state.done[key(t, x)] && 'done'].filter(Boolean).join(' ') || null },
@@ -281,7 +302,7 @@ const Lab = (() => {
         if (--left) return;
         state.done[key(t, l)] = true; save();
         items[idx].classList.add('done');
-        quiz.append(h('div', { class: 'done-note drop-in' }, 'Lesson complete.',
+        quiz.append(h('div', { class: 'done-note drop-in' }, proj ? 'Step complete.' : 'Lesson complete.',
           next ? h('a', { class: 'btn primary small', href: '#' + key(t, next) }, `Next: ${next.title} →`) : h('a', { class: 'btn small', href: '#' + t.id }, `Back to ${t.title}`)));
       })));
 
@@ -326,14 +347,15 @@ const Lab = (() => {
       } }, label)));
 
     const page = h('div', { class: 'wrap lesson-page', style: `--hue:${hue(t)}` },
-      h('nav', { class: 'side', 'aria-label': `${t.title} lessons` }, h('a', { class: 'side-track', href: '#' + t.id }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), t.title), h('ol', {}, items)),
+      h('nav', { class: 'side', 'aria-label': `${t.title} ${proj ? 'steps' : 'lessons'}` }, h('a', { class: 'side-track', href: '#' + t.id }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), t.title), h('ol', {}, items)),
       h('article', { class: 'lesson' },
         crumbs([['Map', '#home'], [t.title, '#' + t.id], [l.title]]),
         state.hide[t.id] ? null : softNote(t, () => { state.hide[t.id] = true; save(); }),
         h('header', { class: 'lesson-head' },
-          h('p', { class: 'eyebrow lesson-eyebrow' }, `Lesson ${idx + 1} of ${t.lessons.length}`, levelBadge(l)),
+          h('p', { class: 'eyebrow lesson-eyebrow' }, `${proj ? 'Step' : 'Lesson'} ${idx + 1} of ${t.lessons.length}`, levelBadge(l)),
           h('h1', {}, l.title),
           h('p', { class: 'lede' }, l.tagline)),
+        reviewFirst(l),
         toc,
         h('div', { class: 'prose', html: l.body }),
         bench, snippet, pin, deeper, hood, mistakes, practice, terms, quiz,
@@ -342,6 +364,15 @@ const Lab = (() => {
           next && h('a', { class: 'next', href: '#' + key(t, next) }, h('small', {}, 'Next →'), next.title))));
     l.visual(viz);
     return page;
+  }
+
+  // Project steps: compact links to the lessons a step applies. Ids that don't resolve are skipped.
+  function reviewFirst(l) {
+    const refs = (Array.isArray(l.refs) ? l.refs : []).map(lessonRef).filter(Boolean);
+    if (!refs.length) return null;
+    return h('nav', { class: 'refs', 'aria-label': 'Review first' }, h('span', { class: 'refs-label' }, 'Review first'),
+      h('ul', {}, refs.map(({ t, l: x }) => h('li', {}, h('a', { href: '#' + key(t, x), class: 'xlink', style: `--hue:${hue(t)}`, title: `${t.title} · ${x.title}` },
+        h('span', { class: 'xring', 'aria-hidden': 'true' }), x.title, state.done[key(t, x)] ? h('span', { class: 'vh' }, ' (done)') : null)))));
   }
 
   // Thin bar under the header: how far down the lesson you are, in the track's color.
@@ -430,11 +461,12 @@ const Lab = (() => {
       return words.filter(w => T.includes(w)).length * 3 + (T.startsWith(words[0]) ? 2 : 0) + 1;
     };
     for (const t of tracks) {
-      const s = score(t.title, `${t.id} ${t.group || ''} ${t.description || ''}`);
-      if (s) hits.push({ s: s + 2 + (words.includes(t.id) ? 4 : 0), href: '#' + t.id, title: t.title, sub: `Track · ${t.lessons.length} lessons` });
+      const proj = isProject(t);
+      const s = score(t.title, `${t.id} ${t.group || ''} ${t.description || ''} ${t.builds || ''} ${proj ? 'project capstone' : ''}`);
+      if (s) hits.push({ s: s + 2 + (words.includes(t.id) ? 4 : 0), href: '#' + t.id, title: t.title, sub: proj ? `Capstone project · ${t.lessons.length} steps` : `Track · ${t.lessons.length} lessons` });
       for (const l of t.lessons) {
         const s2 = score(l.title, `${t.title} ${l.tagline} ${l.remember} ${(l.terms || []).map(x => x.term).join(' ')}`);
-        if (s2) hits.push({ s: s2 + 1, href: '#' + key(t, l), title: l.title, sub: `Lesson · ${t.title}` });
+        if (s2) hits.push({ s: s2 + 1, href: '#' + key(t, l), title: l.title, sub: `${proj ? 'Step' : 'Lesson'} · ${t.title}` });
       }
     }
     for (const x of allTerms()) {
@@ -479,6 +511,11 @@ const Lab = (() => {
   function applyMode(m) {
     const root = document.documentElement;
     if (m === 'system') root.removeAttribute('data-theme'); else root.dataset.theme = m;
+    // Browser chrome follows a forced theme too; 'system' restores the media-matched pair from index.html.
+    document.querySelectorAll('meta[name="theme-color"]').forEach(x => {
+      if (!x.dataset.c) x.dataset.c = x.content;
+      x.content = m === 'system' ? x.dataset.c : m === 'dark' ? '#0B130F' : '#F4F8F5';
+    });
     const btn = document.getElementById('theme-btn');
     if (!btn) return;
     const nextMode = MODES[(MODES.indexOf(m) + 1) % MODES.length];
@@ -496,14 +533,14 @@ const Lab = (() => {
   }
 
   // ---------- keyboard shortcuts ----------
-  const SHORTCUTS = [['←  →', 'Previous / next lesson'], ['/', 'Search'], ['m', 'Map'], ['r', 'Review'], ['g', 'Glossary'], ['t', 'Light / dark theme'], ['?', 'This list']];
+  const SHORTCUTS = [['←  →', 'Previous / next lesson'], ['/', 'Search'], ['m', 'Map'], ['r', 'Review'], ['i', 'Interview practice'], ['g', 'Glossary'], ['t', 'Light / dark theme'], ['1  –  4', 'Answer (interview)'], ['Enter', 'Next question (interview)'], ['?', 'This list']];
   let keysDialog;
   function showKeys() {
     if (!keysDialog) {
       keysDialog = h('dialog', { class: 'keys', 'aria-labelledby': 'keys-h', onclick(e) { if (e.target === keysDialog) keysDialog.close(); } },
         h('div', { class: 'keys-in' },
           h('div', { class: 'keys-head' }, h('h2', { id: 'keys-h' }, 'Keyboard shortcuts'), h('button', { class: 'btn small ghost', onclick: () => keysDialog.close() }, 'Close')),
-          h('dl', {}, SHORTCUTS.map(([k, what]) => [h('dt', {}, k.split(/\s+/).map(x => h('kbd', {}, x))), h('dd', {}, what)])),
+          h('dl', {}, SHORTCUTS.map(([k, what]) => [h('dt', {}, k.split(/\s+/).map(x => x === '–' ? h('span', { 'aria-hidden': 'true' }, '–') : h('kbd', {}, x))), h('dd', {}, what)])),
           h('p', { class: 'muted-text' }, 'Shortcuts pause while you type in a field.')));
       document.body.append(keysDialog);
     }
@@ -514,6 +551,7 @@ const Lab = (() => {
     const el = document.activeElement;
     if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
     if (keysDialog && keysDialog.open) return;
+    if (here.onKey && here.onKey(e)) { e.preventDefault(); return; }
     const go = hash => { e.preventDefault(); if (location.hash === hash) render(); else location.hash = hash; };
     const { t, l } = here;
     switch (e.key) {
@@ -527,10 +565,257 @@ const Lab = (() => {
       case 'm': go('#home'); break;
       case 'r': go('#review'); break;
       case 'g': go('#glossary'); break;
+      case 'i': go('#interview'); break;
       case 't': e.preventDefault(); flipVisible(); break;
       case '?': e.preventDefault(); showKeys(); break;
       default:
     }
+  }
+
+  // ---------- interview mode ----------
+  // Timed, mixed-topic practice from every lesson quiz. Options keep their order, so q.a always stays valid.
+  // Nothing touches the review schedule unless the learner presses "Add missed to Review".
+  const IV_PRESETS = [
+    { label: 'Android interview', tracks: ['kotlin', 'android', 'compose', 'flow', 'arch'] },
+    { label: 'Kotlin only', tracks: ['kotlin', 'kdeep'] },
+    { label: 'Everything', tracks: null },
+  ];
+  const IV_COUNTS = [10, 20, 30], IV_TIMES = [0, 30, 60];
+  const presetTracks = p => (p.tracks ? p.tracks.filter(trackById) : tracks.map(t => t.id));
+  const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+  const presetOf = ids => IV_PRESETS.find(p => presetTracks(p).length && sameSet(presetTracks(p), ids));
+  const poolFor = ids => allCards().filter(c => ids.includes(c.t.id));
+  const setupKey = su => `${[...su.tracks].sort().join(',')}|${su.n}|${su.secs}`;
+  function setupLabel(su) {
+    const p = presetOf(su.tracks);
+    return `${p ? p.label : `${su.tracks.length} topic${su.tracks.length > 1 ? 's' : ''}`} · ${su.n} questions · ${su.secs ? `${su.secs} s each` : 'untimed'}`;
+  }
+  function shuffle(xs) {
+    const a = xs.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  const clock = ms => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const ivScore = r => `${r.right} / ${r.total}`;
+  const beats = (a, b) => !b || a.right / a.total > b.right / b.total || (a.right / a.total === b.right / b.total && a.ms < b.ms);
+
+  function interviewView() {
+    const root = h('div', { class: 'wrap iv' });
+    let run = null, keys = null; // keys: what 1-9 / Enter do right now
+    here.onKey = e => {
+      if (!keys) return false;
+      if (keys.answer && /^[1-9]$/.test(e.key)) return keys.answer(+e.key - 1);
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (keys.next && e.key === 'Enter' && tag !== 'BUTTON' && tag !== 'A') { keys.next(); return true; }
+      return false;
+    };
+    const paint = (...kids) => {
+      clearInterval(ivTimer);
+      root.replaceChildren(...kids.filter(Boolean));
+      window.scrollTo(0, 0);
+      const f = root.querySelector('[data-focus]');
+      if (f) f.focus({ preventScroll: true });
+    };
+
+    function setup() {
+      keys = null;
+      const saved = state.iv.setup || {};
+      const savedIds = Array.isArray(saved.tracks) ? saved.tracks.filter(trackById) : [];
+      let sel = new Set(savedIds.length ? savedIds : tracks.map(t => t.id));
+      let n = IV_COUNTS.includes(saved.n) ? saved.n : 10, secs = IV_TIMES.includes(saved.secs) ? saved.secs : 0;
+      const counts = {};
+      for (const c of allCards()) counts[c.t.id] = (counts[c.t.id] || 0) + 1;
+
+      const presets = IV_PRESETS.filter(p => presetTracks(p).length).map(p => h('button', { type: 'button', class: 'iv-chip', 'aria-pressed': 'false', onclick() { sel = new Set(presetTracks(p)); sync(); } }, p.label));
+      const boxes = tracks.filter(t => counts[t.id]).map(t => {
+        const input = h('input', { type: 'checkbox', value: t.id, onchange() { if (input.checked) sel.add(t.id); else sel.delete(t.id); sync(); } });
+        return h('label', { class: 'iv-track' + (isProject(t) ? ' project' : ''), style: `--hue:${hue(t)}` }, input,
+          h('span', { class: 'iv-track-in' }, h('span', { class: 'xring', 'aria-hidden': 'true' }), h('span', { class: 'iv-track-t' }, t.title),
+            isProject(t) ? h('span', { class: 'vh' }, ', capstone') : null, h('span', { class: 'iv-n' }, h('span', { class: 'vh' }, ', '), counts[t.id], h('span', { class: 'vh' }, ' questions'))));
+      });
+      const seg = (name, vals, label, get, set) => h('div', { class: 'iv-seg' }, vals.map(v => h('label', {},
+        h('input', { type: 'radio', name, value: v, checked: get() === v, onchange() { set(v); sync(); } }), h('span', {}, label(v)))));
+      const note = h('p', { class: 'iv-pool', 'aria-live': 'polite' });
+      const best = h('p', { class: 'iv-best' });
+      const go = h('button', { class: 'btn primary', type: 'button', onclick() {
+        const su = { tracks: tracks.map(t => t.id).filter(id => sel.has(id)), n, secs };
+        state.iv.setup = su; save();
+        start(su, shuffle(poolFor(su.tracks)).slice(0, n));
+      } }, 'Start practice →');
+      function sync() {
+        const ids = [...sel], pool = poolFor(ids).length;
+        boxes.forEach(b => { const i = b.querySelector('input'); i.checked = sel.has(i.value); });
+        presets.forEach((b, i) => b.setAttribute('aria-pressed', String(sameSet(presetTracks(IV_PRESETS[i]), ids))));
+        note.textContent = !ids.length ? 'Pick at least one topic.' : pool < n ? `These topics hold ${pool} question${pool > 1 ? 's' : ''}, so you get all of them.` : `${n} of ${pool} questions, drawn at random.`;
+        go.disabled = !pool;
+        const b = ids.length && state.iv.best && state.iv.best[setupKey({ tracks: ids, n, secs })];
+        best.textContent = b ? `Best for this setup: ${ivScore(b)} in ${clock(b.ms)}` : '';
+        best.hidden = !b;
+      }
+      const hist = (state.iv.history || []).slice(0, 6);
+      paint(
+        h('header', { class: 'lesson-head' },
+          h('p', { class: 'eyebrow' }, 'Interview practice'),
+          h('h1', { tabindex: '-1', 'data-focus': '' }, 'Practice like it’s the real thing'),
+          h('p', { class: 'lede' }, 'Mixed questions from every lesson quiz, one at a time, optionally against the clock. Your review schedule is left alone unless you add the misses at the end.')),
+        h('section', { class: 'iv-card', 'aria-label': 'Setup' },
+          h('fieldset', { class: 'iv-field' }, h('legend', {}, 'Start from a preset'), h('div', { class: 'iv-chips' }, presets)),
+          h('fieldset', { class: 'iv-field' },
+            h('legend', {}, 'Topics'),
+            h('div', { class: 'iv-tracks' }, boxes),
+            h('div', { class: 'iv-mini' },
+              h('button', { type: 'button', class: 'btn small ghost', onclick() { sel = new Set(tracks.map(t => t.id)); sync(); } }, 'Select all'),
+              h('button', { type: 'button', class: 'btn small ghost', onclick() { sel = new Set(); sync(); } }, 'Clear'))),
+          h('div', { class: 'iv-row' },
+            h('fieldset', { class: 'iv-field' }, h('legend', {}, 'Questions'), seg('iv-n', IV_COUNTS, String, () => n, v => { n = v; })),
+            h('fieldset', { class: 'iv-field' }, h('legend', {}, 'Time per question'), seg('iv-secs', IV_TIMES, v => (v ? `${v} s` : 'No limit'), () => secs, v => { secs = v; }))),
+          h('div', { class: 'iv-go' }, h('div', { class: 'iv-go-text' }, note, best), go)),
+        hist.length ? h('section', { class: 'iv-hist', 'aria-labelledby': 'iv-hist-h' },
+          h('h2', { id: 'iv-hist-h' }, 'Recent runs'),
+          h('ol', {}, hist.map(r => {
+            const b = state.iv.best && state.iv.best[r.key];
+            const top = b && b.at === r.at;
+            return h('li', {}, h('span', { class: 'iv-hist-score' }, ivScore(r)), h('span', { class: 'iv-hist-label' }, r.label),
+              h('span', { class: 'iv-hist-meta' }, clock(r.ms), top ? h('span', { class: 'iv-tag' }, 'Best') : null));
+          }))) : null);
+      sync();
+    }
+
+    function start(su, qs) {
+      run = { su, qs, i: 0, answers: [] };
+      question();
+    }
+
+    function question() {
+      const c = run.qs[run.i], q = c.q, total = run.qs.length, secs = run.su.secs;
+      const shownAt = Date.now();
+      let answered = false;
+      const why = h('p', { class: 'why', hidden: true });
+      const last = run.i + 1 === total;
+      const next = h('button', { class: 'btn primary', type: 'button', hidden: true, onclick: advance }, last ? 'See results' : 'Next question', ' →');
+      const opts = q.options.map((o, j) => h('button', { class: 'opt iv-opt', type: 'button', onclick: () => answer(j) },
+        h('kbd', { 'aria-hidden': 'true' }, String(j + 1)), h('span', { html: o })));
+      const box = h('div', { class: 'q iv-q' },
+        h('p', { class: 'eyebrow', style: `--hue:${hue(c.t)}` }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), c.t.title),
+        h('p', { class: 'q-text', html: q.q, tabindex: '-1', 'data-focus': '' }),
+        h('div', { class: 'opts', role: 'group', 'aria-label': 'Answers' }, opts), why);
+
+      let ring = null, tick = null;
+      if (secs) {
+        const C = 2 * Math.PI * 20, ms = secs * 1000, deadline = shownAt + ms;
+        ring = h('div', { class: 'iv-ring', role: 'timer', 'aria-label': `${secs} seconds left`,
+          html: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle class="iv-ring-bg" cx="24" cy="24" r="20"/><circle class="iv-ring-fg" cx="24" cy="24" r="20" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="0"/></svg><span aria-hidden="true">${secs}</span>` });
+        const fg = ring.querySelector('.iv-ring-fg'), num = ring.querySelector('span');
+        let shown = secs;
+        tick = () => {
+          const left = Math.max(0, deadline - Date.now()), s = Math.ceil(left / 1000);
+          fg.setAttribute('stroke-dashoffset', (C * (1 - left / ms)).toFixed(2));
+          if (s !== shown) { shown = s; num.textContent = s; ring.setAttribute('aria-label', `${s} second${s === 1 ? '' : 's'} left`); }
+          ring.classList.toggle('low', left <= 5000);
+          if (!left) answer(-1);
+        };
+      }
+
+      function answer(j) {
+        if (answered || j >= opts.length) return false;
+        answered = true; clearInterval(ivTimer);
+        const ok = j === q.a;
+        run.answers.push({ pick: j, ok, ms: Math.min(Date.now() - shownAt, secs ? secs * 1000 : Infinity) });
+        box.dataset.answered = '1';
+        if (j >= 0) opts[j].classList.add(ok ? 'right' : 'wrong');
+        if (opts[q.a]) opts[q.a].classList.add('right');
+        opts.forEach(b => b.setAttribute('aria-disabled', 'true'));
+        if (ring) ring.classList.add(j < 0 ? 'out' : 'stopped');
+        why.innerHTML = `<b>${j < 0 ? 'Time’s up.' : ok ? 'Right.' : 'Not quite.'}</b> ${q.why || ''}`;
+        why.hidden = false;
+        status.textContent = j < 0 ? 'Time’s up.' : ok ? 'Right.' : 'Not quite.';
+        next.hidden = false; next.focus({ preventScroll: true });
+        next.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
+        keys = { next: advance };
+        return true;
+      }
+      function advance() {
+        if (!answered) return;
+        run.i++;
+        if (run.i < run.qs.length) question(); else results();
+      }
+      const status = h('p', { class: 'vh', role: 'status' });
+      keys = { answer };
+      paint(
+        h('div', { class: 'iv-top' },
+          h('p', { class: 'eyebrow' }, 'Interview · ', setupLabel(run.su)),
+          h('button', { class: 'btn small ghost', type: 'button', onclick: setup }, 'Quit')),
+        h('div', { class: 'iv-bar' },
+          h('span', { class: 'iv-count', 'aria-label': `Question ${run.i + 1} of ${total}` }, `${run.i + 1} / ${total}`),
+          h('div', { class: 'meter', 'aria-hidden': 'true' }, h('span', { style: `width:${(run.i / total) * 100}%` })),
+          ring),
+        box,
+        h('div', { class: 'iv-next' }, next,
+          h('p', { class: 'iv-hint' }, h('kbd', {}, '1'), '–', h('kbd', {}, String(opts.length)), ' answer', h('span', { 'aria-hidden': 'true' }, ' · '), h('kbd', {}, 'Enter'), ' next')),
+        status);
+      if (tick) ivTimer = setInterval(tick, 100);
+    }
+
+    function results() {
+      keys = null;
+      const { su, qs, answers } = run;
+      const total = qs.length, right = answers.filter(a => a.ok).length, ms = answers.reduce((s, a) => s + a.ms, 0);
+      const k = setupKey(su), prev = state.iv.best && state.iv.best[k];
+      const rec = { key: k, label: setupLabel(su), right, total, ms, at: Date.now() };
+      const isBest = beats(rec, prev);
+      state.iv.best = { ...(state.iv.best || {}), [k]: isBest ? rec : prev };
+      state.iv.history = [rec, ...(state.iv.history || [])].slice(0, 12);
+      save();
+
+      const byTrack = new Map();
+      qs.forEach((c, i) => {
+        const r = byTrack.get(c.t) || { right: 0, total: 0 };
+        r.total++; r.right += answers[i].ok ? 1 : 0; byTrack.set(c.t, r);
+      });
+      const missed = qs.map((c, i) => ({ c, a: answers[i] })).filter(x => !x.a.ok);
+      const added = h('p', { class: 'iv-added', role: 'status' });
+      const addBtn = missed.length ? h('button', { class: 'btn primary', type: 'button', onclick() {
+        const now = Date.now();
+        // Same shape the schedule produces after a miss (box 1), but due now instead of tomorrow.
+        missed.forEach(({ c }) => { state.cards[c.id] = { ...schedule(state.cards[c.id], false, now), due: now }; });
+        save(); updateNav('interview');
+        addBtn.disabled = true; addBtn.textContent = 'Added to Review';
+        added.replaceChildren(`${missed.length} card${missed.length > 1 ? 's are' : ' is'} due now. `, h('a', { href: '#review' }, 'Open Review →'));
+      } }, `Add ${missed.length} missed to Review`) : null;
+      const pct = Math.round((right / total) * 100);
+      paint(
+        h('header', { class: 'lesson-head' },
+          h('p', { class: 'eyebrow' }, 'Interview results · ', rec.label),
+          h('h1', { tabindex: '-1', 'data-focus': '' }, `${right} of ${total} right`),
+          h('p', { class: 'lede' }, `${pct}% in ${clock(ms)} of answering, about ${(ms / total / 1000).toFixed(ms / total < 10000 ? 1 : 0)} s per question.`),
+          h('p', { class: 'iv-best' }, isBest ? h('span', { class: 'iv-tag' }, prev ? 'New best' : 'First run') : `Best for this setup: ${ivScore(prev)} in ${clock(prev.ms)}`)),
+        h('div', { class: 'actions' },
+          addBtn,
+          h('button', { class: 'btn' + (missed.length ? '' : ' primary'), type: 'button', onclick: () => start(su, shuffle(qs)) }, 'Try again'),
+          h('button', { class: 'btn', type: 'button', onclick: setup }, 'New setup')),
+        added,
+        h('section', { class: 'iv-card', 'aria-labelledby': 'iv-by-h' },
+          h('h2', { id: 'iv-by-h' }, 'By topic'),
+          h('ul', { class: 'iv-bars' }, [...byTrack].sort((a, b) => tracks.indexOf(a[0]) - tracks.indexOf(b[0])).map(([t, r]) =>
+            h('li', { style: `--hue:${hue(t)}` },
+              h('a', { href: '#' + t.id, class: 'iv-bars-t' }, t.title),
+              h('span', { class: 'iv-bars-m', 'aria-hidden': 'true' }, h('span', { style: `width:${(r.right / r.total) * 100}%` })),
+              h('span', { class: 'iv-bars-n' }, `${r.right} / ${r.total}`, h('span', { class: 'vh' }, ' right')))))),
+        h('section', { class: 'iv-missed', 'aria-labelledby': 'iv-miss-h' },
+          h('h2', { id: 'iv-miss-h' }, missed.length ? `Missed (${missed.length})` : 'Nothing missed'),
+          missed.length ? h('ol', {}, missed.map(({ c, a }) => h('li', { class: 'q', style: `--hue:${hue(c.t)}` },
+            h('p', { class: 'eyebrow' }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), `${c.t.title} · ${c.l.title}`),
+            h('p', { class: 'q-text', html: c.q.q }),
+            h('dl', { class: 'iv-ans' },
+              h('dt', {}, 'Yours'), h('dd', { class: 'bad-ans', html: a.pick < 0 ? 'No answer in time' : c.q.options[a.pick] }),
+              h('dt', {}, 'Right'), h('dd', { class: 'good-ans', html: c.q.options[c.q.a] })),
+            h('p', { class: 'why', html: c.q.why || '' }),
+            h('a', { href: '#' + key(c.t, c.l), class: 'iv-open' }, `Open lesson: ${c.l.title} →`))))
+            : h('p', { class: 'muted-text' }, 'A clean run. Try a longer set or a tighter timer.')));
+    }
+
+    setup();
+    return root;
   }
 
   function reviewView() {
@@ -574,6 +859,12 @@ const Lab = (() => {
     addEventListener('resize', paintReadbar);
     addEventListener('hashchange', render);
     render();
+    // Offline support, only when served over http(s); file:// can't register a service worker.
+    try {
+      if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
+        addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      }
+    } catch (e) { /* no offline mode */ }
   }
 
   // A track may carry its own demo styles as a CSS string in t.css.

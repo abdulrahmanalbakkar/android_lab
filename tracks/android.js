@@ -134,8 +134,6 @@
 .and-col { display: grid; gap: 10px; justify-items: center; }
 
 /* depth: let long code scroll inside step and hood grids instead of widening the page (shell-level fix, harmless if duplicated) */
-.step > pre.code, .hood > pre.code, .hood > .prose { min-width: 0; }
-.hood::details-content { min-width: 0; }
 
 /* depth: saved state */
 .and-field { font: 600 0.8rem var(--mono); padding: 6px 8px; border-radius: 8px; border: 2px solid var(--accent); background: var(--bg); color: var(--ink); min-height: 1.9em; overflow-wrap: anywhere; }
@@ -598,7 +596,7 @@ fun SearchBox() {
           {
             title: 'Your own types need a way into the Bundle',
             body: `<p>A Bundle holds primitives, Strings, Parcelables, Serializables and lists of those. <code>SavedStateHandle</code> has the same rules. For your own class, add <code>@Parcelize</code> from the <code>kotlin-parcelize</code> plugin.</p>
-<p><code>rememberSaveable</code> needs the same, or a <code>Saver</code> that turns the value into something a Bundle can hold. Without one, saving a plain class throws <code>IllegalArgumentException</code>, and only at the moment Android saves state. So a missing Saver shows up on rotation or backgrounding, not when the screen first draws.</p>`,
+<p><code>rememberSaveable</code> needs the same, or a <code>Saver</code> that turns the value into something a Bundle can hold. Without one, <code>rememberSaveable</code> throws <code>IllegalArgumentException</code> as soon as it remembers a plain class, because it checks that the value can be saved when it registers. So a missing Saver crashes the screen the first time it draws.</p>`,
             code: `@Parcelize
 data class Filters(val minPrice: Int, val inStock: Boolean) : Parcelable
 

@@ -1132,7 +1132,7 @@ fun FavoriteChip(selected: Boolean, count: Int, onClick: () -> Unit) {
           function toggle() {
             visible = !visible;
             banner.classList.toggle('cx-gone', !visible);
-            say(o, `${hl(`AnimatedVisibility(visible = ${visible})`)} <span class="muted">${visible ? 'enter: fadeIn + scaleIn' : 'exit: fadeOut + scaleOut, then leaves composition'}</span>`);
+            say(o, `${hl(`AnimatedVisibility(visible = ${visible})`)} <span class="muted">${visible ? 'default enter: fadeIn + expandIn' : 'default exit: shrinkOut + fadeOut, then leaves composition'}</span>`);
           }
           function next() {
             count++;

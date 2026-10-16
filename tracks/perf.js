@@ -991,7 +991,7 @@ object Analytics {
         level: 'advanced',
         body: `
 <p>The Profiler in Android Studio runs tasks against a live app. <em>Find CPU hotspots</em> records Java and Kotlin method calls, so you see which functions take the time. <em>Capture system activities</em> records a system trace with Perfetto: every thread, every frame, and when your process was waiting on the CPU, disk or a lock. Start there for jank and slow startup. <em>Heap dump</em> takes a snapshot of every object, and <em>Track memory consumption</em> records allocations over time.</p>
-<p>Method traces come with a flame chart. Each bar is a function. Its callers sit below it and the functions it calls sit above. Width is total time spent in that call stack, merged across calls, so the order left to right means nothing. Look for wide bars with little on top of them: that time is spent in the function itself. Click a bar to zoom in.</p>
+<p>Method traces come with a flame chart. Each bar is a function. Its callers sit below it and the functions it calls sit above. Width is total time spent in that call stack, merged across calls, so left to right is not a timeline. Look for wide bars with little on top of them: that time is spent in the function itself. Click a bar to zoom in.</p>
 <p>Profile a build that behaves like release. Debuggable builds turn off optimizations and can run several times slower. Mark the release build <code>profileable</code> in the manifest, or use the Profiler's low overhead mode. Add your own trace sections with <code>trace("label") { }</code> so they show up by name in system traces. In a heap dump, sort by retained size and look for duplicate bitmaps, huge caches and destroyed Activities.</p>`,
         code: `// Name your own code in system traces (androidx.tracing:tracing-ktx)
 fun bind(holder: ArticleHolder, item: Article) = trace("ArticleAdapter.bind") {
@@ -1250,7 +1250,7 @@ composeCompiler {
               act('Scroll the list', scroll),
               act('Insert or remove top item', insert)),
             o,
-            h('span', { class: 'pf-label' }, 'build/compose_compiler: classes.txt and composables.txt'),
+            h('span', { class: 'pf-label' }, 'build/compose_compiler: <module>-classes.txt and <module>-composables.txt'),
             report);
           el.append(root);
         },
@@ -1391,7 +1391,7 @@ class AnalyticsInitializer : Initializer<Analytics> {
         tagline: 'Smaller, faster release builds, and the keep rules that stop them breaking.',
         level: 'advanced',
         body: `
-<p>R8 is the compiler step that turns your release build's bytecode into DEX. With <code>isMinifyEnabled = true</code> it does three jobs. <em>Shrinking</em> starts from entry points like your Activities and removes every class, method and field nothing reaches. <em>Optimization</em> inlines small methods, removes dead branches and merges classes. <em>Obfuscation</em> renames what is left to short names like <code>a.b</code>. Apps often lose a large part of their code size, and they start a little faster too. <code>isShrinkResources = true</code> then removes resources the remaining code no longer uses.</p>
+<p>With <code>isMinifyEnabled = true</code>, R8 replaces D8 as the step that turns your release build's bytecode into DEX, and it does three jobs. <em>Shrinking</em> starts from entry points like your Activities and removes every class, method and field nothing reaches. <em>Optimization</em> inlines small methods, removes dead branches and merges classes. <em>Obfuscation</em> renames what is left to short names like <code>a.b</code>. Apps often lose a large part of their code size, and they start a little faster too. <code>isShrinkResources = true</code> then removes resources the remaining code no longer uses.</p>
 <p>R8 can only see direct references. Code reached through reflection looks unused, so it gets removed or renamed. Typical victims: classes loaded with <code>Class.forName</code>, JSON models that Gson reads by field name, and classes named in XML or native code. Tell R8 about them with keep rules in <code>proguard-rules.pro</code>. Keep as little as you can. Prefer libraries that ship their own rules, and codegen-based ones like kotlinx.serialization, which need almost none.</p>
 <p>Renamed code makes crash stack traces unreadable: <code>at a.b.c(SourceFile:12)</code>. Every build writes <code>mapping.txt</code>, which maps the short names back. Keep it for every release. Upload it to Play Console and Crashlytics, or run <code>retrace</code> on a trace by hand. Always test the minified release build before shipping, because keep rule bugs only show up there.</p>`,
         code: `// app/build.gradle.kts

@@ -791,7 +791,7 @@ Button(onClick = onChoose, Modifier.semantics { traversalIndex = -1f }) {
         level: 'intermediate',
         body: `
 <p>Use <code>sp</code> for text and <code>dp</code> for everything else. A dp has the same physical size on every screen. An sp is a dp multiplied by the user’s font scale, so text grows when they pick a larger font in Settings, while icons and spacing stay put.</p>
-<p>Since Android 14 users can go up to 200%, and the scaling is nonlinear. Small text grows the most and large text grows less, since it is already easy to read. At 200%, 14sp body text becomes 26sp and a 30sp headline reaches only 38sp. Text that grows needs room, so use <code>heightIn(min = ...)</code> in place of fixed heights, let text wrap, and check with <code>@PreviewFontScale</code>.</p>
+<p>Since Android 14 users can go up to 200%, and the scaling is nonlinear. Small text grows the most and large text grows less, since it is already easy to read. At 200%, 14sp body text is drawn at 26dp and a 30sp headline at only 38dp. Text that grows needs room, so use <code>heightIn(min = ...)</code> in place of fixed heights, let text wrap, and check with <code>@PreviewFontScale</code>.</p>
 <p>Text also needs contrast with its background. WCAG measures it as a ratio from 1:1 to 21:1. Body text needs at least 4.5:1. Large text (about 24sp, or 19sp bold) and icons need 3:1. Material 3 color pairs like <code>onSurface</code> on <code>surface</code> are built to pass.</p>`,
         code: `Text(
     text = article.title,
@@ -923,7 +923,7 @@ val fontScale = LocalDensity.current.fontScale   // 1.0f is the default`,
         tagline: 'Pick a layout from the window’s width, and let list-detail do the rest.',
         level: 'advanced',
         body: `
-<p>Phones, foldables, tablets, Chromebooks and desktop windows run the same APK. Design for the window you get. A tablet in split screen can hand you a phone-sized window. Window size classes put the width into buckets: Compact under 600dp (most phones in portrait), Medium from 600 to 839dp (unfolded foldables, small tablets in portrait) and Expanded from 840dp (tablets in landscape). Newer versions split off Large at 1200dp and Extra-large at 1600dp for big tablets and desktop windows.</p>
+<p>Phones, foldables, tablets, Chromebooks and desktop windows run the same APK. Design for the window you get. A tablet in split screen can hand you a phone-sized window. Window size classes put the width into buckets: Compact under 600dp (most phones in portrait), Medium from 600 to 839dp (unfolded foldables, small tablets in portrait) and Expanded from 840dp (tablets in landscape). Newer versions split off Large at 1200dp and Extra-large at 1600dp for big tablets and desktop windows. To get those two, pass <code>supportLargeAndXLargeWidth = true</code> to <code>currentWindowAdaptiveInfo()</code>.</p>
 <p>Call <code>currentWindowAdaptiveInfo()</code> and read its <code>windowSizeClass</code>, then branch with <code>isWidthAtLeastBreakpoint(...)</code>. The value updates when the window resizes, and your layout follows.</p>
 <p>For the common list and detail screen, <code>NavigableListDetailPaneScaffold</code> does the work. It shows both panes when there is room, and one pane with back navigation when there isn’t. <code>NavigationSuiteScaffold</code> does the same for navigation: a bottom bar on Compact, a rail on wider windows.</p>`,
         code: `@Composable
@@ -1033,7 +1033,7 @@ val wide = sizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_
         body: `
 <p>A foldable has a hinge and a posture. Fully open, it is flat. Half open with the hinge horizontal is tabletop, like a small laptop. Half open with the hinge vertical is book posture. The <code>windowPosture</code> from <code>currentWindowAdaptiveInfo()</code> tells you <code>isTabletop</code> and where each hinge is, so a video player can put the picture above the fold and the controls below it. In Views, <code>WindowInfoTracker</code> reports the same thing as a <code>FoldingFeature</code>.</p>
 <p>Folding, unfolding, rotating and resizing a multi-window split are all configuration changes. By default the Activity is recreated, so state that matters belongs in a ViewModel or <code>rememberSaveable</code>. Test each one: fold and unfold the emulator, and drag the split-screen divider.</p>
-<p>Don’t lock orientation or mark activities non-resizable. On large screens a locked app gets letterboxed: a phone-shaped window with bars around it. From Android 16, for apps that target API 36, the system ignores <code>screenOrientation</code>, <code>resizeableActivity</code> and aspect ratio limits on displays at least 600dp wide. Games are exempt.</p>`,
+<p>Don’t lock orientation or mark activities non-resizable. On large screens a locked app gets letterboxed: a phone-shaped window with bars around it. From Android 16, for apps that target API 36, the system ignores <code>screenOrientation</code>, <code>resizeableActivity</code> and aspect ratio limits on displays with a smallest width of at least 600dp. Games are exempt. A temporary manifest opt-out exists, but it stops working once you target API 37.</p>`,
         code: `@Composable
 fun PlayerScreen(player: Player) {
     val posture = currentWindowAdaptiveInfo().windowPosture
@@ -1070,7 +1070,7 @@ val separating = hinges.firstOrNull { it.isSeparating }?.bounds
         ],
         quiz: [
           { q: 'A foldable is half open with the hinge running left to right, bottom half on the table. What posture is that?', options: ['Book', 'Tabletop', 'Flat'], a: 1, why: 'A horizontal hinge with the device half open is tabletop.' },
-          { q: 'Your app targets API 36 and sets <code>screenOrientation="portrait"</code>. What happens on a tablet with Android 16?', options: ['It stays portrait with bars around it', 'The lock is ignored and the app fills the screen', 'It crashes'], a: 1, why: 'Android 16 ignores orientation and resizability limits on displays 600 dp and wider for apps targeting API 36. Older targets get letterboxed.' },
+          { q: 'Your app targets API 36 and sets <code>screenOrientation="portrait"</code>. What happens on a tablet with Android 16?', options: ['It stays portrait with bars around it', 'The lock is ignored and the app fills the screen', 'It crashes'], a: 1, why: 'Android 16 ignores orientation and resizability limits on displays with a smallest width of 600 dp or more, for apps targeting API 36. Older targets get letterboxed.' },
           { q: 'What happens to the Activity by default when the user unfolds the phone?', options: ['Nothing', 'It is recreated because of a configuration change', 'It is moved to the background'], a: 1, why: 'The screen size changes, and by default that recreates the Activity. Keep state in a ViewModel or rememberSaveable.' },
         ],
         visual(el) {

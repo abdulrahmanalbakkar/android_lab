@@ -162,7 +162,7 @@ plugins {
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "com.example.shared"
         compileSdk = 36
         minSdk = 24
@@ -194,7 +194,7 @@ kotlin {
         ],
         challenges: [
           { type: 'blank', prompt: 'Put the coroutines library where every target gets it, and the Darwin engine only where iOS gets it.', code: 'sourceSets {\n    [[commonMain]].dependencies {\n        implementation(libs.kotlinx.coroutines.core)\n    }\n    [[iosMain]].dependencies {\n        implementation(libs.ktor.client.darwin)\n    }\n}', why: 'Shared libraries go in <code>commonMain</code>. The Darwin engine uses Apple networking, so it belongs in <code>iosMain</code>.' },
-          { type: 'bug', prompt: 'The Android build works, but the iOS build fails to resolve a dependency. Tap the line.', code: 'kotlin {\n    androidLibrary { namespace = "com.example.shared"; compileSdk = 36 }\n    iosArm64()\n    iosSimulatorArm64()\n    sourceSets {\n        commonMain.dependencies {\n            implementation(libs.ktor.client.core)\n            implementation(libs.ktor.client.okhttp)\n        }\n        iosMain.dependencies {\n            implementation(libs.ktor.client.darwin)\n        }\n    }\n}', bug: 7, fix: '        // move it: androidMain.dependencies { implementation(libs.ktor.client.okhttp) }', why: 'The OkHttp engine only exists for the JVM. A <code>commonMain</code> dependency must be published for every target, including iOS.' },
+          { type: 'bug', prompt: 'The Android build works, but the iOS build fails to resolve a dependency. Tap the line.', code: 'kotlin {\n    android { namespace = "com.example.shared"; compileSdk = 36 }\n    iosArm64()\n    iosSimulatorArm64()\n    sourceSets {\n        commonMain.dependencies {\n            implementation(libs.ktor.client.core)\n            implementation(libs.ktor.client.okhttp)\n        }\n        iosMain.dependencies {\n            implementation(libs.ktor.client.darwin)\n        }\n    }\n}', bug: 7, fix: '        // move it: androidMain.dependencies { implementation(libs.ktor.client.okhttp) }', why: 'The OkHttp engine only exists for the JVM. A <code>commonMain</code> dependency must be published for every target, including iOS.' },
         ],
         quiz: [
           { q: 'Where can you call <code>android.content.Context</code>?', options: ['<code>commonMain</code>', '<code>androidMain</code>', 'Any source set'], a: 1, why: 'Only <code>androidMain</code> compiles against the Android SDK. <code>commonMain</code> must compile for iOS too.' },
@@ -1082,7 +1082,7 @@ fun main() = application {
         body: `
 <p>Kotlin/Native exports the shared module as a framework with an Objective-C header. Swift imports that header, so Swift sees your Kotlin API through Objective-C. Classes stay classes, interfaces become protocols, <code>List</code> becomes a Swift array, and an <code>object</code> is reached through <code>.shared</code>. Kotlin <code>Int</code> arrives as <code>Int32</code>, and top-level functions live on a class named after the file, like <code>PlatformKt</code>.</p>
 <p>A <code>suspend</code> function becomes a method with a completion handler, which Swift can also call with <code>await</code>. Exceptions only cross into Swift if the function declares them with <code>@Throws</code>. Anything else crashes the app. Suspend functions always pass <code>CancellationException</code> through.</p>
-<p>Sealed classes and enums lose their exhaustiveness: Swift sees a class hierarchy and needs <code>as?</code> casts with a default case. SKIE fixes that with real Swift enums and <code>onEnum(of:)</code>. Kotlin's own Swift export, which skips Objective-C, is still experimental.</p>`,
+<p>Sealed classes and enums lose their exhaustiveness: Swift sees a class hierarchy and needs <code>as?</code> casts with a default case. SKIE fixes that with real Swift enums and <code>onEnum(of:)</code>. Kotlin's own Swift export, which skips Objective-C, is still in Alpha.</p>`,
         code: `// Kotlin, commonMain
 class UserRepository(private val api: UserApi) {
     fun count(): Int = api.cachedCount()

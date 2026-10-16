@@ -115,8 +115,6 @@
 .kd-parts { display: grid; gap: 10px; justify-items: center; min-width: 0; }
 
 /* depth steps */
-/* Shell fix (belongs in style.css): an open details.hood is a grid whose ::details-content item grows to the widest code line. */
-.hood[open] { grid-template-columns: minmax(0, 1fr); }
 .kd-intruder { border-color: var(--err) !important; background: var(--err-soft) !important; color: var(--err) !important; }
 .kd-node.kd-bad { border-color: var(--err); background: var(--err-soft); }
 .kd-node.kd-dim { opacity: 0.45; }
@@ -715,7 +713,7 @@ inline fun track(onStart: () -> Unit, noinline onDone: () -> Unit) {
                 if (busy) return; busy = true;
                 if (!noinl) {
                   replay(decl, 'shake');
-                  say(o, `<span class="bad">compile error:</span> Illegal usage of inline-parameter 'onDone'. Add 'noinline' modifier to the parameter declaration.`);
+                  say(o, `<span class="bad">compile error:</span> Illegal usage of inline parameter 'onDone'. Add 'noinline' modifier to the parameter declaration.`);
                   await sleep(400); busy = false; return;
                 }
                 const rows = [...decl.children];
@@ -959,7 +957,7 @@ val screen = settings {
             const s = last();
             if (marker) {
               replay(codeEl, 'shake');
-              say(o, `<span class="bad">compile error:</span> 'fun section(...)' can't be called in this context by implicit receiver. Use the explicit one if necessary`);
+              say(o, `<span class="bad">compile error:</span> 'fun section(...)' cannot be called in this context with an implicit receiver. Use an explicit receiver if necessary.`);
               return;
             }
             if (s.leak) { say(o, 'Already there. Turn on @DslMarker to see the compiler catch it.'); return; }

@@ -910,7 +910,7 @@ fun BellWithCount(count: Int) {
         title: 'Scaffold and Material 3 structure',
         tagline: 'Slots for the bars, and innerPadding to keep content clear of them.',
         body: `
-<p><code>Scaffold</code> lays out the standard parts of a Material 3 screen: <code>topBar</code>, <code>bottomBar</code>, <code>floatingActionButton</code>, <code>snackbarHost</code>, and your content in the middle. It knows where each part goes. The FAB sits above the bottom bar and moves up when a snackbar shows.</p>
+<p><code>Scaffold</code> lays out the standard parts of a Material 3 screen: <code>topBar</code>, <code>bottomBar</code>, <code>floatingActionButton</code>, <code>snackbarHost</code>, and your content in the middle. It knows where each part goes. The FAB sits above the bottom bar, and a snackbar appears above the FAB.</p>
 <p>The content lambda gets one parameter, <code>innerPadding</code>. It holds the space taken by the bars and by the system bars. Apps that target Android 15 draw edge to edge, so if you drop <code>innerPadding</code>, your first and last items slide under the bars. Apply it with <code>Modifier.padding(innerPadding)</code>, or pass it as <code>contentPadding</code> to a lazy list so items still scroll behind the bars.</p>
 <p>A snackbar needs a <code>SnackbarHostState</code>. Its <code>showSnackbar</code> is a suspend function, so you call it from a coroutine. It shows one message at a time, and the rest wait in line.</p>`,
         code: `@OptIn(ExperimentalMaterial3Api::class)
@@ -991,8 +991,8 @@ fun InboxScreen(messages: List<Message>, onCompose: () -> Unit) {
             content.style.paddingTop = usePad ? `${p.top * PX}px` : '0px';
             content.style.paddingBottom = usePad ? `${p.bottom * PX}px` : '0px';
             const base = p.bottom * PX;
-            snack.style.bottom = `${base + 8}px`;
-            fab.style.bottom = `${base + 12 + (showing ? snack.offsetHeight + 10 : 0)}px`;
+            fab.style.bottom = `${base + 12}px`;
+            snack.style.bottom = `${base + (hasFab ? 12 + fab.offsetHeight + 8 : 8)}px`;
             fab.classList.toggle('cmp-sc-hide', !hasFab);
             pad.innerHTML = hl(`innerPadding = PaddingValues(\n    top = ${p.top}.dp,     // ${hasTop ? 'status bar + TopAppBar' : 'status bar only'}\n    bottom = ${p.bottom}.dp,  // ${hasBottom ? 'NavigationBar + gesture bar' : 'gesture bar only'}\n)\n${usePad ? 'LazyColumn(contentPadding = innerPadding)' : 'LazyColumn()   // innerPadding ignored'}`);
             setTimeout(markUnder, 430);
@@ -1041,7 +1041,7 @@ fun InboxScreen(messages: List<Message>, onCompose: () -> Unit) {
             addRow(`Draft ${drafts}`, 'Just now', true);
             content.scrollTo({ top: 0, behavior: 'smooth' });
             replay(fab, 'pop');
-            say(o, `${hl('scope.launch { snackbarHostState.showSnackbar("Draft saved") }')} <span class="muted">// the FAB moves up to make room</span>`);
+            say(o, `${hl('scope.launch { snackbarHostState.showSnackbar("Draft saved") }')} <span class="muted">// the snackbar appears above the FAB</span>`);
             show(`Draft ${drafts} saved`);
           }
           layout();

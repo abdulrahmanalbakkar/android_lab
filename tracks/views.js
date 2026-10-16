@@ -113,8 +113,6 @@
 .vw-big { font: 800 1.6rem var(--display); font-variant-numeric: tabular-nums; }
 
 /* depth: shell-level fix so long code scrolls inside step and hood grids (harmless if duplicated) */
-.step > pre.code, .hood > pre.code, .hood > .prose { min-width: 0; }
-.hood::details-content { min-width: 0; }
 
 /* depth: RecyclerView */
 .vw-row.vw-hdr { height: 30px; background: var(--sunk); border-style: dashed; font: 700 0.8rem var(--mono); }

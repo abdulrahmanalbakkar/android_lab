@@ -769,7 +769,7 @@ fun ArticleRow(article: Article, onToggleSave: () -> Unit) {
           function mutate() {
             if (busy) return;
             replay(phone, 'shake');
-            say(o, '<span class="bad">compile error:</span> Unresolved reference: add. <span class="muted">items is a read-only List. The screen can only read state; send an event instead.</span>');
+            say(o, '<span class="bad">compile error:</span> Unresolved reference \'add\'. <span class="muted">items is a read-only List. The screen can only read state; send an event instead.</span>');
           }
           paintPhone();
           slot.append(card(st));
@@ -2098,7 +2098,7 @@ suspend fun loadArticle(id: Int): Result<ArticleDto> = try {
             }
             if (kind === 'missing') {
               card.classList.add('shake'); card.style.borderColor = 'var(--err)';
-              say(o, `<span class="bad">MissingFieldException:</span> Field 'title' is required for type ArticleDto, but it was missing. <span class="muted">A SerializationException: catch it too, or the app crashes.</span>`);
+              say(o, `<span class="bad">MissingFieldException:</span> Field 'title' is required for type with serial name 'com.example.ArticleDto', but it was missing. <span class="muted">A SerializationException: catch it too, or the app crashes.</span>`);
             } else {
               say(o, `${hl('Result.success(ArticleDto(id=42, title="Room with KSP", publishedAt="2026-10-01"))')} <span class="muted">// "views" was ignored</span>`);
             }

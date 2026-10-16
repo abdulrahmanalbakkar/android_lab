@@ -98,7 +98,7 @@
 var score = 10        // mutable
 
 score += 5            // fine: score is now 15
-name = "Grace"        // error: Val cannot be reassigned
+name = "Grace"        // error: 'val' cannot be reassigned
 
 val items = mutableListOf(1)
 items.add(2)          // fine: the list changes, the name doesn't`,
@@ -128,7 +128,7 @@ items.add(2)          // fine: the list changes, the name doesn't`,
           el.append(
             h('div', { class: 'stage' }, name, score),
             h('div', { class: 'controls' },
-              cmd('name = "Grace"', () => { replay(name, 'shake'); say(o, '<span class="bad">error:</span> Val cannot be reassigned'); }),
+              cmd('name = "Grace"', () => { replay(name, 'shake'); say(o, '<span class="bad">error:</span> \'val\' cannot be reassigned'); }),
               cmd('score += 5', () => { n += 5; swap(score.well, String(n)); say(o, `<span class="good">ok:</span> score is now ${n}`); })),
             o);
         },
@@ -514,7 +514,7 @@ public static final int greet(@NotNull String name) {
           const paint = () => { toggle.innerHTML = hl(`val name: String? = ${isNull ? 'null' : '"Kotlin"'}`) + '  <span class="muted">⇄ tap to flip</span>'; track.replaceChildren(); say(o, 'Pick an expression to watch the value travel.'); };
           const len = v => (v == null ? null : v.length);
           const exprs = [
-            { src: 'name.length', error: 'Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type String?' },
+            { src: 'name.length', error: 'Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type \'String?\'.' },
             { src: 'name?.length', steps: [['?.length', len]] },
             { src: 'name?.length ?: 0', steps: [['?.length', len], ['?: 0', v => v ?? 0]] },
             { src: 'name!!.length', steps: [['!!.length', v => { if (v == null) throw new Error('NullPointerException'); return v.length; }]] },
@@ -619,7 +619,7 @@ b()          // 1: b has its own count`,
               };
               const call = name => {
                 const c = made[name];
-                if (!c) { say(o, `<span class="bad">error:</span> Unresolved reference: ${name}. Create it first.`); replay(o, 'shake'); return; }
+                if (!c) { say(o, `<span class="bad">error:</span> Unresolved reference '${name}'. Create it first.`); replay(o, 'shake'); return; }
                 c.n += 1; c.val.textContent = `count = ${c.n}`;
                 c.val.className = 'field changed'; replay(c.val, 'pop');
                 say(o, `${hl(`${name}()`)} <span class="muted">returns</span> ${hl(String(c.n))}`);
@@ -838,7 +838,7 @@ val snapshot = basket.items.toList()          // a separate copy`,
                   }),
                   cmd('items.add("Fig")', () => {
                     replay(refB, 'shake');
-                    say(o, '<span class="bad">compile error:</span> Unresolved reference: add. List has no add().');
+                    say(o, '<span class="bad">compile error:</span> Unresolved reference \'add\'. List has no add().');
                   }),
                   cmd('val snapshot = items.toList()', () => {
                     snap = [...listChips.children].map(c => c.textContent);
@@ -1378,10 +1378,10 @@ b.move()       // "flies"`,
         visual(el) {
           const dogOpen = 'class Dog : Animal() {\n    override fun sound() = "Woof"\n}';
           const modes = {
-            final: { label: 'class Animal', tag: 'final', base: 'class Animal {\n    fun sound() = "..."\n}', dog: dogOpen, dogErr: 'This type is final, so it cannot be inherited from.' },
+            final: { label: 'class Animal', tag: 'final', base: 'class Animal {\n    fun sound() = "..."\n}', dog: dogOpen, dogErr: 'This type is final, so it cannot be extended.' },
             open: { label: 'open class Animal', tag: 'open', base: 'open class Animal {\n    open fun sound() = "..."\n}', dog: dogOpen },
             abstract: { label: 'abstract class Animal', tag: 'abstract', base: 'abstract class Animal {\n    abstract fun sound(): String\n}', dog: dogOpen, makeErr: 'Cannot create an instance of an abstract class.' },
-            iface: { label: 'interface Animal', tag: 'interface', base: 'interface Animal {\n    fun sound() = "..."  // default\n}', dog: 'class Dog : Animal {\n    override fun sound() = "Woof"\n}', makeErr: 'Interface Animal does not have constructors.' },
+            iface: { label: 'interface Animal', tag: 'interface', base: 'interface Animal {\n    fun sound() = "..."  // default\n}', dog: 'class Dog : Animal {\n    override fun sound() = "Woof"\n}', makeErr: 'Interface \'Animal\' does not have constructors.' },
           };
           let mode = 'open', dogOk = false;
           const baseTag = h('span', { class: 'kt-tag' });
@@ -1420,7 +1420,7 @@ b.move()       // "flies"`,
             replay(base, 'pop'); say(o, `${hl('Animal().sound()')} <span class="muted">returns</span> ${hl('"..."')}`);
           }
           function makeDog() {
-            if (!dogOk) { replay(stage, 'shake'); say(o, '<span class="bad">error:</span> Unresolved reference: Dog. Declare it first.'); return; }
+            if (!dogOk) { replay(stage, 'shake'); say(o, '<span class="bad">error:</span> Unresolved reference \'Dog\'. Declare it first.'); return; }
             replay(dog, 'pop'); say(o, `${hl('Dog().sound()')} <span class="muted">returns</span> ${hl('"Woof"')}`);
           }
           paint(); declare();
@@ -1723,7 +1723,7 @@ println(a)  // User(name=Ada, age=36)`,
                 say(o, `${hl('val b = a.copy(owner = "Bo")')} <span class="muted">// one list, two references</span>`);
               };
               const add = () => {
-                if (!b) { say(o, '<span class="bad">error:</span> Unresolved reference: b. Copy a first.'); replay(o, 'shake'); return; }
+                if (!b) { say(o, '<span class="bad">error:</span> Unresolved reference \'b\'. Copy a first.'); replay(o, 'shake'); return; }
                 if (ro) {
                   b = { owner: b.owner, list: { id: ids++, items: [...b.list.items, 'Jam'] } };
                   paint();
@@ -1772,7 +1772,7 @@ override fun hashCode() = name.hashCode() * 31 + age.hashCode()
 override fun toString() = "User(name=$name, age=$age)"`,
         },
         mistakes: [
-          { title: 'Arrays inside a data class', bad: 'data class Photo(val id: Int, val bytes: ByteArray)\n\nPhoto(1, data) == Photo(1, data.copyOf())   // false', good: 'data class Photo(val id: Int, val bytes: List<Byte>)\n// or override equals/hashCode with contentEquals/contentHashCode', why: 'Arrays compare by identity, so the generated <code>equals</code> does too. The compiler warns about this. Use a <code>List</code>, or write <code>equals</code> and <code>hashCode</code> yourself.' },
+          { title: 'Arrays inside a data class', bad: 'data class Photo(val id: Int, val bytes: ByteArray)\n\nPhoto(1, data) == Photo(1, data.copyOf())   // false', good: 'data class Photo(val id: Int, val bytes: List<Byte>)\n// or override equals/hashCode with contentEquals/contentHashCode', why: 'Arrays compare by identity, so the generated <code>equals</code> does too. The IDE warns about this. Use a <code>List</code>, or write <code>equals</code> and <code>hashCode</code> yourself.' },
           { title: 'Mutating state instead of copying it', bad: 'data class UiState(val items: MutableList<String>)\n\n_state.value.items.add("New")   // UI never updates', good: 'data class UiState(val items: List<String>)\n\n_state.update { it.copy(items = it.items + "New") }', why: 'The StateFlow still holds the same object, so it has nothing new to emit and Compose sees no change. A new object from <code>copy()</code> triggers the update.' },
           { title: 'Secrets in toString', bad: 'data class Login(val user: String, val password: String)\n\nLog.d("Auth", "Sending $login")', good: 'data class Login(val user: String, val password: String) {\n    override fun toString() = "Login(user=$user, password=***)"\n}', why: 'The generated <code>toString</code> prints every constructor property, so passwords and tokens end up in logs and crash reports. Override it for sensitive data.' },
         ],
@@ -1801,7 +1801,7 @@ override fun toString() = "User(name=$name, age=$age)"`,
           };
           const cmp = k => {
             const a = objs.a, x = objs[k];
-            if (!x) { say(o, `<span class="bad">error:</span> Unresolved reference: ${k}. Create it first.`); return; }
+            if (!x) { say(o, `<span class="bad">error:</span> Unresolved reference '${k}'. Create it first.`); return; }
             replay(a.el, 'cmp'); replay(x.el, 'cmp');
             const eq = isData ? a.name === x.name && a.age === x.age : a === x;
             const why = isData ? (eq ? 'every field matches' : 'age is different') : 'different objects in memory, and a plain class compares identity';
@@ -1815,7 +1815,7 @@ override fun toString() = "User(name=$name, age=$age)"`,
             h('div', { class: 'controls' },
               cmd('val b = User("Ada", 36)', () => make('b', { name: 'Ada', age: 36 }, 'val b = User("Ada", 36)')),
               cmd('val c = a.copy(age = 37)', () => {
-                if (!isData) { say(o, '<span class="bad">compile error:</span> Unresolved reference: copy. Only data classes get copy().'); return; }
+                if (!isData) { say(o, '<span class="bad">compile error:</span> Unresolved reference \'copy\'. Only data classes get copy().'); return; }
                 make('c', { name: objs.a.name, age: 37 }, 'val c = a.copy(age = 37)', true);
               }),
               cmd('a == b', () => cmp('b')),
@@ -1855,7 +1855,7 @@ fun String.initials(): String =
         ],
         quiz: [
           { q: 'Inside <code>fun Int.isOdd() = this % 2 == 1</code>, what is <code>this</code>?', options: ['The Int it was called on', 'The file it lives in', 'Nothing, extensions have no this'], a: 0, why: '<code>this</code> is the receiver: in <code>5.isOdd()</code> it is 5.' },
-          { q: 'Can an extension function read a class’s <code>private</code> members?', options: ['Yes, it becomes part of the class', 'No, it is an ordinary function called with dot syntax'], a: 1, why: 'Extensions are compiled to regular functions that take the receiver as a parameter, so they only see public API.' },
+          { q: 'Can an extension function read a class’s <code>private</code> members?', options: ['Yes, it becomes part of the class', 'No, it is an ordinary function called with dot syntax'], a: 1, why: 'Extensions are compiled to regular functions that take the receiver as a parameter, so they can’t see private members.' },
         ],
         visual(el) {
           const exts = [
@@ -2012,7 +2012,7 @@ fun render(state: UiState) = when (state) {
             if (drop.checked) {
               phone.replaceChildren(h('p', { class: 'build-fail' }, 'Build failed'));
               replay(phone, 'shake');
-              say(o, `<span class="bad">compile error:</span> 'when' expression must be exhaustive. Add the 'is Error' branch or 'else'.`);
+              say(o, `<span class="bad">compile error:</span> 'when' expression must be exhaustive. Add the 'is Error' branch or an 'else' branch.`);
               return;
             }
             phone.replaceChildren(...screens[s.name]());

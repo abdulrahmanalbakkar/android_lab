@@ -4,7 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Android Lab</title>
+<meta name="description" content="Learn Kotlin and Android one live demo at a time: interactive tracks, capstone projects, timed interview practice and spaced review. Free, no sign-up.">
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#F4F8F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B130F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Android Lab">
+<meta property="og:title" content="Android Lab: learn Kotlin and Android by playing with it">
+<meta property="og:description" content="Interactive lessons with live demos, capstone projects, timed interview practice and spaced review.">
+<meta property="og:url" content="https://abdulrahmanalbakkar.github.io/android_lab/">
+<meta property="og:image" content="https://abdulrahmanalbakkar.github.io/android_lab/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Android Lab: a subway map of Kotlin and Android tracks">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Android Lab: learn Kotlin and Android by playing with it">
+<meta name="twitter:description" content="Interactive lessons with live demos, capstone projects, timed interview practice and spaced review.">
+<meta name="twitter:image" content="https://abdulrahmanalbakkar.github.io/android_lab/og.png">
 <script>try { var m = localStorage.getItem('android-lab:theme'); if (m === 'light' || m === 'dark') document.documentElement.dataset.theme = m; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +38,7 @@
       <a href="#home">Map</a>
       <a href="#glossary">Glossary</a>
       <a href="#review">Review <span id="due-badge" class="badge" hidden></span></a>
+      <a href="#interview">Interview</a>
     </nav>
     <div class="search">
       <input id="search" type="search" placeholder="Search lessons, tracks, terms  /" aria-label="Search lessons, tracks and terms" role="combobox" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">
@@ -30,7 +50,7 @@
 </header>
 <main id="app"></main>
 <footer class="foot">
-  <p><span><kbd>←</kbd><kbd>→</kbd> lessons</span><span><kbd>/</kbd> search</span><span><kbd>m</kbd> map</span><span><kbd>r</kbd> review</span><span><kbd>g</kbd> glossary</span><span><kbd>t</kbd> theme</span><button id="keys-btn" type="button"><kbd>?</kbd> all shortcuts</button></p>
+  <p><span><kbd>←</kbd><kbd>→</kbd> lessons</span><span><kbd>/</kbd> search</span><span><kbd>m</kbd> map</span><span><kbd>r</kbd> review</span><span><kbd>i</kbd> interview</span><span><kbd>g</kbd> glossary</span><span><kbd>t</kbd> theme</span><button id="keys-btn" type="button"><kbd>?</kbd> all shortcuts</button></p>
 </footer>
 <script src="js/app.js"></script>
 <!-- One script per track. To add a topic, copy tracks/kotlin.js's shape into a new file and list it here. A missing file just doesn't load. -->
@@ -53,5 +73,10 @@
 <script src="tracks/security.js"></script>
 <script src="tracks/build.js"></script>
 <script src="tracks/kmp.js"></script>
+<!-- Capstone projects (kind: 'project'). Listed after the tracks; the map puts each at the end of its group anyway. -->
+<script src="tracks/cap-kotlin.js"></script>
+<script src="tracks/cap-app.js"></script>
+<script src="tracks/cap-quality.js"></script>
+<script src="tracks/cap-ship.js"></script>
 </body>
 </html>

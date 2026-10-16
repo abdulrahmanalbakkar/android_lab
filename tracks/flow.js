@@ -292,9 +292,11 @@ class SearchViewModel(private val repo: SearchRepository) : ViewModel() {
 }
 
 // One chapter at a time, pages stay in order
+@OptIn(ExperimentalCoroutinesApi::class)
 val pages: Flow<Page> = chapterIds.asFlow().flatMapConcat { id -> repo.pages(id) }
 
 // Up to 4 thumbnails at once, in whatever order they finish
+@OptIn(ExperimentalCoroutinesApi::class)
 val thumbs: Flow<Thumb> = photoIds.asFlow()
     .flatMapMerge(concurrency = 4) { id -> flow { emit(repo.thumb(id)) } }`,
     remember: 'Concat waits its turn, Merge runs them all at once, Latest cancels the old one.',
@@ -2137,7 +2139,7 @@ fun MapScreen(vm: MapViewModel) {
         title: 'Dispatchers and withContext',
         tagline: 'Pick the right threads for the job, then hop back.',
         body: `
-<p>A dispatcher decides which threads run a coroutine. <code>Dispatchers.Main</code> is the UI thread. <code>Dispatchers.IO</code> is a large pool for blocking calls like file, socket and database reads. <code>Dispatchers.Default</code> has one thread per CPU core, for heavy computation like parsing or sorting.</p>
+<p>A dispatcher decides which threads run a coroutine. <code>Dispatchers.Main</code> is the UI thread. <code>Dispatchers.IO</code> is a large pool for blocking calls like file, socket and database reads. <code>Dispatchers.Default</code> has one thread per CPU core (at least two), for heavy computation like parsing or sorting.</p>
 <p><code>withContext(dispatcher) { … }</code> runs a block on another dispatcher. The caller suspends until the block returns, then continues on its original dispatcher with the result. It does not start a parallel task.</p>
 <p>Code in <code>viewModelScope</code> starts on Main. Keep Main for touching the UI and hop away for anything slow. Suspend functions from Room and Retrofit already switch threads for you, so you can call them from Main.</p>`,
         code: `fun load() {

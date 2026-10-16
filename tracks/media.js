@@ -491,6 +491,7 @@ controller.play()`,
 override fun onPlaybackResumption(
     mediaSession: MediaSession,
     controller: MediaSession.ControllerInfo,
+    isForPlayback: Boolean,                        // Media3 1.9+; older versions lack it
 ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
     serviceScope.future {                          // kotlinx-coroutines-guava
         val saved = lastPlayedStore.read()         // written while playing
@@ -545,7 +546,9 @@ override fun onPlaybackResumption(
             title: 'Your own buttons in the notification',
             body: `<p>The notification and the lock screen show play, pause, previous and next by default. To add “forward 15 s” or “like”, define a <code>SessionCommand</code>, show it as a <code>CommandButton</code>, and allow it for controllers in <code>onConnect</code>.</p>
 <p>When a button is pressed, Media3 calls <code>onCustomCommand</code> on the session callback. The same command works from the notification, Android Auto and your own UI.</p>`,
-            code: `val skip15 = SessionCommand("SKIP_15", Bundle.EMPTY)
+            code: `// CommandButton.Builder(icon) and setMediaButtonPreferences are @UnstableApi:
+// add @OptIn(UnstableApi::class) to the enclosing function (Media3 1.5+)
+val skip15 = SessionCommand("SKIP_15", Bundle.EMPTY)
 val button = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_15)
     .setDisplayName("Forward 15 seconds")
     .setSessionCommand(skip15)
@@ -714,7 +717,7 @@ mediaSession = MediaSession.Builder(this, player)
         body: `
 <p>Only one app should be heard at a time. Android coordinates this with audio focus. An app asks for focus before it plays. When another app takes focus, yours should pause, lower its volume (duck) or stop for good, depending on what kind of loss it is.</p>
 <p>ExoPlayer does all of this for you. Pass <code>AudioAttributes</code> that describe the sound and <code>handleAudioFocus = true</code> to <code>setAudioAttributes()</code>. It then requests focus on play, pauses for a phone call and resumes after, stays paused when another music app takes over, and ducks for a navigation prompt. With <code>AUDIO_CONTENT_TYPE_SPEECH</code> it pauses instead of ducking, so a podcast never talks under the prompt.</p>
-<p>Unplugging headphones sends <code>ACTION_AUDIO_BECOMING_NOISY</code>. Call <code>setHandleAudioBecomingNoisy(true)</code> so the player pauses instead of playing out loud from the speaker. On Android 15 and later, an app only gets audio focus while it is the top app or runs a foreground service.</p>`,
+<p>Unplugging headphones sends <code>ACTION_AUDIO_BECOMING_NOISY</code>. Call <code>setHandleAudioBecomingNoisy(true)</code> so the player pauses instead of playing out loud from the speaker. For apps that target Android 15 (API 35) or higher, a focus request only succeeds while the app is the top app or runs a foreground service.</p>`,
         code: `val attributes = AudioAttributes.Builder()          // androidx.media3.common
     .setUsage(C.USAGE_MEDIA)
     .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)    // a podcast: pause, don't duck

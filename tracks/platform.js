@@ -137,8 +137,6 @@
 
 
 /* depth: shell-level fix so long code scrolls inside step and hood grids (harmless if duplicated) */
-.step > pre.code, .hood > pre.code, .hood > .prose { min-width: 0; }
-.hood::details-content { min-width: 0; }
 
 /* depth: FCM tokens */
 .plt-devs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
@@ -179,14 +177,14 @@
         level: 'beginner',
         body: `
 <p>Since Android 8.0 every notification belongs to a <code>NotificationChannel</code>, and the channel sets how loud it is. <code>IMPORTANCE_HIGH</code> makes a sound and pops up as a heads-up banner. <code>DEFAULT</code> makes a sound without the banner. <code>LOW</code> is silent with a status bar icon. <code>MIN</code> is silent and only shows in the shade.</p>
-<p>Create your channels at startup. The call does nothing once a channel exists. From then on the user owns its importance and sound, and your code can’t raise them. To change a default, ship a new channel id and delete the old one.</p>
+<p>Create your channels at startup. Once a channel exists, the call only updates its name and description. From then on the user owns its importance and sound, and your code can’t raise them. To change a default, ship a new channel id and delete the old one.</p>
 <p>On Android 13 and later, posting also needs the <code>POST_NOTIFICATIONS</code> runtime permission. Without it, <code>notify()</code> posts nothing and throws nothing. Ask when the user turns on something that sends notifications, like following a team.</p>`,
         code: `const val NEWS_CHANNEL = "news_alerts"
 
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
-        // Safe on every launch: a no-op once the channel exists.
+        // Safe on every launch: an existing channel only gets its name and description updated.
         val channel = NotificationChannel(
             NEWS_CHANNEL, getString(R.string.channel_news), NotificationManager.IMPORTANCE_HIGH,
         ).apply { description = getString(R.string.channel_news_desc) }
@@ -326,7 +324,8 @@ fun showScore(context: Context, id: Int, text: String) {
         body: `
 <p>FCM identifies each app install by a registration token. The SDK creates one on first start and calls <code>onNewToken()</code>. Your job is to send it to your server and store it next to the user.</p>
 <p>The token changes when the app is restored on a new device, reinstalled, or the user clears its data. FCM can also rotate it. Each time, <code>onNewToken()</code> fires again, so always forward it. Also send the current token from <code>FirebaseMessaging<wbr>.getInstance()<wbr>.token</code> at login, because a new user on the same install gets no callback.</p>
-<p>Your server sends through the HTTP v1 API. When FCM answers <code>404 UNREGISTERED</code>, that token is dead, so delete it. On the device, <code>onMessageReceived()</code> runs with a short execution window. Hand anything longer than a few seconds to WorkManager.</p>`,
+<p>Your server sends through the HTTP v1 API. When FCM answers <code>404 UNREGISTERED</code>, that token is dead, so delete it. On the device, <code>onMessageReceived()</code> runs with a short execution window. Hand anything longer than a few seconds to WorkManager.</p>
+<p>Heads-up: firebase-messaging 25.1.0 (June 2026) deprecated <code>getToken()</code>, <code>deleteToken()</code> and <code>onNewToken()</code>. The replacement registers by Firebase Installation ID. Add the manifest flag <code>firebase_messaging<wbr>_installation_id<wbr>_enabled</code>, and <code>onRegistered<wbr>(installationId)</code> takes the place of <code>onNewToken</code>. The flag turns the token APIs off, so pick one mode. The rules here stay the same: forward every ID to your server, and delete it on <code>UNREGISTERED</code>.</p>`,
         code: `class PushService : FirebaseMessagingService() {
 
     // First token, and every rotation after that.
@@ -357,7 +356,7 @@ suspend fun registerDevice(api: DeviceApi, userId: String) {
         remember: 'Every onNewToken goes to your server. Every 404 UNREGISTERED gets deleted.',
         terms: [
           { term: 'FCM registration token', def: 'An id FCM gives one app install so a server can address messages to that device.' },
-          { term: 'onNewToken', def: 'The FirebaseMessagingService callback that fires when a token is first created and whenever it changes.' },
+          { term: 'onNewToken', def: 'The FirebaseMessagingService callback that fires when a token is first created and whenever it changes. Deprecated since firebase-messaging 25.1.0 in favor of onRegistered.' },
           { term: 'onMessageReceived', def: 'The FirebaseMessagingService callback that receives data messages, and notification messages while the app is in the foreground.' },
           { term: 'FCM HTTP v1 API', def: 'The current server API for sending FCM messages, authorized with a short-lived OAuth 2.0 token from a service account.' },
         ],
@@ -448,7 +447,7 @@ ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, updated_at = now()
           },
           {
             title: 'Fresh timestamps tell live installs from dead ones',
-            body: `<p>Tokens rarely die loudly. A phone in a drawer keeps a valid token for months, and FCM accepts sends to it that never arrive. Firebase recommends refreshing each token on your server about once a month, with a periodic job that calls <code>getToken()</code> and posts it with a timestamp. Then a token that hasn’t been refreshed for a month really means an inactive install, and you can stop sending to it. FCM itself expires tokens of devices that stay inactive for 270 days, and sends to them return <code>UNREGISTERED</code>.</p>
+            body: `<p>Tokens rarely die loudly. A phone in a drawer keeps a valid token for months, and FCM accepts sends to it that never arrive. For token-based registration, Firebase suggests refreshing each token on your server about once a month, with a periodic job that calls <code>getToken()</code> and posts it with a timestamp. Then a token that hasn’t been refreshed for a month really means an inactive install, and you can stop sending to it. FCM itself treats a registration as stale after a month without connecting, and on Android expires it after 270 days of inactivity. Sends to an expired token fail, usually with <code>UNREGISTERED</code>. With FID registration, <code>onRegistered()</code> already fires on routine syncs at app startup, so you don’t need your own job.</p>
 <p>Without the monthly refresh, every row looks old, and the same cleanup would delete your most loyal users too. Advance the months and try pruning with the job on and off.</p>`,
             code: `class TokenRefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result = try {
@@ -737,7 +736,7 @@ class MainActivity : ComponentActivity() {
         deeper: [
           {
             title: 'Offline devices: collapsible or every message',
-            body: `<p>When the device is offline, FCM stores messages for it. By default each message is non-collapsible, so every one is kept and delivered in order. FCM keeps at most 100 of them per app on a device. Past that it drops them all, and on reconnect your app gets <code>onDeletedMessages()</code> instead.</p>
+            body: `<p>When the device is offline, FCM stores messages for it. By default each message is non-collapsible, so every one is kept and delivered. FCM keeps at most 100 of them per app on a device. Past that it drops them all, and on reconnect your app gets <code>onDeletedMessages()</code> instead.</p>
 <p>A <code>collapse_key</code> says only the latest one matters, like a live score. FCM keeps just the newest message per key, with up to 4 different keys per device at once. Notification messages are collapsible by default. Send a few updates while the phone is offline, then bring it back.</p>`,
             visual(el) {
               const SCORES = ['1-0', '1-1', '2-1', '2-2', '3-2', '3-3', '4-3'];
@@ -1372,7 +1371,7 @@ class App : Application(), Configuration.Provider {
     WorkManager.getInstance(this).enqueueUniquePeriodicWork(
         "daily-sync", ExistingPeriodicWorkPolicy.UPDATE, daily)
 }`,
-            why: 'Cancel and re-enqueue starts a new 24 hour wait each time. A user who opens the app daily never gets a sync. <code>UPDATE</code> keeps the schedule and applies your new request settings.',
+            why: 'Cancel and re-enqueue throws the schedule away on every launch and cancels a sync that is mid-run, so the period follows app opens instead of the clock. <code>UPDATE</code> keeps the existing schedule and applies your new request settings.',
           },
           {
             title: 'Passing the payload itself in inputData',
@@ -1499,7 +1498,7 @@ val status = workManager.getWorkInfoByIdFlow(request.id)`,
         level: 'advanced',
         body: `
 <p>A foreground service is work the user is aware of and expects to continue, like playback, navigation, a call or a workout. It must show an ongoing notification. For deferrable jobs, use WorkManager instead.</p>
-<p>Apps targeting Android 14 must give every foreground service a type. Declare <code>android:foregroundServiceType</code> on the <code>&lt;service&gt;</code>, request the matching permission such as <code>FOREGROUND_SERVICE_MEDIA_PLAYBACK</code>, and pass the type to <code>startForeground()</code>. After <code>startForegroundService()</code>, the service has about 5 seconds to call <code>startForeground()</code>, or the app crashes.</p>
+<p>Apps targeting Android 14 must give every foreground service a type. Declare <code>android:foregroundServiceType</code> on the <code>&lt;service&gt;</code>, request the matching permission such as <code>FOREGROUND_SERVICE_MEDIA_PLAYBACK</code>, and pass the type to <code>startForeground()</code>. After <code>startForegroundService()</code>, the service has only a few seconds to call <code>startForeground()</code>, or the app crashes. The exact limit depends on the Android version and device, so make it the first thing you do.</p>
 <p>Since Android 12 you can’t start one while the app is in the background, apart from a few exemptions. A high priority FCM message is one of them. Normal priority is not. Apps targeting Android 15 also can’t start types like <code>mediaPlayback</code> from <code>BOOT_COMPLETED</code>. For audio, Media3’s <code>MediaSessionService</code> handles the foreground part for you.</p>`,
         code: `// AndroidManifest.xml
 // <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -1524,7 +1523,7 @@ class BriefingService : Service() {
 
 // From a click while the app is visible, or from a high priority FCM message:
 ContextCompat.startForegroundService(context, Intent(context, BriefingService::class.java))`,
-        remember: 'Declare the type, start from the foreground, call startForeground within 5 seconds.',
+        remember: 'Declare the type, start from the foreground, call startForeground right away.',
         terms: [
           { term: 'Foreground service', def: 'A service that shows an ongoing notification while it does work the user is aware of.' },
           { term: 'foregroundServiceType', def: 'The manifest attribute naming what a foreground service does, such as mediaPlayback or location; required for apps targeting Android 14+.' },
@@ -1536,7 +1535,7 @@ ContextCompat.startForegroundService(context, Intent(context, BriefingService::c
         ],
         quiz: [
           { q: 'Your app is in the background. A <code>normal</code> priority FCM message arrives and your code calls <code>startForegroundService()</code>. Target is Android 14.', options: ['The service starts', 'It throws <code>ForegroundService<wbr>StartNotAllowed<wbr>Exception</code>', 'It waits until the app is opened'], a: 1, why: 'Only some cases are exempt from the background start ban. A high priority message is one of them, normal priority is not.' },
-          { q: '<code>onStartCommand</code> makes an 8 second network call before <code>startForeground()</code>. What happens?', options: ['Nothing special', 'The app crashes with <code>ForegroundService<wbr>DidNotStartInTime<wbr>Exception</code>', 'It quietly becomes a background service'], a: 1, why: 'The service has about 5 seconds after startForegroundService(). Go foreground first, then do the work.' },
+          { q: '<code>onStartCommand</code> launches a coroutine that downloads for a minute and only then calls <code>startForeground()</code>. What happens?', options: ['Nothing special', 'The app crashes with <code>ForegroundService<wbr>DidNotStartInTime<wbr>Exception</code>', 'It quietly becomes a background service'], a: 1, why: 'The service has only a few seconds after startForegroundService(). Go foreground first, then do the work.' },
           { q: 'Targeting Android 14, the <code>&lt;service&gt;</code> has no <code>foregroundServiceType</code>. <code>startForeground()</code> is called.', options: ['It works as before', 'It throws <code>MissingForeground<wbr>ServiceType<wbr>Exception</code>', 'The type defaults to dataSync'], a: 1, why: 'Android 14 requires a declared type for every foreground service.' },
         ],
         visual(el) {
@@ -1565,11 +1564,11 @@ ContextCompat.startForegroundService(context, Intent(context, BriefingService::c
             busy = true; bar.style.background = ''; setT(0);
             const f = FROM[from];
             if (f.no) { await sleep(300); fail(f.no); return; }
-            say(o, `${f.ok} onStartCommand() runs. The 5 second clock is ticking.`);
+            say(o, `${f.ok} onStartCommand() runs. The deadline clock is ticking.`);
             const callAt = quick ? 0.4 : 6;
             for (let s = 0; ; s += 0.2) {
               setT(s);
-              if (s >= LIMIT && !quick) { fail('ForegroundServiceDidNotStartInTimeException: startForeground() was not called within 5 seconds.'); return; }
+              if (s >= LIMIT && !quick) { fail('ForegroundServiceDidNotStartInTimeException: startForeground() was not called in time.'); return; }
               if (s >= callAt) break;
               await sleep(80);
               if (!el.isConnected) return;
@@ -1600,7 +1599,7 @@ ContextCompat.startForegroundService(context, Intent(context, BriefingService::c
                 h('div', { class: 'controls plt-row' }, cmd('startForegroundService(intent)', start), cmd('stopSelf()', stop)),
                 h('div', { class: 'timeline' },
                   h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'clock'), track),
-                  h('div', { class: 'plt-lane-note' }, h('span', {}, 'red line: 5 s limit'), clock))),
+                  h('div', { class: 'plt-lane-note' }, h('span', {}, 'red line: the deadline (a few seconds, varies by version)'), clock))),
               ph.dev),
             o);
         },
