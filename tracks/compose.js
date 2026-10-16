@@ -291,7 +291,33 @@
 @media (max-width: 460px) {
   .cmp-ls-wrap { grid-template-columns: minmax(0, 1fr); }
   .cmp-ls-map { grid-template-columns: repeat(auto-fill, 12px); }
-}`;
+}
+/* depth: recomposition */
+.cmp-rs-read { font: 600 0.66rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; background: var(--warm-soft); color: var(--warm); }
+.cmp-rs-lanes { display: grid; gap: 10px; padding: 14px; background: var(--bg); border-radius: 12px; border: 1px dashed var(--line); min-width: 0; }
+.cmp-rs-lane { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; align-items: center; min-width: 0; }
+.cmp-rs-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; align-items: center; min-width: 0; }
+.cmp-rs-phone { width: 170px; height: 130px; }
+/* depth: remember */
+.cmp-zk-price { font: 700 1.2rem var(--display); padding: 0 6px; border-radius: 6px; }
+.cmp-card.cmp-zk-stale { border-color: var(--err); }
+.cmp-card.cmp-zk-stale .cmp-zk-price { color: var(--err); }
+.cmp-zt-table { display: grid; gap: 4px; align-content: start; min-width: 0; font: 500 0.8rem/1.4 var(--mono); }
+.cmp-zt-row { margin-left: calc(var(--d, 0) * 14px); padding: 5px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.cmp-zt-row.cmp-zt-slot { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.cmp-zt-field { width: min(220px, 100%); min-height: 64px; display: grid; align-items: center; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--ink); background: var(--surface); font-weight: 700; overflow-wrap: anywhere; }
+/* depth: lazy keys */
+.cmp-dk-list { position: relative; }
+.cmp-dk-crash { position: absolute; inset: 6px; display: grid; align-content: center; gap: 6px; padding: 14px; border-radius: 10px; background: var(--code-bg); color: var(--t-e); font: 600 0.8rem/1.5 var(--mono); overflow-wrap: anywhere; }
+.cmp-sa-view { position: relative; height: 166px; width: min(300px, 100%); margin: 0 auto; overflow: hidden; border-radius: 14px; border: 6px solid var(--code-bg); background: var(--surface); }
+.cmp-sa-col { display: grid; gap: 6px; padding: 0 8px; }
+.cmp-sa-row { height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border-radius: 8px; border: 2px solid transparent; background: var(--sunk); font-weight: 700; font-size: 0.88rem; min-width: 0; }
+.cmp-sa-row.cmp-sa-reading { border-color: var(--accent); background: var(--accent-soft); }
+.cmp-de-pool { min-width: 0; }
+@media (max-width: 640px) {
+  .cmp-rs-lane { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+`;
 
   Lab.addTrack({
     id: 'compose',
@@ -342,6 +368,192 @@ fun LikeCount(likes: Int) {
           { q: 'What makes a composable recompose?', options: ['A <code>State</code> value it read has changed', 'Every new frame', 'Calling <code>invalidate()</code> on it'], a: 0, why: 'Compose tracks which state each composable reads and reruns only those when the state changes.' },
           { q: 'After <code>likes++</code>, <code>ProfileScreen</code> runs again. What happens to <code>Avatar()</code>, which takes no parameters?', options: ['It runs again too', 'It is skipped'], a: 1, why: 'Its inputs did not change, so Compose skips it.' },
           { q: 'What recomposes after <code>likes = likes</code>?', options: ['Everything', 'Only <code>LikeCount</code>', 'Nothing'], a: 2, why: 'Writing an equal value does not count as a change, so no reader is notified.' },
+        ],
+        deeper: [
+          {
+            title: 'The smallest scope that read the state',
+            body: `<p>Compose never reruns "the screen". It reruns the nearest <em>restart scope</em> that read the state. Every non-inline composable function is a restart scope, and so is every composable lambda.</p>
+<p><code>Column</code>, <code>Row</code> and <code>Box</code> are <code>inline</code> functions, so their content lambdas are not scopes of their own. A read inside them belongs to the function around them. The content lambda of <code>Button</code> is a normal composable lambda, so a read there reruns only that lambda.</p>`,
+            code: `@Composable
+fun Screen() {
+    var count by remember { mutableIntStateOf(0) }
+    Column {                                    // inline: part of Screen's scope
+        Header()
+        Button(onClick = { count++ }) {
+            Text("Clicked $count times")        // read here: only this lambda reruns
+        }
+    }
+}`,
+            visual(el) {
+              const OPTS = [
+                { src: 'val label = "Clicked $count"   // in Screen()', at: 'screen', note: 'The read sits in the Screen body, so Screen is the scope.' },
+                { src: 'Column { val label = "Clicked $count" }', at: 'column', note: 'Column is inline. The read still belongs to Screen.' },
+                { src: 'Button(onClick) { Text("Clicked $count") }', at: 'button', note: 'The Button content lambda is its own scope.' },
+              ];
+              let opt = OPTS[0], count = 0, busy = false;
+              const mk = (label, kind) => {
+                const badge = h('span', { class: 'cmp-badge', title: 'Times this has run' }, '1');
+                const status = h('span', { class: 'cmp-status' }, kind);
+                const read = h('span', { class: 'cmp-rs-read', hidden: true }, 'reads count');
+                return { runs: 1, kind, badge, status, read, el: h('div', { class: 'cmp-node' }, h('span', { class: 'cmp-node-label' }, label), read, status, badge) };
+              };
+              const N = {
+                screen: mk('Screen()', 'scope'),
+                column: mk('Column { }', 'inline, no scope'),
+                header: mk('Header()', 'scope'),
+                button: mk('Button(onClick) { }', 'content lambda is a scope'),
+                text: mk('Text(label)', 'scope'),
+              };
+              const o = out();
+              const btns = OPTS.map(x => cmd(x.src, () => pick(x)));
+              function pick(x) {
+                if (busy) return;
+                opt = x;
+                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(OPTS[i] === x)));
+                Object.entries(N).forEach(([k, n]) => { n.read.hidden = k !== x.at; n.el.classList.remove('cmp-hit', 'cmp-skip'); n.status.textContent = n.kind; });
+                replay(N[x.at].read, 'pop');
+                say(o, `${esc(x.note)} <span class="muted">// press count++</span>`);
+              }
+              async function bump() {
+                if (busy) return; busy = true;
+                count++;
+                Object.values(N).forEach(n => { n.el.classList.remove('cmp-hit', 'cmp-skip'); n.status.textContent = n.kind; });
+                const ran = opt.at === 'button' ? ['button', 'text'] : ['screen', 'column', 'header', 'button', 'text'];
+                say(o, `${hl(`count = ${count}`)} <span class="muted">// invalidates the scope that read it</span>`);
+                for (const k of ['screen', 'column', 'header', 'button', 'text']) {
+                  await sleep(300);
+                  if (!el.isConnected) return;
+                  const n = N[k];
+                  if (!ran.includes(k)) { n.status.textContent = 'not visited'; n.el.classList.add('cmp-skip'); continue; }
+                  if (k === 'header') { n.status.textContent = 'skipped, no inputs changed'; n.el.classList.add('cmp-skip'); continue; }
+                  n.runs++; n.badge.textContent = n.runs; replay(n.badge, 'pop');
+                  n.status.textContent = k === 'column' ? 'ran as part of Screen' : 'ran';
+                  n.el.classList.add('cmp-hit'); replay(n.el, 'cmp-flash');
+                }
+                const hits = Object.values(N).filter(n => n.el.classList.contains('cmp-hit')).length;
+                say(o, opt.at === 'button'
+                  ? `<span class="good">${hits} of 5 ran.</span> Only the Button content lambda and its Text. Screen was never called.`
+                  : `<span class="bad">${hits} of 5 ran.</span> Screen reran, so its Column body did too. Header skipped.`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'cmp-tree' }, N.screen.el,
+                  h('div', { class: 'cmp-kids' }, N.column.el,
+                    h('div', { class: 'cmp-kids' }, N.header.el, N.button.el, h('div', { class: 'cmp-kids' }, N.text.el)))),
+                h('div', { class: 'controls' }, btns),
+                h('div', { class: 'controls' }, cmd('count++', bump)),
+                o);
+              pick(OPTS[0]);
+            },
+          },
+          {
+            title: 'Writes wait for the next frame',
+            body: `<p>Writing a State value does not run anything right away. Compose marks the scopes that read it as invalid. Just before the next frame, the Recomposer reruns each invalid scope once, with the latest values.</p>
+<p>So three writes in one click handler cost one recomposition, not three. Code in the same handler still sees the new value at once. Only the UI waits.</p>`,
+            code: `Button(onClick = {
+    likes++
+    likes++
+    likes++
+    println(likes)   // already 3 here
+}) { Text("Like x3") }
+// LikeCount(likes) runs once, on the next frame, with 3`,
+            visual(el) {
+              let likes = 0, recomps = 0, busy = false;
+              const writes = h('div', { class: 'cmp-rs-chips' });
+              const frame = h('div', { class: 'cmp-rs-chips' }, h('span', { class: 'cmp-status' }, 'waiting'));
+              const rc = h('span', { class: 'cmp-badge' }, '0');
+              const shown = h('p', { class: 'cmp-pv-name' }, '0 likes');
+              const o = out('Each click writes likes. Watch when LikeCount actually runs.');
+              async function click(n, src) {
+                if (busy) return; busy = true;
+                writes.replaceChildren();
+                frame.replaceChildren(h('span', { class: 'cmp-status' }, 'waiting'));
+                say(o, `${hl(src)} <span class="muted">// writes happen now</span>`);
+                for (let i = 0; i < n; i++) {
+                  likes++;
+                  writes.append(h('span', { class: 'cmp-obj cmp-new drop-in' }, `likes = ${likes}`));
+                  await sleep(280);
+                  if (!el.isConnected) return;
+                }
+                say(o, `${n} write${n > 1 ? 's' : ''} done. LikeCount is marked invalid. Nothing has run yet.`);
+                await sleep(700);
+                if (!el.isConnected) return;
+                frame.replaceChildren(h('span', { class: 'cmp-obj cmp-reuse drop-in' }, `LikeCount(likes = ${likes})`));
+                recomps++; rc.textContent = recomps; replay(rc, 'pop');
+                shown.textContent = `${likes} like${likes === 1 ? '' : 's'}`; replay(shown, 'cmp-flash');
+                say(o, `Next frame: ${n} write${n > 1 ? 's' : ''}, <span class="good">1 recomposition</span> with the latest value.`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'cmp-split' },
+                  h('div', { class: 'cmp-rs-lanes' },
+                    h('div', { class: 'cmp-rs-lane' }, h('span', { class: 'cmp-fx-name' }, 'in onClick'), writes),
+                    h('div', { class: 'cmp-rs-lane' }, h('span', { class: 'cmp-fx-name' }, 'next frame'), frame),
+                    h('div', { class: 'cmp-rs-lane' }, h('span', { class: 'cmp-fx-name' }, 'recompositions'), h('div', { class: 'cmp-rs-chips' }, rc))),
+                  h('div', { class: 'phone cmp-rs-phone', role: 'img', 'aria-label': 'Like count preview' }, shown)),
+                h('div', { class: 'controls' },
+                  cmd('onClick = { likes++ }', () => click(1, 'likes++')),
+                  cmd('onClick = { repeat(3) { likes++ } }', () => click(3, 'repeat(3) { likes++ }'))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>The Compose compiler plugin rewrites every <code>@Composable</code> function. It adds hidden parameters: a <code>Composer</code> that records what the function emits, and a <code>$changed</code> bit mask where the caller says which arguments it already knows are the same or different.</p>
+<p>The body is wrapped in a <em>restart group</em>. If no argument changed and the composer allows skipping, the function jumps to the end of its group and its body never runs. At the end, it registers a lambda that calls the same function again with the same arguments. That lambda is the restart scope. When a State read inside it is invalidated, the Recomposer calls it on the next frame. The code below is simplified. The real output has more bookkeeping.</p>`,
+          code: `// You write
+@Composable
+fun LikeCount(likes: Int) {
+    Text("$likes likes")
+}
+
+// The compiler produces roughly this (simplified)
+fun LikeCount(likes: Int, $composer: Composer, $changed: Int) {
+    val composer = $composer.startRestartGroup(/* source key */ 0x5a1c)
+    val likesChanged = /* bits in $changed, else */ composer.changed(likes)
+    if (likesChanged || !composer.skipping) {
+        Text("$likes likes", composer, 0)
+    } else {
+        composer.skipToGroupEnd()           // skipped: the body never runs
+    }
+    composer.endRestartGroup()?.updateScope { nextComposer, _ ->
+        LikeCount(likes, nextComposer, $changed or 1)   // the restart scope
+    }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Heavy work in the body',
+            bad: `@Composable
+fun Contacts(contacts: List<Contact>) {
+    val sorted = contacts.sortedBy { it.name }   // every recomposition
+    LazyColumn {
+        items(sorted, key = { it.id }) { ContactRow(it) }
+    }
+}`,
+            good: `@Composable
+fun Contacts(contacts: List<Contact>) {
+    val sorted = remember(contacts) { contacts.sortedBy { it.name } }
+    LazyColumn {
+        items(sorted, key = { it.id }) { ContactRow(it) }
+    }
+}`,
+            why: 'A composable can run on every frame of an animation. Cache derived data with <code>remember</code> keyed on its input, or better, prepare it in the ViewModel.',
+          },
+          {
+            title: 'Writing state during composition',
+            bad: `@Composable
+fun Cart(items: List<Item>, vm: CartViewModel) {
+    vm.total = items.sumOf { it.price }   // State write in the body
+    Text("Total: \${vm.total}")
+}`,
+            good: `@Composable
+fun Cart(items: List<Item>) {
+    val total = items.sumOf { it.price }  // a plain local value
+    Text("Total: $total")
+}`,
+            why: 'Composition should only read state. Writing a State that the same composition reads invalidates it again, which can loop and recompose on every frame.',
+          },
         ],
         visual(el) {
           let name = 'Ada', likes = 0, busy = false;
@@ -998,6 +1210,196 @@ fun BrokenCounter() {
           { q: 'You tap +1 on <code>BrokenCounter</code> three times. What does it show?', options: ['Count: 3', 'Count: 1', 'Count: 0'], a: 2, why: 'Each tap triggers a recomposition, which creates a fresh state set to 0.' },
           { q: 'Does a <code>remember</code>ed value survive rotating the phone?', options: ['Yes', 'No, the composition is rebuilt'], a: 1, why: 'Rotation recreates the Activity and its composition. The next lesson fixes that.' },
         ],
+        deeper: [
+          {
+            title: 'Keys: build it again when an input changes',
+            body: `<p><code>remember(key) { }</code> keeps its value while the key stays equal. When the key changes, the old value is dropped and the block runs again. Use it for anything built from a parameter, like a formatter for a locale or a filtered list.</p>
+<p>Without the key, the first value stays for the whole life of the composable, even after the parameter changes.</p>`,
+            code: `@Composable
+fun PriceTag(cents: Long, locale: Locale) {
+    val format = remember(locale) { NumberFormat.getCurrencyInstance(locale) }
+    Text(format.format(cents / 100.0))
+}`,
+            visual(el) {
+              const LOC = { US: ['en-US', 'USD', 'Locale.US'], DE: ['de-DE', 'EUR', 'Locale.GERMANY'], UK: ['en-GB', 'GBP', 'Locale.UK'] };
+              let loc = 'US', cents = 1250, addr = 0x31c0, busy = false;
+              const next = () => '@' + (addr += 0x1b4).toString(16);
+              const fmt = (l, c) => { try { return new Intl.NumberFormat(LOC[l][0], { style: 'currency', currency: LOC[l][1] }).format(c / 100); } catch (e) { return (c / 100).toFixed(2); } };
+              const o = out();
+              const card = keyed => {
+                const c = { keyed, loc: 'US', id: next() };
+                c.obj = h('span', { class: 'cmp-obj' }, `NumberFormat(${LOC.US[0]}) ${c.id}`);
+                c.stack = h('div', { class: 'cmp-stack' }, c.obj);
+                c.price = h('span', { class: 'cmp-zk-price' }, fmt('US', cents));
+                c.el = h('div', { class: 'cmp-card' },
+                  h('div', { class: 'kt', html: hl(keyed ? 'remember(locale) { NumberFormat... }' : 'remember { NumberFormat... }') }),
+                  h('div', { class: 'cmp-mem' }, h('span', { class: 'cmp-label' }, 'slot'), c.stack),
+                  h('div', { class: 'cmp-row' }, h('span', { class: 'cmp-label' }, 'On screen'), c.price));
+                return c;
+              };
+              const A = card(false), B = card(true);
+              const paint = c => {
+                c.price.textContent = fmt(c.loc, cents);
+                c.el.classList.toggle('cmp-zk-stale', c.loc !== loc);
+                replay(c.price, 'cmp-flash');
+              };
+              async function setLocale(l) {
+                if (busy) return;
+                if (l === loc) { say(o, `${hl(`locale = ${LOC[l][2]}`)} <span class="muted">// same key: both slots reused</span>`); [A, B].forEach(c => replay(c.obj, 'pop')); return; }
+                busy = true; loc = l;
+                locBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(LOC)[i] === l)));
+                A.obj.classList.add('cmp-reuse'); replay(A.obj, 'pop');
+                const old = B.obj; old.classList.add('fly-out'); setTimeout(() => old.remove(), 400);
+                B.loc = l; B.id = next();
+                B.obj = h('span', { class: 'cmp-obj cmp-new drop-in' }, `NumberFormat(${LOC[l][0]}) ${B.id}`);
+                B.stack.append(B.obj);
+                await sleep(420);
+                if (!el.isConnected) return;
+                paint(A); paint(B);
+                say(o, `Key changed to ${LOC[l][2]}. <span class="good">remember(locale)</span> built a new formatter. <span class="bad">remember { }</span> still formats for ${LOC[A.loc][2]}.`);
+                busy = false;
+              }
+              function amount() {
+                if (busy) return;
+                cents += 100;
+                [A, B].forEach(c => { replay(c.obj, 'pop'); paint(c); });
+                say(o, `${hl('cents += 100')} <span class="muted">// a recomposition, keys unchanged: both slots reused</span>`);
+              }
+              const locBtns = Object.entries(LOC).map(([k, v]) => cmd(`locale = ${v[2]}`, () => setLocale(k)));
+              locBtns[0].setAttribute('aria-pressed', 'true');
+              say(o, 'Change the locale and compare the two slots.');
+              el.append(h('div', { class: 'cmp-pair' }, A.el, B.el), h('div', { class: 'controls' }, locBtns, cmd('cents += 100', amount)), o);
+            },
+          },
+          {
+            title: 'Slots belong to a place in the tree',
+            body: `<p>The composition stores remembered values by where the call sits. When an <code>if</code> stops calling a composable, its group and its slots are removed, and the remembered values go with them. When the branch comes back, <code>remember</code> runs its block again from scratch.</p>
+<p>The same happens when a screen leaves navigation or a lazy row scrolls far away. State that must outlive a branch belongs higher up: hoisted into the parent, saved with <code>rememberSaveable</code>, or kept in a ViewModel.</p>`,
+            code: `@Composable
+fun Order(showNotes: Boolean) {
+    if (showNotes) {
+        NotesEditor()   // its remember { } is forgotten when showNotes turns false
+    }
+}
+
+@Composable
+fun NotesEditor() {
+    var note by remember { mutableStateOf("") }
+    TextField(note, onValueChange = { note = it })
+}`,
+            visual(el) {
+              const NOTES = ['Gate code 41', 'Leave at the door', 'Ring twice'];
+              let show = true, hoist = false, note = '', typed = 0, busy = false, prev = new Set();
+              const table = h('div', { class: 'cmp-zt-table', 'aria-label': 'Slot table' });
+              const field = h('div', { class: 'cmp-zt-field' });
+              const toggle = h('input', { type: 'checkbox', id: 'cmp-rm-hoist' });
+              const showBtn = cmd('showNotes = false', () => flip());
+              const o = out();
+              function rows() {
+                const r = [{ k: 'order', d: 0, t: hoist ? 'group  Order(showNotes)' : 'group  Order(showNotes)' }];
+                if (hoist) r.push({ k: 'hoisted', d: 1, t: `slot   MutableState("${note}")`, slot: true });
+                if (show) {
+                  r.push({ k: 'if', d: 1, t: 'group  if (showNotes)' });
+                  r.push({ k: 'editor', d: 2, t: hoist ? 'group  NotesEditor(note, onNoteChange)' : 'group  NotesEditor()' });
+                  if (!hoist) r.push({ k: 'local', d: 3, t: `slot   MutableState("${note}")`, slot: true });
+                }
+                return r;
+              }
+              function paint() {
+                const r = rows(), now = new Set(r.map(x => x.k));
+                table.replaceChildren(...r.map(x => h('div', { class: ['cmp-zt-row', x.slot && 'cmp-zt-slot', !prev.has(x.k) && 'drop-in'].filter(Boolean).join(' '), style: `--d:${x.d}` }, x.t)));
+                prev = now;
+                field.replaceChildren(show
+                  ? h('span', {}, h('span', { class: 'cmp-label' }, 'Notes  '), note || h('span', { class: 'muted-text' }, '(empty)'))
+                  : h('span', { class: 'muted-text' }, 'Notes hidden'));
+                showBtn.innerHTML = hl(`showNotes = ${!show}`);
+              }
+              async function flip() {
+                if (busy) return; busy = true;
+                if (show) {
+                  const gone = [...table.children].filter(x => /if \(|NotesEditor|slot/.test(x.textContent) && !(hoist && x.textContent.startsWith('slot')));
+                  gone.forEach(x => x.classList.add('leave'));
+                  await sleep(420);
+                  if (!el.isConnected) return;
+                  show = false;
+                  if (!hoist) note = '';
+                  paint();
+                  say(o, hoist ? 'The NotesEditor group left. The note lives in Order, so it stays.' : '<span class="bad">The group left the table and took its slot with it.</span> The note is gone.');
+                } else {
+                  show = true; paint();
+                  say(o, hoist ? `<span class="good">Back with "${esc(note)}".</span> The state never left.` : 'NotesEditor is back in a new group. remember ran its block again: the note starts empty.');
+                }
+                busy = false;
+              }
+              function type() {
+                if (busy) return;
+                if (!show) { replay(field, 'shake'); say(o, 'The editor is hidden. Show it first.'); return; }
+                note = NOTES[typed++ % NOTES.length]; paint();
+                replay(table.querySelector('.cmp-zt-slot'), 'pop');
+                say(o, `${hl(`note = "${note}"`)} <span class="muted">// written into the slot</span>`);
+              }
+              toggle.addEventListener('change', () => {
+                if (busy) { toggle.checked = hoist; return; }
+                hoist = toggle.checked; show = true; note = ''; prev = new Set(); paint();
+                say(o, hoist ? 'The state now sits in Order. NotesEditor only gets the value and a callback.' : 'The state sits inside NotesEditor again.');
+              });
+              paint();
+              say(o, 'Type a note, then hide and show the editor.');
+              el.append(
+                h('div', { class: 'cmp-split' }, table, field),
+                h('div', { class: 'controls' }, act('Type a note', type), showBtn, h('label', { class: 'switch', for: 'cmp-rm-hoist' }, toggle, 'Hoist note into Order')),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>remember</code> is a small inline function. It asks the current <code>Composer</code> for the next slot in the <em>slot table</em>, the structure that stores groups and remembered values in the order your code ran. On the first composition the slot is empty, so the block runs and its result is written there. On later runs the same slot comes back. With keys, the composer first checks each key against the value it stored for that key last time.</p>
+<p>That is why position matters: the composer finds your value by walking the same path of groups. Values that implement <code>RememberObserver</code> are told when they enter and leave the table, which is how effects start and stop.</p>`,
+          code: `// Simplified from androidx.compose.runtime
+@Composable
+inline fun <T> remember(key1: Any?, crossinline calculation: () -> T): T =
+    currentComposer.cache(currentComposer.changed(key1), calculation)
+
+inline fun <T> Composer.cache(invalid: Boolean, block: () -> T): T {
+    val stored = rememberedValue()                   // read the next slot
+    return if (invalid || stored === Composer.Empty) {
+        block().also { updateRememberedValue(it) }   // first run or new key
+    } else {
+        stored as T                                  // same object as last time
+    }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Copying a parameter into state and expecting updates',
+            bad: `@Composable
+fun NameField(initial: String) {
+    var text by remember { mutableStateOf(initial) }
+    TextField(text, onValueChange = { text = it })
+}`,
+            good: `@Composable
+fun NameField(initial: String) {
+    var text by remember(initial) { mutableStateOf(initial) }
+    TextField(text, onValueChange = { text = it })
+}`,
+            why: 'The block runs once, so a later <code>initial</code> is ignored. Key it on the parameter if a new value should reset the field, or hoist the state so there is one source of truth.',
+          },
+          {
+            title: 'Rebuilding a constant object on every run',
+            bad: `@Composable
+fun DayLabel(date: LocalDate) {
+    val format = DateTimeFormatter.ofPattern("d MMM")
+    Text(date.format(format))
+}`,
+            good: `private val DayFormat = DateTimeFormatter.ofPattern("d MMM")
+
+@Composable
+fun DayLabel(date: LocalDate) {
+    Text(date.format(DayFormat))
+}`,
+            why: 'Anything built in the body is built again on every recomposition. A true constant goes in a top-level <code>val</code>. Use <code>remember</code> for things that depend on composition, like the current locale.',
+          },
+        ],
         visual(el) {
           let busy = false, addr = 0x4f1a;
           const newAddr = () => '@' + (addr += 0x2c3).toString(16);
@@ -1639,6 +2041,157 @@ fun GroceryList(items: List<Grocery>) {
           { q: 'No keys. Row 0 (“Milk”) is checked with <code>remember</code> state. You remove Milk. What is checked now?', options: ['Nothing', 'Eggs, the item that moved into row 0', 'Milk, still on screen'], a: 1, why: 'Row 0 keeps its remembered state and now shows Eggs.' },
           { q: 'Which makes a good key?', options: ['The list index', 'A stable unique id from the data', '<code>Random.nextInt()</code>'], a: 1, why: 'A key must stay the same for the same item and differ between items. Indexes shift; random values change on every run.' },
         ],
+        deeper: [
+          {
+            title: 'Keys must be unique',
+            body: `<p>Two items with the same key crash the list with <code>IllegalArgumentException: Key ... was already used</code>. Compose can’t tell which row owns which state. Ids from your database or server are unique. Names and titles are not.</p>
+<p>On Android a key must also fit in a <code>Bundle</code>, so use an <code>Int</code>, <code>Long</code>, <code>String</code> or a <code>Parcelable</code>. The list saves keys to restore scroll position and <code>rememberSaveable</code> state.</p>`,
+            visual(el) {
+              let byName = false, items, nextId, crashed = false, busy = false;
+              const toggle = h('input', { type: 'checkbox', id: 'cmp-dk-name' });
+              const head = h('div', { class: 'kt' });
+              const list = h('div', { class: 'cmp-lazy cmp-dk-list', role: 'list', 'aria-label': 'Grocery list' });
+              const o = out();
+              const keyOf = it => (byName ? `"${it.name}"` : String(it.id));
+              function paint(fresh) {
+                head.innerHTML = hl(`items(items, key = { it.${byName ? 'name' : 'id'} }) { ... }`);
+                list.replaceChildren(...items.map(it => h('div', { class: 'cmp-item' + (it === fresh ? ' drop-in' : ''), role: 'listitem' },
+                  h('span', { class: 'cmp-box', 'aria-hidden': 'true' }), h('span', { class: 'cmp-name' }, it.name), h('span', { class: 'cmp-tag' }, `key = ${keyOf(it)}`))));
+              }
+              function reset() {
+                byName = toggle.checked; crashed = false;
+                items = [{ id: 1, name: 'Milk' }, { id: 2, name: 'Eggs' }, { id: 3, name: 'Bread' }];
+                nextId = 4; paint();
+                say(o, byName ? 'Keyed by name. Fine while every name is different.' : 'Keyed by id. Every row has its own number.');
+              }
+              async function add(name) {
+                if (busy) return;
+                if (crashed) { replay(list, 'shake'); say(o, 'The app crashed. Reset the list.'); return; }
+                if (items.length >= 6) { replay(list, 'shake'); say(o, 'Six rows is enough for this demo. Reset the list.'); return; }
+                busy = true;
+                const it = { id: nextId++, name };
+                const clash = items.find(x => keyOf(x) === keyOf(it));
+                items.push(it); paint(it);
+                await sleep(450);
+                if (!el.isConnected) return;
+                if (clash) {
+                  crashed = true;
+                  list.append(h('div', { class: 'cmp-dk-crash drop-in' }, h('b', {}, 'FATAL EXCEPTION: main'), `IllegalArgumentException: Key ${keyOf(it)} was already used.`));
+                  replay(list, 'shake');
+                  say(o, `<span class="bad">Crash.</span> Two items share ${hl(`key = ${keyOf(it)}`)}. Turn off the name key and try again.`);
+                } else say(o, `${hl(`add(Grocery(id = ${it.id}, name = "${name}"))`)} <span class="muted">→</span> <span class="good">new key ${esc(keyOf(it))}, no clash</span>`);
+                busy = false;
+              }
+              toggle.addEventListener('change', () => { if (busy) { toggle.checked = byName; return; } reset(); });
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-dk-name' }, toggle, 'key = { it.name }'), head),
+                list,
+                h('div', { class: 'controls' }, cmd('items.add(Grocery(name = "Milk"))', () => add('Milk')), cmd('items.add(Grocery(name = "Tea"))', () => add('Tea')), act('Reset list', () => { if (!busy) reset(); })),
+                o);
+              reset();
+            },
+          },
+          {
+            title: 'Keys hold your scroll position',
+            body: `<p><code>LazyListState</code> remembers the key of the first visible item, not just its index. When new items arrive above it, the list finds that key again and keeps it in place. Without keys it can only keep the index, so the content slides down under the reader.</p>
+<p>This matters for chats and feeds that insert at the top while someone is reading.</p>`,
+            visual(el) {
+              const ROW = 40;
+              let keyed = true, items, first, fresh, busy = false;
+              const toggle = h('input', { type: 'checkbox', id: 'cmp-sa-key', checked: true });
+              const col = h('div', { class: 'cmp-sa-col' });
+              const view = h('div', { class: 'cmp-sa-view', role: 'img', 'aria-label': 'Feed viewport' }, col);
+              const idx = h('div', { class: 'kt' });
+              const o = out();
+              const paintIdx = () => { idx.innerHTML = hl(`firstVisibleItemIndex = ${first}`); };
+              function paint(newOnes) {
+                col.replaceChildren(...items.map(it => h('div', { class: ['cmp-sa-row', it.read && 'cmp-sa-reading', newOnes && newOnes.includes(it) && 'cmp-ls-in'].filter(Boolean).join(' ') }, it.name, it.read ? h('span', { class: 'cmp-tag' }, 'reading') : null)));
+              }
+              const place = animate => {
+                col.style.transition = animate ? 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none';
+                col.style.transform = `translateY(${-first * ROW}px)`;
+              };
+              function reset() {
+                keyed = toggle.checked; fresh = 0;
+                items = Array.from({ length: 9 }, (_, i) => ({ id: i + 1, name: `Post ${i + 1}`, read: i === 4 }));
+                first = 4; paint(); place(false); paintIdx();
+                say(o, `You scrolled to Post 5 and are reading it. ${keyed ? 'Items have keys.' : 'No keys: the list only knows indexes.'}`);
+              }
+              async function arrive() {
+                if (busy) return;
+                if (fresh >= 6) { replay(view, 'shake'); say(o, 'Enough new posts. Reset to try again.'); return; }
+                busy = true;
+                const add = [1, 2, 3].map(() => ({ id: 100 + ++fresh, name: `New post ${fresh}` }));
+                items = [...add, ...items];
+                paint(add);
+                if (keyed) first += 3;
+                place(false); paintIdx(); replay(idx, 'pop-soft');
+                if (!keyed) replay(view, 'shake');
+                await sleep(450);
+                if (!el.isConnected) return;
+                say(o, keyed
+                  ? `<span class="good">Post 5 stayed put.</span> The list found its key at index ${first} and moved the scroll there.`
+                  : `<span class="bad">The content jumped.</span> The index stayed ${first}, which is now ${esc(items[first].name)}. Post 5 slid down.`);
+                busy = false;
+              }
+              toggle.addEventListener('change', () => { if (busy) { toggle.checked = keyed; return; } reset(); });
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-sa-key' }, toggle, 'key = { it.id }'), idx),
+                view,
+                h('div', { class: 'controls' }, cmd('posts.addAll(0, newPosts)', arrive), act('Reset', () => { if (!busy) reset(); })),
+                o);
+              reset();
+            },
+          },
+          {
+            title: 'contentType for mixed rows',
+            body: `<p>When rows of different shapes share one list, also pass <code>contentType</code>. A row that scrolls off is not thrown away at once. Compose keeps it to reuse for the next row coming in, but only for a row of the same type. A header is never rebuilt into a post.</p>`,
+            code: `LazyColumn {
+    items(
+        feed,
+        key = { it.id },
+        contentType = { if (it is FeedItem.Header) "header" else "post" },
+    ) { item ->
+        when (item) {
+            is FeedItem.Header -> SectionHeader(item)
+            is FeedItem.Post -> PostCard(item)
+        }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>LazyColumn</code> is built on <code>SubcomposeLayout</code>. During measure it works out which items fit on screen and composes each one on demand as its own small piece of composition, tagged with the item’s key. If you pass no key, the key is a wrapper around the index.</p>
+<p>On every measure pass the list rebuilds a map from key to index. When an item moves, its composition, its <code>remember</code> slots and its placement animation move with it. A <code>SaveableStateHolder</code> keyed the same way keeps the <code>rememberSaveable</code> values of rows that scrolled off, ready for when they come back.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Keying by hashCode or the whole item',
+            bad: `LazyColumn {
+    items(todos, key = { it.hashCode() }) { todo ->
+        TodoRow(todo)
+    }
+}`,
+            good: `LazyColumn {
+    items(todos, key = { it.id }) { todo ->
+        TodoRow(todo)
+    }
+}`,
+            why: 'A data class hash changes when any field changes. Edit a todo and the list sees one item removed and a new one added, so its row state resets and it animates out and back in.',
+          },
+          {
+            title: 'remember in a row for state that must last',
+            bad: `items(posts, key = { it.id }) { post ->
+    var expanded by remember { mutableStateOf(false) }
+    PostCard(post, expanded, onToggle = { expanded = !expanded })
+}`,
+            good: `items(posts, key = { it.id }) { post ->
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    PostCard(post, expanded, onToggle = { expanded = !expanded })
+}`,
+            why: 'Rows that scroll far off screen leave the composition, and their <code>remember</code> slots go with them. <code>rememberSaveable</code> keeps the value per key. State the app depends on belongs in the ViewModel.',
+          },
+        ],
         visual(el) {
           const POOL = ['Milk', 'Eggs', 'Bread', 'Apples', 'Coffee', 'Rice', 'Tea', 'Butter', 'Honey'];
           let keyed, items, nextId, truth, slots, rowsById, rowEls, busy = false;
@@ -2014,6 +2567,226 @@ fun ProfileScreen(userId: Int, repo: UserRepository) {
           { q: '<code>LaunchedEffect(userId)</code> is loading user 1 when <code>userId</code> becomes 2. What happens?', options: ['Both loads keep running', 'The load for 1 is cancelled and a load for 2 starts', 'Nothing until the first load ends'], a: 1, why: 'A new key cancels the old coroutine and launches a fresh one.' },
           { q: 'The screen recomposes but <code>userId</code> stays the same. Does the effect restart?', options: ['Yes', 'No'], a: 1, why: 'Only a key change restarts it. Recomposition alone does not.' },
           { q: 'You want to start a coroutine when a button is tapped. What do you use?', options: ['<code>LaunchedEffect</code> inside <code>onClick</code>', '<code>rememberCoroutineScope()</code> and <code>scope.launch</code>'], a: 1, why: '<code>onClick</code> is not a composable context, so <code>LaunchedEffect</code> can’t be called there.' },
+        ],
+        deeper: [
+          {
+            title: 'rememberUpdatedState for long effects',
+            body: `<p>Some effects should not restart, like a splash screen timeout, so they use a constant key. But the block captured the values from the first composition. If the parent later passes a new <code>onTimeout</code>, the effect still calls the old one.</p>
+<p><code>rememberUpdatedState(onTimeout)</code> returns a State that always holds the latest value. Read it inside the effect and you get the current callback without restarting the timer.</p>`,
+            code: `@Composable
+fun Splash(onTimeout: () -> Unit) {
+    val currentOnTimeout by rememberUpdatedState(onTimeout)
+    LaunchedEffect(Unit) {
+        delay(3_000)
+        currentOnTimeout()   // the latest lambda, not the first one
+    }
+}`,
+            visual(el) {
+              const MS = 3000;
+              let latest = 'goHome', captured = 'goHome', run = 0, live = false;
+              const toggle = h('input', { type: 'checkbox', id: 'cmp-ru-on' });
+              const fill = h('span', { class: 'cmp-job-fill' });
+              const jobState = h('span', { class: 'cmp-job-state' }, 'running');
+              const chip = h('span', { class: 'cmp-job' }, fill, h('span', { class: 'cmp-job-label' }, 'delay(3_000)'), jobState);
+              const capEl = h('span', { class: 'cmp-obj' });
+              const latEl = h('span', { class: 'cmp-obj' });
+              const head = h('div', { class: 'kt' });
+              const o = out();
+              const paint = () => {
+                capEl.textContent = `captured: ${captured}`;
+                latEl.textContent = `latest: ${latest}`;
+                head.innerHTML = hl(toggle.checked ? 'val current by rememberUpdatedState(onTimeout)\nLaunchedEffect(Unit) { delay(3_000); current() }' : 'LaunchedEffect(Unit) { delay(3_000); onTimeout() }');
+              };
+              function start() {
+                const me = ++run; live = true; captured = latest;
+                chip.classList.remove('cmp-done', 'cmp-cancel'); jobState.textContent = 'running';
+                fill.style.transition = 'none'; fill.style.width = '0';
+                void fill.offsetWidth;
+                fill.style.transition = `width ${MS}ms linear`; fill.style.width = '100%';
+                paint();
+                say(o, `Splash entered the composition. The effect captured ${hl(`onTimeout = ${captured}`)}. Change it before the timer ends.`);
+                setTimeout(() => {
+                  if (me !== run || !el.isConnected) return;
+                  live = false;
+                  chip.classList.add('cmp-done'); jobState.textContent = 'done'; replay(chip, 'pop');
+                  const called = toggle.checked ? latest : captured;
+                  say(o, called === latest
+                    ? `<span class="good">Called ${called}().</span> That is what the parent passed last.`
+                    : `<span class="bad">Called ${called}().</span> The parent now passes ${latest}, but the block kept the lambda from the first composition.`);
+                }, MS);
+              }
+              function setLatest(name) {
+                if (latest === name) { replay(latEl, 'pop'); return; }
+                latest = name; paint(); replay(latEl, 'pop');
+                say(o, live
+                  ? `Parent recomposed with ${hl(`onTimeout = ${name}`)}. Same key, so the timer keeps going.`
+                  : `${hl(`onTimeout = ${name}`)} <span class="muted">// restart Splash to run the timer again</span>`);
+              }
+              toggle.addEventListener('change', start);
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-ru-on' }, toggle, 'rememberUpdatedState')),
+                head,
+                h('div', { class: 'cmp-fx' },
+                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'LaunchedEffect(Unit)'), h('div', { class: 'cmp-jobs' }, chip)),
+                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'onTimeout'), h('div', { class: 'cmp-jobs' }, capEl, latEl))),
+                h('div', { class: 'controls' }, cmd('onTimeout = goLogin', () => setLatest('goLogin')), cmd('onTimeout = goHome', () => setLatest('goHome')), act('Restart Splash', start)),
+                o);
+              start();
+            },
+          },
+          {
+            title: 'DisposableEffect: undo what you register',
+            body: `<p>Some setup is not a coroutine: adding a listener, a lifecycle observer or a sensor callback. <code>DisposableEffect(key)</code> runs its block when it enters and must end with <code>onDispose { }</code>. Compose calls <code>onDispose</code> before the effect restarts for a new key, and when the composable leaves.</p>
+<p>Register in a <code>LaunchedEffect</code> or <code>SideEffect</code> instead and nothing ever unregisters. Each restart adds another listener. They all keep firing and keep the old screen in memory.</p>`,
+            code: `@Composable
+fun TiltSensor(sensorManager: SensorManager, sensor: Sensor, onTilt: (Float) -> Unit) {
+    val currentOnTilt by rememberUpdatedState(onTilt)
+    DisposableEffect(sensor) {
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) = currentOnTilt(e.values[0])
+            override fun onAccuracyChanged(s: Sensor, accuracy: Int) = Unit
+        }
+        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        onDispose { sensorManager.unregisterListener(listener) }
+    }
+}`,
+            visual(el) {
+              let good = false, sensor = 'Accelerometer', onScreen = true, n = 0, listeners = [];
+              const toggle = h('input', { type: 'checkbox', id: 'cmp-de-on' });
+              const pool = h('div', { class: 'cmp-jobs cmp-de-pool' });
+              const head = h('div', { class: 'kt' });
+              const count = h('span', { class: 'cmp-badge' }, '0');
+              const leaveBtn = act('Leave the screen', () => leave());
+              const o = out();
+              const paintHead = () => { head.innerHTML = hl(good ? 'DisposableEffect(sensor) {\n    register(listener)\n    onDispose { unregister(listener) }\n}' : 'LaunchedEffect(sensor) {\n    register(listener)   // no cleanup\n}'); };
+              function paint() {
+                pool.replaceChildren(...(listeners.length ? listeners.map(l => l.chip) : [h('span', { class: 'cmp-status' }, 'no listeners')]));
+                count.textContent = listeners.length; replay(count, 'pop');
+              }
+              function register() {
+                const chip = h('span', { class: 'cmp-job cmp-done drop-in' }, h('span', { class: 'cmp-job-label' }, `#${++n} ${sensor}`), h('span', { class: 'cmp-job-state' }, onScreen ? 'live' : ''));
+                listeners.push({ n, sensor, chip });
+              }
+              function dispose() {
+                listeners.forEach(l => { l.chip.classList.add('fly-out'); });
+                const gone = listeners.length; listeners = [];
+                return gone;
+              }
+              function markLeaks() {
+                listeners.forEach((l, i) => { if (i < listeners.length - 1 || !onScreen) { l.chip.classList.remove('cmp-done'); l.chip.classList.add('cmp-cancel'); l.chip.lastChild.textContent = 'leaked'; } });
+              }
+              async function setSensor(s) {
+                if (!onScreen) { replay(pool, 'shake'); say(o, 'The screen is gone. Come back first.'); return; }
+                if (s === sensor) { say(o, `${hl(`sensor = ${s}`)} <span class="muted">// same key: nothing restarts</span>`); return; }
+                if (listeners.length >= 6) { replay(pool, 'shake'); say(o, '<span class="bad">Six live listeners.</span> Reset by flipping the switch.'); return; }
+                sensor = s;
+                const removed = good ? dispose() : 0;
+                if (removed) await sleep(380);
+                if (!el.isConnected) return;
+                register(); if (!good) markLeaks(); paint();
+                say(o, good ? `Key changed. <span class="good">onDispose removed the old listener</span>, then the effect added one for ${s}.` : `Key changed. A new listener for ${s} was added. <span class="bad">The old one is still registered.</span>`);
+              }
+              async function leave() {
+                if (onScreen) {
+                  onScreen = false; leaveBtn.textContent = 'Come back';
+                  if (good) { dispose(); await sleep(380); if (!el.isConnected) return; } else markLeaks();
+                  paint();
+                  say(o, good ? '<span class="good">Left the composition. onDispose ran.</span> Nothing is registered.' : `<span class="bad">Left the composition. ${listeners.length} listener${listeners.length === 1 ? '' : 's'} still registered</span>, holding the old screen.`);
+                } else {
+                  onScreen = true; leaveBtn.textContent = 'Leave the screen';
+                  register(); if (!good) markLeaks(); paint();
+                  say(o, 'Back on screen. The effect registered a listener again.');
+                }
+              }
+              function shake() {
+                if (!listeners.length) { replay(pool, 'shake'); say(o, 'Phone moved. No listener heard it.'); return; }
+                listeners.forEach(l => replay(l.chip, 'pop'));
+                say(o, `Phone moved: <span class="${listeners.length > 1 ? 'bad' : 'good'}">${listeners.length} callback${listeners.length === 1 ? '' : 's'}</span> for one event.`);
+              }
+              function reset() {
+                good = toggle.checked; sensor = 'Accelerometer'; onScreen = true; listeners = []; leaveBtn.textContent = 'Leave the screen';
+                paintHead(); register(); paint();
+                say(o, good ? 'DisposableEffect registered one listener.' : 'LaunchedEffect registered one listener. Now change the key a few times.');
+              }
+              toggle.addEventListener('change', reset);
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-de-on' }, toggle, 'DisposableEffect with onDispose')),
+                head,
+                h('div', { class: 'cmp-fx' }, h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'registered listeners'), h('div', { class: 'cmp-jobs' }, count, pool))),
+                h('div', { class: 'controls' }, cmd('sensor = Gyroscope', () => setSensor('Gyroscope')), cmd('sensor = Accelerometer', () => setSensor('Accelerometer')), leaveBtn, act('Move the phone', shake)),
+                o);
+              reset();
+            },
+          },
+          {
+            title: 'snapshotFlow: turn State into a Flow',
+            body: `<p>To react to State changes inside an effect, wrap the read in <code>snapshotFlow { }</code>. It emits each time the State it read changes, and you get every Flow operator. The effect itself keeps running, so nothing is cancelled or relaunched.</p>`,
+            code: `LaunchedEffect(listState) {
+    snapshotFlow { listState.firstVisibleItemIndex }
+        .map { it > 0 }
+        .distinctUntilChanged()
+        .collect { scrolled -> analytics.log("scrolled", scrolled) }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>LaunchedEffect(key) { }</code> is little more than <code>remember(key) { LaunchedEffectImpl(context, block) }</code>. That object implements <code>RememberObserver</code>. After a composition is applied, Compose calls its <code>onRemembered()</code>, which launches your block in a scope built from the composition’s coroutine context, including its frame clock.</p>
+<p>When the key changes, <code>remember</code> creates a new object. The old one gets <code>onForgotten()</code> and cancels its job, then the new one launches. <code>DisposableEffect</code> uses the same hooks and calls your <code>onDispose</code> from <code>onForgotten()</code>. Effects never run in the middle of composition. If a composition is abandoned, nothing launches.</p>`,
+          code: `// Simplified from androidx.compose.runtime
+@Composable
+fun LaunchedEffect(key1: Any?, block: suspend CoroutineScope.() -> Unit) {
+    val context = currentComposer.applyCoroutineContext
+    remember(key1) { LaunchedEffectImpl(context, block) }
+}
+
+class LaunchedEffectImpl(
+    context: CoroutineContext,
+    private val task: suspend CoroutineScope.() -> Unit,
+) : RememberObserver {
+    private val scope = CoroutineScope(context)
+    private var job: Job? = null
+    override fun onRemembered() { job = scope.launch(block = task) }
+    override fun onForgotten() { job?.cancel(); job = null }
+    override fun onAbandoned() { job?.cancel(); job = null }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Launching from the composable body',
+            bad: `@Composable
+fun Feed(vm: FeedViewModel) {
+    val scope = rememberCoroutineScope()
+    scope.launch { vm.refresh() }   // runs on every recomposition
+    FeedList(vm.items)
+}`,
+            good: `@Composable
+fun Feed(vm: FeedViewModel) {
+    LaunchedEffect(Unit) { vm.refresh() }   // once per entry
+    FeedList(vm.items)
+}`,
+            why: 'The body runs on every recomposition, so each one starts another refresh. An effect launches once when it enters. Loading that should survive rotation belongs in the ViewModel.',
+          },
+          {
+            title: 'Collecting a Flow without the lifecycle',
+            bad: `var messages by remember { mutableStateOf(emptyList<Message>()) }
+LaunchedEffect(Unit) {
+    vm.messages.collect { messages = it }
+}`,
+            good: `val messages by vm.messages.collectAsStateWithLifecycle()`,
+            why: 'The composition stays alive while the app is in the background, so the effect keeps collecting. <code>collectAsStateWithLifecycle()</code> stops below STARTED and hands you State directly.',
+          },
+          {
+            title: 'A key that is new on every run',
+            bad: `class SearchRequest(val query: String, val page: Int)
+
+LaunchedEffect(SearchRequest(query, page)) {
+    results = repo.search(query, page)
+}`,
+            good: `LaunchedEffect(query, page) {
+    results = repo.search(query, page)
+}`,
+            why: 'Keys are compared with <code>equals()</code>. A plain class without it is a new key on every recomposition, so the effect cancels and relaunches each time. Pass the values, or use a <code>data class</code>.',
+          },
         ],
         visual(el) {
           const NAMES = { 1: 'Ada', 2: 'Grace', 3: 'Linus' };

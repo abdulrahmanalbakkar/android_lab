@@ -132,6 +132,34 @@
 .and-perm.and-ok { background: var(--ok-soft); color: var(--ok); }
 .and-perm.and-no { background: var(--err-soft); color: var(--err); }
 .and-col { display: grid; gap: 10px; justify-items: center; }
+
+/* depth: let long code scroll inside step and hood grids instead of widening the page (shell-level fix, harmless if duplicated) */
+.step > pre.code, .hood > pre.code, .hood > .prose { min-width: 0; }
+.hood::details-content { min-width: 0; }
+
+/* depth: saved state */
+.and-field { font: 600 0.8rem var(--mono); padding: 6px 8px; border-radius: 8px; border: 2px solid var(--accent); background: var(--bg); color: var(--ink); min-height: 1.9em; overflow-wrap: anywhere; }
+.and-field.and-blank { border-color: var(--line); color: var(--muted); font-weight: 500; }
+.and-bundle { display: grid; gap: 6px; flex: 0 1 220px; min-width: 0; }
+.and-bundle .obj { min-width: 0; transition: border-color 0.25s, opacity 0.25s; }
+.and-bundle .obj.and-gone { opacity: 0.4; border-style: dashed; border-color: var(--err); }
+.and-ways { display: grid; gap: 6px; min-width: 0; }
+.and-way { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font: 500 0.8rem var(--mono); min-width: 0; transition: border-color 0.25s, background 0.25s; }
+.and-way > .cmd { justify-self: start; text-align: left; }
+.and-way.and-on { border-color: var(--accent); background: var(--accent-soft); }
+.and-way small { grid-column: 1 / -1; font: 400 0.78rem var(--body); color: var(--muted); }
+
+/* depth: permissions */
+.and-tog { display: flex; gap: 4px; }
+.and-tog .and-ui { flex: 1; font-size: 0.66rem; padding: 5px 4px; }
+.and-tog .and-ui[aria-pressed="false"] { background: var(--sunk); color: var(--muted); }
+.and-map { display: grid; gap: 4px; justify-items: stretch; min-width: 0; max-width: 100%; }
+.and-sort { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
+.and-bin { display: grid; gap: 6px; align-content: start; padding: 8px; min-height: 92px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg); min-width: 0; }
+.and-bin > .cmd { justify-content: center; text-align: center; white-space: normal; }
+.and-bin .and-tile { font-size: 0.78rem; }
+.and-tasks { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.and-tasks .cmd { white-space: normal; text-align: left; }
 `;
 
   Lab.addTrack({
@@ -434,6 +462,203 @@ fun SearchBox() {
           { q: 'The process is killed in the background and the user returns. A plain ViewModel property is', options: ['restored', 'lost: a new ViewModel is created', 'restored if it is a StateFlow'], a: 1, why: 'The ViewModel lived in the old process memory. Only what went into the saved-state Bundle comes back.' },
           { q: 'Which one survives both rotation and process death?', options: ['<code>remember { }</code>', 'a ViewModel property', '<code>rememberSaveable { }</code>'], a: 2, why: '<code>rememberSaveable</code> writes its value into the saved-state Bundle.' },
           { q: 'Should you put a list of 5,000 products into <code>SavedStateHandle</code>?', options: ['Yes, that is what it is for', 'No. Save an id or a query and reload the data.'], a: 1, why: 'The Bundle travels through Binder with a limit of about 1 MB. Too much data throws <code>TransactionTooLargeException</code>.' },
+        ],
+        deeper: [
+          {
+            title: 'The Bundle is a snapshot taken on the way out',
+            body: `<p>Android does not watch your state all the time. It asks for it once, in <code>onSaveInstanceState</code>, when the Activity stops. For apps targeting Android 9 and later that call comes right after <code>onStop</code>. Whatever the handle holds at that moment goes into the Bundle.</p>
+<p>A kill can only happen to a stopped app, so the snapshot is always there first. Type a few letters, leave, then kill the process and come back.</p>`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const WORD = 'kotlin flow';
+              let query = 'ko', saved = null, phase = 'front', pid = 4127, busy = false;
+              const { dev, view, dim } = device();
+              const pidEl = h('span', { class: 'and-pid' }, `process ${pid}`);
+              const phaseEl = h('span', { class: 'and-perm and-ok' }, 'RESUMED');
+              const bVal = h('b', {}, 'null');
+              const bObj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'saved Bundle'), h('span', { class: 'field' }, 'query = ', bVal), h('span', { class: 'obj-addr' }, 'held by the system, outside your process'));
+              const o = out();
+              const screen = anim => view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Search'),
+                h('div', { class: 'and-field' + (query ? '' : ' and-blank') }, query || 'Search…'), bars(85, 60, 70)));
+              const paintBundle = () => { bVal.textContent = saved == null ? 'null' : `"${saved}"`; replay(bObj, 'pop'); };
+              const setPhase = (text, kind) => { phaseEl.textContent = text; phaseEl.className = 'and-perm' + (kind ? ' and-' + kind : ''); replay(phaseEl, 'pop-soft'); };
+              const nope = msg => { replay(dev, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); };
+              function type() {
+                if (busy) return;
+                if (phase !== 'front') return nope('the app is not on screen. Open it first.');
+                query = query.length >= WORD.length ? 'k' : WORD.slice(0, query.length + 1);
+                screen();
+                say(o, `${hl(`onQuery("${query}")`)}  ${note('in memory. The Bundle still says ' + (saved == null ? 'null' : `"${saved}"`))}`);
+              }
+              async function home() {
+                if (busy) return;
+                if (phase !== 'front') return nope('the app is already in the background.');
+                busy = true;
+                say(o, note('press Home'));
+                for (const c of ['onPause()', 'onStop()']) { line(o, hl(c)); await sleep(380); }
+                dim.classList.add('and-on');
+                saved = query; paintBundle();
+                line(o, `${hl('onSaveInstanceState(outState)')}  ${note(`snapshot: query = "${query}"`)}`);
+                await sleep(380);
+                dim.classList.remove('and-on');
+                view.replaceChildren(homeScreen());
+                phase = 'bg'; setPhase('STOPPED', '');
+                busy = false;
+              }
+              async function kill() {
+                if (busy) return;
+                if (phase === 'front') return nope('the app in front is the last one Android kills. Press Home first.');
+                if (phase === 'dead') return nope('the process is already gone.');
+                busy = true;
+                phase = 'dead'; pidEl.classList.add('and-dead'); replay(pidEl, 'shake'); setPhase('no process', 'no');
+                say(o, `${note(`low memory: process ${pid} is killed. No callback runs.`)}`);
+                await sleep(500);
+                line(o, `<span class="good">safe:</span> the Bundle lives in the system, not in the dead process`);
+                replay(bObj, 'pop');
+                busy = false;
+              }
+              async function open() {
+                if (busy) return;
+                if (phase === 'front') return nope('the app is already in front.');
+                busy = true;
+                if (phase === 'bg') {
+                  say(o, `${hl('onRestart() onStart() onResume()')}  ${note('same process: memory was never lost')}`);
+                } else {
+                  pid = 4128 + Math.floor(Math.random() * 3000);
+                  pidEl.className = 'and-pid'; pidEl.textContent = `process ${pid}`; replay(pidEl, 'drop-in');
+                  say(o, note(`new process ${pid}`));
+                  await sleep(400);
+                  query = saved || '';
+                  line(o, `${hl('onCreate(savedInstanceState)')}  ${note(`Bundle is not null: query = "${query}"`)}`);
+                }
+                screen(true);
+                phase = 'front'; setPhase('RESUMED', 'ok');
+                busy = false;
+              }
+              screen();
+              say(o, `${hl('onCreate(savedInstanceState = null)')}  ${note('first launch: nothing to restore')}`);
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-col' }, dev, phaseEl), h('div', { class: 'and-bundle' }, h('div', { class: 'and-proc' }, pidEl), bObj)),
+                h('div', { class: 'controls' }, cmd('type a letter', type), cmd('press Home', home), cmd('system kills process', kill), cmd('open from Recents', open)),
+                o);
+            },
+          },
+          {
+            title: 'Only the system’s kill keeps the Bundle',
+            body: `<p>Saved state exists for one promise: if the user did not choose to leave, the screen comes back as they left it. When the user does choose to leave, Android throws the Bundle away.</p>
+<p>Swiping the app out of Recents, Force stop, or a <code>finish()</code> all mean the user is done. The next launch starts fresh with <code>savedInstanceState == null</code>. A finishing Activity doesn’t even get <code>onSaveInstanceState</code>. Anything that must outlive those belongs in a database or DataStore.</p>`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const WAYS = [
+                { label: 'system kills it in the background', keep: true, why: 'The user never chose to leave. The task stays in Recents with its Bundle.' },
+                { label: 'user swipes it out of Recents', keep: false, why: 'Removing the task says “I am done”. Its saved state goes with it.' },
+                { label: 'user taps Force stop in Settings', keep: false, why: 'Force stop clears the app’s tasks. Nothing is restored.' },
+                { label: 'finish(), or Back on a screen you pushed', keep: false, why: 'A finishing Activity is not coming back, so onSaveInstanceState never runs for it.' },
+              ];
+              let busy = false;
+              const { dev, view } = device();
+              const bVal = h('b', {}, '"kotlin"');
+              const bObj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'saved Bundle'), h('span', { class: 'field' }, 'query = ', bVal));
+              const o = out('The user searched for "kotlin" and left the app. Pick how it ends.');
+              const screen = (q, anim) => view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Search'),
+                h('div', { class: 'and-field' + (q ? '' : ' and-blank') }, q || 'Search…'), bars(85, 60, 70)));
+              const rows = WAYS.map(w => {
+                const res = h('span', { class: 'and-res' }, '?');
+                const btn = cmd(w.label, () => run(w));
+                const row = h('div', { class: 'and-way' }, btn, res);
+                return Object.assign(w, { res, row });
+              });
+              async function run(w) {
+                if (busy) return; busy = true;
+                rows.forEach(r => r.row.classList.remove('and-on'));
+                w.row.classList.add('and-on');
+                bObj.classList.remove('and-gone'); bVal.textContent = '"kotlin"';
+                view.replaceChildren(homeScreen());
+                say(o, note(w.label));
+                await sleep(500);
+                if (!w.keep) { bObj.classList.add('and-gone'); bVal.textContent = 'discarded'; replay(bObj, 'shake'); }
+                else replay(bObj, 'pop');
+                line(o, w.why);
+                await sleep(700);
+                if (!el.isConnected) return;
+                line(o, `${hl(`onCreate(savedInstanceState = ${w.keep ? 'Bundle' : 'null'})`)}  ${note(w.keep ? 'query restored' : 'fresh start')}`);
+                screen(w.keep ? 'kotlin' : '', true);
+                w.res.textContent = w.keep ? '✓ restored' : '✗ fresh';
+                w.res.className = 'and-res ' + (w.keep ? 'and-ok' : 'and-no');
+                replay(w.res, 'pop');
+                busy = false;
+              }
+              screen('kotlin');
+              el.append(
+                h('div', { class: 'stage' }, dev, h('div', { class: 'and-bundle' }, bObj)),
+                h('div', { class: 'and-ways' }, rows.map(r => r.row)),
+                o);
+            },
+          },
+          {
+            title: 'Your own types need a way into the Bundle',
+            body: `<p>A Bundle holds primitives, Strings, Parcelables, Serializables and lists of those. <code>SavedStateHandle</code> has the same rules. For your own class, add <code>@Parcelize</code> from the <code>kotlin-parcelize</code> plugin.</p>
+<p><code>rememberSaveable</code> needs the same, or a <code>Saver</code> that turns the value into something a Bundle can hold. Without one, saving a plain class throws <code>IllegalArgumentException</code>, and only at the moment Android saves state. So a missing Saver shows up on rotation or backgrounding, not when the screen first draws.</p>`,
+            code: `@Parcelize
+data class Filters(val minPrice: Int, val inStock: Boolean) : Parcelable
+
+class ShopViewModel(state: SavedStateHandle) : ViewModel() {
+    val filters = state.getStateFlow("filters", Filters(0, false))   // Parcelable: fine
+}
+
+data class PriceRange(val from: Int, val to: Int)   // not Parcelable
+val PriceRangeSaver = listSaver<PriceRange, Int>(
+    save = { listOf(it.from, it.to) },
+    restore = { PriceRange(it[0], it[1]) },
+)
+
+@Composable
+fun PriceSlider() {
+    var range by rememberSaveable(stateSaver = PriceRangeSaver) { mutableStateOf(PriceRange(0, 100)) }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>ComponentActivity</code> owns a <code>SavedStateRegistry</code>. Anything that wants to be saved registers a provider under a key. In <code>onSaveInstanceState</code> the registry asks each provider for a Bundle and nests them all under their keys in <code>outState</code>.</p>
+<p><code>SavedStateHandle</code> is one of those providers, with one entry per ViewModel. <code>rememberSaveable</code> writes into Compose’s <code>SaveableStateRegistry</code>, which <code>setContent</code> wires into the same registry. Android then sends the finished Bundle over Binder to <code>system_server</code>, which stores it with the Activity’s record in the task. That is why it outlives your process, and why the Binder size limit applies to it.</p>`,
+          code: `// Roughly what SavedStateHandle does for you
+savedStateRegistry.registerSavedStateProvider("search") {
+    bundleOf("query" to query)              // asked once, in onSaveInstanceState
+}
+
+// After process death, in the new instance:
+val restored = savedStateRegistry.consumeRestoredStateForKey("search")
+query = restored?.getString("query").orEmpty()`,
+        },
+        mistakes: [
+          {
+            title: 'Saving in onCleared()',
+            bad: `override fun onCleared() {
+    draftStore.save(draft)   // never runs on process death
+}`,
+            good: `fun onDraftChanged(text: String) {
+    state["draft"] = text                         // small: in the Bundle
+    viewModelScope.launch { draftStore.save(text) } // durable: on disk
+}`,
+            why: 'Process death runs no callback at all, so <code>onCleared</code> and <code>onDestroy</code> never get their chance. Save as the value changes.',
+          },
+          {
+            title: 'Reading the handle once, then writing to a local copy',
+            bad: `var query = state.get<String>("query") ?: ""
+fun onQuery(text: String) { query = text }`,
+            good: `val query = state.getStateFlow("query", "")
+fun onQuery(text: String) { state["query"] = text }`,
+            why: 'The first death restores fine. After that, new values only live in the local <code>var</code>, so the next death loses them.',
+          },
+          {
+            title: 'Testing process death with Don’t keep activities',
+            bad: `// Developer options › Don't keep activities: on
+// leave the app, come back: looks fine`,
+            good: `// Leave the app with Home, then:
+// adb shell am kill com.example.app
+// and reopen it from Recents`,
+            why: 'That option destroys Activities but keeps the process, so singletons and in-memory caches survive and hide bugs. <code>am kill</code> ends the process like the system does.',
+          },
         ],
         visual(el) {
           el.classList.add('and-viz');
@@ -802,6 +1027,172 @@ fun TakePhotoButton(onReady: () -> Unit) {
           { q: 'On the first request the user taps Don’t allow. What does <code>shouldShowRequestPermissionRationale</code> return next time?', options: ['<code>true</code>', '<code>false</code>'], a: 0, why: 'The user said no once, so Android suggests you explain before asking again.' },
           { q: 'On Android 11+ the user has denied twice. What does <code>launcher.launch(CAMERA)</code> do?', options: ['Shows the dialog again', 'Calls back with false at once, no dialog', 'Crashes'], a: 1, why: 'Two denials count as don’t ask again. The result comes back false without any UI.' },
           { q: 'Which API is the current way to request a permission?', options: ['<code>registerForActivityResult<wbr>(RequestPermission())</code>', '<code>startActivityForResult()</code>', '<code>onActivityResult()</code>'], a: 0, why: 'The Activity Result API replaces the old request code and callback overrides. In Compose use <code>rememberLauncherForActivityResult</code>.' },
+        ],
+        deeper: [
+          {
+            title: 'Location: the user picks precise or approximate',
+            body: `<p>On Android 12 and later the location dialog has a Precise and an Approximate choice. Ask for <code>ACCESS_FINE_LOCATION</code> and <code>ACCESS_COARSE_LOCATION</code> together with <code>RequestMultiplePermissions</code>. The result is a map, and the user may grant only the coarse one.</p>
+<p>If you ask for fine alone, apps targeting Android 12+ get no dialog at all. Logcat says fine must be requested with coarse. Handle all three outcomes: precise, approximate and none.</p>`,
+            code: `val launcher = rememberLauncherForActivityResult(RequestMultiplePermissions()) { result ->
+    when {
+        result[ACCESS_FINE_LOCATION] == true -> showNearby(precise = true)
+        result[ACCESS_COARSE_LOCATION] == true -> showNearby(precise = false)
+        else -> showCityPicker()
+    }
+}
+launcher.launch(arrayOf(ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION))`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let fine = false, coarse = false, precise = true, busy = false, waiting = null;
+              const { dev, view } = device('and-tall');
+              const fineEl = h('span', { class: 'and-perm' }), coarseEl = h('span', { class: 'and-perm' });
+              const o = out();
+              const ui = (text, onclick, ghost) => h('button', { class: 'and-ui' + (ghost ? ' and-ghost' : ''), onclick }, text);
+              const paintMap = (fresh) => {
+                fineEl.textContent = `FINE: ${fine}`; fineEl.className = 'and-perm' + (fine ? ' and-ok' : '');
+                coarseEl.textContent = `COARSE: ${coarse}`; coarseEl.className = 'and-perm' + (coarse ? ' and-ok' : '');
+                if (fresh) { replay(fineEl, 'pop'); replay(coarseEl, 'pop'); }
+              };
+              const home = () => {
+                const msg = fine ? 'Stores within 50 m of you' : coarse ? 'Stores in your area (approximate)' : 'Pick your city to see stores';
+                view.replaceChildren(h('div', { class: 'and-scr drop-in' }, appbar('Stores'), h('p', {}, msg), ...bars(80, 70, 55)));
+              };
+              function close() { waiting = null; view.querySelectorAll('.and-dlg, .and-dim').forEach(x => x.remove()); }
+              function done(f, c, why) {
+                close(); fine = f; coarse = c; paintMap(true); home();
+                line(o, `${hl(`callback: { FINE = ${f}, COARSE = ${c} }`)}  ${note(why)}`);
+                busy = false;
+              }
+              function dialog() {
+                view.append(h('div', { class: 'and-dim and-on' }));
+                const pBtn = ui('Precise', () => pick(true)), aBtn = ui('Approximate', () => pick(false));
+                const pick = v => { precise = v; pBtn.setAttribute('aria-pressed', String(v)); aBtn.setAttribute('aria-pressed', String(!v)); };
+                pick(true);
+                const d = h('div', { class: 'and-dlg drop-in' }, h('b', {}, 'Allow Stores to access this device’s location?'),
+                  h('div', { class: 'and-tog' }, pBtn, aBtn),
+                  ui('While using the app', () => done(precise, true, precise ? 'precise granted' : 'the user chose approximate')),
+                  ui('Don’t allow', () => done(false, false, 'denied: fall back to a city picker'), true));
+                view.append(d); waiting = d;
+              }
+              function upgrade() {
+                view.append(h('div', { class: 'and-dim and-on' }));
+                const d = h('div', { class: 'and-dlg drop-in' }, h('b', {}, 'Change Stores’ location access to precise?'),
+                  ui('Change to precise', () => done(true, true, 'upgraded to precise')),
+                  ui('Keep approximate', () => done(false, true, 'still approximate. Keep working with it.'), true));
+                view.append(d); waiting = d;
+              }
+              function askBoth() {
+                if (waiting) { replay(waiting, 'shake'); say(o, 'Answer the dialog on the phone first.'); return; }
+                if (busy) return; busy = true;
+                say(o, hl('launch(arrayOf(FINE, COARSE))'));
+                if (fine) return done(true, true, 'already granted: no dialog');
+                if (coarse) { line(o, note('approximate already granted: the system offers an upgrade')); upgrade(); return; }
+                line(o, note('one dialog for both, with a precise switch'));
+                dialog();
+              }
+              function askFine() {
+                if (waiting) { replay(waiting, 'shake'); say(o, 'Answer the dialog on the phone first.'); return; }
+                if (busy) return;
+                replay(dev, 'shake');
+                say(o, `${hl('launch(arrayOf(FINE))')}  <span class="bad">ignored:</span> no dialog`);
+                line(o, note('Logcat: ACCESS_FINE_LOCATION must be requested with ACCESS_COARSE_LOCATION'));
+              }
+              paintMap(); home();
+              say(o, 'Ask for both. In the dialog, try Approximate, then ask again.');
+              el.append(
+                h('div', { class: 'stage' }, dev, h('div', { class: 'and-map' }, h('span', { class: 'and-lbl' }, 'result map'), fineEl, coarseEl)),
+                h('div', { class: 'controls' }, cmd('launch(arrayOf(FINE, COARSE))', askBoth), cmd('launch(arrayOf(FINE))', askFine)),
+                o);
+            },
+          },
+          {
+            title: 'Background location is a second, separate step',
+            body: `<p><code>ACCESS_BACKGROUND_LOCATION</code> lets the app read location while no screen is visible, for things like geofence reminders. Ask for it only after foreground location is granted, and never in the same request. A combined request is ignored.</p>
+<p>On Android 11 and later, no dialog can grant it. Launching the request opens the app’s location page in Settings, where the user has to pick <em>Allow all the time</em>. Explain that in your own UI first. Google Play also reviews every app that declares it.</p>`,
+            code: `// Only after FINE or COARSE is granted, and after your own explanation:
+val bgLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
+    if (granted) geofences.enable() else showAllTheTimeHelp()
+}
+bgLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)   // Android 11+: opens Settings`,
+          },
+          {
+            title: 'Many features need no permission at all',
+            body: `<p>Before you add a permission, check if a system UI can do the job. The photo picker and the camera app work for you without any grant, because the user picks the item themselves. Normal permissions like <code>INTERNET</code> are granted at install. A few special ones, like exact alarms, are toggled only on a Settings page.</p>
+<p>Pick a task, then the bucket it belongs in.</p>`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const BINS = { none: 'no permission', install: 'granted at install', runtime: 'runtime dialog', special: 'special: Settings page' };
+              const TASKS = [
+                { t: 'Let the user pick a photo', b: 'none', api: 'PickVisualMedia', why: 'The photo picker runs in the system. Your app only gets the one photo the user chose.' },
+                { t: 'Take one photo with the camera app', b: 'none', api: 'TakePicture', why: 'The camera app takes the picture. One catch: if your manifest declares CAMERA, you must hold it for this too.' },
+                { t: 'Download a JSON feed', b: 'install', api: 'INTERNET', why: 'INTERNET is a normal permission. Declare it and it is granted at install.' },
+                { t: 'Post a notification', b: 'runtime', api: 'POST_NOTIFICATIONS', why: 'A runtime permission since Android 13.' },
+                { t: 'Record a voice note', b: 'runtime', api: 'RECORD_AUDIO', why: 'The microphone is a dangerous permission, so the user decides at runtime.' },
+                { t: 'Ring at exactly 7:00', b: 'special', api: 'SCHEDULE_EXACT_ALARM', why: 'Exact alarms are a special permission. Check canScheduleExactAlarms() and send the user to Settings.' },
+              ];
+              let sel = null, left = TASKS.length;
+              const o = out('Pick a task, then a bucket.');
+              const bins = {};
+              const taskRow = h('div', { class: 'and-tasks' });
+              TASKS.forEach(x => {
+                x.btn = h('button', { class: 'cmd', 'aria-pressed': 'false', onclick() {
+                  sel = x; TASKS.forEach(y => y.btn && y.btn.setAttribute('aria-pressed', String(y === x)));
+                  say(o, `${x.t}: which bucket?`);
+                } }, x.t);
+                taskRow.append(x.btn);
+              });
+              const sort = h('div', { class: 'and-sort' }, Object.entries(BINS).map(([k, label]) => {
+                const bin = h('div', { class: 'and-bin' }, h('button', { class: 'cmd', onclick: () => drop(k) }, label));
+                bins[k] = bin; return bin;
+              }));
+              function drop(k) {
+                if (!sel) { replay(taskRow, 'shake'); say(o, left ? 'Pick a task first.' : 'All sorted. Press Reset to try again.'); return; }
+                if (sel.b !== k) { replay(bins[k], 'shake'); say(o, `<span class="bad">not that one.</span> ${sel.t}: think about who picks or does the work.`); return; }
+                sel.btn.remove(); sel.btn = null;
+                bins[k].append(h('div', { class: 'and-tile and-match drop-in' }, sel.t, h('small', {}, sel.api)));
+                say(o, `<span class="good">yes:</span> ${sel.why}`);
+                sel = null; left--;
+                if (!left) line(o, note('two of six needed a dialog'));
+              }
+              el.append(taskRow, sort, o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>launch()</code> goes through the Activity’s <code>ActivityResultRegistry</code>, which calls <code>requestPermissions</code>. The system then starts <code>GrantPermissionsActivity</code> from the PermissionController app on top of yours. It is a separate, translucent Activity, so yours gets <code>onPause</code> but not <code>onStop</code>.</p>
+<p>The answer comes back as an Activity result, and the registry routes it to your callback by a key. The registry also keeps pending requests in the saved state, so an Activity recreated while the dialog is open still gets its result. That only works if the new instance registers the same launchers during creation. That is why <code>registerForActivityResult</code> must run before STARTED, and why <code>rememberLauncherForActivityResult</code> keeps its key in <code>rememberSaveable</code>.</p>`,
+          code: `// Inside ComponentActivity, roughly
+override fun <I, O> registerForActivityResult(contract: ActivityResultContract<I, O>, callback: ActivityResultCallback<O>) =
+    activityResultRegistry.register("activity_rq#" + nextLocalRequestCode.getAndIncrement(), this, contract, callback)`,
+        },
+        mistakes: [
+          {
+            title: 'Asking for fine location alone',
+            bad: `launcher.launch(arrayOf(ACCESS_FINE_LOCATION))`,
+            good: `launcher.launch(arrayOf(ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION))`,
+            why: 'Apps targeting Android 12+ get no dialog for fine alone. Ask for both and accept approximate.',
+          },
+          {
+            title: 'Reading a false rationale as “blocked” before the first ask',
+            bad: `onClick = {
+    if (!activity.shouldShowRequestPermissionRationale(CAMERA)) openAppSettings()
+    else launcher.launch(CAMERA)
+}`,
+            good: `onClick = { launcher.launch(CAMERA) }
+// in the callback, after a denial:
+if (!granted && !activity.shouldShowRequestPermissionRationale(CAMERA)) showSettingsHint()`,
+            why: 'The rationale is also false when you have never asked. Only a false that follows a denial means the user said don’t ask again.',
+          },
+          {
+            title: 'Asking for everything on first launch',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    launcher.launch(arrayOf(CAMERA, RECORD_AUDIO, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION))
+}`,
+            good: `// Ask for each one where the feature starts
+Button(onClick = { cameraLauncher.launch(CAMERA) }) { Text("Scan receipt") }`,
+            why: 'Requests without context get denied, and each denial counts toward don’t ask again.',
+          },
         ],
         visual(el) {
           el.classList.add('and-viz');

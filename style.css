@@ -482,3 +482,26 @@ input.blank.wrong { border-color: var(--t-e); color: var(--t-e); }
 .g-group { display: grid; gap: 12px; scroll-margin-top: 130px; }
 .g-group h2 { font-size: 1.6rem; color: var(--muted); }
 .soft-note b { margin-right: 6px; }
+
+/* Go deeper, under the hood, common mistakes */
+.deeper, .mistakes { display: grid; gap: 18px; min-width: 0; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; }
+.step { display: grid; gap: 14px; padding-left: 22px; border-left: 3px solid var(--line); min-width: 0; }
+.step h3 { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; }
+.step-n { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-left: -38px; border-radius: 50%; background: var(--surface); border: 3px solid var(--accent); font: 700 0.8rem var(--mono); color: var(--accent); }
+.bench.mini { padding: 16px; }
+.hood { border: 1px dashed var(--line); border-radius: 14px; padding: 14px 18px; background: var(--surface); min-width: 0; }
+.hood summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.hood-label { font: 700 1.1rem var(--display); }
+.hood[open] { display: grid; gap: 14px; }
+.mistake { display: grid; gap: 10px; min-width: 0; }
+.mistake h3 { font-size: 1.05rem; }
+.ba { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ba > div { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.ba-tag { font: 600 0.7rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; }
+.ba-bad .ba-tag { color: var(--err); } .ba-good .ba-tag { color: var(--ok); }
+.ba-bad pre.code { box-shadow: inset 3px 0 0 var(--err); } .ba-good pre.code { box-shadow: inset 3px 0 0 var(--ok); }
+@media (max-width: 720px) { .ba { grid-template-columns: minmax(0, 1fr); } .step { padding-left: 18px; } .step-n { margin-left: -34px; } }
+.step > *, .hood > *, .hood[open] > .prose, .hood[open] > pre.code { min-width: 0; }
+.hood[open] { grid-template-columns: minmax(0, 1fr); }
+.hood::details-content { min-width: 0; }

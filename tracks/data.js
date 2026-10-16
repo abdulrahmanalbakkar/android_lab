@@ -123,6 +123,13 @@
 .bar.dt-bar-ok { background: var(--ok); }
 .bar.dt-bar-stale { background: var(--warm); }
 .legend .bar.dt-bar-ok, .legend .bar.dt-bar-stale { height: 12px; }
+
+/* depth steps */
+.dt-vers { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.dt-ver { font: 700 0.84rem var(--mono); padding: 6px 14px; border-radius: 999px; border: 2px solid var(--line); background: var(--surface); color: var(--muted); transition: border-color 0.25s, background 0.25s, color 0.25s; }
+.dt-ver.dt-dev { outline: 2px dashed var(--warm); outline-offset: 2px; }
+.dt-ver.dt-on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.dt-ver.dt-fail { border-color: var(--err); background: var(--err-soft); color: var(--err); }
 `;
 
   Lab.addTrack({
@@ -661,6 +668,192 @@ room { schemaDirectory("$projectDir/schemas") }`,
           { q: 'When is <code>fallbackToDestructiveMigration</code> acceptable?', options: ['Always, it is the simplest option', 'When the database is a cache you can refetch from the server', 'Never, it does not compile'], a: 1, why: 'It deletes every row. That is fine for data you can download again, never for notes, drafts or settings.' },
           { q: 'What does <code>AutoMigration</code> need to work?', options: ['Exported schema files for both versions', 'Network access at build time', 'A <code>@Transaction</code> on every DAO'], a: 0, why: 'Room diffs the exported JSON schemas. Without <code>exportSchema</code> and a schema directory there is nothing to compare.' },
         ],
+        deeper: [
+          {
+            title: 'Migrations chain from any old version',
+            body: `
+<p>Users skip updates. One phone is on version 1, another on version 3, and both install the build with version 4. Room looks for a path from the file’s version to the new one. At each step it takes the migration that starts at the current version and jumps the furthest without passing the target.</p>
+<p>So you keep every migration you ever shipped. Remove <code>MIGRATION_2_3</code> and every user still on version 2 crashes, even if version 1 users are fine through a direct <code>MIGRATION_1_3</code>.</p>`,
+            code: `Room.databaseBuilder(context, AppDatabase::class.java, "app.db")
+    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    // Optional shortcut. Room prefers it for version 1 users.
+    .addMigrations(MIGRATION_1_3)
+    .build()`,
+            visual(el) {
+              const TARGET = 4;
+              const M = [[1, 2, true], [2, 3, true], [3, 4, true], [1, 3, false]].map(([from, to, on]) => ({ from, to, on }));
+              let dev = 1, busy = false;
+              const vers = [1, 2, 3, 4].map(v => h('span', { class: 'dt-ver' }, `v${v}`));
+              const o = out();
+              const migBtns = M.map(m => act(`Migration(${m.from}, ${m.to})`, function () {
+                if (busy) return; m.on = !m.on; this.setAttribute('aria-pressed', String(m.on)); paint();
+                say(o, `${m.on ? 'Added' : 'Removed'} MIGRATION_${m.from}_${m.to}.`);
+              }, { 'aria-pressed': String(m.on) }));
+              const devBtns = [1, 2, 3].map(v => act(`device on v${v}`, () => { if (busy) return; dev = v; press(devBtns, devBtns[v - 1]); paint(); }));
+              function paint(on = [], fail) {
+                vers.forEach((e, i) => { const v = i + 1; e.className = 'dt-ver' + (v === dev ? ' dt-dev' : '') + (on.includes(v) ? ' dt-on' : '') + (fail === v ? ' dt-fail' : ''); });
+              }
+              async function open() {
+                if (busy) return; busy = true;
+                let cur = dev; const path = [cur];
+                paint(path);
+                say(o, `Room opens app.db: file is v${dev}, @Database(version = ${TARGET})`);
+                while (cur < TARGET) {
+                  await sleep(550); if (!el.isConnected) return;
+                  const next = M.filter(m => m.on && m.from === cur && m.to <= TARGET).sort((a, b) => b.to - a.to)[0];
+                  if (!next) {
+                    paint(path, cur + 1); replay(vers[cur], 'shake');
+                    line(o, `<span class="bad">IllegalStateException:</span> A migration from ${cur} to ${cur + 1} was required but not found.`);
+                    busy = false; return;
+                  }
+                  cur = next.to; path.push(cur); paint(path); replay(vers[cur - 1], 'pop');
+                  line(o, hl(`MIGRATION_${next.from}_${next.to}.migrate(db)`));
+                }
+                line(o, `<span class="good">path ${path.map(v => 'v' + v).join(' → ')}. The file is on v${TARGET} with its rows.</span>`);
+                busy = false;
+              }
+              press(devBtns, devBtns[0]); paint();
+              say(o, 'Pick the version on the device and the migrations in the build, then open the database.');
+              el.append(
+                h('div', { class: 'dt-vers' }, h('span', { class: 'dt-label' }, 'versions'), vers),
+                h('div', { class: 'controls' }, h('span', { class: 'dt-label' }, 'in the build'), migBtns),
+                h('div', { class: 'controls' }, devBtns, act('open the database', open)),
+                o);
+            },
+          },
+          {
+            title: 'AutoMigration can’t guess a rename',
+            body: `
+<p>AutoMigration compares two schema files. An added column is clear. A column that disappeared is not: was <code>title</code> renamed to <code>headline</code>, or deleted while a new column was added? Guessing wrong would lose data, so Room fails the build and asks you.</p>
+<p>You answer with an <code>AutoMigrationSpec</code> class annotated with <code>@RenameColumn</code> or <code>@DeleteColumn</code> (and <code>@RenameTable</code> or <code>@DeleteTable</code> for tables). Room then copies the data across for you.</p>`,
+            code: `@RenameColumn(tableName = "articles", fromColumnName = "title", toColumnName = "headline")
+class RenameTitle : AutoMigrationSpec
+
+@Database(
+    entities = [Article::class],
+    version = 2,
+    autoMigrations = [AutoMigration(from = 1, to = 2, spec = RenameTitle::class)],
+)
+abstract class AppDatabase : RoomDatabase()`,
+            visual(el) {
+              const CH = {
+                add: { label: 'add column read', spec: null, cols: ['id', 'title', 'summary', 'read'], note: 'an added column needs no spec' },
+                ren: { label: 'rename title → headline', spec: '@RenameColumn(tableName = "articles",\n  fromColumnName = "title", toColumnName = "headline")\nclass RenameTitle : AutoMigrationSpec', cols: ['id', 'headline', 'summary'] },
+                del: { label: 'delete column summary', spec: '@DeleteColumn(tableName = "articles", columnName = "summary")\nclass DropSummary : AutoMigrationSpec', cols: ['id', 'title'] },
+              };
+              const ROWS = [{ id: 1, title: 'Room notes', summary: 'Short intro' }, { id: 2, title: 'Paging tips', summary: 'Load in pages' }];
+              let ch = 'ren', spec = false, busy = false;
+              const dbBody = h('div');
+              const verPill = h('span', { class: 'dt-pill dt-acc' });
+              const kt = h('div', { class: 'kt' });
+              const o = out();
+              const W = { id: '2.2em', read: '3em' };
+              function paintDb(cols, ver, fresh) {
+                verPill.textContent = `version ${ver}`;
+                const tpl = cols.map(c => W[c] || 'minmax(0, 1fr)').join(' ');
+                const r = (cells, cls) => h('div', { class: 'dt-tr' + (cls || ''), style: `--dt-cols:${tpl}` }, cells.map((c, i) => h('span', { class: cols[i] === fresh ? 'dt-newcol pop' : null }, String(c))));
+                dbBody.replaceChildren(r(cols, ' dt-th'), ...ROWS.map(x => r(cols.map(c => c === 'headline' ? x.title : c === 'read' ? 0 : x[c]))));
+              }
+              const needs = () => CH[ch].spec !== null;
+              const paintKt = () => { kt.innerHTML = hl(needs() ? (spec ? CH[ch].spec : '// no AutoMigrationSpec') : '// AutoMigration(from = 1, to = 2)'); };
+              const chBtns = Object.entries(CH).map(([k, c]) => act(c.label, () => { if (busy) return; ch = k; press(chBtns, chBtns[Object.keys(CH).indexOf(k)]); paintKt(); paintDb(['id', 'title', 'summary'], 1); }));
+              async function build() {
+                if (busy) return; busy = true;
+                paintDb(['id', 'title', 'summary'], 1);
+                say(o, '<span class="muted">KSP: diffing schemas/1.json and schemas/2.json…</span>');
+                await sleep(650); if (!el.isConnected) return;
+                if (needs() && !spec) {
+                  const col = ch === 'ren' ? 'title' : 'summary';
+                  replay(kt, 'shake');
+                  line(o, `<span class="bad">error: AutoMigration Failure:</span> column '${col}' in 'articles' was either removed or renamed. Declare an AutoMigrationSpec with @RenameColumn or @DeleteColumn. <span class="muted">(shortened) The build stops, so no user ever runs a bad guess.</span>`);
+                  busy = false; return;
+                }
+                line(o, `<span class="muted">generated AutoMigration_1_2_Impl, ${ch === 'add' ? 'ALTER TABLE … ADD COLUMN' : 'new table, copy rows, drop old, rename'}</span>`);
+                await sleep(600); if (!el.isConnected) return;
+                const fresh = ch === 'add' ? 'read' : ch === 'ren' ? 'headline' : null;
+                paintDb(CH[ch].cols, 2, fresh);
+                line(o, ch === 'del'
+                  ? '<span class="good">installed:</span> the summary column is gone, on purpose. Every row kept its id and title.'
+                  : `<span class="good">installed:</span> ${ch === 'ren' ? 'the titles moved into headline' : 'read was added with its default'}. All ${ROWS.length} rows kept.`);
+                busy = false;
+              }
+              const sw = toggle('dt-d-spec', 'with AutoMigrationSpec', () => { if (busy) { sw.input.checked = spec; return; } spec = sw.input.checked; paintKt(); });
+              press(chBtns, chBtns[1]); paintKt(); paintDb(['id', 'title', 'summary'], 1);
+              say(o, 'Pick a schema change, decide on a spec, then build.');
+              el.append(
+                h('div', { class: 'controls' }, chBtns),
+                h('div', { class: 'controls' }, sw, act('build and install', build)),
+                h('div', { class: 'dt-grid' },
+                  h('div', { class: 'dt-card' }, h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'app.db'), verPill), h('div', { class: 'dt-table' }, h('div', { class: 'dt-tname' }, 'articles'), dbBody)),
+                  h('div', { class: 'dt-card' }, h('span', { class: 'dt-title' }, 'spec'), kt)),
+                o);
+            },
+          },
+          {
+            title: 'Test every migration',
+            body: `
+<p>A migration runs once per user, on real data, and you can’t take it back. Test it. <code>MigrationTestHelper</code> creates a database at an old version from the exported schema, lets you insert rows with plain SQL, runs your migrations and checks the result against the new schema.</p>`,
+            code: `@RunWith(AndroidJUnit4::class)
+class MigrationTest {
+    @get:Rule
+    val helper = MigrationTestHelper(
+        InstrumentationRegistry.getInstrumentation(),
+        AppDatabase::class.java,
+    )
+
+    @Test
+    fun migrate2To3_fillsSlug() {
+        helper.createDatabase("test.db", 2).apply {
+            execSQL("INSERT INTO articles (id, title, read) VALUES (1, 'Hello World', 0)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate("test.db", 3, true, MIGRATION_2_3)
+        db.query("SELECT slug FROM articles WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals("hello-world", it.getString(0))
+        }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>SQLite keeps a version number in the file header, which you can read with <code>PRAGMA user_version</code>. Room also writes an identity hash of the schema into its own table, <code>room_master_table</code>. On open, a higher version in <code>@Database</code> makes SQLite call Room’s upgrade hook, inside a transaction. Room finds a migration path and runs each step.</p>
+<p>After the last step, Room checks the result. The generated database class knows every table, column, type, nullability, default value and index your entities expect. Room reads the real schema from the file and compares. Any difference throws “Migration didn’t properly handle” with the expected and found table, and the transaction rolls back. If the version didn’t change but the hash did, you get “Room cannot verify the data integrity”.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'NOT NULL without a default',
+            bad: `db.execSQL("ALTER TABLE articles ADD COLUMN read INTEGER NOT NULL")`,
+            good: `db.execSQL("ALTER TABLE articles ADD COLUMN read INTEGER NOT NULL DEFAULT 0")`,
+            why: 'Existing rows need a value for the new column. SQLite refuses with “Cannot add a NOT NULL column with default value NULL”, and the app crashes on launch.',
+          },
+          {
+            title: 'A default in SQL that the entity doesn’t declare',
+            bad: `data class Article(
+    @PrimaryKey val id: Int,
+    val title: String,
+    val read: Boolean = false,   // Kotlin default only
+)
+// migration: ADD COLUMN read INTEGER NOT NULL DEFAULT 0`,
+            good: `data class Article(
+    @PrimaryKey val id: Int,
+    val title: String,
+    @ColumnInfo(defaultValue = "0") val read: Boolean = false,
+)`,
+            why: 'Room compares column defaults too. The migrated table has <code>DEFAULT 0</code>, the entity says no default, and validation throws “Migration didn’t properly handle”. A Kotlin default is not a SQL default.',
+          },
+          {
+            title: 'Using DAOs or entities inside a migration',
+            bad: `override fun migrate(db: SupportSQLiteDatabase) {
+    appDb.articleDao().getAll().forEach { /* fix titles */ }
+}`,
+            good: `override fun migrate(db: SupportSQLiteDatabase) {
+    db.execSQL("UPDATE articles SET title = trim(title)")
+}`,
+            why: 'DAOs and entities describe the newest schema, not the one being migrated, and the database isn’t open yet. Migrations should be plain SQL on the <code>db</code> they receive, so they keep working after later schema changes.',
+          },
+        ],
         visual(el) {
           const START = [[1, 'Room 2.8 notes'], [2, 'Paging tips'], [3, 'KSP setup']];
           let rows, cols, ver, crashed, busy = false, strategy = 'none';
@@ -812,6 +1005,245 @@ fun Feed(vm: FeedViewModel) {
           { q: 'What triggers loading the next page?', options: ['A timer', 'The list scrolling within prefetchDistance of the last loaded item', 'Calling <code>load()</code> from the UI'], a: 1, why: 'Reading items near the end tells Paging the user is getting close, and it calls <code>load</code> with the next key.' },
           { q: 'An append load fails. How does the user try again?', options: ['<code>items.retry()</code>', 'Recreate the Pager', 'Call <code>invalidate()</code> on the Flow'], a: 0, why: '<code>retry()</code> re-runs only the failed load. <code>refresh()</code> would reload from scratch.' },
           { q: 'What does <code>RemoteMediator</code> add?', options: ['Faster JSON parsing', 'Pages fetched from the network land in Room, and the UI pages from Room, so the list works offline', 'Placeholders for missing items'], a: 1, why: 'The database becomes the single source of truth. The mediator fills it when Paging reaches the end of what is stored.' },
+        ],
+        deeper: [
+          {
+            title: 'getRefreshKey keeps the user’s place',
+            body: `
+<p>A <code>PagingSource</code> is single-use. When data changes, it is invalidated and the Pager makes a new one. The new source has to start loading somewhere. Paging calls <code>getRefreshKey()</code> with the old state, including <code>anchorPosition</code>, the last index the UI read.</p>
+<p>Return the key of the page around that index and the reload starts where the user is looking. Return <code>null</code> and it starts from the first page, so the list jumps back to the top.</p>`,
+            code: `override fun getRefreshKey(state: PagingState<Int, Article>): Int? {
+    val anchor = state.anchorPosition ?: return null          // last index the UI read
+    val page = state.closestPageToPosition(anchor) ?: return null
+    return page.prevKey?.plus(1) ?: page.nextKey?.minus(1)    // the key that loaded that page
+}`,
+            visual(el) {
+              const PAGE = 10, MAXP = 8;
+              let anchor = 47, loaded = [4, 5, 6], keyOn = true, busy = false, wait = null;
+              const pages = h('div', { class: 'dt-pages' });
+              const rows = h('div', { class: 'dt-screen' });
+              const anc = h('span', { class: 'dt-pill' });
+              const o = out();
+              const pageOf = i => Math.floor((i - 1) / PAGE) + 1;
+              function paint() {
+                pages.replaceChildren(...Array.from({ length: MAXP }, (_, i) => h('span', { class: 'dt-page' + (loaded.includes(i + 1) ? ' dt-in' : wait === i + 1 ? ' dt-wait' : '') }, `p${i + 1}`)));
+                anc.textContent = `anchorPosition = ${anchor} (page ${pageOf(anchor)})`;
+                rows.replaceChildren(...(loaded.includes(pageOf(anchor))
+                  ? Array.from({ length: 4 }, (_, i) => h('div', { class: 'dt-row' + (pageOf(anchor + i) % 2 ? '' : ' dt-odd') }, h('b', {}, `#${anchor + i}`), h('span', {}, `Article ${anchor + i}`)))
+                  : [h('div', { class: 'spinner dt-spin' })]));
+              }
+              function scroll(to) {
+                if (busy) return;
+                anchor = to; const p = pageOf(to); loaded = [p - 1, p, p + 1].filter(x => x >= 1 && x <= MAXP);
+                paint(); replay(rows, 'pop-soft');
+                say(o, `Scrolled to #${to}. Pages ${loaded.join(', ')} are in memory.`);
+              }
+              async function invalidate() {
+                if (busy) return; busy = true;
+                say(o, '<span class="muted">The data changed: invalidate(). The old PagingSource is done; a new one is created.</span>');
+                loaded = []; paint(); replay(pages, 'pop-soft');
+                await sleep(600); if (!el.isConnected) return;
+                const key = keyOn ? pageOf(anchor) : null;
+                line(o, hl(`getRefreshKey(state) // anchorPosition = ${anchor}`) + ` → <b>${key}</b>`);
+                const start = key || 1;
+                if (!keyOn) anchor = 1;
+                wait = start; paint();
+                line(o, hl(`load(LoadParams.Refresh(key = ${key}))`));
+                await sleep(700); if (!el.isConnected) return;
+                wait = null; loaded = [start]; paint(); replay(rows, 'pop-soft');
+                for (const p of [start - 1, start + 1].filter(x => x >= 1 && x <= MAXP)) {
+                  await sleep(450); if (!el.isConnected) return;
+                  loaded.push(p); loaded.sort((a, b) => a - b); paint();
+                  line(o, `<span class="muted">${p < start ? 'prepend' : 'append'} page ${p}</span>`);
+                }
+                line(o, keyOn
+                  ? `<span class="good">The user still sees #${anchor}. Only the pages around it were reloaded.</span>`
+                  : '<span class="bad">getRefreshKey returned null, so the reload started at page 1. The user lost their place.</span>');
+                busy = false;
+              }
+              const sw = toggle('dt-d-refkey', 'getRefreshKey uses the anchor', () => { if (busy) { sw.input.checked = keyOn; return; } keyOn = sw.input.checked; });
+              sw.input.checked = true;
+              paint();
+              say(o, 'The user scrolled to #47. Now the server data changes.');
+              el.append(
+                h('div', { class: 'controls' }, act('scroll to #23', () => scroll(23)), act('scroll to #47', () => scroll(47)), cmd('invalidate()', invalidate), sw),
+                h('div', { class: 'dt-pg' },
+                  h('div', { class: 'dt-side' }, h('span', { class: 'dt-label' }, 'on screen'), rows),
+                  h('div', { class: 'dt-side' }, h('span', { class: 'dt-label' }, 'pages in memory'), pages, anc)),
+                o);
+            },
+          },
+          {
+            title: 'RemoteMediator: the network fills Room, Paging reads Room',
+            body: `
+<p>For an offline-first feed, the Pager reads pages from Room’s own <code>PagingSource</code>. When the user scrolls past the last row Room has, Paging calls your <code>RemoteMediator</code>. It fetches the next page from the network and writes it to Room in a transaction.</p>
+<p>The write invalidates Room’s PagingSource, a new one is created, and the fresh rows reach the list. The network never talks to the UI. If the call fails, the list keeps every row already stored, and <code>loadState.mediator</code> reports the error.</p>`,
+            code: `@OptIn(ExperimentalPagingApi::class)
+class ArticleRemoteMediator(
+    private val api: NewsApi,
+    private val db: AppDatabase,
+) : RemoteMediator<Int, ArticleEntity>() {
+    override suspend fun load(loadType: LoadType, state: PagingState<Int, ArticleEntity>): MediatorResult {
+        val page = when (loadType) {
+            LoadType.REFRESH -> 1
+            LoadType.PREPEND -> return MediatorResult.Success(endOfPaginationReached = true)
+            LoadType.APPEND -> db.remoteKeys().nextPage() ?: return MediatorResult.Success(endOfPaginationReached = true)
+        }
+        return try {
+            val items = api.articles(page = page, pageSize = state.config.pageSize)
+            db.withTransaction {
+                if (loadType == LoadType.REFRESH) db.articles().clearAll()
+                db.remoteKeys().setNextPage(if (items.isEmpty()) null else page + 1)
+                db.articles().insertAll(items.map { it.toEntity() })
+            }
+            MediatorResult.Success(endOfPaginationReached = items.isEmpty())
+        } catch (e: IOException) {
+            MediatorResult.Error(e)
+        }
+    }
+}
+
+// Pager(config, remoteMediator = ArticleRemoteMediator(api, db)) { db.articles().pagingSource() }`,
+            visual(el) {
+              const PAGE = 10, MAXP = 4;
+              let room = 10, shown = 10, gen = 1, next = 2, offline = false, busy = false, med = 'NotLoading';
+              const apiPill = h('span', { class: 'dt-pill' }), roomPill = h('span', { class: 'dt-pill' }), srcPill = h('span', { class: 'dt-pill' }), medPill = h('span', { class: 'dt-pill' });
+              const cards = {
+                api: h('div', { class: 'dt-card' }, h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'NewsApi'), apiPill), h('span', { class: 'dt-sub' }, 'GET /articles?page=n')),
+                med: h('div', { class: 'dt-card' }, h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'RemoteMediator'), medPill), h('span', { class: 'dt-sub' }, 'called when Room runs out')),
+                room: h('div', { class: 'dt-card' }, h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'Room · articles'), roomPill), h('span', { class: 'dt-sub' }, 'the single source of truth')),
+                src: h('div', { class: 'dt-card' }, h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'PagingSource'), srcPill), h('span', { class: 'dt-sub' }, 'Room’s, reads rows only')),
+              };
+              const feed = h('div', { class: 'dt-screen' });
+              const o = out();
+              const lit = (k, cls) => { Object.values(cards).forEach(c => c.classList.remove('dt-on')); if (k) { cards[k].classList.add(cls || 'dt-on'); replay(cards[k], 'pop-soft'); } };
+              function paint() {
+                apiPill.textContent = next > MAXP ? 'no more pages' : `next page ${next}`;
+                roomPill.textContent = `${room} rows`;
+                srcPill.textContent = `generation ${gen}`;
+                medPill.textContent = `append: ${med}`;
+                medPill.className = 'dt-pill' + (med === 'Error' ? ' dt-bad' : med === 'Loading' ? ' dt-warn' : med.startsWith('end') ? ' dt-ok' : '');
+                feed.replaceChildren(...(shown
+                  ? [h('span', { class: 'dt-sub' }, `${shown} items loaded`), ...[shown - 2, shown - 1, shown].filter(i => i > 0).map(i => h('div', { class: 'dt-item' }, `#${i} Article ${i}`))]
+                  : [h('div', { class: 'spinner dt-spin' })]));
+              }
+              async function scrollEnd() {
+                if (busy) return; busy = true;
+                if (shown < room) {
+                  lit('src'); line(o, hl(`PagingSource.load(Append) // from Room`));
+                  await sleep(500); if (!el.isConnected) return;
+                  shown = Math.min(room, shown + PAGE); paint(); replay(feed, 'pop-soft');
+                  line(o, '<span class="good">read from disk, no network needed</span>');
+                  busy = false; return;
+                }
+                lit('med'); med = 'Loading'; paint();
+                line(o, `<span class="muted">Room has no more rows:</span> ${hl('mediator.load(LoadType.APPEND)')}`);
+                await sleep(550); if (!el.isConnected) return;
+                if (next > MAXP) {
+                  med = 'end reached'; paint();
+                  line(o, '<span class="good">MediatorResult.Success(endOfPaginationReached = true)</span>');
+                  busy = false; return;
+                }
+                lit('api', offline ? 'dt-on' : 'dt-on');
+                line(o, hl(`GET /articles?page=${next}`));
+                await sleep(600); if (!el.isConnected) return;
+                if (offline) {
+                  med = 'Error'; paint(); replay(cards.api, 'shake'); lit(null);
+                  line(o, `<span class="bad">MediatorResult.Error(IOException)</span> <span class="muted">The list keeps its ${shown} rows. Show a retry row from loadState.</span>`);
+                  busy = false; return;
+                }
+                lit('room'); room += PAGE; next++; paint();
+                line(o, `<span class="muted">withTransaction { insertAll(${PAGE} rows) }</span>`);
+                await sleep(550); if (!el.isConnected) return;
+                lit('src'); gen++; paint();
+                line(o, `<span class="muted">table changed: PagingSource invalidated, generation ${gen} created</span>`);
+                await sleep(550); if (!el.isConnected) return;
+                shown = room; med = 'NotLoading'; lit(null); paint(); replay(feed, 'pop-soft');
+                line(o, `<span class="good">${PAGE} new rows reached the list through Room.</span>`);
+                busy = false;
+              }
+              async function reopen() {
+                if (busy) return; busy = true;
+                shown = 0; gen++; med = 'NotLoading'; paint();
+                say(o, '<span class="muted">app restarted…</span>');
+                await sleep(600); if (!el.isConnected) return;
+                lit('src'); shown = Math.min(room, 2 * PAGE); paint(); replay(feed, 'pop-soft');
+                line(o, `<span class="good">The first ${shown} rows came straight from Room${offline ? ', with the network off' : ''}.</span>`);
+                busy = false;
+              }
+              const sw = toggle('dt-d-medoff', 'offline', () => { if (busy) { sw.input.checked = offline; return; } offline = sw.input.checked; say(o, offline ? 'Offline. Scroll to the end of what Room has.' : 'Back online.'); });
+              paint();
+              say(o, 'Room already holds page 1 from last time. Scroll to the end.');
+              el.append(
+                h('div', { class: 'controls' }, act('scroll to the end', scrollEnd), act('restart the app', reopen), sw),
+                h('div', { class: 'dt-grid' }, cards.api, cards.med, cards.room, cards.src),
+                h('span', { class: 'dt-label' }, 'the list'), feed,
+                o);
+            },
+          },
+          {
+            title: 'Transform pages before you cache them',
+            body: `
+<p><code>PagingData</code> has its own <code>map</code>, <code>filter</code> and <code>insertSeparators</code>. They run on each page as it loads, so you can turn rows into UI items and add day headers without loading the whole list. Apply them inside the flow’s <code>map</code> and before <code>cachedIn</code>, so the result is cached and not computed again on every rotation.</p>`,
+            code: `sealed interface FeedItem {
+    data class Story(val article: Article) : FeedItem
+    data class DayHeader(val day: String) : FeedItem
+}
+
+val feed: Flow<PagingData<FeedItem>> = pager.flow
+    .map { page ->
+        page.filter { !it.hidden }
+            .map { FeedItem.Story(it) }
+            .insertSeparators { before, after ->
+                if (after != null && before?.article?.day != after.article.day) FeedItem.DayHeader(after.article.day)
+                else null
+            }
+    }
+    .cachedIn(viewModelScope)`,
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>Pager.flow</code> emits one <code>PagingData</code> per generation, which means per <code>PagingSource</code>. Inside it is a stream of events: insert a page, drop a page, update a load state. On the UI side a presenter applies those events to a snapshot list, which is what <code>LazyPagingItems</code> reads.</p>
+<p>Reading <code>items[index]</code> does more than return an item. It tells the presenter which index the UI touched. That hint travels back to the fetcher, which compares it with <code>prefetchDistance</code> and calls <code>load</code> for the next or previous key. When <code>maxSize</code> is set, pages far from the hint are dropped to save memory. Room’s generated PagingSource listens to its invalidation tracker and calls <code>invalidate()</code> on any write to the table, which starts the next generation.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A next key that never ends',
+            bad: `LoadResult.Page(
+    data = items,
+    prevKey = if (page == 1) null else page - 1,
+    nextKey = page + 1,
+)`,
+            good: `LoadResult.Page(
+    data = items,
+    prevKey = if (page == 1) null else page - 1,
+    nextKey = if (items.isEmpty()) null else page + 1,
+)`,
+            why: 'A <code>null</code> next key is how Paging learns the list is over. Without it, every scroll to the end requests another empty page, and the footer spinner never goes away.',
+          },
+          {
+            title: 'An empty state that flashes during the first load',
+            bad: `if (items.itemCount == 0) {
+    EmptyState()
+}`,
+            good: `val refresh = items.loadState.refresh
+if (refresh is LoadState.NotLoading && items.itemCount == 0) {
+    EmptyState()
+}`,
+            why: 'Before the first page arrives, <code>itemCount</code> is 0 too. Check that the refresh finished before you tell the user there is nothing.',
+          },
+          {
+            title: 'Building the Pager in a function the UI calls',
+            bad: `fun articles() = Pager(PagingConfig(pageSize = 20)) { ArticlePagingSource(api) }.flow
+
+// in a composable
+val items = vm.articles().collectAsLazyPagingItems()`,
+            good: `val articles = Pager(PagingConfig(pageSize = 20)) { ArticlePagingSource(api) }
+    .flow
+    .cachedIn(viewModelScope)`,
+            why: 'Every recomposition gets a new Pager and loads from page 1 again. Keep one cached flow in the ViewModel as a property.',
+          },
         ],
         visual(el) {
           const PAGE = 8, PREFETCH = 4, MAX = 6, ROW = 40;

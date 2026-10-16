@@ -123,7 +123,20 @@
   .kmp-maphead { display: none; }
   .kmp-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .kmp-pass { height: 18px; width: 20px; justify-self: center; transform: rotate(90deg); }
-}`;
+}
+/* depth steps */
+.kmp-ss.kmp-leaf { border-style: dashed; }
+.kmp-tbtn { font: 600 0.74rem var(--mono); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+.kmp-tbtn[aria-pressed="true"], .kmp-tbtn.kmp-fixed { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.kmp-tbtn.kmp-fixed { cursor: default; }
+.kmp-tpill { font: 700 0.72rem var(--mono); padding: 2px 9px; border-radius: 999px; }
+.kmp-tpill:empty { display: none; }
+.kmp-tpill.kmp-tok { background: var(--ok-soft); color: var(--ok); }
+.kmp-tpill.kmp-tbad { background: var(--err-soft); color: var(--err); }
+.kmp-tpill.kmp-twarn { background: var(--warm-soft); color: var(--warm); }
+.kmp-vms { display: grid; gap: 8px; align-content: start; flex: 1 1 220px; min-width: 0; }
+.kmp-vms .kmp-vm { padding: 8px 10px; gap: 4px; }
+`;
 
   Lab.addTrack({
     id: 'kmp',
@@ -281,6 +294,205 @@ class AndroidClipboard(private val context: Context) : Clipboard {
         quiz: [
           { q: 'An <code>expect fun</code> has an <code>actual</code> in <code>androidMain</code> only. The module targets Android and iOS. What happens?', options: ['iOS uses the Android version', 'The iOS compilation fails', 'It returns null on iOS'], a: 1, why: 'Every target needs its own <code>actual</code>. Android still compiles. iOS does not.' },
           { q: 'Your Android implementation needs a <code>Context</code>. What fits best?', options: ['An <code>expect fun</code> that reads a global static Context', 'An interface in <code>commonMain</code>, an Android class that takes Context in its constructor, wired with DI', 'Pass Context through <code>commonMain</code> function parameters'], a: 1, why: 'An interface keeps common code free of Android types, and the platform class gets its dependencies the normal way.' },
+        ],
+        deeper: [
+          {
+            title: 'Put the actual as high in the tree as it fits',
+            body: `
+<p>An <code>actual</code> doesn’t have to live in a leaf like <code>iosArm64Main</code>. It can sit in any source set between <code>commonMain</code> and the target, and it covers every target below it. One actual in <code>iosMain</code> serves the iPhone and the simulator. One in <code>appleMain</code> also serves macOS, since all of them can call the same Apple APIs.</p>
+<p>The rule is per target: walking up from the target to <code>commonMain</code>, the compiler must find exactly one actual. None fails that target. Two also fail. Add a macOS target below and see which placement works.</p>`,
+            visual(el) {
+              const T = [
+                { id: 'android', name: 'androidMain', d: 1, up: 'common', act: true },
+                { id: 'apple', name: 'appleMain', d: 1, up: 'common', act: false },
+                { id: 'ios', name: 'iosMain', d: 2, up: 'apple', act: true },
+                { id: 'arm', name: 'iosArm64', d: 3, up: 'ios', leaf: true },
+                { id: 'sim', name: 'iosSimulatorArm64', d: 3, up: 'ios', leaf: true },
+                { id: 'mac', name: 'macosMain', d: 2, up: 'apple', act: false },
+                { id: 'macarm', name: 'macosArm64', d: 3, up: 'mac', leaf: true },
+              ];
+              const byId = Object.fromEntries(T.map(t => [t.id, t]));
+              let busy = false;
+              const o = out();
+              const common = h('div', { class: 'kmp-ss', style: '--d:0' }, h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, 'commonMain'), h('span', { class: 'kmp-label' }, 'expect fun platformName()')));
+              for (const t of T) {
+                t.pill = h('span', { class: 'kmp-tpill' });
+                const head = h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, t.leaf ? `target: ${t.name}` : t.name));
+                if (t.leaf) head.append(t.pill);
+                else if (t.id === 'android') { head.append(h('span', { class: 'kmp-tbtn kmp-fixed' }, 'actual'), t.pill); }
+                else {
+                  t.btn = h('button', { class: 'kmp-tbtn', 'aria-pressed': String(t.act), onclick() {
+                    if (busy) return; t.act = !t.act; this.setAttribute('aria-pressed', String(t.act)); clear();
+                    say(o, `${t.act ? 'Added an' : 'Removed the'} actual ${t.act ? 'to' : 'from'} ${t.name}.`);
+                  } }, 'actual');
+                  head.append(t.btn);
+                }
+                t.el = h('div', { class: 'kmp-ss' + (t.leaf ? ' kmp-leaf' : ''), style: `--d:${t.d}` }, head);
+              }
+              const clear = () => { [common, ...T.map(t => t.el)].forEach(e => e.classList.remove('kmp-on', 'kmp-dim')); T.forEach(t => { t.pill.textContent = ''; t.pill.className = 'kmp-tpill'; }); };
+              const path = id => { const xs = []; for (let c = id; c && c !== 'common'; c = byId[c].up) xs.push(byId[c]); return xs; };
+              async function build() {
+                if (busy) return; busy = true; clear();
+                const targets = T.filter(t => t.leaf || t.id === 'android');
+                const bad = [];
+                for (const t of targets) {
+                  const p = path(t.id);
+                  [common, ...T.map(x => x.el)].forEach(e => e.classList.add('kmp-dim'));
+                  common.classList.remove('kmp-dim');
+                  p.forEach(x => { x.el.classList.remove('kmp-dim'); x.el.classList.add('kmp-on'); });
+                  say(o, `<span class="muted">compiling ${t.name}: ${p.slice().reverse().map(x => x.name).join(' ← ')} ← commonMain</span>`);
+                  await sleep(650); if (!el.isConnected) return;
+                  const n = p.filter(x => x.act).length;
+                  t.pill.textContent = n === 1 ? 'builds' : n ? 'two actuals' : 'no actual';
+                  t.pill.className = 'kmp-tpill ' + (n === 1 ? 'kmp-tok' : 'kmp-tbad');
+                  replay(t.pill, n === 1 ? 'pop' : 'shake');
+                  if (n !== 1) bad.push(`${t.name} (${n ? 'two actuals' : 'no actual'})`);
+                  p.forEach(x => x.el.classList.remove('kmp-on'));
+                }
+                [common, ...T.map(x => x.el)].forEach(e => e.classList.remove('kmp-dim'));
+                say(o, bad.length
+                  ? `<span class="bad">e:</span> ${bad.join(', ')} failed. Every target needs exactly one actual on its way up to commonMain.`
+                  : '<span class="good">ok:</span> every target found exactly one actual.');
+                busy = false;
+              }
+              say(o, 'Android and both iOS targets are covered. Build, then fix macOS.');
+              el.append(
+                h('div', { class: 'kmp-tree' }, common, T.map(t => t.el)),
+                h('div', { class: 'controls' }, cmd('./gradlew assemble', build)),
+                o);
+            },
+          },
+          {
+            title: 'Reuse a platform class with actual typealias',
+            body: `
+<p>Sometimes a platform already has a class that matches your <code>expect class</code> member for member. Then the actual can be a type alias, with no wrapper code. The JVM side below borrows <code>AtomicReference</code> from the JDK. iOS still writes a real class.</p>
+<p>Expect and actual classes are Beta. The compiler warns unless you opt in with the <code>-Xexpect-actual-classes</code> flag. For most cases, an interface is still the simpler tool.</p>`,
+            code: `// commonMain
+expect class AtomicRef<V>(value: V) {
+    fun get(): V
+    fun set(value: V)
+    fun compareAndSet(expect: V, update: V): Boolean
+}
+
+// jvmMain: an existing JDK class already matches
+actual typealias AtomicRef<V> = java.util.concurrent.atomic.AtomicReference<V>
+
+// iosMain: implement it
+actual class AtomicRef<V> actual constructor(value: V) {
+    /* ... */
+}
+
+// build.gradle.kts
+kotlin { compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") } }`,
+          },
+          {
+            title: 'Interfaces can be faked in tests. expect can’t.',
+            body: `
+<p>Code in <code>commonTest</code> runs on every target. An <code>expect fun</code> always resolves to the real actual, so a test of code that copies to the clipboard touches the real clipboard, or needs an Android <code>Context</code> that a unit test doesn’t have.</p>
+<p>With an interface, the code under test takes a <code>Clipboard</code>, and the test passes a fake that only records what it got. The same test then runs and passes on every target.</p>`,
+            code: `class FakeClipboard : Clipboard {
+    val copied = mutableListOf<String>()
+    override fun copy(text: String) { copied += text }
+}
+
+class ShareTest {
+    @Test
+    fun copiesTheLink() {
+        val clipboard = FakeClipboard()
+        ShareUseCase(clipboard).share(articleId = 42)
+        assertEquals(listOf("https://example.com/a/42"), clipboard.copied)
+    }
+}`,
+            visual(el) {
+              const MODES = [
+                { label: 'expect fun copyToClipboard()', test: 'ShareUseCase().share(42)\n// can only check the real clipboard',
+                  res: [['Android unit test (JVM)', 'bad', 'UninitializedPropertyAccessException: lateinit property appContext has not been initialized'],
+                    ['iosSimulatorArm64Test', 'warn', 'passed, but it wrote to the simulator’s real pasteboard and had to read it back from the OS']] },
+                { label: 'interface Clipboard + FakeClipboard', test: 'val fake = FakeClipboard()\nShareUseCase(fake).share(42)\nassertEquals(listOf(".../a/42"), fake.copied)',
+                  res: [['Android unit test (JVM)', 'ok', 'passed: fake.copied == [".../a/42"]'], ['iosSimulatorArm64Test', 'ok', 'passed: same test, same fake']] },
+              ];
+              let mode = 0, busy = false;
+              const testKt = h('div', { class: 'kt' });
+              const panels = MODES[0].res.map(([name]) => {
+                const res = h('div', { class: 'kmp-result' });
+                return { el: h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, name), res), res };
+              });
+              const o = out();
+              const btns = MODES.map((m, i) => act(m.label, () => { if (busy) return; mode = i; pick(btns, i); testKt.innerHTML = hl(m.test); replay(testKt, 'pop-soft'); panels.forEach(p => { p.res.replaceChildren(); p.el.classList.remove('kmp-on', 'kmp-missing'); }); }));
+              async function run() {
+                if (busy) return; busy = true;
+                panels.forEach(p => { p.res.replaceChildren(); p.el.classList.remove('kmp-on', 'kmp-missing'); });
+                say(o, '<span class="muted">./gradlew allTests</span>');
+                for (let i = 0; i < panels.length; i++) {
+                  const p = panels[i], [, kind, msg] = MODES[mode].res[i];
+                  p.el.classList.add('kmp-on'); p.res.append(h('div', { class: 'kmp-spin' }));
+                  await sleep(700); if (!el.isConnected) return;
+                  p.el.classList.remove('kmp-on'); if (kind === 'bad') { p.el.classList.add('kmp-missing'); replay(p.el, 'shake'); }
+                  p.res.replaceChildren(h('span', { class: `kmp-tpill ${kind === 'ok' ? 'kmp-tok' : kind === 'bad' ? 'kmp-tbad' : 'kmp-twarn'} drop-in` }, kind === 'ok' ? 'PASS' : kind === 'bad' ? 'FAIL' : 'PASS?'), h('span', { class: 'tip' }, msg));
+                }
+                say(o, mode
+                  ? '<span class="good">ok:</span> the fake runs everywhere, and the test checks exactly what was copied.'
+                  : '<span class="bad">expect:</span> the test can only reach the real platform code. One target crashes, the other leans on global OS state.');
+                busy = false;
+              }
+              pick(btns, 0); testKt.innerHTML = hl(MODES[0].test);
+              say(o, 'Pick a design, then run the shared test on both targets.');
+              el.append(
+                h('div', { class: 'controls' }, btns),
+                h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'commonTest/ShareTest.kt'), testKt),
+                h('div', { class: 'controls' }, cmd('./gradlew allTests', run)),
+                h('div', { class: 'kmp-grid2' }, panels.map(p => p.el)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `
+<p>There is no runtime lookup. Each target is compiled on its own, from <code>commonMain</code> plus every source set on its path. During that compilation the compiler matches each <code>expect</code> declaration to the one <code>actual</code> it can see and checks that names, parameters, return types and modifiers agree.</p>
+<p>The <code>expect</code> declaration produces no code. Calls to it are compiled as direct calls to the actual, as if you had called that function by name. The Android binary contains only the Android actual and the iOS framework only the iOS one, so expect and actual cost nothing at runtime.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Default arguments on the actual',
+            bad: `// commonMain
+expect fun formatPrice(cents: Long, currency: String): String
+
+// androidMain
+actual fun formatPrice(cents: Long, currency: String = "EUR"): String = /* ... */`,
+            good: `// commonMain
+expect fun formatPrice(cents: Long, currency: String = "EUR"): String
+
+// androidMain
+actual fun formatPrice(cents: Long, currency: String): String = /* ... */`,
+            why: 'Common callers only see the expect signature, so defaults must live there. The compiler rejects an actual with default values.',
+          },
+          {
+            title: 'Same file name in common and platform code',
+            bad: `// commonMain/Platform.kt
+expect fun platformName(): String
+fun greet() = "Hello from " + platformName()
+
+// androidMain/Platform.kt
+actual fun platformName(): String = "Android"`,
+            good: `// commonMain/Platform.kt
+expect fun platformName(): String
+fun greet() = "Hello from " + platformName()
+
+// androidMain/Platform.android.kt
+actual fun platformName(): String = "Android"`,
+            why: 'On the JVM both files compile to a class named <code>PlatformKt</code>, and the Android build fails with a duplicate class name. Add the platform as a suffix, as the KMP wizard does.',
+          },
+          {
+            title: 'Writing expect for what the standard library already has',
+            bad: `// commonMain
+expect fun nowMillis(): Long
+// androidMain: System.currentTimeMillis(), iosMain: NSDate()...`,
+            good: `// commonMain
+import kotlin.time.Clock   // standard library since Kotlin 2.1.20, may need @OptIn(ExperimentalTime::class)
+
+fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()`,
+            why: 'Time, UUIDs, atomics, coroutines and serialization already have multiplatform APIs. Every expect you write is code to test on every target. Check the standard library and kotlinx first.',
+          },
         ],
         visual(el) {
           const T = [
@@ -495,6 +707,199 @@ val uiState: StateFlow<UiState> = _state.asStateFlow()
           { q: 'What happens to coroutines in <code>viewModelScope</code> when the ViewModel is cleared on iOS?', options: ['They keep running until the app exits', 'They are cancelled, same as on Android', 'viewModelScope does not exist on iOS'], a: 1, why: 'The KMP lifecycle library cancels the scope on every platform when the ViewModel is cleared.' },
           { q: 'With no bridge library, what can Swift easily do with a Kotlin <code>StateFlow</code>?', options: ['<code>for await</code> over it', 'Read its current <code>value</code>; collecting needs a hand-written collector', 'Bind it with <code>@Published</code> automatically'], a: 1, why: 'Swift sees an Objective-C protocol. Reading <code>value</code> works; observing changes needs a <code>FlowCollector</code> or a tool like SKIE.' },
           { q: 'With SKIE, how does SwiftUI observe <code>viewModel.state</code>?', options: ['<code>for await state in viewModel.state</code>', '<code>viewModel.state.observe(owner)</code>', '<code>viewModel.state.sink { }</code> only'], a: 0, why: 'SKIE exposes Kotlin flows as Swift <code>AsyncSequence</code>s, and cancels the Kotlin collection when the Swift task is cancelled.' },
+        ],
+        deeper: [
+          {
+            title: 'On iOS, someone has to clear the ViewModel',
+            body: `
+<p>On Android, the Activity or navigation back stack owns a <code>ViewModelStore</code> and clears it when the screen is gone for good. SwiftUI knows nothing about that. If Swift just creates the ViewModel and drops the reference, <code>onCleared()</code> never runs and <code>viewModelScope</code> is never cancelled. A polling loop keeps running for a screen nobody can see.</p>
+<p>Give each iOS screen a small Kotlin holder that owns a <code>ViewModelStore</code>. Swift creates it when the screen appears and calls <code>clear()</code> when it goes away. Push and pop screens below.</p>`,
+            code: `// iosMain: one holder per screen, owned by Swift
+class NewsScreenHolder(repo: ArticleRepository) {
+    private val store = ViewModelStore()
+    val viewModel: NewsViewModel = ViewModelProvider.create(
+        store,
+        viewModelFactory { initializer { NewsViewModel(repo) } },
+    )[NewsViewModel::class]
+
+    fun clear() = store.clear()   // onCleared() runs, viewModelScope is cancelled
+}
+
+// Swift
+// .onDisappear { holder.clear() }`,
+            visual(el) {
+              let clearOn = true, n = 0, busy = false;
+              const stack = [], vms = [];
+              const navList = h('div', { class: 'kmp-list' });
+              const nav = h('div', { class: 'kmp-dev kmp-ios', role: 'img', 'aria-label': 'iOS navigation stack' }, h('span', { class: 'kmp-scr-title' }, 'Navigation'), navList);
+              const vmBox = h('div', { class: 'kmp-vms' });
+              const o = out();
+              const paintNav = () => navList.replaceChildren(...(stack.length
+                ? stack.map((v, i) => h('div', { class: 'kmp-li' + (i === stack.length - 1 ? ' kmp-new' : '') }, `${i === stack.length - 1 ? '▸ ' : ''}NewsScreen #${v.n}`))
+                : [h('p', { class: 'kmp-empty' }, 'Home. No news screen open.')]));
+              function push() {
+                if (busy) return;
+                if (stack.length >= 3) { replay(nav, 'shake'); say(o, 'Three screens deep is enough. Pop one.'); return; }
+                const v = { n: ++n, ticks: 0, alive: true };
+                v.count = h('span', { class: 'kmp-state' }, 'polls: 0');
+                v.job = h('span', { class: 'kmp-job kmp-run' }, 'poll loop');
+                v.note = h('span', { class: 'kmp-label' }, 'on screen');
+                v.el = h('div', { class: 'kmp-vm drop-in' }, h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, `NewsViewModel #${v.n}`), v.note), v.count, h('div', { class: 'kmp-jobs' }, v.job));
+                stack.push(v); vms.push(v); vmBox.append(v.el);
+                while (vms.length > 5) { const old = vms.shift(); old.alive = false; old.el.remove(); }
+                paintNav();
+                say(o, `Pushed NewsScreen #${v.n}. Its ViewModel starts polling in viewModelScope.`);
+              }
+              function pop() {
+                if (busy) return;
+                const v = stack.pop();
+                if (!v) { replay(nav, 'shake'); say(o, 'Nothing to pop. Push a screen first.'); return; }
+                paintNav();
+                if (clearOn) {
+                  v.alive = false; v.el.classList.add('kmp-gone'); v.job.className = 'kmp-job kmp-cancel'; v.note.textContent = 'cleared';
+                  say(o, `<span class="good">holder.clear():</span> onCleared() ran and the poll loop of #${v.n} was cancelled.`);
+                } else {
+                  v.el.classList.add('kmp-stale'); v.note.textContent = 'no screen';
+                  const leaked = vms.filter(x => x.alive && !stack.includes(x)).length;
+                  say(o, `<span class="bad">leaked:</span> nobody cleared #${v.n}. ${leaked} ViewModel${leaked > 1 ? 's are' : ' is'} still polling for screens that are gone.`);
+                }
+              }
+              const box = h('input', { type: 'checkbox', id: 'kmp-d-clear', checked: true, onchange() { clearOn = this.checked; say(o, clearOn ? 'Popped screens clear their store again.' : 'Now Swift just drops the screen. Pop one and watch.'); } });
+              (async () => {
+                while (true) {
+                  await sleep(900); if (!el.isConnected) return;
+                  vms.forEach(v => { if (v.alive) { v.ticks++; v.count.textContent = `polls: ${v.ticks}`; } });
+                }
+              })();
+              paintNav(); push();
+              el.append(
+                h('div', { class: 'kmp-devs' }, h('div', { class: 'kmp-dev-wrap' }, nav, h('span', { class: 'kmp-label' }, 'SwiftUI')), vmBox),
+                h('div', { class: 'controls' }, act('push NewsScreen', push), act('pop', pop), h('label', { class: 'switch', for: 'kmp-d-clear' }, box, 'clear on disappear')),
+                o);
+            },
+          },
+          {
+            title: 'Cancellation has to cross the bridge',
+            body: `
+<p>SwiftUI cancels a view’s <code>.task</code> when the view disappears. Whether the Kotlin coroutine behind it stops depends on the bridge. Kotlin’s own export lets Swift <code>await</code> a suspend function, but it does not pass Swift’s cancellation on. The coroutine runs to the end, and its result is thrown away.</p>
+<p>SKIE and KMP-NativeCoroutines connect the two: cancelling the Swift task cancels the coroutine, which stops at its next suspension point, network call included.</p>`,
+            code: `// commonMain
+class SearchRepository(private val api: SearchApi) {
+    suspend fun search(query: String): List<SearchHit> {
+        delay(300)                 // debounce; a cancellation point
+        return api.search(query)   // Ktor calls are cancellable too
+    }
+}
+
+// Swift with SKIE: leaving the view cancels the task and the coroutine
+// .task(id: query) { hits = (try? await repo.search(query: query)) ?? [] }`,
+            visual(el) {
+              const BR = [
+                { label: 'Kotlin export', cancel: false, swift: '.task { hits = try? await repo.search(query: "kotlin") }' },
+                { label: 'SKIE', cancel: true, swift: '.task { hits = try? await repo.search(query: "kotlin") }' },
+                { label: 'KMP-NativeCoroutines', cancel: true, swift: '.task { hits = try? await asyncFunction(for: repo.search(query: "kotlin")) }' },
+              ];
+              let br = 0, run = 0, swiftP = 0, ktP = 0, swiftEnd = null, ktEnd = null;
+              const mkLane = name => { const bar = h('div', { class: 'bar run' }); const tr = h('div', { class: 'lane-track' }, bar); return { bar, row: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), tr) }; };
+              const sw = mkLane('Swift .task'), kt = mkLane('Kotlin coroutine');
+              const swiftLine = h('div', { class: 'kt' });
+              const o = out();
+              const paint = () => {
+                sw.bar.style.left = '0'; sw.bar.style.width = `${swiftP}%`; sw.bar.className = 'bar ' + (swiftEnd === 'cancel' ? 'block' : 'run');
+                kt.bar.style.left = '0'; kt.bar.style.width = `${ktP}%`; kt.bar.className = 'bar ' + (ktEnd === 'cancel' ? 'block' : ktEnd === 'wasted' ? 'queued' : 'run');
+              };
+              const btns = BR.map((b, i) => act(b.label, () => { if (run) return; br = i; pick(btns, i); swiftLine.innerHTML = hl(b.swift); replay(swiftLine, 'pop-soft'); }));
+              async function open() {
+                if (run) return;
+                const my = run = Date.now();
+                swiftP = 0; ktP = 0; swiftEnd = null; ktEnd = null; paint();
+                say(o, 'Search screen open. The task awaits repo.search().');
+                while (ktP < 100) {
+                  await sleep(60); if (!el.isConnected || run !== my) return;
+                  if (ktEnd === 'cancel') break;
+                  ktP = Math.min(100, ktP + 2); if (!swiftEnd) swiftP = ktP;
+                  paint();
+                }
+                if (ktEnd === 'cancel') return;
+                if (swiftEnd === 'cancel') {
+                  ktEnd = 'wasted'; paint();
+                  say(o, '<span class="bad">wasted:</span> the coroutine finished the network call and the parsing. Swift had already cancelled, so the result was thrown away.');
+                } else say(o, '<span class="good">done:</span> results arrived while the screen was still open.');
+                run = 0;
+              }
+              async function leave() {
+                if (!run || swiftEnd) { say(o, '<span class="muted">No search is running. Open the screen first.</span>'); return; }
+                swiftEnd = 'cancel'; paint(); replay(sw.row, 'shake');
+                if (BR[br].cancel) {
+                  await sleep(200); if (!el.isConnected) return;
+                  ktEnd = 'cancel'; paint(); run = 0;
+                  say(o, `<span class="good">${BR[br].label}:</span> the Swift task was cancelled, so the coroutine got a CancellationException and stopped at ${ktP}%.`);
+                } else {
+                  say(o, '<span class="muted">The Swift task is cancelled. The Kotlin coroutine doesn’t know…</span>');
+                }
+              }
+              pick(btns, 0); swiftLine.innerHTML = hl(BR[0].swift); paint();
+              say(o, 'Pick a bridge. Open the screen, then leave it before the search finishes.');
+              el.append(
+                h('div', { class: 'controls' }, btns), swiftLine,
+                h('div', { class: 'timeline' }, sw.row, kt.row),
+                h('div', { class: 'controls' }, act('open search screen', open), act('leave screen', leave)),
+                o);
+            },
+          },
+          {
+            title: 'Threads on iOS work the same way',
+            body: `
+<p><code>viewModelScope</code> runs on <code>Dispatchers.Main.immediate</code>. On iOS, <code>Dispatchers.Main</code> is the main dispatch queue, so state updates land on the UI thread on both platforms. <code>Dispatchers.IO</code> and <code>Default</code> exist on Kotlin/Native too, and since the new memory model, objects can move between threads freely. The same <code>withContext</code> code runs unchanged.</p>`,
+            code: `fun refresh() {
+    viewModelScope.launch {                                   // main thread on Android and iOS
+        val items = withContext(Dispatchers.IO) { repo.loadFromDisk() }
+        _state.value = UiState.Success(items)                 // back on main
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Every ViewModel keeps a set of closeable objects. The first time you read <code>viewModelScope</code>, it creates a scope with a <code>SupervisorJob</code> and <code>Dispatchers.Main.immediate</code> (where a main dispatcher exists) and registers it as one of them. <code>ViewModelStore.clear()</code> calls the ViewModel’s internal clear, which runs <code>onCleared()</code> and closes those objects. Closing the scope cancels its job, and that cancels every coroutine launched in it. This code is the same on every platform.</p>
+<p>SKIE adds Swift code to the framework. For a flow, it generates an <code>AsyncSequence</code> that starts a Kotlin coroutine to collect the flow and hands each value to Swift. When the Swift task is cancelled, the sequence cancels that coroutine.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A catch-all that swallows cancellation',
+            bad: `viewModelScope.launch {
+    while (true) {
+        try {
+            delay(5_000)
+            _state.value = repo.poll()
+        } catch (e: Exception) {
+            log(e)   // also catches CancellationException
+        }
+    }
+}`,
+            good: `viewModelScope.launch {
+    while (isActive) {
+        try {
+            delay(5_000)
+            _state.value = repo.poll()
+        } catch (e: IOException) {
+            log(e)
+        }
+    }
+}`,
+            why: 'After <code>clear()</code>, <code>delay</code> throws <code>CancellationException</code>. The catch eats it and the loop spins again, so the coroutine never stops. Catch only the errors you expect, or rethrow cancellation.',
+          },
+          {
+            title: 'Handing Swift the mutable flow',
+            bad: `class NewsViewModel : ViewModel() {
+    val state = MutableStateFlow<UiState>(UiState.Loading)
+}`,
+            good: `class NewsViewModel : ViewModel() {
+    private val _state = MutableStateFlow<UiState>(UiState.Loading)
+    val state: StateFlow<UiState> = _state.asStateFlow()
+}`,
+            why: 'Swift sees a writable <code>value</code> property and can set state from the view. Then the ViewModel no longer owns its state, and Android and iOS can drift apart.',
+          },
         ],
         visual(el) {
           const BR = [

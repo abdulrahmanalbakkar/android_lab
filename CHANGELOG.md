@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-10-16: depth pass
+
+- **New lesson sections**, shown only where a lesson needs them:
+  - **Go deeper**: 2–4 numbered steps, each adding one idea, most with their own demo.
+  - **Under the hood**: a collapsed panel on what the compiler or runtime does.
+  - **Common mistakes**: before and after code with the reason.
+- **Coverage:** 55 of the 159 lessons now have these sections, with 112 new step demos. Lessons whose single demo already tells the whole story were left alone.
+- **Deepened lessons, by track:**
+  - Kotlin: nulls, lambdas, collections, classes, data, coroutines
+  - Kotlin, deeper: variance, delegation, inline, errors
+  - OOP and SOLID: polymorphism, liskov, dip
+  - Design patterns: singleton, observer, state-machine
+  - Android fundamentals: savedstate, permissions
+  - Views and Compose interop: recycler, fragments
+  - Platform and push: fcm, messages, workmanager
+  - Jetpack Compose: recomposition, remember, lazy-keys, effects
+  - Compose, advanced: stability, derived, phases
+  - Accessibility and adaptive UI: semantics, insets
+  - Coroutines and Flow: structured, dispatchers, hot, lifecycle
+  - Testing and quality: coroutines, compose-ui
+  - Performance and debugging: leaks, compose-perf
+  - App architecture: udf, ssot, room, hilt
+  - Data and storage: migrations, paging
+  - Kotlin Multiplatform: expect, viewmodels
+  - Security and privacy: keystore, at-rest, network
+  - Build and release: gradle, modules
+  - Media, camera and sensors: session, analysis
+
+### To verify
+- **FCM tokens:** the monthly refresh guidance and the 270-day token expiry (platform.fcm) come from memory.
+- **Media3:** `setMediaButtonPreferences` and `CommandButton.ICON_SKIP_FORWARD_15` need Media3 1.6 or later (media.session).
+- **Tink:** the keyset rotation snippet (security.at-rest).
+- **Error messages:** the Dagger and AutoMigration texts are marked "(shortened)", not exact compiler wording.
+
+### Testing
+- **Coverage:** all 159 lessons at 1280px light and 400px dark.
+- **What was exercised:** clicks on core and step demos, with every "Under the hood" panel open.
+- **Result:** no script errors and no page wider than the screen.
+
 ## 2026-10-16: overnight build
 
 ### New shell

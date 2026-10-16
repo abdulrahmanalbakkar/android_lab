@@ -136,7 +136,438 @@
   .pf-heap-stage { grid-template-columns: minmax(0, 1fr); }
   .pf-ihead, .pf-irow { grid-template-columns: minmax(0, 1fr) 46px 46px; padding: 5px 4px; }
 }
+
+/* depth steps */
+.pf-dz-graph { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: 14px; padding: 14px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; align-items: start; min-width: 0; }
+.pf-dz-col { display: grid; gap: 8px; min-width: 0; }
+.pf-dz-heap { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
+.obj.pf-dz-obj { min-width: 0; padding: 8px 10px; font-size: 0.78rem; transition: border-color 0.25s, background 0.25s, opacity 0.3s; }
+.pf-dz-obj .obj-name { overflow-wrap: anywhere; }
+.pf-dz-obj.pf-dz-root { border-color: var(--accent); }
+.pf-dz-refs { color: var(--muted); font-size: 0.72rem; overflow-wrap: anywhere; }
+.pf-dz-st { font: 600 0.7rem var(--mono); color: var(--muted); }
+.pf-dz-mark { border-color: var(--ok) !important; background: var(--ok-soft); }
+.pf-dz-free { opacity: 0.4; border-style: dashed !important; }
+.pf-dz-free .obj-name { text-decoration: line-through; }
+.pf-dz-kept { border-color: var(--err) !important; background: var(--err-soft); }
+.pf-dz-kept .pf-dz-st { color: var(--err); }
+.legend i.pf-dz-key { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--line); }
+.legend i.pf-dz-key.pf-dz-free { opacity: 1; border-style: dashed; border-color: var(--muted); }
+.pf-dz-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
+.pf-dz-link { font: 600 0.76rem var(--mono); padding: 5px 9px; border-radius: 8px; border: 2px solid var(--ink); background: var(--surface); transition: opacity 0.3s, border-color 0.3s, background 0.3s; min-width: 0; overflow-wrap: anywhere; }
+.pf-dz-link.pf-dz-gone { opacity: 0.35; border-style: dashed; text-decoration: line-through; }
+.pf-dz-link.pf-dz-free { opacity: 0.45; border-style: dashed; }
+.pf-dz-link.pf-dz-kept { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.pf-dz-arrow { font: 700 0.9rem var(--mono); color: var(--muted); }
+.pf-dz-phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pf-dz-phase { display: grid; gap: 2px; padding: 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); opacity: 0.55; transition: opacity 0.25s, border-color 0.25s; min-width: 0; }
+.pf-dz-phase b { font: 700 1.4rem var(--display); font-variant-numeric: tabular-nums; }
+.pf-dz-phase small { color: var(--muted); font-size: 0.74rem; }
+.pf-dz-phase.pf-dz-on { opacity: 1; border-color: var(--warm); }
+.pf-dz-phase.pf-dz-on b { color: var(--warm); }
+@media (max-width: 600px) {
+  .pf-dz-graph { grid-template-columns: minmax(0, 1fr); }
+  .pf-dz-phase .pf-label { font-size: 0.62rem; letter-spacing: 0.02em; }
+}
 `;
+
+  // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
+  const leaksDepth = {
+    deeper: [
+      {
+        title: 'The GC traces from roots, so cycles are fine',
+        body: `<p>ART does not count references. It starts at the GC roots, marks everything it can reach, and frees the rest. Two objects that point at each other but that no root reaches are freed together. A cycle between an Activity and its presenter is not a leak.</p>
+<p>A leak needs a path from a root. Toggle the stale listener, then run a GC and watch the mark phase.</p>`,
+        visual(el) {
+          const OBJS = {
+            thread: { name: 'main thread', root: true, refs: ['act2'] },
+            repo: { name: 'object LocationRepo', root: true, refs: [] },
+            act2: { name: 'MapActivity #2', note: 'on screen', refs: ['pres2'] },
+            pres2: { name: 'MapPresenter #2', refs: ['act2'] },
+            act1: { name: 'MapActivity #1', note: 'destroyed', refs: ['pres1', 'bmp1'] },
+            pres1: { name: 'MapPresenter #1', refs: ['act1'] },
+            bmp1: { name: 'Bitmap 12 MB', refs: [] },
+          };
+          let busy = false, holds = false;
+          const els = {};
+          const o = out();
+          const build = (id) => {
+            const O = OBJS[id];
+            const refs = h('span', { class: 'pf-dz-refs' });
+            const st = h('span', { class: 'pf-dz-st' }, O.note || (O.root ? 'GC root' : ''));
+            const box = h('div', { class: `obj pf-dz-obj${O.root ? ' pf-dz-root' : ''}` }, h('span', { class: 'obj-name' }, O.name), refs, st);
+            els[id] = { box, refs, st };
+            return box;
+          };
+          const roots = h('div', { class: 'pf-dz-col' }, h('span', { class: 'pf-label' }, 'roots'), build('thread'), build('repo'));
+          const heap = h('div', { class: 'pf-dz-heap' }, ['act2', 'pres2', 'act1', 'pres1', 'bmp1'].map(build));
+          function paint() {
+            OBJS.repo.refs = holds ? ['act1'] : [];
+            for (const [id, O] of Object.entries(OBJS)) {
+              els[id].refs.textContent = O.refs.length ? '→ ' + O.refs.map(r => OBJS[r].name.replace(/ \d+ MB$/, '')).join(', ') : '→ nothing';
+              els[id].box.classList.remove('pf-dz-mark', 'pf-dz-free', 'pf-dz-kept');
+              els[id].st.textContent = O.note || (O.root ? 'GC root' : '');
+            }
+          }
+          const sw = toggle('pf-dz-holds', 'LocationRepo still holds <b>#1’s listener</b>', false, v => { if (busy) { sw.input.checked = holds; return; } holds = v; paint(); say(o, v ? 'Now a root reaches MapActivity #1 through the forgotten listener. Run a GC.' : 'No root reaches MapActivity #1 any more. Run a GC.'); });
+          async function gc() {
+            if (busy) return; busy = true;
+            try {
+              paint();
+              say(o, '<span class="muted">mark:</span> start at the roots and follow every reference…');
+              const seen = new Set(), queue = Object.keys(OBJS).filter(k => OBJS[k].root);
+              while (queue.length) {
+                const id = queue.shift();
+                if (seen.has(id)) continue;
+                seen.add(id);
+                els[id].box.classList.add('pf-dz-mark'); replay(els[id].box, 'pop');
+                await sleep(380); if (!el.isConnected) return;
+                OBJS[id].refs.forEach(r => { if (!seen.has(r)) queue.push(r); });
+              }
+              await sleep(300); if (!el.isConnected) return;
+              const dead = Object.keys(OBJS).filter(k => !seen.has(k));
+              dead.forEach(k => { els[k].box.classList.add('pf-dz-free'); els[k].st.textContent = 'freed'; });
+              if (holds) {
+                ['act1', 'pres1', 'bmp1'].forEach(k => { els[k].box.classList.add('pf-dz-kept'); els[k].st.textContent = 'leaked'; });
+                say(o, '<span class="bad">leak:</span> LocationRepo is a root, and its listener reaches MapActivity #1, its presenter and its 12 MB bitmap. Nothing was freed.');
+              } else {
+                say(o, '<span class="good">sweep:</span> MapActivity #1 and its presenter point at each other, but no root reaches them. The cycle and the bitmap were freed together.');
+              }
+            } finally { busy = false; }
+          }
+          paint();
+          o.innerHTML = 'MapActivity #1 was destroyed by a rotation. It still forms a cycle with its presenter.';
+          el.append(
+            h('div', { class: 'controls' }, sw.el, act('Run GC', gc)),
+            h('div', { class: 'pf-dz-graph' }, roots, heap),
+            h('div', { class: 'legend' },
+              h('span', {}, h('i', { class: 'pf-dz-key pf-dz-mark' }), 'reached from a root'),
+              h('span', {}, h('i', { class: 'pf-dz-key pf-dz-free' }), 'freed'),
+              h('span', {}, h('i', { class: 'pf-dz-key pf-dz-kept' }), 'leaked')),
+            o);
+        },
+      },
+      {
+        title: 'Hidden references: lambdas and delayed messages',
+        body: `<p>A lambda or anonymous object that uses the Activity captures it. Post it with <code>Handler.postDelayed</code> and the main thread’s message queue holds the Activity until the message runs. That queue is reachable from a root, so a rotation during the delay leaks the old Activity until then.</p>
+<p>Remove the callback in <code>onDestroy</code>, or use <code>lifecycleScope</code> with <code>delay</code>, which is cancelled with the Activity.</p>`,
+        code: `// Leaks for 30 s after a rotation
+handler.postDelayed({ showTip() }, 30_000)
+
+// Cancelled with the Activity
+lifecycleScope.launch {
+    delay(30_000)
+    showTip()
+}`,
+        visual(el) {
+          const MODES = [
+            ['post', 'handler.postDelayed({ showTip() }, 30_000)', 'postDelayed(…, 30_000)'],
+            ['remove', 'handler.removeCallbacksAndMessages(null) // in onDestroy', 'removeCallbacksAndMessages(null)'],
+            ['scope', 'lifecycleScope.launch { delay(30_000); showTip() }', 'lifecycleScope.launch { delay(…) }'],
+          ];
+          const T = 6000;
+          let mode = 'post', state = 'idle', t0 = 0;
+          const chain = h('div', { class: 'pf-dz-chain' });
+          const timer = h('span', { class: 'bar wait', style: 'left:0;width:0' });
+          const countdown = h('span', { class: 'pf-stat' });
+          const o = out();
+          const modeBtns = MODES.map(([k, , label]) => cmd(label, () => { mode = k; reset(); }));
+          const link = (txt, cls = '') => h('span', { class: `pf-dz-link ${cls}` }, txt);
+          function paintChain() {
+            const act1 = state === 'retained' ? 'pf-dz-kept' : state === 'freed' ? 'pf-dz-free' : '';
+            const cut = state === 'freed' || state === 'idle';
+            const holder = mode === 'scope' ? 'Job (lifecycleScope)' : 'Message in main queue';
+            chain.replaceChildren(
+              link('main Looper'), h('span', { class: 'pf-dz-arrow' }, '→'),
+              link(holder, cut && state === 'freed' ? 'pf-dz-gone' : ''), h('span', { class: 'pf-dz-arrow' }, cut && state === 'freed' ? '×' : '→'),
+              link('lambda { showTip() }', cut && state === 'freed' ? 'pf-dz-gone' : ''), h('span', { class: 'pf-dz-arrow' }, '→'),
+              link(state === 'idle' ? 'MapActivity #1 (on screen)' : 'MapActivity #1 (destroyed)', act1));
+          }
+          function reset() {
+            state = 'idle'; t0 = 0; timer.style.width = '0'; countdown.textContent = 'tip due in 30 s';
+            press(modeBtns, modeBtns[MODES.findIndex(m => m[0] === mode)]);
+            paintChain();
+            say(o, `<span class="muted">mode:</span> ${hl(MODES.find(m => m[0] === mode)[1])}. The tip is scheduled. Rotate before it fires.`);
+          }
+          const isAlive = alive(chain);
+          const tick = () => {
+            if (!isAlive()) return;
+            if (state === 'retained') {
+              const p = Math.min(1, (performance.now() - t0) / T);
+              timer.style.width = p * 100 + '%';
+              countdown.textContent = `message runs in ${Math.ceil(30 * (1 - p))} s (sped up)`;
+              if (p >= 1) {
+                state = 'freed'; paintChain();
+                countdown.textContent = 'message ran';
+                say(o, '<span class="bad">late:</span> the message finally ran showTip() on a dead Activity, then the queue let go. For 30 s the old screen and its views stayed in memory.');
+              }
+            }
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+          reset();
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            chain,
+            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'retained'), h('div', { class: 'lane-track' }, timer))),
+            h('div', { class: 'pf-row' }, act('Rotate the phone', () => {
+              if (state !== 'idle') { replay(chain, 'shake'); say(o, '<span class="muted">already rotated:</span> pick a mode to start over.'); return; }
+              if (mode === 'post') {
+                state = 'retained'; t0 = performance.now(); paintChain();
+                say(o, '<span class="bad">retained:</span> MapActivity #1 is destroyed, but the pending message still reaches it through the lambda. LeakCanary would flag it 5 s from now.');
+              } else {
+                state = 'freed'; paintChain(); countdown.textContent = mode === 'scope' ? 'coroutine cancelled' : 'message removed';
+                say(o, mode === 'scope'
+                  ? '<span class="good">freed:</span> lifecycleScope was cancelled in onDestroy, so the coroutine and its lambda are gone. Nothing reaches MapActivity #1.'
+                  : '<span class="good">freed:</span> onDestroy removed the pending message, which cut the only path to MapActivity #1.');
+              }
+            }), countdown),
+            o);
+        },
+      },
+      {
+        title: 'Fragments: drop view references in onDestroyView',
+        body: `<p>A Fragment on the back stack lives on after its view is destroyed. Any field that holds the binding or a View keeps the whole old view tree alive until the Fragment itself is destroyed. Clear such fields in <code>onDestroyView</code>.</p>`,
+        code: `class FeedFragment : Fragment(R.layout.feed) {
+    private var _binding: FeedBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        _binding = FeedBinding.bind(view)
+    }
+
+    override fun onDestroyView() {
+        _binding = null      // the view tree can be freed now
+        super.onDestroyView()
+    }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>LeakCanary hooks into the lifecycle callbacks. When an Activity, Fragment, Fragment view or ViewModel is destroyed, it wraps the object in a <code>WeakReference</code> tied to a <code>ReferenceQueue</code>. Five seconds later it checks the queue. If the reference was not enqueued, it forces a GC and checks again. An object that is still there is counted as retained.</p>
+<p>When enough objects are retained (5 while the app is visible, 1 once it goes to the background), LeakCanary dumps the heap to an <code>.hprof</code> file. Its parser, Shark, finds the shortest path from a GC root to each retained object. That path is the leak trace you read.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'A ViewModel that holds an Activity or View',
+        bad: `class MapViewModel(
+    private val activity: Activity,      // outlives rotation, keeps the old Activity
+) : ViewModel() {
+    fun permissionGranted() = ContextCompat.checkSelfPermission(
+        activity, ACCESS_FINE_LOCATION) == PERMISSION_GRANTED
+}`,
+        good: `@HiltViewModel
+class MapViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : ViewModel() {
+    fun permissionGranted() = ContextCompat.checkSelfPermission(
+        context, ACCESS_FINE_LOCATION) == PERMISSION_GRANTED
+}`,
+        why: 'A ViewModel survives rotation, so it keeps the destroyed Activity and its views. Hold the application context, or keep Context out of the ViewModel entirely.',
+      },
+      {
+        title: 'Caching a View in a companion object',
+        bad: `class PlayerActivity : ComponentActivity() {
+    companion object {
+        var progressBar: ProgressBar? = null   // static field, a GC root
+    }
+}`,
+        good: `class PlayerActivity : ComponentActivity() {
+    private val viewModel: PlayerViewModel by viewModels()
+    // the ViewModel holds progress as state; the View reads it
+}`,
+        why: 'A static field lives as long as the process. A View knows its Context, so this pins the whole Activity. Share state, not Views.',
+      },
+    ],
+  };
+
+  const composePerfDepth = {
+    deeper: [
+      {
+        title: 'Read state in the latest phase you can',
+        body: `<p>Compose renders a frame in three phases: composition, layout and draw. A state read is tracked in the phase where it happens. Read an animated value in the composable body and every frame runs all three phases. Read it inside a lambda modifier like <code>offset { }</code> and only layout and draw run. Read it in <code>graphicsLayer { }</code> or <code>drawBehind { }</code> and only draw runs.</p>
+<p>Switch modifiers and watch the per-second counts.</p>`,
+        code: `val x by animateFloatAsState(if (moved) 300f else 0f, label = "x")
+
+// Recomposes every frame
+Box(Modifier.offset(x = x.dp))
+
+// Only relayout and redraw
+Box(Modifier.offset { IntOffset(x.roundToInt(), 0) })
+
+// Only redraw
+Box(Modifier.graphicsLayer { translationX = x })`,
+        visual(el) {
+          const MODES = [
+            ['comp', 'Modifier.offset(x = x.dp)', [1, 1, 1]],
+            ['layout', 'Modifier.offset { IntOffset(x, 0) }', [0, 1, 1]],
+            ['draw', 'Modifier.graphicsLayer { translationX = x }', [0, 0, 1]],
+          ];
+          const NAMES = ['Composition', 'Layout', 'Draw'];
+          let mode = 0, counts = [0, 0, 0], since = performance.now(), x = 0;
+          const ball = h('span', { class: 'pf-ball', style: 'left:14px' });
+          const rail = h('div', { class: 'pf-rail' }, ball);
+          const phases = NAMES.map(n => {
+            const num = h('b', {}, '0');
+            const box = h('div', { class: 'pf-dz-phase' }, h('span', { class: 'pf-label' }, n), num, h('small', {}, 'runs per second'));
+            return { box, num };
+          });
+          const o = out();
+          const modeBtns = MODES.map(([, src], i) => cmd(src, () => {
+            mode = i; counts = [0, 0, 0]; since = performance.now();
+            press(modeBtns, modeBtns[i]);
+            paintOn();
+            say(o, [
+              '<span class="bad">every phase, every frame:</span> x is read during composition, so the composable recomposes 60 times a second.',
+              '<span class="good">layout and draw only:</span> the read moved into the offset lambda, which runs during layout. Composition stays at 0.',
+              '<span class="good">draw only:</span> graphicsLayer reads x while drawing, so the box just moves on the GPU layer.',
+            ][i]);
+          }));
+          const paintOn = () => phases.forEach((p, i) => p.box.classList.toggle('pf-dz-on', !!MODES[mode][2][i]));
+          const isAlive = alive(rail);
+          const frame = now => {
+            if (!isAlive()) return;
+            x = (Math.sin(now / 600) + 1) / 2;
+            ball.style.left = `calc(14px + ${x} * (100% - 28px))`;
+            MODES[mode][2].forEach((on, i) => { counts[i] += on; });
+            if (now - since >= 500) {
+              const k = 1000 / (now - since);
+              phases.forEach((p, i) => { p.num.textContent = String(Math.round(counts[i] * k)); });
+              counts = [0, 0, 0]; since = now;
+            }
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+          press(modeBtns, modeBtns[0]); paintOn();
+          o.innerHTML = 'The box is animating. Right now x is read in composition. Try the other two modifiers.';
+          el.append(h('div', { class: 'controls' }, modeBtns), rail, h('div', { class: 'pf-dz-phases' }, phases.map(p => p.box)), o);
+        },
+      },
+      {
+        title: 'Never write state you just read during composition',
+        body: `<p>Composition should only read state. If a composable reads a value and then writes it in the same pass, the write invalidates the composable it was just read in. Compose schedules it again, it writes again, and the loop never ends. This is called a <em>backwards write</em>.</p>
+<p>Change state in event handlers or effects instead. Then it changes once per event.</p>`,
+        code: `// Backwards write: recomposes forever
+@Composable
+fun Badge(count: MutableState<Int>) {
+    Text("\${count.value}")
+    count.value++                    // written after it was read
+}
+
+// Fine: the write happens in an event
+@Composable
+fun Badge(count: MutableState<Int>) {
+    Text("\${count.value}", Modifier.clickable { count.value++ })
+}`,
+        visual(el) {
+          let running = false, recs = 0, frames = 0, stopAt = 0;
+          const recEl = h('b', {}, '0'), frameEl = h('b', {}, '0');
+          const cpu = h('div', { class: 'pf-heap-bar' }, h('span'));
+          const badge = h('span', { class: 'chip total' }, '0');
+          const o = out();
+          let value = 0;
+          const paint = () => { recEl.textContent = recs; frameEl.textContent = frames; badge.textContent = value; };
+          const isAlive = alive(badge);
+          function loop() {
+            if (!isAlive() || !running) return;
+            if (performance.now() > stopAt) {
+              running = false; cpu.className = 'pf-heap-bar'; cpu.firstChild.style.width = '6%';
+              say(o, '<span class="bad">stopped by the demo:</span> on a phone this never stops. The UI thread spends every frame recomposing, and the app janks or freezes.');
+              return;
+            }
+            recs++; frames++; value++; paint();
+            requestAnimationFrame(loop);
+          }
+          paint(); cpu.firstChild.style.width = '6%';
+          o.innerHTML = 'One badge, two ways to change its count.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('count.value++ // in the composable body', () => {
+                if (running) return;
+                running = true; stopAt = performance.now() + 3500;
+                cpu.className = 'pf-heap-bar pf-full'; cpu.firstChild.style.width = '100%';
+                say(o, '<span class="bad">loop:</span> read count, wrote count + 1, which invalidated the scope that read it. Compose recomposes, and it happens again…');
+                requestAnimationFrame(loop);
+              }),
+              cmd('onClick = { count.value++ }', () => {
+                if (running) { replay(badge, 'shake'); return; }
+                recs++; frames++; value++; paint(); replay(badge, 'pop');
+                cpu.className = 'pf-heap-bar'; cpu.firstChild.style.width = '12%';
+                setTimeout(() => { if (cpu.isConnected && !running) cpu.firstChild.style.width = '6%'; }, 400);
+                say(o, '<span class="good">one event, one recomposition:</span> the click changed the count, Compose redrew the badge once, then went idle.');
+              })),
+            h('div', { class: 'pf-split' },
+              h('div', { class: 'pf-heap' },
+                h('div', { class: 'pf-stat' }, 'recompositions ', recEl, ' · frames ', frameEl),
+                h('span', { class: 'pf-label' }, 'main thread busy'), cpu),
+              badge),
+            o);
+        },
+      },
+      {
+        title: 'Measure a release build, not debug',
+        body: `<p>Debug builds run Compose with extra checks and without R8 or a Baseline Profile, so they are much slower than what users get. Use the Layout Inspector in debug to find <em>what</em> recomposes. Measure <em>how long</em> things take with Macrobenchmark on a release-like build.</p>`,
+        code: `@Test fun scrollFeed() = benchmarkRule.measureRepeated(
+    packageName = "com.example.feed",
+    metrics = listOf(FrameTimingMetric()),
+    iterations = 5,
+    startupMode = StartupMode.WARM,
+) {
+    startActivityAndWait()
+    device.findObject(By.res("feed")).fling(Direction.DOWN)
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>The Compose compiler rewrites every <code>@Composable</code> function. It adds a <code>Composer</code> parameter and a <code>$changed</code> bit mask that says which arguments are known to be unchanged. The body is wrapped in a restart group. If every parameter is unchanged, the function calls <code>skipToGroupEnd()</code> and does nothing.</p>
+<p>At the end, the restart group registers a lambda that can call the function again. When a state object read inside it changes, the snapshot system marks that scope invalid and the Recomposer reruns only that lambda. Reads inside layout and draw lambdas are tracked by separate observers, which invalidate only layout or draw.</p>`,
+      code: `// Simplified shape of what the compiler generates
+@Composable
+fun Greeting(name: String, $composer: Composer, $changed: Int) {
+    $composer.startRestartGroup(/* key */)
+    var dirty = $changed
+    if (($changed and 0b0110) == 0) {
+        dirty = dirty or if ($composer.changed(name)) 0b0100 else 0b0010
+    }
+    if ((dirty and 0b0011) != 0b0010 || !$composer.skipping) {
+        Text("Hello $name", $composer, 0)
+    } else {
+        $composer.skipToGroupEnd()
+    }
+    $composer.endRestartGroup()?.updateScope { c, _ -> Greeting(name, c, $changed or 1) }
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Heavy work in the composable body',
+        bad: `@Composable
+fun Contacts(contacts: List<Contact>) {
+    val sorted = contacts.sortedBy { it.name }   // on every recomposition
+    LazyColumn { items(sorted, key = { it.id }) { ContactRow(it) } }
+}`,
+        good: `@Composable
+fun Contacts(contacts: List<Contact>) {
+    val sorted = remember(contacts) { contacts.sortedBy { it.name } }
+    LazyColumn { items(sorted, key = { it.id }) { ContactRow(it) } }
+}`,
+        why: 'The body can run many times per second. <code>remember(contacts)</code> sorts once per new list. Sorting in the ViewModel is often even better.',
+      },
+      {
+        title: 'Using the index as a lazy key',
+        bad: `LazyColumn {
+    itemsIndexed(messages, key = { index, _ -> index }) { _, m ->
+        MessageRow(m)
+    }
+}`,
+        good: `LazyColumn {
+    items(messages, key = { it.id }) { m ->
+        MessageRow(m)
+    }
+}`,
+        why: 'Insert a message at the top and every index shifts, so every row gets a new key and its <code>remember</code> state moves to the wrong row. Use a stable id.',
+      },
+    ],
+  };
 
   Lab.addTrack({
     id: 'perf',
@@ -461,6 +892,9 @@ object Analytics {
           { q: 'What should a long-lived object keep when it needs a Context?', options: ['The current Activity', '<code>context.applicationContext</code>', 'A View’s context'], a: 1, why: 'The application context lives as long as the process, so holding it leaks nothing.' },
           { q: 'In a LeakCanary trace, what does <code>Leaking: YES</code> on <code>MapActivity</code> mean?', options: ['It is destroyed but still reachable', 'It is still on screen', 'It threw an exception'], a: 0, why: 'LeakCanary knows the Activity was destroyed, so being reachable means it leaked. Look up the trace for the reference to cut.' },
         ],
+        deeper: leaksDepth.deeper,
+        underHood: leaksDepth.underHood,
+        mistakes: leaksDepth.mistakes,
         visual(el) {
           const MB = 14, LIMIT = 96;
           let n = 0, fixed = false, busy = false, oom = false;
@@ -725,6 +1159,9 @@ composeCompiler {
           { q: 'A compiler report shows <code>unstable item: Item</code>. What does that mean for <code>ItemRow</code>?', options: ['It skips only when it gets the same <code>Item</code> instance', 'It never compiles', 'It always skips'], a: 0, why: 'With strong skipping, unstable parameters are compared by instance. A new but equal object still triggers recomposition.' },
           { q: 'When does <code>derivedStateOf</code> help?', options: ['When the input changes much more often than the result', 'For every piece of state', 'Only for network results'], a: 0, why: 'Scroll position changes constantly, but “show the button” flips rarely. Readers only recompose when the derived value changes.' },
         ],
+        deeper: composePerfDepth.deeper,
+        underHood: composePerfDepth.underHood,
+        mistakes: composePerfDepth.mistakes,
         visual(el) {
           const pool = ['Kotlin', 'Compose', 'Flow', 'Room', 'Hilt', 'Ktor'];
           let imm = false, derived = false, keyed = false, busy = false, scrolled = false, next = 3, uid = 4;

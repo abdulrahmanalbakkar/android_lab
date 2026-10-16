@@ -119,6 +119,23 @@
 .sec-meter { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
 .sec-meter span { display: block; height: 100%; background: var(--warm); border-radius: 99px; transition: width 0.5s, background 0.5s; }
 .sec-meter span.sec-low { background: var(--ok); }
+/* depth demos */
+.sec-chks { display: grid; gap: 6px; min-width: 0; }
+.sec-chk { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; align-items: center; padding: 6px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font-size: 0.86rem; min-width: 0; transition: border-color 0.25s, background 0.25s; }
+.sec-chk.sec-now { border-color: var(--accent); }
+.sec-chk.sec-pass { border-color: var(--ok); }
+.sec-chk.sec-pass .sec-state { background: var(--ok-soft); color: var(--ok); }
+.sec-chk.sec-fail { border-color: var(--err); background: var(--err-soft); }
+.sec-chk.sec-fail .sec-state { background: var(--err); color: var(--surface); }
+.sec-recs { display: grid; gap: 6px; min-width: 0; }
+.sec-rec { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 10px; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); font: 500 0.78rem var(--mono); min-width: 0; transition: box-shadow 0.25s; }
+.sec-rec > span { overflow-wrap: anywhere; min-width: 0; }
+.sec-rec.sec-fail { box-shadow: inset 4px 0 0 var(--t-e); }
+.sec-rs { margin-left: auto; font-weight: 600; }
+.sec-rs.sec-y { color: var(--hi); }
+.sec-rs.sec-n { color: var(--t-e); }
+.sec-key.sec-prim { border-style: solid; }
+.sec-key.sec-off { opacity: 0.45; text-decoration: line-through; }
 @media (max-width: 520px) {
   .sec-path { grid-template-columns: minmax(0, 1fr); }
   .sec-node:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -18px; }
@@ -312,6 +329,216 @@ fun decrypt(iv: ByteArray, data: ByteArray): ByteArray {
           { q: 'Where does the IV come from when you encrypt with a Keystore AES-GCM key?', options: ['You pass a fixed one', 'The Keystore generates a random one; read it from <code>cipher.iv</code>', 'GCM does not use an IV'], a: 1, why: 'Randomized encryption is required by default. Store the IV with the ciphertext; it is not secret.' },
           { q: 'A key was made with <code>setUserAuthenticationParameters(30, AUTH_BIOMETRIC_STRONG)</code>. The user unlocked a minute ago. What happens on <code>cipher.init</code>?', options: ['It works', 'It throws <code>UserNotAuthenticatedException</code>', 'The key is deleted'], a: 1, why: 'The 30 second window has passed. Show a BiometricPrompt, then try again.' },
         ],
+        deeper: [
+          {
+            title: 'The rules are sealed into the key',
+            body: `<p>Everything you set on <code>KeyGenParameterSpec</code> becomes part of the key: purposes, block modes, paddings and the auth timeout. The secure hardware checks those rules on every operation. Ask for something the key was not made for and the Keystore refuses, even when your code compiles fine.</p>
+<p>The rules can’t change later. Edit the spec and ship an update, and <code>getOrCreateKey()</code> still finds the old key under the same alias. To change the rules you delete the key and make a new one, and data sealed with the old key is gone with it.</p>`,
+            visual(el) {
+              const NAMES = { ENCRYPT: 'PURPOSE_ENCRYPT', DECRYPT: 'PURPOSE_DECRYPT', GCM: 'BLOCK_MODE_GCM', CBC: 'BLOCK_MODE_CBC' };
+              const spec = { ENCRYPT: true, DECRYPT: true, GCM: true, CBC: false };
+              let key = null, busy = false;
+              const o = out('session_key exists with the rules shown. Try each operation, then edit the spec.');
+              const rules = h('div', { class: 'sec-pile' });
+              const hw = h('div', { class: 'sec-zone sec-hw' }, h('span', { class: 'sec-label' }, 'Keystore · rules inside session_key'), rules);
+              const paint = anim => rules.replaceChildren(...(key
+                ? Object.keys(key).filter(k => key[k]).map((k, i) => h('span', { class: 'sec-tag' + (anim ? ' drop-in' : ''), style: anim ? `animation-delay:${i * 80}ms` : null }, NAMES[k]))
+                : [h('span', { class: 'sec-empty' }, 'no key with this alias')]));
+              const specBtns = Object.keys(spec).map(k => act(NAMES[k], function () {
+                if (busy) return;
+                spec[k] = !spec[k]; this.setAttribute('aria-pressed', String(spec[k]));
+                say(o, key ? 'Spec edited in your code. <span class="muted">The key in the Keystore still has its old rules.</span>' : 'Spec edited. Generate the key to use it.');
+              }, { 'aria-pressed': String(spec[k]) }));
+              const create = cmd('getOrCreateKey()', () => {
+                if (busy) return;
+                if (key) { replay(hw, 'pop'); say(o, 'Alias session_key already exists, so it comes back as is. <span class="muted">Your edited spec was never used.</span>'); return; }
+                if (!(spec.ENCRYPT || spec.DECRYPT) || !(spec.GCM || spec.CBC)) { replay(hw, 'shake'); say(o, 'Pick at least one purpose and one block mode first.'); return; }
+                key = { ...spec }; paint(true);
+                say(o, '<span class="good">generated:</span> these rules are now part of the key. They can’t be edited.');
+              });
+              const del = cmd('ks.deleteEntry("session_key")', () => {
+                if (busy) return;
+                if (!key) { say(o, 'Nothing to delete.'); return; }
+                key = null; paint(); replay(hw, 'shake');
+                say(o, 'Deleted. <span class="bad">Anything sealed with it can never be decrypted again.</span>');
+              });
+              const use = (label, purpose, mode) => cmd(label, async () => {
+                if (busy) return;
+                if (!key) { replay(hw, 'shake'); say(o, '<span class="bad">error:</span> no key with alias session_key. Call getOrCreateKey().'); return; }
+                busy = true; hw.classList.add('on');
+                say(o, 'asking secure hardware…');
+                await sleep(420);
+                hw.classList.remove('on'); busy = false;
+                const miss = !key[purpose] ? NAMES[purpose] : !key[mode] ? NAMES[mode] : null;
+                if (miss) { replay(hw, 'shake'); say(o, `<span class="bad">InvalidKeyException:</span> Keystore operation failed. The key was not made with ${miss}.`); }
+                else say(o, '<span class="good">ok:</span> the hardware checked the key’s rules and allowed it.');
+              });
+              key = { ...spec }; paint(false);
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Spec in code'), specBtns),
+                hw,
+                h('div', { class: 'controls' }, create, del),
+                h('div', { class: 'controls' },
+                  use('cipher.init(ENCRYPT_MODE, key) // GCM', 'ENCRYPT', 'GCM'),
+                  use('cipher.init(DECRYPT_MODE, key, gcm) // GCM', 'DECRYPT', 'GCM'),
+                  use('cipher.init(ENCRYPT_MODE, key) // CBC', 'ENCRYPT', 'CBC')),
+                o);
+            },
+          },
+          {
+            title: 'Auth-bound keys can die',
+            body: `<p>A key that needs the user is tied to the device’s lock screen. Remove the screen lock and every auth-bound key is invalidated for good. A key that needs a biometric for every use also dies when the user enrolls a new fingerprint or face, unless you build it with <code>setInvalidatedBy<wbr>BiometricEnrollment(false)</code>. The default exists so a finger added by someone else can’t open your data.</p>
+<p>An invalid key throws <code>KeyPermanentlyInvalidatedException</code> on <code>cipher.init</code>. There is no repair. Catch it, delete the alias, make a new key once a lock screen is back, and get the data again, usually by signing the user in.</p>`,
+            code: `fun unlockCipher(iv: ByteArray): Cipher? = try {
+    Cipher.getInstance("AES/GCM/NoPadding").apply {
+        init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+    }
+} catch (e: KeyPermanentlyInvalidatedException) {
+    KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS)
+    tokenStore.clear()   // the old ciphertext can never be opened again
+    null                 // the caller shows the password sign-in
+}`,
+            visual(el) {
+              let valid = true, lock = true, fps = 1, keep = false, token = true;
+              const kState = h('span', { class: 'sec-state' }), tState = h('span', { class: 'sec-state' });
+              const kCard = h('div', { class: 'sec-card' }, kState, h('b', {}, 'wallet_key'), h('small', {}, 'every use needs BIOMETRIC_STRONG'));
+              const tCard = h('div', { class: 'sec-card' }, tState, h('b', {}, 'sealed token'), h('small', {}, 'iv + ciphertext in DataStore'));
+              const dev = h('span', { class: 'sec-stat' });
+              const o = out('The key works. Change the phone’s security settings and see what survives.');
+              const paint = () => {
+                kCard.className = 'sec-card ' + (valid ? 'sec-safe' : 'sec-bad');
+                kState.textContent = valid ? 'valid' : 'permanently invalid';
+                tCard.className = 'sec-card ' + (!token ? '' : valid ? 'sec-safe' : 'sec-bad');
+                tState.textContent = !token ? 'empty' : valid ? 'opens after a prompt' : 'unreadable forever';
+                dev.innerHTML = `screen lock: <b>${lock ? 'PIN' : 'none'}</b> · fingerprints: <b>${fps}</b>`;
+              };
+              const kill = why => { if (!valid) return; valid = false; replay(kCard, 'shake'); say(o, `<span class="bad">wallet_key invalidated:</span> ${why}`); };
+              const keepSw = toggle('sec-ks2-keep', 'setInvalidatedBy<wbr>BiometricEnrollment(false)', false, v => {
+                keep = v; valid = true; token = true; paint(); replay(kCard, 'pop');
+                say(o, `The flag is part of the key, so the demo made a new key${v ? ' that survives new fingerprints' : ' with the default'} and sealed the token again.`);
+              });
+              const settings = [
+                act('Add a fingerprint', () => {
+                  if (!lock) { say(o, 'Android asks for a screen lock before it lets you add a fingerprint.'); return; }
+                  fps++; paint();
+                  if (!valid) { say(o, 'Fingerprint added. The key is still dead.'); return; }
+                  if (keep) { replay(kCard, 'pop'); say(o, '<span class="good">key survives:</span> it was made with setInvalidatedByBiometricEnrollment(false).'); }
+                  else { kill('a new biometric was enrolled.'); paint(); }
+                }),
+                act('Remove screen lock', () => {
+                  if (!lock) { say(o, 'There is no screen lock to remove.'); return; }
+                  lock = false; fps = 0;
+                  if (valid) kill('the secure lock screen was turned off. This kills every auth-bound key, whatever the flags.');
+                  else say(o, 'Screen lock and fingerprints removed.');
+                  paint();
+                }),
+                act('Set a PIN', () => {
+                  if (lock) { say(o, 'A PIN is already set.'); return; }
+                  lock = true; paint();
+                  say(o, `PIN set. ${valid ? '' : 'The old key stays dead. A new PIN does not bring it back.'}`);
+                }),
+              ];
+              el.append(
+                h('div', { class: 'sec-grid' }, kCard, tCard),
+                h('div', { class: 'sec-row' }, dev),
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Settings'), settings),
+                h('div', { class: 'controls' }, keepSw.el),
+                h('div', { class: 'controls' },
+                  cmd('unlockWallet()', () => {
+                    if (!token) { say(o, 'Nothing stored. Sign in first.'); return; }
+                    if (!valid) { replay(tCard, 'shake'); say(o, '<span class="bad">KeyPermanentlyInvalidatedException:</span> Key permanently invalidated'); return; }
+                    replay(tCard, 'pop'); say(o, '<span class="good">BiometricPrompt ok:</span> cipher unlocked, token decrypted.');
+                  }),
+                  cmd('recover()', () => {
+                    if (valid) { say(o, 'The key is fine. Nothing to recover.'); return; }
+                    if (!lock) { replay(kCard, 'shake'); say(o, '<span class="bad">InvalidAlgorithmParameterException:</span> Secure lock screen must be enabled to create keys requiring user authentication'); return; }
+                    if (!fps) { replay(kCard, 'shake'); say(o, '<span class="bad">InvalidAlgorithmParameterException:</span> At least one biometric must be enrolled to create keys requiring user authentication for every use'); return; }
+                    valid = true; token = true; paint(); replay(kCard, 'pop'); replay(tCard, 'pop');
+                    say(o, '<span class="good">recovered:</span> deleteEntry, new key, user signed in with the password, new token sealed. <span class="muted">The old ciphertext was thrown away.</span>');
+                  })),
+                o);
+              paint();
+            },
+          },
+          {
+            title: 'Signing keys and attestation',
+            body: `<p>The Keystore also holds key pairs. An EC private key signs inside secure hardware, and the public key is free to leave. Send the public key to your server at sign-in, then sign sensitive requests. A stolen session token alone can no longer approve a payment.</p>
+<p>Add <code>setAttestationChallenge()</code> with a fresh nonce from your server, and the key comes with a certificate chain that leads up to a Google root. The server checks the chain and the nonce, and reads where the key lives: TEE or StrongBox. Treat it like Play Integrity: a strong signal, combined with your other checks.</p>`,
+            code: `val spec = KeyGenParameterSpec.Builder("device_key", KeyProperties.PURPOSE_SIGN)
+    .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+    .setDigests(KeyProperties.DIGEST_SHA256)
+    .setAttestationChallenge(serverNonce)   // ties the chain to this request
+    .build()
+
+KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+    .apply { initialize(spec) }
+    .generateKeyPair()
+
+val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+val chain = ks.getCertificateChain("device_key")   // send to the server once
+
+val signature = Signature.getInstance("SHA256withECDSA").run {
+    initSign(ks.getKey("device_key", null) as PrivateKey)
+    update(requestBody)
+    sign()                                          // runs in the TEE
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>"AndroidKeyStore"</code> selects a JCA provider that ships with Android. On Android 12 and later, each <code>cipher.init</code>, <code>update</code> and <code>doFinal</code> becomes a Binder call to <code>keystore2</code>, a system daemon. keystore2 forwards the operation to the KeyMint HAL, which runs inside the TEE, or to StrongBox. Older versions use the same design with the keystore daemon and Keymaster.</p>
+<p>The key is saved on disk as a key blob, encrypted by a key that never leaves the secure hardware. A copied blob is useless anywhere else. The authorizations from <code>KeyGenParameterSpec</code> are bound into the blob, and KeyMint checks them on every operation, which is why they can’t change. Every call is a round trip into secure hardware, so keep Keystore work small: wrap a data key, sign a hash, not every record.</p>`,
+          code: `val key = getOrCreateKey()
+val info = SecretKeyFactory.getInstance(key.algorithm, "AndroidKeyStore")
+    .getKeySpec(key, KeyInfo::class.java) as KeyInfo
+
+val where = when (info.securityLevel) {   // API 31+
+    KeyProperties.SECURITY_LEVEL_STRONGBOX -> "StrongBox chip"
+    KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT -> "TEE"
+    else -> "software or unknown"
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Generating a new key on every launch',
+            bad: `// Application.onCreate()
+val key = KeyGenerator.getInstance(KEY_ALGORITHM_AES, "AndroidKeyStore")
+    .apply { init(spec) }
+    .generateKey()   // same alias, replaces the old key`,
+            good: `val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+val key = (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
+    ?: KeyGenerator.getInstance(KEY_ALGORITHM_AES, "AndroidKeyStore")
+        .apply { init(spec) }
+        .generateKey()`,
+            why: 'Generating under an existing alias replaces that key. Everything sealed in earlier sessions becomes unreadable. Look the alias up first.',
+          },
+          {
+            title: 'Requiring StrongBox with no fallback',
+            bad: `val spec = builder
+    .setIsStrongBoxBacked(true)
+    .build()
+generator.init(spec)
+generator.generateKey()   // throws on phones without StrongBox`,
+            good: `val key = try {
+    generate(builder.setIsStrongBoxBacked(true).build())
+} catch (e: StrongBoxUnavailableException) {
+    generate(builder.setIsStrongBoxBacked(false).build())   // TEE is still hardware
+}`,
+            why: 'Many phones have no StrongBox chip. There, key generation throws <code>StrongBoxUnavailableException</code>. Fall back to the TEE.',
+          },
+          {
+            title: 'Encrypting every record with the Keystore',
+            bad: `messages.forEach { msg ->
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, keystoreKey)   // IPC into the TEE
+    dao.insert(msg.id, cipher.iv, cipher.doFinal(msg.bytes))
+}`,
+            good: `// One Keystore key wraps a Tink keyset; Tink encrypts in memory.
+messages.forEach { msg ->
+    dao.insert(msg.id, aead.encrypt(msg.bytes, msg.id.encodeToByteArray()))
+}`,
+            why: 'Every Keystore operation is a round trip into secure hardware, and StrongBox is slower still. Use the Keystore to protect a data key, then encrypt records with that key. The next lesson shows how.',
+          },
+        ],
         visual(el) {
           const root = h('div', { class: 'viz' });
           const live = alive(root);
@@ -439,6 +666,203 @@ fun tokenFlow(store: DataStore<Preferences>, crypto: SessionCrypto): Flow<String
           { q: 'One byte of a sealed value changes on disk. What does <code>aead.decrypt</code> do?', options: ['Returns slightly wrong text', 'Throws <code>GeneralSecurityException</code>', 'Returns the original text'], a: 1, why: 'AEAD checks an authentication tag. Any change, even one bit, fails the check.' },
           { q: 'Someone copies the app’s files to a laptop. Why can’t they read the token?', options: ['The files are hidden', 'The keyset is wrapped by a master key that stays in this phone’s Keystore', 'Tink deletes them'], a: 1, why: 'The copied keyset is itself ciphertext. The key to unwrap it can’t leave the secure hardware of the original phone.' },
         ],
+        deeper: [
+          {
+            title: 'Why two layers of keys',
+            body: `<p>The setup above is envelope encryption. The Keystore master key encrypts one thing: Tink’s keyset. The keyset’s AES key encrypts your data. Why not encrypt the data with the Keystore key directly?</p>
+<p>Speed. Each Keystore operation is a call into secure hardware, a few milliseconds in the TEE and far more in StrongBox. Tink unwraps the keyset once, then seals every record in memory in microseconds. The master key still never leaves the hardware, so a copied keyset is still useless.</p>`,
+            visual(el) {
+              const N = 40, COST = { TEE: 5, StrongBox: 40 }, FAST = 0.03;
+              let hw = 'TEE', busy = false;
+              const live = alive(el);
+              const mkLane = name => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) }; };
+              const A = mkLane('Keystore x40'), B = mkLane('Tink, 1 unwrap');
+              const tA = h('b', {}, '0 ms'), tB = h('b', {}, '0 ms');
+              const o = out('Seal 40 chat messages both ways. Timings are typical, not exact.');
+              const hwBtns = Object.keys(COST).map((k, i) => act(k, () => { if (busy) return; hw = k; press(hwBtns, hwBtns[i]); run(); }));
+              press(hwBtns, hwBtns[0]);
+              const fmt = ms => (ms < 10 ? ms.toFixed(1) : Math.round(ms)) + ' ms';
+              async function run() {
+                if (busy) return;
+                busy = true;
+                const c = COST[hw], total = N * c;
+                A.track.replaceChildren(); B.track.replaceChildren();
+                tA.textContent = tB.textContent = '0 ms';
+                say(o, `sealing 40 messages, master key in the <b>${hw}</b>…`);
+                const pct = ms => (ms / total * 100).toFixed(2);
+                const laneB = (async () => {
+                  B.track.append(h('div', { class: 'bar run drop-in', style: `left:0;width:${pct(c)}%` }));
+                  await sleep(220);
+                  B.track.append(h('div', { class: 'bar wait drop-in', style: `left:${pct(c)}%;width:${Math.max(0.8, N * FAST / total * 100).toFixed(2)}%` }));
+                  tB.textContent = fmt(c + N * FAST);
+                })();
+                for (let i = 0; i < N; i++) {
+                  if (!live()) { busy = false; return; }
+                  A.track.append(h('div', { class: 'bar run', style: `left:${pct(i * c)}%;width:${(c / total * 100 * 0.7).toFixed(2)}%` }));
+                  tA.textContent = fmt((i + 1) * c);
+                  await sleep(35);
+                }
+                await laneB;
+                say(o, `<span class="bad">Keystore each time:</span> ${fmt(total)}. <span class="good">Tink:</span> ${fmt(c + N * FAST)}, one hardware call to unwrap the keyset, then pure memory work.`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Master key in'), hwBtns, cmd('seal(messages)', () => run())),
+                h('div', { class: 'timeline' }, A.el, B.el),
+                h('div', { class: 'sec-row' }, h('span', { class: 'sec-stat' }, 'Keystore each: ', tA), h('span', { class: 'sec-stat' }, 'Tink: ', tB)),
+                h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar run' }), 'call into secure hardware'), h('span', {}, h('i', { class: 'bar wait' }), 'AES-GCM in memory')),
+                o);
+              run();
+            },
+          },
+          {
+            title: 'Rotating keys with a keyset',
+            body: `<p>A keyset can hold several keys. One is the primary: new data is sealed with it. Every ciphertext starts with a 5-byte prefix that names the key that sealed it, so Tink knows which key to try on decrypt. Old data keeps working after you add a new primary.</p>
+<p>That makes rotation safe. Add a key and make it primary. Re-encrypt old records in the background. Only then disable the old key. Disable it too early and the records that still point at it fail to open.</p>`,
+            code: `manager.add(KeyTemplates.get("AES256_GCM"))        // new key, not primary yet
+val handle = manager.keysetHandle
+val newId = handle.getAt(handle.size() - 1).id
+manager.setPrimary(newId)                           // new data uses it
+
+// later, after every old record was opened and sealed again:
+manager.disable(oldId)`,
+            visual(el) {
+              const NEXT = ['7be10d44', 'c90f3e12', '19ad77b0'];
+              let keys = [{ id: 'a3f29c01', st: 'primary' }], recs = [], made = 0, busy = false;
+              const keyPile = h('div', { class: 'sec-pile' });
+              const zone = h('div', { class: 'sec-zone sec-hw' }, h('span', { class: 'sec-label' }, 'Keyset · wrapped by the master key'), keyPile);
+              const list = h('div', { class: 'sec-recs' });
+              const o = out('Three notes are sealed with key a3f29c01. Rotate.');
+              const primary = () => keys.find(k => k.st === 'primary');
+              const paintKeys = anim => keyPile.replaceChildren(...keys.map(k => h('span', { class: `sec-key${k.st === 'primary' ? ' sec-prim' : ''}${k.st === 'disabled' ? ' sec-off' : ''}${anim === k.id ? ' drop-in' : ''}` }, k.id, h('span', { class: 'sec-tag' }, k.st))));
+              const row = r => {
+                r.st = h('span', { class: 'sec-rs' }, '');
+                r.pre = h('span', { class: 'sec-hx-p' }, `01 ${r.kid}`);
+                r.el = h('div', { class: 'sec-rec drop-in' }, h('span', {}, r.name), r.pre, h('span', { class: 'sec-hx-n' }, hex(4) + '…'), r.st);
+                return r.el;
+              };
+              const seal = name => { const r = { name, kid: primary().id }; recs.push(r); list.append(row(r)); };
+              const opens = r => { const k = keys.find(x => x.id === r.kid); return k && k.st !== 'disabled'; };
+              const guard = fn => async () => { if (busy) return; busy = true; await fn(); busy = false; };
+              ['note 1', 'note 2', 'note 3'].forEach(seal);
+              paintKeys();
+              el.append(
+                zone,
+                h('div', { class: 'controls' },
+                  cmd('manager.setPrimary(newId)', guard(() => {
+                    if (!NEXT.length) { say(o, 'That is enough keys for one demo. Disable the old ones.'); return; }
+                    primary().st = 'enabled';
+                    const id = NEXT.shift(); keys.push({ id, st: 'primary' }); paintKeys(id);
+                    say(o, `manager.add() made key <span class="good">${id}</span>, and it is the primary now. Old keys stay enabled for decrypt.`);
+                  })),
+                  cmd('crypto.seal(note)', guard(() => {
+                    if (recs.length >= 8) { say(o, 'Plenty of notes. Try opening them.'); return; }
+                    seal(`note ${recs.length + 1}`);
+                    say(o, `sealed with the primary, prefix <span class="t-f">01 ${primary().id}</span>`);
+                  }))),
+                h('div', { class: 'controls' },
+                  cmd('crypto.open(all)', guard(async () => {
+                    let bad = 0;
+                    for (const r of recs) {
+                      if (!el.isConnected) return;
+                      const ok = opens(r); bad += !ok;
+                      r.st.textContent = ok ? 'opens' : 'fails'; r.st.className = 'sec-rs ' + (ok ? 'sec-y' : 'sec-n');
+                      r.el.classList.toggle('sec-fail', !ok); replay(r.el, ok ? 'pop-soft' : 'shake');
+                      await sleep(170);
+                    }
+                    say(o, bad ? `<span class="bad">${bad} record${bad > 1 ? 's' : ''} failed:</span> no enabled key matches the prefix. Re-encrypt before you disable.` : '<span class="good">all open:</span> each prefix found its key.');
+                  })),
+                  act('Re-encrypt old records', guard(async () => {
+                    const p = primary().id; let n = 0;
+                    for (const r of recs) {
+                      if (!el.isConnected) return;
+                      if (r.kid === p || !opens(r)) continue;
+                      r.kid = p; r.pre.textContent = `01 ${p}`; r.st.textContent = 'resealed'; r.st.className = 'sec-rs sec-y';
+                      replay(r.el, 'pop'); n++;
+                      await sleep(200);
+                    }
+                    say(o, n ? `${n} record${n > 1 ? 's' : ''} opened and sealed again with ${p}.` : 'Nothing to re-encrypt that can still be opened.');
+                  })),
+                  cmd('manager.disable(oldestId)', guard(() => {
+                    const k = keys.find(x => x.st === 'enabled');
+                    if (!k) { say(o, keys.length > 1 ? 'Every old key is disabled already.' : '<span class="bad">GeneralSecurityException:</span> cannot disable the primary key. Add a new one first.'); return; }
+                    k.st = 'disabled'; paintKeys();
+                    const left = recs.filter(r => r.kid === k.id).length;
+                    say(o, left ? `<span class="bad">${k.id} disabled</span> while ${left} record${left > 1 ? 's' : ''} still use it. Open all and see.` : `<span class="good">${k.id} disabled</span> and nothing points at it. Safe.`);
+                  }))),
+                list,
+                o);
+            },
+          },
+          {
+            title: 'Large files: streaming AEAD',
+            body: `<p><code>Aead</code> needs the whole plaintext in memory. For photos, audio or database exports, use <code>StreamingAead</code>. It splits the file into segments of a few KB, encrypts each one with its own tag, and lets you read and write through normal streams.</p>
+<p>It still detects tampering, and it also detects a file cut short, because the last segment is marked as last. Keep a separate keyset for streaming, since the key templates differ.</p>`,
+            code: `StreamingAeadConfig.register()
+val streaming = AndroidKeysetManager.Builder()
+    .withSharedPref(context, "files_keyset", "crypto_prefs")
+    .withKeyTemplate(KeyTemplates.get("AES256_GCM_HKDF_4KB"))
+    .withMasterKeyUri("android-keystore://files_master_key")
+    .build()
+    .keysetHandle
+    .getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
+
+val ad = file.name.encodeToByteArray()
+streaming.newEncryptingStream(FileOutputStream(file), ad).use { out ->
+    source.copyTo(out)            // never holds the whole file in memory
+}
+streaming.newDecryptingStream(FileInputStream(file), ad).use { input ->
+    input.copyTo(destination)     // throws IOException if a segment was changed
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>A Tink <code>Aead</code> ciphertext for an <code>AES256_GCM</code> key has a fixed layout. One version byte <code>0x01</code> and the 4-byte key id come first. Then a random 12-byte IV, the encrypted bytes, and a 16-byte GCM tag. That is why a sealed 14-character token takes 47 bytes, and why the demo’s colored bytes come in four groups.</p>
+<p><code>AndroidKeysetManager</code> stores the whole keyset as one encrypted blob, hex-encoded, in the SharedPreferences file you name. On first run it generates the keyset, asks the Keystore for an AES-GCM master key under the alias in the URI, and writes the wrapped keyset. On later runs it reads the blob and unwraps it with one Keystore call. Your primitives then work from memory.</p>`,
+          code: `01 | a3 f2 9c 01 | 12 bytes IV | ciphertext (same length as plaintext) | 16 bytes tag
+^    ^ key id: picks the key in the keyset on decrypt
+version byte for the TINK prefix`,
+        },
+        mistakes: [
+          {
+            title: 'Building the Aead on every read',
+            bad: `fun readToken(prefs: Preferences): String? {
+    val aead = AndroidKeysetManager.Builder()
+        .withSharedPref(context, "session_keyset", "crypto_prefs")
+        .withKeyTemplate(KeyTemplates.get("AES256_GCM"))
+        .withMasterKeyUri("android-keystore://session_master_key")
+        .build().keysetHandle
+        .getPrimitive(RegistryConfiguration.get(), Aead::class.java)
+    return prefs[TOKEN]?.let { open(aead, it) }
+}`,
+            good: `@Singleton
+class SessionCrypto @Inject constructor(@ApplicationContext context: Context) {
+    private val aead: Aead = buildAead(context)   // once, off the main thread
+    fun open(sealed: ByteArray, field: String) =
+        aead.decrypt(sealed, field.encodeToByteArray())
+}`,
+            why: 'Each build reads prefs and calls the Keystore. On first launch, two callers racing can each create a keyset, and the loser’s ciphertext can’t be opened. Build it once and share it.',
+          },
+          {
+            title: 'Sealing everything with no associated data',
+            bad: `fun seal(plain: ByteArray) = aead.encrypt(plain, ByteArray(0))`,
+            good: `fun seal(plain: ByteArray, field: String, userId: String) =
+    aead.encrypt(plain, "$field:$userId".encodeToByteArray())`,
+            why: 'With empty associated data, a sealed value from one field or one user can be copied into another and still decrypts. Bind each value to where it belongs.',
+          },
+          {
+            title: 'Backing up the keyset without its master key',
+            bad: `<!-- res/xml/data_extraction_rules.xml -->
+<cloud-backup>
+    <include domain="sharedpref" path="." />
+</cloud-backup>`,
+            good: `<cloud-backup>
+    <exclude domain="sharedpref" path="crypto_prefs.xml" />
+    <exclude domain="file" path="datastore/session.preferences_pb" />
+</cloud-backup>`,
+            why: 'Backup restores files on a new phone, but Keystore keys never travel. The restored keyset can’t be unwrapped there. Exclude the keyset and the sealed data, and sign the user in again.',
+          },
+        ],
         visual(el) {
           const TOKEN = 'ya29.a0AfB_byC';
           let sealed = null, tampered = -1, n = 0;
@@ -551,6 +975,152 @@ fun tokenFlow(store: DataStore<Preferences>, crypto: SessionCrypto): Flow<String
           { q: 'Your app targets API 35 and calls <code>http://api.example.com</code>. What happens by default?', options: ['It works', 'The request fails: cleartext is not permitted', 'Android upgrades it to HTTPS'], a: 1, why: 'Since API 28 the default is <code>cleartextTrafficPermitted="false"</code>. OkHttp throws <code>UnknownServiceException</code>.' },
           { q: 'A user installs a proxy’s CA certificate in Settings. Does your release app trust it?', options: ['Yes, it’s in the device store', 'No, apps targeting API 24+ trust only system CAs unless you opt in', 'Only for HTTP'], a: 1, why: 'User CAs need an explicit <code>&lt;certificates src="user"/&gt;</code>. Put it in <code>debug-overrides</code> to keep release builds safe.' },
           { q: 'Why ship a backup pin?', options: ['To make pinning faster', 'So you can rotate the server key without breaking installed apps', 'Android rejects a single pin'], a: 1, why: 'Old app versions stay installed for years. If the only pinned key changes, every one of them fails to connect.' },
+        ],
+        deeper: [
+          {
+            title: 'What the handshake actually checks',
+            body: `<p>The server sends a chain: its own leaf certificate, one or more intermediates, ending at a root. The platform trust manager checks that each certificate is signed by the next, that the chain ends at a trust anchor, and that every certificate is inside its validity dates. Then OkHttp checks that the leaf names the host you asked for.</p>
+<p>Each check fails with its own error, and knowing which one saves hours. “Trust anchor not found” means an unknown root, often a missing intermediate on the server. An expired certificate fails chain validation. A wrong name fails only the host check.</p>`,
+            visual(el) {
+              const CASES = [['ok', 'Valid chain'], ['expired', 'Expired leaf'], ['host', 'Wrong host name'], ['root', 'Unknown root']];
+              let cur = 'ok', busy = false;
+              const cert = () => { const well = h('div', { class: 'sec-well' }); const b = h('b', {}), s = h('small', {}); return Object.assign(h('div', { class: 'sec-node' }, b, well, s), { b, s, well }); };
+              const leaf = cert(), mid = cert(), root = cert();
+              const chks = ['Chain ends at a trusted root', 'Every certificate is in date', 'Leaf names api.example.com'].map(t => {
+                const st = h('span', { class: 'sec-state' }, 'not checked');
+                return Object.assign(h('div', { class: 'sec-chk' }, h('span', {}, t), st), { st });
+              });
+              const o = out('Pick a server setup, then make the request.');
+              const paint = () => {
+                leaf.b.textContent = cur === 'host' ? 'CN=cdn.other.net' : 'CN=api.example.com';
+                leaf.s.textContent = cur === 'expired' ? 'valid until 2025-03-01' : 'valid until 2027-01-10';
+                mid.b.textContent = 'Example CA R1'; mid.s.textContent = `issued by ${cur === 'root' ? 'Unknown Root' : 'Example Root'}`;
+                root.b.textContent = cur === 'root' ? 'Unknown Root' : 'Example Root';
+                root.s.textContent = cur === 'root' ? 'not in the trust store' : 'in the system store';
+                [leaf, mid, root].forEach(n => n.classList.remove('sec-evil', 'sec-ok', 'on'));
+                chks.forEach(c => { c.className = 'sec-chk'; c.st.textContent = 'not checked'; });
+              };
+              const caseBtns = CASES.map(([id, label], i) => act(label, () => { if (busy) return; cur = id; press(caseBtns, caseBtns[i]); paint(); say(o, 'Server changed. Make the request.'); }));
+              press(caseBtns, caseBtns[0]);
+              const step = async (i, ok, node) => {
+                const c = chks[i];
+                c.className = 'sec-chk sec-now'; c.st.textContent = 'checking';
+                node.classList.add('on');
+                await sleep(450);
+                node.classList.remove('on');
+                c.className = 'sec-chk ' + (ok ? 'sec-pass' : 'sec-fail'); c.st.textContent = ok ? 'pass' : 'fail';
+                if (!ok) { node.classList.add('sec-evil'); replay(node, 'shake'); }
+                return ok;
+              };
+              const go = async () => {
+                if (busy) return;
+                busy = true; paint();
+                say(o, '<span class="muted">GET https://api.example.com/v1/me</span>');
+                if (!await step(0, cur !== 'root', root)) { say(o, '<span class="bad">SSLHandshakeException:</span> Trust anchor for certification path not found.'); busy = false; return; }
+                if (!await step(1, cur !== 'expired', leaf)) { say(o, '<span class="bad">SSLHandshakeException:</span> Chain validation failed <span class="muted">(CertificateExpiredException)</span>'); busy = false; return; }
+                if (!await step(2, cur !== 'host', leaf)) { say(o, '<span class="bad">SSLPeerUnverifiedException:</span> Hostname api.example.com not verified'); busy = false; return; }
+                [leaf, mid, root].forEach(n => n.classList.add('sec-ok'));
+                say(o, '<span class="good">200 OK:</span> all three checks passed, then the encrypted request went out.');
+                busy = false;
+              };
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Server'), caseBtns),
+                h('div', { class: 'sec-path' }, leaf, mid, root),
+                h('div', { class: 'sec-chks' }, chks),
+                h('div', { class: 'controls' }, cmd('client.newCall(request).execute()', go)),
+                o);
+            },
+          },
+          {
+            title: 'Rotating a pinned key',
+            body: `<p>Pins live in every installed copy of your app, and old copies stay around for years. So plan the server’s next key before you ship the first pin. Each release pins the current key and the next one. When the server switches, every version that knew the new key keeps working.</p>
+<p>The <code>expiration</code> date is the safety net. After it, the platform stops checking that pin-set and falls back to normal CA checks. An app nobody updated still connects, with less protection.</p>`,
+            visual(el) {
+              const V = [{ v: 'v1.0', pins: ['A'], share: 15 }, { v: 'v2.0', pins: ['A', 'B'], share: 35 }, { v: 'v3.0', pins: ['B', 'C'], share: 50 }];
+              let server = 'A', expired = false, busy = false;
+              const cards = V.map(x => {
+                const st = h('span', { class: 'sec-state' }, 'not tried'), note = h('small', {}, `pins ${x.pins.join(' + ')} · ${x.share}% of users`);
+                return Object.assign(h('div', { class: 'sec-card' }, st, h('b', {}, x.v), note), { st, x });
+              });
+              const stat = h('span', { class: 'sec-stat' });
+              const o = out('The server uses key A. Every version pins A. Rotate the server key.');
+              const expSw = toggle('sec-nw2-exp', 'v1.0 pin-set <code>expiration</code> has passed', false, v => { expired = v; run(); });
+              const run = async () => {
+                if (busy) return;
+                busy = true; let reach = 0;
+                for (const c of cards) {
+                  if (!el.isConnected) { busy = false; return; }
+                  const off = expired && c.x.v === 'v1.0';
+                  const ok = off || c.x.pins.includes(server);
+                  c.className = 'sec-card ' + (off ? 'sec-warn' : ok ? 'sec-safe' : 'sec-bad');
+                  c.st.textContent = off ? 'connects, CA check only' : ok ? 'connects' : 'pin mismatch';
+                  replay(c, ok ? 'pop' : 'shake');
+                  if (ok) reach += c.x.share;
+                  await sleep(260);
+                }
+                stat.innerHTML = `users who can connect: <b class="${reach < 100 ? 'sec-badnum' : ''}">${reach}%</b>`;
+                say(o, reach === 100 ? `<span class="good">Everyone connects</span> with server key ${server}.` : `<span class="bad">${100 - reach}% of users are locked out</span> until they update. They can’t even download the update notice from your API.`);
+                busy = false;
+              };
+              const keyBtns = ['A', 'B', 'C'].map((k, i) => act(`Server key ${k}`, () => { if (busy) return; server = k; press(keyBtns, keyBtns[i]); run(); }));
+              press(keyBtns, keyBtns[0]);
+              stat.innerHTML = 'users who can connect: <b>?</b>';
+              el.append(
+                h('div', { class: 'controls' }, keyBtns),
+                h('div', { class: 'sec-grid' }, cards),
+                h('div', { class: 'controls' }, expSw.el, stat),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>When the app starts, the platform reads <code>network_security_config.xml</code> and installs a trust manager built from it as the app’s default. <code>HttpsURLConnection</code> and OkHttp both use that default, so trust anchors and pin-sets apply without extra code. For cleartext, OkHttp asks <code>NetworkSecurityPolicy</code> whether that host allows cleartext before it opens an <code>http://</code> connection.</p>
+<p>Pins are checked inside that trust manager, against the public keys of the chain it built, so a pin on an intermediate matches too. Libraries that bring their own TLS stack and trust store skip the platform trust manager and ignore the file. Check how any networking SDK you add does TLS.</p>`,
+          code: `// The same checks, readable from code
+val policy = NetworkSecurityPolicy.getInstance()
+policy.isCleartextTrafficPermitted("api.example.com")   // false
+policy.isCleartextTrafficPermitted("legacy.example.net") // true if a domain-config allows it`,
+        },
+        mistakes: [
+          {
+            title: 'A trust-all TrustManager to get past a dev certificate',
+            bad: `val trustAll = object : X509TrustManager {
+    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+    override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
+}
+OkHttpClient.Builder()
+    .sslSocketFactory(sslContext.socketFactory, trustAll)
+    .hostnameVerifier { _, _ -> true }`,
+            good: `<!-- network_security_config.xml: dev CA, debug builds only -->
+<debug-overrides>
+    <trust-anchors>
+        <certificates src="@raw/dev_ca" />
+    </trust-anchors>
+</debug-overrides>`,
+            why: 'The trust-all version accepts any certificate for any host in every build, release included. Play also flags apps that ship an unsafe TrustManager.',
+          },
+          {
+            title: 'Turning on cleartext for the whole app',
+            bad: `<application
+    android:usesCleartextTraffic="true">`,
+            good: `<domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">legacy.example.net</domain>
+</domain-config>`,
+            why: 'The manifest flag opens every host to plain HTTP. On API 24 and up it is also ignored once a network security config exists, which confuses people the other way. Allow one domain in the config.',
+          },
+          {
+            title: 'Pinning the leaf certificate',
+            bad: `CertificatePinner.Builder()
+    .add("api.example.com", "sha256/<leaf key hash>")   // renewed every 90 days
+    .build()`,
+            good: `CertificatePinner.Builder()
+    .add("api.example.com", "sha256/<issuing CA key hash>")
+    .add("api.example.com", "sha256/<backup CA key hash>")
+    .build()`,
+            why: 'Many renewals create a new leaf key, which breaks a leaf pin overnight. Pin a key that changes rarely, such as the issuing CA, and always add a backup from a different CA.',
+          },
         ],
         visual(el) {
           let scheme = 'https', attacker = 'none', busy = false;

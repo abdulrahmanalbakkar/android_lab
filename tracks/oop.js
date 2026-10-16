@@ -75,6 +75,18 @@
 .oo-layers .oo-card { width: min(100%, 420px); }
 .oo-arrow { font: 600 0.78rem var(--mono); color: var(--muted); text-align: center; }
 .oo-arrow.oo-hot { color: var(--err); }
+
+/* depth steps */
+.phone.oo-mini-phone { height: 200px; width: min(190px, 100%); }
+.oo-matrix { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)); gap: 6px 8px; align-items: center; min-width: 0; }
+.oo-matrix.oo-scopes { grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)); }
+.oo-matrix .oo-label { overflow-wrap: anywhere; }
+.oo-matrix .oo-pill { justify-self: start; font-size: 0.74rem; }
+.oo-col { display: grid; gap: 2px; min-width: 0; }
+.oo-cell { display: grid; place-items: center; min-height: 30px; border-radius: 8px; background: var(--sunk); font: 600 0.74rem var(--mono); color: var(--muted); transition: background 0.2s, color 0.2s; }
+.oo-cell.oo-pass { background: var(--ok-soft); color: var(--ok); }
+.oo-cell.oo-fail { background: var(--err-soft); color: var(--err); }
+.oo-cell.oo-na { opacity: 0.5; border: 1px dashed var(--line); background: transparent; }
 `;
 
   Lab.addTrack({
@@ -317,6 +329,143 @@ broadcast(listOf(PushSender(fcm), EmailSender(mail)), "Sale ends tonight")`,
         quiz: [
           { q: '<code>val s: Sender = EmailSender()</code>. Which <code>send()</code> runs for <code>s.send("Hi")</code>?', options: ['Sender’s, because that is the declared type', 'EmailSender’s, because that is the real object', 'It does not compile'], a: 1, why: 'Member calls dispatch on the runtime class of the object.' },
           { q: 'You add a <code>ChatSender</code>. What changes in <code>broadcast()</code>?', options: ['A new branch for ChatSender', 'Nothing', 'Its parameter type'], a: 1, why: 'It calls <code>send()</code> through the interface, so any new implementation works without touching it.' },
+        ],
+        deeper: [
+          {
+            title: 'Overloads are picked at compile time',
+            body: `<p>Overriding and overloading look alike, but they are decided at different moments. An override is picked at runtime from the real object. An overload, meaning two functions with the same name and different parameter types, is picked at compile time from the declared type.</p>
+<p>So with <code>val x: Animal = Cat()</code>, <code>x.speak()</code> runs the cat's code, but <code>greet(x)</code> calls the <code>Animal</code> overload. Change the declared type below and compare both calls.</p>`,
+            code: `open class Animal { open fun speak() = "..." }
+class Cat : Animal() { override fun speak() = "Meow" }
+
+fun greet(a: Animal) = "Hello, animal"
+fun greet(c: Cat) = "Hello, cat"
+
+val x: Animal = Cat()
+x.speak()     // "Meow": override, chosen at runtime
+greet(x)      // "Hello, animal": overload, chosen at compile time`,
+            visual(el) {
+              const DECLS = [
+                { src: 'val x: Animal = Cat()', decl: 'Animal', obj: 'Cat' },
+                { src: 'val x: Cat = Cat()', decl: 'Cat', obj: 'Cat' },
+                { src: 'val x: Animal = Animal()', decl: 'Animal', obj: 'Animal' },
+              ];
+              let d = DECLS[0], busy = false;
+              const card = (src, when) => { const c = h('div', { class: 'oo-impl' }, h('b', { html: hl(src) }), h('span', { class: 'oo-sent' }, when)); return c; };
+              const F = {
+                speakA: card('Animal.speak() = "..."', 'override, runtime'),
+                speakC: card('Cat.speak() = "Meow"', 'override, runtime'),
+                greetA: card('greet(a: Animal)', 'overload, compile time'),
+                greetC: card('greet(c: Cat)', 'overload, compile time'),
+              };
+              const o = out('');
+              const dBtns = DECLS.map(x => cmd(x.src, () => { if (busy) return; d = x; press(dBtns, dBtns[DECLS.indexOf(x)]); Object.values(F).forEach(c => c.classList.remove('oo-hit')); say(o, `Declared type <b>${x.decl}</b>, real object <b>${x.obj}</b>.`); }));
+              async function call(kind) {
+                if (busy) return; busy = true;
+                Object.values(F).forEach(c => c.classList.remove('oo-hit'));
+                const pick = kind === 'speak' ? (d.obj === 'Cat' ? F.speakC : F.speakA) : (d.decl === 'Cat' ? F.greetC : F.greetA);
+                await sleep(250); if (!el.isConnected) return;
+                pick.classList.add('oo-hit'); replay(pick, 'pop');
+                if (kind === 'speak') say(o, `${hl('x.speak()')} <span class="muted">→ looks at the object:</span> <b>${d.obj}</b> <span class="muted">→</span> ${hl(d.obj === 'Cat' ? '"Meow"' : '"..."')}`);
+                else say(o, `${hl('greet(x)')} <span class="muted">→ looks at the declared type:</span> <b>${d.decl}</b> <span class="muted">→</span> ${hl(d.decl === 'Cat' ? '"Hello, cat"' : '"Hello, animal"')}${d.decl !== d.obj ? ' <span class="bad">even though x is a Cat</span>' : ''}`);
+                await sleep(300); busy = false;
+              }
+              press(dBtns, dBtns[0]);
+              say(o, 'Pick a declaration, then call both functions.');
+              el.append(
+                h('div', { class: 'controls' }, dBtns),
+                h('div', { class: 'oo-pair' },
+                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'members (dynamic)'), h('div', { class: 'oo-impls' }, F.speakA, F.speakC)),
+                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'overloads (static)'), h('div', { class: 'oo-impls' }, F.greetA, F.greetC))),
+                h('div', { class: 'controls' }, cmd('x.speak()', () => call('speak')), cmd('greet(x)', () => call('greet'))),
+                o);
+            },
+          },
+          {
+            title: 'super: run the parent body too',
+            body: `<p>An override replaces the parent's body. If the parent did real work, call it with <code>super.method()</code>. Every layer of the class tree then runs, from the top down.</p>
+<p>Android checks this for lifecycle methods. An Activity whose <code>onCreate</code> skips <code>super.onCreate()</code> throws <code>SuperNotCalledException</code>, because the framework's own setup never ran. Turn off a <code>super</code> call below and create the screen.</p>`,
+            visual(el) {
+              const LAYERS = [
+                { name: 'HomeActivity', body: 'setContentView(...)', sup: 'home' },
+                { name: 'BaseActivity', body: 'analytics.screen(name)', sup: 'base' },
+                { name: 'AppCompatActivity', body: 'restore state, set up window', sup: null },
+              ];
+              const calls = { home: true, base: true };
+              let busy = false;
+              const nodes = LAYERS.map(l => h('div', { class: 'oo-node' + (l.sup ? '' : '') }, `${l.name}.onCreate(): ${l.body}`));
+              nodes.slice(1).forEach(n => n.classList.add('oo-sub'));
+              const log = h('div', { class: 'oo-code' });
+              const o = out('Both super calls are on. Create the Activity.');
+              const toggles = ['home', 'base'].map(k => {
+                const id = `oo-poly-super-${k}`;
+                const inp = h('input', { type: 'checkbox', id, checked: true });
+                inp.addEventListener('change', () => { if (busy) { inp.checked = calls[k]; return; } calls[k] = inp.checked; say(o, `${k === 'home' ? 'HomeActivity' : 'BaseActivity'} ${inp.checked ? 'calls' : 'skips'} super.onCreate().`); });
+                return h('label', { class: 'switch', for: id }, inp, `${k === 'home' ? 'HomeActivity' : 'BaseActivity'} calls super`);
+              });
+              const line = (t, cls = '') => { const l = h('div', { class: `oo-line ${cls} drop-in`, html: hl(t) }); log.append(l); };
+              async function create() {
+                if (busy) return; busy = true;
+                nodes.forEach(n => n.classList.remove('oo-cur', 'oo-hot'));
+                log.replaceChildren();
+                let i = 0;
+                for (; i < LAYERS.length; i++) {
+                  nodes[i].classList.add('oo-cur'); replay(nodes[i], 'pop');
+                  line(`${LAYERS[i].name}.onCreate()`);
+                  await sleep(450); if (!el.isConnected) return;
+                  if (!LAYERS[i].sup || !calls[LAYERS[i].sup]) break;
+                }
+                for (let j = i + 1; j < LAYERS.length; j++) nodes[j].classList.add('oo-hot');
+                if (i === LAYERS.length - 1) {
+                  line('// every layer ran', 'oo-ln-ok');
+                  say(o, '<span class="good">created:</span> each override did its part, then handed up with super.');
+                } else {
+                  line('SuperNotCalledException', 'oo-ln-err'); replay(nodes[0], 'shake');
+                  say(o, `<span class="bad">SuperNotCalledException:</span> Activity HomeActivity did not call through to super.onCreate() <span class="muted">(${LAYERS.slice(i + 1).map(l => l.name).join(' and ')} never ran)</span>`);
+                }
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'oo-pair' }, h('div', { class: 'oo-tree' }, nodes), log),
+                h('div', { class: 'oo-switches' }, toggles),
+                h('div', { class: 'controls' }, cmd('startActivity(homeIntent)', create)),
+                o);
+            },
+          },
+          {
+            title: 'final override: make the order impossible to forget',
+            body: `<p>An <code>override</code> is itself open, so a subclass of a subclass can override it again. Write <code>final override</code> to stop that. A base class can then run the fixed steps itself and offer a separate hook for the part that varies.</p>
+<p>This is the template method idea. The base class owns the order, and subclasses can't forget <code>super</code> because they never override the method that calls it.</p>`,
+            code: `abstract class TrackedActivity : AppCompatActivity() {
+    final override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        analytics.screen(screenName)
+        onCreateScreen(savedInstanceState)     // the part subclasses fill in
+    }
+    protected abstract val screenName: String
+    protected abstract fun onCreateScreen(savedInstanceState: Bundle?)
+}
+
+class HomeActivity : TrackedActivity() {
+    override val screenName = "home"
+    override fun onCreateScreen(savedInstanceState: Bundle?) = setContent { HomeRoute() }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>A member call compiles to <code>invokevirtual</code>, or <code>invokeinterface</code> for an interface type. The JVM looks the method up on the object's runtime class, using a per-class method table. The JIT often turns a call site that only ever sees one class into a direct call, so dispatch is usually cheap.</p>
+<p>An extension function compiles to a static method that takes the receiver as its first parameter. The call is <code>invokestatic</code>, fixed at compile time from the declared type. That is why extensions never dispatch like members.</p>`,
+          code: `// Kotlin
+s.send("Hi")       // s: Sender, an interface
+p.label()          // label() is an extension on PushSender
+
+// Bytecode, simplified
+invokeinterface Sender.send(String)          // resolved on the object at runtime
+invokestatic  SendersKt.label(PushSender)    // fixed when compiled`,
+        },
+        mistakes: [
+          { title: 'Type checks instead of an override', bad: 'fun icon(s: Sender): Int = when (s) {\n    is PushSender -> R.drawable.ic_bell\n    is EmailSender -> R.drawable.ic_mail\n    else -> R.drawable.ic_unknown\n}', good: 'interface Sender {\n    val icon: Int\n    fun send(msg: String)\n}\nclass PushSender : Sender {\n    override val icon = R.drawable.ic_bell\n    override fun send(msg: String) { /* ... */ }\n}', why: 'Every new sender falls into <code>else</code> and quietly gets the wrong icon. Put the behaviour on the type, and the compiler asks each new class for it.' },
+          { title: 'Overriding equals without hashCode', bad: 'class Tag(val name: String) {\n    override fun equals(other: Any?) =\n        other is Tag && other.name == name\n}\nsetOf(Tag("kt"), Tag("kt")).size   // 2', good: 'data class Tag(val name: String)\n\nsetOf(Tag("kt"), Tag("kt")).size   // 1', why: '<code>HashSet</code> calls the overridden <code>hashCode</code> first. Equal objects with different hash codes land in different buckets. Override both, or use a data class.' },
         ],
         visual(el) {
           const impls = [
@@ -787,6 +936,146 @@ data class Sq(val side: Int) : Shape { override val area get() = side * side }`,
           { q: 'Square extends Rectangle and compiles. Why can it still break LSP?', options: ['Squares are slower', 'It changes behaviour callers rely on: width and height are no longer independent', 'It needs an interface'], a: 1, why: 'LSP is about behaviour. The compiler checks signatures, not promises.' },
           { q: 'Which of these breaks LSP?', options: ['An override that returns a more specific type', 'An override that throws for inputs the parent accepted', 'An override that logs extra info'], a: 1, why: 'Rejecting input the parent accepted strengthens the precondition, and callers written for the parent will fail.' },
         ],
+        deeper: [
+          {
+            title: 'Accept more, promise more, never the reverse',
+            body: `<p>A contract has two sides. The precondition is what the method accepts. The postcondition is what it guarantees back. A valid subtype may accept <em>more</em> than the parent, and may promise <em>more</em>. It may not accept less or promise less.</p>
+<p>Here the parent <code>Uploader</code> accepts files up to 10 MB and returns an https URL. The caller uploads a 5 MB avatar and loads the URL. Try each implementation.</p>`,
+            code: `interface Uploader {
+    /** Accepts files up to 10 MB. Returns an https URL. */
+    suspend fun upload(file: File): Uri
+}
+
+class CdnUploader : Uploader { /* up to 100 MB: accepts more, fine */ }
+class TinyUploader : Uploader {
+    override suspend fun upload(file: File): Uri {
+        require(file.length() <= 1_000_000)   // accepts less: breaks callers
+        TODO()
+    }
+}`,
+            visual(el) {
+              const IMPLS = [
+                { name: 'CdnUploader', max: 100, url: 'https://cdn.example.com/a.jpg', note: 'accepts up to 100 MB' },
+                { name: 'SigningUploader', max: 10, url: 'https://img.example.com/a.jpg?sig=9f', note: 'adds a signature' },
+                { name: 'TinyUploader', max: 1, url: '', note: 'accepts up to 1 MB' },
+                { name: 'MirrorUploader', max: 10, url: 'http://mirror.example.com/a.jpg', note: 'returns http' },
+              ];
+              let pick = IMPLS[0], busy = false;
+              const steps = ['val url = uploader.upload(avatar)   // 5 MB', 'check(url.scheme == "https")', 'imageLoader.load(url)'].map(t => h('div', { class: 'oo-line', html: hl(t) }));
+              const pre = h('span', { class: 'oo-pill' }), post = h('span', { class: 'oo-pill' });
+              const o = out('');
+              const btns = IMPLS.map(x => cmd(x.name, () => { if (busy) return; pick = x; press(btns, btns[IMPLS.indexOf(x)]); paint(); }));
+              function paint() {
+                steps.forEach(s => s.classList.remove('oo-cur', 'oo-ln-ok', 'oo-ln-err'));
+                pre.textContent = `accepts ≤ ${pick.max} MB`; pre.className = 'oo-pill ' + (pick.max >= 10 ? 'oo-ok' : 'oo-err');
+                post.textContent = pick.url ? (pick.url.startsWith('https') ? 'returns https' : 'returns http') : 'returns https';
+                post.className = 'oo-pill ' + (!pick.url || pick.url.startsWith('https') ? 'oo-ok' : 'oo-err');
+                say(o, `${pick.name}: ${pick.note}. Run the caller.`);
+              }
+              async function run() {
+                if (busy) return; busy = true; paint();
+                steps[0].classList.add('oo-cur'); await sleep(600); if (!el.isConnected) return;
+                steps[0].classList.remove('oo-cur');
+                if (pick.max < 5) {
+                  steps[0].classList.add('oo-ln-err'); replay(pre, 'shake');
+                  say(o, '<span class="bad">IllegalArgumentException:</span> Failed requirement. <span class="muted">The parent accepts 5 MB, so the caller had every right to send it.</span>');
+                  busy = false; return;
+                }
+                steps[0].classList.add('oo-ln-ok'); steps[1].classList.add('oo-cur');
+                await sleep(500); if (!el.isConnected) return;
+                steps[1].classList.remove('oo-cur');
+                if (!pick.url.startsWith('https')) {
+                  steps[1].classList.add('oo-ln-err'); replay(post, 'shake');
+                  say(o, `<span class="bad">IllegalStateException: Check failed.</span> got ${pick.url} <span class="muted">The parent promised https and this one promises less.</span>`);
+                  busy = false; return;
+                }
+                steps[1].classList.add('oo-ln-ok'); steps[2].classList.add('oo-ln-ok'); replay(steps[2], 'pop');
+                say(o, `<span class="good">works:</span> ${pick.max > 10 ? 'accepting more than the parent never hurts a caller.' : 'promising more than the parent never hurts a caller.'}`);
+                busy = false;
+              }
+              press(btns, btns[0]); paint();
+              el.append(
+                h('div', { class: 'controls' }, btns),
+                h('div', { class: 'oo-pair' },
+                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'parent contract'), h('div', { class: 'oo-row' }, pill('accepts ≤ 10 MB', 'oo-acc'), pill('returns https', 'oo-acc')), h('span', { class: 'oo-label' }, 'this implementation'), h('div', { class: 'oo-row' }, pre, post)),
+                  h('div', { class: 'oo-code' }, steps)),
+                h('div', { class: 'controls' }, cmd('uploadAvatar(uploader)', run)),
+                o);
+            },
+          },
+          {
+            title: 'Write the contract once as tests',
+            body: `<p>Promises in a doc comment are easy to break. Put them in an abstract test class instead, with one abstract factory method. Each implementation gets a tiny subclass that runs every contract test against it.</p>
+<p>A type that fails the contract is not a valid substitute. Often the fix is a smaller interface that it can fully honour, and a smaller contract to match.</p>`,
+            code: `abstract class SettingsContract {
+    abstract fun create(): Settings
+
+    @Test fun getReturnsWhatPutStored() {
+        val s = create()
+        s.put("theme", "dark")
+        assertEquals("dark", s.get("theme"))
+    }
+    @Test fun missingKeyIsNull() = assertNull(create().get("nope"))
+}
+
+class InMemorySettingsTest : SettingsContract() { override fun create() = InMemorySettings() }
+class DataStoreSettingsTest : SettingsContract() { override fun create() = DataStoreSettings(testStore()) }`,
+            visual(el) {
+              const TESTS = [{ n: 'get returns what put stored', w: true }, { n: 'missing key is null', w: false }, { n: 'put overwrites', w: true }];
+              const IMPLS = ['InMemory', 'DataStore', 'BundledDefaults'];
+              let split = false, busy = false;
+              const cells = [];
+              const grid = h('div', { class: 'oo-matrix', role: 'table', 'aria-label': 'Contract test results' });
+              const o = out('Run the contract suite against every implementation.');
+              function build() {
+                grid.replaceChildren(h('span', { class: 'oo-label' }, 'test'), ...IMPLS.map(i => h('span', { class: 'oo-label oo-raw' }, i)));
+                cells.length = 0;
+                TESTS.forEach((t, r) => {
+                  grid.append(h('span', { class: 'oo-stat' }, t.n));
+                  cells[r] = IMPLS.map((im, c) => { const skip = split && c === 2 && t.w; const x = h('span', { class: 'oo-cell' + (skip ? ' oo-na' : '') }, skip ? 'n/a' : ''); grid.append(x); return x; });
+                });
+              }
+              const sw = h('input', { type: 'checkbox', id: 'oo-lsp-split' });
+              sw.addEventListener('change', () => { if (busy) { sw.checked = split; return; } split = sw.checked; build(); say(o, split ? 'BundledDefaults now implements ReadOnlySettings. Only the read tests apply to it.' : 'BundledDefaults claims to be a full Settings again.'); });
+              async function run() {
+                if (busy) return; busy = true; build();
+                let fails = 0;
+                for (let c = 0; c < IMPLS.length; c++) for (let r = 0; r < TESTS.length; r++) {
+                  const x = cells[r][c];
+                  if (x.classList.contains('oo-na')) continue;
+                  x.textContent = '…'; await sleep(170); if (!el.isConnected) return;
+                  const ok = !(c === 2 && TESTS[r].w);
+                  if (!ok) fails++;
+                  x.textContent = ok ? 'pass' : 'fail'; x.classList.add(ok ? 'oo-pass' : 'oo-fail'); replay(x, ok ? 'pop-soft' : 'shake');
+                }
+                say(o, fails ? `<span class="bad">${fails} failed:</span> BundledDefaults.put() throws UnsupportedOperationException. It is not a valid Settings.` : '<span class="good">all green:</span> every type keeps every promise it makes.');
+                busy = false;
+              }
+              build();
+              el.append(grid,
+                h('label', { class: 'switch', for: 'oo-lsp-split' }, sw, 'BundledDefaults implements ReadOnlySettings instead'),
+                h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: run }, 'Run contract tests')),
+                o);
+            },
+          },
+          {
+            title: 'Read-only is not immutable',
+            body: `<p>Kotlin's <code>MutableList</code> is a subtype of <code>List</code>, and that is a valid substitution. <code>List</code> only promises that <em>you</em> can read. It never promised that nobody else can write.</p>
+<p>So a function that keeps a <code>List</code> it was given may see it change later. If you need a value that can't change, copy it with <code>toList()</code>, or use a truly immutable type such as <code>PersistentList</code> from kotlinx.collections.immutable.</p>`,
+            code: `class Playlist(songs: List<Song>) {
+    private val songs = songs.toList()   // own copy: callers can't change it later
+}
+
+val source = mutableListOf(song1)
+val p = Playlist(source)
+source += song2          // p.songs is unaffected`,
+          },
+        ],
+        mistakes: [
+          { title: 'Narrowing what an override accepts', bad: 'open class Player {\n    open fun setVolume(level: Int) { /* 0..100 */ }\n}\nclass KidsPlayer : Player() {\n    override fun setVolume(level: Int) {\n        require(level <= 50)\n    }\n}', good: 'class KidsPlayer : Player() {\n    override fun setVolume(level: Int) {\n        super.setVolume(level.coerceAtMost(50))\n    }\n}', why: 'Code written for <code>Player</code> may pass 80 and crash. Accept the same range and handle it, here by capping.' },
+          { title: 'A silent no-op override', bad: 'class GuestAccount : Account {\n    override suspend fun syncFavorites() {\n        // guests have no server account\n    }\n}', good: 'interface Account { val name: String }\ninterface SyncedAccount : Account {\n    suspend fun syncFavorites()\n}\nclass GuestAccount : Account', why: 'A caller that syncs and then shows "Saved" now lies to the user. Doing nothing breaks the promise as surely as throwing. Leave the method out of types that can’t do it.' },
+          { title: 'Casting a read-only list to mutable', bad: 'fun addDefault(tags: List<String>) {\n    (tags as MutableList).add("news")\n}\naddDefault(listOf("kotlin", "android"))   // throws', good: 'fun withDefault(tags: List<String>): List<String> =\n    tags + "news"', why: 'The cast compiles and even succeeds, but <code>listOf</code> returns a fixed-size list. <code>add</code> throws <code>UnsupportedOperationException</code>. Return a new list instead.' },
+        ],
         visual(el) {
           const U = 16;
           const subs = {
@@ -988,6 +1277,161 @@ val vm = NewsViewModel(FakeNewsRepository(listOf(sampleArticle)))`,
           { q: 'What gets “inverted” in dependency inversion?', options: ['The order of constructor parameters', 'The direction of the arrow: the detail now depends on an abstraction the high-level code owns', 'The call stack'], a: 1, why: 'The low-level class points up at the interface by implementing it, instead of the high-level class pointing down at it.' },
           { q: 'You switch from a network repository to an offline-first one. With DIP and Hilt, what changes?', options: ['NewsViewModel', 'The @Binds line in the module', 'Every screen'], a: 1, why: 'The module is the one place that names the concrete class.' },
           { q: 'Why does DIP make ViewModel tests easier?', options: ['Tests can pass a fake repository through the constructor', 'Hilt runs faster in tests', 'ViewModels don’t need tests'], a: 0, why: 'The ViewModel only needs something that implements the interface, so a fake with fixed data works.' },
+        ],
+        deeper: [
+          {
+            title: 'A fake you can drive',
+            body: `<p>The interface is the seam a test uses. A hand-written fake backed by a <code>MutableStateFlow</code> lets the test push any data it likes, at any moment, and check how the ViewModel reacts.</p>
+<p>Fakes are usually clearer than mocks here. They behave like a tiny real repository, so one fake serves every test and reads like normal code.</p>`,
+            code: `class FakeNewsRepository : NewsRepository {
+    private val flow = MutableStateFlow<List<Article>>(emptyList())
+    fun emit(articles: List<Article>) { flow.value = articles }
+    override fun headlines(): Flow<List<Article>> = flow
+}
+
+@get:Rule val mainRule = MainDispatcherRule()   // Dispatchers.Main for viewModelScope
+
+@Test fun showsHeadlinesWhenTheRepoEmits() = runTest {
+    val repo = FakeNewsRepository()
+    val vm = NewsViewModel(repo)
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.headlines.collect() }
+
+    assertEquals(emptyList<Article>(), vm.headlines.value)
+    repo.emit(listOf(sampleArticle))
+    assertEquals(listOf(sampleArticle), vm.headlines.value)
+}`,
+            visual(el) {
+              const SAMPLES = [['Rain all weekend', 'Ferry times change'], [], ['New park opens', 'Tram extended', 'Market moves']];
+              let busy = false;
+              const phone = h('div', { class: 'phone oo-mini-phone' });
+              const assertLine = h('div', { class: 'oo-line', html: hl('// no assertion yet') });
+              const fake = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'test controls the fake'), kt('class FakeNewsRepository : NewsRepository'));
+              const vmCard = h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'real NewsViewModel'), kt('vm.headlines: StateFlow<List<Article>>'), phone);
+              const o = out('');
+              function show(list) {
+                phone.replaceChildren(...(list.length ? list.map(t => h('div', { class: 'item drop-in' }, t)) : [h('p', { class: 'phone-note drop-in' }, 'No news yet')]));
+              }
+              async function emit(i) {
+                if (busy) return; busy = true;
+                const list = SAMPLES[i];
+                replay(fake, 'oo-flash');
+                say(o, `${hl(`repo.emit(${list.length ? `listOf(${list.length} articles)` : 'emptyList()'})`)} <span class="muted">→ flows into the ViewModel</span>`);
+                await sleep(450); if (!el.isConnected) return;
+                vmCard.classList.add('oo-on'); show(list);
+                assertLine.className = 'oo-line oo-ln-ok';
+                assertLine.innerHTML = hl(`assertEquals(${list.length ? `${list.length} articles` : 'emptyList()'}, vm.headlines.value)  // passes`);
+                replay(assertLine, 'pop');
+                await sleep(400); vmCard.classList.remove('oo-on'); busy = false;
+              }
+              show([]);
+              say(o, 'You are the test. Push data through the fake.');
+              el.append(
+                h('div', { class: 'oo-pair' }, fake, vmCard),
+                h('div', { class: 'oo-code' }, assertLine),
+                h('div', { class: 'controls' }, cmd('repo.emit(two articles)', () => emit(0)), cmd('repo.emit(emptyList())', () => emit(1)), cmd('repo.emit(three articles)', () => emit(2))),
+                o);
+            },
+          },
+          {
+            title: '@Binds for your classes, @Provides for theirs',
+            body: `<p><code>@Binds</code> maps an interface to a class you wrote, whose constructor already has <code>@Inject</code>. It is just a declaration, so the module is abstract.</p>
+<p>Classes from libraries, like Retrofit or Room, have no <code>@Inject</code> constructor and are made by builders. Build them in a <code>@Provides</code> function. Hilt calls it when something needs the type.</p>`,
+            code: `@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+    @Provides @Singleton
+    fun retrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .baseUrl("https://api.example.com/")
+        .client(client)
+        .addConverterFactory(Json.asConverterFactory("application/json".toMediaType()))
+        .build()
+
+    @Provides
+    fun newsApi(retrofit: Retrofit): NewsApi = retrofit.create()
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class DataModule {
+    @Binds abstract fun news(impl: OfflineFirstNewsRepository): NewsRepository
+}`,
+          },
+          {
+            title: 'Scopes decide how long an object lives',
+            body: `<p>Without a scope, Hilt builds a new object every time something asks for one. A scope annotation keeps one instance per component: <code>@Singleton</code> for the app, <code>@ActivityRetainedScoped</code> across rotations of one Activity, <code>@ActivityScoped</code> for one Activity instance, and <code>@ViewModelScoped</code> for one ViewModel.</p>
+<p>Pick the shortest life that works. A wider scope keeps memory and state around longer than anyone expects. Watch which instances survive each event below.</p>`,
+            visual(el) {
+              const ROWS = [
+                { k: 'none', label: 'ArticleFormatter', scope: 'no scope', two: true },
+                { k: 'vm', label: 'NewsPager', scope: '@ViewModelScoped', two: true },
+                { k: 'act', label: 'Navigator', scope: '@ActivityScoped' },
+                { k: 'ret', label: 'SessionCache', scope: '@ActivityRetainedScoped' },
+                { k: 'app', label: 'NewsRepository', scope: '@Singleton' },
+              ];
+              const RESETS = {
+                rotate: ['act'],
+                screen: ['none', 'vm'],
+                reopen: ['none', 'vm', 'act', 'ret'],
+                process: ['none', 'vm', 'act', 'ret', 'app'],
+              };
+              let n = 0x2a0, busy = false;
+              const id = () => '@' + (n += 0x35).toString(16);
+              const ids = {};
+              const chips = {};
+              const grid = h('div', { class: 'oo-matrix oo-scopes' });
+              const o = out('');
+              function fresh(k) { const r = ROWS.find(x => x.k === k); ids[k] = r.two ? [id(), k === 'none' ? id() : null] : [id()]; if (k === 'vm') ids.vm[1] = ids.vm[0]; }
+              function build() {
+                grid.replaceChildren(h('span', { class: 'oo-label' }, 'binding'), h('span', { class: 'oo-label' }, 'in ViewModel'), h('span', { class: 'oo-label' }, 'in a use case'));
+                ROWS.forEach(r => {
+                  grid.append(h('div', { class: 'oo-col' }, h('span', { class: 'oo-title' }, r.label), h('span', { class: 'oo-stat' }, r.scope)));
+                  chips[r.k] = [pill('', 'oo-acc'), r.two ? pill('', 'oo-acc') : h('span', { class: 'oo-stat' }, '-')];
+                  grid.append(chips[r.k][0], chips[r.k][1]);
+                });
+              }
+              function paint(changed) {
+                ROWS.forEach(r => {
+                  ids[r.k].forEach((v, i) => { if (!v) return; const c = chips[r.k][i]; c.textContent = v; c.className = 'oo-pill ' + (changed.includes(r.k) ? 'oo-warn' : 'oo-acc'); replay(c, changed.includes(r.k) ? 'drop-in' : 'pop-soft'); });
+                });
+              }
+              const MSG = {
+                rotate: 'Rotation: a new Activity, so a new @ActivityScoped Navigator. The ViewModel survived, and so did everything scoped to it or wider.',
+                screen: 'A new screen gets a new ViewModel: new NewsPager, new formatters. Activity and app objects stay.',
+                reopen: 'The Activity finished and started again. Everything below @Singleton is new.',
+                process: 'The process died. Even the @Singleton is rebuilt from scratch.',
+              };
+              async function ev(k) {
+                if (busy) return; busy = true;
+                RESETS[k].forEach(fresh); paint(RESETS[k]);
+                say(o, MSG[k]);
+                await sleep(500); busy = false;
+              }
+              build(); ROWS.forEach(r => fresh(r.k)); paint([]);
+              say(o, 'Unscoped: the ViewModel and the use case each got their own formatter. @ViewModelScoped: they share one pager.');
+              el.append(grid,
+                h('div', { class: 'controls' }, act('Rotate', () => ev('rotate')), act('Open another news screen', () => ev('screen')), act('Back out, then reopen the app', () => ev('reopen')), act('Process death', () => ev('process'))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Hilt runs at compile time, through KSP or kapt. For each Hilt component it generates a Dagger component that knows how to build every binding installed in it. For each <code>@Inject</code> constructor it generates a small factory class.</p>
+<p>The Hilt Gradle plugin also rewrites your <code>@AndroidEntryPoint</code> Activity to extend a generated <code>Hilt_HomeActivity</code>, which injects fields in <code>onCreate</code>. A scoped binding is wrapped in a <code>DoubleCheck</code> provider, which creates the object once and caches it. An unscoped binding calls the factory every time.</p>`,
+          code: `// Generated for: class OfflineFirstNewsRepository @Inject constructor(dao: ArticleDao)
+public final class OfflineFirstNewsRepository_Factory implements Factory<OfflineFirstNewsRepository> {
+    private final Provider<ArticleDao> daoProvider;
+    @Override public OfflineFirstNewsRepository get() {
+        return new OfflineFirstNewsRepository(daoProvider.get());
+    }
+}
+
+// In the component, a @Singleton binding is cached:
+newsProvider = DoubleCheck.provider(OfflineFirstNewsRepository_Factory.create(daoProvider));`,
+        },
+        mistakes: [
+          { title: 'An interface that leaks the detail', bad: 'interface NewsRepository {\n    fun dao(): ArticleDao\n    fun api(): NewsApi\n}', good: 'interface NewsRepository {\n    fun headlines(): Flow<List<Article>>\n    suspend fun refresh()\n}', why: 'Returning the DAO and the API ties every caller to Room and Retrofit again. The interface should speak the caller’s language, in domain types.' },
+          { title: 'Field injection on a class you build yourself', bad: 'class Uploader {\n    @Inject lateinit var api: UploadApi\n}\nval u = Uploader()\nu.api   // UninitializedPropertyAccessException', good: 'class Uploader @Inject constructor(\n    private val api: UploadApi,\n)\n// ask Hilt for an Uploader instead of calling the constructor', why: 'Hilt only fills fields of objects it creates or entry points it knows. Constructor injection makes the dependency impossible to forget.' },
+          { title: 'A scope wider than the state', bad: '@Singleton\nclass CheckoutForm @Inject constructor() {\n    var address = ""\n    var coupon = ""\n}', good: '@ViewModelScoped\nclass CheckoutForm @Inject constructor() {\n    var address = ""\n    var coupon = ""\n}', why: 'As a singleton, the half-filled form follows the user into the next checkout, and into the next account after a logout. Scope state to the screen that owns it.' },
         ],
         visual(el) {
           const impls = ['NetworkNewsRepository', 'OfflineFirstNewsRepository'];

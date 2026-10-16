@@ -36,6 +36,12 @@
 .bd-st.bd-utd { color: var(--t-s); }
 .bd-st.bd-busy { color: var(--t-k); }
 
+.bd-st.bd-fc { color: var(--t-t); }
+/* depth demos */
+.bd-graph svg { color: var(--muted); }
+.bd-edge.bd-cyc { stroke: var(--err); stroke-width: 2.5; }
+.bd-bar { display: grid; place-items: center; overflow: hidden; font: 600 0.66rem var(--mono); color: var(--accent-ink); white-space: nowrap; }
+
 /* 2 catalog */
 .bd-repos { display: flex; flex-wrap: wrap; gap: 6px; }
 .bd-repo { font: 600 0.76rem var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); transition: background 0.2s, color 0.2s, border-color 0.2s; }
@@ -194,6 +200,188 @@ tasks.register("hello") {
           { q: 'You run <code>./gradlew assembleDebug</code> twice without changing anything. What does the second run do?', options: ['Recompiles everything to be safe', 'Configures, then marks the tasks UP-TO-DATE and skips their work', 'Skips all three phases'], a: 1, why: 'Gradle compares each task\u2019s inputs and outputs with the last run. Nothing changed, so every task is up to date. Configuration still runs unless the configuration cache is reused.' },
           { q: 'Where does <code>include(":feature:news")</code> belong?', options: ['<code>app/build.gradle.kts</code>', '<code>settings.gradle.kts</code>', '<code>gradle.properties</code>'], a: 1, why: 'The settings file decides which projects are part of the build. It is read in the initialization phase.' },
           { q: 'What does the configuration cache let Gradle skip?', options: ['The execution phase', 'The configuration phase, when build scripts and their inputs are unchanged', 'Downloading dependencies'], a: 1, why: 'Gradle stores the configured task graph and reuses it. Tasks still run or get skipped as usual.' },
+        ],
+        deeper: [
+          {
+            title: 'Inputs and outputs make a task skippable',
+            body: `<p>A task is UP-TO-DATE only if Gradle knows what it reads and what it writes. Before it runs a task, Gradle hashes the declared inputs and checks the declared outputs. If both match the last run, the action is skipped.</p>
+<p>Gradle hashes file contents, not timestamps, so touching a file changes nothing. Deleting an output makes the task run again. A task that declares no outputs can never be up to date, so it runs on every build.</p>`,
+            visual(el) {
+              let content = 'versionName=1.0', touched = 0, made = false, last = null, busy = false;
+              const hash = s => { let x = 7; for (const c of s) x = (x * 31 + c.charCodeAt(0)) >>> 0; return x.toString(16).padStart(8, '0').slice(0, 8); };
+              const st = h('span', { class: 'bd-st' }, 'never run');
+              const row = h('div', { class: 'bd-task' }, h('span', {}, ':app:writeVersion'), st);
+              const kv = h('dl', { class: 'bd-kv' });
+              const o = out('Run the task, then change things and run it again.');
+              const decl = toggle('bd-g1-out', 'declares @OutputFile', function () {
+                if (busy) { this.checked = !this.checked; return; }
+                say(o, this.checked ? 'Outputs declared. Gradle can check them now.' : 'No outputs declared. Gradle has nothing to compare.');
+              });
+              decl.input.checked = true;
+              const paint = () => kv.replaceChildren(...[
+                ['version.txt', `${content} · touched ${touched}x`],
+                ['input hash now', hash(content)],
+                ['input hash last run', last || 'none'],
+                ['Version.kt', made ? 'exists' : 'missing'],
+              ].flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
+              async function run() {
+                if (busy) return; busy = true;
+                st.textContent = 'checking'; st.className = 'bd-st bd-busy'; row.classList.add('bd-now');
+                say(o, '<span class="muted">$ ./gradlew writeVersion --info</span>');
+                await sleep(450); if (!el.isConnected) return;
+                const now = hash(content);
+                const why = !decl.input.checked ? 'Task has not declared any outputs despite executing actions.'
+                  : last === null ? 'No history is available.'
+                  : last !== now ? "Input property 'versionFile' file version.txt has changed."
+                  : !made ? "Output property 'outputFile' file Version.kt has been removed." : null;
+                row.classList.remove('bd-now');
+                if (why) { made = true; last = now; st.textContent = 'EXECUTED'; st.className = 'bd-st bd-ex'; say(o, `<span class="bad">not up-to-date:</span> ${why}`); }
+                else { st.textContent = 'UP-TO-DATE'; st.className = 'bd-st bd-utd'; say(o, '<span class="good">Skipping task \':app:writeVersion\' as it is up-to-date.</span>'); }
+                replay(row, 'bd-flash'); paint(); busy = false;
+              }
+              const edit = (fn, msg) => () => { if (busy) return; fn(); paint(); replay(kv, 'bd-flash'); say(o, msg); };
+              paint();
+              el.append(
+                h('div', { class: 'bd-tasks' }, row),
+                h('div', { class: 'bd-card' }, lbl('What Gradle compares'), kv),
+                h('div', { class: 'controls' },
+                  cmd('./gradlew writeVersion', run),
+                  act('Edit version.txt', edit(() => { content = content.endsWith('1.0') ? 'versionName=1.1' : 'versionName=1.0'; }, 'Content changed, so the input hash changed.')),
+                  act('Touch version.txt', edit(() => { touched++; }, 'New timestamp, same bytes. The hash is the same.')),
+                  act('Delete Version.kt', edit(() => { made = false; }, 'The output file is gone.')),
+                  decl.el),
+                o);
+            },
+          },
+          {
+            title: 'The build cache: FROM-CACHE',
+            body: `<p>UP-TO-DATE only compares with the last run in this folder. Switch to a branch and back, and the outputs on disk belong to the other branch, so tasks run again.</p>
+<p>The build cache remembers outputs by a key made from all the task’s inputs. When the same key comes back, Gradle copies the outputs from the cache and marks the task FROM-CACHE. Turn it on with <code>org.gradle.caching=true</code>. A remote cache shared with CI lets a fresh checkout skip work someone else already did.</p>`,
+            code: `# gradle.properties
+org.gradle.caching=true
+org.gradle.configuration-cache=true`,
+            visual(el) {
+              const TASKS = [['compileDebugKotlin', 'kt'], ['mergeDebugResources', 'res']];
+              let branch = 'main', busy = false;
+              const cache = new Set(), ws = {};
+              const keyOf = k => k === 'kt' ? `kt@${branch}` : 'res@shared';
+              const rows = TASKS.map(([n, k]) => { const st = h('span', { class: 'bd-st' }, 'waiting'); return { k, st, row: h('div', { class: 'bd-task' }, h('span', {}, ':app:' + n), st) }; });
+              const chips = h('div', { class: 'bd-repos' });
+              const br = h('span', { class: 'bd-count' });
+              const o = out('Build on main, switch branch, build, switch back and build again.');
+              const cc = toggle('bd-g2-cache', 'org.gradle.caching=true', function () {
+                if (busy) { this.checked = !this.checked; return; }
+                say(o, this.checked ? 'Build cache on. Executed tasks store their outputs.' : 'Build cache off.');
+              });
+              const paint = () => {
+                br.textContent = `branch: ${branch}`;
+                chips.replaceChildren(...(cache.size ? [...cache].map(c => h('span', { class: 'bd-repo bd-yes' }, c)) : [h('span', { class: 'bd-repo' }, 'cache empty')]));
+              };
+              async function run() {
+                if (busy) return; busy = true;
+                rows.forEach(r => { r.st.textContent = 'waiting'; r.st.className = 'bd-st'; });
+                say(o, '<span class="muted">$ ./gradlew assembleDebug</span>');
+                const n = { ex: 0, fc: 0, utd: 0 };
+                for (const r of rows) {
+                  const key = keyOf(r.k);
+                  r.row.classList.add('bd-now'); r.st.textContent = 'checking'; r.st.className = 'bd-st bd-busy';
+                  await sleep(420); if (!el.isConnected) return;
+                  r.row.classList.remove('bd-now');
+                  let res;
+                  if (ws[r.k] === key) res = 'utd';
+                  else if (cc.input.checked && cache.has(key)) res = 'fc';
+                  else { res = 'ex'; if (cc.input.checked) cache.add(key); }
+                  ws[r.k] = key; n[res]++;
+                  r.st.textContent = { utd: 'UP-TO-DATE', fc: 'FROM-CACHE', ex: 'EXECUTED' }[res];
+                  r.st.className = 'bd-st ' + { utd: 'bd-utd', fc: 'bd-fc', ex: 'bd-ex' }[res];
+                  paint();
+                }
+                say(o, `<span class="good">BUILD SUCCESSFUL</span> · ${n.ex} executed, ${n.fc} from cache, ${n.utd} up-to-date`);
+                busy = false;
+              }
+              const sw = act('git switch feature', function () {
+                if (busy) return;
+                branch = branch === 'main' ? 'feature' : 'main';
+                this.textContent = `git switch ${branch === 'main' ? 'feature' : 'main'}`;
+                paint(); replay(br, 'bd-flash');
+                say(o, `On ${branch}. Kotlin sources differ between branches. Resources are the same.`);
+              });
+              cc.input.checked = true;
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, br, cc.el),
+                h('div', { class: 'bd-tasks' }, rows.map(r => r.row)),
+                h('div', { class: 'bd-card' }, lbl('Build cache entries'), chips),
+                h('div', { class: 'controls' },
+                  cmd('./gradlew assembleDebug', run),
+                  sw,
+                  cmd('./gradlew clean', () => { if (busy) return; for (const k in ws) delete ws[k]; say(o, 'build/ deleted. The cache lives elsewhere, in ~/.gradle/caches.'); })),
+                o);
+            },
+          },
+          {
+            title: 'Wire values lazily with providers',
+            body: `<p>A custom task should declare its inputs and outputs as properties. Then Gradle can fingerprint them, and the task gets the up-to-date check and the cache for free.</p>
+<p>Connect values with providers instead of reading them during configuration. <code>providers.exec</code> describes a command. It runs only when a task that needs the value runs, and the configuration cache knows to track it.</p>`,
+            code: `abstract class WriteVersion : DefaultTask() {
+    @get:Input abstract val gitSha: Property<String>
+    @get:OutputFile abstract val outputFile: RegularFileProperty
+
+    @TaskAction
+    fun write() {
+        outputFile.get().asFile.writeText("const val GIT_SHA = \\"\${gitSha.get()}\\"\\n")
+    }
+}
+
+val gitSha = providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }
+    .standardOutput.asText.map { it.trim() }
+
+tasks.register<WriteVersion>("writeVersion") {
+    this.gitSha = gitSha                                    // wired, not computed
+    outputFile = layout.buildDirectory.file("generated/Version.kt")
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>./gradlew</code> is a small script that starts the wrapper jar. The jar downloads the Gradle version named in <code>gradle/wrapper/gradle-wrapper.properties</code> once, into <code>~/.gradle/wrapper/dists</code>. Then it hands the build to a Gradle Daemon: a long-lived JVM that stays warm between builds. That is why the second build of the day is faster than the first.</p>
+<p>Your <code>.kts</code> scripts compile to JVM classes, cached under <code>~/.gradle/caches</code>, and recompile only when they change. For each task, Gradle saves the input and output fingerprints in the project’s <code>.gradle</code> folder. UP-TO-DATE means the new fingerprint matches the saved one. The configuration cache stores the configured task graph in <code>.gradle/configuration-cache</code>. Kotlin compilation runs in its own Kotlin daemon.</p>`,
+          code: `$ ./gradlew assembleDebug --info
+> Task :app:compileDebugKotlin UP-TO-DATE
+Skipping task ':app:compileDebugKotlin' as it is up-to-date.
+
+$ ./gradlew --status   # running daemons
+$ ./gradlew --stop     # stop them`,
+        },
+        mistakes: [
+          {
+            title: 'Running a process during configuration',
+            bad: `// app/build.gradle.kts, top level
+val sha = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+    .start().inputStream.reader().readText().trim()
+android.defaultConfig.buildConfigField("String", "SHA", "\\"$sha\\"")`,
+            good: `val sha = providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }
+    .standardOutput.asText.map { it.trim() }
+androidComponents.onVariants { variant ->
+    variant.buildConfigFields?.put("SHA", sha.map { BuildConfigField("String", "\\"$it\\"", null) })
+}`,
+            why: 'Top-level code runs on every build, even <code>./gradlew help</code>. The configuration cache also can’t see the process, so it can reuse a stale value. <code>providers.exec</code> is tracked and lazy.',
+          },
+          {
+            title: 'Using project inside a task action',
+            bad: `tasks.register("copyApks") {
+    doLast {
+        project.copy {
+            from(project.layout.buildDirectory.dir("outputs/apk"))
+            into("dist")
+        }
+    }
+}`,
+            good: `tasks.register<Copy>("copyApks") {
+    from(layout.buildDirectory.dir("outputs/apk"))
+    into(layout.projectDirectory.dir("dist"))
+}`,
+            why: 'With the configuration cache on, touching <code>Task.project</code> at execution time is reported as a problem and fails the build. A typed <code>Copy</code> task also declares inputs and outputs, so it can be up to date.',
+          },
         ],
         visual(el) {
           const TASKS = [['mergeDebugResources', 'res'], ['processDebugResources', 'res'], ['compileDebugKotlin', 'kt'], ['dexBuilderDebug', 'kt'], ['mergeDexDebug', 'kt'], ['packageDebug', 'both']];
@@ -537,6 +725,179 @@ dependencies {
           { q: 'You change only a private function body in <code>:core:network</code>. What recompiles?', options: ['Every module', ':core:network only. :app still repackages', ':core:network and everything above it'], a: 1, why: 'The public API did not change, so dependents keep their compiled output. Only packaging reruns to pick up the new bytecode.' },
           { q: 'When should a module use <code>api</code> for a dependency?', options: ['Always, so consumers get everything', 'When its public signatures use that dependency\u2019s types', 'Never, it is deprecated'], a: 1, why: 'If consumers must see a type to call you, expose it with <code>api</code>. Otherwise <code>implementation</code> keeps rebuilds small.' },
           { q: 'What is a convention plugin for?', options: ['Sharing build setup like compileSdk and minSdk across modules', 'Running tests faster', 'Publishing to Maven Central'], a: 0, why: 'It moves repeated Gradle setup into one place. Each module then applies one plugin ID.' },
+        ],
+        deeper: [
+          {
+            title: 'Why features must not depend on each other',
+            body: `<p>The news screen wants to open settings, so someone makes <code>:feature:news</code> depend on <code>:feature:settings</code>. It builds. Now every API change in settings recompiles news. A month later settings needs a link back to news, and Gradle refuses: modules can’t form a cycle.</p>
+<p>The fix is a small <code>:api</code> module per feature. It holds only what others may call, such as a route or an interface. Features depend on each other’s <code>:api</code> modules, and <code>:app</code> wires in the real implementations, for example through Hilt.</p>`,
+            code: `// feature/settings/api/src/main/kotlin/SettingsRoute.kt
+@Serializable data object SettingsRoute
+
+// feature/news/build.gradle.kts
+dependencies {
+    implementation(project(":feature:settings:api"))   // a route, not the screen
+}`,
+            visual(el) {
+              let ns = false, sn = false, split = false, busy = false;
+              const W = 104, H = 26;
+              const graph = h('div', { class: 'bd-graph' });
+              const o = out('Two features, one core module. Connect the features.');
+              const draw = () => {
+                const N = split
+                  ? { app: [160, 20], news: [66, 84], settings: [254, 84], 'news:api': [66, 150], 'settings:api': [254, 150], 'core:data': [160, 212] }
+                  : { app: [160, 20], news: [66, 96], settings: [254, 96], 'core:data': [160, 172] };
+                const E = split
+                  ? [['app', 'news'], ['app', 'settings'], ['news', 'settings:api', 'new'], ['settings', 'news:api', 'new'], ['news', 'core:data'], ['settings', 'core:data']]
+                  : [['app', 'news'], ['app', 'settings'], ['news', 'core:data'], ['settings', 'core:data'], ...(ns ? [['news', 'settings', sn ? 'bad' : 'new']] : []), ...(sn ? [['settings', 'news', ns ? 'bad' : 'new']] : [])];
+                const line = ([a, b, k]) => {
+                  const [x1, y1] = N[a], [x2, y2] = N[b];
+                  const cls = 'bd-edge' + (k === 'bad' ? ' bd-cyc' : k === 'new' ? ' bd-api' : '');
+                  if (y1 === y2) { const dy = x2 > x1 ? -6 : 6, s = Math.sign(x2 - x1); return `<line class="${cls}" x1="${x1 + s * W / 2}" y1="${y1 + dy}" x2="${x2 - s * W / 2}" y2="${y2 + dy}" marker-end="url(#bd-m1-arr)"/>`; }
+                  return `<line class="${cls}" x1="${x1}" y1="${y1 + H / 2}" x2="${x2}" y2="${y2 - H / 2}" marker-end="url(#bd-m1-arr)"/>`;
+                };
+                const nodes = Object.entries(N).map(([k, [x, y]]) => `<g class="bd-node${(ns && sn && !split && (k === 'news' || k === 'settings')) ? ' bd-src' : k.endsWith(':api') ? ' bd-pack' : ''}"><rect x="${x - W / 2}" y="${y - H / 2}" width="${W}" height="${H}" rx="7"/><text x="${x}" y="${y + 4}" text-anchor="middle">:${k}</text></g>`).join('');
+                const hgt = split ? 232 : 192;
+                graph.innerHTML = `<svg viewBox="0 0 320 ${hgt}" role="img" aria-label="Feature module graph"><defs><marker id="bd-m1-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>${E.map(line).join('')}${nodes}</svg>`;
+                replay(graph, 'pop-soft');
+              };
+              const add = which => () => {
+                if (busy) return;
+                if (split) { say(o, 'Already split. Each feature only sees the other’s :api module.'); return; }
+                if (which === 'ns') { if (ns) { say(o, ':news already depends on :settings.'); return; } ns = true; }
+                else { if (sn) { say(o, ':settings already depends on :news.'); return; } sn = true; }
+                draw();
+                say(o, ns && sn ? '<span class="bad">Both directions now.</span> Build it.' : 'Builds fine. <span class="muted">But now an API change in one feature recompiles the other.</span>');
+              };
+              const build = async () => {
+                if (busy) return; busy = true;
+                say(o, '<span class="muted">$ ./gradlew assembleDebug</span>');
+                await sleep(500); if (!el.isConnected) return;
+                if (ns && sn && !split) { replay(graph, 'shake'); say(o, '<span class="bad">Circular dependency between the following tasks:</span> :feature:news:compileDebugKotlin -> :feature:settings:compileDebugKotlin -> :feature:news:compileDebugKotlin'); }
+                else say(o, `<span class="good">BUILD SUCCESSFUL</span>${split ? '. A change inside :settings no longer recompiles :news. Only a change to :settings:api does.' : ''}`);
+                busy = false;
+              };
+              const splitIt = () => {
+                if (busy) return;
+                if (!ns && !sn) { say(o, 'Nothing to untangle yet. Connect the features first.'); return; }
+                if (split) { say(o, 'Already split.'); return; }
+                split = true; draw();
+                say(o, 'Routes moved to :news:api and :settings:api. Features point at those. :app provides the real screens.');
+              };
+              draw();
+              el.append(
+                graph,
+                h('div', { class: 'bd-legend' }, h('span', {}, h('i', { class: 'bd-l-pack' }), ':api module'), h('span', {}, h('i', { class: 'bd-l-src' }), 'in a cycle'), h('span', {}, 'Arrows point to what a module depends on.')),
+                h('div', { class: 'controls' }, act(':news uses :settings', add('ns')), act(':settings uses :news', add('sn')), act('Split out :api modules', splitIt)),
+                h('div', { class: 'controls' }, cmd('./gradlew assembleDebug', build)),
+                o);
+            },
+          },
+          {
+            title: 'Wide graphs build in parallel',
+            body: `<p>With <code>org.gradle.parallel=true</code>, Gradle compiles independent modules at the same time, one per worker. But a module can only start when everything it depends on is done. In a long chain, each module waits for the one below, and extra workers sit idle.</p>
+<p>Build time is set by the longest path through the graph, not by the number of modules. Keep the graph wide and shallow: many features on a few small core modules.</p>`,
+            code: `# gradle.properties
+org.gradle.parallel=true
+# workers default to the number of CPU cores
+# org.gradle.workers.max=4`,
+            visual(el) {
+              let shape = 'wide', par = true, busy = false;
+              const SH = {
+                chain: [['core', []], ['m2', ['core']], ['m3', ['m2']], ['m4', ['m3']], ['m5', ['m4']], ['m6', ['m5']], ['app', ['m6']]],
+                wide: [['core', []], ['f1', ['core']], ['f2', ['core']], ['f3', ['core']], ['f4', ['core']], ['f5', ['core']], ['app', ['f1', 'f2', 'f3', 'f4', 'f5']]],
+              };
+              const lanes = [0, 1, 2, 3].map(i => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, `worker ${i + 1}`), track) }; });
+              const total = h('span', { class: 'bd-count' });
+              const o = out('');
+              const plan = () => {
+                const done = {}, free = par ? [0, 0, 0, 0] : [0], res = [];
+                for (const [m, deps] of SH[shape]) {
+                  const ready = Math.max(0, ...deps.map(d => done[d]));
+                  let w = 0;
+                  for (let i = 1; i < free.length; i++) if (Math.max(free[i], ready) < Math.max(free[w], ready)) w = i;
+                  const start = Math.max(free[w], ready);
+                  done[m] = free[w] = start + 1; res.push({ m, w, start });
+                }
+                return res;
+              };
+              const live = (() => { let seen = false; const t0 = Date.now(); return () => { if (el.isConnected) { seen = true; return true; } return !seen && Date.now() - t0 < 5000; }; })();
+              async function run() {
+                if (busy) return; busy = true;
+                lanes.forEach(l => l.track.replaceChildren());
+                const p = plan(), end = Math.max(...p.map(x => x.start + 1));
+                total.textContent = '';
+                for (const x of p.slice().sort((a, b) => a.start - b.start)) {
+                  if (!live()) { busy = false; return; }
+                  lanes[x.w].track.append(h('div', { class: 'bar run drop-in bd-bar', style: `left:${(x.start / 7 * 100).toFixed(2)}%;width:${(100 / 7 - 1).toFixed(2)}%` }, x.m));
+                  await sleep(240);
+                }
+                total.textContent = `${end} time units for 7 modules`;
+                say(o, end === 7
+                  ? (par ? '<span class="bad">7 units:</span> every module waits for the one before it. Three workers never did anything.' : '7 units: one worker, one module at a time.')
+                  : `<span class="good">${end} units:</span> five features compiled side by side once core was done.`);
+                busy = false;
+              }
+              const pressAt = (bs, i) => bs.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+              const shapeBtns = ['wide', 'chain'].map((s, i) => act(s === 'wide' ? 'Wide graph' : 'Long chain', () => { if (busy) return; shape = s; pressAt(shapeBtns, i); run(); }));
+              pressAt(shapeBtns, 0);
+              const pp = toggle('bd-m2-par', 'org.gradle.parallel=true', function () { if (busy) { this.checked = !this.checked; return; } par = this.checked; run(); });
+              pp.input.checked = true;
+              el.append(
+                h('div', { class: 'controls' }, shapeBtns, pp.el),
+                h('div', { class: 'timeline' }, lanes.map(l => l.el)),
+                h('div', { class: 'controls' }, cmd('./gradlew assembleDebug', run), total),
+                o);
+              run();
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Each dependency configuration feeds two classpaths. <code>api</code> and <code>implementation</code> both end up on your consumers’ runtime classpath, because the code must be in the APK. Only <code>api</code> also goes on their compile classpath. That is the whole difference, and it is why <code>implementation</code> keeps rebuilds small. When published to Maven, <code>api</code> maps to the compile scope and <code>implementation</code> to the runtime scope.</p>
+<p>When a module changes, the Kotlin Gradle plugin compares a snapshot of its ABI, the public signatures, with the previous one. If the ABI is the same, dependents skip recompiling even though the jar’s bytes changed. That is compile avoidance in practice: private changes stop at the module border.</p>`,
+          code: `// :core:data has  api(":core:model")  and  implementation(":core:network")
+// :feature:news depends on :core:data. Its classpaths:
+//   compileClasspath: core-data, core-model
+//   runtimeClasspath: core-data, core-model, core-network
+$ ./gradlew :feature:news:dependencies --configuration debugCompileClasspath`,
+        },
+        mistakes: [
+          {
+            title: 'Making everything api to be safe',
+            bad: `dependencies {
+    api(libs.okhttp)
+    api(libs.androidx.room.runtime)
+    api(project(":core:network"))
+}`,
+            good: `dependencies {
+    api(project(":core:model"))       // public functions return its types
+    implementation(libs.okhttp)
+    implementation(libs.androidx.room.runtime)
+    implementation(project(":core:network"))
+}`,
+            why: 'Every <code>api</code> edge puts that library on all consumers’ compile classpaths. Their builds slow down, and they can start using types you meant to hide.',
+          },
+          {
+            title: 'A :core:common grab-bag that everything uses',
+            bad: `// core/common: DateUtils, Analytics, ImageLoader, Strings, Theme
+// in every module:
+implementation(project(":core:common"))`,
+            good: `implementation(project(":core:analytics"))
+implementation(project(":core:ui"))
+// small modules, each with one job`,
+            why: 'A change to any file in the grab-bag can change its ABI and recompile every module. Split it so a change only reaches the modules that use that piece.',
+          },
+          {
+            title: 'Configuring modules from the root with subprojects',
+            bad: `// root build.gradle.kts
+subprojects {
+    apply(plugin = "com.android.library")
+    extensions.configure<LibraryExtension> { compileSdk = 36 }
+}`,
+            good: `// each module
+plugins { id("news.android.library") }   // convention plugin in build-logic`,
+            why: 'Cross-project configuration couples every module to the root script and blocks Gradle’s isolated projects work. A convention plugin keeps each module’s setup in its own build file.',
+          },
         ],
         visual(el) {
           const N = { app: [170, 20], 'feature:news': [92, 82], 'feature:settings': [248, 82], 'core:data': [110, 148], 'core:ui': [250, 148], 'core:network': [62, 214], 'core:model': [200, 214] };

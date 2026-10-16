@@ -114,6 +114,15 @@
 @keyframes kd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 .kd-parts { display: grid; gap: 10px; justify-items: center; min-width: 0; }
 
+/* depth steps */
+/* Shell fix (belongs in style.css): an open details.hood is a grid whose ::details-content item grows to the widest code line. */
+.hood[open] { grid-template-columns: minmax(0, 1fr); }
+.kd-intruder { border-color: var(--err) !important; background: var(--err-soft) !important; color: var(--err) !important; }
+.kd-node.kd-bad { border-color: var(--err); background: var(--err-soft); }
+.kd-node.kd-dim { opacity: 0.45; }
+.kd-grow { transition: width 0.7s ease-out; }
+.phone.kd-mini-phone { height: 200px; }
+
 @media (max-width: 600px) { .kd-split { grid-template-columns: minmax(0, 1fr); } }
 `;
 
@@ -169,6 +178,149 @@ fun describe(items: List<*>) = "\${items.size} items, first is \${items.firstOrN
           { q: 'Kotlin declares <code>List&lt;out E&gt;</code>. Can you pass a <code>List&lt;Cat&gt;</code> to <code>fun pet(all: List&lt;Animal&gt;)</code>?', options: ['Yes', 'No, you need a cast', 'Only if Cat is open'], a: 0, why: '<code>List</code> is read-only and covariant, so a list of cats is a list of animals.' },
           { q: 'Which interface can declare its parameter as <code>in T</code>?', options: ['One whose functions only take <code>T</code> as parameters', 'One whose functions only return <code>T</code>', 'One that both takes and returns <code>T</code>'], a: 0, why: '<code>in</code> means the type only flows in, like <code>Comparable&lt;in T&gt;</code>.' },
           { q: 'What can you do with a <code>MutableList&lt;*&gt;</code>?', options: ['Read items as <code>Any?</code>', 'Add any item', 'Nothing at all'], a: 0, why: 'The element type is unknown, so reads are typed <code>Any?</code> and writes are rejected.' },
+        ],
+        deeper: [
+          {
+            title: 'Why out bans put',
+            body: `<p>Take an invariant <code>class Box&lt;T&gt;</code> with both <code>get()</code> and <code>put()</code>. You can still view a <code>Box&lt;Cat&gt;</code> as <code>Box&lt;out Animal&gt;</code>. Through that view, <code>get()</code> returns <code>Animal</code>, and <code>put()</code> takes <code>Nothing</code>, so you can't call it.</p>
+<p>The ban protects the owner of the box. They still hold it as <code>Box&lt;Cat&gt;</code> and expect only cats inside. Flip the switch to see what would happen without it.</p>`,
+            code: `class Box<T>(private var item: T) {
+    fun get(): T = item
+    fun put(value: T) { item = value }
+}
+
+val catBox = Box(Cat())
+val view: Box<out Animal> = catBox   // ok: read-only view
+
+val a: Animal = view.get()           // fine, a Cat is an Animal
+view.put(Dog())                      // error: put now takes Nothing`,
+            visual(el) {
+              let items = ['Cat'], unsafe = false, busy = false;
+              const shelf = h('div', { class: 'kd-heap', 'aria-label': 'What is inside the box' });
+              const sw = h('input', { type: 'checkbox', id: 'kd-var-unsafe' });
+              const o = out('One object: a Box<Cat>. The owner holds catBox. You hold view: Box<out Animal>.');
+              const paint = fresh => shelf.replaceChildren(...items.map((t, i) => h('span', { class: 'chip' + (t === 'Dog' ? ' kd-intruder' : '') + (fresh && i === items.length - 1 ? ' drop-in' : '') }, t)));
+              sw.addEventListener('change', () => { unsafe = sw.checked; say(o, unsafe ? '<span class="bad">pretend mode:</span> the compiler now lets put() through the view.' : 'Normal rules: put() takes Nothing through an out view.'); });
+              async function read() {
+                if (busy) return; busy = true;
+                replay(shelf.lastElementChild, 'pop');
+                const t = items[items.length - 1];
+                say(o, `${hl('val a: Animal = view.get()')} <span class="good">ok:</span> got a ${t}, and every ${t} is an Animal`);
+                await sleep(400); busy = false;
+              }
+              async function put() {
+                if (busy) return; busy = true;
+                if (!unsafe) { replay(shelf, 'shake'); say(o, `<span class="bad">compile error:</span> argument type mismatch: actual type is 'Dog', but 'Nothing' was expected`); }
+                else if (items.includes('Dog')) say(o, 'The dog is already in there. Let the owner read it.');
+                else { items.push('Dog'); paint(true); say(o, `${hl('view.put(Dog())')} <span class="bad">compiles in pretend mode.</span> A Dog now sits in a box of cats.`); }
+                await sleep(400); busy = false;
+              }
+              async function owner() {
+                if (busy) return; busy = true;
+                const t = items[items.length - 1];
+                replay(shelf.lastElementChild, 'pop');
+                if (t === 'Dog') { replay(shelf, 'shake'); say(o, `${hl('val c: Cat = catBox.get()')} <span class="bad">ClassCastException:</span> class Dog cannot be cast to class Cat <span class="muted">(far from the line that caused it)</span>`); }
+                else say(o, `${hl('val c: Cat = catBox.get()')} <span class="good">ok:</span> still a Cat`);
+                await sleep(400); busy = false;
+              }
+              function reset() { items = ['Cat']; paint(true); say(o, 'Box emptied and refilled with one Cat.'); }
+              paint(false);
+              el.append(
+                h('div', { class: 'kd-pair' },
+                  h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'the object'), h('span', { class: 'kd-tag', html: hl('Box<Cat>') }), shelf),
+                  h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'your view'), h('span', { class: 'kd-tag', html: hl('view: Box<out Animal>') }),
+                    h('div', { class: 'controls' }, cmd('view.get()', read), cmd('view.put(Dog())', put)))),
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'kd-var-unsafe' }, sw, 'Pretend the compiler allowed put')),
+                h('div', { class: 'controls' }, cmd('catBox.get()  // the owner', owner), act('Refill', reset)),
+                o);
+            },
+          },
+          {
+            title: 'Use-site variance on one function',
+            body: `<p><code>MutableList</code> must stay invariant, because it both reads and writes. A copy function only reads from one list and only writes to the other. Say so at the use site: <code>from: MutableList&lt;out T&gt;</code> and <code>to: MutableList&lt;in T&gt;</code>.</p>
+<p>Now a list of cats can be copied into a list of animals. Copying animals into a list of cats still fails, because some of those animals may be dogs.</p>`,
+            code: `fun <T> copy(from: MutableList<out T>, to: MutableList<in T>) {
+    for (item in from) to.add(item)
+}
+
+val cats: MutableList<Cat> = mutableListOf(Cat())
+val animals: MutableList<Animal> = mutableListOf()
+copy(cats, animals)      // T = Animal: read cats, write animals
+copy(animals, cats)      // error: an Animal may not be a Cat`,
+            visual(el) {
+              const START = { cats: ['Tom', 'Kit'], animals: ['Rex'], anys: ['42'] };
+              const TYPE = { cats: 'Cat', animals: 'Animal', anys: 'Any' };
+              const RANK = { cats: 0, animals: 1, anys: 2 };
+              let lists, variant = false, busy = false;
+              const boxes = {}, wells = {};
+              const sig = h('div', { class: 'kt' });
+              const o = out('');
+              Object.keys(START).forEach(k => {
+                wells[k] = h('div', { class: 'kd-row' });
+                boxes[k] = h('div', { class: 'kd-card' }, h('span', { class: 'kd-tag', html: hl(`${k}: MutableList<${TYPE[k]}>`) }), wells[k]);
+              });
+              const paintList = k => wells[k].replaceChildren(...(lists[k].length ? lists[k].map(x => h('span', { class: 'chip' }, x)) : [h('span', { class: 'kd-empty' }, 'empty')]));
+              function reset() { lists = JSON.parse(JSON.stringify(START)); Object.keys(lists).forEach(paintList); }
+              const sigBtns = [act('invariant', () => setSig(false)), act('out / in', () => setSig(true))];
+              function setSig(v) {
+                if (busy) return; variant = v; press(sigBtns, sigBtns[v ? 1 : 0]);
+                lines(sig, [{ src: v ? 'fun <T> copy(from: MutableList<out T>, to: MutableList<in T>)' : 'fun <T> copy(from: MutableList<T>, to: MutableList<T>)', cls: 'kd-new' }]);
+                say(o, v ? 'from only produces T, to only consumes T.' : 'Both lists must have exactly the same T.');
+              }
+              async function copy(a, b) {
+                if (busy) return; busy = true;
+                const ok = variant ? RANK[a] <= RANK[b] : a === b;
+                const call = `copy(${a}, ${b})`;
+                if (!ok) {
+                  replay(boxes[b], 'shake');
+                  say(o, `${hl(call)} <span class="bad">compile error:</span> ${variant ? `no T fits. T must be a supertype of ${TYPE[a]} and a subtype of ${TYPE[b]}.` : `argument type mismatch: actual type is 'MutableList<${TYPE[b]}>', but 'MutableList<${TYPE[a]}>' was expected.`}`);
+                  await sleep(400); busy = false; return;
+                }
+                if (lists[b].length > 5) lists[b] = START[b].slice();
+                boxes[a].classList.add('kd-hit');
+                for (const x of lists[a].slice()) {
+                  await sleep(300); if (!el.isConnected) return;
+                  lists[b].push(x); paintList(b); replay(wells[b].lastElementChild, 'drop-in');
+                }
+                boxes[a].classList.remove('kd-hit');
+                say(o, `${hl(call)} <span class="good">ok:</span> T = ${TYPE[b]}. Read as ${TYPE[a]}, written as ${TYPE[b]}.`);
+                busy = false;
+              }
+              reset(); setSig(false);
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kd-label' }, 'signature'), sigBtns), sig,
+                h('div', { class: 'kd-pair' }, boxes.cats, boxes.animals, boxes.anys),
+                h('div', { class: 'controls' }, cmd('copy(cats, animals)', () => copy('cats', 'animals')), cmd('copy(animals, anys)', () => copy('animals', 'anys')), cmd('copy(animals, cats)', () => copy('animals', 'cats')), cmd('copy(cats, cats)', () => copy('cats', 'cats'))),
+                o);
+            },
+          },
+          {
+            title: 'When the rule is too strict: @UnsafeVariance',
+            body: `<p><code>List&lt;out E&gt;</code> still has <code>contains(element: E)</code>, which takes <code>E</code> as input. The standard library marks that parameter <code>@UnsafeVariance</code>. It tells the compiler "this method only compares, it never stores".</p>
+<p>Use it the same way in your own read-only types, and only when the method truly never writes the value anywhere. If it does, you are back to dogs in the cat box.</p>`,
+            code: `interface ReadOnlyCache<out V> {
+    fun get(key: String): V?
+    // only compares, never stores, so the input position is safe
+    fun containsValue(value: @UnsafeVariance V): Boolean
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Variance exists only at compile time. Generics are erased on the JVM, so a <code>Box&lt;Cat&gt;</code> and a <code>Box&lt;Animal&gt;</code> are the same class at runtime. That is also why an unchecked cast like <code>list as List&lt;String&gt;</code> never fails on the spot.</p>
+<p>For Java callers, Kotlin turns declaration-site variance into wildcards on parameters. A parameter of type <code>Producer&lt;Animal&gt;</code> becomes <code>Producer&lt;? extends Animal&gt;</code>. Return types get no wildcard, so Java code that receives the value stays simple. Final type arguments like <code>String</code> also get no wildcard.</p>`,
+          code: `// Kotlin
+interface Producer<out T> { fun get(): T }
+fun adopt(source: Producer<Animal>): Animal = source.get()
+fun shelter(): Producer<Animal> = TODO()
+
+// What Java sees
+Animal adopt(Producer<? extends Animal> source)
+Producer<Animal> shelter()            // no wildcard on return types`,
+        },
+        mistakes: [
+          { title: 'Asking for MutableList when you only read', bad: 'fun average(xs: MutableList<Number>): Double =\n    xs.sumOf { it.toDouble() } / xs.size\n\nval ints: MutableList<Int> = mutableListOf(1, 2, 3)\naverage(ints)   // error: MutableList<Int>', good: 'fun average(xs: List<Number>): Double =\n    xs.sumOf { it.toDouble() } / xs.size\n\nval ints: MutableList<Int> = mutableListOf(1, 2, 3)\naverage(ints)   // ok: List is covariant', why: '<code>MutableList</code> is invariant, so it rejects a list of a subtype. If you only read, take <code>List</code>, which is <code>out</code>.' },
+          { title: 'Trusting an unchecked cast', bad: 'val names = payload["names"] as List<String>\n// passes even if the list holds numbers\nnames.first().length   // ClassCastException here', good: 'val names = (payload["names"] as? List<*>)\n    .orEmpty()\n    .filterIsInstance<String>()', why: 'Erasure means <code>as List&lt;String&gt;</code> only checks for <code>List</code>. The crash moves to the first read. Check each element instead.' },
+          { title: 'Comparator without in', bad: 'fun sortCats(cats: MutableList<Cat>, by: Comparator<Cat>) =\n    cats.sortWith(by)\n\nsortCats(cats, byName)   // error: byName is Comparator<Animal>', good: 'fun sortCats(cats: MutableList<Cat>, by: Comparator<in Cat>) =\n    cats.sortWith(by)\n\nsortCats(cats, byName)   // ok', why: '<code>java.util.Comparator</code> has no variance in Kotlin. A comparator for any animal can sort cats, so say <code>in Cat</code>, as <code>sortWith</code> itself does.' },
         ],
         visual(el) {
           const TYPES = ['Any', 'Animal', 'Cat'];
@@ -269,6 +421,147 @@ class ProfileFragment : Fragment(R.layout.profile) {
           { q: '<code>val x by lazy { println("init"); 42 }</code>. You read <code>x</code> three times. How often does <code>init</code> print?', options: ['Once', 'Three times', 'Never'], a: 0, why: 'The block runs on the first read only. Later reads return the cached 42.' },
           { q: 'In <code>class A(b: B) : I by b</code>, what happens when you call a method of <code>I</code> that <code>A</code> doesn’t override?', options: ['It forwards to <code>b</code>', 'It throws', 'It does nothing'], a: 0, why: 'The compiler generates a forwarding method for every member of <code>I</code> you didn’t write yourself.' },
           { q: 'When does <code>by viewModels()</code> create or fetch the ViewModel?', options: ['When the Fragment is constructed', 'The first time the property is read', 'In <code>onDestroy</code>'], a: 1, why: 'It is a lazy delegate. That is why reading it before the Fragment is attached crashes.' },
+        ],
+        deeper: [
+          {
+            title: 'Write your own property delegate',
+            body: `<p>Any object with the right <code>getValue</code> and <code>setValue</code> can be a delegate. Implement <code>ReadWriteProperty</code> and the compiler routes every read and write of the property through it.</p>
+<p>Each call also receives <code>thisRef</code>, the object that owns the property, and <code>property</code>, which carries its name. One delegate class can back many properties and use each name as a storage key.</p>`,
+            code: `class Pref(private val prefs: SharedPreferences) : ReadWriteProperty<Any?, String> {
+    override fun getValue(thisRef: Any?, property: KProperty<*>): String =
+        prefs.getString(property.name, "").orEmpty()
+
+    override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) =
+        prefs.edit { putString(property.name, value) }
+}
+
+class Session(prefs: SharedPreferences) {
+    var token by Pref(prefs)    // stored under "token"
+    var theme by Pref(prefs)    // stored under "theme"
+}`,
+            visual(el) {
+              const store = {};
+              let busy = false;
+              const owner = h('div', { class: 'kd-node' }, h('b', {}, 'session'), h('span', {}, 'var token, var theme'));
+              const dele = h('div', { class: 'kd-node' }, h('b', {}, 'Pref'), h('span', {}, 'getValue / setValue'));
+              const disk = h('div', { class: 'kd-node' }, h('b', {}, 'SharedPreferences'), h('span', {}, '{ }'));
+              const call = h('div', { class: 'kd-log' });
+              const o = out('Write a property, then read it back.');
+              const paintDisk = () => { disk.lastChild.textContent = '{ ' + Object.entries(store).map(([k, v]) => `${k}=${v}`).join(', ') + ' }'; };
+              const pulse = async n => { n.classList.add('kd-hit'); await sleep(330); n.classList.remove('kd-hit'); return el.isConnected; };
+              async function write(name, v) {
+                if (busy) return; busy = true;
+                say(o, `${hl(`session.${name} = "${v}"`)} <span class="muted">has no field to write to</span>`);
+                if (!await pulse(owner)) return;
+                call.replaceChildren(h('div', { class: 'kd-log-line drop-in', html: hl(`setValue(session, ::${name}, "${v}")`) }));
+                if (!await pulse(dele)) return;
+                store[name] = `"${v}"`; paintDisk();
+                if (!await pulse(disk)) return;
+                say(o, `<span class="good">stored</span> under the key <b>${name}</b>, taken from property.name`);
+                busy = false;
+              }
+              async function read(name) {
+                if (busy) return; busy = true;
+                if (!await pulse(owner)) return;
+                call.replaceChildren(h('div', { class: 'kd-log-line drop-in', html: hl(`getValue(session, ::${name})`) }));
+                if (!await pulse(dele)) return;
+                if (!await pulse(disk)) return;
+                say(o, `${hl(`session.${name}`)} = ${hl(store[name] || '""')} <span class="muted">${store[name] ? 'read from disk' : 'nothing stored yet, so the default'}</span>`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'kd-fwd' }, owner, h('span', { class: 'arrow' }, '→'), dele, h('span', { class: 'arrow' }, '→'), disk),
+                call,
+                h('div', { class: 'controls' }, cmd('session.token = "a1b2"', () => write('token', 'a1b2')), cmd('session.theme = "dark"', () => write('theme', 'dark')), cmd('session.token', () => read('token')), cmd('session.theme', () => read('theme'))),
+                o);
+            },
+          },
+          {
+            title: 'lazy and threads',
+            body: `<p><code>by lazy</code> takes a mode. The default, <code>SYNCHRONIZED</code>, holds a lock while the block runs. A second thread that reads at the same time waits, and the block runs once.</p>
+<p><code>PUBLICATION</code> lets both threads run the block, and the first result to finish wins. <code>NONE</code> has no locking at all. It is fastest, but only safe when one thread ever touches the property, such as a view created on the main thread.</p>`,
+            code: `val parser by lazy { JsonParser() }                                  // SYNCHRONIZED
+val digest by lazy(LazyThreadSafetyMode.PUBLICATION) { sha256() }      // may run twice
+val adapter by lazy(LazyThreadSafetyMode.NONE) { FeedAdapter() }       // main thread only`,
+            visual(el) {
+              const MODES = {
+                SYNCHRONIZED: { a: [[0, 60, 'run']], b: [[8, 60, 'wait']], runs: 1, same: true, say: 'Thread B waited on the lock. The block ran once and both threads got the same object.' },
+                PUBLICATION: { a: [[0, 60, 'run']], b: [[8, 60, 'run']], runs: 2, same: true, say: 'Both threads ran the block. A finished first, so its result was kept and B threw its own away.' },
+                NONE: { a: [[0, 60, 'run']], b: [[8, 60, 'run']], runs: 2, same: false, say: 'No lock: both ran the block, and here each thread kept its own result. With NONE the outcome on two threads is undefined.' },
+              };
+              let mode = 'SYNCHRONIZED', busy = false;
+              const tracks = { a: h('div', { class: 'lane-track' }), b: h('div', { class: 'lane-track' }) };
+              const got = { a: h('span', { class: 'chip kd-ghost' }, '?'), b: h('span', { class: 'chip kd-ghost' }, '?') };
+              const runs = h('span', { class: 'kd-stat' }, 'block ran 0 times');
+              const o = out('Pick a mode, then let two threads read the property at the same moment.');
+              const btns = Object.keys(MODES).map(k => act(k, () => { if (busy) return; mode = k; press(btns, btns[Object.keys(MODES).indexOf(k)]); clear(); say(o, `lazy(${k}). Run both threads.`); }));
+              function clear() { Object.values(tracks).forEach(t => t.replaceChildren()); Object.values(got).forEach(g => { g.className = 'chip kd-ghost'; g.textContent = '?'; }); runs.textContent = 'block ran 0 times'; }
+              async function run() {
+                if (busy) return; busy = true; clear();
+                const m = MODES[mode];
+                for (const t of ['a', 'b']) for (const [l, w, cls] of m[t]) {
+                  const bar = h('span', { class: `bar ${cls} kd-grow`, style: `left:${l}%;width:0` });
+                  tracks[t].append(bar);
+                  requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = `${w - l}%`; }));
+                }
+                await sleep(900); if (!el.isConnected) return;
+                got.a.className = 'chip pop'; got.a.textContent = 'Parser@1a';
+                await sleep(250); if (!el.isConnected) return;
+                got.b.className = 'chip pop' + (m.same ? '' : ' kd-intruder'); got.b.textContent = m.same ? 'Parser@1a' : 'Parser@7f';
+                runs.textContent = `block ran ${m.runs} time${m.runs > 1 ? 's' : ''}`; replay(runs, 'pop');
+                say(o, (m.same ? '<span class="good">one instance.</span> ' : '<span class="bad">two instances.</span> ') + m.say);
+                busy = false;
+              }
+              press(btns, btns[0]);
+              el.append(
+                h('div', { class: 'controls' }, btns),
+                h('div', { class: 'timeline' },
+                  h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'thread A'), tracks.a),
+                  h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'thread B'), tracks.b)),
+                h('div', { class: 'kd-row' }, h('span', { class: 'kd-label' }, 'A got'), got.a, h('span', { class: 'kd-label' }, 'B got'), got.b, runs),
+                h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: run }, 'Read on both threads')),
+                o);
+            },
+          },
+          {
+            title: 'Delegates you already use',
+            body: `<p>A <code>Map</code> can back properties directly: <code>val name: String by map</code> reads <code>map["name"]</code>. It is handy for parsed config, but a missing key throws on read.</p>
+<p>Compose state is a delegate too. <code>var count by remember { mutableStateOf(0) }</code> works because the runtime defines <code>getValue</code> and <code>setValue</code> extensions on <code>State</code> and <code>MutableState</code>. Reading <code>count</code> calls <code>.value</code>, which is what lets Compose track the read.</p>`,
+            code: `class FeatureFlags(values: Map<String, Any?>) {
+    val newFeed: Boolean by values      // values["newFeed"]
+    val maxItems: Int by values         // values["maxItems"]
+}
+
+@Composable
+fun Counter() {
+    var count by remember { mutableStateOf(0) }   // getValue/setValue on MutableState
+    Button(onClick = { count++ }) { Text("Tapped $count times") }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>For a delegated property the compiler adds a hidden field that holds the delegate, and writes the getter and setter to call it. For <code>by lazy</code> the field is a <code>Lazy</code> and the getter reads its <code>value</code>.</p>
+<p>For class delegation the compiler stores the delegate in a hidden field and writes one forwarding method for every interface member you didn't override. It captures the object you passed at construction. The names below are what you see in the bytecode.</p>`,
+          code: `// You write
+class CountingSet<T>(inner: MutableSet<T>) : MutableSet<T> by inner
+class Screen { val formatter by lazy { build() } }
+
+// Roughly what the compiler generates
+class CountingSet<T>(inner: MutableSet<T>) : MutableSet<T> {
+    private val \`$$delegate_0\` = inner
+    override val size: Int get() = \`$$delegate_0\`.size
+    override fun contains(element: T) = \`$$delegate_0\`.contains(element)
+    // ...one forwarder per member you did not write
+}
+class Screen {
+    private val \`formatter$delegate\` = lazy { build() }
+    val formatter get() = \`formatter$delegate\`.value
+}`,
+        },
+        mistakes: [
+          { title: 'Expecting class delegation to follow a var', bad: 'class Player(var engine: Engine) : Engine by engine\n\nplayer.engine = ExoEngine()\nplayer.play()   // still calls the old engine', good: 'class Player(engine: Engine) : Engine {\n    var engine = engine\n    override fun play() = engine.play()\n}', why: 'The delegate is captured once, at construction. Reassigning the property does not change where the generated methods forward. Forward by hand if the target can change.' },
+          { title: 'Using lazy for a value that changes', bad: 'class Profile(private val prefs: SharedPreferences) {\n    val name by lazy { prefs.getString("name", "") }\n}', good: 'class Profile(private val prefs: SharedPreferences) {\n    val name: String get() = prefs.getString("name", "").orEmpty()\n}', why: '<code>lazy</code> caches forever. After the user renames themselves, <code>name</code> still returns the old value. Use a getter, or observe the source.' },
+          { title: 'Rejecting values with observable', bad: 'var volume by Delegates.observable(5) { _, _, new ->\n    if (new !in 0..10) volume = 5   // too late, and re-enters\n}', good: 'var volume by Delegates.vetoable(5) { _, _, new ->\n    new in 0..10                     // false keeps the old value\n}', why: '<code>observable</code> runs after the value is stored. <code>vetoable</code> runs before and can refuse the change.' },
         ],
         visual(el) {
           const o = out('Read the lazy value twice, then set the filter.');
@@ -386,6 +679,133 @@ val user = arguments?.parcelable<User>("user")`,
           { q: 'Why can <code>return</code> inside <code>list.forEach { }</code> leave the enclosing function?', options: ['<code>forEach</code> is inline, so the lambda body is pasted into the function', 'Every Kotlin lambda can do that', 'It can’t; it only leaves the lambda'], a: 0, why: 'Non-local returns work only in lambdas passed to inline functions.' },
           { q: '<code>fun &lt;T&gt; isType(x: Any) = x is T</code> doesn’t compile. What fixes it?', options: ['<code>inline fun &lt;reified T&gt;</code>', '<code>crossinline</code>', '<code>@JvmStatic</code>'], a: 0, why: 'Generic types are erased at runtime. A reified parameter keeps the type at each inlined call site.' },
           { q: 'Your inline function stores its lambda parameter in a list for later. Which modifier does it need?', options: ['<code>noinline</code>', '<code>crossinline</code>', '<code>reified</code>'], a: 0, why: 'Storing a lambda needs a real function object, so it can’t be inlined.' },
+        ],
+        deeper: [
+          {
+            title: 'noinline: keep one lambda as an object',
+            body: `<p>An inlined lambda has no object, so you can't store it, put it in a list or pass it to a non-inline function. If an inline function needs to keep one of its lambdas, mark that parameter <code>noinline</code>.</p>
+<p>The other lambdas are still pasted in. Only the <code>noinline</code> one becomes a real function object, with the cost that brings.</p>`,
+            code: `private val pending = mutableListOf<() -> Unit>()
+
+inline fun track(onStart: () -> Unit, noinline onDone: () -> Unit) {
+    onStart()            // pasted into the caller
+    pending += onDone    // stored: needs a real object
+}`,
+            visual(el) {
+              let noinl = false, busy = false, calls = 0;
+              const sw = h('input', { type: 'checkbox', id: 'kd-noinline' });
+              const decl = h('div', { class: 'kt' });
+              const site = h('div', { class: 'kt' });
+              const heap = h('div', { class: 'kd-heap' });
+              const o = out('');
+              const empty = () => heap.replaceChildren(h('span', { class: 'kd-empty' }, 'pending is empty'));
+              function paint() {
+                lines(decl, [
+                  { src: `inline fun track(onStart: () -> Unit, ${noinl ? 'noinline ' : ''}onDone: () -> Unit) {`, cls: noinl ? 'kd-new' : '' },
+                  { src: '    onStart()' },
+                  { src: '    pending += onDone', cls: noinl ? '' : 'kd-warn', note: noinl ? '' : '✗ illegal', noteCls: 'bad' },
+                  { src: '}' },
+                ]);
+                lines(site, [{ src: 'track(onStart = { log("start") }, onDone = { log("done") })' }]);
+                calls = 0; empty();
+                say(o, noinl ? 'onDone is a real object now. Call track() a few times.' : 'Both lambdas are inline. Try to call track().');
+              }
+              sw.addEventListener('change', () => { if (busy) { sw.checked = noinl; return; } noinl = sw.checked; paint(); });
+              async function call() {
+                if (busy) return; busy = true;
+                if (!noinl) {
+                  replay(decl, 'shake');
+                  say(o, `<span class="bad">compile error:</span> Illegal usage of inline-parameter 'onDone'. Add 'noinline' modifier to the parameter declaration.`);
+                  await sleep(400); busy = false; return;
+                }
+                const rows = [...decl.children];
+                replay(rows[1], 'kd-flash'); await sleep(350); if (!el.isConnected) return;
+                replay(rows[2], 'kd-flash');
+                if (!calls) heap.replaceChildren();
+                calls++;
+                heap.append(h('span', { class: 'kd-obj drop-in' }, `λ onDone #${calls}`));
+                while (heap.children.length > 6) heap.firstElementChild.remove();
+                say(o, `<span class="good">call ${calls}:</span> log("start") ran in place, and one onDone object went into pending.`);
+                await sleep(300); busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'kd-noinline' }, sw, 'noinline onDone')),
+                decl, site,
+                h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'pending (heap)'), heap),
+                h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: call }, 'Call track()')),
+                o);
+            },
+          },
+          {
+            title: 'reified means one copy per type',
+            body: `<p>A reified function is not one function that knows <code>T</code>. The compiler pastes a fresh copy at each call site, with <code>T</code> replaced by the real class. <code>extra&lt;User&gt;()</code> becomes code that names <code>User::class.java</code>.</p>
+<p>That is also why Java code can't use it. Nothing fills in <code>T</code> for a direct call, so the compiled method's body only throws.</p>`,
+            code: `inline fun <reified T : Parcelable> Intent.extra(key: String): T? =
+    IntentCompat.getParcelableExtra(this, key, T::class.java)
+
+val user = intent.extra<User>("user")
+// compiles to: IntentCompat.getParcelableExtra(intent, "user", User::class.java)`,
+            visual(el) {
+              const TYPES = ['User', 'Article', 'Comment'];
+              let busy = false;
+              const sites = h('div', { class: 'kd-log' });
+              const count = h('span', { class: 'kd-stat' }, 'call sites: 0');
+              const o = out('Call the function with different types and watch each call site get its own copy.');
+              async function callWith(t) {
+                if (busy) return; busy = true;
+                if (sites.children.length >= 4) sites.lastElementChild.remove();
+                const line = h('div', { class: 'kd-log-line drop-in', html: `${hl(`intent.extra<${t}>("${t.toLowerCase()}")`)}` });
+                sites.prepend(line);
+                await sleep(500); if (!el.isConnected) return;
+                line.innerHTML = hl(`IntentCompat.getParcelableExtra(intent, "${t.toLowerCase()}", ${t}::class.java)`);
+                replay(line, 'kd-flash');
+                count.textContent = `call sites: ${sites.children.length}`; replay(count, 'pop');
+                say(o, `<span class="good">inlined:</span> T became ${hl(`${t}::class.java`)} right here. No type is looked up at runtime.`);
+                busy = false;
+              }
+              function fromJava() {
+                replay(sites, 'shake');
+                say(o, `${hl('IntentExtKt.extra(intent, "user")')} <span class="muted">called directly, not inlined →</span> <span class="bad">UnsupportedOperationException:</span> This function has a reified type parameter and thus can only be inlined at compilation time, not called directly.`);
+              }
+              el.append(
+                h('span', { class: 'kd-tag', html: hl('inline fun <reified T : Parcelable> Intent.extra(key: String): T?') }),
+                h('div', { class: 'controls' }, TYPES.map(t => cmd(`extra<${t}>(...)`, () => callWith(t))), act('Call the compiled method directly', fromJava)),
+                h('div', { class: 'kd-card' }, h('div', { class: 'kd-row' }, h('span', { class: 'kd-label' }, 'compiled call sites'), count), sites),
+                o);
+            },
+          },
+          {
+            title: 'When not to inline',
+            body: `<p>Inlining copies code into every caller, so a long inline function called from many places grows the app. Keep inline functions short, and inline only when a lambda parameter or a reified type makes it pay off. The compiler warns when it sees no benefit.</p>
+<p>A public inline function is pasted into other modules, so it may only touch public API. To call an internal helper from it, mark the helper <code>@PublishedApi internal</code>. It stays hidden from callers but becomes part of your binary contract.</p>`,
+            code: `inline fun <T> Cache.getOrPut(key: String, load: () -> T): T =
+    read<T>(key) ?: load().also { write(key, it) }
+
+@PublishedApi
+internal fun <T> Cache.read(key: String): T? = TODO()   // visible to inlined code only
+@PublishedApi
+internal fun Cache.write(key: String, value: Any?): Unit = TODO()`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>forEach</code> is an ordinary inline function in the standard library. After inlining, the call becomes a plain loop in your function, which is why <code>return</code> leaves your function.</p>
+<p>A lambda passed to a non-inline function needs an object. Since Kotlin 2.0 the compiler builds it with <code>invokedynamic</code> and the JVM's <code>LambdaMetafactory</code>. Older versions generated one class per lambda. Either way, a lambda that captures variables is a new object per call, and one that captures nothing is reused.</p>`,
+          code: `// stdlib
+public inline fun <T> Iterable<T>.forEach(action: (T) -> Unit) {
+    for (element in this) action(element)
+}
+
+// You write, inside hasAdmin()
+users.forEach { if (it.isAdmin) return true }
+
+// What ends up in hasAdmin() after inlining
+for (element in users) { if (element.isAdmin) return true }`,
+        },
+        mistakes: [
+          { title: 'return where you meant to skip', bad: 'fun printNames(names: List<String>) {\n    names.forEach {\n        if (it.isBlank()) return   // stops everything\n        println(it)\n    }\n    println("done")\n}', good: 'fun printNames(names: List<String>) {\n    names.forEach {\n        if (it.isBlank()) return@forEach   // skips this one\n        println(it)\n    }\n    println("done")\n}', why: 'A bare <code>return</code> in an inline lambda leaves the whole function, so later names and "done" never print. <code>return@forEach</code> works like <code>continue</code>.' },
+          { title: 'Inlining a function with no lambda', bad: 'inline fun dp(px: Int, density: Float): Int =\n    (px / density).roundToInt()', good: 'fun dp(px: Int, density: Float): Int =\n    (px / density).roundToInt()', why: 'With no lambda and no reified type there is nothing to save, only code to copy. The compiler warns that the performance impact is insignificant.' },
+          { title: 'Touching private code from a public inline function', bad: 'class Repo {\n    private val cache = mutableMapOf<String, Any>()\n    inline fun <reified T> cached(key: String): T? = cache[key] as? T\n}', good: 'class Repo {\n    @PublishedApi internal val cache = mutableMapOf<String, Any>()\n    inline fun <reified T> cached(key: String): T? = cache[key] as? T\n}', why: 'The body is pasted into callers outside the class, where <code>private</code> members don’t exist. The compiler rejects it. <code>@PublishedApi internal</code> allows it.' },
         ],
         visual(el) {
           let inl = false, busy = false;
@@ -794,6 +1214,174 @@ val name = safeCall { api.fetchUser(id) }
           { q: 'What does <code>runCatching</code> catch?', options: ['Every <code>Throwable</code>, including <code>CancellationException</code>', 'Only <code>Exception</code> subclasses you list', 'Only <code>IOException</code>'], a: 0, why: 'That is why it needs care inside coroutines.' },
           { q: 'A coroutine is cancelled during <code>delay()</code>. The code catches <code>Exception</code> and logs it. What happens?', options: ['It keeps running past the catch', 'It stops cleanly', 'The app crashes'], a: 0, why: 'The cancellation signal was swallowed, so the code after the catch still runs.' },
           { q: 'How does Kotlin treat checked exceptions?', options: ['The compiler never forces you to catch or declare them', 'You must declare them with <code>throws</code>', 'They are turned into <code>Result</code>'], a: 0, why: 'Kotlin has no checked exceptions. <code>@Throws</code> exists only for Java and Swift interop.' },
+        ],
+        deeper: [
+          {
+            title: 'Expected failures as types',
+            body: `<p><code>Result</code> holds a <code>Throwable</code>, so every failure looks the same to the caller. A wrong password is not an exception, though. It is a normal answer your screen must handle.</p>
+<p>Model those answers as a sealed type. The compiler then makes every <code>when</code> handle each case, and a new case breaks the build instead of the screen. Keep exceptions for the truly unexpected.</p>`,
+            code: `sealed interface LoginResult {
+    data class Success(val user: User) : LoginResult
+    data object WrongPassword : LoginResult
+    data class Locked(val minutes: Int) : LoginResult
+    data object Offline : LoginResult
+}
+
+fun render(r: LoginResult): String = when (r) {
+    is LoginResult.Success -> "Hi \${r.user.name}"
+    LoginResult.WrongPassword -> "Wrong password"
+    is LoginResult.Locked -> "Try again in \${r.minutes} min"
+    LoginResult.Offline -> "You are offline"
+}`,
+            visual(el) {
+              const CASES = [
+                { k: 'Success', src: 'is Success -> "Hi ${r.user.name}"', ui: 'Hi Ada', cls: 'kd-okk' },
+                { k: 'WrongPassword', src: 'WrongPassword -> "Wrong password"', ui: 'Wrong password', cls: 'kd-err' },
+                { k: 'Locked', src: 'is Locked -> "Try again in ${r.minutes} min"', ui: 'Try again in 15 min', cls: 'kd-err' },
+                { k: 'Offline', src: 'Offline -> "You are offline"', ui: 'You are offline', cls: 'kd-cancel' },
+              ];
+              let busy = false;
+              const rows = CASES.map(c => h('div', { class: 'branch', html: '    ' + hl(c.src) }));
+              const box = h('div', { class: 'when' }, h('div', { class: 'branch head', html: hl('when (r) {') }), rows, h('div', { class: 'branch head' }, '}'));
+              const screen = h('div', { class: 'phone kd-mini-phone' }, h('p', { class: 'phone-note' }, 'Log in'));
+              const o = out('Pick what the server answers.');
+              async function answer(i) {
+                if (busy) return; busy = true;
+                rows.forEach(r => r.classList.remove('scan', 'hit', 'miss'));
+                for (let j = 0; j <= i; j++) {
+                  rows[j].classList.add('scan'); await sleep(260); if (!el.isConnected) return;
+                  rows[j].classList.remove('scan'); rows[j].classList.add(j === i ? 'hit' : 'miss');
+                }
+                screen.replaceChildren(h('span', { class: `kd-tok pop ${CASES[i].cls}` }, CASES[i].ui));
+                say(o, `${hl(`LoginResult.${CASES[i].k}`)} <span class="good">handled</span> <span class="muted">by its own branch, checked by the compiler</span>`);
+                busy = false;
+              }
+              function addCase() {
+                replay(box, 'shake');
+                say(o, `<span class="muted">Add</span> ${hl('data object TooManyAttempts : LoginResult')} <span class="muted">→</span> <span class="bad">compile error:</span> 'when' expression must be exhaustive. Add the 'TooManyAttempts' branch.`);
+              }
+              el.append(
+                h('div', { class: 'kd-split' }, box, screen),
+                h('div', { class: 'controls' }, CASES.map((c, i) => act(c.k, () => answer(i))), act('Add a new case', addCase)),
+                o);
+            },
+          },
+          {
+            title: 'launch, async and who sees the exception',
+            body: `<p>In a normal scope, a failing child cancels its parent and every sibling, whether it was started with <code>launch</code> or <code>async</code>. A <code>try</code> around <code>await()</code> catches the exception there, but the scope has already failed and still throws.</p>
+<p>In a <code>supervisorScope</code>, siblings keep running. A failed <code>launch</code> reports to the <code>CoroutineExceptionHandler</code>, and crashes the app if there is none. A failed <code>async</code> keeps its exception until you call <code>await()</code>.</p>`,
+            code: `suspend fun loadHome() = supervisorScope {
+    val ads = async { api.ads() }        // may fail
+    val feed = async { api.feed() }      // keeps running if ads fails
+    HomeState(
+        feed = feed.await(),
+        ads = try { ads.await() } catch (e: IOException) { emptyList() },
+    )
+}`,
+            visual(el) {
+              let builder = 'launch', scope = 'coroutineScope', busy = false;
+              const codeEl = h('div', { class: 'kt' });
+              const parent = h('div', { class: 'kd-node' }, h('b', {}, 'scope'), h('span', {}, 'active'));
+              const kidA = h('div', { class: 'kd-node' }, h('b', {}, 'loadAds()'), h('span', {}, 'waiting'));
+              const kidB = h('div', { class: 'kd-node' }, h('b', {}, 'loadFeed()'), h('span', {}, 'waiting'));
+              const caller = h('div', { class: 'kd-node' }, h('b', {}, 'caller / handler'), h('span', {}, 'idle'));
+              const o = out('');
+              const set = (n, text, cls) => { n.lastChild.textContent = text; n.className = 'kd-node' + (cls ? ' ' + cls : ''); };
+              const bBtns = [cmd('launch', () => pick('launch')), cmd('async', () => pick('async'))];
+              const sBtns = [cmd('coroutineScope', () => pickS('coroutineScope')), cmd('supervisorScope', () => pickS('supervisorScope'))];
+              function paint() {
+                press(bBtns, bBtns[builder === 'launch' ? 0 : 1]); press(sBtns, sBtns[scope === 'coroutineScope' ? 0 : 1]);
+                lines(codeEl, [
+                  { src: `${scope} {` },
+                  { src: `    val ads = ${builder} { loadAds() }`, note: 'throws IOException', noteCls: 'bad' },
+                  { src: `    ${builder} { loadFeed() }` },
+                  ...(builder === 'async' ? [{ src: '    try { ads.await() } catch (e: IOException) { }' }] : []),
+                  { src: '}' },
+                ]);
+                set(parent, 'active'); set(kidA, 'waiting'); set(kidB, 'waiting'); set(caller, 'idle');
+                say(o, 'Pick a builder and a scope, then run.');
+              }
+              function pick(b) { if (busy) return; builder = b; paint(); }
+              function pickS(s) { if (busy) return; scope = s; paint(); }
+              async function run() {
+                if (busy) return; busy = true; paint();
+                const step = async ms => { await sleep(ms); return el.isConnected; };
+                set(kidA, 'running', 'kd-hit'); set(kidB, 'running', 'kd-hit');
+                if (!await step(700)) return;
+                set(kidA, 'IOException', 'kd-bad'); replay(kidA, 'shake');
+                if (!await step(600)) return;
+                const sup = scope === 'supervisorScope';
+                if (!sup) {
+                  set(parent, 'cancelling', 'kd-bad'); set(kidB, 'cancelled', 'kd-dim');
+                  if (!await step(600)) return;
+                  set(parent, 'failed', 'kd-bad');
+                  set(caller, 'gets IOException', 'kd-bad'); replay(caller, 'shake');
+                  say(o, builder === 'async'
+                    ? '<span class="bad">scope failed:</span> the try around await() caught it, but the child had already cancelled the scope, so coroutineScope still throws to the caller.'
+                    : '<span class="bad">scope failed:</span> the child cancelled its parent and loadFeed with it. coroutineScope rethrows to the caller.');
+                } else {
+                  set(kidB, 'done', ''); replay(kidB, 'pop');
+                  if (!await step(500)) return;
+                  set(parent, 'done');
+                  if (builder === 'async') { set(caller, 'caught at await()', ''); replay(caller, 'pop'); say(o, '<span class="good">contained:</span> loadFeed finished. The exception waited inside the Deferred and the try around await() handled it.'); }
+                  else { set(caller, 'handler or crash', 'kd-bad'); replay(caller, 'shake'); say(o, '<span class="good">loadFeed finished,</span> <span class="bad">but</span> the failed launch reported its exception to the CoroutineExceptionHandler. Without one, the app crashes.'); }
+                }
+                busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kd-label' }, 'builder'), bBtns),
+                h('div', { class: 'controls' }, h('span', { class: 'kd-label' }, 'scope'), sBtns),
+                codeEl,
+                h('div', { class: 'kd-fwd' }, parent, h('span', { class: 'arrow' }, '→'), kidA, kidB),
+                h('div', { class: 'kd-fwd' }, h('span', { class: 'kd-label' }, 'exception reaches'), caller),
+                h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: run }, 'Run')),
+                o);
+            },
+          },
+          {
+            title: 'CoroutineExceptionHandler is a last resort',
+            body: `<p>A handler only sees exceptions from a root <code>launch</code>, or from a <code>launch</code> directly inside a supervisor. Installing it on a child or on <code>async</code> does nothing. It can't recover the coroutine either: by the time it runs, the coroutine is finished.</p>
+<p><code>viewModelScope</code> uses a <code>SupervisorJob</code>, so each <code>launch</code> in it is a root of its own. Use the handler to report and show a generic error. Handle the failures you expect with <code>try</code> where they happen.</p>`,
+            code: `class FeedViewModel(private val repo: FeedRepository) : ViewModel() {
+    private val handler = CoroutineExceptionHandler { _, e ->
+        Log.e("Feed", "refresh crashed", e)
+        _message.value = "Something went wrong"
+    }
+
+    fun refresh() = viewModelScope.launch(handler) {
+        try {
+            repo.refresh()
+        } catch (e: IOException) {
+            _message.value = "You are offline"      // expected: handled here
+        }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>runCatching</code> is an inline function around a plain <code>try</code> that catches <code>Throwable</code>. <code>Result</code> is a value class: a success stores the bare value, and a failure stores a small internal <code>Failure</code> object that holds the exception.</p>
+<p>Cancellation uses the same machinery as any exception. When a job is cancelled, the next suspension point that checks for it, like <code>delay</code> or <code>yield</code>, throws <code>CancellationException</code>. A tight loop with no suspension point never sees it unless it calls <code>ensureActive()</code>.</p>`,
+          code: `// stdlib, slightly simplified
+public inline fun <R> runCatching(block: () -> R): Result<R> =
+    try {
+        Result.success(block())
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }
+
+// CPU-bound loop: check for cancellation yourself
+suspend fun crunch(items: List<Item>) = withContext(Dispatchers.Default) {
+    for (item in items) {
+        ensureActive()          // throws CancellationException if cancelled
+        process(item)
+    }
+}`,
+        },
+        mistakes: [
+          { title: 'Suspending in finally after cancellation', bad: 'viewModelScope.launch {\n    try {\n        editor.autosaveLoop()\n    } finally {\n        repo.saveDraft(editor.text)   // throws at once: job is cancelled\n    }\n}', good: 'viewModelScope.launch {\n    try {\n        editor.autosaveLoop()\n    } finally {\n        withContext(NonCancellable) {\n            repo.saveDraft(editor.text)\n        }\n    }\n}', why: 'A cancelled coroutine throws <code>CancellationException</code> at its next suspension point, including inside <code>finally</code>. <code>NonCancellable</code> lets the cleanup finish.' },
+          { title: 'Losing the original cause', bad: 'try {\n    api.sync()\n} catch (e: IOException) {\n    throw SyncFailedException("sync failed")\n}', good: 'try {\n    api.sync()\n} catch (e: IOException) {\n    throw SyncFailedException("sync failed", e)\n}', why: 'Without the cause, the stack trace ends at your <code>throw</code> and hides the real network error. Pass the caught exception on.' },
+          { title: 'Exceptions for ordinary control flow', bad: 'val admin = try {\n    users.first { it.isAdmin }\n} catch (e: NoSuchElementException) {\n    null\n}', good: 'val admin = users.firstOrNull { it.isAdmin }', why: 'Throwing is slow and hides intent. The standard library has an <code>OrNull</code> version for most functions that can come up empty.' },
         ],
         visual(el) {
           const OUTS = [

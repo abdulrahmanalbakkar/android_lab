@@ -111,6 +111,28 @@
 .vw-gauge span { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.45s ease-out; }
 .vw-card.vw-stale .vw-gauge span { background: var(--err); }
 .vw-big { font: 800 1.6rem var(--display); font-variant-numeric: tabular-nums; }
+
+/* depth: shell-level fix so long code scrolls inside step and hood grids (harmless if duplicated) */
+.step > pre.code, .hood > pre.code, .hood > .prose { min-width: 0; }
+.hood::details-content { min-width: 0; }
+
+/* depth: RecyclerView */
+.vw-row.vw-hdr { height: 30px; background: var(--sunk); border-style: dashed; font: 700 0.8rem var(--mono); }
+.vw-pools { display: grid; gap: 8px; min-width: 0; }
+.vw-pools .vw-pool { min-height: 40px; padding: 8px; }
+.vw-ent { display: inline-flex; gap: 4px; align-items: center; font: 500 0.7rem var(--mono); color: var(--muted); }
+
+/* depth: Fragments */
+.vw-objs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
+.vw-objs .obj { min-width: 0; padding: 10px; font-size: 0.78rem; overflow-wrap: anywhere; transition: border-color 0.25s; }
+.vw-objs .vw-tag { justify-self: start; }
+.vw-objs .obj.vw-new { border-color: var(--warm); }
+.vw-objs .obj.vw-kept { border-color: var(--ok); }
+.vw-tag.vw-tnew { background: var(--warm-soft); color: var(--warm); }
+.vw-tag.vw-tkept { background: var(--ok-soft); color: var(--ok); }
+.vw-stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 8px; min-width: 0; }
+.vw-store { display: grid; gap: 6px; align-content: start; min-height: 96px; padding: 10px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg); min-width: 0; }
+.vw-store .obj { min-width: 0; padding: 8px 10px; font-size: 0.78rem; overflow-wrap: anywhere; }
 `;
 
   Lab.addTrack({
@@ -407,6 +429,209 @@ binding.list.adapter = ContactAdapter(contacts) { openDetail(it.id) }`,
           { q: 'You scroll a 5,000 item list to the end. Roughly how often did <code>onCreateViewHolder</code> run?', options: ['About 5,000 times', 'About as many rows as fit on screen, plus a few', 'Once'], a: 1, why: 'After the first screenful, rows come from the pool and only <code>onBindViewHolder</code> runs.' },
           { q: 'Which part decides that rows form a 2 column grid?', options: ['The Adapter', 'The ViewHolder', 'The LayoutManager'], a: 2, why: '<code>GridLayoutManager(context, 2)</code> places the rows. The adapter stays the same.' },
         ],
+        deeper: [
+          {
+            title: 'View types get their own pools',
+            body: `<p>A list with headers and contacts has two row layouts. Override <code>getItemViewType</code> and the adapter gets that type in <code>onCreateViewHolder</code>. The pool keeps holders per type, so a header holder is never handed to a contact row.</p>
+<p>Scroll down and watch: a contact that scrolls in can only take a contact holder. If that bin is empty, a new one is created even when a header holder is waiting.</p>`,
+            code: `override fun getItemViewType(position: Int) = when (items[position]) {
+    is Row.Header -> TYPE_HEADER
+    is Row.Person -> TYPE_PERSON
+}
+
+override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+    val inflater = LayoutInflater.from(parent.context)
+    return when (viewType) {
+        TYPE_HEADER -> HeaderHolder(ItemHeaderBinding.inflate(inflater, parent, false))
+        else -> PersonHolder(ItemContactBinding.inflate(inflater, parent, false))
+    }
+}`,
+            visual(el) {
+              const DATA = ['A', 'Ada', 'Alan', 'B', 'Barbara', 'D', 'Dennis', 'E', 'Edsger', 'F', 'Frances', 'G', 'Grace', 'H', 'Hedy', 'I', 'Ivan', 'J', 'Joan', 'K', 'Ken'];
+              const type = pos => (DATA[pos].length === 1 ? 'header' : 'person');
+              const SHOW = 5;
+              let top = 0, busy = false;
+              const made = { header: 0, person: 0 }, pools = { header: [], person: [] };
+              const rv = h('div', { class: 'vw-rv', 'aria-label': 'RecyclerView viewport' });
+              const poolEls = { header: h('div', { class: 'vw-pool' }), person: h('div', { class: 'vw-pool' }) };
+              const sH = stat('header holders', 0), sP = stat('person holders', 0);
+              const o = out();
+              const rows = [];
+              const chip = vh => h('span', { class: 'vw-vh ' + (vh[0] === 'H' ? 'c1' : 'c0') }, vh);
+              const rowEl = (vh, pos) => type(pos) === 'header'
+                ? h('div', { class: 'vw-row vw-hdr' }, chip(vh), h('span', {}, DATA[pos]))
+                : h('div', { class: 'vw-row' }, chip(vh), h('span', {}, DATA[pos]), h('span', { class: 'vw-pos' }, `pos ${pos}`));
+              const paintPools = () => Object.entries(poolEls).forEach(([k, p]) => p.replaceChildren(h('span', { class: 'vw-label' }, k), ...(pools[k].length ? pools[k].map(chip) : [h('span', { class: 'vw-note' }, 'empty')])));
+              function holder(pos) {
+                const k = type(pos);
+                if (pools[k].length) { const vh = pools[k].shift(); paintPools(); return { vh, msg: `<span class="good">reused</span> ${vh} from the ${k} pool` }; }
+                const vh = (k === 'header' ? 'H' : 'P') + (++made[k]);
+                (k === 'header' ? sH : sP).set(made[k]);
+                const other = k === 'header' ? 'person' : 'header';
+                return { vh, msg: `<span class="bad">created</span> ${vh}: the ${k} pool was empty` + (pools[other].length ? ` <span class="muted">// ${pools[other].length} ${other} holder${pools[other].length > 1 ? 's' : ''} can’t help</span>` : '') };
+              }
+              for (let p = 0; p < SHOW; p++) { const { vh } = holder(p); const r = { pos: p, vh, el: rowEl(vh, p) }; rows.push(r); rv.append(r.el); }
+              paintPools();
+              say(o, 'Headers and people use different layouts. Scroll down.');
+              async function scroll() {
+                if (busy) return false;
+                const pos = top + SHOW;
+                if (pos >= DATA.length) { replay(rv, 'shake'); say(o, '<span class="muted">// end of list</span>'); return false; }
+                busy = true;
+                const { vh, msg } = holder(pos);
+                const r = { pos, vh, el: rowEl(vh, pos) };
+                r.el.classList.add('drop-in'); rows.push(r); rv.append(r.el);
+                say(o, `${msg}, bind ${type(pos)} "${DATA[pos]}"`);
+                await sleep(320);
+                const gone = rows.shift(); gone.el.classList.add('leave');
+                await sleep(400);
+                gone.el.remove();
+                pools[type(gone.pos)].push(gone.vh); paintPools();
+                top++;
+                busy = false;
+                return el.isConnected;
+              }
+              let multi = false;
+              async function three() {
+                if (multi || busy) return; multi = true;
+                for (let i = 0; i < 3; i++) { if (!(await scroll())) break; await sleep(60); }
+                multi = false;
+              }
+              el.append(
+                h('div', { class: 'vw-split' },
+                  h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'On screen'), rv),
+                  h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'RecycledViewPool, one bin per type'), h('div', { class: 'vw-pools' }, poolEls.header, poolEls.person))),
+                h('div', { class: 'controls' }, act('Scroll down 1 row', scroll), act('Scroll down 3 rows', three)),
+                h('div', { class: 'vw-stats' }, sH, sP),
+                o);
+            },
+          },
+          {
+            title: 'A small cache sits in front of the pool',
+            body: `<p>A row that just scrolled off does not go straight to the pool. It first waits in a small cache, two holders by default, still bound to its position. Scroll back and that row returns as it was, with no <code>onBindViewHolder</code> at all.</p>
+<p>When the cache is full, its oldest holder moves to the pool and forgets its data. Anything from the pool must be bound again. That is why small back-and-forth scrolls are cheap.</p>`,
+            visual(el) {
+              const names = ['Ada', 'Alan', 'Barbara', 'Dennis', 'Edsger', 'Frances', 'Grace', 'Hedy', 'Ivan', 'Joan', 'Ken', 'Linus', 'Margaret', 'Niklaus', 'Radia', 'Shafi'];
+              const SHOW = 4, CACHE = 2;
+              let top = 0, created = 0, binds = 0, hits = 0, busy = false;
+              const rows = [], cache = [], pool = [];
+              const rv = h('div', { class: 'vw-rv', style: 'height:220px', 'aria-label': 'RecyclerView viewport' });
+              const cacheEl = h('div', { class: 'vw-pool' }), poolEl = h('div', { class: 'vw-pool' });
+              const sC = stat('created', 0), sB = stat('bound', 0), sH = stat('cache hits', 0);
+              const o = out();
+              const chip = vh => h('span', { class: `vw-vh c${(vh - 1) % 6}` }, `VH${vh}`);
+              const rowEl = (vh, pos) => h('div', { class: 'vw-row' }, chip(vh), h('span', {}, names[pos]), h('span', { class: 'vw-pos' }, `pos ${pos}`));
+              const paint = () => {
+                cacheEl.replaceChildren(...(cache.length ? cache.map(c => h('span', { class: 'vw-ent' }, chip(c.vh), `pos ${c.pos}`)) : [h('span', { class: 'vw-note' }, 'empty')]));
+                poolEl.replaceChildren(...(pool.length ? pool.map(chip) : [h('span', { class: 'vw-note' }, 'empty')]));
+              };
+              function holder(pos) {
+                const i = cache.findIndex(c => c.pos === pos);
+                if (i >= 0) { const [c] = cache.splice(i, 1); sH.set(++hits); return { vh: c.vh, msg: `<span class="good">cache hit</span> VH${c.vh} still shows pos ${pos}. No bind.` }; }
+                if (pool.length) { const vh = pool.shift(); sB.set(++binds); return { vh, msg: `from the pool: VH${vh}, onBindViewHolder(VH${vh}, ${pos})` }; }
+                const vh = ++created; sC.set(created); sB.set(++binds);
+                return { vh, msg: `<span class="bad">created</span> VH${vh}, then bound to pos ${pos}` };
+              }
+              function park(r) {
+                cache.push({ vh: r.vh, pos: r.pos });
+                if (cache.length > CACHE) { const old = cache.shift(); pool.push(old.vh); return ` Cache full: VH${old.vh} moves to the pool and forgets pos ${old.pos}.`; }
+                return '';
+              }
+              for (let p = 0; p < SHOW; p++) { const vh = ++created; binds++; const r = { pos: p, vh, el: rowEl(vh, p) }; rows.push(r); rv.append(r.el); }
+              sC.set(created); sB.set(binds); paint();
+              say(o, 'Scroll down a few rows, then back up.');
+              async function scroll(dir) {
+                if (busy) return;
+                const pos = dir > 0 ? top + SHOW : top - 1;
+                if (pos < 0 || pos >= names.length) { replay(rv, 'shake'); say(o, '<span class="muted">// end of list</span>'); return; }
+                busy = true;
+                const { vh, msg } = holder(pos);
+                const r = { pos, vh, el: rowEl(vh, pos) };
+                r.el.classList.add('drop-in');
+                if (dir > 0) { rows.push(r); rv.append(r.el); } else { rows.unshift(r); rv.prepend(r.el); }
+                paint(); say(o, msg);
+                await sleep(320);
+                const gone = dir > 0 ? rows.shift() : rows.pop();
+                gone.el.classList.add('leave');
+                await sleep(400);
+                if (!el.isConnected) return;
+                gone.el.remove();
+                const extra = park(gone); paint();
+                if (extra) o.append(h('span', {}, extra));
+                top += dir;
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'vw-split' },
+                  h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'On screen'), rv),
+                  h('div', { class: 'vw-col' },
+                    h('span', { class: 'vw-label' }, 'View cache: bound, by position'), cacheEl,
+                    h('span', { class: 'vw-label' }, 'Pool: needs a bind'), poolEl)),
+                h('div', { class: 'controls' }, act('Scroll down 1 row', () => scroll(1)), act('Scroll up 1 row', () => scroll(-1))),
+                h('div', { class: 'vw-stats' }, sC, sB, sH),
+                o);
+            },
+          },
+          {
+            title: 'Rebind only what changed with payloads',
+            body: `<p>A star toggle does not need the whole row rebound. Pass a payload with the change, and the three-argument <code>onBindViewHolder</code> receives it. Update just the star there, and fall back to a full bind when <code>payloads</code> is empty.</p>
+<p>A payload also changes the animation. The default item animator reuses the same holder instead of cross-fading a copy, so the row doesn’t flicker. With <code>ListAdapter</code>, return the payload from <code>getChangePayload</code> in your <code>ItemCallback</code>.</p>`,
+            code: `object ContactDiff : DiffUtil.ItemCallback<Contact>() {
+    override fun areItemsTheSame(oldItem: Contact, newItem: Contact) = oldItem.id == newItem.id
+    override fun areContentsTheSame(oldItem: Contact, newItem: Contact) = oldItem == newItem
+    override fun getChangePayload(oldItem: Contact, newItem: Contact): Any? =
+        if (oldItem.copy(starred = newItem.starred) == newItem) STAR_CHANGED else null
+}
+
+override fun onBindViewHolder(holder: Holder, position: Int, payloads: MutableList<Any>) {
+    if (STAR_CHANGED in payloads) holder.binding.star.isVisible = getItem(position).starred
+    else super.onBindViewHolder(holder, position, payloads)   // full bind
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>When the LayoutManager needs a row, it calls <code>Recycler.getViewForPosition</code>. The Recycler looks in a fixed order: the scrap of rows detached during this layout pass, then the view cache by position, then by stable id if the adapter has stable ids, then an optional <code>ViewCacheExtension</code>, then the <code>RecycledViewPool</code> by view type. Only if all of those miss does it call <code>onCreateViewHolder</code>. A holder from the scrap or cache that is still valid skips the bind.</p>
+<p>The pool keeps at most 5 holders per type by default. On top of this, a <code>GapWorker</code> prefetches the next rows in the idle time between frames on the UI thread, while the RenderThread draws, and parks them in the cache. So a fling often finds its next row already created and bound.</p>`,
+          code: `binding.list.setItemViewCacheSize(4)                                 // default 2
+binding.list.recycledViewPool.setMaxRecycledViews(TYPE_PERSON, 10)    // default 5 per type`,
+        },
+        mistakes: [
+          {
+            title: 'Capturing the bind-time position in a click listener',
+            bad: `override fun onBindViewHolder(holder: Holder, position: Int) {
+    holder.itemView.setOnClickListener { onClick(items[position]) }
+}`,
+            good: `// in onCreateViewHolder, once per holder
+holder.itemView.setOnClickListener {
+    val pos = holder.bindingAdapterPosition
+    if (pos != RecyclerView.NO_POSITION) onClick(items[pos])
+}`,
+            why: 'An insert above shifts rows without rebinding them, so the captured <code>position</code> points at the wrong item. Ask the holder at click time.',
+          },
+          {
+            title: 'Leaving a CheckBox listener attached while you set its state',
+            bad: `val item = items[position]
+holder.binding.done.isChecked = item.done
+holder.binding.done.setOnCheckedChangeListener { _, c -> onToggle(item.id, c) }`,
+            good: `val item = items[position]
+holder.binding.done.setOnCheckedChangeListener(null)
+holder.binding.done.isChecked = item.done
+holder.binding.done.setOnCheckedChangeListener { _, c -> onToggle(item.id, c) }`,
+            why: 'A recycled holder still has the previous item’s listener. Setting <code>isChecked</code> fires it and toggles that other item.',
+          },
+          {
+            title: 'A new inner adapter on every bind',
+            bad: `override fun onBindViewHolder(holder: RowHolder, position: Int) {
+    holder.binding.tags.adapter = TagAdapter(items[position].tags)
+}`,
+            good: `private val tagPool = RecyclerView.RecycledViewPool()
+// onCreateViewHolder: tags.setRecycledViewPool(tagPool) and set one TagAdapter
+override fun onBindViewHolder(holder: RowHolder, position: Int) {
+    (holder.binding.tags.adapter as TagAdapter).submitList(items[position].tags)
+}`,
+            why: 'Swapping the adapter throws away the inner rows, and each inner list has its own pool by default. Share one pool and keep one adapter per row.',
+          },
+        ],
         visual(el) {
           const names = ['Ada', 'Alan', 'Barbara', 'Dennis', 'Edsger', 'Frances', 'Grace', 'Hedy', 'Ivan', 'Joan', 'Ken', 'Linus', 'Margaret', 'Niklaus', 'Radia', 'Shafi', 'Tim', 'Yukihiro'];
           const N = 40, SHOW = 5;
@@ -658,6 +883,184 @@ findNavController().navigate(Detail(userId = 42))`,
         quiz: [
           { q: 'Fragment A is replaced by B with <code>addToBackStack</code>. What happens to A?', options: ['A is destroyed completely', 'A’s view is destroyed, A stays created', 'Nothing, A stays resumed under B'], a: 1, why: 'A gets <code>onDestroyView</code> but not <code>onDestroy</code>. Back recreates its view.' },
           { q: 'A Fragment observes LiveData with <code>this</code> in <code>onViewCreated</code>. The user goes to B and back twice. How many observers now?', options: ['1', '2', '3'], a: 2, why: 'The Fragment never reached DESTROYED, so each new view adds one more observer.' },
+        ],
+        deeper: [
+          {
+            title: 'Rotation and process death rebuild the Fragment too',
+            body: `<p>The back stack destroys only the view. A configuration change goes further: the Activity is recreated, and its FragmentManager creates brand new Fragment objects for every Fragment it had. Their ViewModels survive. After process death even the ViewModels are new, and only the <code>arguments</code> Bundle and the saved state come back.</p>
+<p>So a field you set on the Fragment by hand, or a constructor parameter, is gone after rotation. Put inputs in <code>arguments</code> and screen state in a ViewModel with a <code>SavedStateHandle</code>.</p>`,
+            visual(el) {
+              const nt = t => `<span class="muted">// ${t}</span>`;
+              const addr = () => '@' + (0x1000 + Math.floor(Math.random() * 0xefff)).toString(16);
+              const PARTS = [
+                { k: 'frag', name: 'ProfileFragment' },
+                { k: 'view', name: 'its View' },
+                { k: 'vm', name: 'ProfileViewModel' },
+                { k: 'args', name: 'arguments', fixed: 'userId = 42' },
+              ];
+              const PLAN = {
+                back: { label: 'go to B, then press Back', fresh: ['view'], tail: 'Only the view was rebuilt. The Fragment and its fields stayed.' },
+                rot: { label: 'rotate', fresh: ['frag', 'view'], tail: 'New Fragment and view. The ViewModel came from the store, the arguments from the saved Bundle.' },
+                death: { label: 'process death, then return', fresh: ['frag', 'view', 'vm'], tail: 'Everything in memory is new. The arguments and saved state came back from the Bundle.' },
+              };
+              let busy = false;
+              const o = out('Pick an event. Orange means a new object, teal means the same one.');
+              const cards = PARTS.map(p => {
+                const val = h('span', { class: 'obj-addr' }, p.fixed || addr());
+                const t = h('span', { class: 'vw-tag' }, 'live');
+                const box = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, p.name), val, t);
+                return Object.assign(p, { val, t, box });
+              });
+              async function run(key) {
+                if (busy) return; busy = true;
+                const plan = PLAN[key];
+                say(o, nt(plan.label));
+                for (const c of cards) {
+                  const fresh = plan.fresh.includes(c.k);
+                  if (fresh) { c.val.textContent = addr(); c.box.className = 'obj vw-new'; replay(c.box, 'drop-in'); c.t.textContent = 'new'; c.t.className = 'vw-tag vw-tnew'; }
+                  else { c.box.className = 'obj vw-kept'; replay(c.box, 'pop'); c.t.textContent = c.k === 'args' && key !== 'back' ? 'restored' : 'same'; c.t.className = 'vw-tag vw-tkept'; }
+                  await sleep(300);
+                  if (!el.isConnected) return;
+                }
+                o.append(h('div', { class: 'line drop-in' }, plan.tail));
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'vw-objs' }, cards.map(c => c.box)),
+                h('div', { class: 'controls' }, Object.entries(PLAN).map(([k, p]) => act(p.label, () => run(k)))),
+                o);
+            },
+          },
+          {
+            title: 'Pick the ViewModel’s scope on purpose',
+            body: `<p><code>by viewModels()</code> scopes the ViewModel to this Fragment. <code>by activityViewModels()</code> scopes it to the Activity, so every Fragment in it gets the same instance. With Navigation, <code>navGraphViewModels(R.id.checkout)</code> shares one across the screens of a nested graph and clears it when the user leaves that graph.</p>
+<p>A list and a detail screen that share a selection need the wider scope. Try both: select an item, then open the detail.</p>`,
+            code: `class ListFragment : Fragment() {
+    private val shared: SelectionViewModel by activityViewModels()
+    fun onPick(id: Long) = shared.select(id)
+}
+
+class DetailFragment : Fragment() {
+    private val shared: SelectionViewModel by activityViewModels()   // same instance
+}`,
+            visual(el) {
+              const nt = t => `<span class="muted">// ${t}</span>`;
+              let scope = 'activity', busy = false, picked = null, onDetail = false;
+              const stores = { act: h('div', { class: 'vw-store' }), list: h('div', { class: 'vw-store' }), detail: h('div', { class: 'vw-store' }) };
+              const LABEL = { act: 'Activity store', list: 'ListFragment store', detail: 'DetailFragment store' };
+              const o = out();
+              const vm = (sel, who) => h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, 'SelectionViewModel'), h('span', { class: 'field' }, 'selected = ', h('b', {}, sel || 'null')), h('span', { class: 'obj-addr' }, who));
+              const where = () => (scope === 'activity' ? 'act' : 'list');
+              function paint() {
+                Object.entries(stores).forEach(([k, s]) => s.replaceChildren(h('span', { class: 'vw-label' }, LABEL[k])));
+                stores[where()].append(vm(picked, scope === 'activity' ? 'used by List and Detail' : 'used by ListFragment'));
+                if (onDetail && scope === 'fragment') stores.detail.append(vm(null, 'a second instance'));
+              }
+              const btns = {};
+              const setScope = v => {
+                if (busy) return;
+                scope = v; picked = null; onDetail = false;
+                Object.entries(btns).forEach(([k, b]) => b.setAttribute('aria-pressed', String(k === v)));
+                paint();
+                say(o, v === 'activity' ? 'Both Fragments use by activityViewModels().' : 'Both Fragments use by viewModels().');
+              };
+              btns.activity = cmd('by activityViewModels()', () => setScope('activity'));
+              btns.fragment = cmd('by viewModels()', () => setScope('fragment'));
+              function pick() {
+                if (busy) return;
+                picked = 'Grace'; onDetail = false; paint();
+                say(o, `${hl('shared.select("Grace")')}  ${nt(`stored in the ${LABEL[where()]}`)}`);
+              }
+              async function open() {
+                if (busy) return; busy = true;
+                onDetail = true; paint();
+                say(o, nt('DetailFragment asks for SelectionViewModel'));
+                await sleep(450);
+                if (!el.isConnected) return;
+                if (scope === 'activity') { replay(stores.act, 'pop'); o.append(h('div', { class: 'line drop-in', html: picked ? '<span class="good">same instance:</span> Detail shows Grace' : 'same instance, but nothing is selected yet' })); }
+                else { replay(stores.detail, 'shake'); o.append(h('div', { class: 'line drop-in', html: '<span class="bad">new instance:</span> selected = null. Detail has nothing to show.' })); }
+                busy = false;
+              }
+              setScope('activity');
+              say(o, 'Select Grace in the list, then open the detail.');
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'vw-label' }, 'scope'), btns.activity, btns.fragment),
+                h('div', { class: 'vw-stores' }, stores.act, stores.list, stores.detail),
+                h('div', { class: 'controls' }, cmd('ListFragment: select("Grace")', pick), cmd('navigate to DetailFragment', open)),
+                o);
+            },
+          },
+          {
+            title: 'Pages in a ViewPager2 stop at STARTED',
+            body: `<p><code>FragmentStateAdapter</code> keeps neighbour pages alive, but it caps every page except the current one at STARTED with <code>setMaxLifecycle</code>. Only the visible page reaches RESUMED.</p>
+<p>So <code>onResume</code> means “this page is the one on screen”. Log a page view or start a video there, not in <code>onViewCreated</code>, which runs for pages the user hasn’t seen yet.</p>`,
+            code: `class ArticlePageFragment : Fragment(R.layout.page_article) {
+    override fun onResume() {
+        super.onResume()
+        analytics.pageView(requireArguments().getLong("id"))   // only the visible page
+    }
+}
+
+binding.pager.adapter = object : FragmentStateAdapter(this) {
+    override fun getItemCount() = ids.size
+    override fun createFragment(position: Int) =
+        ArticlePageFragment().apply { arguments = bundleOf("id" to ids[position]) }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>When the Activity saves state, the FragmentManager writes a record for each Fragment: its class name, its <code>arguments</code>, its saved state and its place in the back stack. After a rotation or process death, it rebuilds each one from that record through a <code>FragmentFactory</code>. The default factory calls the no-argument constructor by reflection, which is why a Fragment must have one unless you install your own factory.</p>
+<p><code>viewLifecycleOwner</code> is a separate object, created fresh in each <code>onCreateView</code> and moved to DESTROYED just before <code>onDestroyView</code>. LiveData and <code>repeatOnLifecycle</code> tied to it stop at that moment, which is what keeps them off dead views.</p>`,
+          code: `class AppFragmentFactory(private val repo: ProfileRepository) : FragmentFactory() {
+    override fun instantiate(classLoader: ClassLoader, className: String): Fragment =
+        when (loadFragmentClass(classLoader, className)) {
+            ProfileFragment::class.java -> ProfileFragment(repo)
+            else -> super.instantiate(classLoader, className)
+        }
+}
+
+// Set it before super.onCreate, so restored Fragments use it too
+supportFragmentManager.fragmentFactory = AppFragmentFactory(repo)
+super.onCreate(savedInstanceState)`,
+        },
+        mistakes: [
+          {
+            title: 'Adding the first Fragment on every onCreate',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    supportFragmentManager.commit { add<HomeFragment>(R.id.container) }
+}`,
+            good: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    if (savedInstanceState == null) {
+        supportFragmentManager.commit { add<HomeFragment>(R.id.container) }
+    }
+}`,
+            why: 'After rotation the FragmentManager has already restored HomeFragment. Adding it again stacks a second copy on top.',
+          },
+          {
+            title: 'Passing data through the constructor',
+            bad: `class DetailFragment(private val userId: Long) : Fragment()
+
+replace(R.id.container, DetailFragment(42))`,
+            good: `class DetailFragment : Fragment() {
+    private val userId get() = requireArguments().getLong("userId")
+}
+replace<DetailFragment>(R.id.container, args = bundleOf("userId" to 42L))`,
+            why: 'On recreation the default factory calls a no-argument constructor, so this crashes with <code>Fragment.InstantiationException</code>. Arguments are saved and restored for you.',
+          },
+          {
+            title: 'Touching views from the Fragment’s own scope',
+            bad: `lifecycleScope.launch {
+    val user = repo.load()
+    binding.name.text = user.name
+}`,
+            good: `viewLifecycleOwner.lifecycleScope.launch {
+    val user = repo.load()
+    binding.name.text = user.name
+}`,
+            why: 'If the user moves on before <code>load()</code> returns, the view is gone but the Fragment scope is still alive, and <code>binding</code> throws. The view scope is cancelled with the view.',
+          },
         ],
         visual(el) {
           let useView = true, busy = false, onB = false, observers = 1, aViewGen = 1;

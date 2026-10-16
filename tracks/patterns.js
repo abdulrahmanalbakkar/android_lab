@@ -65,6 +65,9 @@
 .pt-state.pt-on { border-color: var(--accent); background: var(--accent-soft); }
 .pt-state.pt-next { border-style: dashed; border-color: var(--accent); }
 .cmd.pt-off { opacity: 0.55; }
+/* depth steps */
+.pt-grow { transition: width 0.8s ease-out; }
+.phone.pt-mini-phone { height: 220px; justify-content: flex-start; align-items: stretch; }
 @media (max-width: 640px) {
   .pt-split, .pt-split.pt-auto { grid-template-columns: minmax(0, 1fr); }
 }`;
@@ -127,6 +130,133 @@ val vm = HomeViewModel(FakeAnalytics())`,
           { q: 'When is a Kotlin <code>object</code> instance created?', options: ['When the app starts', 'The first time code accesses it', 'Every time you reference it'], a: 1, why: 'Objects are initialized lazily on first access, and only once.' },
           { q: 'Why prefer a Hilt <code>@Singleton</code> over a global <code>object</code> for an analytics client?', options: ['It is faster', 'Tests can pass a fresh fake through the constructor', 'Objects cannot implement interfaces'], a: 1, why: 'You still get one instance in the app, but tests don’t share its state and can swap it out.' },
           { q: 'A singleton needs a <code>Context</code>. Which one is safe to store?', options: ['The current Activity', 'The application context', 'A Fragment’s requireContext()'], a: 1, why: 'The application context lives as long as the process, so holding it leaks nothing.' },
+        ],
+        deeper: [
+          {
+            title: 'Class initialization is the lock',
+            body: `<p>The JVM runs a class's static initializer once, the first time the class is used. If two threads touch an <code>object</code> at the same moment, one runs the initializer and the others wait. No <code>synchronized</code> needed.</p>
+<p>The flip side: if the <code>init</code> block throws, the first caller gets <code>ExceptionInInitializerError</code>, and every later access gets <code>NoClassDefFoundError</code> for the rest of the process. Keep object initializers small and unable to fail.</p>`,
+            code: `object Config {
+    val values: Map<String, String> = loadFromAssets()   // runs once, on first use
+}
+
+// Thread 1 and thread 2 call Config.values at the same moment:
+// one runs the initializer, the other waits, both get the same map`,
+            visual(el) {
+              const THREADS = ['main', 'io-1', 'io-2'];
+              let fails = false, busy = false;
+              const tracks = THREADS.map(() => h('div', { class: 'lane-track' }));
+              const got = THREADS.map(() => tag('-'));
+              const o = out('Three threads read Config.values at nearly the same time.');
+              const t = toggle('pt-sg-throw', 'init block throws', false, () => { if (busy) { t.input.checked = fails; return; } fails = t.input.checked; clear(); say(o, fails ? 'loadFromAssets() will throw this time.' : 'loadFromAssets() works.'); });
+              function clear() { tracks.forEach(x => x.replaceChildren()); got.forEach(g => { g.textContent = '-'; g.className = 'pt-tag'; }); }
+              const bar = (track, l, w, cls) => { const b = h('span', { class: `bar ${cls} pt-grow`, style: `left:${l}%;width:0` }); track.append(b); requestAnimationFrame(() => requestAnimationFrame(() => { b.style.width = `${w}%`; })); };
+              async function run() {
+                if (busy) return; busy = true; clear();
+                bar(tracks[0], 0, 55, 'run');
+                bar(tracks[1], 6, 49, 'wait');
+                bar(tracks[2], 12, 43, 'wait');
+                say(o, 'main runs the initializer. io-1 and io-2 wait on the class init lock.');
+                await sleep(1000); if (!el.isConnected) return;
+                if (!fails) {
+                  got.forEach((g, i) => { g.textContent = 'Config@5e1'; g.className = 'pt-tag pt-good'; replay(g, 'pop'); });
+                  say(o, '<span class="good">one instance:</span> the initializer ran once and all three threads got Config@5e1.');
+                } else {
+                  got[0].textContent = 'ExceptionInInitializerError'; got[0].className = 'pt-tag pt-warn'; replay(got[0], 'shake');
+                  await sleep(350); if (!el.isConnected) return;
+                  [1, 2].forEach(i => { got[i].textContent = 'NoClassDefFoundError'; got[i].className = 'pt-tag pt-warn'; replay(got[i], 'shake'); });
+                  say(o, '<span class="bad">broken for good:</span> main got the real error. The waiting threads, and every later caller, get "Could not initialize class Config".');
+                }
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'timeline' }, THREADS.map((n, i) => h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, n), tracks[i]))),
+                h('div', { class: 'pt-col' }, THREADS.map((n, i) => h('div', { class: 'pt-row' }, h('span', { class: 'pt-label' }, n), got[i]))),
+                h('div', { class: 'controls' }, t, cmd('Config.values  // from 3 threads', run)),
+                o);
+            },
+          },
+          {
+            title: 'One per process, not one forever',
+            body: `<p>A singleton lives in memory, so "one instance" really means one per running process. When Android kills your app in the background, the object and everything in it is gone. When the user comes back, a fresh process creates a fresh instance.</p>
+<p>A component declared with <code>android:process=":sync"</code> runs in a second process with its own copy of every object. State that must survive or be shared belongs in storage like DataStore or Room, not in an <code>object</code>.</p>`,
+            code: `object DraftHolder {
+    var text: String = ""          // gone after process death
+}
+
+// AndroidManifest.xml
+// <service android:name=".SyncService" android:process=":sync" />
+// SyncService sees its own DraftHolder, with its own text`,
+            visual(el) {
+              const vals = { app: 0, sync: 0 };
+              let pid = { app: 4120, sync: 4188 }, busy = false;
+              const mk = k => {
+                const num = h('span', { class: 'pt-num' }, '0');
+                const sub = h('span', { class: 'pt-label' });
+                const c = h('div', { class: 'pt-card pt-on' }, h('span', { class: 'pt-title' }, k === 'app' ? 'com.example.news' : 'com.example.news:sync'), sub, h('span', { class: 'pt-label' }, 'Counter.n'), num);
+                return { c, num, sub };
+              };
+              const P = { app: mk('app'), sync: mk('sync') };
+              const o = out('');
+              const paint = () => Object.keys(P).forEach(k => { P[k].num.textContent = vals[k]; P[k].sub.textContent = `pid ${pid[k]}`; });
+              function inc(k) {
+                if (busy) return;
+                vals[k]++; paint(); replay(P[k].num, 'pop');
+                say(o, `${hl('Counter.n++')} <span class="muted">in the ${k === 'app' ? 'app' : ':sync'} process.</span> ${k === 'app' ? 'The sync process' : 'The app process'} still sees ${vals[k === 'app' ? 'sync' : 'app']}.`);
+              }
+              async function kill() {
+                if (busy) return; busy = true;
+                P.app.c.classList.add('leave'); await sleep(450); if (!el.isConnected) return;
+                vals.app = 0; pid.app += 211; paint();
+                P.app.c.classList.remove('leave'); replay(P.app.c, 'drop-in');
+                say(o, '<span class="bad">process death:</span> the user came back to a new process. Counter was created again, so n is 0.');
+                busy = false;
+              }
+              paint();
+              say(o, 'Two processes from one app. Increment in each.');
+              el.append(
+                h('div', { class: 'pt-split' }, P.app.c, P.sync.c),
+                h('div', { class: 'controls' }, cmd('Counter.n++  // app', () => inc('app')), cmd('Counter.n++  // :sync', () => inc('sync')), act('System kills the app process', kill)),
+                o);
+            },
+          },
+          {
+            title: 'A singleton that needs an argument',
+            body: `<p>An <code>object</code> can't take constructor parameters. When the one instance needs a <code>Context</code>, the classic answer is double-checked locking in a companion: a <code>@Volatile</code> field, a fast unlocked read, and a locked second check.</p>
+<p>You will see it in older Room samples. In new code, let Hilt build the database in a <code>@Provides @Singleton</code> function and inject <code>@ApplicationContext</code>.</p>`,
+            code: `@Database(entities = [ArticleEntity::class], version = 1)
+abstract class AppDb : RoomDatabase() {
+    companion object {
+        @Volatile private var instance: AppDb? = null
+
+        fun get(context: Context): AppDb =
+            instance ?: synchronized(this) {
+                instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "app.db")
+                    .build()
+                    .also { instance = it }
+            }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>An <code>object</code> compiles to a final class with a private constructor and a static <code>INSTANCE</code> field. The field is set in the class's static initializer, which the JVM runs once, under a lock, the first time the class is used. Java code calls <code>AppClock.INSTANCE.now()</code>.</p>
+<p>A <code>companion object</code> is a nested class named <code>Companion</code>, held in a static field of the outer class. <code>by lazy</code> uses a different mechanism: a <code>SynchronizedLazyImpl</code> with its own lock.</p>`,
+          code: `// Kotlin
+object AppClock { fun now() = System.currentTimeMillis() }
+
+// Roughly the Java it compiles to
+public final class AppClock {
+    public static final AppClock INSTANCE;
+    private AppClock() {}
+    static { INSTANCE = new AppClock(); }   // runs once, on first use
+    public final long now() { return System.currentTimeMillis(); }
+}`,
+        },
+        mistakes: [
+          { title: 'Global mutable state in an object', bad: 'object Session {\n    var user: User? = null\n}\n// any screen, any thread: Session.user = ...', good: 'class SessionRepository @Inject constructor() {\n    private val _user = MutableStateFlow<User?>(null)\n    val user: StateFlow<User?> = _user.asStateFlow()\n    fun signIn(u: User) { _user.value = u }\n}', why: 'A public <code>var</code> in an object can change from anywhere, nobody is told, and every test shares it. An injected class with a <code>StateFlow</code> has one writer and observers.' },
+          { title: 'lateinit setup in a singleton', bad: 'object Api {\n    lateinit var client: OkHttpClient\n    fun init(context: Context) { client = buildClient(context) }\n}\n// a ContentProvider runs before Application.onCreate', good: '@Module @InstallIn(SingletonComponent::class)\nobject ApiModule {\n    @Provides @Singleton\n    fun client(@ApplicationContext c: Context) = buildClient(c)\n}', why: 'Every caller now depends on someone calling <code>init</code> first. A provider, a test or a worker that runs early hits <code>UninitializedPropertyAccessException</code>. Let DI build it on demand.' },
+          { title: 'Companion state shared by every instance', bad: 'class Downloader {\n    companion object { var active = 0 }\n    fun start() { active++ }\n}', good: 'class Downloader {\n    var active = 0\n        private set\n    fun start() { active++ }\n}', why: 'A companion is a single object for the whole class. Two downloaders on two screens count into the same number.' },
         ],
         visual(el) {
           let created = false, events = [], di = false, busy = false, gen = 0, fresh = 0;
@@ -469,6 +599,172 @@ val count by cart.count.collectAsStateWithLifecycle()`,
         quiz: [
           { q: 'An Activity calls <code>addListener(this)</code> but never removes it. What happens after rotation?', options: ['Nothing, Android removes it', 'The old Activity stays in memory and keeps getting callbacks', 'The app crashes immediately'], a: 1, why: 'The subject still references the destroyed Activity, so it can’t be collected.' },
           { q: 'A new collector starts on a <code>StateFlow</code> whose value is 3. What does it get first?', options: ['Nothing until the next change', '3, right away', 'Every value since 0'], a: 1, why: 'A StateFlow always has a value and replays the current one to each new collector.' },
+        ],
+        deeper: [
+          {
+            title: 'StateFlow keeps only the latest value',
+            body: `<p>A <code>StateFlow</code> is not a queue. It holds one value. A slow collector that falls behind skips straight to the newest value, and setting a value equal to the current one emits nothing at all.</p>
+<p>That is exactly right for state: the screen only needs to show what is true now. It is wrong for anything where every single item matters, like messages in a chat log.</p>`,
+            code: `val progress = MutableStateFlow(0)
+
+// fast producer
+launch { for (p in 1..5) { progress.value = p; delay(150) } }
+
+// slow collector: may see 0, 2, 5 and never 1, 3 or 4
+launch { progress.collect { p -> drawSlowly(p) } }
+
+progress.value = 5   // same as current: no emission`,
+            visual(el) {
+              let cur = 0, last = null, busy = false, running = false;
+              const sent = h('div', { class: 'pt-row' });
+              const seen = h('div', { class: 'pt-row' });
+              const valueEl = h('div', { class: 'pt-slot' }, h('span', { class: 'chip total' }, '0'));
+              const coll = h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, 'collector (600 ms per value)'), seen);
+              const o = out('');
+              function reset() { cur = 0; last = null; sent.replaceChildren(); seen.replaceChildren(); valueEl.replaceChildren(h('span', { class: 'chip total' }, '0')); }
+              async function collector() {
+                if (running) return; running = true;
+                while (el.isConnected) {
+                  if (cur !== last) {
+                    last = cur;
+                    coll.classList.add('pt-on');
+                    seen.append(tag(String(cur), 'pt-good drop-in'));
+                    [...sent.children].forEach(c => { if (c.textContent === String(cur)) c.className = 'pt-tag pt-good'; });
+                    await sleep(600);
+                    coll.classList.remove('pt-on');
+                  } else if (!busy) break;
+                  else await sleep(50);
+                }
+                running = false;
+              }
+              async function burst() {
+                if (busy) return; busy = true; reset();
+                collector();
+                for (let p = 1; p <= 5; p++) {
+                  await sleep(150); if (!el.isConnected) return;
+                  cur = p; swap(valueEl, String(p));
+                  sent.append(tag(String(p), 'pt-acc'));
+                }
+                busy = false;
+                while (running) { await sleep(100); if (!el.isConnected) return; }
+                [...sent.children].forEach(c => { if (!c.classList.contains('pt-good')) c.className = 'pt-tag'; });
+                const skipped = [...sent.children].filter(c => !c.classList.contains('pt-good')).length;
+                say(o, `<span class="good">conflated:</span> 5 values set, the collector drew ${5 - skipped} of them. ${skipped} grey ones were replaced before it got to them.`);
+              }
+              function same() {
+                if (busy) return;
+                replay(valueEl, 'shake');
+                sent.append(tag(`${cur} (same)`, ''));
+                say(o, `${hl(`state.value = ${cur}`)} <span class="muted">→ equal to the current value, so no collector is woken</span>`);
+              }
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'state.value'), valueEl, h('span', { class: 'pt-label' }, 'set by the producer'), sent),
+                  coll),
+                h('div', { class: 'controls' }, cmd('repeat(5) { state.value = it + 1 }', burst), cmd('state.value = state.value', same)),
+                o);
+              say(o, 'Set five values fast. The collector is slow.');
+            },
+          },
+          {
+            title: 'One-off events are not state',
+            body: `<p>A "Saved" snackbar is an event: show it once. Put it in a <code>StateFlow</code> and it shows again after every rotation, because a new collector gets the current value. Send it on a <code>SharedFlow</code> with no replay and it is lost if it fires while the screen is rotating, since no one is collecting.</p>
+<p>The Android guidance is to keep it as state and clear it. The ViewModel holds the message in its UI state, and the UI calls <code>onMessageShown()</code> once it has displayed it. Rotation can't lose it or repeat it.</p>`,
+            code: `data class EditorUiState(val text: String = "", val message: String? = null)
+
+fun save() = viewModelScope.launch {
+    repo.save(_state.value.text)
+    _state.update { it.copy(message = "Saved") }
+}
+fun onMessageShown() = _state.update { it.copy(message = null) }
+
+// UI
+state.message?.let { msg ->
+    LaunchedEffect(msg) {
+        snackbarHostState.showSnackbar(msg)
+        viewModel.onMessageShown()
+    }
+}`,
+            visual(el) {
+              const MODES = {
+                state: { name: 'StateFlow<String?>', visible: 'shown', during: 'shown after rotation', rotate: 'shown AGAIN', good: [1, 1, 0] },
+                shared: { name: 'SharedFlow (no replay)', visible: 'shown', during: 'lost', rotate: 'nothing', good: [1, 0, 1] },
+                cleared: { name: 'state + onMessageShown()', visible: 'shown, then cleared', during: 'shown after rotation', rotate: 'nothing', good: [1, 1, 1] },
+              };
+              let mode = 'state', busy = false, pending = false, lastShown = false;
+              const phone = h('div', { class: 'phone pt-mini-phone' });
+              const o = out('');
+              const mBtns = Object.entries(MODES).map(([k, m]) => cmd(m.name, () => { if (busy) return; mode = k; pending = false; lastShown = false; press(); blank(); say(o, `${m.name}. Save, then rotate.`); }));
+              const press = () => mBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(MODES)[i] === mode)));
+              const blank = (txt = 'Editor') => phone.replaceChildren(h('p', { class: 'phone-note' }, txt));
+              async function snack(text, cls) {
+                const s = h('div', { class: `pt-notif drop-in ${cls}` }, h('span', { class: 'pt-ic' }), h('b', {}, 'Saved'), h('span', {}, text));
+                phone.append(s);
+                await sleep(1000); if (el.isConnected && s.isConnected) { s.classList.add('fly-out'); await sleep(350); s.remove(); }
+              }
+              async function rotateAnim() { replay(phone, 'flip'); await sleep(420); blank(); }
+              async function saveVisible() {
+                if (busy) return; busy = true; blank();
+                lastShown = mode === 'state';
+                say(o, `${hl('save()')} <span class="muted">while the screen collects →</span> <span class="good">${MODES[mode].visible}</span>`);
+                await snack('', ''); busy = false;
+              }
+              async function saveDuring() {
+                if (busy) return; busy = true;
+                say(o, 'save() finishes while the Activity is being recreated...');
+                await rotateAnim(); if (!el.isConnected) return;
+                const r = MODES[mode].during;
+                lastShown = mode === 'state';
+                if (r === 'lost') { replay(phone, 'shake'); say(o, `<span class="bad">lost:</span> the event fired with no collector, and SharedFlow without replay drops it.`); }
+                else { say(o, `<span class="good">${r}:</span> the new collector read the message from state.`); await snack('', ''); }
+                busy = false;
+              }
+              async function rotate() {
+                if (busy) return; busy = true;
+                await rotateAnim(); if (!el.isConnected) return;
+                if (mode === 'state' && lastShown) { replay(phone, 'shake'); say(o, '<span class="bad">shown again:</span> the StateFlow still holds "Saved", and the new collector gets it at once.'); await snack('again', 'pt-repeat'); }
+                else say(o, `<span class="good">nothing shown</span> <span class="muted">${mode === 'cleared' ? 'because onMessageShown() set it back to null' : mode === 'shared' ? 'because SharedFlow keeps no value' : 'because no message was set yet'}</span>`);
+                busy = false;
+              }
+              press(); blank();
+              say(o, 'Pick how the ViewModel sends "Saved".');
+              el.append(
+                h('div', { class: 'controls' }, mBtns),
+                h('div', { class: 'pt-split pt-auto' },
+                  h('div', { class: 'controls' },
+                    act('save() while visible', saveVisible),
+                    act('save() during a rotation', saveDuring),
+                    act('Rotate', rotate)),
+                  phone),
+                o);
+            },
+          },
+          {
+            title: 'WhileSubscribed(5_000) and rotation',
+            body: `<p><code>stateIn(scope, SharingStarted.WhileSubscribed(5_000), initial)</code> runs the upstream flow only while someone collects. When the last collector leaves, it waits 5 seconds before stopping.</p>
+<p>A rotation drops the collector for well under a second, so the upstream, perhaps a database query or a location listener, keeps running. Leaving the app for longer than 5 seconds stops it and saves battery. When the user returns, collection restarts.</p>`,
+            code: `val feed: StateFlow<List<Article>> = repo.articles()
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),   // survives rotation
+        initialValue = emptyList(),
+    )`,
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>MutableStateFlow</code> stores a single value. Setting it compares the new value with the old one using <code>equals</code>. If they differ, it stores the new one and wakes any suspended collectors. Each collector then reads whatever the value is at that moment. There is no buffer, which is where conflation comes from.</p>
+<p><code>repeatOnLifecycle(STARTED)</code> launches your block each time the lifecycle reaches <code>STARTED</code> and cancels it when it falls below, at <code>ON_STOP</code>. A collector inside it is a new subscription each time, so it receives the current value immediately.</p>`,
+          code: `// Equivalent behaviour, written by hand
+val state = MutableStateFlow(0)
+state.value = 1        // stored, collectors woken
+state.value = 1        // equal: ignored
+// a collector only ever sees "the latest value it hasn't seen",
+// like flow.distinctUntilChanged() with a buffer of one`,
+        },
+        mistakes: [
+          { title: 'Mutating the list inside a StateFlow', bad: 'private val _items = MutableStateFlow(mutableListOf<Item>())\nfun add(item: Item) {\n    _items.value.add(item)   // same list object: no emission\n}', good: 'private val _items = MutableStateFlow<List<Item>>(emptyList())\nfun add(item: Item) {\n    _items.update { it + item }   // new list: emits\n}', why: 'The flow sees the same object, which equals itself, so collectors are never told. Keep immutable values in a StateFlow and replace them.' },
+          { title: 'Two collects in one coroutine', bad: 'repeatOnLifecycle(Lifecycle.State.STARTED) {\n    vm.title.collect { toolbar.title = it }\n    vm.items.collect { adapter.submitList(it) }   // never runs\n}', good: 'repeatOnLifecycle(Lifecycle.State.STARTED) {\n    launch { vm.title.collect { toolbar.title = it } }\n    launch { vm.items.collect { adapter.submitList(it) } }\n}', why: 'Collecting a StateFlow never completes, so the line after it is never reached. Give each collector its own <code>launch</code>.' },
+          { title: 'Using the deprecated launchWhenStarted', bad: 'lifecycleScope.launchWhenStarted {\n    vm.location.collect { map.moveTo(it) }\n}', good: 'lifecycleScope.launch {\n    repeatOnLifecycle(Lifecycle.State.STARTED) {\n        vm.location.collect { map.moveTo(it) }\n    }\n}', why: '<code>launchWhenStarted</code> only pauses the collector in the background, so the upstream keeps producing. <code>repeatOnLifecycle</code> cancels it and starts again later.' },
         ],
         visual(el) {
           let count = 0, flow = true, gen = 1, busy = false, leaked = 0;
@@ -1076,6 +1372,140 @@ class FeedViewModel : ViewModel() {
           { q: 'Why a sealed <code>UiState</code> instead of <code>isLoading</code>, <code>items</code> and <code>error</code> fields?', options: ['It uses less memory', 'Impossible combinations can’t be represented', 'StateFlow requires sealed types'], a: 1, why: 'Three independent fields allow states like loading with an error. A sealed type allows exactly one state at a time.' },
           { q: 'The state is <code>Idle</code> and a late <code>Loaded</code> event arrives. What does the reducer return?', options: ['Success', 'Idle, unchanged', 'It throws'], a: 1, why: 'Idle accepts only Load. Every other event falls through to <code>else state</code>.' },
           { q: 'Why is a pure reducer easy to test?', options: ['It needs an emulator', 'Same input always gives the same output, with no Android types', 'Hilt generates its tests'], a: 1, why: 'You call <code>reduce(state, event)</code> and assert on the result. No dispatcher, no lifecycle.' },
+        ],
+        deeper: [
+          {
+            title: 'Side effects run on transitions',
+            body: `<p>The reducer stays pure: it never starts a network call. Instead, the ViewModel compares the state before and after an event. When the state <em>enters</em> <code>Loading</code>, it launches the request. When the request ends, the result comes back in as another event.</p>
+<p>A nice result: a second <code>Load</code> while already loading is ignored by the reducer, so no second request starts. Tap <code>send(Load)</code> several times quickly.</p>`,
+            code: `fun send(event: FeedEvent) {
+    var entered: UiState? = null
+    _state.update { old -> reduce(old, event).also { new -> entered = new.takeIf { new != old } } }
+    if (entered == UiState.Loading) fetch()      // effect only on a real transition
+}
+
+private fun fetch() = viewModelScope.launch {
+    val event = try {
+        FeedEvent.Loaded(repo.latest())
+    } catch (e: IOException) {
+        FeedEvent.Failed("No connection")
+    }
+    send(event)
+}`,
+            visual(el) {
+              const T = { Idle: { Load: 'Loading' }, Loading: { Loaded: 'Success', Failed: 'Error' }, Success: { Load: 'Loading' }, Error: { Retry: 'Loading' } };
+              let state = 'Idle', fail = false, reqs = 0;
+              const stateEl = h('div', { class: 'pt-slot' }, h('span', { class: 'chip' }, 'Idle'));
+              const log = h('div', { class: 'pt-steps' });
+              const count = tag('requests started: 0');
+              const o = out('');
+              const ft = toggle('pt-sm-fail', 'network fails', false, () => { fail = ft.input.checked; });
+              const logLine = (text, cls = '') => { log.prepend(h('div', { class: `pt-step drop-in ${cls}`, html: text })); while (log.children.length > 5) log.lastElementChild.remove(); };
+              function send(e) {
+                const to = T[state][e];
+                if (!to) { logLine(`${hl(`reduce(${state}, ${e})`)} = ${hl(state)}  <span class="muted">ignored</span>`); replay(stateEl, 'shake'); say(o, `${state} does not accept ${e}. <span class="muted">No new request.</span>`); return; }
+                const from = state; state = to; swap(stateEl, to);
+                logLine(`${hl(`reduce(${from}, ${e})`)} = ${hl(to)}`, 'pt-done');
+                if (to === 'Loading') {
+                  reqs++; count.textContent = `requests started: ${reqs}`; replay(count, 'pop');
+                  logLine('effect: launch fetch()  GET /feed', 'pt-now');
+                  say(o, `<span class="good">entered Loading</span>, so the ViewModel started one request.`);
+                  setTimeout(() => { if (el.isConnected && state === 'Loading') send(fail ? 'Failed' : 'Loaded'); }, 1400);
+                } else say(o, `${hl(to)} <span class="muted">${to === 'Error' ? 'Retry is the only way out.' : 'Load to refresh.'}</span>`);
+              }
+              say(o, 'Send Load, then tap it again while loading.');
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'state'), stateEl, count),
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'reducer and effects'), log)),
+                h('div', { class: 'controls' }, ft, cmd('send(Load)', () => send('Load')), cmd('send(Retry)', () => send('Retry'))),
+                o);
+            },
+          },
+          {
+            title: 'Two events at once: why update',
+            body: `<p>Events can arrive from different coroutines at nearly the same time: a network result on one, a tap on another. With <code>_state.value = reduce(_state.value, e)</code>, both read the same old state, and the second write erases the first.</p>
+<p><code>update { }</code> reads, computes and then writes only if the state is still the one it read. If another write got there first, it runs the reducer again on the newer state. Neither event is lost.</p>`,
+            visual(el) {
+              let atomic = false, busy = false;
+              const lanes = ['Loaded(items)', 'Bookmark(7)'].map(n => ({ name: n, steps: h('div', { class: 'pt-row' }) }));
+              const result = h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, 'final state'), h('span', { class: 'pt-label' }, '-'));
+              const o = out('');
+              const t = toggle('pt-sm-atomic', 'use _state.update { }', false, () => { if (busy) { t.input.checked = atomic; return; } atomic = t.input.checked; clear(); say(o, atomic ? 'update {}: compare-and-set, retry on conflict.' : 'value = reduce(value, e): read, then blind write.'); });
+              function clear() { lanes.forEach(l => l.steps.replaceChildren()); result.className = 'pt-card'; result.lastChild.textContent = '-'; }
+              const add = (l, text, kind = '') => { const s = tag(text, `${kind} drop-in`); l.steps.append(s); return s; };
+              async function run() {
+                if (busy) return; busy = true; clear();
+                const [a, b] = lanes;
+                const st = async ms => { await sleep(ms); return el.isConnected; };
+                add(a, 'read v1 {items: [], marks: []}'); add(b, 'read v1 {items: [], marks: []}');
+                if (!await st(600)) return;
+                add(a, 'reduce → items: 3'); add(b, 'reduce → marks: [7]');
+                if (!await st(600)) return;
+                add(a, 'write v2', 'pt-good');
+                if (!await st(500)) return;
+                if (!atomic) {
+                  add(b, 'write v2′ (overwrites)', 'pt-warn');
+                  result.className = 'pt-card pt-bad'; result.lastChild.textContent = '{ items: [], marks: [7] }'; replay(result, 'shake');
+                  say(o, '<span class="bad">lost update:</span> Bookmark was computed from v1, so its write threw away the three loaded items.');
+                } else {
+                  add(b, 'CAS fails: state is v2', 'pt-warn');
+                  if (!await st(500)) return;
+                  add(b, 'read v2, reduce again', 'pt-acc');
+                  if (!await st(500)) return;
+                  add(b, 'write v3', 'pt-good');
+                  result.className = 'pt-card pt-ok'; result.lastChild.textContent = '{ items: 3, marks: [7] }'; replay(result, 'pop');
+                  say(o, '<span class="good">both kept:</span> the second reducer ran twice, the second time on the newer state.');
+                }
+                busy = false;
+              }
+              say(o, 'Two events reach the ViewModel at the same moment.');
+              el.append(
+                h('div', { class: 'pt-col' }, lanes.map(l => h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, `send(${l.name})`), l.steps))),
+                result,
+                h('div', { class: 'controls' }, t, h('button', { class: 'btn primary small', onclick: run }, 'Send both')),
+                o);
+            },
+          },
+          {
+            title: 'Surviving process death',
+            body: `<p>The state machine lives in the ViewModel, which dies with the process. Save only the inputs you need to rebuild it in <code>SavedStateHandle</code>, such as the selected tab or a search query. Don't save <code>Loading</code> or big lists: reload them.</p>
+<p>When the new process starts, read the saved input and send the event that gets the machine moving again.</p>`,
+            code: `class SearchViewModel(
+    private val saved: SavedStateHandle,
+    private val repo: SearchRepository,
+) : ViewModel() {
+    private val _state = MutableStateFlow<UiState>(UiState.Idle)
+    val state = _state.asStateFlow()
+
+    init {
+        saved.get<String>("query")?.let { send(SearchEvent.Submit(it)) }   // restart after death
+    }
+
+    fun send(event: SearchEvent) {
+        if (event is SearchEvent.Submit) saved["query"] = event.query
+        _state.update { reduce(it, event) }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>update</code> is a short loop in kotlinx.coroutines. It reads the value, calls your function, and tries <code>compareAndSet</code>. If another coroutine changed the value in between, the set fails and the loop runs your function again on the new value.</p>
+<p>So the reducer may run more than once for one event. That is safe only because it is pure. A <code>when</code> over a sealed type compiles to a chain of <code>instanceof</code> checks, and <code>data object</code> branches compare with <code>equals</code>.</p>`,
+          code: `// kotlinx.coroutines
+public inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+    while (true) {
+        val prevValue = value
+        val nextValue = function(prevValue)
+        if (compareAndSet(prevValue, nextValue)) {
+            return
+        }
+    }
+}`,
+        },
+        mistakes: [
+          { title: 'Side effects inside update', bad: '_state.update {\n    analytics.log("load")      // may run twice\n    reduce(it, FeedEvent.Load)\n}', good: '_state.update { reduce(it, FeedEvent.Load) }\nanalytics.log("load")', why: 'Under contention <code>update</code> calls its lambda again. Anything with a side effect inside it can happen twice. Keep the lambda pure.' },
+          { title: 'Starting work for an event the machine ignored', bad: 'fun send(event: FeedEvent) {\n    _state.update { reduce(it, event) }\n    if (event is FeedEvent.Load) fetch()   // even while already Loading\n}', good: 'fun send(event: FeedEvent) {\n    var started = false\n    _state.update { old ->\n        reduce(old, event).also { started = it is UiState.Loading && old !is UiState.Loading }\n    }\n    if (started) fetch()\n}', why: 'The reducer refused the second <code>Load</code>, but the ViewModel fired a second request anyway. Trigger effects from the transition, not from the event.' },
         ],
         visual(el) {
           const T = { Idle: { Load: 'Loading' }, Loading: { Loaded: 'Success', Failed: 'Error' }, Success: { Load: 'Loading' }, Error: { Retry: 'Loading' } };

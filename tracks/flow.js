@@ -202,7 +202,20 @@
   .flw-req { grid-template-columns: minmax(0, 1fr) 64px; }
   .flw-req .flw-prog { grid-column: 1 / -1; grid-row: 2; }
   .flw-ibar { font-size: 0.58rem; text-indent: 2px; }
-}`;
+}
+/* depth steps */
+.flw-chk { position: absolute; top: 3px; bottom: 3px; width: 2px; margin-left: -1px; background: var(--ink); opacity: 0.55; z-index: 1; }
+.legend .flw-chk-key { position: static; display: inline-block; width: 3px; height: 14px; margin-right: 8px; }
+.flw-pool { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.flw-th { display: grid; gap: 4px; align-content: start; padding: 6px; border-radius: 9px; border: 2px solid var(--line); background: var(--surface); font: 600 0.68rem var(--mono); color: var(--muted); min-width: 0; min-height: 58px; overflow: hidden; transition: border-color 0.2s, background 0.2s; }
+.flw-th b { color: var(--ink); }
+.flw-th span:not(.flw-prog) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flw-th .flw-prog { min-width: 0; }
+.flw-th.cpu { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.flw-th.blk { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.flw-th.blk .flw-prog i { background: var(--err); }
+.flw-wrap { flex-wrap: wrap; overflow: visible; }
+`;
 
   // Plays a timeline of T ms, stretched by slow, calling frame(t) every animation frame.
   // Resolves false if node left the page or live() turned false (a newer run took over).
@@ -1097,6 +1110,852 @@ fun posts(): Flow<List<Post>> = channelFlow {
     },
   };
 
+  // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
+  // Small tree node used by the structured-concurrency step demos.
+  function flwTreeNode(N, id, src, kids) {
+    const bar = h('i'), st = h('span', { class: 'flw-st' });
+    const box = h('div', { class: 'flw-node' }, h('span', { class: 'flw-src', html: hl(src) }), st, h('span', { class: 'flw-prog' }, bar));
+    N[id] = { box, st, bar, p: 0, state: 'run' };
+    return h('div', { class: 'flw-sub' }, box, kids && h('div', { class: 'flw-kids' }, kids));
+  }
+  function flwSetNode(N, id, state, text) {
+    const n = N[id]; n.state = state; n.st.textContent = text;
+    n.box.className = `flw-node ${state}${id === 'root' ? ' root' : ''}`;
+  }
+
+  const structuredDepth = {
+    deeper: [
+      {
+        title: 'supervisorScope lets one child fail alone',
+        body: `<p>In <code>coroutineScope</code>, one failing child cancels its siblings and the scope rethrows. Sometimes the children are independent. A broken badge count should not hide the posts.</p>
+<p><code>supervisorScope</code> does not cancel the other children when one fails. A failed <code>async</code> keeps its exception until you call <code>await()</code>. A failed <code>launch</code> sends it to the <code>CoroutineExceptionHandler</code>, or crashes the app if there is none. This is why <code>viewModelScope</code> is built on a <code>SupervisorJob</code>.</p>`,
+        code: `suspend fun loadProfile(): Profile = supervisorScope {
+    val avatar = async { repo.avatar() }
+    val posts = async { repo.posts() }
+    val badges = async { repo.badges() }
+    Profile(
+        avatar = avatar.await(),
+        posts = runCatching { posts.await() }.getOrDefault(emptyList()),
+        badges = badges.await(),
+    )
+}`,
+        visual(el) {
+          const KIDS = [['avatar', 'async { avatar() }', 6500], ['posts', 'async { posts() }', 9000], ['badges', 'async { badges() }', 7500]];
+          const MODES = [['scope', 'coroutineScope { }'], ['super', 'supervisorScope { }']];
+          let mode = 'scope', busy = false, N = {}, failed = false;
+          const wrap = h('div');
+          const o = out();
+          const modeBtns = MODES.map(([k, src]) => cmd(src, () => {
+            if (busy) return;
+            mode = k; build();
+            say(o, `<span class="muted">mode:</span> ${hl(src)}. Make posts() throw and watch its siblings.`);
+          }));
+          function build() {
+            N = {}; failed = false;
+            wrap.replaceChildren(h('div', { class: 'flw-tree' },
+              flwTreeNode(N, 'root', mode === 'scope' ? 'coroutineScope' : 'supervisorScope', KIDS.map(([id, src]) => flwTreeNode(N, id, src)))));
+            flwSetNode(N, 'root', 'run', 'waiting for children');
+            KIDS.forEach(([id], i) => { flwSetNode(N, id, 'run', 'running'); N[id].p = 0.12 + i * 0.08; });
+            pressed(modeBtns, MODES.map(m => m[0]), mode);
+          }
+          loop(wrap, (now, dt) => {
+            if (!N.root || N.root.state !== 'run') return;
+            let running = 0;
+            for (const [id, , dur] of KIDS) {
+              const n = N[id];
+              if (n.state !== 'run') continue;
+              running++;
+              n.p = Math.min(1, n.p + dt / dur);
+              n.bar.style.width = n.p * 100 + '%';
+              if (n.p >= 1) { flwSetNode(N, id, 'done', 'returned'); replay(n.box, 'pop'); }
+            }
+            if (!running && !busy) {
+              if (failed) {
+                flwSetNode(N, 'root', 'caught', 'returned, posts empty'); replay(N.root.box, 'pop');
+                say(o, '<span class="good">done:</span> avatar and badges finished. posts.await() threw inside runCatching, so the screen shows an empty post list instead of nothing.');
+              } else {
+                flwSetNode(N, 'root', 'done', 'returned'); replay(N.root.box, 'pop');
+                say(o, '<span class="good">done:</span> all three children returned. Press run again, then make one fail.');
+              }
+            }
+          });
+          build();
+          o.innerHTML = 'Three independent loads run under coroutineScope. Make posts() throw.';
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            wrap,
+            h('div', { class: 'controls' },
+              cmd('posts() throws IOException', async () => {
+                if (busy) return;
+                if (N.posts.state !== 'run') { replay(N.posts.box, 'shake'); say(o, '<span class="muted">no-op:</span> posts is not running. Press run again.'); return; }
+                busy = true;
+                try {
+                  flwSetNode(N, 'posts', 'fail', 'IOException'); replay(N.posts.box, 'shake'); failed = true;
+                  if (mode === 'super') {
+                    say(o, '<span class="good">isolated:</span> supervisorScope left avatar and badges alone. The exception waits inside posts until someone calls await().');
+                    return;
+                  }
+                  say(o, '<span class="bad">fail:</span> coroutineScope cancels the other children…');
+                  for (const id of ['avatar', 'badges']) {
+                    if (N[id].state !== 'run') continue;
+                    await sleep(340); if (!wrap.isConnected) return;
+                    flwSetNode(N, id, 'cancel', 'cancelled'); replay(N[id].box, 'shake');
+                  }
+                  await sleep(340); if (!wrap.isConnected) return;
+                  flwSetNode(N, 'root', 'fail', 'rethrew IOException'); replay(N.root.box, 'shake');
+                  say(o, '<span class="bad">fail:</span> avatar and badges were cancelled and their work was lost. The scope rethrew IOException to its caller.');
+                } finally { busy = false; }
+              }),
+              cmd('run again', () => {
+                if (busy) return;
+                build();
+                say(o, `<span class="muted">restarted:</span> three fresh children under ${mode === 'scope' ? 'coroutineScope' : 'supervisorScope'}.`);
+              })),
+            o);
+        },
+      },
+      {
+        title: 'Cancellation only lands where the code checks',
+        body: `<p>Calling <code>cancel()</code> only marks a Job as cancelled. The coroutine notices the next time it suspends or checks. A loop that only does math never suspends, so it runs to the end and its result is thrown away.</p>
+<p>Put <code>ensureActive()</code> or a <code>yield()</code> at the top of each iteration. The red stripes below are work done after the cancel, wasted CPU and battery.</p>`,
+        code: `suspend fun resizeAll(photos: List<Photo>) = withContext(Dispatchers.Default) {
+    for (photo in photos) {
+        ensureActive()          // throws CancellationException once cancelled
+        resize(photo)           // CPU only, never suspends
+    }
+}`,
+        visual(el) {
+          const DUR = 7000, CHECKS = 8;
+          const lanes = [
+            { key: 'plain', name: 'no checks', checks: false },
+            { key: 'check', name: 'ensureActive()', checks: true },
+          ];
+          let busy = false;
+          const o = out();
+          const tl = h('div', { class: 'timeline' }, lanes.map(L => {
+            L.run = h('span', { class: 'bar run', style: 'left:0;width:0' });
+            L.waste = h('span', { class: 'bar block', style: 'left:0;width:0' });
+            L.marks = L.checks ? Array.from({ length: CHECKS - 1 }, (_, i) => h('span', { class: 'flw-chk', style: `left:${((i + 1) / CHECKS) * 100}%` })) : [];
+            L.st = h('span', { class: 'flw-note' });
+            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, L.name, h('br'), L.st), h('div', { class: 'lane-track' }, L.run, L.waste, L.marks));
+          }));
+          function start() {
+            lanes.forEach(L => { L.p = 0; L.cancelAt = null; L.state = 'run'; L.st.textContent = 'running'; L.st.className = 'flw-note'; L.waste.style.width = '0'; });
+          }
+          loop(tl, (now, dt) => {
+            for (const L of lanes) {
+              if (L.state !== 'run' && L.state !== 'cancelling') continue;
+              const before = L.p;
+              L.p = Math.min(1, L.p + dt / DUR);
+              if (L.state === 'cancelling' && L.checks) {
+                const nextCheck = Math.ceil(before * CHECKS - 1e-9) / CHECKS;
+                if (L.p >= nextCheck) {
+                  L.p = nextCheck; L.state = 'stopped';
+                  L.st.textContent = 'stopped at a check'; L.st.className = 'flw-note';
+                  say(o, '<span class="good">stopped:</span> ensureActive() threw CancellationException at the next check. Only a sliver of work was wasted.');
+                }
+              }
+              const cut = L.cancelAt == null ? L.p : L.cancelAt;
+              L.run.style.width = cut * 100 + '%';
+              if (L.cancelAt != null) { L.waste.style.left = L.cancelAt * 100 + '%'; L.waste.style.width = (L.p - L.cancelAt) * 100 + '%'; }
+              if (L.p >= 1 && L.state !== 'stopped') {
+                if (L.state === 'cancelling') {
+                  L.state = 'wasted'; L.st.textContent = 'finished anyway'; L.st.className = 'flw-note warn';
+                  say(o, '<span class="bad">wasted:</span> the loop without checks never noticed the cancel. It ran to the end, then its result was thrown away.');
+                } else { L.state = 'done'; L.st.textContent = 'done'; }
+              }
+            }
+          });
+          start();
+          o.innerHTML = 'Two copies of the same CPU loop are running. Cancel them both.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('job.cancel()', () => {
+                if (busy) return;
+                const live = lanes.filter(L => L.state === 'run');
+                if (!live.length) { replay(tl, 'shake'); say(o, '<span class="muted">no-op:</span> nothing is running. Press start.'); return; }
+                live.forEach(L => { L.state = 'cancelling'; L.cancelAt = L.p; L.st.textContent = 'cancel requested'; L.st.className = 'flw-note warn'; });
+                say(o, '<span class="muted">cancel():</span> both Jobs are now marked cancelled. Watch which loop notices.');
+              }),
+              cmd('start', () => {
+                if (lanes.some(L => L.state === 'run' || L.state === 'cancelling')) { replay(tl, 'shake'); say(o, '<span class="muted">busy:</span> wait until both loops have stopped.'); return; }
+                start(); say(o, '<span class="muted">started:</span> two fresh loops.');
+              })),
+            tl,
+            h('div', { class: 'legend' },
+              h('span', {}, h('i', { class: 'bar run' }), 'useful work'),
+              h('span', {}, h('i', { class: 'bar block' }), 'work after cancel'),
+              h('span', {}, h('i', { class: 'flw-chk flw-chk-key' }), 'cancellation check')),
+            o);
+        },
+      },
+      {
+        title: 'Cleanup that suspends needs NonCancellable',
+        body: `<p>A cancelled coroutine still runs its <code>finally</code> blocks. But it is already cancelled, so any suspend call inside <code>finally</code> throws <code>CancellationException</code> at once and the cleanup never happens.</p>
+<p>Wrap suspending cleanup in <code>withContext(NonCancellable)</code>. Keep that block short, because nothing can cancel it.</p>`,
+        code: `viewModelScope.launch {
+    try {
+        uploader.upload(file)
+    } finally {
+        withContext(NonCancellable) {
+            repo.markUploadStopped(file.id)   // a suspend call, safe here
+        }
+    }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>Every builder like <code>launch</code> or <code>async</code> creates a <code>Job</code>. When it starts, it looks up the Job already in its <code>CoroutineContext</code> and attaches itself to it as a child. That link is the tree.</p>
+<p><code>cancel()</code> moves a Job to the cancelling state and cancels each child in turn. A coroutine suspended at that moment is waiting inside a <code>CancellableContinuation</code>, which is resumed with a <code>CancellationException</code> instead of a value. The exception unwinds the code, runs the <code>finally</code> blocks, and the Job becomes cancelled once all its children are done.</p>
+<p>A failing child reports to its parent. A plain Job cancels itself and its other children. A <code>SupervisorJob</code> ignores failures from its children, so each child must handle its own.</p>`,
+      code: `// What the tree looks like in the context
+val parent = viewModelScope.coroutineContext[Job]!!
+val child = viewModelScope.launch { delay(10_000) }
+check(child in parent.children)          // attached on start
+parent.cancelChildren()                 // child is resumed with CancellationException`,
+    },
+    mistakes: [
+      {
+        title: 'Catching Exception swallows cancellation',
+        bad: `while (true) {
+    try {
+        repo.sync()
+        delay(60_000)
+    } catch (e: Exception) {      // also catches CancellationException
+        log(e)
+    }
+}`,
+        good: `while (true) {
+    try {
+        repo.sync()
+        delay(60_000)
+    } catch (e: IOException) {
+        log(e)
+    }
+}`,
+        why: '<code>CancellationException</code> is an <code>Exception</code>. Catching it keeps the loop alive after the scope is cancelled. Catch the specific type, or rethrow <code>CancellationException</code>. <code>runCatching</code> has the same problem.',
+      },
+      {
+        title: 'Passing a new Job to launch breaks the tree',
+        bad: `fun refresh() {
+    viewModelScope.launch(SupervisorJob()) {
+        repo.refresh()
+    }
+}`,
+        good: `fun refresh() {
+    viewModelScope.launch {
+        supervisorScope {
+            launch { repo.refreshNews() }
+            launch { repo.refreshWeather() }
+        }
+    }
+}`,
+        why: 'A Job in the <code>launch</code> arguments becomes the new parent. The coroutine is no longer a child of <code>viewModelScope</code>, so <code>onCleared()</code> does not cancel it. Use <code>supervisorScope</code> inside instead.',
+      },
+    ],
+  };
+
+  const dispatchersDepth = {
+    deeper: [
+      {
+        title: 'Main posts, Main.immediate runs now',
+        body: `<p><code>Dispatchers.Main</code> always posts the coroutine to the main thread’s message queue, even if you are already on the main thread. The code after <code>launch</code> runs first, and the coroutine runs after whatever is already queued, often in a later frame.</p>
+<p><code>Dispatchers.Main.immediate</code> skips the queue when you are already on main and runs the coroutine right away, up to its first suspension. <code>viewModelScope</code> and <code>lifecycleScope</code> use it, so a state update lands before the next frame.</p>`,
+        visual(el) {
+          const MODES = [['main', 'Dispatchers.Main'], ['imm', 'Dispatchers.Main.immediate']];
+          let mode = 'main', busy = false;
+          const snippet = h('div', { class: 'kt' });
+          const queue = h('div', { class: 'flw-strip', 'aria-label': 'Main thread message queue' });
+          const printed = h('div', { class: 'flw-strip', 'aria-label': 'Printed output' });
+          const o = out();
+          const modeBtns = MODES.map(([k, src]) => cmd(src, () => { if (busy) return; mode = k; paint(); say(o, `<span class="muted">mode:</span> ${hl(src)}. Press run.`); }));
+          const fill = () => queue.replaceChildren(h('span', { class: 'flw-v' }, 'touch'), h('span', { class: 'flw-v' }, 'draw frame'));
+          function paint() {
+            snippet.innerHTML = hl(`// in a click handler, already on main\nprintln("A")\nscope.launch(${mode === 'main' ? 'Dispatchers.Main' : 'Dispatchers.Main.immediate'}) {\n    println("B")\n}\nprintln("C")`);
+            pressed(modeBtns, MODES.map(m => m[0]), mode);
+            fill(); printed.replaceChildren(h('span', { class: 'flw-note' }, 'nothing printed yet'));
+          }
+          const print = (v, cls = 'ok') => {
+            printed.querySelectorAll('.flw-note').forEach(n => n.remove());
+            printed.append(h('span', { class: `flw-v drop-in ${cls}` }, v));
+          };
+          async function run() {
+            if (busy) return; busy = true;
+            try {
+              fill(); printed.replaceChildren();
+              const live = () => el.isConnected;
+              print('A'); await sleep(450); if (!live()) return;
+              if (mode === 'main') {
+                const task = h('span', { class: 'flw-v acc drop-in' }, 'coroutine B');
+                queue.append(task);
+                say(o, 'launch posted the coroutine to the end of the queue and returned.');
+                await sleep(550); if (!live()) return;
+                print('C'); await sleep(450); if (!live()) return;
+                for (const m of [...queue.children]) {
+                  m.classList.add('acc'); await sleep(420); if (!live()) return;
+                  if (m === task) print('B', 'acc');
+                  m.remove(); await sleep(160); if (!live()) return;
+                }
+                say(o, '<span class="bad">A C B:</span> the coroutine waited behind the touch event and the frame. A state change in it would show one frame late.');
+              } else {
+                print('B', 'acc');
+                say(o, 'Already on main, so immediate ran the coroutine in place, before launch returned.');
+                await sleep(550); if (!live()) return;
+                print('C'); await sleep(450); if (!live()) return;
+                for (const m of [...queue.children]) { m.classList.add('acc'); await sleep(320); if (!live()) return; m.remove(); }
+                say(o, '<span class="good">A B C:</span> no trip through the queue. The frame that follows already shows what B did.');
+              }
+            } finally { busy = false; }
+          }
+          paint();
+          o.innerHTML = 'Pick a dispatcher, then run the click handler.';
+          el.append(h('div', { class: 'controls' }, modeBtns), snippet,
+            h('div', { class: 'flw-cols' },
+              h('div', { class: 'flw-col' }, h('span', { class: 'lane-name' }, 'main queue'), queue),
+              h('div', { class: 'flw-col' }, h('span', { class: 'lane-name' }, 'printed'), printed)),
+            h('div', { class: 'controls' }, cmd('run the click handler', run)), o);
+        },
+      },
+      {
+        title: 'Blocking calls on Default starve CPU work',
+        body: `<p><code>Default</code> has one thread per CPU core, so only a few. A blocking file or socket read parks a thread without using the CPU. Put four of them on a four-core <code>Default</code> and every CPU task waits in the queue.</p>
+<p><code>IO</code> allows up to 64 threads, so blocked threads are cheap there. Fill Default with blocking reads, then queue some parsing. Then try the reads on IO.</p>`,
+        visual(el) {
+          const POOLS = { def: { name: 'Default', size: 4, label: 'D' }, io: { name: 'IO', size: 8, label: 'IO' } };
+          const DUR = { cpu: 1600, blk: 5200 };
+          let warned = false;
+          const o = out();
+          const ui = {};
+          const blocks = Object.entries(POOLS).map(([k, P]) => {
+            P.slots = Array.from({ length: P.size }, (_, i) => {
+              const bar = h('i'), what = h('span', {}, 'idle');
+              const box = h('div', { class: 'flw-th' }, h('b', {}, `${P.label}-${i + 1}`), what, h('span', { class: 'flw-prog' }, bar));
+              return { box, bar, what, task: null };
+            });
+            P.queue = [];
+            P.qEl = h('div', { class: 'flw-strip flw-wrap' });
+            ui[k] = P;
+            return h('div', { class: 'flw-panel' },
+              h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl(`Dispatchers.${P.name}`) }), h('span', { class: 'flw-badge' }, k === 'def' ? '4 cores' : '8 of 64 shown')),
+              h('div', { class: 'flw-pool' }, P.slots.map(s => s.box)),
+              h('span', { class: 'flw-note' }, 'queued'), P.qEl);
+          });
+          const paintQ = P => P.qEl.replaceChildren(...(P.queue.length ? P.queue.map(t => h('span', { class: `flw-v ${t.kind === 'cpu' ? 'acc' : 'bad'}` }, t.kind === 'cpu' ? 'parse' : 'read')) : [h('span', { class: 'flw-note' }, 'empty')]));
+          function submit(k, kind, n) {
+            const P = ui[k];
+            if (P.queue.length + n > 12) { replay(P.qEl, 'shake'); say(o, '<span class="muted">full:</span> let the queue drain first, or press Reset.'); return false; }
+            for (let i = 0; i < n; i++) P.queue.push({ kind, p: 0 });
+            paintQ(P); return true;
+          }
+          const grid = h('div', { class: 'flw-duo' }, blocks);
+          loop(grid, (now, dt) => {
+            for (const P of Object.values(ui)) {
+              let changed = false;
+              for (const s of P.slots) {
+                if (!s.task && P.queue.length) {
+                  s.task = P.queue.shift(); changed = true;
+                  s.box.className = `flw-th ${s.task.kind}`; s.what.textContent = s.task.kind === 'cpu' ? 'parse()' : 'blocked on read';
+                  replay(s.box, 'pop-soft');
+                }
+                if (!s.task) continue;
+                s.task.p = Math.min(1, s.task.p + dt / DUR[s.task.kind]);
+                s.bar.style.width = s.task.p * 100 + '%';
+                if (s.task.p >= 1) { s.task = null; s.box.className = 'flw-th'; s.what.textContent = 'idle'; s.bar.style.width = '0'; }
+              }
+              if (changed) paintQ(P);
+            }
+            const def = ui.def;
+            if (!warned && def.queue.some(t => t.kind === 'cpu') && def.slots.every(s => s.task && s.task.kind === 'blk')) {
+              warned = true;
+              say(o, '<span class="bad">starved:</span> every Default thread is parked on a file read, so parse() waits even though the CPU is idle.');
+            }
+          });
+          Object.values(ui).forEach(paintQ);
+          o.innerHTML = 'Both pools are idle. Each button launches four coroutines. Fill Default with blocking reads, then queue some parsing.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('launch(Default) { readBlocking() }', () => { if (submit('def', 'blk', 4)) { warned = false; say(o, 'Four blocking reads went to Default. Each one parks a thread for seconds.'); } }),
+              cmd('launch(Default) { parse() }', () => { if (submit('def', 'cpu', 4)) say(o, 'Four CPU tasks queued on Default.'); }),
+              cmd('launch(IO) { readBlocking() }', () => { if (submit('io', 'blk', 4)) say(o, '<span class="good">IO:</span> the reads park IO threads instead. Default stays free for parse().'); })),
+            grid, o);
+        },
+      },
+      {
+        title: 'Limit parallelism instead of making new pools',
+        body: `<p>Sometimes you want at most one or a few coroutines at a time, for example writes to a file that is not thread safe. <code>limitedParallelism(n)</code> returns a view of an existing dispatcher that runs at most <code>n</code> tasks at once. It creates no new threads.</p>`,
+        code: `class LogWriter(
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) {
+    private val oneAtATime = io.limitedParallelism(1)   // serial, still on IO threads
+
+    suspend fun append(line: String) = withContext(oneAtATime) {
+        file.appendText(line + "\\n")
+    }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>On Android, <code>Dispatchers.Main</code> wraps a <code>Handler</code> on the main <code>Looper</code>. Dispatching posts a <code>Runnable</code> to the main message queue. <code>Main.immediate</code> overrides <code>isDispatchNeeded</code> to return false when the current thread is already the main thread, so the coroutine just continues.</p>
+<p><code>Default</code> and <code>IO</code> are two views over one shared scheduler. Default may run as many CPU tasks as there are cores. IO allows up to 64 blocking tasks (more on machines with more cores). Because the threads are shared, <code>withContext(Dispatchers.IO)</code> from Default often continues on the same thread with no real switch.</p>
+<p><code>withContext</code> with the same dispatcher you are already on does not dispatch at all. It still checks for cancellation when the block ends.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Thread.sleep inside a coroutine',
+        bad: `viewModelScope.launch {
+    while (isActive) {
+        refresh()
+        Thread.sleep(30_000)   // blocks the main thread
+    }
+}`,
+        good: `viewModelScope.launch {
+    while (isActive) {
+        refresh()
+        delay(30_000)          // suspends, frees the thread
+    }
+}`,
+        why: '<code>Thread.sleep</code> blocks the thread and ignores cancellation. On Main it freezes the UI and causes an ANR. <code>delay</code> frees the thread and can be cancelled.',
+      },
+      {
+        title: 'Touching Views from inside withContext(IO)',
+        bad: `lifecycleScope.launch {
+    withContext(Dispatchers.IO) {
+        val user = api.loadUserBlocking()
+        binding.name.text = user.name     // wrong thread
+    }
+}`,
+        good: `lifecycleScope.launch {
+    val user = withContext(Dispatchers.IO) {
+        api.loadUserBlocking()
+    }
+    binding.name.text = user.name         // back on Main
+}`,
+        why: 'Views may only be changed on the main thread, so this throws <code>CalledFromWrongThreadException</code>. Return the value from <code>withContext</code> and use it after the block.',
+      },
+      {
+        title: 'Hard-coding Dispatchers.IO in a class',
+        bad: `class ArticleRepository(private val api: ArticleApi) {
+    suspend fun load() = withContext(Dispatchers.IO) {
+        api.fetchBlocking()
+    }
+}`,
+        good: `class ArticleRepository(
+    private val api: ArticleApi,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) {
+    suspend fun load() = withContext(io) { api.fetchBlocking() }
+}`,
+        why: 'A hard-coded dispatcher runs on real threads in tests, out of reach of the test scheduler. Inject it, and pass a <code>StandardTestDispatcher(testScheduler)</code> in tests.',
+      },
+    ],
+  };
+
+  const hotDepth = {
+    deeper: [
+      {
+        title: 'StateFlow compares with equals()',
+        body: `<p>StateFlow emits only when the new value is not equal to the current one. For a list, equal means same items in the same order. A list with the same contents is skipped, even if it is a new object.</p>
+<p>Mutating a list in place is worse. The StateFlow already holds that same list, so the “new” value is equal to itself. Nothing is emitted, and the screen goes stale. Always set a new immutable value.</p>`,
+        visual(el) {
+          const FRUITS = ['Kiwi', 'Plum', 'Fig', 'Lime', 'Pear'];
+          let mem = ['Apple', 'Pear'], shown = ['Apple', 'Pear'], next = 0, emits = 1;
+          const memStrip = h('div', { class: 'flw-strip flw-wrap' }), shownStrip = h('div', { class: 'flw-strip flw-wrap' });
+          const badge = h('span', { class: 'flw-badge' }, 'emissions 1');
+          const o = out();
+          const draw = (strip, list) => strip.replaceChildren(...list.map(v => h('span', { class: 'flw-v' }, v)));
+          function paint() { draw(memStrip, mem); draw(shownStrip, shown); }
+          const nextFruit = () => FRUITS[next++ % FRUITS.length];
+          const emit = () => { shown = [...mem]; emits++; badge.textContent = `emissions ${emits}`; replay(badge, 'pop'); paint(); replay(shownStrip, 'pop-soft'); };
+          const shownPanel = h('div', { class: 'flw-subrow' }, h('div', { class: 'flw-subhead' }, h('span', {}, 'what the screen collected'), badge), shownStrip);
+          paint();
+          o.innerHTML = 'The StateFlow holds a list and the screen shows what it collected. Add a fruit three ways.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('_cart.update { it + "Kiwi" }', () => {
+                if (mem.length >= 6) mem = ['Apple'];
+                mem = [...mem, nextFruit()];
+                emit();
+                say(o, '<span class="good">emitted:</span> update built a new list that differs from the old one, so collectors got it.');
+              }),
+              cmd('cart.add("Kiwi"); _cart.value = cart', () => {
+                if (mem.length >= 6) { replay(memStrip, 'shake'); say(o, '<span class="muted">full:</span> press Reset to start over.'); return; }
+                mem.push(nextFruit());
+                paint(); replay(memStrip, 'pop-soft'); replay(shownPanel, 'shake');
+                say(o, '<span class="bad">no emission:</span> the StateFlow already held this same list object. Old value equals new value, so the screen is now stale.');
+              }),
+              cmd('_cart.value = cart.toList()', () => {
+                const stale = shown.join() !== mem.join();
+                if (stale) { emit(); say(o, '<span class="good">emitted:</span> a new list whose contents differ from what the StateFlow last had. The screen caught up.'); return; }
+                replay(badge, 'shake');
+                say(o, '<span class="muted">no emission:</span> a new object, but equal contents. StateFlow skipped it.');
+              })),
+            h('div', { class: 'flw-duo' },
+              h('div', { class: 'flw-subrow' }, h('div', { class: 'flw-subhead' }, h('span', {}, 'the list in memory'), h('span', { class: 'flw-note' }, 'cart')), memStrip),
+              shownPanel),
+            o);
+        },
+      },
+      {
+        title: 'replay decides what late collectors get',
+        body: `<p><code>MutableSharedFlow(replay = n)</code> keeps the last <code>n</code> values and hands them to every new collector before live values. With <code>replay = 1</code> it behaves a little like a StateFlow, but without an initial value and without skipping equal values.</p>
+<p>Pick a replay size, emit a few values, then let a new screen join.</p>`,
+        code: `private val _log = MutableSharedFlow<LogLine>(
+    replay = 3,                       // late collectors get the last 3
+    extraBufferCapacity = 16,         // room for bursts before emit suspends
+)`,
+        visual(el) {
+          const SIZES = [0, 1, 3];
+          let replayN = 0, n = 0, subs = [];
+          const sent = h('div', { class: 'flw-strip flw-wrap' });
+          const list = h('div', { style: 'display:grid;gap:8px' });
+          const o = out();
+          const btns = SIZES.map(k => cmd(`MutableSharedFlow<Int>(replay = ${k})`, () => setReplay(k)));
+          function setReplay(k) {
+            replayN = k; n = 0; subs = [];
+            sent.replaceChildren(h('span', { class: 'flw-note' }, 'nothing emitted yet'));
+            list.replaceChildren(); addSub(false);
+            pressed(btns, SIZES, k);
+            say(o, `<span class="muted">replay = ${k}:</span> emit a few values, then let a screen join late.`);
+          }
+          function markCache() {
+            const chips = [...sent.querySelectorAll('.flw-v')];
+            chips.forEach((c, i) => c.classList.toggle('acc', i >= chips.length - replayN));
+          }
+          function addSub(late) {
+            const strip = h('div', { class: 'flw-strip flw-wrap' }), note = h('span', { class: 'flw-note' });
+            list.append(h('div', { class: `flw-subrow${late ? ' drop-in' : ''}` }, h('div', { class: 'flw-subhead' }, h('span', {}, `screen ${'ABCD'[subs.length]}`), note), strip));
+            subs.push(strip);
+            if (!late) return;
+            const cache = [...sent.querySelectorAll('.flw-v')].slice(replayN ? -replayN : sent.children.length).map(c => c.textContent);
+            cache.forEach(v => strip.append(h('span', { class: 'flw-v acc drop-in' }, v)));
+            note.textContent = cache.length ? `replayed ${cache.length}` : 'got nothing from the past';
+            note.className = cache.length ? 'flw-note' : 'flw-note warn';
+          }
+          setReplay(0);
+          el.append(
+            h('div', { class: 'controls' }, btns),
+            h('div', { class: 'controls' },
+              cmd('_flow.emit(n)', () => {
+                n++;
+                sent.querySelectorAll('.flw-note').forEach(x => x.remove());
+                sent.append(h('span', { class: 'flw-v drop-in' }, String(n)));
+                while (sent.children.length > 6) sent.firstElementChild.remove();
+                markCache();
+                subs.forEach(s => { s.append(h('span', { class: 'flw-v ok drop-in' }, String(n))); while (s.children.length > 6) s.firstElementChild.remove(); });
+                say(o, `emitted ${n}. ${replayN ? `The highlighted ${Math.min(replayN, n)} sit in the replay cache.` : 'Nothing is cached.'}`);
+              }),
+              cmd('a new screen starts collecting', () => {
+                if (subs.length >= 3) { replay(list, 'shake'); say(o, '<span class="muted">full:</span> pick a replay size to start over.'); return; }
+                addSub(true);
+                say(o, replayN ? `<span class="good">joined:</span> it got the last ${replayN} value${replayN === 1 ? '' : 's'} first, then live ones.` : '<span class="bad">joined:</span> replay = 0, so it only sees values emitted from now on.');
+              })),
+            h('div', { class: 'flw-subrow' }, h('div', { class: 'flw-subhead' }, h('span', {}, 'emitted so far'), h('span', { class: 'flw-note' }, 'highlight = replay cache')), sent),
+            list, o);
+        },
+      },
+      {
+        title: 'Events while nobody listens: Channel keeps them',
+        body: `<p>A <code>SharedFlow</code> with no replay drops an event when nobody is collecting, for example while the app is in the background. For one-off events that must not get lost, use a <code>Channel</code> and expose it with <code>receiveAsFlow()</code>. A buffered channel holds events until a collector arrives.</p>
+<p>The trade-off: each event goes to exactly one collector. That is usually what you want for navigation or a snackbar.</p>`,
+        code: `private val _events = Channel<UiEvent>(Channel.BUFFERED)
+val events: Flow<UiEvent> = _events.receiveAsFlow()
+
+fun save() = viewModelScope.launch {
+    repo.save()
+    _events.send(UiEvent.ShowSnackbar("Saved"))   // waits in the buffer if needed
+}`,
+        visual(el) {
+          let fg = true, k = 0;
+          const NAMES = ['Saved', 'Sent', 'Synced', 'Copied'];
+          const mk = (title) => {
+            const buf = h('div', { class: 'flw-strip flw-wrap' }), shown = h('div', { class: 'flw-strip flw-wrap' });
+            const panel = h('div', { class: 'flw-panel' },
+              h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl(title) })),
+              h('span', { class: 'flw-note' }, 'waiting in the flow'), buf,
+              h('span', { class: 'flw-note' }, 'shown on screen'), shown);
+            return { panel, buf, shown };
+          };
+          const sf = mk('MutableSharedFlow<UiEvent>()'), ch = mk('Channel<UiEvent>(BUFFERED)');
+          const status = h('span', { class: 'flw-gps' }, 'app visible');
+          const o = out();
+          const empty = s => { if (!s.children.length) s.append(h('span', { class: 'flw-note' }, 'empty')); };
+          const add = (s, v, cls) => { s.querySelectorAll('.flw-note').forEach(x => x.remove()); s.append(h('span', { class: `flw-v drop-in ${cls}` }, v)); while (s.children.length > 4) s.firstElementChild.remove(); };
+          [sf.buf, sf.shown, ch.buf, ch.shown].forEach(empty);
+          const toggle = h('button', { class: 'btn primary small', onclick() {
+            fg = !fg;
+            toggle.textContent = fg ? 'Go to home screen' : 'Open the app';
+            status.textContent = fg ? 'app visible' : 'in background, not collecting';
+            status.className = `flw-gps${fg ? '' : ' off'}`;
+            if (!fg) { say(o, 'The screen stopped collecting. Now emit an event.'); return; }
+            const held = [...ch.buf.querySelectorAll('.flw-v')];
+            ch.buf.replaceChildren(); empty(ch.buf);
+            held.forEach(c => add(ch.shown, c.textContent, 'ok'));
+            say(o, held.length
+              ? `<span class="good">back:</span> the Channel delivered ${held.length} held event${held.length === 1 ? '' : 's'}. The SharedFlow had nothing to give.`
+              : 'Back in the foreground. Both flows deliver live events again.');
+          } }, 'Go to home screen');
+          o.innerHTML = 'Emit an event while the app is visible, then again while it is in the background.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('emit(ShowSnackbar(…))', () => {
+                const v = NAMES[k++ % NAMES.length];
+                if (fg) {
+                  add(sf.shown, v, 'ok'); add(ch.shown, v, 'ok');
+                  say(o, `"${v}" reached the screen through both.`);
+                } else {
+                  add(sf.buf, v, 'gone'); add(ch.buf, v, 'warn');
+                  say(o, `<span class="bad">SharedFlow dropped "${v}":</span> no collector. <span class="good">The Channel holds it</span> in its buffer.`);
+                }
+              }),
+              toggle, status),
+            h('div', { class: 'flw-duo' }, sf.panel, ch.panel), o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>A <code>MutableStateFlow</code> keeps one value in an atomic field. Setting it compares the new value with the old one using <code>equals</code> and stops there if they match. Otherwise it stores the value and wakes the collectors. Each collector is a slot that only remembers “something changed”. When it wakes, it reads the newest value, so values set in between are skipped. That is the conflation you saw in the core demo.</p>
+<p>The docs describe StateFlow as a special case of SharedFlow: replay of one, the oldest value dropped on overflow, equal values filtered out, and a required initial value.</p>`,
+      code: `// Behaves like a StateFlow (except it does not need an initial value)
+val shared = MutableSharedFlow<Int>(
+    replay = 1,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST,
+)
+shared.tryEmit(0)                          // the initial value
+val state = shared.distinctUntilChanged()`,
+    },
+    mistakes: [
+      {
+        title: 'Read, copy, write is a race',
+        bad: `fun setLoading() {
+    _state.value = _state.value.copy(loading = true)
+}`,
+        good: `fun setLoading() {
+    _state.update { it.copy(loading = true) }
+}`,
+        why: 'Two coroutines can read the same old value and one write overwrites the other. <code>update</code> retries with compare-and-set until its change applies cleanly.',
+      },
+      {
+        title: 'Exposing the mutable flow',
+        bad: `class CartViewModel : ViewModel() {
+    val items = MutableStateFlow<List<Item>>(emptyList())
+}`,
+        good: `class CartViewModel : ViewModel() {
+    private val _items = MutableStateFlow<List<Item>>(emptyList())
+    val items: StateFlow<List<Item>> = _items.asStateFlow()
+}`,
+        why: 'Any screen could write <code>vm.items.value = …</code> and bypass the ViewModel’s rules. Keep the mutable flow private and expose a read-only view.',
+      },
+      {
+        title: 'Using StateFlow for a one-off event',
+        bad: `private val _toast = MutableStateFlow<String?>(null)
+fun save() = viewModelScope.launch {
+    repo.save()
+    _toast.value = "Saved"
+}`,
+        good: `private val _events = Channel<UiEvent>(Channel.BUFFERED)
+val events = _events.receiveAsFlow()
+fun save() = viewModelScope.launch {
+    repo.save()
+    _events.send(UiEvent.ShowToast("Saved"))
+}`,
+        why: 'StateFlow replays its value to every new collector. After a rotation the screen collects again and shows “Saved” a second time. Events need a flow that delivers once.',
+      },
+    ],
+  };
+
+  const lifecycleDepth = {
+    deeper: [
+      {
+        title: 'In Fragments, collect with viewLifecycleOwner',
+        body: `<p>A Fragment on the back stack keeps living, but its view is destroyed. When you come back, <code>onViewCreated</code> runs again. If you launch from the Fragment’s own <code>lifecycleScope</code>, the old coroutine is still there. Each trip adds another collector, and the old ones write to views that no longer exist.</p>
+<p><code>viewLifecycleOwner</code> has a lifecycle that ends in <code>onDestroyView</code>, so its coroutines end with the view.</p>`,
+        visual(el) {
+          const MODES = [['frag', 'lifecycleScope'], ['view', 'viewLifecycleOwner.lifecycleScope']];
+          let mode = 'frag', onScreen = true, viewN = 1, cols = [], acc = 0;
+          const list = h('div', { class: 'flw-strip flw-wrap' });
+          const stat = h('p', { class: 'tip' });
+          const o = out();
+          const modeBtns = MODES.map(([k, src]) => cmd(src, () => { mode = k; reset(); say(o, `<span class="muted">mode:</span> launching from ${hl(src)} in onViewCreated. Go to Details and back a few times.`); }));
+          const navBtn = h('button', { class: 'btn primary small', onclick() {
+            if (!onScreen && viewN >= 5) { replay(list, 'shake'); say(o, '<span class="muted">enough:</span> five views is plenty. Pick a mode to start over.'); return; }
+            onScreen = !onScreen;
+            navBtn.textContent = onScreen ? 'Open Details' : 'Press Back';
+            if (!onScreen) {
+              cols.forEach(c => { if (c.state === 'run') c.state = 'wait'; });
+              if (mode === 'view') cols.forEach(c => { if (c.view === viewN) c.state = 'gone'; });
+              say(o, mode === 'view'
+                ? `<span class="good">onDestroyView:</span> view #${viewN} is gone and its collector was cancelled with it.`
+                : `onStop and onDestroyView ran. The Fragment is only CREATED now, so repeatOnLifecycle paused, but the coroutine from view #${viewN} is still alive.`);
+            } else {
+              viewN++;
+              cols.forEach(c => { if (c.state === 'wait') c.state = 'run'; });
+              cols.push({ view: viewN, state: 'run' });
+              const stale = cols.filter(c => c.state === 'run' && c.view !== viewN).length;
+              say(o, stale
+                ? `<span class="bad">back:</span> onViewCreated launched another collector. ${stale} old one${stale === 1 ? '' : 's'} restarted too and now write${stale === 1 ? 's' : ''} to destroyed views.`
+                : `<span class="good">back:</span> a new view #${viewN} and exactly one collector for it.`);
+            }
+            paint();
+          } }, 'Open Details');
+          function reset() {
+            onScreen = true; viewN = 1; cols = [{ view: 1, state: 'run' }];
+            navBtn.textContent = 'Open Details';
+            pressed(modeBtns, MODES.map(m => m[0]), mode); paint();
+          }
+          function paint() {
+            list.replaceChildren(...cols.map(c => {
+              const stale = c.state === 'run' && c.view !== viewN;
+              const cls = c.state === 'gone' ? 'gone' : c.state === 'wait' ? '' : stale ? 'bad' : 'ok';
+              return h('span', { class: `flw-v ${cls}`, 'data-v': c.view }, `view #${c.view}${c.state === 'wait' ? ' paused' : c.state === 'gone' ? ' cancelled' : stale ? ' stale' : ''}`);
+            }));
+          }
+          loop(list, (now, dt) => {
+            acc += dt; if (acc < 1000) return; acc -= 1000;
+            const live = cols.filter(c => c.state === 'run');
+            live.forEach(c => { const chip = list.querySelector(`[data-v="${c.view}"]`); if (chip) replay(chip, 'pop'); });
+            const bad = live.filter(c => c.view !== viewN).length;
+            stat.textContent = `collectors running: ${live.length} · writing to destroyed views: ${bad}`;
+          });
+          reset();
+          o.innerHTML = 'Each chip is a running collector. It pulses on every location update.';
+          stat.textContent = 'collectors running: 1 · writing to destroyed views: 0';
+          el.append(h('div', { class: 'controls' }, modeBtns), h('div', { class: 'controls' }, navBtn), list, stat, o);
+        },
+      },
+      {
+        title: 'stateIn start policies',
+        body: `<p><code>stateIn</code> takes a start policy. <code>Eagerly</code> starts the upstream as soon as the ViewModel exists and never stops it. <code>Lazily</code> waits for the first collector, then never stops. <code>WhileSubscribed(5_000)</code> runs only while someone collects, plus five seconds.</p>
+<p>All three stop when <code>viewModelScope</code> is cancelled. Pick a policy and step through a screen’s life.</p>`,
+        visual(el) {
+          const MODES = [['eager', 'SharingStarted.Eagerly'], ['lazy', 'SharingStarted.Lazily'], ['ws', 'SharingStarted.WhileSubscribed(5_000)']];
+          let mode = 'ws', subs = 0, up = false, cleared = false, graceUntil = 0, starts = 0;
+          const upChip = h('span', { class: 'flw-gps off' }, 'upstream stopped');
+          const subChip = h('span', { class: 'flw-badge' }, 'collectors 0');
+          const timer = h('i');
+          const timerBox = h('div', { class: 'flw-timer', hidden: true }, timer);
+          const o = out();
+          const startsEl = h('span', { class: 'flw-note' }, 'upstream starts: 0');
+          const modeBtns = MODES.map(([k, src]) => cmd(src, () => { mode = k; reset(); }));
+          const setUp = on => {
+            if (on && !up) { starts++; replay(upChip, 'pop'); }
+            up = on;
+            upChip.textContent = up ? 'upstream running' : 'upstream stopped';
+            upChip.className = `flw-gps${up ? '' : ' off'}`;
+            startsEl.textContent = `upstream starts: ${starts}`;
+          };
+          function reset() {
+            subs = 0; cleared = false; graceUntil = 0; starts = 0; up = false; timerBox.hidden = true;
+            pressed(modeBtns, MODES.map(m => m[0]), mode);
+            setUp(mode === 'eager');
+            subChip.textContent = 'collectors 0';
+            say(o, mode === 'eager' ? '<span class="muted">ViewModel created:</span> Eagerly started the upstream right away, before any screen asked.' : '<span class="muted">ViewModel created:</span> nothing runs until a screen collects.');
+          }
+          const dead = () => { if (!cleared) return false; replay(upChip, 'shake'); say(o, '<span class="muted">no-op:</span> viewModelScope is cancelled. Pick a policy to start over.'); return true; };
+          loop(upChip, now => {
+            if (!graceUntil) return;
+            const left = graceUntil - now;
+            if (left <= 0) {
+              graceUntil = 0; timerBox.hidden = true; setUp(false);
+              say(o, '<span class="good">5 s passed:</span> no collector came back, so WhileSubscribed stopped the upstream.');
+              return;
+            }
+            timer.style.width = (left / 5000) * 100 + '%';
+          });
+          reset();
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            h('div', { class: 'controls' },
+              cmd('screen starts collecting', () => {
+                if (dead()) return;
+                if (subs >= 2) { replay(subChip, 'shake'); say(o, '<span class="muted">enough:</span> two collectors is plenty here.'); return; }
+                subs++; subChip.textContent = `collectors ${subs}`; replay(subChip, 'pop');
+                const was = up;
+                if (graceUntil) { graceUntil = 0; timerBox.hidden = true; }
+                setUp(true);
+                say(o, was ? '<span class="good">shared:</span> the upstream was already running, so this collector got the current value with no restart.' : '<span class="good">started:</span> the first collector started the upstream.');
+              }),
+              cmd('screen stops collecting', () => {
+                if (dead()) return;
+                if (!subs) { replay(subChip, 'shake'); say(o, '<span class="muted">no-op:</span> nobody is collecting.'); return; }
+                subs--; subChip.textContent = `collectors ${subs}`;
+                if (subs) { say(o, 'One collector left. The upstream keeps running for the other.'); return; }
+                if (mode === 'ws') { graceUntil = performance.now() + 5000; timerBox.hidden = false; say(o, 'Last collector gone. WhileSubscribed waits 5 s in case it comes back, like after a rotation.'); }
+                else say(o, `<span class="bad">still running:</span> ${mode === 'eager' ? 'Eagerly' : 'Lazily'} never stops while the ViewModel lives, even with nobody watching.`);
+              }),
+              cmd('onCleared()', () => {
+                if (dead()) return;
+                cleared = true; graceUntil = 0; timerBox.hidden = true; subs = 0; subChip.textContent = 'collectors 0';
+                setUp(false);
+                say(o, '<span class="good">cleared:</span> viewModelScope was cancelled, and the sharing coroutine with it. Every policy stops here.');
+              })),
+            h('div', { class: 'flw-ui' }, upChip, subChip, startsEl, h('div', { style: 'flex:1 1 120px' }, timerBox)),
+            o);
+        },
+      },
+      {
+        title: 'One flow, one call: flowWithLifecycle',
+        body: `<p>When a Fragment or Activity collects a single flow, <code>flowWithLifecycle</code> is a shorter way to write the same thing. It applies <code>repeatOnLifecycle</code> to the upstream. For several flows, keep one <code>repeatOnLifecycle</code> block with a <code>launch</code> per flow.</p>`,
+        code: `viewLifecycleOwner.lifecycleScope.launch {
+    vm.location
+        .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+        .collect { binding.locationText.text = it.toString() }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p><code>repeatOnLifecycle</code> is a suspend function that adds a <code>LifecycleEventObserver</code>. When the lifecycle moves up to the target state, the observer launches a child coroutine that runs your block. When it moves down past that state, the observer cancels that child. When the lifecycle is destroyed, <code>repeatOnLifecycle</code> returns, so the code after it runs only at the very end.</p>
+<p><code>collectAsStateWithLifecycle</code> is built from the same piece. It is a <code>produceState</code> whose producer calls <code>repeatOnLifecycle</code> and collects inside it.</p>
+<p><code>stateIn</code> launches one sharing coroutine in the scope you pass. It watches the StateFlow’s subscriber count. The start policy turns those counts into start and stop commands for the upstream collection.</p>`,
+      code: `// Roughly what collectAsStateWithLifecycle does
+@Composable
+fun <T> StateFlow<T>.collectAsStateWithLifecycleSketch(lifecycle: Lifecycle): State<T> =
+    produceState(initialValue = value, this, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            collect { value = it }
+        }
+    }`,
+    },
+    mistakes: [
+      {
+        title: 'Two collect calls in a row',
+        bad: `repeatOnLifecycle(Lifecycle.State.STARTED) {
+    vm.location.collect { showLocation(it) }
+    vm.events.collect { handle(it) }   // never reached
+}`,
+        good: `repeatOnLifecycle(Lifecycle.State.STARTED) {
+    launch { vm.location.collect { showLocation(it) } }
+    launch { vm.events.collect { handle(it) } }
+}`,
+        why: '<code>collect</code> suspends until the flow completes. A StateFlow never completes, so the second line never runs. Give each flow its own <code>launch</code>.',
+      },
+      {
+        title: 'Calling stateIn in a getter or function',
+        bad: `val items: StateFlow<List<Item>>
+    get() = repo.items().stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
+    )`,
+        good: `val items: StateFlow<List<Item>> = repo.items().stateIn(
+    viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
+)`,
+        why: 'Every access creates a new StateFlow and a new sharing coroutine that lives as long as <code>viewModelScope</code>. Each recomposition can add one. Create it once, as a property.',
+      },
+      {
+        title: 'collectAsState on Android',
+        bad: `@Composable
+fun MapScreen(vm: MapViewModel) {
+    val location by vm.location.collectAsState()
+    LocationText(location)
+}`,
+        good: `@Composable
+fun MapScreen(vm: MapViewModel) {
+    val location by vm.location.collectAsStateWithLifecycle()
+    LocationText(location)
+}`,
+        why: '<code>collectAsState</code> collects as long as the composable is in the composition, which includes time in the background. The lifecycle-aware version stops below STARTED, so <code>WhileSubscribed</code> can stop the upstream.',
+      },
+    ],
+  };
+
   Lab.addTrack({
     id: 'flow',
     title: 'Coroutines and Flow',
@@ -1155,6 +2014,9 @@ fun posts(): Flow<List<Post>> = channelFlow {
           { q: 'The user leaves the screen and <code>onCleared()</code> runs. What happens to coroutines started in <code>viewModelScope</code>?', options: ['They finish in the background', 'They are cancelled', 'They move to GlobalScope'], a: 1, why: '<code>viewModelScope</code> is cancelled in <code>onCleared()</code>, and that cancels every coroutine in it.' },
           { q: 'You cancel a coroutine that is in a tight CPU loop with no suspend calls. What happens?', options: ['It stops at once', 'It keeps running until it checks, for example with <code>ensureActive()</code>', 'The app crashes'], a: 1, why: 'Cancellation is cooperative. Suspend calls check for it; plain loops must check <code>isActive</code> or call <code>ensureActive()</code>.' },
         ],
+        deeper: structuredDepth.deeper,
+        underHood: structuredDepth.underHood,
+        mistakes: structuredDepth.mistakes,
         visual(el) {
           const N = {};
           const DUR = { news: 7000, weather: 11000 };
@@ -1307,6 +2169,9 @@ fun posts(): Flow<List<Post>> = channelFlow {
           { q: 'After <code>withContext(Dispatchers.IO) { … }</code> returns inside a coroutine that started on Main, where does the next line run?', options: ['On an IO thread', 'Back on Main', 'On whichever thread is free'], a: 1, why: '<code>withContext</code> switches only for its block, then resumes the caller on its original dispatcher.' },
           { q: 'Does <code>withContext</code> run its block in parallel with the code after it?', options: ['Yes, like <code>launch</code>', 'No, the caller suspends until the block returns its result'], a: 1, why: 'It is a suspend call that returns the block’s result. For parallel work, use <code>async</code> or <code>launch</code>.' },
         ],
+        deeper: dispatchersDepth.deeper,
+        underHood: dispatchersDepth.underHood,
+        mistakes: dispatchersDepth.mistakes,
         visual(el) {
           const lanes = {};
           const tl = h('div', { class: 'timeline' }, [['main', 'Main (UI)'], ['io', 'IO'], ['def', 'Default']].map(([id, name]) => {
@@ -1716,6 +2581,9 @@ val screen: Flow<List<Article>> = combine(results, favorites) { list, favs ->
           { q: '<code>_count.value</code> is 5 and you set it to 5 again. What do collectors get?', options: ['Another 5', 'Nothing'], a: 1, why: 'StateFlow only emits when the new value is not equal to the current one.' },
           { q: 'A <code>MutableSharedFlow&lt;UiEvent&gt;()</code> emits a toast while no one is collecting. What happens to it?', options: ['It waits for the next collector', 'It is dropped', 'It throws'], a: 1, why: 'With replay = 0 and no collectors, there is nobody to deliver to, so the event is gone.' },
         ],
+        deeper: hotDepth.deeper,
+        underHood: hotDepth.underHood,
+        mistakes: hotDepth.mistakes,
         visual(el) {
           let count = 2, evN = 1, busy = false;
           const TOASTS = ['Saved', 'Deleted', 'Copied', 'Sent', 'Synced'];
@@ -1838,6 +2706,9 @@ viewLifecycleOwner.lifecycleScope.launch {
           { q: 'Why pass <code>5_000</code> to <code>WhileSubscribed</code>?', options: ['To poll every 5 seconds', 'So a short gap, like a rotation, does not restart the upstream', 'To time out slow network calls'], a: 1, why: 'The upstream stays alive for 5 s after the last collector leaves. A rotation reconnects well within that.' },
           { q: 'An Activity uses <code>lifecycleScope.launch { gps.collect { … } }</code>. The app sits in the background. Is GPS still being collected?', options: ['Yes, until the Activity is destroyed', 'No, it stops at onStop'], a: 0, why: '<code>lifecycleScope</code> is only cancelled at onDestroy. Collection must be tied to STARTED to stop in the background.' },
         ],
+        deeper: lifecycleDepth.deeper,
+        underHood: lifecycleDepth.underHood,
+        mistakes: lifecycleDepth.mistakes,
         visual(el) {
           const W = 12000;
           const MODES = {

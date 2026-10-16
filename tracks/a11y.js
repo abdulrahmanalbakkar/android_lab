@@ -181,6 +181,28 @@
 .ay-input { margin: 4px 8px 8px; padding: 7px 12px; border-radius: 999px; border: 2px solid var(--accent); background: var(--surface); font-size: 0.8rem; color: var(--muted); }
 .ay-shade { position: absolute; left: 0; right: 0; z-index: 2; pointer-events: none; opacity: 0; background: repeating-linear-gradient(45deg, var(--warm-soft) 0 6px, transparent 6px 12px); border: 1px dashed var(--warm); transition: opacity 0.25s, height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .ay-e2e.ay-show .ay-shade { opacity: 0.9; }
+
+/* depth: semantics */
+.ay-cs-gauge { position: relative; flex: 1 1 auto; min-width: 0; padding: 14px 10px; border-radius: 10px; }
+.ay-cs-track { position: relative; display: block; height: 8px; border-radius: 99px; background: var(--sunk); }
+.ay-cs-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--accent); transition: width 0.25s; }
+.ay-cs-thumb { position: absolute; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); transition: left 0.25s; }
+.ay-cs-done { justify-self: start; }
+.ay-ca-list { width: min(300px, 100%); }
+.ay-ca-row { display: grid; gap: 1px; padding: 8px 10px; border-radius: 10px; background: var(--bg); min-width: 0; }
+.ay-ca-row b { font: 700 0.86rem var(--body); }
+.ay-ca-row small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ay-ca-row.ay-ca-read b { font-weight: 400; color: var(--muted); }
+.ay-ca-menu { display: grid; gap: 6px; justify-items: start; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+/* depth: insets */
+.ay-ci-top { position: absolute; top: 24px; left: 0; right: 0; height: 40px; display: flex; align-items: center; padding: 0 12px; font: 700 0.92rem var(--display); background: var(--accent-soft); z-index: 2; }
+.ay-ci-gap { flex: none; height: 0; transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.ay-ci-gap.ay-ci-bad { background: var(--err-soft); box-shadow: inset 0 2px 0 var(--err); }
+.ay-lp-view { position: absolute; left: 0; right: 0; top: 0; bottom: 0; overflow: hidden; z-index: 1; transition: top 0.3s, bottom 0.3s; }
+.ay-lp-inner { display: grid; gap: 6px; padding: 0 8px; transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.3s; }
+.ay-lp-row { display: flex; align-items: center; gap: 8px; height: 44px; flex: none; padding: 0 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font: 700 0.8rem var(--body); }
+.ay-lp-row i { width: 32px; height: 32px; flex: none; border-radius: 8px; background: linear-gradient(135deg, var(--accent-soft), var(--warm-soft)); }
+.ay-lp-phone.ay-show .ay-shade { opacity: 0.6; }
 `;
 
   Lab.addTrack({
@@ -364,6 +386,180 @@ BatteryGauge(
           { q: 'A <code>Row</code> has <code>semantics(mergeDescendants = true)</code> and holds two <code>Text</code>s and a <code>Switch</code> with its own <code>onCheckedChange</code>. How many focus stops?', options: ['One', 'Two: the texts together, then the switch', 'Three'], a: 1, why: 'A child with its own action stays a separate stop. Move the action to the row with <code>toggleable</code> to get one stop.' },
           { q: 'What does <code>clearAndSetSemantics { contentDescription = "Battery" }</code> do to the children’s semantics?', options: ['Keeps them and adds a description', 'Removes them, so only "Battery" is read', 'Hides the composable from the screen'], a: 1, why: 'It clears everything below and uses only what you set in the block. The UI still draws as usual.' },
           { q: 'Which property makes a custom slider say "72 percent"?', options: ['<code>contentDescription</code>', '<code>stateDescription</code>', '<code>testTag</code>'], a: 1, why: '<code>stateDescription</code> is for the current state. <code>contentDescription</code> names the thing itself.' },
+        ],
+        deeper: [
+          {
+            title: 'Custom controls need a value and an action',
+            body: `<p>A slider drawn with <code>Canvas</code> has no text and no action, so TalkBack skips it. Describe it yourself. <code>progressBarRangeInfo</code> gives TalkBack the current value and the range. <code>setProgress</code> lets the user change it: with TalkBack, by swiping up or down while the slider has focus, or with the volume keys.</p>
+<p>Use <code>clearAndSetSemantics</code> so anything drawn inside, like a label, does not become an extra stop.</p>`,
+            code: `Canvas(
+    Modifier
+        .fillMaxWidth()
+        .height(48.dp)
+        .clearAndSetSemantics {
+            contentDescription = "Volume"
+            progressBarRangeInfo = ProgressBarRangeInfo(volume, 0f..1f, steps = 9)
+            setProgress { target ->
+                onVolumeChange(target.coerceIn(0f, 1f))
+                true
+            }
+        }
+) { /* draw the track and the thumb */ }`,
+            visual(el) {
+              let on = false, vol = 40, at = 0;
+              const s = sw('ay-cs-sem', 'clearAndSetSemantics { ... }');
+              const head = h('div', { class: 'ay-set-h' }, 'Sound');
+              const fill = h('span', { class: 'ay-cs-fill' });
+              const thumb = h('span', { class: 'ay-cs-thumb' });
+              const gauge = h('div', { class: 'ay-cs-gauge' }, h('span', { class: 'ay-cs-track' }, fill, thumb));
+              const done = h('span', { class: 'ay-pill ay-cs-done' }, 'Done');
+              const ui = h('div', { class: 'ay-set' }, head, h('div', { class: 'ay-set-row' }, gauge), h('div', { class: 'ay-set-row' }, done));
+              const o = out();
+              const stops = () => [
+                { el: head, text: 'Sound, Heading' },
+                ...(on ? [{ el: gauge, text: () => `Volume, ${vol} percent, Slider`, adj: true }] : []),
+                { el: done, text: 'Done, Button' },
+              ];
+              const txt = st => (typeof st.text === 'function' ? st.text() : st.text);
+              function paintGauge() { fill.style.width = vol + '%'; thumb.style.left = vol + '%'; }
+              function focus(i, quiet) {
+                const list = stops();
+                at = (i + list.length) % list.length;
+                [head, gauge, done].forEach(x => x.classList.remove('ay-focus'));
+                list[at].el.classList.add('ay-focus');
+                if (!quiet) say(o, `TalkBack: <span class="good">"${esc(txt(list[at]))}"</span>${!on && at === 1 ? '  <span class="bad">// the slider was skipped</span>' : ''}`);
+              }
+              function adjust(d) {
+                const st = stops()[at];
+                if (!st.adj) { replay(st.el, 'shake'); say(o, on ? '<span class="muted">// focus is not on the slider. Swipe right to reach it.</span>' : '<span class="bad">// nothing here can be adjusted. To TalkBack, the slider does not exist.</span>'); return; }
+                const nv = Math.max(0, Math.min(100, vol + d));
+                if (nv === vol) { replay(gauge, 'shake'); say(o, `<span class="muted">// already at ${vol} percent</span>`); return; }
+                vol = nv; paintGauge(); replay(thumb, 'pop');
+                say(o, `setProgress(${(vol / 100).toFixed(1)}f) <span class="muted">→</span> TalkBack: <span class="good">"${vol} percent"</span>`);
+              }
+              s.input.addEventListener('change', () => { on = s.input.checked; focus(0); replay(ui, 'pop-soft'); });
+              paintGauge(); focus(0, true);
+              say(o, 'Swipe right through the screen. Then turn on the semantics and try again.');
+              el.append(
+                h('div', { class: 'ay-split' }, ui, h('div', { class: 'ay-col' }, h('span', { class: 'ay-label' }, 'TalkBack gestures'),
+                  h('div', { class: 'controls' }, act('Swipe right', () => focus(at + 1)), act('Swipe up', () => adjust(10)), act('Swipe down', () => adjust(-10))),
+                  s.el)),
+                o);
+            },
+          },
+          {
+            title: 'Custom actions for hidden gestures',
+            body: `<p>Swipe to archive, long-press menus and drag handles are hard or impossible with TalkBack, which uses swipes for its own navigation. Offer the same actions as <code>customActions</code>. TalkBack lists them in its actions menu, and Switch Access offers them too.</p>
+<p>Keep the gesture for touch users. The custom action is a second way in, not a replacement.</p>`,
+            code: `SwipeToDismissBox(state = dismissState, backgroundContent = { ArchiveBackground() }) {
+    MailRow(
+        mail,
+        Modifier.semantics {
+            customActions = listOf(
+                CustomAccessibilityAction("Archive") { onArchive(mail.id); true },
+                CustomAccessibilityAction("Mark as read") { onMarkRead(mail.id); true },
+            )
+        },
+    )
+}`,
+            visual(el) {
+              const MAIL = [['Rami', 'Trail map for Saturday'], ['Ines', 'Invoice 1042'], ['Kai', 'Photos from the ridge']];
+              let mails, at = 0, busy = false;
+              const s = sw('ay-ca-on', 'customActions');
+              const box = h('div', { class: 'ay-set ay-ca-list' });
+              const menu = h('div', { class: 'ay-ca-menu', hidden: true });
+              const o = out();
+              function paint() {
+                box.replaceChildren(...(mails.length ? mails.map((m, i) => h('div', { class: 'ay-ca-row' + (i === at ? ' ay-focus' : '') + (m.read ? ' ay-ca-read' : '') }, h('b', {}, m.from), h('small', {}, m.subject)))
+                  : [h('p', { class: 'ay-empty' }, 'Inbox empty.')]));
+              }
+              const label = m => `${m.from}, ${m.subject}${m.read ? '' : ', unread'}`;
+              function reset() { mails = MAIL.map(([from, subject]) => ({ from, subject, read: false })); at = 0; menu.hidden = true; paint(); }
+              function next() {
+                if (busy || !mails.length) return;
+                menu.hidden = true; at = (at + 1) % mails.length; paint();
+                say(o, `TalkBack: <span class="good">"${esc(label(mails[at]))}"</span>`);
+              }
+              function swipeLeft() {
+                if (busy || !mails.length) return;
+                menu.hidden = true; at = (at - 1 + mails.length) % mails.length; paint();
+                say(o, `<span class="bad">No archive.</span> With TalkBack on, a swipe left moves focus back: "${esc(label(mails[at]))}".`);
+              }
+              async function run(name) {
+                if (busy) return; busy = true;
+                menu.hidden = true;
+                const row = box.children[at], m = mails[at];
+                if (name === 'Archive') {
+                  row.classList.add('leave'); await sleep(420);
+                  if (!el.isConnected) return;
+                  mails.splice(at, 1); at = Math.min(at, Math.max(0, mails.length - 1)); paint();
+                  say(o, `<span class="good">Archived "${esc(m.subject)}".</span>${mails.length ? ` Focus moves to "${esc(label(mails[at]))}".` : ''}`);
+                } else {
+                  m.read = true; paint(); replay(box.children[at], 'pop');
+                  say(o, `<span class="good">Marked as read.</span> TalkBack: "${esc(label(m))}"`);
+                }
+                busy = false;
+              }
+              function openMenu() {
+                if (busy) return;
+                if (!mails.length) { say(o, 'Nothing focused.'); return; }
+                const acts = s.input.checked ? ['Archive', 'Mark as read'] : [];
+                menu.replaceChildren(h('span', { class: 'ay-label' }, 'Actions'),
+                  ...(acts.length ? acts.map(a => act(a, () => run(a))) : [h('p', { class: 'ay-empty' }, 'No actions available')]));
+                menu.hidden = false; replay(menu, 'drop-in');
+                say(o, acts.length ? 'TalkBack’s actions menu lists your custom actions. Pick one.' : '<span class="bad">// the only way to archive is a swipe, which TalkBack takes for itself</span>');
+              }
+              s.input.addEventListener('change', () => { if (!busy) { reset(); say(o, s.input.checked ? 'Each row now carries Archive and Mark as read.' : 'Rows have only the swipe gesture.'); } });
+              reset();
+              say(o, 'Focus is on the first mail. Try to archive it with TalkBack on.');
+              el.append(
+                h('div', { class: 'ay-split' }, box, h('div', { class: 'ay-col' },
+                  h('div', { class: 'controls' }, act('Swipe right', next), act('Swipe left', swipeLeft), act('Open actions menu', openMenu)),
+                  menu, s.el)),
+                o);
+            },
+          },
+          {
+            title: 'Announce changes with liveRegion',
+            body: `<p>Content that changes while focus stays elsewhere, like a cart total or an error under a form, is silent by default. Mark it with <code>liveRegion = LiveRegionMode.Polite</code> and TalkBack reads the new text once it finishes speaking. Use <code>Assertive</code> only for urgent changes, since it interrupts.</p>`,
+            code: `Text(
+    text = "Total: $total",
+    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+)`,
+          },
+        ],
+        underHood: {
+          body: `<p>Compose does not create an Android View per composable, so TalkBack can’t walk a View tree. Instead, the one <code>AndroidComposeView</code> that hosts your UI installs an accessibility delegate. When TalkBack asks for nodes, the delegate builds virtual <code>AccessibilityNodeInfo</code> objects from the <em>merged</em> semantics tree, one per focus stop, and maps actions like click, set progress or a custom action back to your semantics lambdas.</p>
+<p>Compose keeps two views of the same tree. The merged one is what accessibility services see. The unmerged one keeps every node, and UI tests can ask for it with <code>useUnmergedTree = true</code>.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A clickable icon instead of an IconButton',
+            bad: `Icon(
+    Icons.Default.Close,
+    contentDescription = "Close",
+    modifier = Modifier.clickable { onClose() },
+)`,
+            good: `IconButton(onClick = onClose) {
+    Icon(Icons.Default.Close, contentDescription = "Close")
+}`,
+            why: '<code>IconButton</code> adds the button role and a 48 dp touch target. A bare clickable icon is announced without a role and is 24 dp, hard to hit.',
+          },
+          {
+            title: 'Putting state into contentDescription',
+            bad: `Icon(
+    if (starred) Icons.Filled.Star else Icons.Outlined.Star,
+    contentDescription = if (starred) "Starred" else "Not starred",
+    modifier = Modifier.clickable { onStar(!starred) },
+)`,
+            good: `IconToggleButton(checked = starred, onCheckedChange = onStar) {
+    Icon(
+        if (starred) Icons.Filled.Star else Icons.Outlined.Star,
+        contentDescription = "Star",
+    )
+}`,
+            why: 'The description names the thing. <code>IconToggleButton</code> adds the checked state, a role and a 48 dp target, so TalkBack says the state in the user’s language and announces the change.',
+          },
         ],
         visual(el) {
           const MODES = {
@@ -971,6 +1167,156 @@ fun ChatScreen(messages: List<Message>, onSend: (String) -> Unit) {
           { q: 'An app targets Android 15 and runs on Android 15, with no inset handling. What happens?', options: ['The system adds padding for you', 'Content draws behind the status and navigation bars', 'The app falls back to the old non-edge-to-edge layout'], a: 1, why: 'Edge-to-edge is enforced for apps targeting API 35. Handling insets is up to you.' },
           { q: 'Which insets include the keyboard?', options: ['<code>WindowInsets.systemBars</code>', '<code>WindowInsets.ime</code> and <code>WindowInsets.safeDrawing</code>', '<code>WindowInsets.displayCutout</code>'], a: 1, why: '<code>ime</code> is the keyboard alone. <code>safeDrawing</code> combines it with the bars and the cutout.' },
           { q: 'Where should <code>enableEdgeToEdge()</code> go?', options: ['In onCreate, before setContent', 'In onResume', 'Inside a composable'], a: 0, why: 'It configures the window, so call it once in onCreate before any content is set.' },
+        ],
+        deeper: [
+          {
+            title: 'Consume what you already applied',
+            body: `<p>Insets modifiers like <code>systemBarsPadding()</code> consume what they apply, so a nested insets modifier below them only adds what is left. Plain <code>padding(innerPadding)</code> is just padding and consumes nothing. Children further down still see the full insets and pad again.</p>
+<p>After <code>padding(innerPadding)</code>, add <code>consumeWindowInsets(innerPadding)</code>. Now <code>imePadding()</code> on the input subtracts the navigation bar that is already covered, and the field sits right on the keyboard.</p>`,
+            code: `Scaffold(topBar = { TopAppBar(title = { Text("Chat") }) }) { innerPadding ->
+    Column(
+        Modifier
+            .padding(innerPadding)
+            .consumeWindowInsets(innerPadding)
+    ) {
+        Messages(Modifier.weight(1f))
+        MessageInput(Modifier.imePadding())   // keyboard height minus what is already used
+    }
+}`,
+            visual(el) {
+              const SB = 24, TB = 40, NB = 18, KB = 150;
+              let consume = false, kb = false;
+              const msgs = h('div', { class: 'ay-msgs' }, h('div', { class: 'ay-msg' }, 'Ridge path at 9?'), h('div', { class: 'ay-msg me' }, 'Sounds good'));
+              const input = h('div', { class: 'ay-input' }, 'Message');
+              const gap = h('div', { class: 'ay-ci-gap' });
+              const content = h('div', { class: 'ay-content ay-ci-content' }, msgs, input, gap);
+              const kbEl = h('div', { class: 'ay-kb', 'aria-hidden': 'true' }, Array.from({ length: 24 }, () => h('i')));
+              const phone = h('div', { class: 'ay-e2e ay-show ay-ci-phone', role: 'img', 'aria-label': 'Chat screen inside a Scaffold' },
+                h('div', { class: 'ay-ci-top' }, 'Chat'), content,
+                h('div', { class: 'ay-shade', style: `top:0;height:${SB}px` }), h('div', { class: 'ay-shade', style: `bottom:0;height:${NB}px` }), kbEl,
+                h('div', { class: 'ay-sbar' }, h('span', {}, '9:41'), h('span', {}, '5G 80%')), h('div', { class: 'ay-nbar' }));
+              const code = h('div', { class: 'kt' });
+              const o = out();
+              const btns = [
+                cmd('.padding(innerPadding)', () => { consume = false; press(btns, btns[0]); paint(); }),
+                cmd('.padding(innerPadding).consumeWindowInsets(innerPadding)', () => { consume = true; press(btns, btns[1]); paint(); }),
+              ];
+              const kbBtn = act('Show keyboard', () => { kb = !kb; kbBtn.textContent = kb ? 'Hide keyboard' : 'Show keyboard'; paint(); });
+              function paint() {
+                const ime = kb ? (consume ? KB - NB : KB) : 0;
+                const extra = kb && !consume ? NB : 0;
+                content.style.top = SB + TB + 'px';
+                content.style.bottom = NB + 'px';
+                gap.style.height = ime + 'px';
+                gap.classList.toggle('ay-ci-bad', extra > 0);
+                kbEl.classList.toggle('up', kb);
+                code.innerHTML = hl(`Column(Modifier${consume ? '.padding(innerPadding)\n  .consumeWindowInsets(innerPadding)' : '.padding(innerPadding)'}) {\n  MessageInput(Modifier.imePadding())\n}`);
+                say(o, !kb
+                  ? `innerPadding = top ${SB + TB} dp, bottom ${NB} dp. Open the keyboard.`
+                  : consume
+                    ? `<span class="good">imePadding() = ${KB} - ${NB} consumed = ${KB - NB} dp.</span> The field sits on the keyboard.`
+                    : `<span class="bad">imePadding() = ${KB} dp on top of ${NB} dp of padding.</span> An empty ${NB} dp band opens above the keyboard.`);
+              }
+              press(btns, btns[0]);
+              paint();
+              el.append(
+                h('div', { class: 'ay-split' }, phone,
+                  h('div', { class: 'ay-col' }, h('span', { class: 'ay-label' }, 'Modifiers on the Scaffold content'), h('div', { class: 'controls' }, btns), h('div', { class: 'controls' }, kbBtn), code,
+                    h('p', { class: 'tip' }, 'Red band: padding added twice for the same inset.'))),
+                o);
+            },
+          },
+          {
+            title: 'Lists: contentPadding, not padding',
+            body: `<p>Padding a <code>LazyColumn</code> shrinks its viewport. Rows stop at the edge of each bar and you see a hard cut. Pass the insets as <code>contentPadding</code> instead. The list still fills the screen and rows scroll behind the transparent bars, but the first and last row can always scroll clear of them.</p>`,
+            code: `LazyColumn(
+    contentPadding = WindowInsets.systemBars.asPaddingValues(),
+) {
+    items(photos, key = { it.id }) { PhotoRow(it) }
+}`,
+            visual(el) {
+              const SB = 24, NB = 18;
+              let cp = false, pos = 0, busy = false;
+              const inner = h('div', { class: 'ay-lp-inner' }, Array.from({ length: 10 }, (_, i) => h('div', { class: 'ay-lp-row' }, h('i'), `Photo ${i + 1}`)));
+              const view = h('div', { class: 'ay-lp-view' }, inner);
+              const phone = h('div', { class: 'ay-e2e ay-show ay-lp-phone', role: 'img', 'aria-label': 'Photo list drawn edge to edge' },
+                view, h('div', { class: 'ay-shade', style: `top:0;height:${SB}px` }), h('div', { class: 'ay-shade', style: `bottom:0;height:${NB}px` }),
+                h('div', { class: 'ay-sbar' }, h('span', {}, '9:41'), h('span', {}, '5G 80%')), h('div', { class: 'ay-nbar' }));
+              const code = h('div', { class: 'kt' });
+              const o = out();
+              const max = () => Math.max(0, inner.offsetHeight - view.clientHeight);
+              function place() { inner.style.transform = `translateY(${-pos * max()}px)`; }
+              function paint() {
+                view.style.top = cp ? '0' : SB + 'px'; view.style.bottom = cp ? '0' : NB + 'px';
+                inner.style.paddingTop = cp ? SB + 'px' : '0'; inner.style.paddingBottom = cp ? NB + 'px' : '0';
+                code.innerHTML = hl(cp ? 'LazyColumn(contentPadding = WindowInsets.systemBars.asPaddingValues())' : 'LazyColumn(Modifier.windowInsetsPadding(WindowInsets.systemBars))');
+                place();
+              }
+              async function scrollTo(p, label) {
+                if (busy) return; busy = true;
+                pos = p; place();
+                await sleep(500);
+                if (!el.isConnected) return;
+                say(o, cp
+                  ? `${label}: rows slide behind the bars, ${p === 1 ? 'and the last row stops above the gesture bar' : p === 0 ? 'and the first row starts below the status bar' : 'and you can see them through the transparent bars'}.`
+                  : `${label}: rows are cut off at the bar edges. The bars show an empty strip.`);
+                busy = false;
+              }
+              const modes = [
+                cmd('Modifier.windowInsetsPadding(systemBars)', () => { if (busy) return; cp = false; press(modes, modes[0]); paint(); say(o, 'Padding: the viewport ends at the bars.'); }),
+                cmd('contentPadding = systemBars', () => { if (busy) return; cp = true; press(modes, modes[1]); paint(); say(o, 'contentPadding: the viewport fills the screen, the content is inset.'); }),
+              ];
+              press(modes, modes[0]);
+              el.append(
+                h('div', { class: 'ay-split' }, phone,
+                  h('div', { class: 'ay-col' }, h('div', { class: 'controls' }, modes), code,
+                    h('div', { class: 'controls' }, act('Scroll to top', () => scrollTo(0, 'Top')), act('Scroll to middle', () => scrollTo(0.5, 'Middle')), act('Scroll to end', () => scrollTo(1, 'End'))))),
+                o);
+              paint();
+              say(o, 'Compare the two ways and scroll the list.');
+            },
+          },
+          {
+            title: 'Cutouts move when you rotate',
+            body: `<p>Rotate a phone with a camera hole and the cutout moves to a side edge. <code>systemBars</code> does not cover it there, so text can land under the camera. <code>safeDrawing</code> and <code>safeContent</code> include <code>displayCutout</code>. Apply only the sides you need with <code>only</code>.</p>`,
+            code: `Column(
+    Modifier.windowInsetsPadding(
+        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
+    )
+) { /* ... */ }`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>enableEdgeToEdge()</code> tells the window not to fit system windows, so your content gets the whole screen. It also makes the bars transparent, adds a scrim where the system needs one, and picks light or dark bar icons.</p>
+<p>The view that hosts Compose then listens for window insets, including the per-frame updates while the keyboard animates, and stores them in snapshot State. A new inset value is a State write, so only the layouts that read those insets measure again. Insets padding modifiers pass the amount they consumed down the modifier tree through a modifier local, and each nested one subtracts it before it pads.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Hard-coded bar heights',
+            bad: `Column(Modifier.padding(top = 24.dp, bottom = 48.dp)) {
+    /* ... */
+}`,
+            good: `Column(Modifier.systemBarsPadding()) {
+    /* ... */
+}`,
+            why: 'Bar heights differ by device, cutout, gesture or three-button navigation and orientation. Insets give you the real numbers, and they update when they change.',
+          },
+          {
+            title: 'Padding before the background',
+            bad: `Box(
+    Modifier
+        .fillMaxSize()
+        .safeDrawingPadding()
+        .background(MaterialTheme.colorScheme.primaryContainer)
+)`,
+            good: `Box(
+    Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.primaryContainer)
+        .safeDrawingPadding()
+)`,
+            why: 'Modifiers apply in order. Padding first shrinks the area the background paints, so the bars show the window color instead of yours. Paint full bleed, then pad the content.',
+          },
         ],
         visual(el) {
           const SB = 24, NB = 18, KB = 150;

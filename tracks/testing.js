@@ -104,7 +104,383 @@
 
 @media (max-width: 720px) { .tst-split { grid-template-columns: minmax(0, 1fr); } .tst-split .phone { justify-self: center; } }
 @media (max-width: 520px) { .tst-methods { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+
+/* depth steps */
+.phone.tst-dz-phone { width: 170px; height: 220px; justify-content: flex-start; align-items: stretch; gap: 10px; padding: 16px 12px; }
+.tst-dz-panel { border-radius: 10px; background: var(--accent-soft); border: 2px solid var(--accent); box-sizing: border-box; min-height: 0; transition: none; }
+.tst-dz-panel[style*="height: 0px"], .tst-dz-panel[style*="height:0"] { border-width: 0; }
 `;
+
+  // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
+  const pressed = (buttons, keys, k) => buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(keys[i] === k)));
+  const gwt = lines => lines.map(src => h('div', { class: 'tst-gwt-line', html: hl(src) }));
+  const mark = (rows, i, cls) => rows.forEach((r, j) => { r.classList.remove('tst-on', 'tst-pass', 'tst-fail'); if (j === i && cls) r.classList.add(cls); });
+
+  const coroutinesDepth = {
+    deeper: [
+      {
+        title: 'Step the clock: advanceTimeBy and runCurrent',
+        body: `<p><code>advanceUntilIdle()</code> runs everything. To test what happens <em>between</em> events, step the clock yourself. <code>advanceTimeBy(ms)</code> moves virtual time forward and runs every task scheduled <em>before</em> the new time. A task scheduled exactly at the new time is not run yet. <code>runCurrent()</code> runs the tasks due right now.</p>
+<p>The ViewModel below waits 300 ms after the last keystroke before it searches. Step the clock and see when the search runs.</p>`,
+        code: `@Test fun searchesOnlyAfterTypingStops() = runTest {
+    vm.onQuery("kot")
+    advanceTimeBy(300)               // clock at 300, search not run yet
+    assertEquals(SearchState.Idle, vm.state.value)
+    runCurrent()                     // runs the task due at 300
+    assertEquals(SearchState.Results(12), vm.state.value)
+}`,
+        visual(el) {
+          const END = 1200;
+          let now = 0, tasks = [], state = 'Idle', typed = 0;
+          const WORDS = ['kot', 'kotl', 'kotli', 'kotlin'];
+          const cursor = h('span', { class: 'cursor', style: 'left:0' });
+          const track = h('div', { class: 'lane-track' }, cursor);
+          const clock = h('b', { class: 'tst-vt' }, '0 ms');
+          const stateSlot = h('span', {}, h('span', { class: 'chip' }, 'Idle'));
+          const queueEl = h('div', { class: 'tst-queue', 'aria-label': 'Scheduled tasks' });
+          const o = out();
+          const pct = t => (Math.min(t, END) / END) * 100 + '%';
+          const setState = s => { state = s; stateSlot.replaceChildren(h('span', { class: 'chip drop-in' }, s)); };
+          function paint() {
+            cursor.style.left = pct(now);
+            clock.textContent = now + ' ms';
+            track.querySelectorAll('.tst-tick').forEach(x => x.remove());
+            tasks.forEach(t => track.append(h('span', { class: 'tst-tick', style: `left:${pct(t.at)};opacity:1;background:var(--accent);width:3px` })));
+            queueEl.replaceChildren(...tasks.map(t => h('span', { class: 'tst-task drop-in' }, `search("${t.q}") at ${t.at} ms`)));
+          }
+          const run = list => list.forEach(t => { tasks = tasks.filter(x => x !== t); setState(`Results(${t.q.length * 3})`); });
+          function reset() { now = 0; tasks = []; typed = 0; setState('Idle'); paint(); }
+          reset();
+          o.innerHTML = 'Type a query to schedule a debounced search, then step the clock.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('vm.onQuery(…)', () => {
+                if (now > END - 300) { replay(track, 'shake'); say(o, '<span class="muted">end of the timeline:</span> press Reset to start again.'); return; }
+                const q = WORDS[Math.min(typed++, WORDS.length - 1)];
+                const had = tasks.length;
+                tasks = [{ at: now + 300, q }];
+                if (state !== 'Idle' && !had) setState('Idle');
+                paint(); replay(queueEl, 'pop-soft');
+                say(o, had ? `typed "${q}": the old search was cancelled and a new one is due at ${now + 300} ms.` : `typed "${q}": a search is due at ${now + 300} ms.`);
+              }),
+              cmd('advanceTimeBy(100)', () => step(100)),
+              cmd('advanceTimeBy(300)', () => step(300)),
+              cmd('runCurrent()', () => {
+                const due = tasks.filter(t => t.at <= now);
+                if (!due.length) { replay(queueEl, 'shake'); say(o, `${hl('runCurrent()')} <span class="muted">// nothing is due at ${now} ms</span>`); return; }
+                run(due); paint(); replay(stateSlot, 'pop');
+                say(o, `${hl('runCurrent()')} <span class="good">// ran the search due at ${now} ms</span>`);
+              }),
+              cmd('advanceUntilIdle()', () => {
+                if (!tasks.length) { say(o, `${hl('advanceUntilIdle()')} <span class="muted">// nothing queued, clock stays at ${now} ms</span>`); return; }
+                now = Math.max(now, ...tasks.map(t => t.at)); run([...tasks]); paint(); replay(clock, 'pop');
+                say(o, `${hl('advanceUntilIdle()')} <span class="good">// jumped to ${now} ms and ran everything</span>`);
+              })),
+            h('div', { class: 'tst-clocks' }, h('span', {}, 'currentTime ', clock), h('span', { class: 'tst-state' }, 'vm.state ', stateSlot)),
+            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'virtual time'), track)),
+            queueEl, o);
+          function step(ms) {
+            if (now + ms > END) { replay(track, 'shake'); say(o, '<span class="muted">end of the timeline:</span> press Reset to start again.'); return; }
+            const target = now + ms;
+            const ran = tasks.filter(t => t.at < target);
+            const atEdge = tasks.filter(t => t.at === target);
+            now = target; run(ran); paint(); replay(clock, 'pop');
+            if (ran.length) say(o, `${hl(`advanceTimeBy(${ms})`)} <span class="good">// the search was due before ${now} ms, so it ran</span>`);
+            else if (atEdge.length) say(o, `${hl(`advanceTimeBy(${ms})`)} <span class="bad">// clock is at ${now} ms, but the task due exactly at ${now} has not run. Call runCurrent().</span>`);
+            else say(o, `${hl(`advanceTimeBy(${ms})`)} <span class="muted">// clock at ${now} ms, nothing due yet</span>`);
+          }
+        },
+      },
+      {
+        title: 'Endless coroutines go in backgroundScope',
+        body: `<p><code>runTest</code> waits for every coroutine launched in its scope before it returns. A collector of a <code>StateFlow</code> or a ticker never finishes, so the test hangs until <code>runTest</code>’s timeout fails it.</p>
+<p>Launch such collectors in <code>backgroundScope</code> instead. It shares the same scheduler, and <code>runTest</code> cancels it when the test body ends.</p>`,
+        visual(el) {
+          const MODES = [['plain', 'launch { … }'], ['bg', 'backgroundScope.launch { … }']];
+          let mode = 'plain', busy = false;
+          const script = h('div', { class: 'tst-script' });
+          const timer = h('span', { class: 'bar wait', style: 'left:0;width:0;opacity:0' });
+          const child = h('span', { class: 'chip' }, 'not started');
+          const verdict = h('span', { class: 'tst-res' }, 'not run');
+          const o = out();
+          let rows = [];
+          const modeBtns = MODES.map(([k, src]) => cmd(src, () => { if (busy) return; mode = k; paint(); say(o, `<span class="muted">mode:</span> the collector is launched with ${hl(src)}. Run the test.`); }));
+          function paint() {
+            rows = gwt([
+              '@Test fun countsTicks() = runTest {',
+              '    val seen = mutableListOf<Int>()',
+              mode === 'bg' ? '    backgroundScope.launch { vm.ticks.toList(seen) }' : '    launch { vm.ticks.toList(seen) }',
+              '    advanceTimeBy(3_000); runCurrent()',
+              '    assertEquals(listOf(1, 2, 3), seen)',
+              '}   // runTest now waits for its children',
+            ]);
+            script.replaceChildren(...rows);
+            pressed(modeBtns, MODES.map(m => m[0]), mode);
+            timer.style.width = '0'; timer.style.opacity = '0'; child.textContent = 'not started'; child.className = 'chip';
+            verdict.textContent = 'not run'; verdict.className = 'tst-res';
+          }
+          async function runIt() {
+            if (busy) return; busy = true;
+            const live = () => el.isConnected;
+            try {
+              paint();
+              for (let i = 0; i < rows.length; i++) {
+                mark(rows, i, 'tst-on');
+                if (i === 2) { child.textContent = 'collecting'; child.className = 'chip bool drop-in'; }
+                await sleep(420); if (!live()) return;
+              }
+              mark(rows, 4, 'tst-pass'); await sleep(300); if (!live()) return;
+              if (mode === 'bg') {
+                child.textContent = 'cancelled'; child.className = 'chip drop-in';
+                verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
+                mark(rows, 5, 'tst-pass');
+                say(o, '<span class="good">passed:</span> the body finished, runTest cancelled backgroundScope, and the endless collector went with it.');
+                return;
+              }
+              mark(rows, 5, 'tst-on');
+              say(o, 'The body is done, but one child is still collecting. runTest waits for it…');
+              const T = 2600, t0 = performance.now();
+              timer.style.opacity = '1';
+              while (performance.now() - t0 < T) {
+                timer.style.width = ((performance.now() - t0) / T) * 100 + '%';
+                await sleep(50); if (!live()) return;
+              }
+              timer.style.width = '100%';
+              mark(rows, 5, 'tst-fail');
+              verdict.textContent = 'FAILED: timed out'; verdict.className = 'tst-res tst-bad drop-in';
+              say(o, '<span class="bad">failed:</span> the collector never completes, so runTest timed out even though every assertion passed.');
+            } finally { busy = false; }
+          }
+          paint();
+          o.innerHTML = 'The ViewModel exposes an endless flow of ticks. Run the test both ways.';
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            script,
+            h('div', { class: 'tst-clocks' }, h('span', { class: 'tst-state' }, 'collector ', child), verdict),
+            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'waiting (sped up)'), h('div', { class: 'lane-track' }, timer))),
+            h('div', { class: 'controls' }, cmd('run the test', runIt)),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p><code>runTest</code> creates a <code>TestScope</code> whose dispatcher is a <code>StandardTestDispatcher</code> with a <code>TestCoroutineScheduler</code>. If <code>Dispatchers.Main</code> was replaced with a test dispatcher, <code>runTest</code> reuses that dispatcher’s scheduler, so both share one clock.</p>
+<p>The scheduler is a queue of tasks ordered by virtual time. When a coroutine on a test dispatcher calls <code>delay(1_000)</code>, nothing sleeps. The dispatcher adds “resume this continuation” to the queue at <code>currentTime + 1_000</code>, and the coroutine suspends. Advancing takes tasks off the queue in time order, sets <code>currentTime</code> to each task’s time and runs it.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'runBlocking with real delays',
+        bad: `@Test fun retries() = runBlocking {
+    vm.sync()
+    delay(3_500)          // the test really waits
+    assertEquals(SyncState.Done, vm.state.value)
+}`,
+        good: `@Test fun retries() = runTest {
+    vm.sync()
+    advanceUntilIdle()    // skips the delays
+    assertEquals(SyncState.Done, vm.state.value)
+}`,
+        why: 'Real waits make the suite slow and flaky, since 3.5 s may not be enough on a busy CI machine. <code>runTest</code> runs the same code on virtual time.',
+      },
+      {
+        title: 'setMain without resetMain',
+        bad: `@Before fun setUp() {
+    Dispatchers.setMain(StandardTestDispatcher())
+}`,
+        good: `@Before fun setUp() {
+    Dispatchers.setMain(StandardTestDispatcher())
+}
+@After fun tearDown() {
+    Dispatchers.resetMain()
+}`,
+        why: 'The replaced Main stays installed for the next test in the same process, with a scheduler that test does not control. A JUnit rule that does both is the safest form.',
+      },
+      {
+        title: 'Code under test on a hard-coded dispatcher',
+        bad: `class SyncViewModel(private val repo: SyncRepository) : ViewModel() {
+    fun sync() = viewModelScope.launch(Dispatchers.IO) {
+        _state.value = repo.sync()
+    }
+}`,
+        good: `class SyncViewModel(
+    private val repo: SyncRepository,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) : ViewModel() {
+    fun sync() = viewModelScope.launch(io) { _state.value = repo.sync() }
+}`,
+        why: 'Work on the real IO pool runs on other threads, outside the test scheduler. <code>advanceUntilIdle()</code> can return before it finishes. Inject the dispatcher and pass a test one.',
+      },
+    ],
+  };
+
+  const composeUiDepth = {
+    deeper: [
+      {
+        title: 'What the rule waits for, and what it does not',
+        body: `<p>Before every finder and assertion, the rule waits until Compose is idle: no pending recomposition, layout or draw, and no running animations. It also waits for registered Espresso idling resources.</p>
+<p>It does not know about your own background work. If the ViewModel loads on a real <code>Dispatchers.IO</code> thread, the assertion can run before the data arrives. Use a fake repository that returns at once, or wait for the result with <code>waitUntil</code>. Never <code>Thread.sleep</code>.</p>`,
+        code: `rule.onNodeWithText("Refresh").performClick()
+rule.waitUntil(timeoutMillis = 5_000) {
+    rule.onAllNodesWithText("Ada Lovelace").fetchSemanticsNodes().isNotEmpty()
+}
+rule.onNodeWithText("Ada Lovelace").assertIsDisplayed()`,
+        visual(el) {
+          const MODES = [['fake', 'fake repo, returns at once'], ['io', 'real repo on Dispatchers.IO'], ['wait', 'real repo + waitUntil']];
+          let mode = 'fake', busy = false;
+          const script = h('div', { class: 'tst-script' });
+          const screen = h('div', { class: 'tst-ph-count' }, 'Loading…');
+          const bar = h('span', { class: 'bar run', style: 'left:0;width:0' });
+          const verdict = h('span', { class: 'tst-res' }, 'not run');
+          const o = out();
+          let rows = [];
+          const modeBtns = MODES.map(([k, label]) => h('button', { class: 'cmd', onclick() { if (busy) return; mode = k; paint(); say(o, `<span class="muted">setup:</span> ${label}. Run the test.`); } }, label));
+          function paint() {
+            const lines = ['rule.setContent { ProfileScreen(vm) }', 'rule.onNodeWithText("Refresh").performClick()'];
+            if (mode === 'wait') lines.push('rule.waitUntilExactlyOneExists(hasText("Ada Lovelace"))');
+            lines.push('rule.onNodeWithText("Ada Lovelace").assertIsDisplayed()');
+            rows = gwt(lines); script.replaceChildren(...rows);
+            pressed(modeBtns, MODES.map(m => m[0]), mode);
+            screen.textContent = 'Profile'; screen.className = 'tst-ph-count';
+            bar.style.width = '0'; verdict.textContent = 'not run'; verdict.className = 'tst-res';
+          }
+          async function runIt() {
+            if (busy) return; busy = true;
+            const live = () => el.isConnected;
+            let loaded = false, loadP = 0, t0 = 0;
+            const LOAD = 1400;
+            const tick = () => { if (!t0) return; loadP = Math.min(1, (performance.now() - t0) / LOAD); bar.style.width = loadP * 100 + '%'; if (loadP >= 1 && !loaded) { loaded = true; screen.textContent = 'Ada Lovelace'; screen.className = 'tst-ph-title drop-in'; } };
+            try {
+              paint();
+              mark(rows, 0, 'tst-on'); await sleep(450); if (!live()) return;
+              mark(rows, 1, 'tst-on'); screen.textContent = 'Loading…';
+              if (mode === 'fake') { await sleep(250); if (!live()) return; loaded = true; bar.style.width = '100%'; screen.textContent = 'Ada Lovelace'; screen.className = 'tst-ph-title drop-in'; }
+              else t0 = performance.now();
+              await sleep(400); if (!live()) return; tick();
+              let i = 2;
+              if (mode === 'wait') {
+                mark(rows, 2, 'tst-on');
+                while (!loaded) { await sleep(100); if (!live()) return; tick(); replay(rows[2], 'pop-soft'); }
+                await sleep(200); if (!live()) return;
+                i = 3;
+              }
+              mark(rows, i, 'tst-on'); await sleep(350); if (!live()) return; tick();
+              if (loaded) {
+                mark(rows, i, 'tst-pass'); verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
+                say(o, mode === 'fake' ? '<span class="good">passed:</span> the fake answered during the click, so the name was there before the assertion.' : '<span class="good">passed:</span> waitUntil polled the tree until the name showed up, then the assertion ran.');
+              } else {
+                mark(rows, i, 'tst-fail'); verdict.textContent = 'FAILED'; verdict.className = 'tst-res tst-bad drop-in';
+                say(o, '<span class="bad">failed:</span> Compose was idle, so the rule let the assertion run. The IO thread was still loading.');
+                while (!loaded) { await sleep(100); if (!live()) return; tick(); }
+              }
+            } finally { busy = false; }
+          }
+          paint();
+          o.innerHTML = 'Pick a setup and run the same test.';
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            h('div', { class: 'tst-split' },
+              h('div', { class: 'phone tst-dz-phone' }, h('span', { class: 'tst-ph-btn' }, 'Refresh'), screen),
+              h('div', { class: 'tst-sub' }, script,
+                h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'data load'), h('div', { class: 'lane-track' }, bar))),
+                h('div', { class: 'controls' }, cmd('run the test', runIt), verdict))),
+            o);
+        },
+      },
+      {
+        title: 'Freeze the clock to test an animation',
+        body: `<p>The rule drives Compose with a test clock, <code>rule.mainClock</code>. By default it advances on its own, so after <code>performClick()</code> the rule waits until animations finish and you only see the end state.</p>
+<p>Set <code>autoAdvance = false</code> to stop it. Then move time yourself with <code>advanceTimeBy</code> or <code>advanceTimeByFrame</code> and check the UI in the middle of an animation.</p>`,
+        code: `@Test fun panelIsHalfOpenMidAnimation() {
+    rule.mainClock.autoAdvance = false
+    rule.setContent { ExpandingPanel() }        // tween(300) on height
+    rule.onNodeWithText("Details").performClick()
+    rule.mainClock.advanceTimeBy(150)
+    rule.onNodeWithTag("panel").assertHeightIsAtLeast(40.dp)
+    rule.mainClock.advanceTimeBy(150)
+    rule.onNodeWithTag("panel").assertHeightIsEqualTo(120.dp)
+}`,
+        visual(el) {
+          const DUR = 300, FULL = 120;
+          let auto = true, t = null, open = false, busy = false;
+          const panel = h('div', { class: 'tst-dz-panel', style: 'height:0' });
+          const clock = h('b', { class: 'tst-vt' }, '0 ms');
+          const heightEl = h('b', {}, '0 dp');
+          const o = out();
+          const ease = x => 1 - Math.pow(1 - x, 3);
+          let clockMs = 0;
+          function paint() {
+            const p = !open ? 0 : t == null ? 1 : Math.min(1, t / DUR);
+            const hdp = Math.round(FULL * ease(p));
+            panel.style.height = (hdp / FULL) * 90 + 'px';
+            heightEl.textContent = hdp + ' dp';
+            clock.textContent = clockMs + ' ms';
+          }
+          const sw = h('input', { type: 'checkbox', id: 'tst-dz-auto', onchange() { auto = !sw.checked; t = null; open = false; clockMs = 0; paint(); say(o, auto ? 'autoAdvance is on: the rule runs animations to the end for you.' : '<span class="muted">autoAdvance = false:</span> time only moves when you advance it.'); } });
+          async function click() {
+            if (busy) return;
+            if (open) { replay(panel, 'shake'); say(o, '<span class="muted">already open:</span> press Reset to close it.'); return; }
+            open = true; t = 0;
+            if (!auto) { paint(); say(o, `${hl('performClick()')} <span class="muted">// animation started, clock frozen at ${clockMs} ms, height 0 dp</span>`); return; }
+            busy = true;
+            try {
+              const start = clockMs;
+              while (t < DUR) { t = Math.min(DUR, t + 16); clockMs = start + t; paint(); await sleep(16); if (!el.isConnected) return; }
+              say(o, `${hl('performClick()')} <span class="good">// the rule waited for the animation: height is already ${FULL} dp</span>`);
+            } finally { busy = false; }
+          }
+          function adv(ms) {
+            if (busy) return;
+            if (auto) { replay(clock, 'shake'); say(o, '<span class="muted">tip:</span> turn off autoAdvance first. With it on, there is nothing in between to inspect.'); return; }
+            clockMs += ms;
+            if (t != null) t = Math.min(DUR, t + ms);
+            paint(); replay(heightEl, 'pop');
+            say(o, t == null ? `clock at ${clockMs} ms. Nothing is animating yet. Click first.` : t >= DUR ? `clock at ${clockMs} ms. The animation is done: ${heightEl.textContent}.` : `clock at ${clockMs} ms, ${t} ms into the animation. Height is ${heightEl.textContent}.`);
+          }
+          paint();
+          o.innerHTML = 'autoAdvance is on. Click Details and see what the test observes.';
+          el.append(
+            h('label', { class: 'switch', for: 'tst-dz-auto' }, sw, h('span', { html: hl('mainClock.autoAdvance = false') })),
+            h('div', { class: 'controls' }, cmd('performClick()', click), cmd('mainClock.advanceTimeByFrame()', () => adv(16)), cmd('mainClock.advanceTimeBy(100)', () => adv(100))),
+            h('div', { class: 'tst-split' },
+              h('div', { class: 'phone tst-dz-phone' }, h('span', { class: 'tst-ph-btn' }, 'Details'), panel),
+              h('div', { class: 'tst-sub' }, h('div', { class: 'tst-clocks' }, h('span', {}, 'mainClock ', clock), h('span', {}, 'panel height ', heightEl)))),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>The compose rule hosts your content in an Activity and installs a test frame clock, the one you control through <code>mainClock</code>. Frames only happen when that clock advances.</p>
+<p>Every finder first calls <code>waitForIdle()</code>. That loop advances the clock if <code>autoAdvance</code> is on, applies pending snapshot changes, and checks that the Recomposer has no pending work and the layout is clean. With Espresso on the classpath, it also waits for registered idling resources. Only then does it read the semantics tree.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Sleeping instead of waiting for a condition',
+        bad: `rule.onNodeWithText("Refresh").performClick()
+Thread.sleep(2_000)
+rule.onNodeWithText("4 messages").assertIsDisplayed()`,
+        good: `rule.onNodeWithText("Refresh").performClick()
+rule.waitUntil(timeoutMillis = 5_000) {
+    rule.onAllNodesWithText("4 messages").fetchSemanticsNodes().isNotEmpty()
+}
+rule.onNodeWithText("4 messages").assertIsDisplayed()`,
+        why: 'A fixed sleep is too long on a fast machine and too short on a slow one. <code>waitUntil</code> returns as soon as the condition holds and fails clearly on timeout.',
+      },
+      {
+        title: 'Asserting a lazy item that was never composed',
+        bad: `rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
+        good: `rule.onNodeWithTag("inbox_list")
+    .performScrollToNode(hasText("Invoice #40"))
+rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
+        why: 'A <code>LazyColumn</code> only composes rows near the screen, so a row far down is not in the semantics tree at all. Scroll to it first.',
+      },
+      {
+        title: 'Matching part of a text without substring',
+        bad: `rule.onNodeWithText("messages").assertExists()   // the Text says "3 messages"`,
+        good: `rule.onNodeWithText("messages", substring = true).assertExists()`,
+        why: 'Text finders match the whole string by default. Pass <code>substring = true</code>, or better, match the full text the user sees.',
+      },
+    ],
+  };
 
   Lab.addTrack({
     id: 'testing',
@@ -409,6 +785,9 @@ class SyncViewModelTest {
           { q: 'Main is a <code>StandardTestDispatcher</code>. Right after <code>vm.sync()</code>, has the launched coroutine run?', options: ['Yes, up to its first delay', 'No, it waits in the queue until you advance'], a: 1, why: 'Standard queues new coroutines. Unconfined would start it right away.' },
           { q: 'Why does a ViewModel test need <code>Dispatchers.setMain</code>?', options: ['viewModelScope uses Dispatchers.Main, which the JVM does not have', 'It makes tests run in parallel', 'runTest requires it'], a: 0, why: 'Without a replacement, launching in viewModelScope fails because there is no Android main looper.' },
         ],
+        deeper: coroutinesDepth.deeper,
+        underHood: coroutinesDepth.underHood,
+        mistakes: coroutinesDepth.mistakes,
         visual(el) {
           // Part A: real vs virtual time
           const steps = [[0, 'attempt 1 failed'], [1000, 'attempt 2 failed'], [3000, 'attempt 3 ok: Done']];
@@ -736,6 +1115,9 @@ class InboxScreenTest {
           { q: '<code>Button { Text("Refresh") }</code>. What does <code>onNodeWithText("Refresh")</code> match by default?', options: ['The Button, because it merges its child Text', 'Only the inner Text node', 'Nothing'], a: 0, why: 'Finders use the merged tree. Pass <code>useUnmergedTree = true</code> to reach the inner Text.' },
           { q: 'When is <code>Modifier.testTag</code> the right finder hook?', options: ['For a node with no stable text, such as a list or an image', 'For every node, always', 'Never in production code'], a: 0, why: 'Prefer what the user sees, like text or content descriptions. Use tags when there is nothing user-visible to match.' },
         ],
+        deeper: composeUiDepth.deeper,
+        underHood: composeUiDepth.underHood,
+        mistakes: composeUiDepth.mistakes,
         visual(el) {
           let msgs = ['Standup at 10', 'Invoice #2041', 'Lunch Friday?'], sel = null, toastT;
           const subjects = ['Release notes', 'Design review', 'Weekly digest', 'Build passed'];

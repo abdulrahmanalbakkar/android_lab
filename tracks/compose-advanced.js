@@ -134,7 +134,34 @@ button.cx-tn:hover { border-color: var(--accent); }
   .cx-split, .cx-scroll, .cx-phases, .cx-nav { grid-template-columns: minmax(0, 1fr); }
   .cx-pv { min-height: 90px; }
   .cx-split .cx-mini { width: 100%; }
-}`;
+}
+/* depth: stability */
+.cx-lam { font: 600 0.74rem var(--mono); padding: 2px 8px; border-radius: 6px; background: var(--sunk); color: var(--ink); transition: background 0.25s, color 0.25s; }
+.cx-lam.cx-lam-new { background: var(--warm-soft); color: var(--warm); }
+.cx-editor { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); min-width: 0; }
+.cx-props { display: grid; gap: 6px; padding-left: 16px; min-width: 0; }
+.cx-props .cmd { justify-self: start; }
+.cx-verdict { padding: 10px 12px; border-radius: 10px; border: 2px solid var(--warm); background: var(--warm-soft); color: var(--ink); font-size: 0.92rem; transition: background 0.25s, border-color 0.25s; }
+.cx-verdict.cx-verdict-ok { border-color: var(--ok); background: var(--ok-soft); }
+/* depth: derivedStateOf */
+.cx-dv-form { width: min(260px, 100%); }
+.cx-dv-in { width: 100%; min-width: 0; font: 500 0.9rem var(--mono); padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+.cx-dv-in:focus { outline: none; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cx-dv-btn { justify-self: start; margin-top: 4px; padding: 8px 16px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 0.85rem var(--body); transition: background 0.25s, color 0.25s; }
+.cx-dv-btn[aria-disabled="true"] { background: var(--sunk); color: var(--muted); }
+/* depth: phases */
+.cx-pp-rows { margin-left: 0; padding-left: 0; border-left: 0; }
+.cx-pp { position: relative; width: 170px; height: 170px; border-radius: 18px; border: 6px solid var(--code-bg); background: var(--surface); overflow: hidden; justify-self: center; }
+.cx-pp-hdr { position: absolute; top: 0; left: 0; right: 0; height: 54px; display: grid; place-items: center; background: var(--accent-soft); font: 700 0.9rem var(--display); z-index: 1; transition: transform 0.15s linear; }
+.cx-pp-body { position: absolute; top: 62px; left: 8px; right: 8px; display: grid; gap: 8px; transition: transform 0.15s linear; }
+.cx-pp-body i { display: block; height: 16px; border-radius: 6px; background: var(--sunk); }
+.cx-dc-chip { width: 110px; height: 70px; display: grid; place-items: center; border-radius: 14px; border: 2px solid var(--line); background: var(--sunk); color: var(--ink); font: 700 1rem var(--body); justify-self: center; }
+.cx-ph-grid { display: grid; grid-template-columns: 92px repeat(12, minmax(0, 1fr)); gap: 3px; align-items: center; padding: 12px; border-radius: 12px; background: var(--bg); min-width: 0; }
+.cx-ph-name { font: 600 0.7rem var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.cx-ph-cell { height: 18px; border-radius: 4px; background: var(--sunk); transition: background 0.15s; }
+.cx-ph-cell.cx-on { background: var(--accent); }
+.cx-ph-cell.cx-off { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+`;
 
   Lab.addTrack({
     id: 'compose2',
@@ -189,6 +216,177 @@ composeCompiler {
           { q: 'Strong skipping is on. <code>Tags(tags: List&lt;String&gt;)</code> receives the same list instance as last time. What happens?', options: ['It skips', 'It runs, because <code>List</code> is unstable', 'It fails to compile'], a: 0, why: 'Unstable parameters are compared with <code>===</code>. The same instance passes, so the composable skips.' },
           { q: 'Which parameter type is stable?', options: ['<code>List&lt;String&gt;</code>', '<code>ImmutableList&lt;String&gt;</code>', '<code>class User(var name: String)</code>'], a: 1, why: 'The compiler knows kotlinx immutable collections can’t change. A plain <code>List</code> might be mutable, and a <code>var</code> property can change without notice.' },
           { q: 'What does <code>@Immutable</code> promise?', options: ['No public property changes after the object is built', 'The class copies itself on every write', 'Compose will deep-copy it before each recomposition'], a: 0, why: 'It is a promise only. The compiler trusts it and compares with <code>equals()</code>, so breaking it shows stale UI.' },
+        ],
+        deeper: [
+          {
+            title: 'Lambdas: what they capture decides',
+            body: `<p>With strong skipping, the compiler wraps each lambda you pass to a composable in <code>remember</code>, keyed on the values it captures. Stable captures are compared with <code>equals()</code>, unstable ones with <code>===</code>. Same captures give the same lambda instance, so the child can skip.</p>
+<p>Capture something rebuilt on every run, like a fresh list, and the lambda is new each time. The child sees a changed parameter and runs again.</p>`,
+            code: `@Composable
+fun PostActions(vm: PostViewModel, post: Post, related: List<Post>) {
+    // captures vm (same instance) and post.id (Int): the same lambda every run
+    LikeButton(onClick = { vm.like(post.id) })
+
+    // a new list on every run, so a new lambda, so ShareButton never skips
+    val ids = related.map { it.id }
+    ShareButton(onClick = { vm.share(ids) })
+
+    // fixed: the list is rebuilt only when related changes
+    val stableIds = remember(related) { related.map { it.id } }
+    ShareButton(onClick = { vm.share(stableIds) })
+}`,
+            visual(el) {
+              let fix = false, busy = false, addr = 0x2a40;
+              const next = () => '@' + (addr += 0x58).toString(16);
+              const rows = [
+                { sig: 'LikeButton(onClick = { vm.like(post.id) })', caps: () => ['vm: same instance (===)', 'post.id: Int, equal'], fresh: () => false },
+                { sig: 'ShareButton(onClick = { vm.share(ids) })', caps: () => ['vm: same instance (===)', fix ? 'ids: remembered, same instance' : 'ids: related.map { }, new list'], fresh: () => !fix },
+              ];
+              for (const r of rows) {
+                r.runs = 1; r.id = next();
+                r.badge = h('span', { class: 'cx-badge' }, '1');
+                r.lam = h('span', { class: 'cx-lam' }, `Function0 ${r.id}`);
+                r.capsEl = h('div', { class: 'cx-meta' });
+                r.status = h('span', { class: 'cx-status' }, 'composed');
+                r.el = h('div', { class: 'cx-row' }, h('span', { class: 'cx-sig' }, r.sig), r.badge, r.capsEl, h('div', { class: 'cx-meta' }, h('span', { class: 'cx-arg' }, 'lambda'), r.lam), r.status);
+              }
+              const paintCaps = () => rows.forEach(r => r.capsEl.replaceChildren(...r.caps().map(c => h('span', { class: `cx-tag ${/new list/.test(c) ? 'cx-unstable' : 'cx-stable'}` }, c))));
+              const pBadge = h('span', { class: 'cx-badge' }, '1');
+              const parent = h('div', { class: 'cx-parent' }, h('span', {}, 'PostActions()'), pBadge);
+              const sw = h('input', { type: 'checkbox', id: 'cx-lc-fix' });
+              const o = out('Recompose the parent and watch which lambda instances change.');
+              let pr = 1;
+              sw.addEventListener('change', () => { if (busy) { sw.checked = fix; return; } fix = sw.checked; paintCaps(); say(o, fix ? 'ids now comes from remember(related). Recompose again.' : 'ids is built in the body again.'); });
+              async function run() {
+                if (busy) return; busy = true;
+                pBadge.textContent = ++pr; replay(pBadge, 'pop'); replay(parent, 'cx-flash');
+                rows.forEach(r => { r.el.classList.remove('cx-ran', 'cx-skipped'); r.status.textContent = ''; });
+                let ran = 0;
+                for (const r of rows) {
+                  await sleep(420);
+                  if (!el.isConnected) return;
+                  if (r.fresh()) {
+                    r.id = next(); r.lam.textContent = `Function0 ${r.id}`; r.lam.classList.add('cx-lam-new'); replay(r.lam, 'pop');
+                    ran++; r.el.classList.add('cx-ran'); bump(r.badge, ++r.runs); replay(r.el, 'cx-flash');
+                    r.status.textContent = 'a capture changed: new lambda, so the child ran';
+                  } else {
+                    r.lam.classList.remove('cx-lam-new');
+                    r.el.classList.add('cx-skipped');
+                    r.status.textContent = 'captures equal: same lambda, child skipped';
+                  }
+                }
+                say(o, ran ? '<span class="bad">ShareButton ran again</span> because its lambda captured a list built fresh on every run.' : '<span class="good">Both children skipped.</span> Every capture matched, so both lambdas were reused.');
+                busy = false;
+              }
+              paintCaps();
+              el.append(
+                h('div', { class: 'cx-tree' }, parent, h('div', { class: 'cx-kids' }, rows.map(r => r.el))),
+                h('div', { class: 'controls cx-ctl' }, cmd('refresh++', run), h('label', { class: 'switch', for: 'cx-lc-fix' }, sw, 'remember(related) { ... }')),
+                o);
+            },
+          },
+          {
+            title: 'Ask the compiler',
+            body: `<p>You don’t have to guess what is stable. Turn on compiler reports and the build writes what it inferred for every class and composable. Look for <code>unstable</code> on classes you pass into composables.</p>
+<p>Edit the class below and watch the report line change.</p>`,
+            code: `// build.gradle.kts of the module
+composeCompiler {
+    reportsDestination = layout.buildDirectory.dir("compose_compiler")
+}
+// Build a release variant, then open build/compose_compiler/<module>_release-classes.txt`,
+            visual(el) {
+              const P = {
+                title: { on: false, a: 'val title: String', b: 'var title: String', ok: on => !on },
+                tags: { on: false, a: 'val tags: List<String>', b: 'val tags: ImmutableList<String>', ok: on => on },
+                author: { on: false, a: 'val author: Author   // :core, not in config', b: 'val author: Author   // listed in stability.conf', ok: on => on },
+              };
+              const rep = h('div', { class: 'kt' });
+              const verdict = h('p', { class: 'cx-verdict' });
+              const o = out('Tap a property to change it.');
+              const btns = {};
+              function report() {
+                const tOk = P.title.ok(P.title.on), gOk = P.tags.ok(P.tags.on), aOk = P.author.ok(P.author.on);
+                const stable = tOk && gOk && aOk;
+                rep.innerHTML = hl([
+                  `${stable ? 'stable' : 'unstable'} class Article {`,
+                  `  stable ${P.title.on ? 'var' : 'val'} title: String`,
+                  `  ${gOk ? 'stable' : 'unstable'} val tags: ${P.tags.on ? 'ImmutableList' : 'List'}<String>`,
+                  `  ${aOk ? 'stable' : 'unstable'} val author: Author`,
+                  `  <runtime stability> = ${stable ? 'Stable' : 'Unstable'}`,
+                  '}',
+                ].join('\n'));
+                verdict.innerHTML = stable
+                  ? '<b>ArticleCard(article)</b> skips when the new article <b>equals()</b> the old one.'
+                  : '<b>ArticleCard(article)</b> skips only when it gets the <b>same instance</b> (===). An equal copy still runs it.';
+                verdict.classList.toggle('cx-verdict-ok', stable);
+                replay(rep, 'cx-flash');
+                const why = !tOk ? 'a var property can change without telling Compose' : !gOk ? 'List could be a MutableList underneath' : !aOk ? 'Author comes from a module the Compose compiler did not build' : 'every property is a val of a stable type';
+                return { stable, why };
+              }
+              for (const [k, p] of Object.entries(P)) {
+                btns[k] = cmd(p.a, () => {
+                  p.on = !p.on; btns[k].innerHTML = hl(p.on ? p.b : p.a);
+                  const r = report();
+                  say(o, `Article is <span class="${r.stable ? 'good' : 'bad'}">${r.stable ? 'stable' : 'unstable'}</span>: ${r.why}.`);
+                });
+              }
+              report();
+              el.append(
+                h('div', { class: 'cx-editor' }, h('span', { class: 'cx-label' }, 'data class Article('), h('div', { class: 'cx-props' }, Object.values(btns)), h('span', { class: 'cx-label' }, ')')),
+                h('span', { class: 'cx-label' }, 'classes.txt'),
+                rep, verdict, o);
+            },
+          },
+          {
+            title: '@Stable for types that change through State',
+            body: `<p><code>@Immutable</code> is for types that never change. <code>@Stable</code> is a looser promise: the object may change, but every change goes through Compose State, and <code>equals()</code> gives the same answer for the same two objects. State holders like <code>LazyListState</code> are built this way.</p>
+<p>Readers of <code>query</code> below recompose when it changes, because it is a State read. The holder itself stays the same instance, so composables that take it can skip.</p>`,
+            code: `@Stable
+class SearchBarState(initial: String) {
+    var query by mutableStateOf(initial)
+        private set
+    fun update(text: String) { query = text }
+}
+
+@Composable
+fun rememberSearchBarState(initial: String = "") = remember { SearchBarState(initial) }`,
+          },
+        ],
+        underHood: {
+          body: `<p>The compiler decides stability per class at compile time and stores the result in a synthetic static field on the class, so other modules built with the Compose compiler can read it. For a generic class like <code>Box&lt;T&gt;</code>, part of the answer waits until runtime, when the type argument is known.</p>
+<p>Each composable also gets a hidden <code>$changed</code> parameter with a few bits per argument. A caller that already knows an argument is the same, different or static passes that down, so the child can skip without comparing again. When the bits say "uncertain", the child checks itself: <code>composer.changed(arg)</code> uses <code>equals()</code> for stable types, and under strong skipping <code>composer.changedInstance(arg)</code> uses <code>===</code> for unstable ones.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Building a new collection for the child',
+            bad: `@Composable
+fun ArticleScreen(article: Article) {
+    TagRow(tags = article.tags.filter { it.isNotBlank() })
+}
+
+@Composable
+fun TagRow(tags: List<String>) { /* ... */ }`,
+            good: `@Composable
+fun ArticleScreen(article: Article) {
+    val tags = remember(article.tags) { article.tags.filter { it.isNotBlank() } }
+    TagRow(tags = tags)
+}`,
+            why: '<code>List</code> is unstable, so it is compared with <code>===</code>. <code>filter</code> returns a new list on every run, so <code>TagRow</code> never skips. Remember the result, or move the filtering into the ViewModel.',
+          },
+          {
+            title: 'Passing the whole screen state to a leaf',
+            bad: `@Composable
+fun PriceLabel(state: ProductScreenState) {
+    Text(state.product.price.formatted)
+}`,
+            good: `@Composable
+fun PriceLabel(price: String) {
+    Text(price)
+}
+
+PriceLabel(state.product.price.formatted)`,
+            why: 'The leaf now depends on every field of the screen state. A change to any of them makes the state unequal, and the label runs again. Pass only what it shows.',
+          },
         ],
         visual(el) {
           let strong = true, busy = false, parentRuns = 1;
@@ -288,6 +486,155 @@ fun Inbox(messages: List<Message>) {
           { q: 'Why wrap <code>derivedStateOf</code> in <code>remember</code>?', options: ['Otherwise every recomposition builds a new derived object and loses its caching', 'It only works on the main thread otherwise', 'remember moves the calculation to a background thread'], a: 0, why: 'The derived object must survive recompositions to compare old and new results. Lint flags it when it is not remembered.' },
           { q: 'Where is <code>derivedStateOf</code> the wrong tool?', options: ['A full name built from first and last name fields', 'Showing a button once a list scrolls past item 0', 'Collapsing a toolbar once the scroll passes a threshold'], a: 0, why: 'The full name changes every time either field does. Derived state adds overhead without saving a single recomposition.' },
         ],
+        deeper: [
+          {
+            title: 'remember(key) is not the same thing',
+            body: `<p>A common attempt is to key <code>remember</code> on the index: <code>remember(index) { ... }</code>. To pass the index as a key, the composable has to read it during composition. So it still recomposes on every index change, and the cached block saves nothing.</p>
+<p><code>derivedStateOf</code> reads the index inside its own block, outside your composable. Your composable reads only the result. Use keys for plain parameters, and <code>derivedStateOf</code> for State that changes more often than the answer you need.</p>`,
+            code: `// Recomposes on every scrolled item: the key is read in composition
+val show = remember(listState.firstVisibleItemIndex) {
+    listState.firstVisibleItemIndex > 0
+}
+
+// Recomposes only when the answer flips
+val show by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }`,
+            visual(el) {
+              const SLOTS = 24;
+              let index = 0, shown = false, t = 0, busy = false;
+              const defs = [
+                { name: 'direct read', fire: () => true },
+                { name: 'remember(index)', fire: () => true },
+                { name: 'derivedStateOf', fire: flip => flip },
+              ];
+              const lanes = defs.map(d => {
+                const count = h('b', {}, '0');
+                const track = h('div', { class: 'lane-track' });
+                return { ...d, n: 0, count, track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, d.name, count), track) };
+              });
+              const idx = h('div', { class: 'kt' });
+              const o = out('Each bar is one recomposition. Scroll and compare the lanes.');
+              const paintIdx = () => { idx.innerHTML = hl(`index = ${index}   index > 0 = ${shown}`); };
+              function clear() { t = 0; lanes.forEach(L => { L.n = 0; L.count.textContent = '0'; L.track.replaceChildren(); }); }
+              function tick(to) {
+                if (t >= SLOTS) clear();
+                index = to;
+                const s = index > 0, flip = s !== shown; shown = s;
+                lanes.forEach(L => {
+                  if (!L.fire(flip)) return;
+                  L.track.append(h('span', { class: 'bar run', style: `left:${(t / SLOTS) * 100}%;width:${100 / SLOTS - 1}%` }));
+                  L.count.textContent = ++L.n; replay(L.count, 'pop');
+                });
+                t++; paintIdx();
+              }
+              async function scroll(target) {
+                if (busy) return;
+                if (target === index) { say(o, 'No index change, so nobody recomposes.'); return; }
+                busy = true;
+                const a = lanes.map(L => L.n);
+                while (index !== target) {
+                  tick(index + Math.sign(target - index));
+                  await sleep(150);
+                  if (!el.isConnected) return;
+                }
+                const d = lanes.map((L, i) => L.n - a[i]);
+                say(o, `direct <span class="bad">+${d[0]}</span>, remember(index) <span class="bad">+${d[1]}</span>, derivedStateOf <span class="good">+${d[2]}</span>`);
+                busy = false;
+              }
+              paintIdx();
+              el.append(idx, h('div', { class: 'timeline cx-tl' }, lanes.map(L => L.el)),
+                h('div', { class: 'controls cx-ctl' }, act('Scroll down 6 items', () => scroll(index + 6)), act('Back to the top', () => scroll(0)), act('Clear', () => { if (!busy) { clear(); say(o, 'Cleared.'); } })),
+                o);
+            },
+          },
+          {
+            title: 'Derived state in a state holder',
+            body: `<p><code>derivedStateOf</code> also works outside composables. In a plain state holder class, it gives you a computed property that Compose observes like any other State. Each reader recomposes only when the result changes.</p>
+<p>Below, the button reads only <code>canSubmit</code>. Every key you type writes a field, but the button hears about it only when the answer flips.</p>`,
+            code: `@Stable
+class SignUpFormState {
+    var email by mutableStateOf("")
+    var password by mutableStateOf("")
+    val canSubmit by derivedStateOf {
+        "@" in email && password.length >= 8
+    }
+}
+
+@Composable
+fun SubmitButton(form: SignUpFormState, onSubmit: () -> Unit) {
+    Button(onClick = onSubmit, enabled = form.canSubmit) { Text("Create account") }
+}`,
+            visual(el) {
+              let writes = 0, recomps = 1, can = false, busy = false;
+              const email = h('input', { id: 'cx-dv-email', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'email', class: 'cx-dv-in' });
+              const pass = h('input', { id: 'cx-dv-pass', type: 'password', autocomplete: 'off', placeholder: 'password, 8+ characters', class: 'cx-dv-in' });
+              const btn = h('span', { class: 'cx-dv-btn', 'aria-disabled': 'true' }, 'Create account');
+              const wN = h('span', { class: 'cx-big' }, '0'), rN = h('span', { class: 'cx-big' }, '1');
+              const o = out('Type in either field, or let the demo type for you.');
+              function changed() {
+                writes++; wN.textContent = writes;
+                const c = email.value.includes('@') && pass.value.length >= 8;
+                if (c !== can) {
+                  can = c; recomps++; rN.textContent = recomps; replay(rN, 'pop'); replay(btn, 'pop');
+                  btn.setAttribute('aria-disabled', String(!c));
+                  say(o, `canSubmit flipped to <span class="${c ? 'good' : 'bad'}">${c}</span>. SubmitButton recomposed. ${writes} field writes so far.`);
+                }
+              }
+              email.addEventListener('input', changed);
+              pass.addEventListener('input', changed);
+              async function auto() {
+                if (busy) return; busy = true;
+                email.value = ''; pass.value = ''; changed();
+                for (const [f, s] of [[email, 'ada@lab.dev'], [pass, 'hunter2024']]) {
+                  for (const ch of s) {
+                    f.value += ch; changed();
+                    await sleep(90);
+                    if (!el.isConnected) return;
+                  }
+                }
+                say(o, `${writes} field writes. <span class="good">SubmitButton recomposed ${recomps - 1} time${recomps === 2 ? '' : 's'}</span> after the first run.`);
+                busy = false;
+              }
+              function clear() {
+                if (busy) return;
+                email.value = ''; pass.value = ''; changed();
+              }
+              el.append(
+                h('div', { class: 'cx-split' },
+                  h('div', { class: 'cx-mini cx-dv-form' }, h('label', { class: 'cx-label', for: 'cx-dv-email' }, 'Email'), email, h('label', { class: 'cx-label', for: 'cx-dv-pass' }, 'Password'), pass, btn),
+                  h('div', { class: 'cx-counters' },
+                    h('div', { class: 'cx-counter' }, h('div', { class: 'cx-count-line' }, wN, h('span', { class: 'cx-label' }, 'field writes'))),
+                    h('div', { class: 'cx-counter cx-good-c' }, h('div', { class: 'cx-count-line' }, rN, h('span', { class: 'cx-label' }, 'SubmitButton runs'))))),
+                h('div', { class: 'controls cx-ctl' }, act('Type a valid sign-up', auto), act('Clear both fields', clear)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>When the block of <code>derivedStateOf</code> runs, Compose records every State object it reads. The result is cached together with that list of dependencies.</p>
+<p>When one of the dependencies changes, Compose does not invalidate the readers right away. It first runs your block again and compares the new result with the cached one, using <code>==</code> unless you pass a different policy. Only if the result differs are the readers marked for recomposition. So a busy input costs one cheap run of your block per change, not one recomposition.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A plain collection as input',
+            bad: `class CartState {
+    val items = mutableListOf<CartItem>()
+    val total by derivedStateOf { items.sumOf { it.price } }
+}`,
+            good: `class CartState {
+    val items = mutableStateListOf<CartItem>()
+    val total by derivedStateOf { items.sumOf { it.price } }
+}`,
+            why: '<code>derivedStateOf</code> only sees State reads. Adding to a plain <code>MutableList</code> changes nothing it tracks, so <code>total</code> stays stale.',
+          },
+          {
+            title: 'Using it for a one-to-one mapping',
+            bad: `val fullName by remember {
+    derivedStateOf { "\${first.value} \${last.value}" }
+}`,
+            good: `val fullName = "\${first.value} \${last.value}"`,
+            why: 'The result changes every time an input does, so there is no recomposition to save. You only add bookkeeping. Save <code>derivedStateOf</code> for answers that change less often than their inputs.',
+          },
+        ],
         visual(el) {
           const ITEM = 40, MAX = 14;
           let index = 0, direct = 1, derived = 1, shown = false, busy = false;
@@ -384,6 +731,149 @@ fun ArticleScreen() {
           { q: '<code>Modifier.graphicsLayer { alpha = fade() }</code>, and <code>fade()</code> reads changing state. Which phases rerun?', options: ['Drawing only', 'Layout and drawing', 'All three'], a: 0, why: 'The read happens while drawing, so only drawing has to run again.' },
           { q: 'Which modifier keeps a moving offset out of composition?', options: ['<code>Modifier.offset(y = offsetY.dp)</code>', '<code>Modifier.offset { IntOffset(0, offsetY) }</code>', '<code>Modifier.padding(top = offsetY.dp)</code>'], a: 1, why: 'The lambda runs during layout. The other two read the value while composing.' },
           { q: 'Why take <code>scrollProvider: () -&gt; Int</code> instead of <code>scroll: Int</code>?', options: ['The child can read it later, inside layout or draw, so composition is skipped', 'Lambdas are cheaper to copy than Ints', '<code>Int</code> parameters are unstable'], a: 0, why: 'An <code>Int</code> parameter must be read by the caller during composition. A lambda defers the read to wherever the child calls it.' },
+        ],
+        deeper: [
+          {
+            title: 'Pass a lambda, not the value',
+            body: `<p>Where the read happens is decided by the caller as much as by the child. If <code>ArticleScreen</code> reads <code>scroll.value</code> to pass an <code>Int</code>, the read is in <code>ArticleScreen</code>’s composition. Both the screen and the header recompose on every scrolled frame.</p>
+<p>Pass <code>{ scroll.value }</code> instead. The screen never reads the value. The lambda captures only the stable <code>ScrollState</code>, so the header gets the same lambda and skips. The read happens inside the header’s <code>offset { }</code>, during layout.</p>`,
+            visual(el) {
+              const FRAMES = 10;
+              let lazy = false, y = 0, busy = false;
+              const rows = [
+                { label: 'ArticleScreen()', what: 'recompositions' },
+                { label: 'CollapsingHeader()', what: 'recompositions' },
+                { label: 'offset { } in header', what: 'layout passes' },
+              ].map(r => { const badge = h('span', { class: 'cx-badge' }, '0'); const status = h('span', { class: 'cx-status' }, r.what); return { ...r, n: 0, badge, status, el: h('div', { class: 'cx-row' }, h('span', { class: 'cx-sig' }, r.label), badge, status) }; });
+              const hdr = h('div', { class: 'cx-pp-hdr' }, 'Header');
+              const body = h('div', { class: 'cx-pp-body' }, Array.from({ length: 6 }, () => h('i')));
+              const pv = h('div', { class: 'cx-pp', role: 'img', 'aria-label': 'Collapsing header preview' }, hdr, body);
+              const btns = [
+                cmd('CollapsingHeader(scroll = scroll.value)', () => pick(false)),
+                cmd('CollapsingHeader(scrollProvider = { scroll.value })', () => pick(true)),
+              ];
+              const o = out();
+              function pick(v) {
+                if (busy) return;
+                lazy = v; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (v ? 1 : 0))));
+                rows.forEach(r => { r.n = 0; r.badge.textContent = '0'; r.el.classList.remove('cx-ran', 'cx-skipped'); });
+                say(o, v ? 'The screen passes a lambda. Press Scroll.' : 'The screen reads the value and passes an Int. Press Scroll.');
+              }
+              async function scroll() {
+                if (busy) return; busy = true;
+                rows.forEach(r => { r.n = 0; r.badge.textContent = '0'; r.el.classList.remove('cx-ran', 'cx-skipped'); });
+                const dir = y > 0 ? -1 : 1;
+                for (let f = 0; f < FRAMES; f++) {
+                  y = Math.max(0, Math.min(FRAMES, y + dir));
+                  hdr.style.transform = `translateY(${-y * 3}px)`; body.style.transform = `translateY(${-y * 6}px)`;
+                  rows.forEach((r, i) => {
+                    if (lazy && i < 2) { r.el.classList.add('cx-skipped'); r.status.textContent = 'skipped'; return; }
+                    r.n++; bump(r.badge, r.n); r.el.classList.add('cx-ran'); r.status.textContent = r.what;
+                  });
+                  await sleep(160);
+                  if (!el.isConnected) return;
+                }
+                const total = rows.reduce((s, r) => s + r.n, 0);
+                say(o, lazy
+                  ? `<span class="good">${total} units of work</span> for ${FRAMES} frames. Only layout ran.`
+                  : `<span class="bad">${total} units of work</span> for ${FRAMES} frames. Two recompositions and a layout every frame.`);
+                busy = false;
+              }
+              pick(false);
+              el.append(
+                h('div', { class: 'cx-split' }, h('div', { class: 'cx-kids cx-pp-rows' }, rows.map(r => r.el)), pv),
+                h('div', { class: 'controls cx-ctl' }, btns),
+                h('div', { class: 'controls cx-ctl' }, act(`Scroll ${FRAMES} frames`, scroll)),
+                o);
+            },
+          },
+          {
+            title: 'Draw-only reads: drawBehind',
+            body: `<p><code>Modifier.background(color)</code> takes the color as a value, so an animated color recomposes the composable on every frame. The new modifier only needs a redraw, so layout is skipped, but composition still runs.</p>
+<p><code>drawBehind { drawRect(color) }</code> reads the color while drawing. Same pixels, and composition sits still. The same goes for <code>Modifier.alpha(a)</code> versus <code>graphicsLayer { alpha = a }</code>.</p>`,
+            code: `val color by animateColorAsState(if (selected) Selected else Idle, label = "chip")
+
+// Recomposes on every frame of the animation
+Box(Modifier.size(80.dp).background(color))
+
+// Draw phase only
+Box(Modifier.size(80.dp).drawBehind { drawRect(color) })`,
+            visual(el) {
+              const FR = 12;
+              let draw = false, sel = false, busy = false;
+              const chip = h('div', { class: 'cx-dc-chip' }, 'Chip');
+              const names = ['Composition', 'Layout', 'Drawing'];
+              const grid = h('div', { class: 'cx-ph-grid', role: 'img', 'aria-label': 'Phases run per frame' });
+              const cells = names.map(n => {
+                grid.append(h('span', { class: 'cx-ph-name' }, n));
+                return Array.from({ length: FR }, () => { const c = h('span', { class: 'cx-ph-cell' }); grid.append(c); return c; });
+              });
+              const btns = [cmd('Modifier.background(color)', () => pick(false)), cmd('Modifier.drawBehind { drawRect(color) }', () => pick(true))];
+              const o = out();
+              const runs = p => (p === 2 || (p === 0 && !draw));
+              function pick(v) {
+                if (busy) return;
+                draw = v; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (v ? 1 : 0))));
+                cells.flat().forEach(c => c.classList.remove('cx-on', 'cx-off'));
+                say(o, `${hl(v ? 'drawBehind { }' : 'background(color)')} <span class="muted">// press selected = !selected</span>`);
+              }
+              async function anim() {
+                if (busy) return; busy = true;
+                sel = !sel;
+                cells.flat().forEach(c => c.classList.remove('cx-on', 'cx-off'));
+                for (let f = 0; f < FR; f++) {
+                  const p = Math.round(((f + 1) / FR) * 100);
+                  chip.style.background = `color-mix(in srgb, var(--accent) ${sel ? p : 100 - p}%, var(--sunk))`;
+                  chip.style.color = (sel ? p : 100 - p) > 50 ? 'var(--accent-ink)' : 'var(--ink)';
+                  cells.forEach((row, ph) => row[f].classList.add(runs(ph) ? 'cx-on' : 'cx-off'));
+                  await sleep(90);
+                  if (!el.isConnected) return;
+                }
+                const work = [0, 1, 2].filter(runs).length * FR;
+                say(o, draw
+                  ? `<span class="good">${work} phase runs</span> for ${FR} frames: drawing only.`
+                  : `<span class="bad">${work} phase runs</span> for ${FR} frames: composition and drawing. Layout skipped, since the size never changed.`);
+                busy = false;
+              }
+              pick(false);
+              el.append(
+                h('div', { class: 'cx-split' }, grid, chip),
+                h('div', { class: 'controls cx-ctl' }, btns),
+                h('div', { class: 'controls cx-ctl' }, cmd('selected = !selected', anim)),
+                o);
+            },
+          },
+          {
+            title: 'Backward writes cost a frame',
+            body: `<p>The phases run in order inside a frame. If layout writes a State that composition already read, Compose can only act on it in the next frame. For one frame the screen shows the old layout, and the work runs twice.</p>
+<p><code>onSizeChanged</code> feeding a <code>mutableStateOf</code> is the classic case. When one child’s size must shape its siblings, measure them together in a custom <code>Layout</code>, or use <code>SubcomposeLayout</code> when the content itself depends on a size.</p>`,
+            code: `// One frame late: the height arrives after composition already ran
+var headerHeight by remember { mutableIntStateOf(0) }
+Header(Modifier.onSizeChanged { headerHeight = it.height })
+Content(Modifier.padding(top = with(LocalDensity.current) { headerHeight.toDp() }))`,
+          },
+        ],
+        underHood: {
+          body: `<p>Compose finds out who read a State with snapshot read observers, and each phase installs its own. During composition, a read is recorded against the current recompose scope. During measure and layout, the reads are recorded against the layout node whose measure or placement block is running. During drawing, they are recorded against the node that draws.</p>
+<p>When a write is applied, Compose looks up who read that State. A recompose scope is scheduled for the next frame. A layout node is asked to remeasure or to place again. A draw node only has its layer invalidated. So the place of the read decides how much work a change costs.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Animating alpha with the value modifier',
+            bad: `val fade by animateFloatAsState(if (visible) 1f else 0f, label = "fade")
+Image(painter, null, Modifier.alpha(fade))`,
+            good: `val fade by animateFloatAsState(if (visible) 1f else 0f, label = "fade")
+Image(painter, null, Modifier.graphicsLayer { alpha = fade })`,
+            why: '<code>Modifier.alpha(fade)</code> reads <code>fade</code> while composing, so every animation frame recomposes. Inside <code>graphicsLayer { }</code> the read moves to the draw phase.',
+          },
+          {
+            title: 'Deciding visibility from a raw scroll read',
+            bad: `val showTitle = scrollState.value > 300   // every scrolled pixel
+TopBar(showTitle = showTitle)`,
+            good: `val showTitle by remember { derivedStateOf { scrollState.value > 300 } }
+TopBar(showTitle = showTitle)`,
+            why: 'The direct read recomposes on every pixel even though the answer flips once. <code>derivedStateOf</code> keeps the busy read out of composition.',
+          },
         ],
         visual(el) {
           const FRAMES = 14;

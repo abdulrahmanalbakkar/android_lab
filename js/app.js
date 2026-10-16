@@ -291,8 +291,33 @@ const Lab = (() => {
     const snippet = code(l.code);
     const pin = h('aside', { class: 'pin' }, h('span', { class: 'pin-label' }, 'Pin this'), h('p', {}, l.remember));
     const practice = l.challenges && l.challenges.length ? h('section', { class: 'quiz' }, h('h2', {}, 'Practice'), l.challenges.map(challengeView)) : null;
+    // Optional depth: l.deeper = [{ title, body, code?, visual? }], l.underHood = { body, code? }, l.mistakes = [{ title, bad, good, why }]
+    const deeper = l.deeper && l.deeper.length ? h('section', { class: 'deeper' },
+      h('h2', {}, 'Go deeper'),
+      h('ol', { class: 'steps' }, l.deeper.map((d, i) => {
+        const v = d.visual && h('div', { class: 'viz' });
+        const li = h('li', { class: 'step' },
+          h('h3', {}, h('span', { class: 'step-n', 'aria-hidden': 'true' }, String(i + 1)), d.title),
+          h('div', { class: 'prose', html: d.body }),
+          v && h('div', { class: 'bench mini' },
+            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); d.visual(v); } }, 'Reset')), v),
+          d.code ? code(d.code) : null);
+        if (v) d.visual(v);
+        return li;
+      }))) : null;
+    const hood = l.underHood ? h('details', { class: 'hood' },
+      h('summary', {}, h('span', { class: 'hood-label' }, 'Under the hood'), h('span', { class: 'muted-text' }, 'What the compiler or runtime actually does')),
+      h('div', { class: 'prose', html: l.underHood.body }), l.underHood.code ? code(l.underHood.code) : null) : null;
+    const mistakes = l.mistakes && l.mistakes.length ? h('section', { class: 'mistakes' },
+      h('h2', {}, 'Common mistakes'),
+      l.mistakes.map(m => h('div', { class: 'mistake' },
+        h('h3', {}, m.title),
+        h('div', { class: 'ba' },
+          h('div', { class: 'ba-bad' }, h('span', { class: 'ba-tag' }, 'Before'), code(m.bad)),
+          h('div', { class: 'ba-good' }, h('span', { class: 'ba-tag' }, 'After'), code(m.good))),
+        h('p', { class: 'why', html: m.why })))) : null;
     const terms = l.terms && l.terms.length ? h('section', { class: 'terms' }, h('h2', {}, 'Terms'), h('dl', {}, l.terms.map(x => [h('dt', {}, x.term), h('dd', {}, x.def)]))) : null;
-    const sections = [['Demo', bench], ['Code', snippet], ['Pin', pin], ['Practice', practice], ['Terms', terms], ['Check yourself', quiz]].filter(([, el]) => el);
+    const sections = [['Demo', bench], ['Code', snippet], ['Pin', pin], ['Go deeper', deeper], ['Under the hood', hood], ['Mistakes', mistakes], ['Practice', practice], ['Terms', terms], ['Check yourself', quiz]].filter(([, el]) => el);
     const toc = h('nav', { class: 'toc', 'aria-label': 'On this page' }, h('span', { class: 'toc-label' }, 'On this page'),
       sections.map(([label, el]) => h('button', { type: 'button', onclick() {
         el.setAttribute('tabindex', '-1');
@@ -311,7 +336,7 @@ const Lab = (() => {
           h('p', { class: 'lede' }, l.tagline)),
         toc,
         h('div', { class: 'prose', html: l.body }),
-        bench, snippet, pin, practice, terms, quiz,
+        bench, snippet, pin, deeper, hood, mistakes, practice, terms, quiz,
         h('nav', { class: 'pager', 'aria-label': 'Lesson navigation' },
           prev && h('a', { href: '#' + key(t, prev) }, h('small', {}, '← Previous'), prev.title),
           next && h('a', { class: 'next', href: '#' + key(t, next) }, h('small', {}, 'Next →'), next.title))));

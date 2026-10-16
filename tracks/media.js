@@ -137,6 +137,11 @@
 .md-stat small { color: var(--muted); font-size: 0.78rem; line-height: 1.3; }
 .md-stat.md-bad b { color: var(--err); }
 
+/* depth demos */
+.md-a1-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.md-a1-box { aspect-ratio: 4 / 3; border-radius: 12px; background: var(--code-bg); display: grid; place-items: center; overflow: hidden; }
+.md-a1-word { display: inline-block; font: 700 0.9rem var(--mono); color: var(--t-s); padding: 6px 10px; border: 2px dashed var(--t-s); border-radius: 8px; white-space: nowrap; transition: transform 0.45s ease; }
+
 /* 6 sensors */
 .md-pad { position: relative; width: 156px; max-width: 100%; aspect-ratio: 1; justify-self: center; border-radius: 16px; background-color: var(--bg); border: 2px solid var(--line); touch-action: none; cursor: grab; background-image: linear-gradient(var(--line), var(--line)), linear-gradient(var(--line), var(--line)); background-size: 100% 1px, 1px 100%; background-position: center; background-repeat: no-repeat; }
 .md-ball { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--accent); box-shadow: var(--shadow); transition: transform 50ms linear; }
@@ -404,6 +409,215 @@ controller.play()`,
           { q: 'The user pauses, then presses Home. What does Media3 do with the service?', options: ['Keeps it in the foreground forever', 'Takes it out of the foreground; the notification stays and can be dismissed', 'Destroys it at once'], a: 1, why: 'A paused service does not need foreground priority. The system may stop it later, so keep state you need to resume.' },
           { q: 'How does a Bluetooth headset’s play button reach your player?', options: ['A BroadcastReceiver you write', 'Through the MediaSession', 'Through the Activity’s onKeyDown'], a: 1, why: 'Media buttons go to the active MediaSession, which calls play or pause on its player.' },
           { q: 'What should the Activity use to control playback?', options: ['A second ExoPlayer', 'A <code>MediaController</code> built from a <code>SessionToken</code>', 'Static access to the service’s player field'], a: 1, why: 'The controller talks to the session, so the UI and the system share one player.' },
+        ],
+        deeper: [
+          {
+            title: 'Controllers connect, and must let go',
+            body: `<p>Building a <code>MediaController</code> with <code>buildAsync()</code> returns a future. Connecting binds your UI to the service, which may create the service first. Build the controller in <code>onStart</code> and release it in <code>onStop</code> with <code>MediaController.releaseFuture(future)</code>.</p>
+<p>A connected controller keeps the service bound. Forget to release it and every visit leaves one more controller behind. A paused service with leaked controllers stays alive, holding its player and buffers, long after the user is gone.</p>`,
+            code: `class PlayerActivity : ComponentActivity() {
+    private lateinit var future: ListenableFuture<MediaController>
+
+    override fun onStart() {
+        super.onStart()
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        future = MediaController.Builder(this, token).buildAsync()
+        future.addListener({ bindUi(future.get()) }, ContextCompat.getMainExecutor(this))
+    }
+
+    override fun onStop() {
+        MediaController.releaseFuture(future)   // also cancels a pending connect
+        super.onStop()
+    }
+}`,
+            visual(el) {
+              const S = { started: false, ctl: 0, leaked: 0, playing: false, svc: 'none', release: true, busy: false };
+              const { el: logEl, log } = logger(5);
+              const aTag = tag(''), cTag = tag(''), sTag = tag('');
+              const paint = () => {
+                setTag(aTag, S.started ? 'activity: started' : 'activity: stopped', S.started ? 'acc' : '');
+                setTag(cTag, `controllers bound: ${S.ctl}`, S.leaked ? 'no' : S.ctl ? 'ok' : '');
+                setTag(sTag, { none: 'service: not created', bound: S.playing ? 'service: playing, foreground' : 'service: paused, kept alive', idle: 'service: paused, nothing binds it' }[S.svc], S.svc === 'bound' ? (S.playing ? 'ok' : S.leaked ? 'no' : 'wait') : S.svc === 'idle' ? 'wait' : '');
+              };
+              const settle = () => {
+                if (S.svc === 'none') return;
+                if (S.ctl === 0 && !S.playing) { S.svc = 'idle'; log('no controllers, not playing: <span class="muted">the system may stop the service</span>'); }
+                else if (!S.started && S.leaked && !S.playing) { S.svc = 'bound'; log(`<span class="bad">${S.leaked} leaked controller${S.leaked > 1 ? 's' : ''}</span> keep the paused service and its player alive`); }
+                else S.svc = 'bound';
+              };
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, aTag, cTag, sTag),
+                h('div', { class: 'controls' },
+                  cmd('onStart() { buildAsync() }', async () => {
+                    if (S.busy) return;
+                    if (S.started) { log('<span class="muted">already started</span>'); return; }
+                    S.busy = true; S.started = true; paint();
+                    log('buildAsync(): binding to PlaybackService…');
+                    await sleep(450); if (!root.isConnected) return;
+                    S.ctl++; S.svc = 'bound';
+                    log(`<span class="good">connected</span>, ${S.ctl} controller${S.ctl > 1 ? 's' : ''} bound`);
+                    paint(); S.busy = false;
+                  }),
+                  cmd('onStop()', () => {
+                    if (S.busy) return;
+                    if (!S.started) { log('<span class="muted">already stopped</span>'); return; }
+                    S.started = false;
+                    if (S.release) { S.ctl--; log('MediaController.releaseFuture(future): <span class="good">unbound</span>'); }
+                    else { S.leaked++; log('<span class="bad">no release:</span> the controller stays bound'); }
+                    settle(); paint();
+                  }),
+                  cmd('controller.play() / pause()', () => {
+                    if (S.busy) return;
+                    if (!S.started) { log('<span class="bad">no live controller:</span> the activity is stopped'); return; }
+                    S.playing = !S.playing; log(S.playing ? 'play(): service goes foreground' : 'pause(): service leaves foreground');
+                    paint();
+                  })),
+                h('div', { class: 'controls' }, toggle('md-s1-release', 'release the controller in <code>onStop()</code>', true, v => { S.release = v; log(v ? 'onStop() will release the controller' : 'onStop() will forget to release'); })),
+                logEl);
+              el.append(root);
+              paint();
+              log('Start, pause, stop. Then turn the release off and repeat.');
+            },
+          },
+          {
+            title: 'Resuming after a restart',
+            body: `<p>Since Android 11, the media controls in Quick Settings can show your app’s last session after the app was killed or the phone restarted. When the user taps play there, the system sends a media button event. Media3’s <code>MediaButtonReceiver</code> starts your service, and Media3 calls <code>onPlaybackResumption()</code> on your session callback.</p>
+<p>The session doesn’t remember anything across a restart. You do. Save the queue and position as playback goes, and return them from <code>onPlaybackResumption()</code>. The default implementation fails, so without it the play button does nothing.</p>`,
+            code: `// AndroidManifest.xml
+// <receiver android:name="androidx.media3.session.MediaButtonReceiver" android:exported="true">
+//     <intent-filter><action android:name="android.intent.action.MEDIA_BUTTON" /></intent-filter>
+// </receiver>
+
+override fun onPlaybackResumption(
+    mediaSession: MediaSession,
+    controller: MediaSession.ControllerInfo,
+): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
+    serviceScope.future {                          // kotlinx-coroutines-guava
+        val saved = lastPlayedStore.read()         // written while playing
+        MediaSession.MediaItemsWithStartPosition(saved.items, saved.index, saved.positionMs)
+    }`,
+            visual(el) {
+              const S = { impl: true, saved: false, booted: false, playing: false, pos: '0:00' };
+              const { el: logEl, log } = logger(4);
+              const shade = h('div', { class: 'md-col' });
+              const body = h('div', { class: 'md-col' });
+              const sb = h('div', { class: 'md-sb' }, h('span', {}, '9:41'), h('span', {}, ''));
+              const ph = h('div', { class: 'md-phone' }, sb, h('div', { class: 'md-pscreen' }, shade, body));
+              const tapCard = () => {
+                if (!S.booted || !S.saved) { replay(ph, 'shake'); log('<span class="muted">no resumption card is showing</span>'); return; }
+                if (S.playing) { log('<span class="muted">already playing</span>'); return; }
+                log('MEDIA_BUTTON: MediaButtonReceiver starts PlaybackService');
+                if (S.impl) { S.playing = true; log(`onPlaybackResumption(): <span class="good">Episode 12 at ${S.pos}</span>, playing`); }
+                else { replay(ph, 'shake'); log('onPlaybackResumption(): <span class="bad">UnsupportedOperationException</span> (default). Nothing plays.'); }
+                paint();
+              };
+              function paint() {
+                sb.lastChild.textContent = S.playing ? 'audio' : S.booted ? 'just restarted' : '';
+                shade.replaceChildren(...(S.booted && S.saved ? [h('div', { class: 'md-noti drop-in' },
+                  h('div', { class: 'md-noti-top' }, h('span', { class: 'md-art' }), h('span', {}, h('b', {}, 'Episode 12'), h('small', {}, S.playing ? `Playing from ${S.pos}` : 'Media controls'))),
+                  h('div', { class: 'md-nbtns' }, h('button', { class: 'md-nbtn md-main', onclick: tapCard }, S.playing ? 'Playing' : 'Play')))] : []));
+                body.replaceChildren(h('div', { class: 'md-home' }, Array.from({ length: 12 }, () => h('span', { class: 'md-app' }))));
+              }
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-split' },
+                  h('div', { class: 'md-col' },
+                    h('div', { class: 'controls' },
+                      cmd('listen, pause at 12:40', () => {
+                        S.saved = true; S.booted = false; S.playing = false; S.pos = '12:40';
+                        log('Player.Listener saves <span class="good">Episode 12, 12:40</span> to DataStore');
+                        paint();
+                      }),
+                      act('Restart the phone', () => {
+                        S.booted = true; S.playing = false;
+                        log(S.saved ? 'restarted: Quick Settings shows the last session' : 'restarted: <span class="muted">nothing was played, no card</span>');
+                        paint(); replay(ph, 'pop');
+                      }),
+                      cmd('tap play on the card', tapCard)),
+                    toggle('md-s2-impl', 'override <code>onPlaybackResumption()</code>', true, v => { S.impl = v; S.playing = false; log(v ? 'callback returns the saved queue' : 'using the default callback'); paint(); })),
+                  ph),
+                logEl);
+              el.append(root);
+              paint();
+              log('Listen to something first, then restart the phone.');
+            },
+          },
+          {
+            title: 'Your own buttons in the notification',
+            body: `<p>The notification and the lock screen show play, pause, previous and next by default. To add “forward 15 s” or “like”, define a <code>SessionCommand</code>, show it as a <code>CommandButton</code>, and allow it for controllers in <code>onConnect</code>.</p>
+<p>When a button is pressed, Media3 calls <code>onCustomCommand</code> on the session callback. The same command works from the notification, Android Auto and your own UI.</p>`,
+            code: `val skip15 = SessionCommand("SKIP_15", Bundle.EMPTY)
+val button = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_15)
+    .setDisplayName("Forward 15 seconds")
+    .setSessionCommand(skip15)
+    .build()
+
+mediaSession = MediaSession.Builder(this, player)
+    .setMediaButtonPreferences(listOf(button))
+    .setCallback(object : MediaSession.Callback {
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo) =
+            MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(skip15).build()
+                )
+                .build()
+
+        override fun onCustomCommand(
+            session: MediaSession, controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand, args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand == skip15) session.player.seekTo(session.player.currentPosition + 15_000)
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+    })
+    .build()`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>MediaSessionService</code> is a bound service. Controllers, System UI and other apps find it through its <code>MediaSessionService</code> intent filter and bind to it. Each Media3 session also creates a platform session (<code>android.media.session</code>), so the system media controls, Bluetooth headsets and older clients see it without knowing about Media3.</p>
+<p>Media3 watches the player. When playback starts, it builds a MediaStyle notification through its <code>MediaNotification.Provider</code> and calls <code>startForeground()</code>. When playback pauses, it leaves the foreground but keeps the notification. Customize the notification by setting your own provider, not by posting a second one.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Missing the foreground service type',
+            bad: `<service android:name=".PlaybackService" android:exported="true">
+    <intent-filter>
+        <action android:name="androidx.media3.session.MediaSessionService" />
+    </intent-filter>
+</service>`,
+            good: `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+<service android:name=".PlaybackService"
+    android:foregroundServiceType="mediaPlayback"
+    android:exported="true">`,
+            why: 'Apps targeting Android 14 or higher must declare a type for every foreground service. Without it, the service crashes the moment playback starts.',
+          },
+          {
+            title: 'Blocking on the controller future',
+            bad: `override fun onStart() {
+    super.onStart()
+    val controller = MediaController.Builder(this, token).buildAsync().get()   // main thread
+    bindUi(controller)
+}`,
+            good: `override fun onStart() {
+    super.onStart()
+    future = MediaController.Builder(this, token).buildAsync()
+    future.addListener({ bindUi(future.get()) }, ContextCompat.getMainExecutor(this))
+}`,
+            why: 'Connecting needs the main thread to deliver the result. <code>get()</code> on the main thread waits for something that can never arrive, and the app freezes.',
+          },
+          {
+            title: 'Posting your own notification next to Media3’s',
+            bad: `override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    startForeground(1, buildMyPlayerNotification())
+    return super.onStartCommand(intent, flags, startId)
+}`,
+            good: `override fun onCreate() {
+    super.onCreate()
+    setMediaNotificationProvider(
+        DefaultMediaNotificationProvider.Builder(this).setChannelId("playback").build()
+    )
+}`,
+            why: 'Media3 already manages the notification and the foreground state. A second one shows twice and fights over the foreground. Change Media3’s notification through its provider.',
+          },
         ],
         visual(el) {
           const S = { playing: false, ready: false, app: 'visible', svc: 'none', stopOnSwipe: false };
@@ -796,6 +1010,149 @@ provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, ana
           { q: 'The analyzer takes 100 ms and the camera runs at 30 fps with <code>KEEP_ONLY_LATEST</code>. What do you get?', options: ['All 30 frames, 3 seconds late', 'About 10 frames a second, each the newest one', 'Nothing, the camera stops'], a: 1, why: 'Frames that arrive while you are busy are dropped. When you finish, you get the latest one.' },
           { q: 'What happens if the analyzer never calls <code>image.close()</code>?', options: ['Nothing, the garbage collector closes it', 'CameraX stops delivering new frames to the analyzer', 'The preview turns black'], a: 1, why: 'The image buffer is not returned, so no new frame can be handed over.' },
           { q: 'When does <code>STRATEGY_BLOCK_PRODUCER</code> make sense?', options: ['A live barcode scanner', 'When you need consecutive frames and can accept growing delay', 'Always, it is faster'], a: 1, why: 'Queued frames keep their order, but every queued frame adds latency. Live UI usually wants KEEP_ONLY_LATEST.' },
+        ],
+        deeper: [
+          {
+            title: 'Frames arrive sideways',
+            body: `<p>The camera sensor is mounted in landscape. Hold the phone upright and every frame still comes out of the sensor turned on its side. CameraX does not rotate the pixels for you, because that would cost time on every frame. It tells you the angle instead: <code>image.imageInfo.rotationDegrees</code>.</p>
+<p>Pass that angle to your detector, as <code>InputImage.fromMediaImage</code> does, or rotate the bitmap yourself. Text and face models look for upright content. Hand them a sideways frame and they often find nothing.</p>`,
+            visual(el) {
+              const S = { pose: 'portrait', rot: true };
+              const DEG = { portrait: 90, landscape: 0, 'reverse landscape': 180 };
+              const raw = h('span', { class: 'md-a1-word' }, 'SALE 50%');
+              const seen = h('span', { class: 'md-a1-word' }, 'SALE 50%');
+              const deg = h('span', { class: 'md-kv' });
+              const res = tag('');
+              const { el: logEl, log } = logger(3);
+              const paint = () => {
+                const d = DEG[S.pose];
+                raw.style.transform = `rotate(${-d}deg)`;
+                seen.style.transform = `rotate(${S.rot ? 0 : -d}deg)`;
+                deg.innerHTML = `rotationDegrees <b class="md-yes">${d}</b>`;
+                const ok = S.rot || d === 0;
+                setTag(res, ok ? 'text: "SALE 50%"' : 'text: none found', ok ? 'ok' : 'no');
+              };
+              const pose = choice('phone held', Object.keys(DEG), S.pose, v => { S.pose = v; paint(); log(`${v}: the buffer is ${DEG[v] ? `${DEG[v]}° off upright` : 'already upright'}`); });
+              const root = h('div', { class: 'md-root' },
+                pose.el,
+                h('div', { class: 'md-a1-row' },
+                  h('div', { class: 'md-col' }, h('span', { class: 'md-label' }, 'ImageProxy buffer'), h('div', { class: 'md-a1-box' }, raw)),
+                  h('div', { class: 'md-col' }, h('span', { class: 'md-label' }, 'What the model gets'), h('div', { class: 'md-a1-box' }, seen))),
+                h('div', { class: 'md-tags' }, deg, res),
+                h('div', { class: 'controls' },
+                  toggle('md-a1-rot', 'pass <code>rotationDegrees</code> to the detector', true, v => { S.rot = v; paint(); log(v ? 'InputImage.fromMediaImage(media, rotationDegrees)' : '<span class="bad">rotation ignored:</span> the model gets the raw buffer'); }),
+                  cmd('scanner.process(input)', () => { paint(); replay(res, 'pop'); log(res.textContent.includes('none') ? '<span class="bad">empty result</span>: the text was sideways' : '<span class="good">found the text</span>'); })),
+                logEl);
+              el.append(root);
+              paint();
+              log('Hold the phone upright. The buffer is still landscape.');
+            },
+          },
+          {
+            title: 'Ask for a small analysis resolution',
+            body: `<p>Analysis cost grows with the pixel count. A 1080p frame has more than six times the pixels of 640x480, and most detectors don’t need them. Pick the smallest size that still sees your target, with a <code>ResolutionSelector</code>.</p>
+<p>Smaller frames mean a faster analyzer, and with KEEP_ONLY_LATEST that means more fresh results per second. Go bigger only when the target is small or far away, such as a tiny barcode.</p>`,
+            code: `val analysis = ImageAnalysis.Builder()
+    .setResolutionSelector(
+        ResolutionSelector.Builder()
+            .setResolutionStrategy(
+                ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
+            )
+            .build()
+    )
+    .build()`,
+            visual(el) {
+              const R = { '640x480': [0.31, 25, 'low'], '1280x720': [0.92, 60, 'medium'], '1920x1080': [2.07, 130, 'high'] };
+              const track = h('div', { class: 'lane-track' });
+              const sR = h('b', {}, '0'), sD = h('b', {}, '0');
+              const mp = h('span', { class: 'md-kv' });
+              const { el: logEl, log } = logger(2);
+              const show = r => {
+                const [px, cost, detail] = R[r];
+                const GAP = 1000 / 30, bars = [];
+                for (let t = 0; t < 1000;) { bars.push(t); const end = t + cost; t = Math.ceil(end / GAP) * GAP; }
+                track.replaceChildren(...bars.map((t, i) => h('div', { class: 'bar run drop-in', style: `left:${(t / 10).toFixed(2)}%;width:${Math.max(0.6, Math.min(cost, 1000 - t) / 10 - 0.4).toFixed(2)}%;animation-delay:${i * 30}ms` })));
+                sR.textContent = String(bars.length); sD.textContent = `${cost} ms`;
+                mp.innerHTML = `${px} MP per frame · detail <b>${detail}</b>`;
+                log(`${r}: <span class="${cost > 100 ? 'bad' : 'good'}">${bars.length} results a second</span>, each ${cost} ms old when it lands`);
+              };
+              const pick = choice('target size', Object.keys(R), '1920x1080', v => show(v));
+              const root = h('div', { class: 'md-root' },
+                pick.el,
+                h('div', { class: 'md-tags' }, mp),
+                h('div', { class: 'timeline' }, lane('Analyzer, 1 s')),
+                h('div', { class: 'md-stats' },
+                  h('div', { class: 'md-stat' }, sR, h('small', {}, 'results per second')),
+                  h('div', { class: 'md-stat' }, sD, h('small', {}, 'analyzer time per frame'))),
+                h('div', { class: 'controls' }, cmd('analysis.setAnalyzer(executor, ::scan)', () => { const cur = root.querySelector('.md-group [aria-pressed="true"]'); show(cur ? cur.textContent : '1920x1080'); })),
+                logEl);
+              root.querySelector('.timeline .lane-track').replaceWith(track);
+              el.append(root);
+              show('1920x1080');
+            },
+          },
+          {
+            title: 'YUV or RGBA',
+            body: `<p>Frames come as <code>YUV_420_888</code> by default: a full-size brightness plane and two smaller color planes. ML Kit reads that format directly, so keep the default for ML Kit.</p>
+<p>If your own model wants RGB pixels, ask CameraX for <code>OUTPUT_IMAGE_FORMAT_RGBA_8888</code>. CameraX converts each frame for you, which costs some time, and <code>toBitmap()</code> gives you a Bitmap without hand-written conversion code.</p>`,
+            code: `val analysis = ImageAnalysis.Builder()
+    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+    .build()
+
+analysis.setAnalyzer(executor) { image ->
+    image.use {                                     // ImageProxy is AutoCloseable
+        val bitmap = it.toBitmap()
+        val m = Matrix().apply { postRotate(it.imageInfo.rotationDegrees.toFloat()) }
+        val upright = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
+        classifier.run(upright)
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Behind <code>ImageAnalysis</code> sits an <code>ImageReader</code> attached to the camera session as one output surface. It owns a small, fixed pool of image buffers. The camera writes each frame into a free buffer, and CameraX wraps it as an <code>ImageProxy</code> for your analyzer. <code>close()</code> hands the buffer back to the pool.</p>
+<p>With KEEP_ONLY_LATEST, CameraX keeps at most one waiting frame and closes older ones itself, so a slow analyzer only ever sees the newest. With BLOCK_PRODUCER, frames wait in order until the queue depth is reached. Either way, a frame you never close is a buffer the camera can never write to again.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Analyzing on the main thread',
+            bad: `analysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { image ->
+    detect(image)    // 60 ms on the UI thread, every frame
+}`,
+            good: `val analysisExecutor = Executors.newSingleThreadExecutor()
+analysis.setAnalyzer(analysisExecutor) { image ->
+    detect(image)
+}`,
+            why: 'The main executor runs your analyzer between frames of your UI. A slow detector then drops UI frames and can trigger an ANR.',
+          },
+          {
+            title: 'Leaving the analyzer and executor running',
+            bad: `DisposableEffect(Unit) {
+    analysis.setAnalyzer(executor, ::scan)
+    onDispose { }   // analyzer and thread live on
+}`,
+            good: `DisposableEffect(Unit) {
+    analysis.setAnalyzer(executor, ::scan)
+    onDispose {
+        analysis.clearAnalyzer()
+        executor.shutdown()
+    }
+}`,
+            why: 'The analyzer holds references to your screen, and the executor holds a thread. Clear and shut them down when the screen goes away.',
+          },
+          {
+            title: 'Assuming image rows are packed',
+            bad: `val plane = image.planes[0]
+val bytes = ByteArray(image.width * image.height)
+plane.buffer.get(bytes)   // skewed image when rowStride > width`,
+            good: `val plane = image.planes[0]
+val bytes = ByteArray(image.width * image.height)
+for (row in 0 until image.height) {
+    plane.buffer.position(row * plane.rowStride)
+    plane.buffer.get(bytes, row * image.width, image.width)
+}`,
+            why: 'Many devices pad each row, so <code>rowStride</code> is larger than the width. Copy row by row. The Y plane’s <code>pixelStride</code> is always 1.',
+          },
         ],
         visual(el) {
           const S = { cost: 120, strat: 'KEEP_ONLY_LATEST', close: true };

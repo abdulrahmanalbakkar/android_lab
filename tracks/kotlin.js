@@ -49,6 +49,33 @@
 .kt-lamp.on.r { background: var(--err); box-shadow: 0 0 22px var(--err); }
 .kt-lamp.on.y { background: var(--warm); box-shadow: 0 0 22px var(--warm); }
 .kt-lamp.on.g { background: var(--ok); box-shadow: 0 0 22px var(--ok); }
+.station.kt-skip { opacity: 0.4; border-style: dashed; }
+.slot.kt-slot { width: 72px; height: 56px; }
+.kt-capture { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--sunk); }
+.chip.kt-sm { min-width: 0; height: 34px; padding: 0 10px; font-size: 0.82rem; border-width: 1.5px; }
+.stage.kt-refs { gap: 10px; }
+.stage.kt-col { flex-direction: column; flex-wrap: nowrap; }
+.stage.kt-twice { flex-wrap: nowrap; gap: 6px; padding: 16px 8px; }
+.kt-twice .slot.kt-slot { width: 52px; height: 52px; flex: none; }
+.kt-twice .machine { min-width: 0; padding: 10px; flex: none; }
+.kt-twice .gear { width: 24px; height: 24px; border-width: 4px; }
+.kt-twice .chip { min-width: 0; height: 38px; padding: 0 8px; font-size: 0.9rem; }
+.kt-ref { display: grid; gap: 6px; justify-items: center; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); font: 600 0.88rem var(--mono); min-width: 0; }
+.obj .kt-pile { justify-content: flex-start; min-height: 0; }
+.kt-shared { max-width: 100%; }
+.stage.kt-buckets { align-items: flex-start; }
+.kt-bucket { display: grid; gap: 8px; justify-items: center; padding: 10px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--surface); min-width: 0; max-width: 100%; }
+.kt-bucket-key { font: 600 0.78rem var(--mono); color: var(--accent); }
+.field.kt-unset { color: var(--muted); font-style: italic; }
+.field.kt-stale { background: var(--err-soft); color: var(--err); font-weight: 600; }
+.field.kt-ptr { color: var(--ok); font-weight: 600; }
+.kt-body-prop { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.kt-work { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; padding: 14px 10px; background: var(--bg); border-radius: 12px; min-width: 0; }
+.kt-state { font: 600 0.78rem var(--mono); padding: 3px 10px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.kt-state.on { background: var(--accent-soft); color: var(--accent); }
+.kt-state.warn { background: var(--warm-soft); color: var(--warm); }
+.kt-state.bad { background: var(--err-soft); color: var(--err); }
+.kt-state.ok { background: var(--ok-soft); color: var(--ok); }
 `;
 
   Lab.addTrack({
@@ -345,6 +372,140 @@ if (name != null) {
           { q: 'When is <code>!!</code> a reasonable choice?', options: ['Whenever the compiler complains about nulls', 'When a null there would be a bug you want to see right away', 'Never, it does not compile'], a: 1, why: '<code>!!</code> turns null into a crash. Use it only where null means a programming mistake.' },
           { q: 'Which type can hold <code>null</code>?', options: ['<code>String</code>', '<code>String?</code>', 'Both'], a: 1, why: 'Only types with <code>?</code> allow null.' },
         ],
+        deeper: [
+          {
+            title: 'Smart casts need a value that can’t change',
+            body: `<p>After <code>if (x != null)</code> the compiler treats <code>x</code> as non-null. It only does that when nothing could set <code>x</code> back to null between the check and the use.</p>
+<p>A local <code>val</code> is safe. So is a local <code>var</code> nobody touches in between. A <code>var</code> property on a class is not: another thread could change it. Copy it into a local <code>val</code> first, or use <code>?.let</code>.</p>`,
+            code: `class Form(var name: String?)
+
+fun show(form: Form) {
+    val name = form.name          // read once
+    if (name != null) println(name.length)
+
+    form.name?.let { println(it.length) }   // same idea
+}`,
+            visual(el) {
+              const kinds = [
+                { label: 'local val', ref: 'name', ok: true, src: 'val name: String? = load()\nif (name != null) {\n    println(name.length)\n}', note: 'A local val can’t change, so the check still holds.' },
+                { label: 'local var', ref: 'name', ok: true, src: 'var name: String? = load()\nif (name != null) {\n    println(name.length)\n}', note: 'Nothing assigns this local var between the check and the use, so the cast holds.' },
+                { label: 'val property', ref: 'form.name', ok: true, src: 'class Form(val name: String?)\nif (form.name != null) {\n    println(form.name.length)\n}', note: 'A val property without a custom getter, in the same module, can’t change.' },
+                { label: 'var property', ref: 'form.name', ok: false, src: 'class Form(var name: String?)\nif (form.name != null) {\n    println(form.name.length)\n}', note: 'Smart cast to \'String\' is impossible, because \'form.name\' is a mutable property that could have been changed by this time' },
+                { label: 'copy it first', ref: 'name', ok: true, src: 'val name = form.name   // one read\nif (name != null) {\n    println(name.length)\n}', note: 'The local copy can’t change, so the smart cast works again.' },
+              ];
+              let busy = false;
+              const decl = h('div', { class: 'kt' });
+              const track = h('div', { class: 'track' });
+              const o = out();
+              const buttons = kinds.map(k => cmd(k.label, () => run(k)));
+              const station = label => h('div', { class: 'station' }, h('span', { class: 'st-label' }, label));
+              async function run(k) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', kinds[i] === k));
+                decl.innerHTML = hl(k.src);
+                const st = [station(`${k.ref} != null`), station('in between'), station(`${k.ref}.length`)];
+                track.replaceChildren(...st);
+                say(o, 'Checking...');
+                const tok = h('span', { class: 'token drop-in' }, '"Kotlin"');
+                st[0].classList.add('on'); st[0].append(tok);
+                await sleep(650); if (!track.isConnected) return;
+                st[1].classList.add('on');
+                if (k.ok) st[1].append(h('span', { class: 'kt-type drop-in' }, 'can’t change'));
+                else {
+                  st[1].append(h('span', { class: 'kt-type drop-in' }, 'other thread'), h('span', { class: 'token is-null drop-in' }, 'null'));
+                  replay(st[1], 'shake');
+                }
+                await sleep(750); if (!track.isConnected) return;
+                st[2].classList.add('on');
+                if (k.ok) {
+                  st[2].append(h('span', { class: 'token pop' }, '6'));
+                  say(o, `<span class="good">compiles:</span> ${k.note}`);
+                } else {
+                  replay(st[2], 'shake');
+                  st[2].append(h('span', { class: 'token boom' }, '?'));
+                  say(o, `<span class="bad">compile error:</span> ${k.note}`);
+                }
+                busy = false;
+              }
+              el.append(h('div', { class: 'controls' }, buttons), decl, track, o);
+              run(kinds[3]);
+            },
+          },
+          {
+            title: 'Safe calls short-circuit a whole chain',
+            body: `<p>Real data is nested: a user may have no address, and an address may have no city. Chain <code>?.</code> calls and the first null ends the chain. Every call after it is skipped, and the whole expression is null.</p>
+<p>Put one <code>?:</code> at the end and it catches a null from any link.</p>`,
+            visual(el) {
+              const cases = [
+                { label: 'all present', vals: ['User', 'Address', '"Oslo"'] },
+                { label: 'city = null', vals: ['User', 'Address', null] },
+                { label: 'address = null', vals: ['User', null] },
+                { label: 'user = null', vals: [null] },
+              ];
+              const labels = ['user', '?.address', '?.city', '?: "Unknown"'];
+              let busy = false;
+              const track = h('div', { class: 'track' });
+              const o = out();
+              const buttons = cases.map(c => cmd(c.label, () => run(c)));
+              async function run(c) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', cases[i] === c));
+                const st = labels.map(l => h('div', { class: 'station' }, h('span', { class: 'st-label' }, l)));
+                track.replaceChildren(...st);
+                let v;
+                for (let i = 0; i < 3; i++) {
+                  if (i < c.vals.length) {
+                    v = c.vals[i];
+                    st[i].classList.add('on');
+                    st[i].append(h('span', { class: 'token pop' + (v == null ? ' is-null' : '') }, v == null ? 'null' : v));
+                  } else {
+                    st[i].classList.add('kt-skip');
+                    st[i].append(h('span', { class: 'kt-type' }, 'skipped'));
+                  }
+                  await sleep(i < c.vals.length ? 600 : 300); if (!track.isConnected) return;
+                }
+                const result = v == null ? '"Unknown"' : v;
+                st[3].classList.add('on');
+                st[3].append(h('span', { class: 'token pop' }, result));
+                say(o, v == null
+                  ? `<span class="good">result:</span> ${hl('"Unknown"')} <span class="muted">// the chain hit null at ${labels[c.vals.length - 1]}, Elvis caught it</span>`
+                  : `<span class="good">result:</span> ${hl('"Oslo"')} <span class="muted">// no null, Elvis not used</span>`);
+                busy = false;
+              }
+              el.append(h('div', { class: 'kt', html: hl('val city = user?.address?.city ?: "Unknown"') }), h('div', { class: 'controls' }, buttons), track, o);
+              run(cases[2]);
+            },
+          },
+          {
+            title: 'Values from Java carry no promise',
+            body: `<p>Java code without nullability annotations returns a <em>platform type</em>, shown as <code>String!</code>. Kotlin lets you treat it as <code>String</code> or <code>String?</code>. Pick wrong and you get a NullPointerException at runtime, not a compile error.</p>
+<p>Most Android SDK and AndroidX APIs are annotated now, so you see a real <code>String</code> or <code>String?</code>. For older or third-party Java code, write the nullable type yourself where the value enters Kotlin.</p>`,
+            code: `// Java: public String getNickname() { ... }   no annotation
+
+val a = legacy.nickname            // String! : the compiler trusts you
+a.length                           // NPE if Java returned null
+
+val b: String? = legacy.nickname   // now the compiler checks every use
+val len = b?.length ?: 0`,
+          },
+        ],
+        underHood: {
+          body: `<p>On the JVM, <code>String</code> and <code>String?</code> are the same class, <code>java.lang.String</code>. Nullability lives in Kotlin metadata and in <code>@NotNull</code>/<code>@Nullable</code> annotations. There is no wrapper object like Java’s <code>Optional</code>.</p>
+<p><code>?.</code> compiles to a plain null check and a branch. <code>!!</code> compiles to a check that throws <code>NullPointerException</code>. For public functions with non-null parameters, the compiler adds <code>Intrinsics.checkNotNullParameter</code> at the top, so a Java caller that passes null fails at the call, not somewhere deep inside.</p>`,
+          code: `// Kotlin
+fun greet(name: String) = name.length
+
+// Roughly what the JVM sees (decompiled to Java)
+public static final int greet(@NotNull String name) {
+    Intrinsics.checkNotNullParameter(name, "name");
+    return name.length();
+}`,
+        },
+        mistakes: [
+          { title: 'Silencing the compiler with !!', bad: 'val id = intent.getStringExtra("id")!!', good: 'val id = requireNotNull(intent.getStringExtra("id")) {\n    "DetailActivity needs an id extra"\n}', why: 'Both crash when the extra is missing. <code>requireNotNull</code> says why, so the crash report points straight at the cause. If a missing value is normal, use <code>?:</code> with a fallback instead.' },
+          { title: 'Using ?.let ?: as if-else', bad: 'user?.let { render(it) } ?: showLogin()', good: 'if (user != null) render(user) else showLogin()', why: 'The Elvis also runs when the <code>let</code> block itself returns null. If <code>render</code> returns a nullable result and gives back null, both branches run.' },
+          { title: 'Making everything nullable', bad: 'var title: String? = ""\nvar tags: List<String>? = emptyList()', good: 'var title: String = ""\nvar tags: List<String> = emptyList()', why: 'These always have a value, so <code>?</code> only adds null checks at every use. Use a nullable type only when “missing” is a real state.' },
+        ],
         visual(el) {
           let isNull = false, running = false;
           const track = h('div', { class: 'track' });
@@ -425,6 +586,147 @@ listOf(1, 2, 3).map { it * 10 }   // [10, 20, 30]`,
           { q: 'What is the type of <code>{ s: String -> s.length }</code>?', options: ['<code>(String) -> Int</code>', '<code>(Int) -> String</code>', '<code>String</code>'], a: 0, why: 'It takes a String and returns its length, an Int.' },
           { q: '<code>listOf(1, 2, 3).map { it + 1 }</code> returns', options: ['<code>[1, 2, 3]</code>', '<code>[2, 3, 4]</code>', '<code>6</code>'], a: 1, why: '<code>it</code> is each item in turn, so every item gets 1 added.' },
         ],
+        deeper: [
+          {
+            title: 'Lambdas remember where they were made',
+            body: `<p>A lambda can use the variables around it, and it keeps them alive after the surrounding function returns. This is called a <em>closure</em>.</p>
+<p>Each call to <code>makeCounter()</code> creates a fresh <code>count</code>, so every counter you make has its own. The lambda captures the variable itself, not a snapshot of its value, so it sees and makes changes.</p>`,
+            code: `fun makeCounter(): () -> Int {
+    var count = 0
+    return { count += 1; count }
+}
+
+val a = makeCounter()
+val b = makeCounter()
+a(); a()     // 1, 2
+b()          // 1: b has its own count`,
+            visual(el) {
+              const stage = h('div', { class: 'stage' });
+              const o = out();
+              const made = {};
+              const card = name => {
+                const val = h('span', { class: 'field' }, 'count = 0');
+                const c = h('div', { class: 'obj drop-in' },
+                  h('span', { class: 'obj-name' }, `val ${name}`),
+                  h('span', { class: 'kt-type' }, '() -> Int'),
+                  h('div', { class: 'kt-capture' }, h('span', { class: 'kt-tag' }, 'captured'), val));
+                return { el: c, val, n: 0 };
+              };
+              const make = name => {
+                if (made[name]) { replay(made[name].el, 'shake'); say(o, `<span class="bad">error:</span> Conflicting declarations: val ${name}`); return; }
+                made[name] = card(name); stage.append(made[name].el);
+                say(o, `${hl(`val ${name} = makeCounter()`)} <span class="muted">// a new count, starting at 0</span>`);
+              };
+              const call = name => {
+                const c = made[name];
+                if (!c) { say(o, `<span class="bad">error:</span> Unresolved reference: ${name}. Create it first.`); replay(o, 'shake'); return; }
+                c.n += 1; c.val.textContent = `count = ${c.n}`;
+                c.val.className = 'field changed'; replay(c.val, 'pop');
+                say(o, `${hl(`${name}()`)} <span class="muted">returns</span> ${hl(String(c.n))}`);
+              };
+              make('a');
+              say(o, 'Call a() a few times, then make b and compare.');
+              el.append(stage,
+                h('div', { class: 'controls' },
+                  cmd('a()', () => call('a')),
+                  cmd('val b = makeCounter()', () => make('b')),
+                  cmd('b()', () => call('b'))),
+                o);
+            },
+          },
+          {
+            title: 'Pass a function you already have',
+            body: `<p>When a lambda only calls one function, pass a <em>function reference</em> instead. <code>::isValid</code> refers to a top-level function, <code>String::length</code> to a member, and <code>viewModel::refresh</code> to a member bound to one object.</p>
+<p>A reference has a function type like any lambda, so it fits anywhere <code>(T) -> R</code> is expected.</p>`,
+            code: `fun isValid(email: String) = "@" in email
+
+emails.filter { isValid(it) }   // lambda
+emails.filter(::isValid)         // same thing, by reference
+
+names.map(String::length)        // member reference
+Button(onClick = viewModel::refresh) { Text("Refresh") }`,
+          },
+          {
+            title: 'Functions that build functions',
+            body: `<p>A function can take a function and return a new one. <code>twice(f)</code> returns a lambda that applies <code>f</code> two times. The returned lambda captures <code>f</code>, just like the counter captured <code>count</code>.</p>
+<p>This is how many library APIs work: you hand over a small piece of behaviour, and they wrap it in more behaviour.</p>`,
+            code: `fun twice(f: (Int) -> Int): (Int) -> Int = { x -> f(f(x)) }
+
+val addThree: (Int) -> Int = { it + 3 }
+val g = twice(addThree)
+g(1)   // addThree(addThree(1)) = 7`,
+            visual(el) {
+              const fns = [
+                { src: '{ it + 3 }', f: x => x + 3 },
+                { src: '{ it * 2 }', f: x => x * 2 },
+                { src: '{ it * it }', f: x => x * x },
+              ];
+              let cur = fns[0], x = 1, busy = false;
+              const sig = h('div', { class: 'kt' });
+              const machine = () => h('div', { class: 'machine' }, h('div', { class: 'gear' }), h('div', { class: 'kt' }));
+              const m1 = machine(), m2 = machine();
+              const slots = [h('div', { class: 'slot kt-slot' }), h('div', { class: 'slot kt-slot' }), h('div', { class: 'slot kt-slot' })];
+              const o = out();
+              const buttons = fns.map(fn => cmd(`f = ${fn.src}`, () => { if (busy) return; cur = fn; paint(); }));
+              function paint() {
+                sig.innerHTML = hl(`val g = twice(${cur.src})`);
+                [m1, m2].forEach(m => { m.lastChild.innerHTML = hl('f'); });
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', fns[i] === cur));
+                slots[0].replaceChildren(h('span', { class: 'chip' }, String(x)));
+                slots[1].replaceChildren(); slots[2].replaceChildren();
+                say(o, `Call ${hl(`g(${x})`)} to run f two times.`);
+              }
+              async function pass(from, m, to, v) {
+                const chip = from.firstElementChild;
+                if (chip) chip.classList.add('feed');
+                m.classList.add('busy');
+                await sleep(550);
+                m.classList.remove('busy');
+                if (!m.isConnected) return false;
+                if (chip) chip.remove();
+                to.replaceChildren(h('span', { class: 'chip drop-in' }, String(v)));
+                await sleep(300);
+                return m.isConnected;
+              }
+              async function call() {
+                if (busy) return; busy = true;
+                const y = cur.f(x), z = cur.f(y);
+                if (!await pass(slots[0], m1, slots[1], y)) return;
+                if (!await pass(slots[1], m2, slots[2], z)) return;
+                say(o, `${hl(`g(${x})`)} = f(f(${x})) = f(${y}) = ${hl(String(z))}`);
+                x = (x % 5) + 1;
+                busy = false;
+              }
+              paint();
+              el.append(sig,
+                h('div', { class: 'stage kt-twice' }, slots[0], m1, slots[1], m2, slots[2]),
+                h('div', { class: 'controls' }, buttons, h('button', { class: 'btn primary small', onclick: call }, 'Call g(x)')),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>On the JVM a function type like <code>(Int) -> Int</code> is the interface <code>Function1&lt;Int, Int&gt;</code> with one method, <code>invoke</code>. Calling <code>f(4)</code> is calling <code>f.invoke(4)</code>. Because generics need objects, the Int is boxed on the way in and out.</p>
+<p>Since Kotlin 2.0, lambdas compile through <code>invokedynamic</code> by default, the same mechanism Java lambdas use, instead of one generated class per lambda. A captured <code>var</code> can’t live on the stack, so the compiler moves it into a small box object (<code>Ref.IntRef</code> for an Int) that both the function and the lambda share. That is why the counter keeps counting.</p>
+<p>Standard functions such as <code>map</code>, <code>filter</code> and <code>forEach</code> are <code>inline</code>: the lambda body is copied into the call site and no function object exists at all.</p>`,
+          code: `// fun makeCounter(): () -> Int { var count = 0; return { count += 1; count } }
+// compiles to roughly:
+fun makeCounter(): Function0<Int> {
+    val count = Ref.IntRef()          // shared box
+    count.element = 0
+    return object : Function0<Int> {
+        override fun invoke(): Int {
+            count.element += 1
+            return count.element
+        }
+    }
+}`,
+        },
+        mistakes: [
+          { title: 'Returning the function instead of calling it', bad: 'Button(onClick = { viewModel::refresh }) {\n    Text("Refresh")\n}', good: 'Button(onClick = viewModel::refresh) {\n    Text("Refresh")\n}\n// or onClick = { viewModel.refresh() }', why: 'The lambda’s last expression is the reference itself, so the click just produces a function value and nothing runs. Pass the reference directly, or call it inside the lambda.' },
+          { title: 'Nested it shadows the outer it', bad: 'users.forEach {\n    it.orders.forEach {\n        log(it.id)   // which it?\n    }\n}', good: 'users.forEach { user ->\n    user.orders.forEach { order ->\n        log("\${user.id}: \${order.id}")\n    }\n}', why: 'The inner <code>it</code> hides the outer one, so you can’t reach the user anymore and it is easy to read the wrong one. Name parameters once lambdas nest.' },
+          { title: 'Expecting a snapshot of a captured var', bad: 'var label = "Loading"\nval show = { println(label) }\nlabel = "Done"\nshow()   // expects "Loading"', good: 'val snapshot = label\nval show = { println(snapshot) }\nlabel = "Done"\nshow()   // prints "Loading"', why: 'A lambda captures the variable, not its value at that moment. Copy the value into a <code>val</code> when you need what it was at creation time.' },
+        ],
         visual(el) {
           const fns = [
             { src: '{ x -> x * 2 }', type: '(Int) -> Int', f: x => x * 2 },
@@ -499,6 +801,162 @@ val result = numbers
           { q: '<code>listOf(1, 2, 3, 4).filter { it > 2 }</code>', options: ['<code>[1, 2]</code>', '<code>[3, 4]</code>', '<code>[true, true]</code>'], a: 1, why: '<code>filter</code> keeps the items where the lambda is true.' },
           { q: 'After <code>val b = a.map { it * 2 }</code>, what is in <code>a</code>?', options: ['The doubled values', 'The original values', 'Nothing'], a: 1, why: 'Collection operations return a new list and leave the original alone.' },
           { q: '<code>listOf(1, 2, 3).map { it * 2 }.sum()</code>', options: ['<code>6</code>', '<code>12</code>', '<code>[2, 4, 6]</code>'], a: 1, why: '2 + 4 + 6 = 12.' },
+        ],
+        deeper: [
+          {
+            title: 'Read-only is not the same as immutable',
+            body: `<p><code>List</code> has no <code>add</code> or <code>remove</code>. That stops <em>you</em> from changing the list through that name. It doesn’t stop someone holding a <code>MutableList</code> to the same object.</p>
+<p>The common pattern is a private <code>MutableList</code> exposed as a <code>List</code>. Readers can’t edit it, but they do see every change. When you need a frozen copy, call <code>toList()</code>.</p>`,
+            code: `class Basket {
+    private val _items = mutableListOf("Tea")
+    val items: List<String> get() = _items   // read-only view
+
+    fun add(item: String) { _items.add(item) }
+}
+
+val snapshot = basket.items.toList()          // a separate copy`,
+            visual(el) {
+              const fruit = ['Kiwi', 'Fig', 'Lime', 'Plum', 'Date'];
+              let next = 0, snap = null;
+              const listChips = h('div', { class: 'kt-pile' });
+              const listObj = h('div', { class: 'obj kt-shared' }, h('span', { class: 'obj-name' }, 'ArrayList @4f1a'), listChips);
+              const refA = h('div', { class: 'kt-ref' }, h('span', { class: 'kt-tag open' }, 'MutableList'), h('code', {}, '_items'));
+              const refB = h('div', { class: 'kt-ref' }, h('span', { class: 'kt-tag' }, 'List'), h('code', {}, 'items'));
+              const snapZone = h('div', { class: 'kt-pile' });
+              const o = out();
+              const chip = (t, anim) => h('span', { class: 'chip kt-sm' + (anim ? ' drop-in' : '') }, t);
+              listChips.append(chip('Tea'));
+              el.append(
+                h('div', { class: 'stage kt-refs kt-col' }, h('div', { class: 'kt-pile' }, refA, refB), h('span', { class: 'kt-up' }, 'both point at ↓'), listObj),
+                h('div', { class: 'controls' },
+                  cmd('_items.add(...)', () => {
+                    const f = fruit[next++ % fruit.length];
+                    listChips.append(chip(f, true));
+                    if (listChips.children.length > 6) listChips.firstElementChild.remove();
+                    replay(refA, 'pop'); replay(refB, 'pop');
+                    say(o, `${hl(`_items.add("${f}")`)} <span class="muted">// items sees it too: same object</span>`);
+                  }),
+                  cmd('items.add("Fig")', () => {
+                    replay(refB, 'shake');
+                    say(o, '<span class="bad">compile error:</span> Unresolved reference: add. List has no add().');
+                  }),
+                  cmd('val snapshot = items.toList()', () => {
+                    snap = [...listChips.children].map(c => c.textContent);
+                    snapZone.replaceChildren(h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, 'snapshot: ArrayList @7c2e'), h('div', { class: 'kt-pile' }, snap.map(t => chip(t)))));
+                    say(o, `${hl('items.toList()')} <span class="muted">// new list. Later adds won’t reach it.</span>`);
+                  })),
+                o, snapZone);
+              say(o, 'Two names point at one list. Add through _items and watch items.');
+            },
+          },
+          {
+            title: 'Group, split, index and fold',
+            body: `<p>Beyond <code>filter</code> and <code>map</code>, a few operations reshape a list into something else. <code>groupBy</code> builds a <code>Map&lt;K, List&lt;T&gt;&gt;</code>. <code>partition</code> splits into a pair of lists. <code>associateBy</code> builds a <code>Map&lt;K, T&gt;</code> with one value per key. <code>fold</code> walks the list carrying a running result.</p>
+<p>Watch <code>associateBy</code> closely: when two items share a key, the last one wins and the earlier one is gone.</p>`,
+            visual(el) {
+              const words = ['apple', 'avocado', 'banana', 'blueberry', 'cherry', 'kiwi'];
+              let busy = false;
+              const stage = h('div', { class: 'stage kt-buckets' });
+              const o = out();
+              const chip = (t, extra = '') => h('span', { class: 'chip kt-sm ' + extra }, t);
+              const bucket = key => {
+                const pile = h('div', { class: 'kt-pile' });
+                const b = h('div', { class: 'kt-bucket drop-in' }, h('span', { class: 'kt-bucket-key' }, key), pile);
+                stage.append(b);
+                return pile;
+              };
+              const reset = () => { stage.replaceChildren(h('div', { class: 'kt-pile' }, words.map(w => chip(w)))); };
+              async function into(keyOf) {
+                const piles = new Map();
+                stage.replaceChildren();
+                for (const w of words) {
+                  const k = keyOf(w);
+                  if (!piles.has(k)) piles.set(k, bucket(k));
+                  piles.get(k).append(chip(w, 'drop-in'));
+                  await sleep(260); if (!stage.isConnected) return false;
+                }
+                return true;
+              }
+              const ops = [
+                { src: 'groupBy { it.first() }', run: async () => {
+                  if (!await into(w => `'${w[0]}'`)) return;
+                  say(o, hl('{a=[apple, avocado], b=[banana, blueberry], c=[cherry], k=[kiwi]}'));
+                } },
+                { src: 'partition { it.length > 5 }', run: async () => {
+                  if (!await into(w => (w.length > 5 ? 'first (true)' : 'second (false)'))) return;
+                  say(o, hl('([avocado, banana, blueberry, cherry], [apple, kiwi])'));
+                } },
+                { src: 'associateBy { it.length }', run: async () => {
+                  const piles = new Map();
+                  stage.replaceChildren();
+                  for (const w of words) {
+                    const k = w.length;
+                    if (!piles.has(k)) piles.set(k, bucket(String(k)));
+                    const p = piles.get(k);
+                    if (p.firstElementChild) {
+                      p.firstElementChild.classList.add('leave');
+                      say(o, `key ${k}: ${hl(`"${w}"`)} replaces ${hl(`"${p.firstElementChild.textContent}"`)}`);
+                      await sleep(450); if (!stage.isConnected) return;
+                      p.replaceChildren();
+                    }
+                    p.append(chip(w, 'drop-in'));
+                    await sleep(260); if (!stage.isConnected) return;
+                  }
+                  say(o, `${hl('{5=apple, 7=avocado, 6=cherry, 9=blueberry, 4=kiwi}')} <span class="muted">// banana was overwritten</span>`);
+                } },
+                { src: 'fold(0) { acc, w -> acc + w.length }', run: async () => {
+                  reset();
+                  const chips = [...stage.firstElementChild.children];
+                  const acc = h('span', { class: 'chip total drop-in' }, '0');
+                  stage.append(h('div', { class: 'kt-bucket' }, h('span', { class: 'kt-bucket-key' }, 'acc'), acc));
+                  let sum = 0;
+                  for (let i = 0; i < words.length; i++) {
+                    chips[i].classList.add('leave');
+                    sum += words[i].length;
+                    say(o, `acc = ${sum - words[i].length} + ${words[i].length} <span class="muted">// "${words[i]}"</span>`);
+                    await sleep(420); if (!stage.isConnected) return;
+                    acc.textContent = String(sum); replay(acc, 'pop');
+                  }
+                  say(o, `<span class="good">result:</span> ${hl(String(sum))} <span class="muted">// total letters</span>`);
+                } },
+              ];
+              reset();
+              say(o, hl('val fruit = listOf("apple", "avocado", "banana", "blueberry", "cherry", "kiwi")'));
+              el.append(stage,
+                h('div', { class: 'controls' }, ops.map(op => cmd(op.src, async () => {
+                  if (busy) return; busy = true; await op.run(); busy = false;
+                }))),
+                o);
+            },
+          },
+          {
+            title: 'Long chains on big lists',
+            body: `<p>Every step in a chain builds a whole new list. For a few hundred items that costs nothing. For large data, or when you only need the first match, call <code>asSequence()</code> so each item flows through the whole chain one at a time. The Kotlin deep dive track covers sequences in detail.</p>`,
+            code: `val firstBig = orders
+    .asSequence()
+    .filter { it.paid }
+    .map { it.total }
+    .first { it > 100 }   // stops at the first match`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>map</code> and <code>filter</code> are ordinary extension functions on <code>Iterable</code>, marked <code>inline</code>. The compiler pastes your lambda into a plain loop that fills a new <code>ArrayList</code>, so no function object is created per call.</p>
+<p><code>List</code> and <code>MutableList</code> both become <code>java.util.List</code> on the JVM. Read-only is a compile-time view. A cast like <code>items as MutableList</code> compiles, which is one more reason to hand out copies when it matters.</p>`,
+          code: `// From the standard library
+public inline fun <T, R> Iterable<T>.map(transform: (T) -> R): List<R> {
+    return mapTo(ArrayList<R>(collectionSizeOrDefault(10)), transform)
+}
+
+public inline fun <T, R, C : MutableCollection<in R>>
+        Iterable<T>.mapTo(destination: C, transform: (T) -> R): C {
+    for (item in this) destination.add(transform(item))
+    return destination
+}`,
+        },
+        mistakes: [
+          { title: 'Building a list just to count it', bad: 'val paid = orders.filter { it.paid }.size\nval first = orders.filter { it.paid }.first()', good: 'val paid = orders.count { it.paid }\nval first = orders.first { it.paid }', why: '<code>count</code>, <code>first</code>, <code>any</code> and <code>none</code> take a predicate directly. They skip the temporary list, and <code>first</code> stops at the first match.' },
+          { title: 'Removing while looping', bad: 'for (item in cart) {\n    if (item.qty == 0) cart.remove(item)\n}', good: 'cart.removeAll { it.qty == 0 }', why: 'Changing a list while a <code>for</code> loop walks it throws <code>ConcurrentModificationException</code>. <code>removeAll</code> with a predicate does it in one safe pass.' },
+          { title: 'Ignoring the result of sorted()', bad: 'names.sorted()\nshowNames(names)   // still unsorted', good: 'val sortedNames = names.sorted()\nshowNames(sortedNames)', why: '<code>sorted()</code> returns a new list like every other operation here. Only <code>sort()</code> on a <code>MutableList</code> changes it in place.' },
         ],
         visual(el) {
           let items, lines, busy = false;
@@ -666,6 +1124,150 @@ val d = User("Dee", 1990, 2026)      // secondary: age = 36`,
           { q: '<code>class P(name: String)</code>. Does <code>P("Ada").name</code> compile?', options: ['Yes', 'No, name is not a property'], a: 1, why: 'Only parameters marked <code>val</code> or <code>var</code> become properties.' },
           { q: 'With the code above, what is <code>User("Bo").age</code>?', options: ['<code>0</code>', '<code>18</code>', 'It doesn’t compile'], a: 1, why: 'The caller skipped <code>age</code>, so its default of 18 is used.' },
           { q: 'When does an <code>init</code> block run?', options: ['Each time an object is created', 'Once, when the class is loaded', 'Only if you call it'], a: 0, why: '<code>init</code> is part of construction, so it runs for every new object.' },
+        ],
+        deeper: [
+          {
+            title: 'The parent is built first',
+            body: `<p>When a class extends another, the parent’s constructor runs completely before the child sets any of its own properties. That includes the child’s <code>val</code> constructor parameters.</p>
+<p>So if the parent’s <code>init</code> calls an <code>open</code> function, the child’s override runs on a half-built object. A non-null <code>String</code> can read as <code>null</code> there. The IDE warns about calling non-final functions in a constructor. Take the warning seriously.</p>`,
+            visual(el) {
+              const src = [
+                'open class Base {',
+                '    init { println("Base: " + describe()) }',
+                '    open fun describe() = "base"',
+                '}',
+                'class Child(val name: String) : Base() {',
+                '    init { println("Child init") }',
+                '    override fun describe() = "child $name"',
+                '}',
+              ];
+              const rows = src.map(s => h('div', { class: 'branch', html: hl(s) }));
+              const nameField = h('span', { class: 'field kt-unset' }, 'name = (not created)');
+              const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'Child'), nameField);
+              const con = h('div', { class: 'out', 'aria-live': 'polite' });
+              const o = out();
+              let busy = false, built = false;
+              async function at(i, note) {
+                rows.forEach(r => r.classList.remove('kt-on'));
+                if (i >= 0) rows[i].classList.add('kt-on');
+                say(o, note);
+                await sleep(900);
+                return rows[0].isConnected;
+              }
+              const log = t => con.append(h('div', { class: 'line drop-in' }, t));
+              async function create() {
+                if (busy) return; busy = true;
+                con.replaceChildren(); built = false;
+                nameField.textContent = 'name = null'; nameField.className = 'field kt-unset';
+                if (!await at(4, `${hl('Child("Ada")')}: first stop is ${hl('Base()')}`)) return;
+                if (!await at(1, 'Base init runs. Child hasn’t stored name yet.')) return;
+                if (!await at(6, 'describe() is open, so Child’s override runs on the half-built object')) return;
+                replay(nameField, 'shake');
+                log('Base: child null');
+                if (!await at(6, `<span class="bad">name is null</span> here, even though its type is String`)) return;
+                nameField.textContent = 'name = "Ada"'; nameField.className = 'field changed'; replay(nameField, 'pop');
+                if (!await at(4, 'Back in Child: now name = "Ada" is stored')) return;
+                if (!await at(5, 'Child init runs')) return;
+                log('Child init');
+                rows.forEach(r => r.classList.remove('kt-on'));
+                say(o, '<span class="good">done:</span> the object is complete. Try describe() now.');
+                built = true; busy = false;
+              }
+              async function describe() {
+                if (busy) return;
+                if (!built) { say(o, '<span class="bad">error:</span> create the Child first.'); replay(o, 'shake'); return; }
+                busy = true;
+                if (!await at(6, `${hl('child.describe()')} after construction`)) return;
+                log('child Ada');
+                rows.forEach(r => r.classList.remove('kt-on'));
+                say(o, `<span class="good">returns</span> ${hl('"child Ada"')} <span class="muted">// name is set by now</span>`);
+                busy = false;
+              }
+              say(o, 'Create a Child and watch who runs first.');
+              el.append(
+                h('div', { class: 'when' }, rows),
+                h('div', { class: 'controls' }, cmd('val child = Child("Ada")', create), cmd('child.describe()', describe)),
+                o, h('div', { class: 'stage' }, obj), con);
+            },
+          },
+          {
+            title: 'Stored once or computed on every read',
+            body: `<p><code>val isAdult = age >= 18</code> runs once, when the object is built, and stores the answer. If <code>age</code> is a <code>var</code> that changes later, the stored answer goes stale.</p>
+<p>A custom getter, <code>val isAdult get() = age >= 18</code>, has no stored value. It runs its expression on every read, so it always matches the current <code>age</code>.</p>`,
+            code: `class Person(var age: Int) {
+    val isAdultStored = age >= 18              // computed once
+    val isAdult: Boolean get() = age >= 18     // computed on every read
+}`,
+            visual(el) {
+              let age = 17, stored = false;
+              const fAge = h('span', { class: 'field' });
+              const fStored = h('span', { class: 'field' });
+              const fGet = h('span', { class: 'field' });
+              const o = out();
+              const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'val p = Person(17)'), fAge, fStored, fGet);
+              function paint(changed) {
+                const now = age >= 18;
+                fAge.textContent = `age = ${age}`;
+                fStored.textContent = `isAdultStored = ${stored}`;
+                fStored.className = 'field' + (stored !== now ? ' kt-stale' : '');
+                fGet.textContent = `isAdult = ${now}`;
+                fGet.className = 'field' + (changed ? ' changed' : '');
+                if (changed) { replay(fAge, 'pop'); replay(fGet, 'flip'); }
+              }
+              const setAge = n => {
+                age = n; paint(true);
+                const now = age >= 18;
+                say(o, stored !== now
+                  ? `${hl(`p.age = ${age}`)} <span class="bad">isAdultStored is stale:</span> it still says ${stored}`
+                  : `${hl(`p.age = ${age}`)} <span class="muted">// both agree, for now</span>`);
+              };
+              paint(false);
+              say(o, 'Have a birthday. Only the getter keeps up.');
+              el.append(h('div', { class: 'stage' }, obj),
+                h('div', { class: 'controls' },
+                  cmd('p.age += 1', () => setAge(Math.min(age + 1, 99))),
+                  cmd('p.age -= 1', () => setAge(Math.max(age - 1, 0))),
+                  cmd('val p = Person(17)', () => { age = 17; stored = false; paint(false); replay(obj, 'drop-in'); say(o, 'New object: both computed from age 17.'); })),
+                o);
+            },
+          },
+          {
+            title: 'Guard a property with its setter',
+            body: `<p>A property can have its own setter. Inside it, <code>field</code> is the stored value. Use it to validate or clamp what callers assign, without writing a separate <code>setAge()</code> method.</p>
+<p>Make the setter <code>private set</code> when only the class itself should change the value.</p>`,
+            code: `class Player {
+    var health = 100
+        set(value) { field = value.coerceIn(0, 100) }
+
+    var score = 0
+        private set              // readable everywhere, writable only here
+
+    fun hit(points: Int) { score += points }
+}
+
+player.health = 140   // stored as 100`,
+          },
+        ],
+        underHood: {
+          body: `<p>Each property becomes a private JVM field plus a getter (and a setter for <code>var</code>), so Java sees <code>getName()</code>. A property with only a custom getter that never uses <code>field</code> gets no field at all.</p>
+<p>The constructor body the compiler writes is: call the superclass constructor, store the <code>val</code>/<code>var</code> parameters, then run property initializers and <code>init</code> blocks in source order. Default arguments become one extra synthetic constructor that takes a bit mask of which arguments were left out. Java can’t use that one, which is what <code>@JvmOverloads</code> is for.</p>`,
+          code: `// class User(val name: String, val age: Int = 18)
+// roughly what Java sees:
+public final class User {
+    private final String name;
+    private final int age;
+    public User(String name, int age) { super(); this.name = name; this.age = age; }
+    public User(String name, int age, int mask, DefaultConstructorMarker m) {
+        this(name, (mask & 2) != 0 ? 18 : age);   // bit 2: age was left out
+    }
+    public final String getName() { return name; }
+    public final int getAge() { return age; }
+}`,
+        },
+        mistakes: [
+          { title: 'Assigning constructor parameters by hand', bad: 'class User(name: String, age: Int) {\n    val name: String\n    val age: Int\n    init {\n        this.name = name\n        this.age = age\n    }\n}', good: 'class User(val name: String, val age: Int)', why: '<code>val</code> in the header declares and assigns the property in one go. The long form is a habit carried over from Java.' },
+          { title: 'Overloading instead of defaults', bad: 'class Toast(val text: String, val ms: Int) {\n    constructor(text: String) : this(text, 2000)\n}', good: 'class Toast(val text: String, val ms: Int = 2000)', why: 'A default argument covers the same calls with less code, and named arguments keep calls clear. Add <code>@JvmOverloads</code> only if Java code needs the overloads.' },
+          { title: 'Accepting invalid state', bad: 'class Percent(val value: Int)\n\nval p = Percent(140)   // fine?', good: 'class Percent(val value: Int) {\n    init {\n        require(value in 0..100) { "value must be 0..100, was $value" }\n    }\n}', why: 'Check rules in <code>init</code> with <code>require</code>. A bad value fails right where the object is created, with a clear message, instead of causing odd bugs later.' },
         ],
         visual(el) {
           const src = [
@@ -1047,6 +1649,132 @@ println(a)  // User(name=Ada, age=36)`,
         quiz: [
           { q: 'For a plain (non-data) class, <code>User("Ada") == User("Ada")</code> is', options: ['<code>true</code>', '<code>false</code>'], a: 1, why: 'Without <code>data</code>, <code>==</code> checks whether both are the same object, and these are two separate objects.' },
           { q: 'What does <code>a.copy(age = 37)</code> do to <code>a</code>?', options: ['Sets its age to 37', 'Nothing. It returns a new object.'], a: 1, why: '<code>copy()</code> builds a new object. With <code>val</code> properties, <code>a</code> can’t change at all.' },
+        ],
+        deeper: [
+          {
+            title: 'Only the constructor counts',
+            body: `<p>The generated <code>equals</code>, <code>hashCode</code>, <code>toString</code> and <code>copy</code> use only the properties in the primary constructor. A property declared in the class body is invisible to all four.</p>
+<p>That can be handy for UI-only flags, and surprising when you forget it. <code>copy()</code> calls the constructor, so a body property starts again from its initializer.</p>`,
+            code: `data class Item(val id: Int, val name: String) {
+    var selected = false     // not part of equals, toString or copy
+}`,
+            visual(el) {
+              const a = { selected: false }, b = { selected: false };
+              const field = () => h('span', { class: 'field' });
+              const fa = field(), fb = field();
+              const card = (n, f) => h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, `val ${n}`),
+                h('span', { class: 'field' }, 'id = 1'), h('span', { class: 'field' }, 'name = "Tea"'),
+                h('span', { class: 'kt-body-prop' }, h('span', { class: 'kt-tag' }, 'body'), f));
+              const ca = card('a', fa), cb = card('b', fb);
+              const o = out();
+              const paint = () => {
+                fa.textContent = `selected = ${a.selected}`; fb.textContent = `selected = ${b.selected}`;
+                fa.className = 'field' + (a.selected ? ' changed' : '');
+              };
+              paint();
+              say(o, 'a and b are Item(1, "Tea"). Select a, then compare.');
+              el.append(
+                h('div', { class: 'kt', html: hl('data class Item(val id: Int, val name: String) {\n    var selected = false\n}') }),
+                h('div', { class: 'stage' }, ca, cb),
+                h('div', { class: 'controls' },
+                  cmd('a.selected = !a.selected', () => { a.selected = !a.selected; paint(); replay(fa, 'pop'); say(o, hl(`a.selected = ${a.selected}`)); }),
+                  cmd('a == b', () => {
+                    replay(ca, 'cmp'); replay(cb, 'cmp');
+                    say(o, `${hl('a == b')} <span class="muted">is</span> ${hl('true')} <span class="muted">// ${a.selected !== b.selected ? 'selected differs, but equals ignores it' : 'id and name match'}</span>`);
+                  }),
+                  cmd('println(a)', () => say(o, `Item(id=1, name=Tea) <span class="muted">// no selected</span>`)),
+                  cmd('a.copy().selected', () => say(o, `${hl('false')} <span class="muted">// copy() runs the constructor, so selected starts at false${a.selected ? ' even though a.selected is true' : ''}</span>`))),
+                o);
+            },
+          },
+          {
+            title: 'copy() is shallow',
+            body: `<p><code>copy()</code> copies each property’s <em>reference</em>. It doesn’t clone the objects they point to. If a property holds a <code>MutableList</code>, the copy and the original share that one list, and a change through either shows in both.</p>
+<p>Use read-only types inside data classes and build new values instead: <code>copy(items = items + "Jam")</code> creates a new list and leaves the old object untouched.</p>`,
+            visual(el) {
+              const sw = h('input', { type: 'checkbox', id: 'kt-data-shallow-ro' });
+              const decl = h('div', { class: 'kt' });
+              const stage = h('div', { class: 'stage kt-refs' });
+              const lists = h('div', { class: 'kt-pile' });
+              const o = out();
+              let ro, a, b, ids;
+              const addr = n => '@' + (0x3a10 + n * 0x2c4).toString(16);
+              const listCard = l => (l.el = h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, `${ro ? 'List' : 'MutableList'} ${addr(l.id)}`),
+                h('div', { class: 'kt-pile' }, l.items.map(t => h('span', { class: 'chip kt-sm' }, t)))));
+              const refCard = (n, x) => h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, `val ${n}: Cart`),
+                h('span', { class: 'field' }, `owner = "${x.owner}"`),
+                h('span', { class: 'field kt-ptr' }, `items → ${addr(x.list.id)}`));
+              function paint() {
+                stage.replaceChildren(refCard('a', a), ...(b ? [refCard('b', b)] : []));
+                const all = [...new Set([a.list, ...(b ? [b.list] : [])])];
+                lists.replaceChildren(...all.map(listCard));
+              }
+              function reset() {
+                ro = sw.checked; ids = 0;
+                a = { owner: 'Ada', list: { id: ids++, items: ['Tea'] } }; b = null;
+                decl.innerHTML = hl(`data class Cart(val owner: String, val items: ${ro ? 'List' : 'MutableList'}<String>)`);
+                paint();
+                say(o, 'Copy a, then add to b’s items.');
+              }
+              sw.addEventListener('change', reset);
+              const copyB = () => {
+                if (b) { say(o, '<span class="bad">error:</span> b already exists. Press Reset to start over.'); replay(o, 'shake'); return; }
+                b = { owner: 'Bo', list: a.list }; paint();
+                say(o, `${hl('val b = a.copy(owner = "Bo")')} <span class="muted">// one list, two references</span>`);
+              };
+              const add = () => {
+                if (!b) { say(o, '<span class="bad">error:</span> Unresolved reference: b. Copy a first.'); replay(o, 'shake'); return; }
+                if (ro) {
+                  b = { owner: b.owner, list: { id: ids++, items: [...b.list.items, 'Jam'] } };
+                  paint();
+                  say(o, `${hl('b = b.copy(items = b.items + "Jam")')} <span class="good">a keeps [Tea]</span>`);
+                } else {
+                  b.list.items.push('Jam'); paint();
+                  replay(stage, 'shake');
+                  say(o, `${hl('b.items.add("Jam")')} <span class="bad">a.items changed too:</span> ${hl(`[${a.list.items.join(', ')}]`)}`);
+                }
+              };
+              reset();
+              el.append(
+                h('label', { class: 'switch', for: 'kt-data-shallow-ro' }, sw, 'read-only List + copy'),
+                decl, stage, lists,
+                h('div', { class: 'controls' },
+                  cmd('val b = a.copy(owner = "Bo")', copyB),
+                  cmd('add "Jam" to b', add),
+                  cmd('println(a.items)', () => say(o, hl(`[${a.list.items.join(', ')}]`)))),
+                o);
+            },
+          },
+          {
+            title: 'Don’t change a key after storing it',
+            body: `<p>Sets and map keys find an object by its <code>hashCode</code>. A data class computes that from its properties. Change a <code>var</code> property after adding the object and its hash changes, so the set looks in the wrong place and can’t find it any more.</p>
+<p>Keep data classes made of <code>val</code>s, especially ones you use as keys.</p>`,
+            code: `data class Tag(var name: String)
+
+val tag = Tag("kotlin")
+val tags = hashSetOf(tag)
+tag.name = "android"
+
+tags.contains(tag)   // false: stored under the old hash
+tags.size            // 1: it is still in there, unreachable`,
+          },
+        ],
+        underHood: {
+          body: `<p>The compiler adds these members to every data class, built only from the primary constructor properties: <code>component1()</code> to <code>componentN()</code> for destructuring, <code>copy()</code> with each parameter defaulting to the current value, <code>equals()</code>, <code>hashCode()</code> and <code>toString()</code>.</p>
+<p>If you write one of <code>equals</code>, <code>hashCode</code> or <code>toString</code> yourself in the class body, the compiler uses yours and skips generating it. <code>val (name, age) = user</code> is just <code>user.component1()</code> and <code>user.component2()</code>.</p>`,
+          code: `// data class User(val name: String, val age: Int) gets, roughly:
+operator fun component1() = name
+operator fun component2() = age
+fun copy(name: String = this.name, age: Int = this.age) = User(name, age)
+override fun equals(other: Any?) =
+    this === other || (other is User && name == other.name && age == other.age)
+override fun hashCode() = name.hashCode() * 31 + age.hashCode()
+override fun toString() = "User(name=$name, age=$age)"`,
+        },
+        mistakes: [
+          { title: 'Arrays inside a data class', bad: 'data class Photo(val id: Int, val bytes: ByteArray)\n\nPhoto(1, data) == Photo(1, data.copyOf())   // false', good: 'data class Photo(val id: Int, val bytes: List<Byte>)\n// or override equals/hashCode with contentEquals/contentHashCode', why: 'Arrays compare by identity, so the generated <code>equals</code> does too. The compiler warns about this. Use a <code>List</code>, or write <code>equals</code> and <code>hashCode</code> yourself.' },
+          { title: 'Mutating state instead of copying it', bad: 'data class UiState(val items: MutableList<String>)\n\n_state.value.items.add("New")   // UI never updates', good: 'data class UiState(val items: List<String>)\n\n_state.update { it.copy(items = it.items + "New") }', why: 'The StateFlow still holds the same object, so it has nothing new to emit and Compose sees no change. A new object from <code>copy()</code> triggers the update.' },
+          { title: 'Secrets in toString', bad: 'data class Login(val user: String, val password: String)\n\nLog.d("Auth", "Sending $login")', good: 'data class Login(val user: String, val password: String) {\n    override fun toString() = "Login(user=$user, password=***)"\n}', why: 'The generated <code>toString</code> prints every constructor property, so passwords and tokens end up in logs and crash reports. Override it for sensitive data.' },
         ],
         visual(el) {
           let isData = true, addr = 0x1b6d3586, objs;
@@ -1452,6 +2180,194 @@ fun fail(): Nothing = error("unreachable")   // IllegalStateException`,
           { q: 'What does the code above print, in order?', options: ['Started, A done, B done', 'Started, B done, A done', 'A done, B done, Started'], a: 1, why: '"Started" runs first. B’s 400 ms delay ends before A’s 800 ms.' },
           { q: 'Replace both <code>delay()</code> calls with <code>Thread.sleep()</code>. Total time is about', options: ['800 ms', '1200 ms', '400 ms'], a: 1, why: 'Sleep holds the only thread, so A and B run one after another: 800 + 400.' },
           { q: 'Inside a coroutine on Android’s main thread, which one keeps the UI responsive?', options: ['<code>delay(1000)</code>', '<code>Thread.sleep(1000)</code>'], a: 0, why: '<code>delay</code> suspends and frees the main thread to keep drawing.' },
+        ],
+        deeper: [
+          {
+            title: 'Cancellation is cooperative',
+            body: `<p><code>job.cancel()</code> doesn’t stop a coroutine on the spot. It marks the job as cancelled. The coroutine only notices when it reaches a suspension point such as <code>delay()</code>, or when it checks with <code>ensureActive()</code> or <code>isActive</code>.</p>
+<p>A loop of pure CPU work never suspends, so it ignores the cancel and runs to the end. Add <code>ensureActive()</code> (or <code>yield()</code>) inside long loops so cancellation can get in.</p>`,
+            code: `val job = scope.launch(Dispatchers.Default) {
+    for (chunk in chunks) {
+        ensureActive()      // throws CancellationException if cancelled
+        crunch(chunk)       // CPU work, never suspends
+    }
+}
+
+job.cancel()`,
+            visual(el) {
+              const N = 10;
+              const sw = h('input', { type: 'checkbox', id: 'kt-co-coop', checked: true });
+              const src = h('div', { class: 'kt' });
+              const cells = Array.from({ length: N }, (_, i) => h('div', { class: 'kt-cell' }, String(i + 1)));
+              const grid = h('div', { class: 'kt-work' }, cells);
+              const state = h('span', { class: 'kt-state' });
+              const o = out();
+              let running = false, cancelled = false, run = 0;
+              const setState = (t, cls) => { state.textContent = t; state.className = 'kt-state ' + (cls || ''); replay(state, 'pop'); };
+              const paintSrc = () => {
+                src.innerHTML = hl(`launch(Dispatchers.Default) {\n    for (i in 1..10) {\n${sw.checked ? '        ensureActive()\n' : ''}        crunch(i)   // CPU work\n    }\n}`);
+              };
+              const clear = () => cells.forEach(c => { c.className = 'kt-cell'; });
+              async function start() {
+                if (running) return;
+                running = true; cancelled = false; const me = ++run;
+                clear(); setState('active', 'on');
+                say(o, 'Running. Press job.cancel() halfway through.');
+                const coop = sw.checked;
+                for (let i = 0; i < N; i++) {
+                  if (coop && cancelled) {
+                    for (let j = i; j < N; j++) cells[j].classList.add('skip');
+                    setState('cancelled', 'bad');
+                    say(o, `<span class="good">stopped</span> at i = ${i + 1}: ensureActive() threw CancellationException. ${N - i} chunks never ran.`);
+                    running = false; return;
+                  }
+                  cells[i].classList.add('at');
+                  await sleep(380);
+                  if (!grid.isConnected || me !== run) return;
+                  cells[i].className = 'kt-cell seen';
+                }
+                if (cancelled) {
+                  setState('cancelled', 'bad');
+                  say(o, '<span class="bad">ignored:</span> the loop never checked, so all 10 chunks ran after cancel(). The job only finished as cancelled at the end.');
+                } else {
+                  setState('completed', 'ok');
+                  say(o, 'Completed. Run it again and cancel halfway.');
+                }
+                running = false;
+              }
+              function cancel() {
+                if (!running) { say(o, `${hl('job.cancel()')} <span class="muted">// nothing running. Press Start first.</span>`); return; }
+                if (cancelled) return;
+                cancelled = true; setState('cancelling', 'warn');
+                say(o, sw.checked ? 'cancel() requested. Waiting for the next ensureActive()...' : 'cancel() requested. The loop never checks...');
+              }
+              sw.addEventListener('change', () => { if (running) { sw.checked = !sw.checked; return; } paintSrc(); clear(); setState('new', ''); });
+              paintSrc(); setState('new', '');
+              say(o, 'Start the job, then cancel it. Try both with and without ensureActive().');
+              el.append(
+                h('label', { class: 'switch', for: 'kt-co-coop' }, sw, 'call ensureActive() in the loop'),
+                src, grid,
+                h('div', { class: 'controls' },
+                  h('button', { class: 'btn primary small', onclick: start }, 'Start'),
+                  cmd('job.cancel()', cancel),
+                  h('span', { class: 'kt-up' }, 'job:'), state),
+                o);
+            },
+          },
+          {
+            title: 'Sequential by default, concurrent when you ask',
+            body: `<p>Inside a coroutine, code runs top to bottom. Two suspend calls in a row run one after the other, even when they don’t depend on each other.</p>
+<p>To run them at the same time, start each one with <code>async</code> and <code>await()</code> the results. The total time becomes the slowest call, not the sum. Wrap them in <code>coroutineScope</code> so a failure in one cancels the other.</p>`,
+            visual(el) {
+              const modes = {
+                seq: {
+                  label: 'one after another', total: 1060,
+                  src: 'val user = api.user()       // 600 ms\nval orders = api.orders()   // 400 ms\nshow(user, orders)',
+                  bars: [['user', 0, 600], ['orders', 600, 1000]],
+                  note: 'About 1000 ms: orders() didn’t start until user() returned.',
+                },
+                par: {
+                  label: 'async + await', total: 1060,
+                  src: 'coroutineScope {\n    val user = async { api.user() }\n    val orders = async { api.orders() }\n    show(user.await(), orders.await())\n}',
+                  bars: [['user', 0, 600], ['orders', 0, 400]],
+                  note: 'About 600 ms: both requests ran at the same time, so you wait only for the slower one.',
+                },
+              };
+              let mode = 'seq', busy = false, bars = [], cursors = [];
+              const src = h('div', { class: 'kt' });
+              const tl = h('div', { class: 'timeline' });
+              const clock = h('span', { class: 'clock' }, '0 ms');
+              const o = out();
+              const buttons = Object.keys(modes).map(k => cmd(modes[k].label, () => { if (busy) return; mode = k; play(); }));
+              const end = m => Math.max(...m.bars.map(b => b[2]));
+              function setup() {
+                const m = modes[mode];
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', Object.keys(modes)[i] === mode));
+                src.innerHTML = hl(m.src);
+                bars = []; cursors = [];
+                const lane = (name, list) => {
+                  const track = h('div', { class: 'lane-track' });
+                  for (const [start, stop, kind] of list) {
+                    const b = h('span', { class: `bar ${kind}`, style: `left:${(start / m.total) * 100}%;width:0` });
+                    track.append(b); bars.push({ el: b, start, end: stop });
+                  }
+                  const c = h('span', { class: 'cursor' }); track.append(c); cursors.push(c);
+                  return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track);
+                };
+                const done = end(m);
+                tl.replaceChildren(
+                  ...m.bars.map(([n, s, e]) => lane(`${n}()`, [[s, e, 'wait']])),
+                  lane('show()', [[done, Math.min(done + 30, m.total), 'run']]));
+              }
+              function draw(t) {
+                const m = modes[mode];
+                for (const b of bars) b.el.style.width = (Math.max(0, Math.min(t, b.end) - b.start) / m.total) * 100 + '%';
+                cursors.forEach(c => { c.style.left = (Math.min(t, m.total) / m.total) * 100 + '%'; });
+                clock.textContent = Math.round(Math.min(t, end(m))) + ' ms';
+              }
+              function play() {
+                if (busy) return; busy = true; setup();
+                say(o, 'Running...');
+                const m = modes[mode], t0 = performance.now(), stopAt = end(m) + 30;
+                const tick = now => {
+                  if (!tl.isConnected) return;
+                  const t = Math.min((now - t0) / 2, stopAt);
+                  draw(t);
+                  if (t < stopAt) requestAnimationFrame(tick);
+                  else { say(o, m.note); busy = false; }
+                };
+                requestAnimationFrame(tick);
+              }
+              setup(); draw(end(modes.seq) + 30); say(o, modes.seq.note);
+              el.append(
+                h('div', { class: 'controls' }, buttons, clock),
+                src, tl,
+                h('div', { class: 'legend' },
+                  h('span', {}, h('i', { class: 'bar wait' }), 'waiting on the network (suspended)'),
+                  h('span', {}, h('i', { class: 'bar run' }), 'show() runs')),
+                o);
+            },
+          },
+          {
+            title: 'Every coroutine needs an owner',
+            body: `<p>Launch coroutines in a scope that matches the work’s lifetime. <code>viewModelScope</code> cancels its coroutines when the ViewModel is cleared, and <code>lifecycleScope</code> when the Activity or Fragment is destroyed. Nothing keeps running after the screen is gone.</p>
+<p>This idea is called structured concurrency. The Flow and coroutines track covers scopes, jobs and dispatchers in depth.</p>`,
+            code: `class ProfileViewModel(private val repo: ProfileRepo) : ViewModel() {
+    fun refresh() {
+        viewModelScope.launch {          // cancelled in onCleared()
+            val profile = repo.load()
+            _state.value = profile
+        }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>The compiler rewrites every <code>suspend</code> function. It adds a hidden last parameter, a <code>Continuation</code>, and changes the return type to <code>Any?</code>. The function can now return either its result or a special marker, <code>COROUTINE_SUSPENDED</code>, which means “I paused, I’ll call you back”.</p>
+<p>The body becomes a state machine. Each suspension point gets a number (a <code>label</code>). Before pausing, the function saves its local variables and the label into a continuation object. When the awaited work finishes, it calls <code>continuation.resumeWith(result)</code>, which calls the function again. The function reads the label and jumps straight to where it left off. No thread waits during the pause.</p>`,
+          code: `// suspend fun load(): User {
+//     val token = auth()          // suspension point 1
+//     return api.user(token)      // suspension point 2
+// }
+// becomes, simplified:
+fun load(cont: Continuation<User>): Any? {
+    val sm = cont as? LoadStateMachine ?: LoadStateMachine(cont)
+    when (sm.label) {
+        0 -> {
+            sm.label = 1
+            val r = auth(sm)
+            if (r === COROUTINE_SUSPENDED) return r
+            sm.token = r as String        // came back right away
+        }
+        1 -> sm.token = sm.result as String   // resumed later
+    }
+    return api.user(sm.token, sm)   // label 2 works the same way
+}`,
+        },
+        mistakes: [
+          { title: 'Swallowing cancellation', bad: 'viewModelScope.launch {\n    try {\n        _state.value = repo.load()\n    } catch (e: Exception) {\n        _error.value = "Failed"\n    }\n}', good: 'viewModelScope.launch {\n    try {\n        _state.value = repo.load()\n    } catch (e: CancellationException) {\n        throw e\n    } catch (e: Exception) {\n        _error.value = "Failed"\n    }\n}', why: 'Cancellation travels as a <code>CancellationException</code>. Catching every <code>Exception</code> stops it, so a cancelled coroutine carries on and may show a false error. Rethrow it.' },
+          { title: 'Launching in GlobalScope', bad: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    GlobalScope.launch { poll(api) }\n}', good: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    lifecycleScope.launch { poll(api) }\n}', why: '<code>GlobalScope</code> has no owner, so the work keeps running after the Activity is gone and can leak it. A lifecycle-bound scope cancels it for you.' },
+          { title: 'runBlocking on the main thread', bad: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    val user = runBlocking { repo.load() }\n    show(user)\n}', good: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    lifecycleScope.launch { show(repo.load()) }\n}', why: '<code>runBlocking</code> blocks the calling thread until the work ends. On the main thread that freezes the UI and can trigger an ANR. It belongs in tests and <code>main()</code>.' },
         ],
         visual(el) {
           const modes = {

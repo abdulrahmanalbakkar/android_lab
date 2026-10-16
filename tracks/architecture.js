@@ -217,7 +217,10 @@
 }
 @media (max-width: 420px) {
   .arc-pipe { grid-template-columns: minmax(0, 1fr); }
-}`;
+}
+/* depth steps */
+.arc-flow > .arc-table { flex: 1 1 210px; }
+`;
 
   Lab.addTrack({
     id: 'arch',
@@ -426,6 +429,274 @@ fun NewsScreen(viewModel: NewsViewModel = hiltViewModel()) {
           { q: 'How should the screen switch the filter to "Tech"?', options: ['<code>state.filter = "Tech"</code>', '<code>onEvent(SelectFilter("Tech"))</code>', 'Keep the filter in a <code>var</code> inside the Composable'], a: 1, why: 'The screen reports what happened. The ViewModel owns the state and makes the change.' },
           { q: 'After <code>_uiState.update { it.copy(filter = "Tech") }</code>, what happened to the old state object?', options: ['Its filter field changed to "Tech"', 'Nothing. A new object replaced it in the StateFlow.'], a: 1, why: '<code>copy()</code> builds a new object. With <code>val</code> fields the old one can’t change.' },
           { q: 'Why expose <code>StateFlow</code> instead of the <code>MutableStateFlow</code>?', options: ['So only the ViewModel can write state', 'StateFlow uses less memory'], a: 0, why: 'The screen gets a read-only view, so every change has to go through an event.' },
+        ],
+        deeper: [
+          {
+            title: 'Rotation keeps the ViewModel. Process death does not.',
+            body: `
+<p>On rotation the Activity is destroyed and created again, but the ViewModel waits in the <code>ViewModelStore</code>. The new Activity gets the same object, so the UiState is still there.</p>
+<p>When the app sits in the background, Android can kill the whole process to free memory. The ViewModel dies with it. When the user comes back, a new process builds a new ViewModel. Keep small user input, like the selected filter, in <code>SavedStateHandle</code>: the system stores it in a Bundle and hands it back. Reload big data from the repository.</p>`,
+            code: `@HiltViewModel
+class NewsViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
+    private val repository: NewsRepository,
+) : ViewModel() {
+    // Comes back after process death. Keep it small: ids, queries, filters.
+    private val filter: StateFlow<String> = savedState.getStateFlow("filter", "All")
+
+    fun onEvent(event: NewsEvent) {
+        if (event is NewsEvent.SelectFilter) savedState["filter"] = event.filter
+    }
+}`,
+            visual(el) {
+              const ARTS = [['Compose tips', 'Tech'], ['Derby tonight', 'Sports'], ['Kotlin 2.3 notes', 'Tech'], ['Transfer news', 'Sports']];
+              let filter = 'Tech', useSsh = true, bundle = 'Tech', vmId = addr(), loading = false, busy = false;
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'Screen preview' });
+              const vm = node('NewsViewModel', 'held by the ViewModelStore');
+              const saved = node('Saved state Bundle', 'kept by the system, even after the process dies');
+              const o = out();
+              const shown = () => ARTS.filter(a => filter === 'All' || a[1] === filter);
+              function paint(anim) {
+                phone.replaceChildren(
+                  h('div', { class: 'arc-chips' }, ['All', 'Tech', 'Sports'].map(f => h('button', { class: 'arc-fchip' + (filter === f ? ' on' : ''), onclick: () => select(f) }, f))),
+                  ...(loading ? [h('div', { class: 'spinner' }), h('p', { class: 'phone-note' }, 'Loading…')]
+                    : shown().map(a => h('div', { class: 'item arc-small' }, a[0]))));
+                vm.box.replaceChildren(stateCard(`NewsViewModel${vmId}`, [['filter', `"${filter}"`], ['items', loading ? '[]' : `[${shown().length} articles]`]], [], anim));
+                saved.box.replaceChildren(bundle ? h('span', { class: 'token arc-back' }, `"filter" = "${bundle}"`) : h('span', { class: 'tip' }, 'empty'));
+              }
+              function select(f) {
+                if (busy) return;
+                filter = f; if (useSsh) bundle = f;
+                paint(); replay(phone, 'pop-soft');
+                say(o, useSsh ? `${hl(`savedState["filter"] = "${f}"`)} <span class="muted">// the ViewModel and the Bundle both know</span>` : `${hl(`_uiState.update { it.copy(filter = "${f}") }`)} <span class="muted">// only the ViewModel knows</span>`);
+              }
+              async function rotate() {
+                if (busy) return; busy = true;
+                replay(phone, 'flip'); vm.classList.add('ok');
+                say(o, '<span class="muted">Activity destroyed, new Activity created…</span>');
+                await sleep(700); if (!el.isConnected) return;
+                vm.classList.remove('ok'); paint();
+                say(o, `<span class="good">rotated:</span> the new Activity asked for its ViewModel and got the same one, ${vmId}. The filter is still "${filter}".`);
+                busy = false;
+              }
+              async function kill() {
+                if (busy) return; busy = true;
+                vm.classList.add('bad'); replay(vm, 'shake');
+                vm.box.replaceChildren(h('span', { class: 'token boom' }, 'process killed'));
+                phone.replaceChildren(h('p', { class: 'phone-note' }, 'App in the background. The system needs memory.'));
+                say(o, '<span class="bad">process death:</span> every object in memory is gone, the ViewModel too.');
+                await sleep(1000); if (!el.isConnected) return;
+                vm.classList.remove('bad');
+                vmId = addr(); filter = useSsh && bundle ? bundle : 'All'; loading = true;
+                paint(true);
+                say(o, `<span class="muted">user returns: new process, new ViewModel ${vmId}, loading from the repository…</span>`);
+                await sleep(800); if (!el.isConnected) return;
+                loading = false; paint(); replay(phone, 'pop-soft');
+                say(o, useSsh
+                  ? `<span class="good">restored:</span> "${filter}" came back from SavedStateHandle. The list was reloaded, not saved.`
+                  : '<span class="bad">lost:</span> the filter is back to "All". It only lived in the ViewModel, which died with the process.');
+                busy = false;
+              }
+              const sw = switchEl('arc-d-ssh', 'filter in SavedStateHandle', true, i => {
+                if (busy) { i.checked = useSsh; return; }
+                useSsh = i.checked; bundle = useSsh ? filter : null; paint();
+                say(o, useSsh ? 'The filter is written to SavedStateHandle again.' : 'Now the filter only lives in the ViewModel. Try process death.');
+              });
+              paint();
+              say(o, 'Pick a filter, then compare a rotation with process death.');
+              el.append(
+                h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' }, vm, saved)),
+                h('div', { class: 'controls arc-fit' }, cmd('rotate()', rotate), cmd('killProcess(); reopen()', kill), sw),
+                o);
+            },
+          },
+          {
+            title: 'Derive the state. Don’t copy it in.',
+            body: `
+<p>Most screens mix data from the repository with choices the user made. If the ViewModel copies the repository list into its state once, in <code>init</code>, later database changes never reach the screen.</p>
+<p>Instead, keep each input as a flow and <code>combine</code> them. Whenever any input emits, the lambda builds a fresh <code>UiState</code>. <code>stateIn</code> turns the result into the <code>StateFlow</code> the screen collects. The UiState is now a function of its inputs, and it can’t fall out of date.</p>`,
+            code: `private val filter = MutableStateFlow("All")
+
+val uiState: StateFlow<NewsUiState> =
+    combine(repository.observeNews(), filter) { articles, f ->
+        NewsUiState(
+            filter = f,
+            items = articles.filter { f == "All" || it.tag == f },
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NewsUiState())
+
+fun onEvent(event: NewsEvent) {
+    if (event is NewsEvent.SelectFilter) filter.value = event.filter
+}`,
+            visual(el) {
+              const POOL = [['Baseline profiles', 'Tech'], ['Cup final', 'Sports'], ['Room 2.8 notes', 'Tech'], ['Title race', 'Sports']];
+              let arts = [['Compose tips', 'Tech'], ['Derby tonight', 'Sports'], ['Kotlin 2.3 notes', 'Tech']];
+              let filter = 'All', live = true, snap = arts.slice(), p = 0, busy = false, stAddr = addr();
+              const dbLane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'observeNews()'));
+              const fLane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'filter'));
+              const fn = h('div', { class: 'kt' });
+              const comb = h('div', { class: 'arc-node' }, h('b', {}, 'combine(articles, filter)'), fn);
+              const slot = h('div', { class: 'arc-stateslot' });
+              const o = out();
+              const items = () => (live ? arts : snap).filter(a => filter === 'All' || a[1] === filter);
+              const card = (changed, anim) => stateCard(`NewsUiState${stAddr}`, [['filter', `"${filter}"`], ['items', `[${items().length} articles]`]], changed, anim);
+              const paintFn = () => { fn.innerHTML = hl(live ? '{ a, f -> NewsUiState(f, a.filter { … }) }' : '// copied once in init, then copy(filter = …)'); };
+              async function publish() {
+                if (busy) return; busy = true;
+                arts = [POOL[p++ % POOL.length], ...arts].slice(0, 6);
+                laneTok(dbLane, `List(${arts.length})`);
+                say(o, `<span class="muted">Room emits ${arts.length} articles…</span>`);
+                await sleep(450); if (!el.isConnected) return;
+                if (live) {
+                  comb.classList.add('on'); replay(comb, 'pop-soft');
+                  await sleep(400); if (!el.isConnected) return;
+                  stAddr = addr(); swapIn(slot, card(['items'], true)); comb.classList.remove('on');
+                  say(o, `<span class="good">combine re-ran:</span> a new article arrived, so a new UiState was built. The screen sees ${items().length} articles.`);
+                } else {
+                  comb.classList.add('bad'); replay(comb, 'shake');
+                  await sleep(400); if (!el.isConnected) return;
+                  comb.classList.remove('bad');
+                  say(o, `<span class="bad">stale:</span> Room now has ${arts.length} articles. The state still holds the ${snap.length} it copied in init.`);
+                }
+                busy = false;
+              }
+              async function setFilter(f) {
+                if (busy) return; busy = true;
+                filter = f; laneTok(fLane, `"${f}"`);
+                await sleep(450); if (!el.isConnected) return;
+                comb.classList.add('on'); replay(comb, 'pop-soft');
+                await sleep(350); if (!el.isConnected) return;
+                stAddr = addr(); swapIn(slot, card(['filter', 'items'], true)); comb.classList.remove('on');
+                say(o, live
+                  ? `<span class="good">combine re-ran:</span> the filter emitted, so the items were filtered again from the latest list.`
+                  : `<span class="muted">The filter changed, but it filters the old copy of ${snap.length} articles.</span>`);
+                busy = false;
+              }
+              const sw = switchEl('arc-d-combine', 'combine the inputs', true, i => {
+                if (busy) { i.checked = live; return; }
+                live = i.checked; if (!live) snap = arts.slice();
+                paintFn(); stAddr = addr(); swapIn(slot, card([], true));
+                say(o, live ? 'combine is back. The state follows both inputs again.' : 'Now the list is copied once. Add an article and watch the state miss it.');
+              });
+              paintFn(); laneTok(dbLane, `List(${arts.length})`); laneTok(fLane, `"${filter}"`); slot.append(card([]));
+              say(o, 'Both inputs feed one combine. Change either one.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('dao.upsert(article)', publish), cmd('filter.value = "Tech"', () => setFilter('Tech')), cmd('filter.value = "All"', () => setFilter('All')), sw),
+                h('div', { class: 'arc-col' }, dbLane, fLane, h('div', { class: 'arc-dir' }, '↓'), comb, h('div', { class: 'arc-dir' }, '↓ stateIn'), slot),
+                o);
+            },
+          },
+          {
+            title: 'StateFlow keeps only the latest value',
+            body: `
+<p><code>StateFlow</code> is conflated. It holds one value. A slow collector doesn’t get a queue of every update. It gets the newest value when it is ready again. For UI state that is what you want: nobody needs to see frames that are already out of date.</p>
+<p>It also skips equal values. Setting a state that <code>equals()</code> the current one emits nothing. That is why UiState must be an immutable data class: equality has to mean “nothing changed”.</p>`,
+            code: `// Five updates in a row
+repeat(5) { _uiState.update { it.copy(unread = it.unread + 1) } }
+// A slow collector may only see unread = 1 and then unread = 5.
+
+// An equal value: no emission at all
+_uiState.update { it.copy() }`,
+            visual(el) {
+              let value = 0, seen = 0, rendering = false, busy = false, got = [];
+              const prodLane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'update { }'));
+              const valChip = h('span', { class: 'chip total' }, '0');
+              const flowNode = h('div', { class: 'arc-node' }, h('b', {}, 'uiState.value.unread'), valChip);
+              const colLane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'collector'));
+              const o = out();
+              const drawTok = v => {
+                const toks = colLane.querySelectorAll('.token');
+                if (toks.length >= 6) toks[0].remove();
+                colLane.append(h('span', { class: 'token drop-in arc-back' }, `draw ${v}`));
+              };
+              async function pump() {
+                if (rendering || seen === value) return;
+                rendering = true; seen = value; got.push(seen);
+                drawTok(seen); replay(flowNode, 'pop-soft');
+                await sleep(900);
+                rendering = false;
+                if (el.isConnected) pump();
+              }
+              async function burst() {
+                if (busy) return; busy = true; got = [];
+                prodLane.querySelectorAll('.token').forEach(t => t.remove());
+                for (let i = 0; i < 5; i++) {
+                  value++; valChip.textContent = String(value); replay(valChip, 'pop');
+                  prodLane.append(h('span', { class: 'token drop-in' }, `→ ${value}`));
+                  pump();
+                  await sleep(150); if (!el.isConnected) return;
+                }
+                while (rendering || seen !== value) { await sleep(100); if (!el.isConnected) return; }
+                say(o, `<span class="good">conflated:</span> 5 values were set. The slow collector drew ${got.join(' and ')}. It always ends on the latest.`);
+                busy = false;
+              }
+              function same() {
+                if (busy) return;
+                prodLane.querySelectorAll('.token').forEach(t => t.remove());
+                prodLane.append(h('span', { class: 'token drop-in is-null' }, 'copy() // equal'));
+                replay(valChip, 'shake');
+                say(o, '<span class="muted">equals() was true, so StateFlow did not emit. The collector did nothing.</span>');
+              }
+              drawTok(0);
+              say(o, 'The collector takes 900 ms per frame. Fire five quick updates.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('repeat(5) { update { unread + 1 } }', burst), cmd('update { it.copy() }', same)),
+                h('div', { class: 'arc-col' }, prodLane, flowNode, colLane),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>update</code> is a small loop around compare-and-set. It reads the current value, runs your lambda, and swaps the result in only if nobody changed the value in between. If another coroutine won the race, it runs the lambda again on the newer value. That is why two coroutines calling <code>update</code> at once never lose a change, while <code>value = value.copy(...)</code> can.</p>
+<p><code>hiltViewModel()</code> and <code>viewModel()</code> look the ViewModel up in the <code>ViewModelStore</code> of the nearest owner, keyed by class. A <code>ComponentActivity</code> hands its store to the next instance through its non-configuration state during a rotation, which is why the same object comes back.</p>`,
+          code: `// kotlinx.coroutines: MutableStateFlow.update
+public inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
+    while (true) {
+        val prevValue = value
+        val nextValue = function(prevValue)
+        if (compareAndSet(prevValue, nextValue)) return
+    }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Read-modify-write with value',
+            bad: `fun toggleSave(id: Int) {
+    val s = _uiState.value
+    _uiState.value = s.copy(saved = s.saved + id)
+}`,
+            good: `fun toggleSave(id: Int) {
+    _uiState.update { it.copy(saved = it.saved + id) }
+}`,
+            why: 'Two coroutines can read the same old state, and the second write drops the first change. <code>update</code> retries until its change lands on the latest value.',
+          },
+          {
+            title: 'Mutable collections inside the state',
+            bad: `data class NewsUiState(val items: MutableList<Article>)
+
+fun add(a: Article) {
+    _uiState.value.items.add(a)   // same object, no emission
+}`,
+            good: `data class NewsUiState(val items: List<Article> = emptyList())
+
+fun add(a: Article) {
+    _uiState.update { it.copy(items = it.items + a) }
+}`,
+            why: 'Changing the list in place keeps the same state object, so StateFlow sees an equal value and never emits. The screen keeps drawing the old list.',
+          },
+          {
+            title: 'Passing the ViewModel down the tree',
+            bad: `@Composable
+fun ArticleRow(article: Article, viewModel: NewsViewModel) {
+    Row(Modifier.clickable { viewModel.onEvent(ToggleSave(article.id)) }) { /* ... */ }
+}`,
+            good: `@Composable
+fun ArticleRow(article: Article, onToggleSave: () -> Unit) {
+    Row(Modifier.clickable(onClick = onToggleSave)) { /* ... */ }
+}`,
+            why: 'Only the screen-level composable should know the ViewModel. Child composables that take plain values and lambdas work in previews and tests without a ViewModel.',
+          },
         ],
         visual(el) {
           const source0 = [
@@ -1080,6 +1351,203 @@ val uiState: StateFlow<NewsUiState> = repository.observeNews()
           { q: '<code>refresh()</code> fails with an <code>IOException</code>. What does the screen show?', options: ['An empty list', 'The rows already in Room, plus an offline note', 'It crashes'], a: 1, why: 'The failure stops the write. Room still holds the old rows and its Flow keeps them on screen.' },
           { q: 'New articles arrive from the API. How do they reach the screen?', options: ['The repository writes them to Room, and the Flow emits', 'The repository passes them to the ViewModel directly'], a: 0, why: 'Writing to the database is the only path. The observing Flow does the rest.' },
         ],
+        deeper: [
+          {
+            title: 'User edits go to the database first',
+            body: `
+<p>The same rule holds for writes. When the user saves an article, the repository writes to Room right away and marks the row as pending. Room’s Flow emits, so the star lights up at once, even with no connection.</p>
+<p>A background job sends pending rows to the server later. WorkManager runs it when the network is back, retries it with backoff when it fails, and keeps it across app restarts. When the server accepts the change, the job clears the pending flag.</p>`,
+            code: `suspend fun toggleSave(id: Int) {
+    dao.setSaved(id = id, saved = !dao.isSaved(id), pending = true)   // UI updates from Room now
+    workManager.enqueueUniqueWork(
+        "sync-saved",
+        ExistingWorkPolicy.APPEND_OR_REPLACE,
+        OneTimeWorkRequestBuilder<SyncWorker>()
+            .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
+            .build(),
+    )
+}
+
+@HiltWorker
+class SyncWorker @AssistedInject constructor(
+    @Assisted ctx: Context,
+    @Assisted params: WorkerParameters,
+    private val dao: ArticleDao,
+    private val api: NewsApi,
+) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result = try {
+        dao.pending().forEach { api.setSaved(it.id, it.saved); dao.clearPending(it.id) }
+        Result.success()
+    } catch (e: IOException) {
+        Result.retry()
+    }
+}`,
+            visual(el) {
+              let rows, server, online = true, busy = false;
+              const body = h('div');
+              const table = h('div', { class: 'arc-table' }, h('div', { class: 'arc-tname' }, 'Room · articles'),
+                h('div', { class: 'arc-tr arc-th' }, h('span', {}, 'id'), h('span', {}, 'title'), h('span', {}, 'saved')), body);
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'Screen preview' });
+              const sList = h('div', { class: 'arc-mini' });
+              const S = node('Server', 'saved articles on the account', sList);
+              const W = node('SyncWorker', 'WorkManager, needs a network');
+              const o = out();
+              function paint(mark) {
+                body.replaceChildren(...rows.map(r => h('div', { class: 'arc-tr' + (r.pending ? ' changed' : '') + (mark === r.id ? ' drop-in' : '') },
+                  h('span', {}, String(r.id)), h('span', {}, r.pending ? `${r.title} · pending` : r.title), h('span', {}, r.saved ? '1' : '0'))));
+                phone.replaceChildren(...rows.map(r => h('div', { class: 'item arc-row-item' }, h('span', {}, r.title),
+                  h('button', { class: 'arc-star' + (r.saved ? ' on' : ''), 'aria-label': `Save ${r.title}`, onclick: () => toggle(r.id) }, r.saved ? '★' : '☆'))));
+                sList.replaceChildren(...rows.map(r => h('span', { class: server[r.id] ? 'arc-new' : null }, `${r.id}: ${server[r.id] ? 'saved' : 'not saved'}`)));
+              }
+              function reset() {
+                rows = [{ id: 1, title: 'Room notes', saved: false, pending: false }, { id: 2, title: 'Hilt guide', saved: false, pending: false }, { id: 3, title: 'KSP setup', saved: true, pending: false }];
+                server = { 1: false, 2: false, 3: true };
+              }
+              function toggle(id) {
+                if (busy) return;
+                const r = rows.find(x => x.id === id);
+                r.saved = !r.saved; r.pending = r.saved !== server[id];
+                paint(id); replay(table, 'pop-soft'); replay(phone, 'pop-soft');
+                const n = rows.filter(x => x.pending).length;
+                say(o, `${hl(`dao.setSaved(${id}, ${r.saved}, pending = true)`)} <span class="muted">The star changed from Room right away. ${n} row${n === 1 ? '' : 's'} waiting to sync.</span>`);
+              }
+              async function sync() {
+                if (busy) return; busy = true;
+                clearAll([S, W]);
+                W.classList.add('on'); tok(W, 'doWork()');
+                await sleep(450); if (!el.isConnected) return;
+                const pend = rows.filter(r => r.pending);
+                if (!pend.length) { tok(W, 'Result.success()', 'arc-back'); W.classList.replace('on', 'ok'); say(o, 'Nothing pending. The job finished at once.'); busy = false; return; }
+                if (!online) {
+                  S.classList.add('bad'); tok(S, 'IOException', 'boom'); replay(S, 'shake');
+                  await sleep(450); if (!el.isConnected) return;
+                  W.classList.replace('on', 'bad'); tok(W, 'Result.retry()', 'boom');
+                  say(o, `<span class="bad">offline:</span> the job asks to retry later with backoff. The ${pend.length} pending row${pend.length > 1 ? 's stay' : ' stays'} in Room, and the screen keeps showing the user’s choice.`);
+                  busy = false; return;
+                }
+                for (const r of pend) {
+                  S.classList.add('on'); tok(S, `PUT /saved/${r.id}`);
+                  await sleep(550); if (!el.isConnected) return;
+                  server[r.id] = r.saved; r.pending = false; paint(); replay(S, 'pop-soft');
+                }
+                S.classList.remove('on'); W.classList.replace('on', 'ok'); tok(W, 'Result.success()', 'arc-back');
+                say(o, `<span class="good">synced:</span> the server accepted ${pend.length} change${pend.length > 1 ? 's' : ''} and the pending flags were cleared. The screen didn’t need to change.`);
+                busy = false;
+              }
+              const sw = switchEl('arc-d-sync-net', 'Network on', true, i => {
+                if (busy) { i.checked = online; return; }
+                online = i.checked; clearAll([S, W]); S.classList.toggle('bad', !online);
+                say(o, online ? 'Network back. WorkManager would start the sync now. Run it.' : 'Network off. Saving still works. Try it.');
+              });
+              reset(); paint();
+              say(o, 'Tap a star on the phone, or run the commands. The screen only reads Room.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('toggleSave(2)', () => toggle(2)), cmd('SyncWorker.doWork()', sync), sw),
+                h('div', { class: 'arc-flow' }, phone, h('span', { class: 'arrow' }, '→'), table, h('span', { class: 'arrow' }, '→'), W, h('span', { class: 'arrow' }, '→'), S),
+                o);
+            },
+          },
+          {
+            title: 'A refresh must not overwrite pending edits',
+            body: `
+<p>Now two writers touch the same table: the refresh brings rows from the server, and the user’s edits wait to be synced. A plain <code>upsertAll</code> from the refresh replaces the row the user just changed with the server’s older copy. The star goes dark and the pending flag is gone, so the edit is never sent.</p>
+<p>Merge instead. In one transaction, skip server rows whose local copy is still pending. Everything else updates as usual.</p>`,
+            code: `@Dao
+abstract class ArticleDao {
+    @Query("SELECT id FROM articles WHERE pending = 1")
+    abstract suspend fun pendingIds(): List<Int>
+
+    @Upsert
+    abstract suspend fun upsertAll(rows: List<ArticleEntity>)
+
+    @Transaction
+    open suspend fun mergeFromServer(remote: List<ArticleEntity>) {
+        val pending = pendingIds().toSet()
+        upsertAll(remote.filter { it.id !in pending })
+    }
+}`,
+            visual(el) {
+              let local, merge = true, busy = false;
+              const REMOTE = [{ id: 1, title: 'Room notes v2', saved: false }, { id: 2, title: 'Hilt guide', saved: false }, { id: 3, title: 'KSP setup', saved: true }];
+              const tbl = (name, bodyEl) => h('div', { class: 'arc-table' }, h('div', { class: 'arc-tname' }, name),
+                h('div', { class: 'arc-tr arc-th' }, h('span', {}, 'id'), h('span', {}, 'title'), h('span', {}, 'saved')), bodyEl);
+              const rBody = h('div'), lBody = h('div');
+              const o = out();
+              const row = (r, cls) => h('div', { class: 'arc-tr' + (cls ? ' ' + cls : '') }, h('span', {}, String(r.id)), h('span', {}, r.pending ? `${r.title} · pending` : r.title), h('span', {}, r.saved ? '1' : '0'));
+              const paint = (marks = {}) => {
+                rBody.replaceChildren(...REMOTE.map(r => row(r)));
+                lBody.replaceChildren(...local.map(r => row(r, marks[r.id] || (r.pending ? 'changed' : ''))));
+              };
+              const reset = () => { local = [{ id: 1, title: 'Room notes', saved: false }, { id: 2, title: 'Hilt guide', saved: true, pending: true }, { id: 3, title: 'KSP setup', saved: true }]; };
+              async function refresh() {
+                if (busy) return; busy = true;
+                const marks = {};
+                let lost = false, kept = false;
+                say(o, merge ? hl('dao.mergeFromServer(remote)') : hl('dao.upsertAll(remote)'));
+                for (const r of REMOTE) {
+                  const i = local.findIndex(x => x.id === r.id);
+                  const mine = local[i];
+                  await sleep(500); if (!el.isConnected) return;
+                  if (merge && mine.pending) { marks[r.id] = 'changed'; kept = true; o.append(h('div', { class: 'line drop-in', html: `<span class="muted">row ${r.id}: pending, skipped</span>` })); }
+                  else {
+                    const changed = mine.title !== r.title || mine.saved !== r.saved;
+                    if (mine.pending) lost = true;
+                    local[i] = { ...r };
+                    marks[r.id] = mine.pending ? 'bad' : changed ? 'added' : '';
+                    o.append(h('div', { class: 'line drop-in', html: mine.pending ? `<span class="bad">row ${r.id}: replaced, the local edit is gone</span>` : `<span class="muted">row ${r.id}: ${changed ? 'updated' : 'same'}</span>` }));
+                  }
+                  paint(marks);
+                }
+                o.append(h('div', { class: 'line drop-in', html: lost
+                  ? '<span class="bad">The user saved row 2, and the refresh undid it. Nothing is pending, so the save never reaches the server.</span>'
+                  : kept ? '<span class="good">Row 1 got the new title. Row 2 kept the user’s save and is still pending.</span>' : '<span class="good">Nothing was pending, so every row took the server copy.</span>' }));
+                busy = false;
+              }
+              function edit() {
+                if (busy) return;
+                const r = local.find(x => x.id === 2);
+                r.saved = true; r.pending = true; paint();
+                say(o, 'Row 2 is saved locally and pending again.');
+              }
+              const sw = switchEl('arc-d-merge', 'skip rows with pending edits', true, i => {
+                if (busy) { i.checked = merge; return; }
+                merge = i.checked;
+                say(o, merge ? 'The refresh merges again.' : 'The refresh now upserts every server row. Run it with row 2 pending.');
+              });
+              reset(); paint();
+              say(o, 'The user saved row 2 while offline. Now a refresh arrives with the server’s copy.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('repository.refresh()', refresh), cmd('toggleSave(2)', edit), sw),
+                h('div', { class: 'arc-map' }, h('div', {}, h('div', { class: 'arc-cap' }, 'server response'), tbl('GET /articles', rBody)), h('div', {}, h('div', { class: 'arc-cap' }, 'on the device'), tbl('Room · articles', lBody))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>stateIn(viewModelScope, WhileSubscribed(5_000), initial)</code> starts one coroutine in the ViewModel’s scope. It collects the repository Flow only while the <code>StateFlow</code> has a subscriber. When the last collector leaves, it waits 5 seconds before it cancels the upstream. A rotation takes far less than that, so the Room query keeps running and the new screen gets the current value at once.</p>
+<p>While it collects, Room re-runs the query after each write transaction that touches the table, then emits the new list. The <code>StateFlow</code> compares it with the current value and drops it if it is equal, so a refresh that changed nothing doesn’t redraw the screen.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Putting the network result straight into the state',
+            bad: `fun refresh() = viewModelScope.launch {
+    val fresh = api.getLatest()
+    _uiState.update { it.copy(items = fresh) }   // second source of truth
+}`,
+            good: `fun refresh() = viewModelScope.launch {
+    repository.refresh()   // writes to Room; the observed Flow updates the state
+}`,
+            why: 'Now the screen has two writers. The next Room emission overwrites the network list, or the other way round, and the list flickers between them.',
+          },
+          {
+            title: 'Handing Room entities to the UI',
+            bad: `override fun observeNews(): Flow<List<ArticleEntity>> = dao.observeAll()`,
+            good: `override fun observeNews(): Flow<List<Article>> =
+    dao.observeAll().map { rows -> rows.map { it.toArticle() } }`,
+            why: 'The UI then depends on table columns. Renaming a column or adding a sync flag forces changes in every screen. Map to a plain model at the repository boundary.',
+          },
+        ],
         visual(el) {
           const titles = ['Room 2.8 notes', 'Hilt in 5 minutes', 'KSP is the default', 'StateFlow vs LiveData', 'Navigation 3 guide', 'Baseline profiles', 'Paging 3 basics'];
           let server = 3, db = 2, shown = 2, online = true, offlineNote = false, busy = false;
@@ -1218,6 +1686,210 @@ abstract class AppDatabase : RoomDatabase() {
           { q: 'You collect <code>dao.observeAll()</code>, then insert a row. What happens?', options: ['Nothing until you call <code>observeAll()</code> again', 'The Flow re-runs the query and emits the new list'], a: 1, why: 'Room tracks which tables a query reads and re-runs it after any write to them.' },
           { q: 'Which annotation turns a data class into a table?', options: ['<code>@Dao</code>', '<code>@Entity</code>', '<code>@Database</code>'], a: 1, why: '<code>@Entity</code> describes a table. <code>@Dao</code> holds queries; <code>@Database</code> lists entities and DAOs.' },
           { q: 'A plain <code>@Insert</code> gets an id that already exists. What happens?', options: ['The row is replaced', 'It throws <code>SQLiteConstraintException</code>', 'It is skipped silently'], a: 1, why: 'The default conflict strategy is ABORT. Use <code>@Upsert</code> or <code>onConflict</code> to change that.' },
+        ],
+        deeper: [
+          {
+            title: 'Flow queries and one-shot queries',
+            body: `
+<p>The return type decides how a query behaves. A function that returns <code>Flow</code> is not <code>suspend</code>. It runs when collected and again after every change. A <code>suspend</code> function runs once and returns the result as it was at that moment.</p>
+<p>Use a Flow for anything a screen shows. Use a one-shot query inside logic that needs a value now, like checking whether a row exists before a write.</p>`,
+            code: `@Dao
+interface ArticleDao {
+    @Query("SELECT * FROM articles ORDER BY id")
+    fun observeAll(): Flow<List<ArticleEntity>>          // keeps emitting
+
+    @Query("SELECT * FROM articles WHERE id = :id")
+    suspend fun getById(id: Int): ArticleEntity?         // runs once
+
+    @Query("SELECT * FROM articles WHERE id = :id")
+    fun observeById(id: Int): Flow<ArticleEntity?>       // null while the row is missing
+}`,
+          },
+          {
+            title: 'Room watches tables, not rows',
+            body: `
+<p>Room knows which tables a query reads, not which rows. Any write to <code>articles</code> re-runs every Flow query on that table, even one that only reads the row with id 1. The query then emits again, often with the exact same value.</p>
+<p>Usually that is cheap. When the collector does real work, like a redraw or a network call, add <code>distinctUntilChanged()</code> so equal results stop there. A <code>StateFlow</code> already does this for you.</p>`,
+            code: `val article: Flow<ArticleEntity?> =
+    dao.observeById(1)
+        .distinctUntilChanged()   // drop results equal to the last one`,
+            visual(el) {
+              let rows, runs = 1, draws = 1, distinct = false, busy = false, t1 = 0;
+              const body = h('div');
+              const table = h('div', { class: 'arc-table' }, h('div', { class: 'arc-tname' }, 'table: articles'),
+                h('div', { class: 'arc-tr arc-th' }, h('span', {}, 'id'), h('span', {}, 'title'), h('span', {}, 'edits')), body);
+              const runBadge = h('span', { class: 'arc-badge' }), valChip = h('span', { class: 'token arc-back' });
+              const drawBadge = h('span', { class: 'arc-badge' });
+              const Q = node('observeById(1)', '<code>WHERE id = 1</code>', runBadge, valChip);
+              const C = node('collector', 'redraws the detail screen', drawBadge);
+              const filt = h('div', { class: 'arc-dir' });
+              const o = out();
+              const rowEl = new Map();
+              function paint(mark) {
+                rowEl.clear();
+                body.replaceChildren(...rows.map(r => { const e = h('div', { class: 'arc-tr' + (mark === r.id ? ' changed' : '') }, h('span', {}, String(r.id)), h('span', {}, `"${r.title}"`), h('span', {}, String(r.n))); rowEl.set(r.id, e); return e; }));
+                runBadge.textContent = `query ran ${runs}×`;
+                drawBadge.textContent = `redrew ${draws}×`;
+                valChip.textContent = `"${rows[0].title}"`;
+                filt.textContent = distinct ? '↓ distinctUntilChanged()' : '↓';
+              }
+              async function write(id) {
+                if (busy) return; busy = true;
+                const r = rows.find(x => x.id === id), before = rows[0].title;
+                r.n++;
+                if (id === 1) r.title = ['Room 2.8', 'Room KMP', 'Room'][t1++ % 3];
+                say(o, hl(`dao.update(article${id})`) + ` <span class="muted">// row ${id} changed</span>`);
+                paint(id); replay(rowEl.get(id), 'pop-soft');
+                await sleep(500); if (!el.isConnected) return;
+                table.classList.add('inval');
+                o.append(h('div', { class: 'line drop-in', html: '<span class="muted">table "articles" changed: re-run its queries</span>' }));
+                await sleep(450); if (!el.isConnected) return;
+                runs++; Q.classList.add('on'); paint(); replay(Q, 'pop');
+                const same = rows[0].title === before;
+                await sleep(450); if (!el.isConnected) return;
+                Q.classList.remove('on'); table.classList.remove('inval');
+                if (same && distinct) {
+                  replay(filt, 'shake');
+                  o.append(h('div', { class: 'line drop-in', html: '<span class="good">same result, dropped by distinctUntilChanged()</span>' }));
+                } else {
+                  draws++; C.classList.add(same ? 'bad' : 'ok'); paint(); replay(C, 'pop');
+                  o.append(h('div', { class: 'line drop-in', html: same ? '<span class="bad">same result emitted again, the screen redrew for nothing</span>' : '<span class="good">row 1 really changed, the screen redrew</span>' }));
+                  await sleep(500); if (!el.isConnected) return;
+                  C.classList.remove('bad', 'ok');
+                }
+                busy = false;
+              }
+              const sw = switchEl('arc-d-distinct', '.distinctUntilChanged()', false, i => {
+                if (busy) { i.checked = distinct; return; }
+                distinct = i.checked; paint();
+                say(o, distinct ? 'Equal results now stop before the collector.' : 'Every re-run reaches the collector again.');
+              });
+              rows = [{ id: 1, title: 'Room', n: 0 }, { id: 2, title: 'Flow', n: 0 }, { id: 3, title: 'KSP', n: 0 }];
+              paint();
+              say(o, 'The query only reads row 1. Update row 3 and watch it run anyway.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('dao.update(article3)', () => write(3)), cmd('dao.update(article1)', () => write(1)), sw),
+                h('div', { class: 'arc-db' }, table, h('div', { class: 'arc-col' }, Q, filt, C)),
+                o);
+            },
+          },
+          {
+            title: 'Group writes in one transaction',
+            body: `
+<p>Each DAO write is its own transaction, and Room notifies observers when a transaction ends. If you replace a list with <code>deleteAll()</code> and then <code>insertAll()</code>, an observer can see the empty table in between. The screen flashes its empty state.</p>
+<p>Wrap related writes in a <code>@Transaction</code> DAO function, or in <code>db.withTransaction { }</code>. Observers then see one change, from the old rows straight to the new ones. If a write in the middle fails, the whole transaction rolls back.</p>`,
+            code: `@Dao
+abstract class ArticleDao {
+    @Query("DELETE FROM articles")
+    abstract suspend fun deleteAll()
+
+    @Insert
+    abstract suspend fun insertAll(rows: List<ArticleEntity>)
+
+    @Transaction
+    open suspend fun replaceAll(rows: List<ArticleEntity>) {
+        deleteAll()
+        insertAll(rows)
+    }
+}`,
+            visual(el) {
+              const SETS = [['Room', 'Flow', 'KSP'], ['Hilt', 'Paging', 'Coil'], ['Compose', 'DataStore', 'WorkManager']];
+              let set = 0, tx = true, busy = false;
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'Screen preview' });
+              const lane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'emissions'));
+              const o = out();
+              const draw = (list, anim) => phone.replaceChildren(...(list.length
+                ? list.map(t => h('div', { class: 'item arc-small' + (anim ? ' drop-in' : '') }, t))
+                : [h('p', { class: 'phone-note pop' }, 'No articles yet.')]));
+              const emit = (list) => {
+                const toks = lane.querySelectorAll('.token');
+                if (toks.length >= 5) toks[0].remove();
+                lane.append(h('span', { class: `token drop-in ${list.length ? 'arc-back' : 'boom'}` }, `[${list.length}]`));
+                draw(list, true); replay(phone, 'pop-soft');
+              };
+              const log = html => o.append(h('div', { class: 'line drop-in', html }));
+              async function replace() {
+                if (busy) return; busy = true;
+                const next = SETS[(set = (set + 1) % SETS.length)];
+                say(o, hl(tx ? 'dao.replaceAll(rows)  // @Transaction' : 'dao.deleteAll(); dao.insertAll(rows)'));
+                const step = async html => { await sleep(500); if (!el.isConnected) return false; log(html); return true; };
+                if (tx) {
+                  if (!await step('BEGIN')) return;
+                  if (!await step('DELETE FROM articles')) return;
+                  if (!await step('INSERT INTO articles … (3 rows)')) return;
+                  if (!await step('COMMIT <span class="muted">→ observers notified once</span>')) return;
+                  await sleep(300); if (!el.isConnected) return;
+                  emit(next);
+                  log('<span class="good">one emission: the old list went straight to the new one</span>');
+                } else {
+                  if (!await step('DELETE FROM articles <span class="muted">→ commit, observers notified</span>')) return;
+                  await sleep(250); if (!el.isConnected) return;
+                  emit([]);
+                  if (!await step('INSERT INTO articles … (3 rows) <span class="muted">→ commit, notified again</span>')) return;
+                  await sleep(250); if (!el.isConnected) return;
+                  emit(next);
+                  log('<span class="bad">two emissions: the screen showed its empty state for a moment</span>');
+                }
+                busy = false;
+              }
+              const sw = switchEl('arc-d-tx', 'inside one @Transaction', true, i => {
+                if (busy) { i.checked = tx; return; }
+                tx = i.checked;
+                say(o, tx ? 'Both writes run in one transaction again.' : 'Now each write commits on its own. Replace the list and watch the screen.');
+              });
+              draw(SETS[0]); lane.append(h('span', { class: 'token arc-back' }, '[3]'));
+              say(o, 'Replace all rows. Then turn the transaction off and do it again.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('replaceAll(newRows)', replace), sw),
+                h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' }, lane, o)));
+            },
+          },
+        ],
+        underHood: {
+          body: `
+<p>KSP generates a class for every DAO and for the database, named like <code>ArticleDao_Impl</code> and <code>AppDatabase_Impl</code>. Each <code>@Query</code> becomes code that prepares the SQL statement, binds your arguments and reads each row’s columns into your entity’s constructor. Queries are checked against the schema while this code is generated, which is why a typo in a column name fails the build.</p>
+<p>For Flow queries, Room registers the query’s table names with its <code>InvalidationTracker</code>. The tracker adds triggers to those tables that record each change in a small temporary table. When a write transaction ends, Room reads that record, finds the observers of the changed tables and re-runs their queries. That is the whole mechanism: table-level change tracking, with no knowledge of rows.</p>`,
+          code: `// Simplified shape of the generated code, not the exact source
+class ArticleDao_Impl(private val db: RoomDatabase) : ArticleDao {
+    override fun observeAll(): Flow<List<ArticleEntity>> =
+        db.createFlow(tables = arrayOf("articles")) {        // re-run when "articles" changes
+            db.query("SELECT * FROM articles ORDER BY id") { row ->
+                ArticleEntity(row.getInt("id"), row.getText("title"), row.getInt("read") != 0)
+            }
+        }
+
+    override suspend fun insert(article: ArticleEntity) =
+        db.writeTransaction { insertAdapter.insert(article) }   // off the main thread
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Building the database more than once',
+            bad: `class NewsRepository(context: Context) {
+    private val db = Room.databaseBuilder(context, AppDatabase::class.java, "news.db").build()
+}`,
+            good: `@Provides @Singleton
+fun provideDb(@ApplicationContext context: Context): AppDatabase =
+    Room.databaseBuilder(context, AppDatabase::class.java, "news.db").build()`,
+            why: 'Each instance has its own invalidation tracker. A write through one instance doesn’t wake Flows from another, so screens go stale. Build one database for the app.',
+          },
+          {
+            title: 'A field type Room can’t store',
+            bad: `@Entity
+data class ArticleEntity(
+    @PrimaryKey val id: Int,
+    val tags: List<String>,
+)`,
+            good: `class Converters {
+    @TypeConverter fun fromTags(tags: List<String>): String = Json.encodeToString(tags)
+    @TypeConverter fun toTags(value: String): List<String> = Json.decodeFromString(value)
+}
+
+@Database(entities = [ArticleEntity::class], version = 1)
+@TypeConverters(Converters::class)
+abstract class AppDatabase : RoomDatabase()`,
+            why: 'The build fails with “Cannot figure out how to save this field into database”. A <code>@TypeConverter</code> maps it to a column type. If you need to query by tag, use a separate table instead.',
+          },
         ],
         visual(el) {
           const pool = ['Hilt', 'Retrofit', 'Paging', 'DataStore', 'WorkManager', 'Compose', 'Coil'];
@@ -1526,6 +2198,196 @@ val viewModel: NewsViewModel = hiltViewModel()`,
           { q: 'What does <code>@Inject constructor(...)</code> tell Hilt?', options: ['How to build this class, and what it needs', 'To keep one instance for the whole app', 'To build it lazily on a background thread'], a: 0, why: 'It marks the constructor Hilt calls. Scope is a separate annotation like <code>@Singleton</code>.' },
           { q: 'When do you reach for <code>@Binds</code>?', options: ['To build a third-party object like Retrofit', 'To tell Hilt which implementation to use for an interface'], a: 1, why: '<code>@Binds</code> maps an interface to an implementation Hilt can already build. <code>@Provides</code> runs your code to build an object.' },
           { q: 'Two screens each get their own <code>NewsViewModel</code>. <code>NewsRepository</code> is <code>@Singleton</code>. How many repositories exist?', options: ['1', '2'], a: 0, why: 'Each screen gets a new ViewModel, but both receive the same singleton repository.' },
+        ],
+        deeper: [
+          {
+            title: 'Each scope matches a lifetime',
+            body: `
+<p>Hilt builds a tree of components, and each one lives as long as something on Android. <code>SingletonComponent</code> lives as long as the app process. <code>ActivityRetainedComponent</code> survives rotation and ends when the Activity finishes. <code>ViewModelComponent</code> belongs to one ViewModel. <code>ActivityComponent</code> is rebuilt every time the Activity is recreated.</p>
+<p>A scope annotation ties a class to one of them: one instance per component, kept until that component dies. Without a scope, Hilt builds a new instance every time someone asks. Try each event below and watch which instances survive.</p>`,
+            code: `@Singleton
+class Analytics @Inject constructor()                    // one per app process
+
+@ActivityRetainedScoped
+class CheckoutSession @Inject constructor()              // survives rotation
+
+@ViewModelScoped
+class SearchCache @Inject constructor()                  // one per ViewModel
+
+@ActivityScoped
+class PermissionHelper @Inject constructor(
+    private val activity: Activity,                      // safe: dies with the Activity
+)`,
+            visual(el) {
+              const R = [
+                { k: 'app', ann: '@Singleton', cls: 'Analytics', life: 'SingletonComponent · the app process' },
+                { k: 'ret', ann: '@ActivityRetainedScoped', cls: 'CheckoutSession', life: 'ActivityRetainedComponent · until the Activity finishes' },
+                { k: 'vm', ann: '@ViewModelScoped', cls: 'SearchCache', life: 'ViewModelComponent · one ViewModel' },
+                { k: 'act', ann: '@ActivityScoped', cls: 'PermissionHelper', life: 'ActivityComponent · one Activity object' },
+              ];
+              const EV = {
+                nav: { label: 'navigate(Search)', renew: ['vm'], msg: 'A new screen made a new ViewModel. Only the ViewModel-scoped object is new.' },
+                rot: { label: 'rotate()', renew: ['act'], msg: 'The Activity object was rebuilt, so its scoped helper is new. The retained and ViewModel scopes survived.' },
+                fin: { label: 'finish(); relaunch()', renew: ['ret', 'vm', 'act'], msg: 'The Activity finished for real. Everything below the app scope is gone. Analytics stayed.' },
+                die: { label: 'process death', renew: ['app', 'ret', 'vm', 'act'], msg: 'A new process starts from nothing. Even the singleton is new.' },
+              };
+              let busy = false;
+              const rows = R.map(r => Object.assign(r, { inst: addr(), el: node(`${r.ann} ${r.cls}`, r.life) }));
+              const o = out();
+              const chip = (r, fresh) => r.el.box.replaceChildren(h('span', { class: `chip ${fresh ? 'drop-in' : 'arc-reused pop'}` }, `${r.inst} ${fresh ? 'new' : 'kept'}`));
+              async function fire(k) {
+                if (busy) return; busy = true;
+                const ev = EV[k];
+                clearAll(rows.map(r => r.el));
+                rows.forEach(r => r.el.box.replaceChildren(h('span', { class: 'chip arc-old' }, r.inst)));
+                say(o, hl(ev.label));
+                for (const r of rows) {
+                  await sleep(320); if (!el.isConnected) return;
+                  const fresh = ev.renew.includes(r.k);
+                  if (fresh) r.inst = addr();
+                  r.el.classList.add(fresh ? 'on' : 'ok');
+                  chip(r, fresh);
+                }
+                o.append(h('div', { class: 'line drop-in', html: `<span class="muted">${ev.msg}</span>` }));
+                busy = false;
+              }
+              rows.forEach(r => chip(r, true));
+              say(o, 'The app is running with one screen. Fire an event.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, Object.entries(EV).map(([k, ev]) => cmd(ev.label, () => fire(k)))),
+                h('div', { class: 'arc-col' }, rows.map(r => r.el)),
+                o);
+            },
+          },
+          {
+            title: 'Dependencies come from your own scope or a longer one',
+            body: `
+<p>A component can use bindings from itself and from its parents, never from a child or a sibling. A ViewModel can get <code>@Singleton</code> and <code>@ActivityRetainedScoped</code> objects. It can’t get an <code>@ActivityScoped</code> one, because the ViewModel outlives every Activity object it ever sees.</p>
+<p>Hilt checks this at build time. Pick who is asking and what it asks for, then build.</p>`,
+            visual(el) {
+              const C = {
+                app: { name: 'SingletonComponent', up: null },
+                ret: { name: 'ActivityRetainedComponent', up: 'app' },
+                vm: { name: 'ViewModelComponent', up: 'ret' },
+                act: { name: 'ActivityComponent', up: 'ret' },
+              };
+              const ASK = [['app', '@Singleton NewsRepository'], ['vm', 'NewsViewModel'], ['act', 'MainActivity']];
+              const DEP = [['app', '@Singleton', 'Analytics'], ['ret', '@ActivityRetainedScoped', 'CheckoutSession'], ['vm', '@ViewModelScoped', 'SearchCache'], ['act', '@ActivityScoped', 'PermissionHelper']];
+              let ask = 1, dep = 3, busy = false;
+              for (const c of Object.values(C)) c.el = node(c.name, null);
+              const all = Object.values(C).map(c => c.el);
+              const o = out();
+              const toggle = (label, fn) => h('button', { class: 'cmd', onclick: fn }, label);
+              const press = (btns, i) => btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+              const askBtns = ASK.map(([, label], i) => toggle(label, () => { if (busy) return; ask = i; press(askBtns, i); clearAll(all); }));
+              const depBtns = DEP.map(([, ann, cls], i) => toggle(`${ann} ${cls}`, () => { if (busy) return; dep = i; press(depBtns, i); clearAll(all); }));
+              const chain = k => { const xs = []; for (let c = k; c; c = C[c].up) xs.push(c); return xs; };
+              async function build() {
+                if (busy) return; busy = true;
+                clearAll(all);
+                const [from, who] = ASK[ask], [to, ann, cls] = DEP[dep];
+                say(o, `<span class="muted">${who} asks for ${cls}…</span>`);
+                for (const k of chain(from)) {
+                  C[k].el.classList.add(k === from ? 'on' : 'ask'); tok(C[k].el, k === from ? 'asks here' : 'visible');
+                  await sleep(380); if (!el.isConnected) return;
+                }
+                const ok = chain(from).includes(to);
+                C[to].el.classList.remove('ask', 'on'); C[to].el.classList.add(ok ? 'ok' : 'bad');
+                tok(C[to].el, `${ann} ${cls}`, ok ? 'arc-back' : 'boom');
+                if (!ok) replay(C[to].el, 'shake');
+                await sleep(300); if (!el.isConnected) return;
+                say(o, ok
+                  ? `<span class="good">builds:</span> ${C[to].name} is ${to === from ? 'the same component' : 'a parent'} of ${C[from].name}, so the instance lives at least as long as ${who}.`
+                  : `<span class="bad">error: [Dagger/IncompatiblyScopedBindings]</span> ${C[from].name} … may not reference bindings with different scopes: ${ann} class ${cls} <span class="muted">(shortened). ${C[to].name} is not above ${C[from].name}, so the object could die before ${who} does.</span>`);
+                busy = false;
+              }
+              press(askBtns, ask); press(depBtns, dep);
+              const row = (...ks) => h('div', { class: 'arc-row' }, ks.map(k => C[k].el));
+              const up = () => h('div', { class: 'arc-dir' }, '↑ parent');
+              say(o, 'Pick who asks and what it asks for, then build.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, h('span', { class: 'arc-cap' }, 'who asks'), askBtns),
+                h('div', { class: 'controls arc-fit' }, h('span', { class: 'arc-cap' }, 'what it needs'), depBtns),
+                h('div', { class: 'controls arc-fit' }, cmd('build()', build)),
+                h('div', { class: 'arc-graph' }, row('app'), up(), row('ret'), up(), row('vm', 'act')),
+                o);
+            },
+          },
+          {
+            title: 'Two bindings of one type need a qualifier',
+            body: `
+<p>Hilt finds a binding by its type. If you provide two <code>CoroutineDispatcher</code>s, it can’t tell which one a constructor wants, and the build fails with a duplicate binding error.</p>
+<p>A qualifier is an annotation that becomes part of the key. Put it on the <code>@Provides</code> function and on the constructor parameter. Injecting dispatchers this way also lets tests swap in a test dispatcher.</p>`,
+            code: `@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class IoDispatcher
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DispatchersModule {
+    @Provides @IoDispatcher
+    fun io(): CoroutineDispatcher = Dispatchers.IO
+}
+
+class OfflineFirstNewsRepository @Inject constructor(
+    private val dao: ArticleDao,
+    @IoDispatcher private val io: CoroutineDispatcher,
+) : NewsRepository`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Hilt is a layer over Dagger. At build time it generates a Dagger component for each Hilt component and wires them as parent and child. The Gradle plugin rewrites <code>NewsApp</code> to extend a generated <code>Hilt_NewsApp</code>, which creates the singleton component, and each <code>@AndroidEntryPoint</code> class extends a generated base that injects its fields.</p>
+<p>A scoped binding is stored in its component behind a thread-safe lazy holder, so the first request builds it and later ones get the same object. For <code>@HiltViewModel</code>, Hilt generates a map from ViewModel class to provider. <code>hiltViewModel()</code> uses a factory that creates a <code>ViewModelComponent</code> for the new ViewModel and picks its provider from that map. Nothing is looked up by reflection at runtime.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Using an injected field before super.onCreate()',
+            bad: `@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+    @Inject lateinit var analytics: Analytics
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        analytics.track("open")
+        super.onCreate(savedInstanceState)
+    }
+}`,
+            good: `@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+    @Inject lateinit var analytics: Analytics
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        analytics.track("open")
+    }
+}`,
+            why: 'Hilt injects Activity fields during <code>super.onCreate()</code>. Before that the field is empty and you get <code>UninitializedPropertyAccessException</code>.',
+          },
+          {
+            title: 'Making everything @Singleton',
+            bad: `@Singleton
+class PriceFormatter @Inject constructor()
+
+@Singleton
+class SearchCache @Inject constructor()   // keeps every search forever`,
+            good: `class PriceFormatter @Inject constructor()        // stateless: no scope
+
+@ViewModelScoped
+class SearchCache @Inject constructor()   // freed with its ViewModel`,
+            why: 'A scope is a promise to keep an object alive. Stateless classes are cheap to build, so leave them unscoped. Scope state to the shortest lifetime that needs it.',
+          },
+          {
+            title: 'Building dependencies by hand inside a class',
+            bad: `@HiltViewModel
+class NewsViewModel @Inject constructor() : ViewModel() {
+    private val repository = OfflineFirstNewsRepository(NewsApiImpl(), FakeDao())
+}`,
+            good: `@HiltViewModel
+class NewsViewModel @Inject constructor(
+    private val repository: NewsRepository,
+) : ViewModel()`,
+            why: 'The ViewModel now picks concrete classes, skips the shared singletons, and can’t get a fake in tests. Ask for the interface in the constructor.',
+          },
         ],
         visual(el) {
           const G = {

@@ -135,6 +135,30 @@
 .plt-events { display: grid; gap: 6px; min-width: 0; }
 .plt-events .cmd { text-align: left; }
 
+
+/* depth: shell-level fix so long code scrolls inside step and hood grids (harmless if duplicated) */
+.step > pre.code, .hood > pre.code, .hood > .prose { min-width: 0; }
+.hood::details-content { min-width: 0; }
+
+/* depth: FCM tokens */
+.plt-devs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
+.plt-node.plt-hitme { border-color: var(--ok); background: var(--ok-soft); }
+.plt-node.plt-leak { border-color: var(--err); background: var(--err-soft); }
+.plt-table { display: grid; gap: 4px; min-width: 0; }
+.plt-tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font: 500 0.76rem var(--mono); min-width: 0; }
+.plt-tr > span { min-width: 0; overflow-wrap: anywhere; }
+.plt-tr.plt-th { background: none; border-color: transparent; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.plt-tr.plt-gone { opacity: 0.4; text-decoration: line-through; }
+.plt-stats { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+
+/* depth: messages */
+.plt-store { display: flex; flex-wrap: wrap; gap: 4px; align-content: start; min-height: 44px; padding: 8px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg); min-width: 0; }
+
+/* depth: WorkManager chain */
+.plt-chain { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
+.plt-chain .plt-work { grid-template-columns: minmax(0, 1fr); }
+.plt-data { font: 500 0.72rem var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+
 @media (max-width: 640px) {
   .plt-split { grid-template-columns: minmax(0, 1fr); }
 }
@@ -346,6 +370,243 @@ suspend fun registerDevice(api: DeviceApi, userId: String) {
           { q: 'Your server sends to a stored token and FCM answers <code>404 UNREGISTERED</code>. What should it do?', options: ['Retry with backoff', 'Delete the token', 'Ignore it and try again tomorrow'], a: 1, why: 'The install behind that token is gone or has a new token. Retrying never works.' },
           { q: 'Why also send the token at login, not only in <code>onNewToken</code>?', options: ['onNewToken only fires when the token changes, so a new user on the same install would never be linked', 'getToken is faster', 'onNewToken is deprecated'], a: 0, why: 'The token belongs to the install, not the user. Link it again whenever the signed-in user changes.' },
         ],
+        deeper: [
+          {
+            title: 'A token belongs to an install, a user can have many',
+            body: `<p>Your server needs two rules. One user can have many tokens, one per phone or tablet, and a send to that user goes to each of them. One token belongs to exactly one user at a time, so make the token the unique key and upsert on it.</p>
+<p>Without that key, a shared or resold phone keeps the previous owner’s row. When Bob signs in on Ada’s old phone, Ada’s pushes keep landing on it. Turn the switch off and try it.</p>`,
+            code: `-- One row per install. Signing in on a used device moves the row.
+CREATE TABLE device_tokens (
+  token      TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  updated_at TIMESTAMP NOT NULL
+);
+INSERT INTO device_tokens (token, user_id, updated_at) VALUES (?, ?, now())
+ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, updated_at = now();`,
+            visual(el) {
+              const devs = [
+                { name: 'Phone', token: newToken(), user: null },
+                { name: 'Tablet', token: newToken(), user: null },
+              ];
+              let rows = [], upsert = true, busy = false;
+              const o = out('Nobody is signed in yet. Sign Ada in on both devices.');
+              const table = h('div', { class: 'plt-table' });
+              devs.forEach(d => {
+                d.body = h('div', { class: 'plt-node-body' });
+                d.node = h('div', { class: 'plt-node' }, h('span', { class: 'plt-node-name' }, d.name), d.body);
+              });
+              const paint = () => {
+                devs.forEach(d => { d.body.innerHTML = `signed in: ${d.user || 'nobody'}<br>${d.token}`; });
+                table.replaceChildren(h('div', { class: 'plt-tr plt-th' }, h('span', {}, 'user_id'), h('span', {}, 'token'), h('span', {}, '')),
+                  ...(rows.length ? rows.map(r => h('div', { class: 'plt-tr' }, h('span', {}, r.user), h('span', {}, r.token), tag(devs.find(d => d.token === r.token).name))) : [h('span', { class: 'plt-empty' }, 'no rows')]));
+              };
+              function signIn(d, user) {
+                if (busy) return;
+                if (d.user === user) { replay(d.node, 'pop'); say(o, `${user} is already signed in on the ${d.name}.`); return; }
+                d.user = user;
+                const old = rows.find(r => r.token === d.token);
+                const prev = old && old.user;
+                if (upsert) {
+                  if (old) old.user = user; else rows.push({ user, token: d.token });
+                  say(o, old ? `<span class="good">upsert:</span> the ${d.name} token now points at ${user}. ${prev} no longer reaches it.` : `POST /devices: ${user} → ${d.name} token.`);
+                } else {
+                  const dup = rows.some(r => r.token === d.token && r.user === user);
+                  if (!dup) rows.push({ user, token: d.token });
+                  say(o, dup ? `${user}’s row for the ${d.name} is still there, next to the others.` : old ? `<span class="bad">insert:</span> a second row for the same token. ${prev} still owns it too.` : `POST /devices: ${user} → ${d.name} token.`);
+                }
+                paint(); replay(table, 'pop-soft');
+              }
+              async function sendTo(user) {
+                if (busy) return;
+                const targets = rows.filter(r => r.user === user);
+                if (!targets.length) { replay(table, 'shake'); say(o, `No rows for ${user}. Nothing to send.`); return; }
+                busy = true;
+                say(o, `Fan out to ${user}: ${targets.length} token${targets.length > 1 ? 's' : ''}, one send each.`);
+                for (const r of targets) {
+                  const d = devs.find(x => x.token === r.token);
+                  const leak = d.user !== user;
+                  d.node.classList.add(leak ? 'plt-leak' : 'plt-hitme'); replay(d.node, leak ? 'shake' : 'pop');
+                  o.append(h('div', { class: 'line drop-in', html: leak ? `<span class="bad">leak:</span> ${user}’s message shows on the ${d.name}, where ${d.user} is signed in` : `<span class="good">delivered</span> to the ${d.name}` }));
+                  await sleep(600);
+                  if (!el.isConnected) return;
+                }
+                devs.forEach(d => d.node.classList.remove('plt-leak', 'plt-hitme'));
+                busy = false;
+              }
+              const sw = toggle('plt-fcm-upsert', 'token is the unique key (upsert)', true, v => {
+                upsert = v; rows = []; devs.forEach(d => { d.user = null; }); paint();
+                say(o, v ? 'Upsert on token. Rows cleared. Start again.' : 'Plain insert of (user, token). Rows cleared. Start again.');
+              });
+              paint();
+              el.append(
+                h('div', { class: 'plt-devs' }, devs.map(d => d.node)),
+                h('div', { class: 'controls plt-row' }, act('Ada signs in on Phone', () => signIn(devs[0], 'ada')), act('Ada signs in on Tablet', () => signIn(devs[1], 'ada')), act('Bob signs in on Phone', () => signIn(devs[0], 'bob'))),
+                h('div', { class: 'controls plt-row' }, act('Send to Ada', () => sendTo('ada')), act('Send to Bob', () => sendTo('bob')), sw.el),
+                h('span', { class: 'plt-label' }, 'device_tokens on your server'), table,
+                o);
+            },
+          },
+          {
+            title: 'Fresh timestamps tell live installs from dead ones',
+            body: `<p>Tokens rarely die loudly. A phone in a drawer keeps a valid token for months, and FCM accepts sends to it that never arrive. Firebase recommends refreshing each token on your server about once a month, with a periodic job that calls <code>getToken()</code> and posts it with a timestamp. Then a token that hasn’t been refreshed for a month really means an inactive install, and you can stop sending to it. FCM itself expires tokens of devices that stay inactive for 270 days, and sends to them return <code>UNREGISTERED</code>.</p>
+<p>Without the monthly refresh, every row looks old, and the same cleanup would delete your most loyal users too. Advance the months and try pruning with the job on and off.</p>`,
+            code: `class TokenRefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result = try {
+        val token = FirebaseMessaging.getInstance().token.await()
+        api.register(DeviceRegistration(session.userId, token, updatedAt = System.currentTimeMillis()))
+        Result.success()
+    } catch (e: IOException) { Result.retry() }
+}
+
+WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+    "fcm-token-refresh", ExistingPeriodicWorkPolicy.KEEP,
+    PeriodicWorkRequestBuilder<TokenRefreshWorker>(30, TimeUnit.DAYS)
+        .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
+        .build(),
+)`,
+            visual(el) {
+              const INSTALLS = [
+                { name: 'Ada, phone, daily user', off: Infinity, opens: true },
+                { name: 'Bob, phone, opens app rarely', off: Infinity, opens: false },
+                { name: 'Cem, old phone in a drawer', off: 0, opens: false },
+                { name: 'Dee, uninstalled the app', off: 1, opens: false, uninstall: true },
+                { name: 'Eda, broke her phone', off: 3, opens: false },
+              ];
+              let month = 0, refresh = true, busy = false;
+              const o = out('Month 0. Every install registered this month. Advance time.');
+              const monthEl = h('span', { class: 'clock' }, 'month 0');
+              const table = h('div', { class: 'plt-table' });
+              const rows = INSTALLS.map(x => ({ ...x, updated: 0, deleted: false }));
+              const alive = r => month < r.off;
+              const lastSeen = r => Math.min(month, r.off);
+              const expired = r => !alive(r) && !r.uninstall && month - lastSeen(r) >= 9;
+              function paint() {
+                monthEl.textContent = `month ${month}`;
+                table.replaceChildren(h('div', { class: 'plt-tr plt-th' }, h('span', {}, 'install'), h('span', {}, 'updated_at'), h('span', {}, 'age')),
+                  ...rows.map(r => {
+                    const age = month - r.updated;
+                    return h('div', { class: 'plt-tr' + (r.deleted ? ' plt-gone' : '') }, h('span', {}, r.name), h('span', {}, `month ${r.updated}`),
+                      r.deleted ? tag('deleted', 'no') : age > 1 ? tag(`${age} mo, stale`, 'wait') : tag('fresh', 'ok'));
+                  }));
+              }
+              function advance() {
+                if (busy) return;
+                if (month >= 12) { replay(monthEl, 'shake'); say(o, 'A year has passed. Press Reset to start over.'); return; }
+                month++;
+                for (const r of rows) if (alive(r) && (refresh || r.opens)) r.updated = month;
+                paint(); replay(monthEl, 'pop');
+                say(o, refresh ? `Month ${month}. The refresh job ran on every phone that is still on.` : `Month ${month}. No refresh job: only rows of users who changed something get a new timestamp.`);
+                if (!refresh) line(o, 'Here: Ada re-registers at each login. Everyone else keeps month 0.');
+              }
+              async function send() {
+                if (busy) return; busy = true;
+                let ok = 0, wasted = 0, removed = 0;
+                say(o, `Month ${month}: send a campaign to every row.`);
+                for (const r of rows) {
+                  if (r.deleted) continue;
+                  let res;
+                  if (alive(r)) { res = ['ok', 'delivered']; ok++; }
+                  else if (r.uninstall || expired(r)) { res = ['no', '404 UNREGISTERED, row deleted']; r.deleted = true; removed++; }
+                  else { res = ['wait', 'accepted, never delivered']; wasted++; }
+                  o.append(h('div', { class: 'line drop-in' }, `${r.name}: `, tag(res[1], res[0])));
+                  paint();
+                  await sleep(320);
+                  if (!el.isConnected) return;
+                }
+                o.append(h('div', { class: 'line', html: `<span class="good">${ok} delivered</span>, <span class="bad">${wasted} wasted</span>, ${removed} deleted` }));
+                busy = false;
+              }
+              function prune() {
+                if (busy) return;
+                const gone = rows.filter(r => !r.deleted && month - r.updated > 1);
+                if (!gone.length) { say(o, 'No row is older than a month. Nothing to prune.'); return; }
+                gone.forEach(r => { r.deleted = true; });
+                paint();
+                const lost = gone.filter(alive);
+                say(o, `Pruned ${gone.length} row${gone.length > 1 ? 's' : ''} not refreshed for over a month.`);
+                line(o, lost.length ? `<span class="bad">lost live users:</span> ${lost.map(r => r.name.split(',')[0]).join(', ')} still use their phones` : '<span class="good">only dead installs removed.</span>');
+              }
+              const sw = toggle('plt-fcm-refresh', 'monthly token refresh job', true, v => {
+                refresh = v; month = 0; rows.forEach(r => { r.updated = 0; r.deleted = false; }); paint();
+                say(o, (v ? 'Refresh job on.' : 'Refresh job off.') + ' Back to month 0.');
+              });
+              paint();
+              el.append(
+                h('div', { class: 'controls plt-row' }, sw.el, monthEl),
+                h('div', { class: 'controls plt-row' }, act('Advance 1 month', advance), act('Send a campaign', send), act('Prune rows older than a month', prune)),
+                table, o);
+            },
+          },
+          {
+            title: 'Read every send result on the server',
+            body: `<p>HTTP v1 sends one message per request, and the old batch endpoint is gone. The Admin SDK’s <code>sendEach</code> runs those requests for you and returns one result per message, in order. Act on each error code. <code>UNREGISTERED</code> and <code>SENDER_ID_MISMATCH</code> mean the token will never work for you: delete it. <code>INVALID_ARGUMENT</code> means the request is wrong, or the token is malformed. Fix the payload, and delete the token only if it is the bad part.</p>
+<p><code>QUOTA_EXCEEDED</code>, <code>UNAVAILABLE</code> and <code>INTERNAL</code> are temporary. Retry with exponential backoff, and honor a <code>Retry-After</code> header when there is one. Don’t retry other 4xx errors unchanged.</p>`,
+            code: `val batch = FirebaseMessaging.getInstance().sendEach(messages)   // results in the same order
+batch.responses.forEachIndexed { i, result ->
+    val code = result.exception?.messagingErrorCode ?: return@forEachIndexed
+    val token = targets[i]
+    when (code) {
+        MessagingErrorCode.UNREGISTERED,
+        MessagingErrorCode.SENDER_ID_MISMATCH -> tokens.delete(token)
+        MessagingErrorCode.INVALID_ARGUMENT -> log.warn("Bad request or malformed token: $token")
+        MessagingErrorCode.QUOTA_EXCEEDED,
+        MessagingErrorCode.UNAVAILABLE,
+        MessagingErrorCode.INTERNAL -> retryQueue.add(messages[i], backoff = exponential())
+        else -> log.error("FCM $code for $token")
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Your app does not hold its own connection. Google Play services keeps one persistent connection to FCM for every app on the device. When a message arrives, it sends an explicit broadcast to the <code>FirebaseInstanceIdReceiver</code> that the SDK adds to your manifest. That receiver is guarded by a permission only Google Play services holds. It hands the message to your <code>FirebaseMessagingService</code>, which is why your process starts and <code>Application.onCreate</code> runs first. For a high priority message the system also puts your app on a short power allowlist, which is what lets it start a foreground service or run expedited work from the background.</p>
+<p>The token is tied to the install’s Firebase Installation ID, and current tokens start with that id and a colon. Deleting the installation or calling <code>deleteToken()</code> makes the old token invalid. The SDK creates a token on first launch unless you turn auto-init off, which is how apps wait for consent before registering.</p>`,
+          code: `<!-- AndroidManifest.xml: no token until the user agrees -->
+<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+
+// After consent
+FirebaseMessaging.getInstance().isAutoInitEnabled = true`,
+        },
+        mistakes: [
+          {
+            title: 'Signing out without detaching the token',
+            bad: `fun signOut() {
+    session.clear()
+}`,
+            good: `suspend fun signOut() {
+    val token = FirebaseMessaging.getInstance().token.await()
+    api.unregister(token)                                // server drops the row
+    FirebaseMessaging.getInstance().deleteToken().await() // the install gets a new one later
+    session.clear()
+}`,
+            why: 'The row still links this install to the old user, so their private notifications keep arriving after sign-out.',
+          },
+          {
+            title: 'Posting the token straight from onNewToken',
+            bad: `override fun onNewToken(token: String) {
+    runBlocking { api.register(token) }   // offline? the token is lost
+}`,
+            good: `override fun onNewToken(token: String) {
+    val work = OneTimeWorkRequestBuilder<TokenSyncWorker>()
+        .setInputData(workDataOf("token" to token))
+        .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
+        .build()
+    WorkManager.getInstance(this).enqueueUniqueWork("token-sync", ExistingWorkPolicy.REPLACE, work)
+}`,
+            why: 'The callback fires once per new token. If that one request fails, the server never learns the token. A unique work request retries until it lands, and REPLACE keeps only the newest token.',
+          },
+          {
+            title: 'Blocking the main thread for the token',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    val token = Tasks.await(FirebaseMessaging.getInstance().token)
+}`,
+            good: `lifecycleScope.launch {
+    val token = FirebaseMessaging.getInstance().token.await()   // kotlinx-coroutines-play-services
+    viewModel.onToken(token)
+}`,
+            why: '<code>Tasks.await</code> throws <code>IllegalStateException</code> on the main thread. The suspending <code>await()</code> waits without blocking it.',
+          },
+        ],
         visual(el) {
           const mk = name => { const body = h('div', { class: 'plt-node-body' }); return { node: h('div', { class: 'plt-node' }, h('span', { class: 'plt-node-name' }, name), body), body }; };
           const app = mk('App'), fcm = mk('FCM'), srv = mk('Your server');
@@ -472,6 +733,189 @@ class MainActivity : ComponentActivity() {
           { q: 'A message has both <code>notification</code> and <code>data</code>. The app is in the background. Does <code>onMessageReceived</code> run?', options: ['Yes, with both payloads', 'No: the system shows it, and the data goes into the launcher intent extras on tap', 'No, and the data is lost'], a: 1, why: 'In the background the notification block takes the system path. The data rides along in the launcher Activity’s intent.' },
           { q: 'A <code>normal</code> priority data message reaches a device in Doze. What happens?', options: ['Delivered at once', 'Held until a maintenance window or until the device wakes', 'Dropped'], a: 1, why: 'Only high priority can wake a dozing device. Normal waits.' },
           { q: 'The user force-stopped your app in Settings. A high priority data message arrives. What runs?', options: ['onMessageReceived', 'Nothing until the user opens the app again', 'The system shows it in the tray'], a: 1, why: 'Android does not deliver broadcasts, FCM included, to a force-stopped app.' },
+        ],
+        deeper: [
+          {
+            title: 'Offline devices: collapsible or every message',
+            body: `<p>When the device is offline, FCM stores messages for it. By default each message is non-collapsible, so every one is kept and delivered in order. FCM keeps at most 100 of them per app on a device. Past that it drops them all, and on reconnect your app gets <code>onDeletedMessages()</code> instead.</p>
+<p>A <code>collapse_key</code> says only the latest one matters, like a live score. FCM keeps just the newest message per key, with up to 4 different keys per device at once. Notification messages are collapsible by default. Send a few updates while the phone is offline, then bring it back.</p>`,
+            visual(el) {
+              const SCORES = ['1-0', '1-1', '2-1', '2-2', '3-2', '3-3', '4-3'];
+              let online = false, collapse = false, held = [], dropped = false, n = 0, busy = false;
+              const ph = phone();
+              const shade = h('div', { class: 'plt-shade' });
+              ph.screen.append(h('p', { class: 'plt-shade-title' }, 'Notification shade'), shade);
+              const store = h('div', { class: 'plt-store' });
+              const o = out('The phone is offline. Send a few score updates.');
+              function paint() {
+                if (dropped) { store.replaceChildren(tag('over 100: all dropped', 'no')); return; }
+                const shown = held.slice(-6).map(m => tag(m.key ? `score ${m.text} · key` : `score ${m.text}`, m.key ? 'acc' : ''));
+                store.replaceChildren(...(held.length ? shown : [h('span', { class: 'plt-empty' }, 'nothing stored')]), held.length > 6 ? tag(`+${held.length - 6} more`) : null);
+              }
+              function show(text) {
+                shade.prepend(note('scores', 'Derby', `Score: ${text}`, 'drop-in'));
+                while (shade.children.length > 4) shade.lastElementChild.remove();
+              }
+              function send() {
+                if (busy) return;
+                const text = SCORES[n++ % SCORES.length];
+                const msg = { text, key: collapse ? 'score_derby' : null };
+                if (online) { show(text); say(o, `Online: delivered at once. ${hl('onMessageReceived()')}`); return; }
+                if (dropped) { say(o, 'FCM already dropped the backlog. Reconnect to see what happens.'); return; }
+                if (msg.key) {
+                  const had = held.some(m => m.key === msg.key);
+                  held = held.filter(m => m.key !== msg.key);
+                  say(o, had ? `collapse_key "score_derby": the older update is replaced by ${text}.` : `Stored with collapse_key "score_derby".`);
+                } else say(o, `Stored. ${held.length + 1} non-collapsible message${held.length ? 's' : ''} waiting.`);
+                held.push(msg); paint(); replay(store, 'pop-soft');
+              }
+              function flood() {
+                if (busy) return;
+                if (online) { say(o, 'Go offline first.'); return; }
+                held = []; dropped = true; paint(); replay(store, 'shake');
+                say(o, '<span class="bad">101 non-collapsible messages</span> while offline. FCM drops every stored message for this app.');
+              }
+              async function reconnect(v) {
+                online = v;
+                if (!v) { say(o, 'Offline. New messages wait at FCM.'); return; }
+                busy = true;
+                if (dropped) {
+                  say(o, `Back online: ${hl('onDeletedMessages()')}  <span class="muted">// do a full sync from your server</span>`);
+                  dropped = false;
+                } else if (!held.length) say(o, 'Back online. Nothing was waiting.');
+                else {
+                  say(o, `Back online: ${held.length} message${held.length > 1 ? 's' : ''} delivered.`);
+                  for (const m of held) { show(m.text); await sleep(350); if (!el.isConnected) return; }
+                }
+                held = []; paint();
+                busy = false;
+              }
+              const net = toggle('plt-msg-online', 'phone online', false, (v, input) => { if (busy) { input.checked = online; return; } reconnect(v); });
+              const keys = toggle('plt-msg-collapse', 'collapse_key = "score_derby"', false, v => { collapse = v; say(o, v ? 'New sends carry a collapse key.' : 'New sends are non-collapsible.'); });
+              paint();
+              el.append(
+                h('div', { class: 'plt-split' },
+                  h('div', { class: 'plt-col' },
+                    h('div', { class: 'controls plt-row' }, net.el, keys.el),
+                    h('div', { class: 'controls plt-row' }, cmd('send(scoreUpdate)', send), act('Send 101 while offline', flood)),
+                    h('span', { class: 'plt-label' }, 'Stored at FCM for this device'), store),
+                  ph.dev),
+                o);
+            },
+          },
+          {
+            title: 'Update a notification instead of stacking new ones',
+            body: `<p>When you post data messages yourself, the notification id decides what happens in the tray. <code>notify(id, …)</code> with an id that is already showing replaces that notification. A new id each time stacks a new one. For notification messages, the <code>android.notification.tag</code> field does the same job.</p>
+<p>A replaced notification alerts again by default, with sound and a heads-up banner. <code>setOnlyAlertOnce(true)</code> keeps later updates quiet while the first one still alerts.</p>`,
+            code: `fun showScore(context: Context, matchId: Int, score: String) {
+    val n = NotificationCompat.Builder(context, SCORES_CHANNEL)
+        .setSmallIcon(R.drawable.ic_stat_score)
+        .setContentTitle("Derby")
+        .setContentText(score)
+        .setOnlyAlertOnce(true)        // updates don't buzz again
+        .build()
+    NotificationManagerCompat.from(context).notify(matchId, n)   // same match, same id
+}`,
+            visual(el) {
+              const SCORES = ['1-0', '1-1', '2-1', '2-2', '3-2'];
+              let same = true, once = false, n = 0, nextId = 100, busy = false;
+              const ph = phone();
+              const shade = h('div', { class: 'plt-shade' });
+              ph.screen.append(h('p', { class: 'plt-shade-title' }, 'Notification shade'), shade);
+              const posted = new Map();
+              const o = out('Post a few score updates for the same match.');
+              async function post() {
+                if (busy) return; busy = true;
+                const score = SCORES[n++ % SCORES.length];
+                const id = same ? 7 : nextId++;
+                const existing = posted.get(id);
+                const card = note(`scores · id ${id}`, 'Derby', `Score: ${score}`);
+                const alert = !existing || !once;
+                if (existing) { existing.replaceWith(card); replay(card, 'pop'); }
+                else { card.classList.add('drop-in'); shade.prepend(card); }
+                posted.set(id, card);
+                while (shade.children.length > 4) { const last = shade.lastElementChild; posted.forEach((v, k) => { if (v === last) posted.delete(k); }); last.remove(); }
+                say(o, `${hl(`notify(${id}, n)`)}  ${existing ? 'replaced in place' : 'new entry'}${alert ? ', alerts' : ', silent update'}`);
+                if (alert) {
+                  const hu = note(`scores · id ${id}`, 'Derby', `Score: ${score}`); hu.classList.add('plt-in'); ph.banner.append(hu);
+                  await sleep(1300);
+                  hu.classList.replace('plt-in', 'plt-out'); await sleep(400); hu.remove();
+                } else await sleep(300);
+                busy = false;
+              }
+              const ids = choice('id', ['same id', 'new id'], 'same id', v => { if (busy) return false; same = v === 'same id'; });
+              const quiet = toggle('plt-msg-once', 'setOnlyAlertOnce(true)', false, v => { once = v; });
+              el.append(
+                h('div', { class: 'plt-split' },
+                  h('div', { class: 'plt-col' }, ids.el, quiet.el, h('div', { class: 'controls plt-row' }, cmd('showScore(context, matchId, score)', post)),
+                    h('p', { class: 'tip' }, 'Try new id, then same id with setOnlyAlertOnce.')),
+                  ph.dev),
+                o);
+            },
+          },
+          {
+            title: 'Give time-bound messages a TTL',
+            body: `<p>FCM keeps an undelivered message for 4 weeks by default, which is also the maximum. A goal alert that arrives a day late is worse than none, so set a <code>ttl</code>. With a TTL of 0 FCM tries once, right now, and discards the message if the device can’t be reached.</p>
+<p>When FCM throws away messages it was holding, because of the 100 message limit or because the device stayed away for over a month, your app gets <code>onDeletedMessages()</code> on reconnect. Treat it as “your local state may be behind” and pull fresh data from your server.</p>`,
+            code: `// Server: only the latest score matters, and only for 10 minutes
+val android = AndroidConfig.builder()
+    .setCollapseKey("score_$matchId")
+    .setTtl(10 * 60 * 1000L)                       // milliseconds
+    .setPriority(AndroidConfig.Priority.HIGH)
+    .build()
+
+// Device
+override fun onDeletedMessages() {
+    SyncWorker.enqueueFullSync(applicationContext)  // catch up from your server
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>“Your code does not run” is about <code>onMessageReceived</code>, not your process. A background notification message still reaches your app as a broadcast, so the process starts and <code>Application.onCreate</code> runs. The FCM SDK inside your process checks whether the app is in the foreground. If not, it builds the notification itself and posts it.</p>
+<p>It picks the channel from <code>android.notification.channel_id</code> in the payload, then from a default channel in your manifest. With neither, it creates a fallback channel the user sees as “Miscellaneous”. The tap opens your launcher Activity, or the Activity matching <code>click_action</code>, with the <code>data</code> pairs as String extras next to keys like <code>google.message_id</code>.</p>`,
+          code: `<!-- AndroidManifest.xml, inside <application> -->
+<meta-data
+    android:name="com.google.firebase.messaging.default_notification_channel_id"
+    android:value="news_alerts" />
+<meta-data
+    android:name="com.google.firebase.messaging.default_notification_icon"
+    android:resource="@drawable/ic_stat_news" />`,
+        },
+        mistakes: [
+          {
+            title: 'Reading the tap extras only in onCreate',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    intent.extras?.getString("article_id")?.let(::openArticle)
+}`,
+            good: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    if (savedInstanceState == null) handlePush(intent)
+}
+override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    handlePush(intent)
+}`,
+            why: 'With a singleTop or singleTask launcher that is already running, the tap arrives in <code>onNewIntent</code> and <code>onCreate</code> never sees it. The saved state check stops a rotation from opening the article again.',
+          },
+          {
+            title: 'High priority for silent syncs',
+            bad: `Message.builder().setToken(token)
+    .putData("sync", "inbox")
+    .setAndroidConfig(AndroidConfig.builder().setPriority(AndroidConfig.Priority.HIGH).build())`,
+            good: `Message.builder().setToken(token)
+    .putData("sync", "inbox")
+    .setAndroidConfig(AndroidConfig.builder().setPriority(AndroidConfig.Priority.NORMAL).build())`,
+            why: 'High priority is for messages the user sees right away. If they rarely lead to a visible notification, FCM may start delivering them as normal priority.',
+          },
+          {
+            title: 'Putting numbers and objects in data',
+            bad: `{ "message": { "token": "…",
+  "data": { "article_id": 42, "tags": ["derby", "live"] } } }`,
+            good: `{ "message": { "token": "…",
+  "data": { "article_id": "42", "tags": "derby,live" } } }`,
+            why: 'Every <code>data</code> value must be a string. HTTP v1 rejects the first request with <code>INVALID_ARGUMENT</code>. Keep the whole payload under 4 KB.',
+          },
         ],
         visual(el) {
           const TYPES = ['notification', 'data', 'both'];
@@ -759,6 +1203,196 @@ WorkManager.getInstance(context)
           { q: 'Exponential backoff at 30 seconds. A worker returns <code>retry()</code> three times. What are the waits?', options: ['30 s, 30 s, 30 s', '30 s, 60 s, 120 s', '1 s, 2 s, 4 s'], a: 1, why: 'Exponential doubles the delay after each attempt, up to a 5 hour cap.' },
           { q: '<code>enqueueUniqueWork("sync", KEEP, r)</code> runs while an earlier "sync" is still ENQUEUED. What happens?', options: ['Both run', 'The new request is ignored', 'The old one is cancelled'], a: 1, why: 'KEEP keeps the existing pending or running work. REPLACE would cancel it.' },
           { q: 'What is the shortest repeat interval for a <code>PeriodicWorkRequest</code>?', options: ['1 minute', '15 minutes', '1 hour'], a: 1, why: 'Shorter intervals are raised to 15 minutes.' },
+        ],
+        deeper: [
+          {
+            title: 'Chains pass data and share their fate',
+            body: `<p><code>beginWith(a).then(b).then(c)</code> runs work in order. The output <code>Data</code> of one worker becomes the input of the next, so a compress step can hand the file path to the upload step.</p>
+<p>A chain stops at the first problem. If a worker returns <code>failure()</code>, every worker after it is marked FAILED without running. Cancel the chain and the rest becomes CANCELLED. A <code>retry()</code> only delays that one link.</p>`,
+            code: `class CompressWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        val src = inputData.getString("src") ?: return Result.failure()
+        val out = Images.compress(src)
+        return Result.success(workDataOf("path" to out))   // becomes UploadWorker's inputData
+    }
+}
+
+WorkManager.getInstance(context)
+    .beginUniqueWork("photo-$id", ExistingWorkPolicy.KEEP, compress)
+    .then(upload)
+    .then(cleanup)
+    .enqueue()`,
+            visual(el) {
+              const STEPS = [
+                { name: 'CompressWorker', out: 'path = /cache/p42.jpg' },
+                { name: 'UploadWorker', out: 'url = /photos/42' },
+                { name: 'CleanupWorker', out: '' },
+              ];
+              let fail = false, runId = 0, running = false;
+              const o = out('Enqueue the chain. Then try it with a failing first step, or cancel it halfway.');
+              const cards = STEPS.map(s => {
+                const t = tag('');
+                const data = h('span', { class: 'plt-data' });
+                const bar = h('span');
+                const box = h('div', { class: 'plt-work' }, h('span', { class: 'plt-work-name' }, s.name), t, h('div', { class: 'plt-prog' }, bar), data);
+                return Object.assign({}, s, { t, data, bar, box });
+              });
+              const KIND = { ENQUEUED: 'wait', BLOCKED: '', RUNNING: 'acc', SUCCEEDED: 'ok', FAILED: 'no', CANCELLED: 'no' };
+              const set = (c, st, data) => {
+                c.state = st; c.t.textContent = st; c.t.className = 'plt-tag plt-' + KIND[st]; replay(c.t, 'pop');
+                c.box.classList.toggle('plt-running', st === 'RUNNING');
+                if (data != null) c.data.textContent = data;
+              };
+              const idle = () => cards.forEach((c, i) => { set(c, i ? 'BLOCKED' : 'ENQUEUED', i ? 'waits for the step before' : 'input: src = IMG_42.jpg'); c.bar.style.width = '0%'; });
+              async function start() {
+                if (running) { say(o, 'The chain is still running. Cancel it or wait.'); return; }
+                running = true; const me = ++runId;
+                idle();
+                say(o, hl('beginWith(compress).then(upload).then(cleanup).enqueue()'));
+                for (let i = 0; i < cards.length; i++) {
+                  const c = cards[i];
+                  set(c, 'RUNNING');
+                  for (let p = 0; p <= 100; p += 10) {
+                    c.bar.style.width = p + '%';
+                    await sleep(90);
+                    if (!el.isConnected || me !== runId) return;
+                  }
+                  if (i === 0 && fail) {
+                    set(c, 'FAILED', 'Result.failure()');
+                    for (const d of cards.slice(1)) { set(d, 'FAILED', 'never ran'); await sleep(250); }
+                    o.append(h('div', { class: 'line drop-in', html: '<span class="bad">failure()</span> fails every dependent. Upload and cleanup never run.' }));
+                    running = false; return;
+                  }
+                  set(c, 'SUCCEEDED', c.out ? `output: ${c.out}` : 'Result.success()');
+                  if (cards[i + 1]) { set(cards[i + 1], 'ENQUEUED', `input: ${c.out}`); o.append(h('div', { class: 'line drop-in' }, `${c.name} output → ${cards[i + 1].name} input`)); await sleep(350); }
+                  if (me !== runId) return;
+                }
+                o.append(h('div', { class: 'line drop-in', html: '<span class="good">chain done</span>' }));
+                running = false;
+              }
+              async function cancel() {
+                if (!running) { say(o, 'Nothing is running.'); return; }
+                runId++; running = false;
+                say(o, hl('cancelUniqueWork("photo-42")'));
+                for (const c of cards) if (!['SUCCEEDED', 'FAILED'].includes(c.state)) { set(c, 'CANCELLED', c.state === 'RUNNING' ? 'stopped mid-run' : 'never ran'); await sleep(200); }
+              }
+              const sw = toggle('plt-wm-fail', 'CompressWorker returns failure()', false, v => { fail = v; });
+              idle();
+              el.append(
+                h('div', { class: 'controls plt-row' }, cmd('enqueue chain', start), cmd('cancelUniqueWork("photo-42")', cancel), sw.el),
+                h('div', { class: 'plt-chain' }, cards.map(c => c.box)),
+                o);
+            },
+          },
+          {
+            title: 'Expedited work starts now, within a quota',
+            body: `<p>Normal work runs when the system finds a good moment. <code>setExpedited()</code> asks for it to start right away, for short jobs the user just triggered, like sending a message. On Android 12+ it runs as an expedited job, and each app gets a limited quota of those. The <code>OutOfQuotaPolicy</code> says what happens when the quota is used up: run as normal work, or drop the request.</p>
+<p>Below Android 12, WorkManager runs expedited work as a foreground service, so your worker must override <code>getForegroundInfo()</code> to supply the notification.</p>`,
+            code: `val send = OneTimeWorkRequestBuilder<SendMessageWorker>()
+    .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+    .setInputData(workDataOf("draftId" to draft.id))
+    .build()
+
+class SendMessageWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    // Used below Android 12, where expedited work runs as a foreground service
+    override suspend fun getForegroundInfo() = ForegroundInfo(SENDING_ID, sendingNotification())
+
+    override suspend fun doWork(): Result = /* send it */ Result.success()
+}`,
+          },
+          {
+            title: 'A worker can run twice, so make it safe to repeat',
+            body: `<p>WorkManager guarantees the work finishes, not that it runs once. If the process dies after your upload reached the server but before <code>doWork()</code> returned, WorkManager never got a result and runs the work again from the start. The same happens when a constraint breaks mid-run.</p>
+<p>So send an idempotency key the server can recognise, like the work id or an id you generated when you enqueued. The second attempt then finds the first result instead of creating a duplicate.</p>`,
+            code: `override suspend fun doWork(): Result {
+    val key = inputData.getString("uploadKey") ?: id.toString()   // stable across retries
+    api.uploadPhoto(path, idempotencyKey = key)                  // server ignores repeats of a key
+    return Result.success()
+}`,
+            visual(el) {
+              let keyed = false, kill = true, busy = false, n = 0;
+              const srv = h('div', { class: 'plt-table' });
+              const records = [];
+              const steps = h('div', { class: 'plt-steps' });
+              const step = (k, who, text) => { steps.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', { html: text }))); while (steps.children.length > 7) steps.firstElementChild.remove(); };
+              const paint = () => srv.replaceChildren(h('div', { class: 'plt-tr plt-th' }, h('span', {}, 'photo'), h('span', {}, 'key'), h('span', {}, '')),
+                ...(records.length ? records.map((r, i) => h('div', { class: 'plt-tr' }, h('span', {}, `photo #${i + 1}`), h('span', {}, r.key || 'none'), r.dup ? tag('duplicate', 'no') : tag('ok', 'ok'))) : [h('span', { class: 'plt-empty' }, 'no photos yet')]));
+              async function attempt(no, key) {
+                step('', 'WorkManager', `attempt ${no}: <code>doWork()</code> starts`); await sleep(500);
+                const hit = key && records.find(r => r.key === key);
+                if (hit) step('good', 'Server', `key ${key} seen before: returns the existing photo`);
+                else { records.push({ key, dup: records.length > 0 && !key }); paint(); replay(srv, 'pop-soft'); step(records.length > 1 && !key ? 'bad' : '', 'Server', 'POST /photos: new photo stored'); }
+                await sleep(500);
+                return el.isConnected;
+              }
+              async function run() {
+                if (busy) return; busy = true;
+                steps.replaceChildren();
+                const key = keyed ? `u-${(++n).toString(16).padStart(3, '0')}` : null;
+                if (!keyed) n++;
+                if (!(await attempt(1, key))) return;
+                if (kill) {
+                  step('bad', 'System', 'process killed before <code>doWork()</code> returns'); await sleep(700);
+                  step('wait', 'WorkManager', 'no result was recorded, so the work runs again'); await sleep(700);
+                  if (!(await attempt(2, key))) return;
+                }
+                step('good', 'Worker', '<code>Result.success()</code>');
+                busy = false;
+              }
+              const k = toggle('plt-wm-idem', 'send an idempotency key', false, v => { keyed = v; });
+              const d = toggle('plt-wm-kill', 'process dies after the POST', true, v => { kill = v; });
+              paint();
+              el.append(
+                h('div', { class: 'controls plt-row' }, k.el, d.el),
+                h('div', { class: 'controls plt-row' }, cmd('enqueue(uploadRequest)', run)),
+                h('div', { class: 'plt-split' }, steps, h('div', { class: 'plt-col' }, h('span', { class: 'plt-label' }, 'Server'), srv)));
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>WorkManager keeps every request in its own Room database inside your app. That is how work survives the app closing and the phone rebooting. On Android 6.0 and later it hands each request to <code>JobScheduler</code>, which wakes your process when the constraints hold. When the process is already running, an in-process scheduler can start work at once without waiting for the job.</p>
+<p>After a reboot, a receiver in the library reschedules the jobs. A force stop cancels your jobs and alarms, and WorkManager notices on the next launch and schedules everything again. Each run gets about 10 minutes before the system stops it, and stopped work runs again later. WorkManager starts itself through App Startup, unless you remove that initializer and provide your own <code>Configuration</code>.</p>`,
+          code: `// Custom setup, for example to give workers injected dependencies
+class App : Application(), Configuration.Provider {
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
+}
+// and remove androidx.work.WorkManagerInitializer from the App Startup provider in the manifest`,
+        },
+        mistakes: [
+          {
+            title: 'Restarting the periodic clock on every launch',
+            bad: `override fun onCreate() {
+    super.onCreate()
+    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        "daily-sync", ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, daily)
+}`,
+            good: `override fun onCreate() {
+    super.onCreate()
+    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        "daily-sync", ExistingPeriodicWorkPolicy.UPDATE, daily)
+}`,
+            why: 'Cancel and re-enqueue starts a new 24 hour wait each time. A user who opens the app daily never gets a sync. <code>UPDATE</code> keeps the schedule and applies your new request settings.',
+          },
+          {
+            title: 'Passing the payload itself in inputData',
+            bad: `val request = OneTimeWorkRequestBuilder<UploadWorker>()
+    .setInputData(workDataOf("json" to bigReport.toJson()))
+    .build()`,
+            good: `val request = OneTimeWorkRequestBuilder<UploadWorker>()
+    .setInputData(workDataOf("reportId" to bigReport.id))   // worker loads it from Room
+    .build()`,
+            why: '<code>Data</code> is capped at 10 KB, and a bigger one throws <code>IllegalStateException</code>. Pass an id or a file path.',
+          },
+          {
+            title: 'Observing a request id you no longer have',
+            bad: `// ViewModel builds a new request object, then observes its id
+val request = OneTimeWorkRequestBuilder<UploadWorker>().build()
+val status = workManager.getWorkInfoByIdFlow(request.id)`,
+            good: `val status = workManager.getWorkInfosForUniqueWorkFlow("upload")
+    .map { it.firstOrNull()?.state }`,
+            why: 'After process death the new id matches nothing that was enqueued, so the UI shows no progress. Observe the unique name, which stays the same.',
+          },
         ],
         visual(el) {
           const RUN = 12; // simulated seconds per run
