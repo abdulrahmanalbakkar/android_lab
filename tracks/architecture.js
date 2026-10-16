@@ -26,6 +26,24 @@
     return Object.assign(h('label', { class: 'switch', for: id }, input, label), { input });
   };
 
+  // Shared by the newer lessons: a state card, a lane token, and a slot swap that animates the old card out.
+  const stateCard = (name, fields, changed = [], anim = false) => h('div', { class: 'obj' + (anim ? ' drop-in' : '') },
+    h('span', { class: 'obj-name' }, name),
+    fields.map(f => typeof f === 'string'
+      ? h('span', { class: 'field' }, f)
+      : h('span', { class: changed.includes(f[0]) ? 'field changed' : 'field' }, `${f[0]} = ${f[1]}`)));
+  const swapIn = (slotEl, card) => {
+    const prev = slotEl.firstElementChild;
+    if (prev) { prev.classList.add('fly-out'); setTimeout(() => prev.remove(), 400); }
+    slotEl.append(card);
+  };
+  const laneTok = (lane, text, cls = '') => {
+    lane.querySelectorAll('.token').forEach(t => t.remove());
+    lane.append(h('span', { class: `token drop-in ${cls}` }, text));
+  };
+  const band = (name, ...nodes) => h('div', { class: 'arc-band' }, h('span', { class: 'arc-band-name' }, name), h('div', { class: 'arc-row' }, nodes));
+  const quote = v => (v == null ? 'null' : `"${v}"`);
+
   const css = `
 .arc-fit, .arc-layers, .arc-udf, .arc-db, .arc-map, .arc-flow, .arc-graph, .arc-wire-row, .arc-screens { min-width: 0; }
 .arc-layers { display: grid; gap: 4px; min-width: 0; }
@@ -122,12 +140,90 @@
 }
 @media (max-width: 520px) {
   .arc-wire-row { grid-template-columns: minmax(0, 1fr); }
+}
+/* mvvm-mvi */
+.arc-mvx { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; min-width: 0; }
+.arc-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-width: 0; }
+.arc-pane { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 12px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); }
+.arc-pane-head { display: grid; gap: 2px; }
+.arc-pane-head b { font: 700 0.95rem var(--mono); color: var(--accent); }
+.arc-pane-head small { color: var(--muted); font-size: 0.8rem; }
+.arc-pane .arc-lane { min-height: 40px; }
+.arc-pane .arc-lane-name { min-width: 0; }
+.arc-pane .kt { font-size: 0.76rem; }
+.arc-pane .arc-cap { margin: 2px 0 0; }
+.arc-total { margin-top: auto; width: 100%; text-align: right; font: 700 1.05rem var(--mono); padding-top: 6px; border-top: 1px solid var(--line); }
+.phone .arc-chips .arc-fchip { font-size: 0.9rem; }
+
+/* ui-state-patterns */
+.phone.arc-rel { position: relative; }
+.arc-center { flex: 1; width: 100%; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }
+.arc-center .phone-note { font-size: 0.82rem; }
+.arc-refresh { width: 100%; height: 4px; flex: none; border-radius: 99px; background: var(--sunk); overflow: hidden; position: relative; }
+.arc-refresh::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: var(--accent); border-radius: 99px; animation: arc-slide 0.9s ease-in-out infinite; }
+@keyframes arc-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.arc-snack { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 0.74rem; font-weight: 700; }
+.arc-snack b { color: var(--accent-soft); font: 700 0.72rem var(--mono); }
+.arc-retry { font: 700 0.74rem var(--body); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); }
+
+/* usecases */
+.arc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.arc-tag { font: 600 0.74rem var(--mono); padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+
+/* modularization-arch */
+.arc-scope.arc-hot { background: var(--warm-soft); color: var(--warm); }
+.arc-scope.arc-fine { background: var(--ok-soft); color: var(--ok); }
+.arc-baddep { color: var(--err); font-weight: 700; }
+.arc-mods .arc-node { flex: 1 1 170px; }
+.arc-screen.arc-now { border-color: var(--accent); background: var(--accent-soft); }
+
+/* clean */
+.arc-ring { display: grid; gap: 8px; padding: 12px; border-radius: 18px; border: 2px solid var(--line); min-width: 0; transition: border-color 0.2s, background 0.2s; }
+.arc-out { background: var(--bg); }
+.arc-mid { background: var(--surface); }
+.arc-in { background: var(--accent-soft); border-color: var(--accent); }
+.arc-ring.bad { border-color: var(--err); background: var(--err-soft); }
+.arc-ring-name { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.arc-cls { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.arc-cl { font: 600 0.76rem var(--mono); padding: 4px 9px; border-radius: 8px; background: var(--sunk); color: var(--ink); border: 1px solid var(--line); overflow-wrap: anywhere; min-width: 0; transition: background 0.2s, border-color 0.2s, color 0.2s; }
+.arc-in .arc-cl { background: var(--surface); }
+.arc-cl.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.arc-cl.hot { background: var(--warm-soft); color: var(--warm); border-color: var(--warm); }
+.arc-cl.bad { background: var(--err-soft); color: var(--err); border-color: var(--err); }
+.arc-pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.arc-stage { min-width: 0; display: grid; gap: 6px; align-content: start; padding: 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); transition: opacity 0.25s, border-color 0.2s; }
+.arc-stage.on { border-color: var(--accent); }
+.arc-stage.hot { border-color: var(--warm); }
+.arc-stage.ok { border-color: var(--ok); }
+.arc-stage.arc-cut, .arc-mapper.arc-cut { opacity: 0.3; }
+.arc-ring.arc-cut { opacity: 0.45; }
+.arc-stage .arc-stateslot { min-height: 96px; }
+.arc-stage .obj { min-width: 0; font-size: 0.76rem; overflow-wrap: anywhere; padding: 8px 10px; }
+.arc-mapper { font: 600 0.72rem var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.arc-mapper.on { color: var(--accent); }
+.arc-cost { display: grid; gap: 6px; }
+.arc-cost-row { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 4.5em; gap: 8px; align-items: center; font: 600 0.78rem var(--mono); color: var(--muted); transition: color 0.2s; }
+.arc-cost-row .meter span { background: var(--muted); }
+.arc-cost-row.on { color: var(--ink); }
+.arc-cost-row.on .meter span { background: var(--accent); }
+
+@media (max-width: 860px) {
+  .arc-mvx { grid-template-columns: minmax(0, 1fr); }
+  .arc-mvx .phone { justify-self: center; }
+  .arc-pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .arc-panes { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .arc-pipe { grid-template-columns: minmax(0, 1fr); }
 }`;
 
   Lab.addTrack({
     id: 'arch',
     title: 'App architecture',
     description: 'How a real Android app splits into layers, keeps its data straight, and wires itself together.',
+    group: 'Building apps', requires: ['android', 'flow'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────
@@ -417,6 +513,521 @@ fun NewsScreen(viewModel: NewsViewModel = hiltViewModel()) {
               cmd('onEvent(ToggleSave(1))', () => send({ type: 'save', id: 1 })),
               cmd('onEvent(Refresh)', () => send({ type: 'refresh' })),
               cmd('state.items.add(article)', mutate)),
+            o);
+        },
+      },
+
+      // mvvm-mvi ───────────────────────────────────────
+      {
+        id: 'mvvm-mvi',
+        title: 'MVVM vs MVI',
+        tagline: 'A function per action, or one stream of intents.',
+        level: 'intermediate',
+        body: `
+<p>Both patterns keep screen state in a ViewModel and let the screen draw it. They differ in how the screen asks for a change. In <b>MVVM</b> the ViewModel has one public function per action, like <code>increment()</code> or <code>applyCoupon()</code>. Each function updates the state in its own way.</p>
+<p>In <b>MVI</b> the screen sends every action as an <b>intent</b>: a value of one sealed type, unrelated to Android’s <code>Intent</code> class. One entry point, <code>onIntent()</code>, hands the current state and the intent to a pure reducer, which returns the next state. Every change passes through one function, so you can log intents, replay them, and test the reducer with plain values.</p>
+<p>MVVM is less code and fits most screens. MVI pays off when many actions touch the same state, as in a cart, a long form or an editor. The <code>onEvent()</code> ViewModel from the UiState lesson already sits between the two. Below, the same cart runs both ways at once.</p>`,
+        code: `data class CartState(val qty: Int = 1, val coupon: String? = null) {
+    val total: Double get() = qty * 12.0 * (if (coupon != null) 0.9 else 1.0)
+}
+
+// MVVM: one public function per action
+class CartViewModel : ViewModel() {
+    private val _state = MutableStateFlow(CartState())
+    val state: StateFlow<CartState> = _state.asStateFlow()
+
+    fun increment() = _state.update { it.copy(qty = it.qty + 1) }
+    fun decrement() = _state.update { it.copy(qty = (it.qty - 1).coerceAtLeast(0)) }
+    fun applyCoupon(code: String) = _state.update { it.copy(coupon = code) }
+}
+
+// MVI: one sealed intent type, one entry point, one pure reducer
+sealed interface CartIntent {
+    data object Increment : CartIntent
+    data object Decrement : CartIntent
+    data class ApplyCoupon(val code: String) : CartIntent
+}
+
+class CartMviViewModel : ViewModel() {
+    private val _state = MutableStateFlow(CartState())
+    val state: StateFlow<CartState> = _state.asStateFlow()
+
+    fun onIntent(intent: CartIntent) = _state.update { reduce(it, intent) }
+
+    private fun reduce(state: CartState, intent: CartIntent): CartState = when (intent) {
+        CartIntent.Increment -> state.copy(qty = state.qty + 1)
+        CartIntent.Decrement -> state.copy(qty = (state.qty - 1).coerceAtLeast(0))
+        is CartIntent.ApplyCoupon -> state.copy(coupon = intent.code)
+    }
+}`,
+        remember: 'MVVM: a function per action. MVI: one intent type, one reducer, every change in one place.',
+        terms: [
+          { term: 'MVVM', def: 'Model-View-ViewModel: the screen observes state from a ViewModel and calls one of its public functions for each user action.' },
+          { term: 'MVI', def: 'Model-View-Intent: the screen sends every action as a value of one sealed type, and a single reducer turns state plus intent into the next state.' },
+          { term: 'MVI intent', def: 'A value that describes one user action in MVI, such as CartIntent.Increment; it has nothing to do with android.content.Intent.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Declare the intents and send every one through <code>reduce(state, intent)</code>.', code: 'sealed [[interface|class]] CartIntent {\n    data object Increment : CartIntent\n    data class ApplyCoupon(val code: String) : CartIntent\n}\n\nfun onIntent(intent: CartIntent) = _state.[[update]] { [[reduce]](it, intent) }', why: 'A sealed type lists every action, so <code>when</code> in the reducer must handle each one. <code>update</code> applies the reducer atomically.' },
+          { type: 'bug', prompt: 'Replaying the intent log in a test places a real order. Tap the line that breaks the reducer.', code: 'private fun reduce(state: CartState, intent: CartIntent): CartState = when (intent) {\n    CartIntent.Increment -> state.copy(qty = state.qty + 1)\n    CartIntent.Decrement -> state.copy(qty = (state.qty - 1).coerceAtLeast(0))\n    is CartIntent.ApplyCoupon -> state.copy(coupon = intent.code)\n    CartIntent.Checkout -> state.also { checkoutApi.placeOrder(it) }\n}', bug: 4, fix: '    CartIntent.Checkout -> state.copy(isPlacingOrder = true)  // the ViewModel launches the call', why: 'A reducer must be pure: the same state and intent always give the same result and touch nothing else. Return a state that says an order is in progress, and let the ViewModel launch the network call.' },
+        ],
+        quiz: [
+          { q: 'In MVI, how does the screen apply a coupon?', options: ['<code>vm.applyCoupon("SAVE10")</code>', '<code>vm.onIntent(ApplyCoupon("SAVE10"))</code>', '<code>state.coupon = "SAVE10"</code>'], a: 1, why: 'Every action is a value sent to the one entry point. The reducer decides what it does to the state.' },
+          { q: 'What does an MVI reducer take and return?', options: ['The current state and an intent in, the next state out', 'An intent in, a network result out', 'Nothing; it changes the state in place'], a: 0, why: 'It is a pure function. That is why a log of intents can rebuild the same state again.' },
+          { q: 'A settings screen has two toggles that never affect each other. What fits best?', options: ['Plain MVVM functions', 'Full MVI with a reducer and an intent log'], a: 0, why: 'MVI’s extra types pay off when many actions touch shared state. Two independent toggles don’t need them.' },
+        ],
+        visual(el) {
+          const PRICE = 12, start = { qty: 1, coupon: null };
+          let st = { ...start }, busy = false;
+          const log = [];
+          const total = s => (s.qty * PRICE * (s.coupon ? 0.9 : 1)).toFixed(2);
+          const fields = s => [['qty', String(s.qty)], ['coupon', quote(s.coupon)], ['total', total(s)]];
+          const o = out();
+          const phone = h('div', { class: 'phone arc-top', 'aria-label': 'Cart screen preview' });
+          const pane = (title, sub, laneName, capText) => {
+            const lane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, laneName));
+            const line = h('div', { class: 'kt' });
+            const slot = h('div', { class: 'arc-stateslot' });
+            const list = h('div', { class: 'arc-mini' });
+            const root = h('div', { class: 'arc-pane' }, h('div', { class: 'arc-pane-head' }, h('b', {}, title), h('small', {}, sub)), lane, line, slot, h('div', { class: 'arc-cap' }, capText), list);
+            return { root, lane, line, slot, list };
+          };
+          const A = pane('MVVM', 'CartViewModel: a public function per action', 'calls →', 'public functions');
+          const B = pane('MVI', 'CartMviViewModel: one entry point', 'intents →', 'intent log');
+          const API = ['increment()', 'decrement()', 'applyCoupon(code)'];
+          const paintApi = hot => A.list.replaceChildren(...API.map(f => h('span', { class: f === hot ? 'arc-new' : null }, `fun ${f}`)));
+          const paintLog = (cur = -1, fresh = false) => B.list.replaceChildren(...(log.length
+            ? log.map((x, i) => h('span', { class: [i === cur ? 'arc-new' : '', fresh && i === log.length - 1 ? 'drop-in' : ''].join(' ').trim() || null }, `${i + 1}. ${x.intent}`))
+            : [h('span', {}, '(empty)')]));
+          const ACT = {
+            add: { fn: 'increment()', mvvm: '_state.update { it.copy(qty = it.qty + 1) }', intent: 'Increment', mvi: 'Increment -> state.copy(qty = state.qty + 1)', next: s => ({ ...s, qty: s.qty + 1 }), ch: ['qty', 'total'] },
+            sub: { fn: 'decrement()', mvvm: '_state.update { it.copy(qty = (it.qty - 1).coerceAtLeast(0)) }', intent: 'Decrement', mvi: 'Decrement -> state.copy(qty = (state.qty - 1).coerceAtLeast(0))', next: s => ({ ...s, qty: Math.max(0, s.qty - 1) }), ch: ['qty', 'total'] },
+            coupon: { fn: 'applyCoupon(code)', call: 'applyCoupon("SAVE10")', mvvm: '_state.update { it.copy(coupon = code) }', intent: 'ApplyCoupon("SAVE10")', mvi: 'is ApplyCoupon -> state.copy(coupon = intent.code)', next: s => ({ ...s, coupon: 'SAVE10' }), ch: ['coupon', 'total'] },
+          };
+          function paintPhone() {
+            phone.replaceChildren(...[
+              h('p', { class: 'phone-note' }, 'Your cart'),
+              h('div', { class: 'item arc-row-item' }, h('span', {}, 'Kotlin mug · €12'), h('b', {}, `× ${st.qty}`)),
+              h('div', { class: 'arc-chips' },
+                h('button', { class: 'arc-fchip', 'aria-label': 'Remove one', onclick: () => tap('sub') }, '−'),
+                h('button', { class: 'arc-fchip', 'aria-label': 'Add one', onclick: () => tap('add') }, '+')),
+              st.coupon ? h('div', { class: 'arc-banner' }, `${st.coupon}: 10% off`) : null,
+              h('div', { class: 'arc-total' }, `€${total(st)}`),
+            ].filter(Boolean));
+          }
+          async function tap(k) {
+            if (busy) return; busy = true;
+            const a = ACT[k];
+            replay(phone, 'pop-soft');
+            laneTok(A.lane, `viewModel.${a.call || a.fn}`);
+            laneTok(B.lane, `onIntent(${a.intent})`);
+            paintApi(a.fn);
+            log.push({ intent: a.intent, k }); paintLog(log.length - 1, true);
+            await sleep(450); if (!el.isConnected) return;
+            A.line.innerHTML = hl(a.mvvm); B.line.innerHTML = hl(a.mvi);
+            replay(A.line, 'pop-soft'); replay(B.line, 'pop-soft');
+            await sleep(550); if (!el.isConnected) return;
+            const nx = a.next(st);
+            if (nx.qty === st.qty && nx.coupon === st.coupon) {
+              say(o, '<span class="muted">Both returned a CartState equal to the current one, so StateFlow skipped it and the screen did not redraw. The MVI log still recorded the intent.</span>');
+              busy = false; return;
+            }
+            st = nx;
+            swapIn(A.slot, stateCard('CartState', fields(st), a.ch, true));
+            swapIn(B.slot, stateCard('CartState', fields(st), a.ch, true));
+            paintPhone();
+            say(o, `<span class="good">same screen, same state.</span> MVVM ran <b>${a.fn}</b>. MVI ran <b>onIntent()</b>, and its log now holds ${log.length} intent${log.length > 1 ? 's' : ''}.`);
+            busy = false;
+          }
+          async function replayLog() {
+            if (busy) return;
+            if (!log.length) { replay(B.root, 'shake'); say(o, '<span class="muted">The intent log is empty. Tap something first.</span>'); return; }
+            busy = true;
+            let s = { ...start };
+            laneTok(A.lane, 'no log to replay', 'is-null');
+            A.line.innerHTML = hl('// the calls left no record');
+            laneTok(B.lane, 'CartState()');
+            B.line.innerHTML = hl('var state = CartState()');
+            swapIn(B.slot, stateCard('CartState', fields(s), [], true));
+            say(o, '<span class="muted">MVI: starting from CartState() and feeding the log back through reduce()…</span>');
+            for (let i = 0; i < log.length; i++) {
+              await sleep(560); if (!el.isConnected) return;
+              const a = ACT[log[i].k];
+              paintLog(i);
+              laneTok(B.lane, `reduce(state, ${a.intent})`);
+              B.line.innerHTML = hl(a.mvi);
+              s = a.next(s);
+              swapIn(B.slot, stateCard('CartState', fields(s), a.ch, true));
+            }
+            await sleep(400); if (!el.isConnected) return;
+            say(o, `<span class="good">replayed ${log.length} intent${log.length > 1 ? 's' : ''}:</span> qty = ${s.qty}, total = ${total(s)}, the same as the screen. The reducer is pure, so the log always rebuilds the same state. MVVM has no such record.`);
+            busy = false;
+          }
+          paintPhone(); paintApi(null); paintLog();
+          A.slot.append(stateCard('CartState', fields(st)));
+          B.slot.append(stateCard('CartState', fields(st)));
+          A.line.innerHTML = hl('fun increment() = _state.update { … }');
+          B.line.innerHTML = hl('fun onIntent(intent: CartIntent)');
+          say(o, 'One cart, two ViewModels. Tap a button and watch each one handle it.');
+          el.append(
+            h('div', { class: 'controls arc-fit' },
+              cmd('tap "+"', () => tap('add')),
+              cmd('tap "−"', () => tap('sub')),
+              cmd('tap "Apply SAVE10"', () => tap('coupon')),
+              cmd('replay(intentLog)', replayLog)),
+            h('div', { class: 'arc-mvx' }, phone, h('div', { class: 'arc-panes' }, A.root, B.root)),
+            o);
+        },
+      },
+
+      // usecases ───────────────────────────────────────
+      {
+        id: 'usecases',
+        title: 'Use cases and interactors',
+        tagline: 'One job per class, and only when the job is real.',
+        level: 'intermediate',
+        body: `
+<p>A use case, also called an interactor, puts one piece of business logic in its own class. Give it <code>operator fun invoke</code> and callers use it like a function: <code>getFeed()</code>. It may depend on repositories and on other use cases, never on the UI.</p>
+<p>A use case earns its place when it holds real logic: it combines several repositories, applies a rule that two screens share, or keeps a ViewModel short. A use case that only forwards one call to a repository adds a file, a binding and a test, and nothing else. Skip it and call the repository. Google’s guide marks the whole domain layer optional.</p>
+<p>Below, one use case joins the news list with the topics the user follows, and two screens share it. Follow a topic and both update. Then try the pass-through one.</p>`,
+        code: `class GetPersonalizedFeedUseCase @Inject constructor(
+    private val news: NewsRepository,
+    private val userData: UserDataRepository,
+) {
+    operator fun invoke(): Flow<List<Article>> =
+        combine(news.observeNews(), userData.observeFollowedTopics()) { articles, topics ->
+            articles
+                .filter { it.topic in topics }
+                .sortedByDescending { it.publishedAt }
+        }
+}
+
+@HiltViewModel
+class ForYouViewModel @Inject constructor(
+    getFeed: GetPersonalizedFeedUseCase,
+) : ViewModel() {
+    val feed: StateFlow<List<Article>> = getFeed()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+}
+
+// A second screen reuses the rule instead of copying it
+@HiltViewModel
+class TopStoriesViewModel @Inject constructor(
+    getFeed: GetPersonalizedFeedUseCase,
+) : ViewModel() {
+    val top: StateFlow<List<Article>> = getFeed()
+        .map { it.take(2) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+}
+
+// Ceremony: forwards one call and adds nothing. Call the repository instead.
+class GetArticleUseCase @Inject constructor(private val news: NewsRepository) {
+    suspend operator fun invoke(id: Int): Article = news.article(id)
+}`,
+        remember: 'A use case holds logic worth sharing. If it only forwards a call, delete it.',
+        terms: [
+          { term: 'Interactor', def: 'Another name for a use case: a domain-layer class that runs one piece of business logic.' },
+          { term: 'Pass-through use case', def: 'A use case whose invoke only forwards to one repository function and adds no logic of its own.' },
+          { term: 'zip', def: 'A Flow operator that pairs the nth value of one flow with the nth value of another, so it waits until both emit again.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make the use case callable like a function and re-run it whenever either source changes.', code: 'class GetPersonalizedFeedUseCase @Inject constructor(\n    private val news: NewsRepository,\n    private val userData: UserDataRepository,\n) {\n    [[operator]] fun [[invoke]](): Flow<List<Article>> =\n        [[combine]](news.observeNews(), userData.observeFollowedTopics()) { articles, topics ->\n            articles.filter { it.topic in topics }\n        }\n}', why: '<code>operator fun invoke</code> lets callers write <code>getFeed()</code>. <code>combine</code> emits again with the latest of both flows whenever either one changes.' },
+          { type: 'bug', prompt: 'Following a new topic doesn’t change the feed until a new article arrives. Tap the line.', code: 'class GetPersonalizedFeedUseCase @Inject constructor(\n    private val news: NewsRepository,\n    private val userData: UserDataRepository,\n) {\n    operator fun invoke(): Flow<List<Article>> =\n        news.observeNews().zip(userData.observeFollowedTopics()) { articles, topics ->\n            articles.filter { it.topic in topics }\n        }\n}', bug: 5, fix: '        combine(news.observeNews(), userData.observeFollowedTopics()) { articles, topics ->', why: '<code>zip</code> pairs emissions one to one, so a new topics value waits for the next news value. <code>combine</code> re-runs with the latest of both as soon as either emits.' },
+        ],
+        quiz: [
+          { q: 'Which use case is worth its own class?', options: ['<code>invoke(id) = repo.article(id)</code>', 'One that combines news with followed topics and is used by two screens'], a: 1, why: 'It holds a real rule and removes duplicate code. The other only adds a hop.' },
+          { q: 'What does <code>operator fun invoke</code> give you?', options: ['Callers can write <code>getFeed()</code> instead of <code>getFeed.execute()</code>', 'It runs the use case on a background thread', 'It lets Hilt inject the class'], a: 0, why: 'It is a calling convention. Threading comes from suspend functions and Flow; injection comes from <code>@Inject</code>.' },
+          { q: 'May a use case depend on another use case?', options: ['Yes, and on repositories, but never on the UI layer', 'No, only on repositories'], a: 0, why: 'Use cases can build on each other. Like everything in the domain layer, they never point up at the UI.' },
+        ],
+        visual(el) {
+          const extra = [{ t: 'Coroutines deep dive', topic: 'Kotlin' }, { t: 'Cup final tonight', topic: 'Sports' }, { t: 'Material 3 update', topic: 'Compose' }];
+          let articles = [
+            { id: 1, t: 'Compose 1.9 notes', topic: 'Compose', at: 5 },
+            { id: 2, t: 'Derby tonight', topic: 'Sports', at: 4 },
+            { id: 3, t: 'Kotlin 2.2 tips', topic: 'Kotlin', at: 3 },
+            { id: 4, t: 'Room 2.8 notes', topic: 'Android', at: 2 },
+          ];
+          let topics = ['Kotlin', 'Compose'], busy = false, x = 0, seq = 5;
+          const feed = () => articles.filter(a => topics.includes(a.topic)).sort((a, b) => b.at - a.at);
+          const fyList = h('div', { class: 'arc-mini' }), topList = h('div', { class: 'arc-mini' });
+          const newsList = h('div', { class: 'arc-mini' }), topicRow = h('div', { class: 'arc-tags' });
+          const N = {
+            fy: node('ForYouViewModel', '<code>getFeed()</code>', fyList),
+            top: node('TopStoriesViewModel', '<code>getFeed().map { it.take(2) }</code>', topList),
+            uc: node('GetPersonalizedFeedUseCase', 'combine(news, topics) → filter → sort'),
+            pass: node('GetArticleUseCase', '<code>invoke(id) = news.article(id)</code>', h('span', { class: 'arc-scope' }, 'pass-through')),
+            news: node('NewsRepository', '<code>observeNews()</code>', newsList),
+            user: node('UserDataRepository', '<code>observeFollowedTopics()</code>', topicRow),
+          };
+          const all = Object.values(N);
+          const o = out();
+          const paintNews = fresh => newsList.replaceChildren(...articles.slice().sort((a, b) => b.at - a.at).slice(0, 4)
+            .map(a => h('span', { class: a.id === fresh ? 'arc-new drop-in' : null }, `${a.t} · ${a.topic}`)));
+          const paintTopics = fresh => topicRow.replaceChildren(...(topics.length ? topics.map(t => h('span', { class: 'arc-tag' + (t === fresh ? ' pop' : '') }, t)) : [h('span', { class: 'arc-tag' }, 'none')]));
+          const rows = (list, hot) => (list.length ? list.map(a => h('span', { class: hot ? 'arc-new drop-in' : null }, a.t)) : [h('span', {}, '(nothing matches)')]);
+          const paintFeeds = hot => { const f = feed(); fyList.replaceChildren(...rows(f, hot)); topList.replaceChildren(...rows(f.slice(0, 2), hot)); };
+          const dim = () => all.forEach(n => { n.classList.remove('on', 'ask', 'bad', 'ok'); n.box.replaceChildren(); });
+          async function step(pairs, back, ms = 540) {
+            dim();
+            pairs.forEach(([n, t]) => { n.classList.add('on'); tok(n, t, back ? 'arc-back' : ''); });
+            await sleep(ms);
+            return el.isConnected;
+          }
+          const landed = () => { dim(); [N.fy, N.top].forEach(n => n.classList.add('ok')); paintFeeds(true); };
+          async function collect() {
+            if (busy) return; busy = true;
+            say(o, '<span class="muted">both ViewModels start collecting getFeed()…</span>');
+            if (!await step([[N.fy, 'getFeed()'], [N.top, 'getFeed()']])) return;
+            if (!await step([[N.uc, 'invoke()']])) return;
+            if (!await step([[N.news, 'observeNews()'], [N.user, 'observeFollowedTopics()']])) return;
+            if (!await step([[N.news, `${articles.length} articles`], [N.user, `[${topics.join(', ')}]`]], true)) return;
+            if (!await step([[N.uc, `combine → ${feed().length} match`]], true, 640)) return;
+            landed();
+            say(o, `<span class="good">one rule, two screens:</span> ${feed().length} of ${articles.length} articles match your topics. Neither ViewModel contains the filter.`);
+            busy = false;
+          }
+          const followBtn = cmd('userData.follow("Sports")', toggleSports);
+          async function toggleSports() {
+            if (busy) return; busy = true;
+            const was = topics.includes('Sports');
+            topics = was ? topics.filter(t => t !== 'Sports') : [...topics, 'Sports'];
+            followBtn.innerHTML = hl(was ? 'userData.follow("Sports")' : 'userData.unfollow("Sports")');
+            dim(); N.user.classList.add('on'); paintTopics('Sports'); tok(N.user, `emits [${topics.join(', ')}]`, 'arc-back');
+            await sleep(650); if (!el.isConnected) return;
+            if (!await step([[N.uc, `combine re-runs → ${feed().length}`]], true, 640)) return;
+            landed();
+            say(o, `<span class="good">${was ? 'unfollowed' : 'followed'} Sports:</span> the topics Flow emitted, combine re-ran with the latest news, and both screens updated. Nobody called getFeed() again.`);
+            busy = false;
+          }
+          async function publish() {
+            if (busy) return; busy = true;
+            const e = extra[x++ % extra.length];
+            const a = { id: seq, t: e.t, topic: e.topic, at: seq * 10 }; seq++;
+            articles = [a, ...articles].slice(0, 8);
+            dim(); N.news.classList.add('on'); paintNews(a.id); tok(N.news, 'emits', 'arc-back');
+            await sleep(650); if (!el.isConnected) return;
+            const hit = topics.includes(a.topic);
+            if (!await step([[N.uc, hit ? `combine → ${feed().length}` : `filtered out: ${a.topic}`]], true, 640)) return;
+            if (hit) landed(); else { dim(); N.uc.classList.add('ask'); paintFeeds(false); }
+            say(o, hit
+              ? `<span class="good">new ${a.topic} story:</span> it reached both screens, sorted to the top.`
+              : `<span class="muted">new ${a.topic} story:</span> combine re-ran, but you don’t follow ${a.topic}, so the screens didn’t change. Follow Sports and it shows up.`);
+            busy = false;
+          }
+          async function getArticle() {
+            if (busy) return; busy = true;
+            if (!await step([[N.fy, 'getArticle(3)']])) return;
+            if (!await step([[N.pass, 'invoke(3)']])) return;
+            if (!await step([[N.news, 'article(3)']])) return;
+            if (!await step([[N.pass, 'Article(3)']], true)) return;
+            dim(); N.pass.classList.add('ask'); N.fy.classList.add('ok'); tok(N.fy, 'Article(3)', 'arc-back');
+            say(o, '<span class="bad">ceremony:</span> GetArticleUseCase handed the call straight down and the result straight up. It added a class, a test and a hop, and no logic. Call <b>news.article(3)</b> from the ViewModel until real logic shows up.');
+            busy = false;
+          }
+          paintNews(); paintTopics(); paintFeeds(false);
+          say(o, 'Both screens show the feed for Kotlin and Compose. Follow Sports, publish a story, or collect again.');
+          el.append(
+            h('div', { class: 'controls arc-fit' },
+              cmd('getFeed().collect { … }', collect),
+              followBtn,
+              cmd('news.publish()', publish),
+              cmd('getArticle(3)', getArticle)),
+            h('div', { class: 'arc-layers' },
+              band('UI layer: two screens', N.fy, N.top),
+              h('div', { class: 'arc-dir' }, '↓ invoke()'),
+              band('Domain layer: use cases', N.uc, N.pass),
+              h('div', { class: 'arc-dir' }, '↓ depends on'),
+              band('Data layer', N.news, N.user)),
+            o);
+        },
+      },
+
+      // ui-state-patterns ──────────────────────────────
+      {
+        id: 'ui-state-patterns',
+        title: 'Loading, error and empty states',
+        tagline: 'Draw every look the screen can have, and show messages once.',
+        level: 'intermediate',
+        body: `
+<p>A screen that loads data has at least four looks: loading, content, empty and error. You can model them two ways. A <b>sealed</b> <code>UiState</code> has one subtype per look, so a mix like “loading and error at once” can’t exist, and <code>when</code> makes you draw every case. A <b>data class with flags</b> keeps <code>isLoading</code>, <code>items</code> and <code>errorMessage</code> side by side, so a reload can keep the old list on screen.</p>
+<p>Many apps mix the two: a sealed type for the first load, flags once there is content. Either way, give an empty list its own look. A blank screen looks broken; “No stories yet” does not.</p>
+<p>Snackbars are <b>one-off events</b>. Android’s guide recommends keeping the message in UiState and having the UI report when it has shown it. The ViewModel then clears it, so a rotation doesn’t show it twice. Try both switches below.</p>`,
+        code: `// Option 1: a sealed type. One look at a time.
+sealed interface FeedUiState {
+    data object Loading : FeedUiState
+    data object Empty : FeedUiState
+    data class Success(val items: List<Article>) : FeedUiState
+    data class Error(val message: String) : FeedUiState
+}
+
+// Option 2: one data class with flags. Content can stay during a reload.
+data class NewsUiState(
+    val isLoading: Boolean = false,
+    val items: List<Article> = emptyList(),
+    val errorMessage: String? = null,
+    val userMessage: String? = null,   // snackbar text, cleared once shown
+) {
+    val isEmpty: Boolean get() = !isLoading && errorMessage == null && items.isEmpty()
+}
+
+// ViewModel
+fun delete(article: Article) = viewModelScope.launch {
+    repository.delete(article)
+    _uiState.update { it.copy(userMessage = "Article deleted") }
+}
+
+fun userMessageShown() = _uiState.update { it.copy(userMessage = null) }
+
+// Screen
+val snackbarHostState = remember { SnackbarHostState() }
+state.userMessage?.let { message ->
+    LaunchedEffect(message) {
+        snackbarHostState.showSnackbar(message)
+        viewModel.userMessageShown()
+    }
+}`,
+        remember: 'Draw loading, content, empty and error. Keep snackbar text in state and clear it once shown.',
+        terms: [
+          { term: 'Empty state', def: 'The look a screen shows when loading worked but there is nothing to list, such as a short message and an action.' },
+          { term: 'One-off event', def: 'Something the UI should react to once, like a snackbar or a navigation, which still has to survive rotation.' },
+          { term: 'Impossible state', def: 'A combination of fields that should never happen together, such as isLoading = true with an old error still set.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show the message once, then tell the ViewModel so it clears it.', code: 'state.userMessage?.let { message ->\n    [[LaunchedEffect]](message) {\n        snackbarHostState.[[showSnackbar]](message)\n        viewModel.[[userMessageShown]]()\n    }\n}', why: 'The effect restarts when the message changes. <code>showSnackbar</code> suspends until the snackbar is gone, and then the ViewModel sets <code>userMessage</code> back to null.' },
+          { type: 'bug', prompt: 'After a failed load, tapping Retry shows the spinner and the old error at the same time. Tap the line.', code: 'fun retry() = viewModelScope.launch {\n    _uiState.update { it.copy(isLoading = true) }\n    try {\n        val items = repository.latest()\n        _uiState.update { it.copy(isLoading = false, items = items, errorMessage = null) }\n    } catch (e: IOException) {\n        _uiState.update { it.copy(isLoading = false, errorMessage = "No connection") }\n    }\n}', bug: 1, fix: '    _uiState.update { it.copy(isLoading = true, errorMessage = null) }', why: 'With flags, every update has to reset the fields that no longer apply. A sealed <code>Loading</code> state would make this mix impossible.' },
+        ],
+        quiz: [
+          { q: 'Pull-to-refresh should keep the list visible while it reloads. Which model makes that easy?', options: ['A sealed type where <code>Loading</code> replaces <code>Success</code>', 'A data class with <code>isLoading</code> next to <code>items</code>'], a: 1, why: 'Flags can hold the old items and a loading flag at once. A single sealed value can only be one of them.' },
+          { q: 'Why give an empty list its own look?', options: ['So the screen says “No stories yet” instead of looking broken', 'Because <code>emptyList()</code> can’t be collected'], a: 0, why: 'Empty is a real result. Users need to see that loading worked and there is nothing there.' },
+          { q: 'A delete shows a snackbar. Where should its text live?', options: ['In UiState, cleared when the UI calls <code>userMessageShown()</code>', 'In a <code>var</code> inside the Composable', 'In a Boolean <code>showSnackbar</code> that is never reset'], a: 0, why: 'State survives rotation and the acknowledgement clears it, so it shows once. A flag that is never reset shows again after every rotation.' },
+        ],
+        visual(el) {
+          const pool = ['Compose tips', 'Kotlin 2.2 notes', 'Room 2.8 notes', 'Hilt in 5 minutes', 'Paging 3 basics'];
+          let sealed = false, consume = true, busy = false, snack = null, round = 0;
+          const fresh = () => pool.slice(round % 2, (round % 2) + 3);
+          let st = { kind: 'Success', isLoading: false, items: fresh(), error: null, msg: null };
+          const phone = h('div', { class: 'phone arc-top arc-rel', 'aria-label': 'Screen preview' });
+          const slot = h('div', { class: 'arc-stateslot' });
+          const line = h('div', { class: 'kt' });
+          const o = out();
+          const card = (changed = [], anim = false) => sealed
+            ? stateCard(`FeedUiState.${st.kind}`,
+              st.kind === 'Success' ? [['items', `[${st.items.length} articles]`], ['userMessage', quote(st.msg)]]
+                : st.kind === 'Error' ? [['message', quote(st.error)]] : ['data object'], changed, anim)
+            : stateCard('NewsUiState', [['isLoading', String(st.isLoading)], ['items', `[${st.items.length} articles]`], ['errorMessage', quote(st.error)], ['userMessage', quote(st.msg)]], changed, anim);
+          const setState = (next, changed) => { st = { ...st, ...next }; swapIn(slot, card(changed, true)); };
+          const vmLine = src => { line.innerHTML = hl(src); replay(line, 'pop-soft'); };
+          function paintPhone(drop = false) {
+            const kids = [];
+            const has = st.items.length > 0;
+            const loadingFull = sealed ? st.kind === 'Loading' : st.isLoading && !has;
+            const errorFull = sealed ? st.kind === 'Error' : !!st.error && !has && !st.isLoading;
+            const empty = sealed ? st.kind === 'Empty' : !st.isLoading && !st.error && !has;
+            const list = sealed ? st.kind === 'Success' : has;
+            if (!sealed && st.isLoading && has) kids.push(h('div', { class: 'arc-refresh' }));
+            if (!sealed && st.error && has) kids.push(h('div', { class: 'arc-banner drop-in' }, `${st.error}. Showing saved stories.`));
+            if (loadingFull) kids.push(h('div', { class: 'arc-center' }, h('div', { class: 'spinner' }), h('p', { class: 'phone-note' }, 'Loading…')));
+            else if (errorFull) kids.push(h('div', { class: 'arc-center' }, h('div', { class: 'err-icon' }, '!'), h('p', { class: 'phone-note' }, st.error), h('span', { class: 'arc-retry' }, 'Retry')));
+            else if (empty) kids.push(h('div', { class: 'arc-center' }, h('p', { class: 'phone-note' }, h('b', {}, 'No stories yet')), h('p', { class: 'phone-note' }, 'Follow a topic to fill your feed.')));
+            if (list) kids.push(...st.items.map(t => h('div', { class: 'item arc-small' + (drop ? ' drop-in' : '') }, t)));
+            if (snack) kids.push(h('div', { class: 'arc-snack drop-in' }, h('span', {}, snack), h('b', {}, 'UNDO')));
+            phone.replaceChildren(...kids);
+          }
+          async function load(result) {
+            if (busy) return; busy = true;
+            snack = null;
+            const had = sealed ? st.kind === 'Success' && st.items.length : st.items.length;
+            if (sealed) { setState({ kind: 'Loading', isLoading: true, msg: null }, []); vmLine('_uiState.value = FeedUiState.Loading'); }
+            else { setState({ isLoading: true }, ['isLoading']); vmLine('_uiState.update { it.copy(isLoading = true) }'); }
+            paintPhone();
+            say(o, sealed
+              ? (had ? '<span class="bad">Loading replaced Success:</span> the list vanished while it reloads.' : '<span class="muted">FeedUiState.Loading: one look, a spinner.</span>')
+              : (had ? '<span class="good">isLoading = true sits next to items:</span> the list stays, with a progress bar on top.' : '<span class="muted">isLoading = true and no items yet: a full spinner.</span>'));
+            await sleep(1100); if (!el.isConnected) return;
+            if (result === 'ok') {
+              round++;
+              const items = fresh();
+              if (sealed) { setState({ kind: 'Success', isLoading: false, items, error: null }, ['items']); vmLine('_uiState.value = FeedUiState.Success(items)'); }
+              else { setState({ isLoading: false, items, error: null }, ['isLoading', 'items', 'errorMessage']); vmLine('_uiState.update { it.copy(isLoading = false, items = items, errorMessage = null) }'); }
+              paintPhone(true);
+              say(o, `<span class="good">content:</span> ${st.items.length} stories.`);
+            } else if (result === 'empty') {
+              if (sealed) { setState({ kind: 'Empty', isLoading: false, items: [], error: null }, []); vmLine('_uiState.value = FeedUiState.Empty'); }
+              else { setState({ isLoading: false, items: [], error: null }, ['isLoading', 'items', 'errorMessage']); vmLine('_uiState.update { it.copy(isLoading = false, items = emptyList()) }'); }
+              paintPhone();
+              say(o, '<span class="good">empty:</span> loading worked and there is nothing to show, so the screen says so instead of going blank.');
+            } else {
+              if (sealed) { setState({ kind: 'Error', isLoading: false, items: [], error: 'No connection' }, ['message']); vmLine('_uiState.value = FeedUiState.Error("No connection")'); }
+              else { setState({ isLoading: false, error: 'No connection' }, ['isLoading', 'errorMessage']); vmLine('_uiState.update { it.copy(isLoading = false, errorMessage = "No connection") }'); }
+              paintPhone();
+              say(o, sealed
+                ? '<span class="bad">Error:</span> a full error screen with Retry. Any stories you had are gone from this state.'
+                : (st.items.length ? '<span class="good">error with content:</span> the old stories stay and a banner explains. Flags can hold both.' : '<span class="bad">error:</span> nothing saved, so a full error screen with Retry.'));
+            }
+            busy = false;
+          }
+          async function del() {
+            if (busy) return;
+            const can = (sealed ? st.kind === 'Success' : true) && st.items.length > 1;
+            if (!can) { replay(phone, 'shake'); say(o, '<span class="muted">Load a list with stories first.</span>'); return; }
+            busy = true;
+            setState({ items: st.items.slice(1), msg: 'Article deleted' }, ['items', 'userMessage']);
+            vmLine('_uiState.update { it.copy(userMessage = "Article deleted") }');
+            snack = st.msg; paintPhone();
+            say(o, '<span class="muted">LaunchedEffect(message) → snackbarHostState.showSnackbar("Article deleted")…</span>');
+            await sleep(1700); if (!el.isConnected) return;
+            snack = null; paintPhone();
+            if (consume) {
+              setState({ msg: null }, ['userMessage']);
+              vmLine('fun userMessageShown() = _uiState.update { it.copy(userMessage = null) }');
+              say(o, '<span class="good">shown once:</span> the snackbar finished, the UI called userMessageShown(), and the message left the state. Now rotate.');
+            } else {
+              vmLine('// userMessageShown() never called');
+              say(o, '<span class="bad">still in state:</span> the snackbar is gone from the screen, but userMessage = "Article deleted" is still set. Now rotate.');
+            }
+            busy = false;
+          }
+          async function rotate() {
+            if (busy) return; busy = true;
+            snack = null; replay(phone, 'flip');
+            await sleep(420); if (!el.isConnected) return;
+            paintPhone();
+            say(o, '<span class="muted">Activity recreated. The new screen collects the same UiState from the ViewModel…</span>');
+            await sleep(500); if (!el.isConnected) return;
+            if (st.msg) {
+              snack = st.msg; paintPhone();
+              say(o, '<span class="bad">shown again:</span> userMessage was never cleared, so LaunchedEffect ran on the new screen and the snackbar came back. Turn the switch on.');
+              await sleep(1600); if (!el.isConnected) return;
+              snack = null; paintPhone();
+            } else {
+              say(o, '<span class="good">no repeat:</span> the screen came back from the same UiState, and there is no message left to show.');
+            }
+            busy = false;
+          }
+          const swSealed = switchEl('arc-uis-sealed', 'Model as sealed FeedUiState', false, i => {
+            if (busy) { i.checked = sealed; return; }
+            sealed = i.checked; snack = null;
+            st = { kind: 'Success', isLoading: false, items: fresh(), error: null, msg: null };
+            slot.replaceChildren(card([], true)); paintPhone(true);
+            vmLine(sealed ? 'sealed interface FeedUiState' : 'data class NewsUiState(…)');
+            say(o, sealed ? 'Sealed: one look at a time. Load again with stories on screen and watch the list.' : 'Flags: fields sit side by side. Load again and the list stays.');
+          });
+          const swConsume = switchEl('arc-uis-consume', 'Call userMessageShown()', true, i => {
+            if (busy) { i.checked = consume; return; }
+            consume = i.checked;
+            say(o, consume ? 'The UI reports when the snackbar is done, and the ViewModel clears it.' : 'Nobody clears the message now. Delete a story, then rotate.');
+          });
+          slot.append(card()); paintPhone();
+          vmLine('data class NewsUiState(…)');
+          say(o, 'Three stories on screen. Load, delete or rotate, and flip the switches to compare.');
+          el.append(
+            h('div', { class: 'controls arc-fit' },
+              cmd('load() → items', () => load('ok')),
+              cmd('load() → empty', () => load('empty')),
+              cmd('load() → IOException', () => load('err')),
+              cmd('delete(first)', del),
+              cmd('rotate()', rotate)),
+            h('div', { class: 'controls arc-fit' }, swSealed, swConsume),
+            h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' }, h('div', { class: 'arc-cap' }, 'last ViewModel line'), line, h('div', { class: 'arc-cap' }, 'current state'), slot)),
             o);
         },
       },
@@ -1001,6 +1612,335 @@ val viewModel: NewsViewModel = hiltViewModel()`,
             h('div', { class: 'controls arc-fit' }, swSingle, swApi),
             h('div', { class: 'arc-graph' }, row('vm'), up(), row('repo'), up(), row('api', 'dao'), up(), row('ok', 'db')),
             screens, o);
+        },
+      },
+
+      // modularization-arch ────────────────────────────
+      {
+        id: 'modularization-arch',
+        title: 'Modularizing by feature and layer',
+        tagline: 'Features talk through small api modules, and only :app sees everything.',
+        level: 'advanced',
+        body: `
+<p>Layers split code by job. Feature modules split it by screen or flow, so one team can change Bookmarks without touching News. Split each feature in two. <code>:feature:news:api</code> is the small public surface: route classes and maybe an interface. <code>:feature:news:impl</code> holds the screens, ViewModels and DI wiring, and only <code>:app</code> depends on it.</p>
+<p>The rules: an impl module may depend on api modules and on core modules, never on another impl module. Api modules depend on almost nothing. <code>:app</code> depends on every impl and builds the navigation graph from each feature’s entry point. So Bookmarks opens an article by navigating to <code>ArticleRoute</code> from news:api, without knowing which screen draws it.</p>
+<p>This lesson is about where the lines go. The Build track’s Modularization lesson covers the Gradle side: <code>api</code> vs <code>implementation</code>, convention plugins and build speed. Below, open an article across features, then see what a change recompiles.</p>`,
+        code: `// :feature:news:api, the only part other features see
+@Serializable data class ArticleRoute(val id: Int)
+
+fun NavController.navigateToArticle(id: Int) = navigate(ArticleRoute(id))
+
+// :feature:news:impl, screens stay internal to the feature
+fun NavGraphBuilder.newsSection() {
+    composable<ArticleRoute> { entry ->
+        ArticleScreen(id = entry.toRoute<ArticleRoute>().id)
+    }
+}
+
+// :feature:bookmarks:impl, knows news:api only
+fun NavGraphBuilder.bookmarksSection(onOpenArticle: (Int) -> Unit) {
+    composable<BookmarksRoute> {
+        BookmarksScreen(onOpenArticle = onOpenArticle)
+    }
+}
+
+// :app, the one place that sees every impl and wires them up
+NavHost(navController, startDestination = BookmarksRoute) {
+    bookmarksSection(onOpenArticle = navController::navigateToArticle)
+    newsSection()
+}
+
+// feature/bookmarks/impl/build.gradle.kts
+dependencies {
+    implementation(projects.feature.bookmarks.api)
+    implementation(projects.feature.news.api)   // never news.impl
+    implementation(projects.core.data)
+    implementation(projects.core.ui)
+}`,
+        remember: 'Impl depends on api, never on another impl. Only :app sees every impl and wires the navigation.',
+        terms: [
+          { term: 'Feature module', def: 'A Gradle module that holds one screen or user flow, such as news or bookmarks, separate from other features.' },
+          { term: 'API module', def: 'The small public half of a feature, with routes and interfaces that other features may depend on.' },
+          { term: 'Impl module', def: 'The private half of a feature, with its screens, ViewModels and DI bindings, which only the app module depends on.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Depend on the news contract only, and register the article destination in news:impl.', code: '// feature/bookmarks/impl/build.gradle.kts\ndependencies {\n    implementation(projects.feature.news.[[api]])\n    implementation(projects.core.data)\n}\n\n// :feature:news:impl\nfun NavGraphBuilder.newsSection() {\n    composable<[[ArticleRoute]]> { entry ->\n        ArticleScreen(id = entry.[[toRoute]]<ArticleRoute>().id)\n    }\n}', why: 'Bookmarks only needs the route from news:api. News registers the screen for that route with <code>composable&lt;ArticleRoute&gt;</code> and reads the arguments back with <code>toRoute()</code>.' },
+          { type: 'bug', prompt: 'Every change to a public class in the news screens now recompiles Bookmarks, and the two teams keep breaking each other. Tap the line.', code: '// feature/bookmarks/impl/build.gradle.kts\nplugins {\n    id("news.android.feature")\n}\n\ndependencies {\n    implementation(projects.feature.bookmarks.api)\n    implementation(projects.feature.news.impl)\n    implementation(projects.core.data)\n    implementation(projects.core.ui)\n}', bug: 7, fix: '    implementation(projects.feature.news.api)', why: 'An impl module that depends on another impl sees all of its public classes and recompiles with them. Depend on the small api module and let <code>:app</code> connect the two.' },
+        ],
+        quiz: [
+          { q: '<code>:feature:bookmarks:impl</code> needs to open an article. What should it depend on?', options: ['<code>:feature:news:impl</code>', '<code>:feature:news:api</code>', '<code>:app</code>'], a: 1, why: 'The api module has the route. The screen behind it stays private to news:impl.' },
+          { q: 'Who builds the NavHost that connects every feature?', options: ['<code>:app</code>, which depends on every impl module', 'Each feature builds its own NavHost and they find each other at run time', '<code>:core:ui</code>'], a: 0, why: 'Only <code>:app</code> sees every impl, so it calls each feature’s <code>NavGraphBuilder</code> extension and passes callbacks between them.' },
+          { q: 'What belongs in an api module?', options: ['Routes and small interfaces other features use', 'The screens and ViewModels', 'The Room database'], a: 0, why: 'Keep it small and stable. Everything that changes often lives in impl, where only the feature and <code>:app</code> recompile.' },
+        ],
+        visual(el) {
+          const M = {
+            app: { name: ':app', short: 'app', deps: ['newsImpl', 'bmImpl'], role: 'wires everything' },
+            newsImpl: { name: ':feature:news:impl', short: 'news:impl', deps: ['newsApi', 'data', 'ui'], role: 'screens + DI' },
+            bmImpl: { name: ':feature:bookmarks:impl', short: 'bookmarks:impl', deps: ['bmApi', 'newsApi', 'data', 'ui'], role: 'screens + DI' },
+            newsApi: { name: ':feature:news:api', short: 'news:api', deps: [], role: 'ArticleRoute' },
+            bmApi: { name: ':feature:bookmarks:api', short: 'bookmarks:api', deps: [], role: 'BookmarksRoute' },
+            data: { name: ':core:data', short: 'core:data', deps: [], role: 'shared' },
+            ui: { name: ':core:ui', short: 'core:ui', deps: [], role: 'shared' },
+          };
+          let bad = false, busy = false;
+          const deps = k => M[k].deps.concat(bad && k === 'bmImpl' ? ['newsImpl'] : []);
+          for (const m of Object.values(M)) {
+            m.depsEl = h('small');
+            m.badge = h('span', { class: 'arc-scope' });
+            m.el = node(m.name, null, m.depsEl, m.badge);
+          }
+          const nodes = Object.values(M).map(m => m.el);
+          const screens = h('div', { class: 'arc-screens' });
+          const o = out();
+          const paintDeps = () => Object.entries(M).forEach(([k, m]) => {
+            const ds = deps(k);
+            m.depsEl.innerHTML = ds.length ? '→ ' + ds.map(d => `<span class="${bad && k === 'bmImpl' && d === 'newsImpl' ? 'arc-baddep' : ''}">${M[d].short}</span>`).join(', ') : 'depends on nothing';
+          });
+          const badge = (m, text, cls = '') => { m.badge.textContent = text; m.badge.className = 'arc-scope' + (cls ? ' ' + cls : ''); };
+          const reset = () => {
+            clearAll(nodes);
+            Object.values(M).forEach(m => badge(m, m.role));
+            if (bad) [M.bmImpl, M.newsImpl].forEach(m => m.el.classList.add('bad'));
+          };
+          const showScreens = (names) => screens.replaceChildren(...names.map((n, i) => h('span', { class: 'arc-screen drop-in' + (i === names.length - 1 ? ' arc-now' : '') }, n)));
+          async function openArticle() {
+            if (busy) return; busy = true;
+            reset(); showScreens(['BookmarksScreen']);
+            const path = bad
+              ? [[M.bmImpl, 'ArticleScreen(7)'], [M.newsImpl, 'called directly']]
+              : [[M.bmImpl, 'onOpenArticle(7)'], [M.app, 'navigateToArticle(7)'], [M.newsApi, 'ArticleRoute(7)'], [M.newsImpl, 'composable<ArticleRoute>']];
+            say(o, '<span class="muted">tap on a bookmark…</span>');
+            for (const [m, t] of path) {
+              nodes.forEach(n => { n.classList.remove('on'); n.box.replaceChildren(); });
+              m.el.classList.add('on'); tok(m.el, t);
+              await sleep(650); if (!el.isConnected) return;
+            }
+            showScreens(['BookmarksScreen', 'ArticleScreen(id = 7)']);
+            say(o, bad
+              ? '<span class="bad">works, but coupled:</span> Bookmarks built the news screen itself. It now compiles against every public class in news:impl, and the two features can’t be built or tested apart.'
+              : '<span class="good">opened across features:</span> Bookmarks only knew ArticleRoute from news:api. :app passed navigateToArticle in, and news:impl drew the screen.');
+            busy = false;
+          }
+          const dependents = k => Object.keys(M).filter(x => deps(x).includes(k));
+          async function change(k) {
+            if (busy) return; busy = true;
+            reset(); screens.replaceChildren();
+            const m = M[k];
+            m.el.classList.add('on'); badge(m, 'changed', 'single'); replay(m.el, 'pop-soft');
+            say(o, `<span class="muted">${k === 'newsApi' ? 'ArticleRoute gets a new field' : 'a public class in news:impl changes'}…</span>`);
+            await sleep(600); if (!el.isConnected) return;
+            const hit = dependents(k);
+            for (const d of hit) {
+              M[d].el.classList.add('ask'); badge(M[d], 'recompiles', 'arc-hot'); replay(M[d].el, 'pop');
+              await sleep(380); if (!el.isConnected) return;
+            }
+            if (!hit.includes('app') && k !== 'app') badge(M.app, 'repackages');
+            Object.keys(M).filter(x => x !== k && x !== 'app' && !hit.includes(x)).forEach(x => { M[x].el.classList.add('ok'); badge(M[x], 'up to date', 'arc-fine'); });
+            const names = hit.map(d => M[d].short).join(', ');
+            say(o, k === 'newsApi'
+              ? `<span class="muted">contract change:</span> ${names} recompile, because both features use the route. Keep api modules small and change them rarely.`
+              : bad
+                ? `<span class="bad">${names} recompile:</span> Bookmarks depends on news:impl directly, so News’ internals now break and rebuild Bookmarks.`
+                : `<span class="good">only ${names} recompiles</span> beyond news:impl itself. Bookmarks never noticed.`);
+            busy = false;
+          }
+          const sw = switchEl('arc-mod-baddep', 'bookmarks:impl → news:impl', false, i => {
+            if (busy) { i.checked = bad; return; }
+            bad = i.checked; paintDeps(); reset(); screens.replaceChildren();
+            if (bad) { replay(M.bmImpl.el, 'shake'); say(o, '<span class="bad">rule broken:</span> an impl module now depends on another impl. Open an article or change news:impl to see the cost.'); }
+            else say(o, '<span class="good">rule restored:</span> bookmarks:impl depends on news:api only.');
+          });
+          paintDeps(); reset(); showScreens(['BookmarksScreen']);
+          say(o, 'Bookmarks is on screen. Open an article from it, or change a module and see what recompiles.');
+          el.append(
+            h('div', { class: 'controls arc-fit' },
+              cmd('bookmarks: open article 7', openArticle),
+              cmd('edit a public class in news:impl', () => change('newsImpl')),
+              cmd('edit ArticleRoute in news:api', () => change('newsApi')),
+              sw),
+            h('div', { class: 'arc-layers arc-mods' },
+              band('App', M.app.el),
+              h('div', { class: 'arc-dir' }, '↓ depends on every impl'),
+              band('Feature impl', M.newsImpl.el, M.bmImpl.el),
+              h('div', { class: 'arc-dir' }, '↓ impl → api, never impl → impl'),
+              band('Feature api', M.newsApi.el, M.bmApi.el),
+              band('Core', M.data.el, M.ui.el)),
+            screens,
+            h('p', { class: 'tip' }, 'How Gradle decides what recompiles is in the Build track’s Modularization lesson.'),
+            o);
+        },
+      },
+
+      // clean ──────────────────────────────────────────
+      {
+        id: 'clean',
+        title: 'Clean Architecture in practice',
+        tagline: 'Dependencies point inward, and each ring keeps its own model.',
+        level: 'advanced',
+        body: `
+<p>Clean Architecture draws the app as rings. The domain sits in the middle: models like <code>Article</code>, repository interfaces and use cases, in plain Kotlin with no Android or library annotations. Around it sit adapters: repository implementations, ViewModels and mappers. Frameworks like Room, Retrofit and Compose sit outside. The <b>dependency rule</b>: source code only points inward. The domain knows nothing about the rings around it.</p>
+<p>The data layer still reaches the domain: it implements the interface the domain declares. Each ring keeps its own model, and mappers convert at the borders. <code>ArticleDto</code> matches the JSON, <code>ArticleEntity</code> the Room table, <code>Article</code> the business, <code>ArticleUi</code> the screen. When the server renames a field, the DTO changes and nothing else does.</p>
+<p>That safety costs classes. A small app with one screen and one data source can use one model and skip the domain module. Add rings when the app, the team or the number of data sources grows.</p>`,
+        code: `// :core:domain, plain Kotlin: no Room, Retrofit or Compose imports
+data class Article(val id: Int, val title: String, val publishedAt: Instant)
+
+interface NewsRepository {
+    fun observeNews(): Flow<List<Article>>
+}
+
+// :core:data, implements the domain interface
+@Serializable
+data class ArticleDto(
+    val id: Int,
+    val title: String,
+    @SerialName("published_at") val publishedAt: String,
+)
+
+@Entity(tableName = "articles")
+data class ArticleEntity(
+    @PrimaryKey val id: Int,
+    val title: String,
+    val publishedAtMillis: Long,
+)
+
+fun ArticleDto.toEntity() = ArticleEntity(id, title, Instant.parse(publishedAt).toEpochMilli())
+fun ArticleEntity.toDomain() = Article(id, title, Instant.ofEpochMilli(publishedAtMillis))
+
+class OfflineFirstNewsRepository @Inject constructor(
+    private val dao: ArticleDao,
+) : NewsRepository {
+    override fun observeNews(): Flow<List<Article>> =
+        dao.observeAll().map { rows -> rows.map { it.toDomain() } }
+}
+
+// UI layer, shaped for the screen
+data class ArticleUi(val id: Int, val title: String, val age: String)
+
+fun Article.toUi(now: Instant): ArticleUi {
+    val hours = Duration.between(publishedAt, now).toHours()
+    return ArticleUi(id, title, if (hours < 1) "just now" else "$hours h ago")
+}`,
+        remember: 'Source code points inward. Each ring has its own model, and mappers translate at the borders.',
+        terms: [
+          { term: 'Clean Architecture', def: 'A way to arrange code in rings, with business rules in the center and frameworks outside, where dependencies only point inward.' },
+          { term: 'Dependency rule', def: 'The Clean Architecture rule that inner code never names anything from an outer ring, such as a domain model importing Room.' },
+          { term: 'Domain model', def: 'A plain Kotlin class, like Article, that describes business data without any database, network or UI annotations.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Implement the domain interface in the data layer and hand out domain models.', code: 'class OfflineFirstNewsRepository @Inject constructor(\n    private val dao: ArticleDao,\n) : [[NewsRepository]] {\n    override fun observeNews(): Flow<List<Article>> =\n        dao.observeAll().map { rows -> rows.map { it.[[toDomain]]() } }\n}', why: 'The domain declares <code>NewsRepository</code>; the data layer implements it, so the arrow points inward. The mapper turns each Room row into an <code>Article</code>.' },
+          { type: 'bug', prompt: 'The domain module stopped compiling as a plain Kotlin module. Tap the line that breaks the dependency rule.', code: '// :core:domain, a plain Kotlin module\npackage com.example.news.domain\n\n@Entity(tableName = "articles")\ndata class Article(\n    val id: Int,\n    val title: String,\n    val publishedAt: Instant,\n)\n\ninterface NewsRepository {\n    fun observeNews(): Flow<List<Article>>\n}', bug: 3, fix: '// remove it: the Room table is ArticleEntity in the data layer', why: 'A Room annotation makes the center depend on a framework in the outer ring. Keep <code>Article</code> plain and let <code>ArticleEntity</code> carry <code>@Entity</code>.' },
+        ],
+        quiz: [
+          { q: 'Which import breaks the dependency rule in the domain module?', options: ['<code>kotlinx.coroutines.flow.Flow</code>', '<code>androidx.room.Entity</code>', '<code>java.time.Instant</code>'], a: 1, why: 'Room is a framework in the outer ring. Flow and Instant are general-purpose types most teams allow in the domain.' },
+          { q: 'The API renames <code>"title"</code> to <code>"headline"</code>. With a DTO and mappers, what changes?', options: ['The DTO: <code>@SerialName("headline") val title</code>', 'Every model from the DTO to the UI', 'The domain model and every use case'], a: 0, why: 'The DTO absorbs the JSON shape. Its Kotlin property keeps its name, so the mapper, the domain and the UI don’t change.' },
+          { q: 'You are building a one-screen app with one API call. Is the full set of rings worth it?', options: ['Yes, every app needs every ring and mapper', 'Usually not: one model and a repository are enough until the app grows'], a: 1, why: 'Each ring adds models and mappers to maintain. Start small and split when a second data source or team shows up.' },
+        ],
+        visual(el) {
+          const PUB = '2026-10-16T08:00:00Z', MS = Date.UTC(2026, 9, 16, 8, 0, 0);
+          let renamed = false, small = false, busy = false;
+          const C = {};
+          const cl = (label, k) => (C[k] = h('span', { class: 'arc-cl' }, label));
+          const inner = h('div', { class: 'arc-ring arc-in' }, h('span', { class: 'arc-ring-name' }, 'Domain · plain Kotlin'),
+            h('div', { class: 'arc-cls' }, cl('Article', 'article'), cl('interface NewsRepository', 'iface'), cl('GetLatestNewsUseCase', 'uc')));
+          const mid = h('div', { class: 'arc-ring arc-mid' }, h('span', { class: 'arc-ring-name' }, 'Adapters · data and UI'),
+            h('div', { class: 'arc-cls' }, cl('ArticleDto', 'dto'), cl('ArticleEntity', 'entity'), cl('toEntity() · toDomain()', 'map1'), cl('OfflineFirstNewsRepository', 'impl'), cl('NewsViewModel', 'vm'), cl('ArticleUi · toUi()', 'ui')), inner);
+          const outer = h('div', { class: 'arc-ring arc-out' }, h('span', { class: 'arc-ring-name' }, 'Frameworks'),
+            h('div', { class: 'arc-cls' }, cl('Retrofit', 'retrofit'), cl('Room', 'room'), cl('Compose', 'compose')), mid);
+          const rings = [outer, mid, inner];
+          const S = [
+            { k: 'dto', name: 'ArticleDto', cap: 'from JSON', chips: ['retrofit', 'dto'] },
+            { k: 'entity', name: 'ArticleEntity', cap: 'Room row', map: '← toEntity()', chips: ['map1', 'entity', 'room'] },
+            { k: 'article', name: 'Article', cap: 'domain', map: '← toDomain()', chips: ['map1', 'article', 'impl'] },
+            { k: 'ui', name: 'ArticleUi', cap: 'screen', map: '← toUi(now)', chips: ['vm', 'ui', 'compose'] },
+          ];
+          const fieldsOf = k => ({
+            dto: [['id', '42'], renamed ? ['title ← "headline"', '"Room with KSP"'] : ['title', '"Room with KSP"'], ['publishedAt', `"${PUB}"`]],
+            entity: [['id', '42'], ['title', '"Room with KSP"'], ['publishedAtMillis', String(MS)]],
+            article: [['id', '42'], ['title', '"Room with KSP"'], ['publishedAt', 'Instant(08:00Z)']],
+            ui: [['id', '42'], ['title', '"Room with KSP"'], ['age', '"2 h ago"']],
+          }[k]);
+          const pipe = h('div', { class: 'arc-pipe' });
+          for (const s of S) {
+            s.slot = h('div', { class: 'arc-stateslot' });
+            if (s.map) s.mapEl = h('span', { class: 'arc-mapper' }, s.map);
+            s.el = h('div', { class: 'arc-stage' }, h('div', { class: 'arc-cap' }, s.cap), s.mapEl || h('span', { class: 'arc-mapper' }, 'GET /articles/42'), s.slot);
+            pipe.append(s.el);
+          }
+          const rowFull = h('div', { class: 'arc-cost-row on' }, h('span', {}, 'full rings'), h('div', { class: 'meter' }, h('span', { style: 'width:100%' })), h('span', {}, '9 types'));
+          const rowSmall = h('div', { class: 'arc-cost-row' }, h('span', {}, 'small app'), h('div', { class: 'meter' }, h('span', { style: 'width:33%' })), h('span', {}, '3 types'));
+          const o = out();
+          const chipsOff = () => Object.values(C).forEach(c => c.classList.remove('on', 'hot', 'bad'));
+          const stagesOff = () => S.forEach(s => { s.el.classList.remove('on', 'hot', 'ok'); if (s.mapEl) s.mapEl.classList.remove('on'); });
+          const fill = (s, changed = [], anim = false) => { s.slot.replaceChildren(stateCard(s.name, fieldsOf(s.k), changed, anim)); };
+          const live = () => S.filter(s => !small || s.k === 'dto' || s.k === 'ui');
+          async function fetchArticle() {
+            if (busy) return; busy = true;
+            chipsOff(); stagesOff(); rings.forEach(r => r.classList.remove('bad'));
+            S.forEach(s => s.slot.replaceChildren());
+            say(o, '<span class="muted">GET /articles/42…</span>');
+            for (const s of live()) {
+              await sleep(380); if (!el.isConnected) return;
+              chipsOff(); stagesOff();
+              if (s.mapEl && !small) s.mapEl.classList.add('on');
+              s.el.classList.add('on'); s.chips.forEach(k => C[k].classList.add('on'));
+              fill(s, [], true);
+              await sleep(420); if (!el.isConnected) return;
+            }
+            chipsOff(); stagesOff();
+            say(o, small
+              ? '<span class="good">small app:</span> the DTO goes straight to a UI model. Two classes, one mapper, no domain module. Plenty for one screen.'
+              : '<span class="good">four models, three mappers:</span> each ring got the shape it needs. The domain saw an Instant and nothing about JSON, SQL or Compose.');
+            busy = false;
+          }
+          const renameBtn = cmd('server renames "title" → "headline"', rename);
+          async function rename() {
+            if (busy) return; busy = true;
+            renamed = !renamed;
+            renameBtn.innerHTML = hl(renamed ? 'server renames "headline" → "title"' : 'server renames "title" → "headline"');
+            chipsOff(); stagesOff(); rings.forEach(r => r.classList.remove('bad'));
+            const d = S[0];
+            d.el.classList.add('hot'); C.dto.classList.add('hot');
+            fill(d, [renamed ? 'title ← "headline"' : 'title'], true);
+            await sleep(500); if (!el.isConnected) return;
+            for (const s of S.slice(1)) {
+              if (!s.slot.firstElementChild) fill(s);
+              s.el.classList.add('ok'); replay(s.el, 'pop-soft');
+              await sleep(240); if (!el.isConnected) return;
+            }
+            say(o, renamed
+              ? `<span class="good">one line changed:</span> ${hl('@SerialName("headline") val title: String')} in ArticleDto. The mapper, Article, ArticleUi and every use case compile untouched.`
+              : '<span class="good">reverted:</span> again only the DTO changed.');
+            busy = false;
+          }
+          function leak() {
+            if (busy) return;
+            chipsOff(); stagesOff();
+            inner.classList.add('bad'); C.article.classList.add('bad'); C.room.classList.add('bad');
+            replay(inner, 'shake');
+            say(o, `<span class="bad">dependency rule broken:</span> ${hl('import androidx.room.Entity')} in the domain points outward, to a framework. The domain module now needs Room to compile, and every Room upgrade touches your business code.`);
+          }
+          const sw = switchEl('arc-clean-small', 'Small app: one screen, one API', false, i => {
+            if (busy) { i.checked = small; return; }
+            small = i.checked;
+            rings.forEach(r => r.classList.remove('bad')); chipsOff(); stagesOff();
+            S.forEach(s => { const cut = small && (s.k === 'entity' || s.k === 'article'); s.el.classList.toggle('arc-cut', cut); if (s.mapEl) s.mapEl.classList.toggle('arc-cut', cut); });
+            S[3].mapEl.textContent = small ? '← dto.toUi()' : '← toUi(now)';
+            inner.classList.toggle('arc-cut', small);
+            rowFull.classList.toggle('on', !small); rowSmall.classList.toggle('on', small);
+            say(o, small
+              ? 'Small app: no Room cache, no domain module. ArticleDto maps straight to what the screen needs. Fetch to see the shorter path.'
+              : 'Full rings: four models and three mappers. Worth it once there are several sources, screens or teams.');
+          });
+          S.forEach(s => fill(s));
+          say(o, 'Article 42 has already passed through every ring. Fetch it again, rename a server field, or break the rule.');
+          el.append(
+            h('div', { class: 'controls arc-fit' }, cmd('fetch(42)', fetchArticle), renameBtn, cmd('import androidx.room.Entity // in Article.kt', leak)),
+            h('div', { class: 'controls arc-fit' }, sw),
+            outer,
+            h('div', { class: 'arc-dir' }, 'source dependencies point inward: Frameworks → Adapters → Domain'),
+            pipe,
+            h('div', { class: 'arc-cost' }, rowFull, rowSmall),
+            o);
         },
       },
     ],

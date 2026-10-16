@@ -10,10 +10,53 @@
   const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
   const show = v => (v == null ? 'null' : typeof v === 'string' ? `"${v}"` : String(v));
 
+  // Demo styles for the newer lessons; every class is prefixed kt-.
+  const css = `
+.kt-type { justify-self: start; font: 600 0.74rem var(--mono); padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.kt.kt-tpl { white-space: normal; }
+.kt-tpl span { display: inline-block; white-space: pre; }
+.kt-types .obj { min-width: 120px; }
+.kt-tpl .kt-hole { color: var(--t-k); outline: 1.5px dashed var(--t-k); outline-offset: 1px; border-radius: 4px; transition: background 0.2s; }
+.kt-tpl .kt-hole.on { background: rgba(200, 166, 255, 0.22); }
+.kt-tpl .kt-filled { background: rgba(158, 223, 165, 0.14); border-radius: 4px; }
+.kt-line { display: grid; grid-template-columns: repeat(11, minmax(0, 44px)); gap: 6px; justify-content: center; padding: 18px 10px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
+.kt-cell { aspect-ratio: 1; min-width: 0; display: grid; place-items: center; border-radius: 9px; border: 2px solid var(--line); background: var(--surface); font: 600 0.88rem var(--mono); color: var(--muted); transition: background 0.2s, border-color 0.2s, opacity 0.2s; }
+.kt-cell.in { border-color: var(--accent); color: var(--ink); }
+.kt-cell.skip { opacity: 0.35; }
+.kt-cell.seen { background: var(--accent-soft); }
+.kt-cell.at { background: var(--accent); color: var(--accent-ink); animation: pop 0.35s ease-out; }
+.kt-printed { display: inline-block; white-space: pre; }
+.when .branch.kt-on { background: rgba(127, 211, 255, 0.14); border-color: var(--t-t); }
+.when .branch.kt-err { background: rgba(255, 138, 155, 0.16); border-color: var(--t-e); }
+.when .branch.kt-off { opacity: 0.35; }
+.kt-zone { flex: 1 1 200px; min-width: 0; display: grid; gap: 10px; justify-items: center; align-content: start; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.kt-zone-title { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); text-align: center; }
+.kt-zone .obj { min-width: 0; }
+.kt-pile { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 46px; min-width: 0; max-width: 100%; }
+.kt-tree { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.kt-card { display: grid; gap: 6px; min-width: 0; max-width: 100%; }
+.kt-card .kt { border: 2px solid transparent; }
+.kt-card.broken .kt { border: 2px dashed var(--err); }
+.kt-tag { justify-self: start; font: 600 0.7rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.kt-tag.final { background: var(--err-soft); color: var(--err); }
+.kt-tag.open { background: var(--ok-soft); color: var(--ok); }
+.kt-tag.abstract, .kt-tag.interface { background: var(--warm-soft); color: var(--warm); }
+.kt-up { font: 600 0.8rem var(--mono); color: var(--muted); }
+.kt-enum-wrap { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: center; min-width: 0; }
+.kt-enum-wrap .when { flex: 1 1 240px; }
+.kt-light { display: grid; gap: 10px; padding: 14px; border-radius: 18px; background: var(--code-bg); }
+.kt-lamp { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); transition: background 0.25s, box-shadow 0.25s; }
+.kt-lamp.on.r { background: var(--err); box-shadow: 0 0 22px var(--err); }
+.kt-lamp.on.y { background: var(--warm); box-shadow: 0 0 22px var(--warm); }
+.kt-lamp.on.g { background: var(--ok); box-shadow: 0 0 22px var(--ok); }
+`;
+
   Lab.addTrack({
     id: 'kotlin',
     title: 'Kotlin',
     description: 'The language Android is written in. From val to coroutines.',
+    group: 'Foundations', requires: [],
+    css,
     lessons: [
       // 1 ─────────────────────────────────────────────
       {
@@ -60,6 +103,208 @@ items.add(2)          // fine: the list changes, the name doesn't`,
             h('div', { class: 'controls' },
               cmd('name = "Grace"', () => { replay(name, 'shake'); say(o, '<span class="bad">error:</span> Val cannot be reassigned'); }),
               cmd('score += 5', () => { n += 5; swap(score.well, String(n)); say(o, `<span class="good">ok:</span> score is now ${n}`); })),
+            o);
+        },
+      },
+
+      // + types ─────────────────────────────────────
+      {
+        id: 'types',
+        title: 'Basic types and string templates',
+        tagline: 'Int, Double, String, and values inside text.',
+        body: `
+<p>Kotlin works out a type from the value you assign. A whole number is an <code>Int</code>, or a <code>Long</code> when it is too big for Int or ends in <code>L</code>. A decimal is a <code>Double</code>, and <code>0.5f</code> is a <code>Float</code>. You also get <code>Boolean</code>, <code>Char</code> in single quotes and <code>String</code> in double quotes.</p>
+<p>Numbers never convert on their own. An Int can’t go where a Long is expected, so you call <code>toLong()</code> or <code>toDouble()</code>. To read a number from text, <code>"42".toInt()</code> works but throws on bad input. <code>toIntOrNull()</code> gives null instead.</p>
+<p>Put values inside a string with a template: <code>$name</code> for a plain name, <code>\${count + 1}</code> for any expression. Triple quotes make a raw string that keeps line breaks and needs no escapes.</p>`,
+        code: `val count = 42                 // Int
+val big = 3_000_000_000        // Long: too big for Int
+val price = 9.99               // Double
+val ratio = 0.5f               // Float
+val done = false               // Boolean
+val initial = 'A'              // Char
+val name = "Ada"               // String
+
+val total: Long = count.toLong()   // no automatic widening
+val parsed = "42".toInt()          // 42
+val safe = "4x".toIntOrNull()      // null
+
+println("$name has \${count + 1} points")
+val json = """
+    {"name": "$name"}
+""".trimIndent()`,
+        remember: 'The value picks the type. Convert numbers with toX(). $name and ${expr} put values into text.',
+        level: 'beginner',
+        terms: [
+          { term: 'Type inference', def: 'The compiler works out a variable’s type from the value assigned to it, so you don’t have to write it.' },
+          { term: 'String template', def: 'A $name or ${expression} inside a string literal that is replaced by its value.' },
+          { term: 'Raw string', def: 'A string in triple quotes that keeps line breaks and treats backslashes literally.' },
+          { term: 'toIntOrNull', def: 'Parses a string as an Int and returns null instead of throwing when the text is not a number.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Turn the Int into a Long, then print it with a template.', code: 'val count: Int = 21\nval total: Long = count.[[toLong]]()\nprintln("Total: [[$]]total")', why: 'Kotlin never widens numbers for you, so <code>toLong()</code> is required. <code>$total</code> drops the value into the string.' },
+          { type: 'bug', prompt: 'One line has a type mismatch. Tap it.', code: 'val count: Int = 10\nval total: Long = count\nval average = total / 2.0\nprintln("Average $average")', bug: 1, fix: 'val total: Long = count.toLong()', why: 'An Int is not a Long, even though every Int fits. Convert it with <code>toLong()</code>.' },
+        ],
+        quiz: [
+          { q: 'What type does <code>val x = 3_000_000_000</code> get?', options: ['<code>Int</code>', '<code>Long</code>', '<code>Double</code>'], a: 1, why: 'The number is bigger than Int’s maximum of about 2.1 billion, so Kotlin picks Long.' },
+          { q: '<code>val a = 1; val b = 2</code>. What does <code>"$a + $b"</code> contain?', options: ['<code>"1 + 2"</code>', '<code>"3"</code>', '<code>"$a + $b"</code>'], a: 0, why: 'Each <code>$name</code> is replaced on its own. To compute the sum, write <code>"${a + b}"</code>.' },
+          { q: 'What does <code>"abc".toInt()</code> do?', options: ['Returns 0', 'Returns null', 'Throws NumberFormatException'], a: 2, why: '<code>toInt()</code> throws on text that is not a number. Use <code>toIntOrNull()</code> to get null instead.' },
+        ],
+        visual(el) {
+          const decls = [
+            { src: 'val a = 42', name: 'a', type: 'Int', value: '42' },
+            { src: 'val b = 3_000_000_000', name: 'b', type: 'Long', value: '3000000000', note: 'too big for Int' },
+            { src: 'val c = 9.99', name: 'c', type: 'Double', value: '9.99' },
+            { src: "val d = 'K'", name: 'd', type: 'Char', value: "'K'" },
+            { src: 'val e = "42".toInt()', name: 'e', type: 'Int', value: '42', note: 'parsed from text' },
+            { src: 'val f = "4x".toIntOrNull()', name: 'f', type: 'Int?', value: 'null', note: 'not a number, so null' },
+            { src: 'val g = "4x".toInt()', error: 'NumberFormatException: For input string: "4x"' },
+          ];
+          const stage = h('div', { class: 'stage kt-types' });
+          const o = out();
+          const shown = [];
+          const card = (d, anim) => h('div', { class: 'obj' + (anim ? ' drop-in' : '') },
+            h('span', { class: 'obj-name' }, `val ${d.name}`),
+            h('span', { class: 'kt-type' }, d.type),
+            h('span', { class: 'field' }, `= ${d.value}`));
+          function declare(d, anim = true) {
+            if (d.error) { replay(stage, 'shake'); say(o, `<span class="bad">crash:</span> ${d.error}`); return; }
+            const old = shown.find(x => x.d === d);
+            if (old) replay(old.el, 'pop');
+            else {
+              const c = card(d, anim); stage.append(c); shown.push({ d, el: c });
+              if (shown.length > 4) shown.shift().el.remove();
+            }
+            say(o, `${hl(d.src)}  <span class="muted">// ${d.type}${d.note ? ', ' + d.note : ''}</span>`);
+          }
+          // String template part
+          const count = 4;
+          const nameIn = h('input', { id: 'kt-types-name', value: 'Ada', spellcheck: 'false', autocomplete: 'off', maxlength: '14' });
+          const decl = h('div', { class: 'kt' });
+          const tpl = h('div', { class: 'kt kt-tpl' });
+          const o2 = out();
+          const parts = [
+            { html: hl('println(') + '<span class="t-s">"Hi, </span>' },
+            { hole: '$name', val: () => nameIn.value },
+            { html: '<span class="t-s">! You have </span>' },
+            { hole: '${count + 1}', val: () => String(count + 1) },
+            { html: '<span class="t-s"> new messages"</span>)' },
+          ];
+          let busy = false;
+          const paintTpl = () => {
+            decl.innerHTML = hl(`val name = ${JSON.stringify(nameIn.value)}\nval count = ${count}`);
+            tpl.replaceChildren(...parts.map(p => (p.hole ? h('span', { class: 'kt-hole' }, p.hole) : h('span', { html: p.html }))));
+          };
+          async function evaluate() {
+            if (busy) return; busy = true; paintTpl();
+            const spans = [...tpl.children];
+            for (let i = 0; i < parts.length; i++) {
+              if (!parts[i].hole) continue;
+              spans[i].classList.add('on'); await sleep(500);
+              if (!tpl.isConnected) return;
+              spans[i].textContent = parts[i].val(); spans[i].className = 't-s kt-filled'; replay(spans[i], 'flip');
+              await sleep(380);
+            }
+            say(o2, `Hi, ${nameIn.value.replace(/[<&]/g, '')}! You have ${count + 1} new messages`);
+            busy = false;
+          }
+          nameIn.addEventListener('input', () => { if (!busy) { paintTpl(); say(o2, 'Press Run to fill the template.'); } });
+          declare(decls[0], false); declare(decls[2], false);
+          say(o, 'Declare a value. Kotlin works out its type.');
+          paintTpl(); say(o2, 'Press Run to fill the template.');
+          el.append(
+            stage,
+            h('div', { class: 'controls' }, decls.map(d => cmd(d.src, () => declare(d)))),
+            o,
+            h('p', { class: 'tip' }, 'String templates: each hole is replaced by its value.'),
+            h('label', { class: 'field-input', for: 'kt-types-name' }, 'name =', nameIn),
+            decl, tpl,
+            h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: evaluate }, 'Run println')),
+            o2);
+        },
+      },
+
+      // + control ─────────────────────────────────────
+      {
+        id: 'control',
+        title: 'Control flow and ranges',
+        tagline: 'if returns a value, for walks a range.',
+        body: `
+<p>In Kotlin <code>if</code> is an expression: it hands back a value. <code>val max = if (a > b) a else b</code> replaces the ternary operator other languages have.</p>
+<p><code>for</code> walks over anything you can iterate, most often a range. <code>1..5</code> includes both ends. <code>0 until 5</code> (or <code>0..&lt;5</code>) stops before the end, which suits list indexes. <code>5 downTo 1</code> counts down, and <code>step 2</code> skips values.</p>
+<p>Use <code>while</code> when you don’t know the count in advance, and <code>repeat(3) { }</code> when you just need something done n times. Pick a range below and walk it.</p>`,
+        code: `val max = if (a > b) a else b      // if returns a value
+
+for (i in 1..5) print(i)           // 12345
+for (i in 0 until 5) print(i)      // 01234
+for (i in 5 downTo 1) print(i)     // 54321
+for (i in 0..10 step 3) print(i)   // 0369
+
+for ((index, name) in names.withIndex()) {
+    println("$index: $name")
+}
+
+var tries = 3
+while (tries > 0) { tries-- }
+repeat(3) { println("Hi") }`,
+        remember: '.. includes the end, until stops before it. downTo counts down, step skips. if gives back a value.',
+        level: 'beginner',
+        terms: [
+          { term: 'Range (..)', def: 'An inclusive sequence of values from a start to an end, like 1..5, which you can loop over or test with in.' },
+          { term: 'until', def: 'Builds a range that stops before its end value, so 0 until 3 is 0, 1, 2.' },
+          { term: 'downTo', def: 'Builds a range that counts down, like 5 downTo 1, and can be combined with step.' },
+          { term: 'if expression', def: 'An if with an else branch that returns a value, so it can be assigned or returned.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print 10, 8, 6, 4, 2, 0.', code: 'for (i in 10 [[downTo]] 0 [[step]] 2) {\n    println(i)\n}', why: '<code>downTo</code> counts down from 10 to 0, and <code>step 2</code> skips every other value.' },
+          { type: 'bug', prompt: 'This loop crashes with IndexOutOfBoundsException. Tap the line.', code: 'val items = listOf("a", "b", "c")\nfor (i in 0..items.size) {\n    println(items[i])\n}', bug: 1, fix: 'for (i in items.indices) {   // or 0 until items.size', why: '<code>..</code> includes the end, so the last round reads <code>items[3]</code>. Valid indexes stop at <code>size - 1</code>.' },
+        ],
+        quiz: [
+          { q: 'How many times does <code>for (i in 1..3)</code> run?', options: ['2', '3', '4'], a: 1, why: '<code>1..3</code> includes both ends: 1, 2, 3.' },
+          { q: '<code>(1 until 4).toList()</code> is', options: ['<code>[1, 2, 3]</code>', '<code>[1, 2, 3, 4]</code>', '<code>[2, 3]</code>'], a: 0, why: '<code>until</code> stops before the end value.' },
+          { q: 'Does <code>val label = if (ok) "yes" else "no"</code> compile?', options: ['Yes, if is an expression', 'No, use a ternary <code>?:</code>'], a: 0, why: 'Kotlin has no ternary operator. <code>if</code> with an <code>else</code> returns a value.' },
+        ],
+        visual(el) {
+          const ranges = [
+            { src: '1..5', vals: [1, 2, 3, 4, 5] },
+            { src: '0 until 5', vals: [0, 1, 2, 3, 4] },
+            { src: '5 downTo 1', vals: [5, 4, 3, 2, 1] },
+            { src: '0..10 step 3', vals: [0, 3, 6, 9] },
+            { src: '10 downTo 0 step 2', vals: [10, 8, 6, 4, 2, 0] },
+          ];
+          let cur = ranges[0], busy = false;
+          const cells = Array.from({ length: 11 }, (_, i) => h('span', { class: 'kt-cell' }, String(i)));
+          const line = h('div', { class: 'kt-line', role: 'img', 'aria-label': 'Number line from 0 to 10' }, cells);
+          const loop = h('div', { class: 'kt' });
+          const ifLine = h('div', { class: 'kt' });
+          const o = out();
+          const buttons = ranges.map(r => cmd(r.src, () => { if (busy) return; cur = r; paint(); replay(line, 'pop-soft'); }));
+          const ifSrc = 'val kind = if (i % 2 == 0) "even" else "odd"';
+          function paint() {
+            buttons.forEach((b, i) => b.setAttribute('aria-pressed', ranges[i] === cur));
+            loop.innerHTML = hl(`for (i in ${cur.src}) print("$i ")`);
+            ifLine.innerHTML = hl(ifSrc);
+            cells.forEach((c, i) => { c.className = 'kt-cell' + (cur.vals.includes(i) ? ' in' : ' skip'); });
+            say(o, `<span class="muted">${cur.vals.length} values in the range. Press Run loop.</span>`);
+          }
+          async function walk() {
+            if (busy) return; busy = true; paint(); o.replaceChildren();
+            for (const v of cur.vals) {
+              cells.forEach(c => c.classList.remove('at'));
+              cells[v].classList.add('at', 'seen');
+              o.append(h('span', { class: 'kt-printed drop-in' }, v + ' '));
+              ifLine.innerHTML = hl(ifSrc) + `  <span class="t-c">// i = ${v} → "${v % 2 === 0 ? 'even' : 'odd'}"</span>`;
+              await sleep(520);
+              if (!line.isConnected) return;
+            }
+            cells.forEach(c => c.classList.remove('at'));
+            o.append(h('span', { class: 'muted' }, ` // ran ${cur.vals.length} times`));
+            busy = false;
+          }
+          paint();
+          el.append(
+            h('div', { class: 'controls' }, buttons),
+            line, loop, ifLine,
+            h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: walk }, 'Run loop')),
             o);
         },
       },
@@ -377,6 +622,399 @@ val result = numbers
         },
       },
 
+      // + classes ───────────────────────────────────
+      {
+        id: 'classes',
+        title: 'Classes and constructors',
+        tagline: 'Primary constructor, init blocks, default arguments.',
+        body: `
+<p>The parentheses after a class name are its <em>primary constructor</em>. Write <code>val</code> or <code>var</code> in front of a parameter and it becomes a property you can read later. Without it, the parameter only exists while the object is being built. There is no <code>new</code> keyword: <code>User("Ada", 36)</code> creates an object.</p>
+<p>When an object is created, property initializers and <code>init</code> blocks run from top to bottom, in the order you wrote them. Use <code>init</code> for setup that needs the constructor values.</p>
+<p>Give a parameter a default value and callers can skip it. Named arguments like <code>User(name = "Cy")</code> make calls readable. A secondary <code>constructor</code> must call the primary one through <code>this(...)</code>, and in Kotlin default arguments usually replace it.</p>`,
+        code: `class User(val name: String, val age: Int = 18) {
+    val isAdult = age >= 18
+
+    init {
+        println("Created $name, age $age")
+    }
+
+    constructor(name: String, born: Int, year: Int) :
+        this(name, year - born) {
+        println("from birth year")
+    }
+
+    fun greet() = "Hi, I'm $name"
+}
+
+val a = User("Ada", 36)
+val b = User("Bo")                   // age = 18
+val c = User(age = 20, name = "Cy")  // named arguments
+val d = User("Dee", 1990, 2026)      // secondary: age = 36`,
+        remember: 'val in the constructor makes a property. init runs at creation. Defaults beat extra constructors.',
+        level: 'beginner',
+        terms: [
+          { term: 'Primary constructor', def: 'The parameter list in a class header; parameters marked val or var become properties.' },
+          { term: 'init block', def: 'A block in a class body that runs when an object is created, in order with the property initializers.' },
+          { term: 'Secondary constructor', def: 'An extra constructor declared with constructor that must delegate to the primary one with this(...).' },
+          { term: 'Default argument', def: 'A value given to a parameter in its declaration, used when the caller leaves that argument out.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Let callers skip the seconds, and log every new timer.', code: 'class Timer(val seconds: Int [[=]] 60) {\n    [[init]] {\n        println("Timer for $seconds s")\n    }\n}\nval t = Timer()', why: '<code>= 60</code> is a default argument, so <code>Timer()</code> compiles. The <code>init</code> block runs each time a Timer is created.' },
+          { type: 'bug', prompt: '<code>describe()</code> won’t compile. Tap the line to fix.', code: 'class Account(owner: String) {\n    var balance = 0\n    fun describe() = "$owner has $balance"\n}', bug: 0, fix: 'class Account(val owner: String) {', why: 'Without <code>val</code>, <code>owner</code> is only a constructor parameter. Member functions can’t see it. <code>val</code> makes it a property.' },
+        ],
+        quiz: [
+          { q: '<code>class P(name: String)</code>. Does <code>P("Ada").name</code> compile?', options: ['Yes', 'No, name is not a property'], a: 1, why: 'Only parameters marked <code>val</code> or <code>var</code> become properties.' },
+          { q: 'With the code above, what is <code>User("Bo").age</code>?', options: ['<code>0</code>', '<code>18</code>', 'It doesn’t compile'], a: 1, why: 'The caller skipped <code>age</code>, so its default of 18 is used.' },
+          { q: 'When does an <code>init</code> block run?', options: ['Each time an object is created', 'Once, when the class is loaded', 'Only if you call it'], a: 0, why: '<code>init</code> is part of construction, so it runs for every new object.' },
+        ],
+        visual(el) {
+          const src = [
+            'class User(val name: String, val age: Int = 18) {',
+            '    val isAdult = age >= 18',
+            '    init { println("Created $name, age $age") }',
+            '    constructor(name: String, born: Int, year: Int) :',
+            '        this(name, year - born) { println("from birth year") }',
+            '}',
+          ];
+          const rows = src.map(s => h('div', { class: 'branch', html: hl(s) }));
+          const stage = h('div', { class: 'stage' });
+          const con = h('div', { class: 'out', 'aria-live': 'polite' });
+          const o = out();
+          const objs = [];
+          let busy = false;
+          const calls = [
+            { src: 'User("Ada", 36)', name: 'Ada', age: 36, bind: 'name = "Ada", age = 36' },
+            { src: 'User("Bo")', name: 'Bo', age: 18, bind: 'name = "Bo", age not passed: default 18' },
+            { src: 'User(age = 20, name = "Cy")', name: 'Cy', age: 20, bind: 'named arguments: order doesn’t matter' },
+            { src: 'User("Dee", 1990, 2026)', name: 'Dee', age: 36, secondary: true },
+          ];
+          const card = (u, anim) => h('div', { class: 'obj' + (anim ? ' drop-in' : '') },
+            h('span', { class: 'obj-name' }, `User`),
+            h('span', { class: 'field' }, `name = "${u.name}"`),
+            h('span', { class: 'field' }, `age = ${u.age}`),
+            h('span', { class: 'field changed' }, `isAdult = ${u.age >= 18}`));
+          const addObj = (u, anim) => { const c = card(u, anim); stage.append(c); objs.push(c); if (objs.length > 3) objs.shift().remove(); };
+          const log = text => con.append(h('div', { class: 'line drop-in' }, text));
+          async function step(i, note) {
+            rows.forEach(r => r.classList.remove('kt-on'));
+            rows[i].classList.add('kt-on');
+            say(o, note);
+            await sleep(700);
+            return rows[0].isConnected;
+          }
+          async function create(c) {
+            if (busy) return; busy = true;
+            con.replaceChildren();
+            if (c.secondary) {
+              if (!await step(3, '3 arguments: the secondary constructor matches')) return;
+              if (!await step(4, `it delegates first: ${hl('this("Dee", 2026 - 1990)')}`)) return;
+            }
+            if (!await step(0, `primary constructor: ${c.secondary ? 'name = "Dee", age = 36' : c.bind}`)) return;
+            if (!await step(1, `property initializer: isAdult = ${c.age >= 18}`)) return;
+            if (!await step(2, 'init block runs')) return;
+            log(`Created ${c.name}, age ${c.age}`);
+            if (c.secondary) { if (!await step(4, 'then the secondary constructor’s own body')) return; log('from birth year'); }
+            rows.forEach(r => r.classList.remove('kt-on'));
+            addObj(c, true);
+            say(o, `<span class="good">ok:</span> ${hl(`val u = ${c.src}`)}`);
+            busy = false;
+          }
+          addObj(calls[0], false); log('Created Ada, age 36');
+          say(o, 'Create a User and watch the order things run in.');
+          el.append(
+            h('div', { class: 'when' }, rows),
+            h('div', { class: 'controls' }, calls.map(c => cmd(c.src, () => create(c)))),
+            o, stage, con);
+        },
+      },
+
+      // + inheritance ─────────────────────────────────
+      {
+        id: 'inheritance',
+        title: 'Interfaces, abstract and open classes',
+        tagline: 'Classes are final until you open them.',
+        body: `
+<p>In Kotlin, classes and their functions are <em>final</em> by default: nobody can extend or override them. Mark a class <code>open</code> to allow subclasses, and mark each function <code>open</code> that may be replaced. The subclass writes <code>override</code>.</p>
+<p>A subclass header calls the parent’s constructor: <code>class Dog : Animal()</code>. An <code>abstract</code> class can’t be created on its own, and its <code>abstract</code> members have no body, so every subclass must provide one. An <code>interface</code> has no constructor and holds no state, but it can give functions a default body. A class extends at most one class and can implement many interfaces.</p>
+<p>This lesson covers the syntax. When to use each one is in the OOP track. Switch the kind of <code>Animal</code> below and try the same three lines.</p>`,
+        code: `interface Named {
+    val name: String
+    fun describe() = "I am $name"     // default body
+}
+
+abstract class Animal(override val name: String) : Named {
+    abstract fun sound(): String      // no body: subclasses must override
+    open fun move() = "walks"         // open: may be overridden
+    fun breathe() = "breathes"        // final: can't be overridden
+}
+
+class Bird(name: String) : Animal(name) {
+    override fun sound() = "Tweet"
+    override fun move() = "flies"
+}
+
+val b = Bird("Robin")
+b.describe()   // "I am Robin"
+b.move()       // "flies"`,
+        remember: 'Final by default. open allows it, override does it, abstract demands it. Interfaces: no constructor, many allowed.',
+        level: 'beginner',
+        terms: [
+          { term: 'open', def: 'A modifier that allows a class to be subclassed or a member to be overridden, since both are final by default.' },
+          { term: 'override', def: 'Marks a member that replaces an open or abstract member from a superclass or interface.' },
+          { term: 'Abstract class', def: 'A class that can’t be instantiated and may declare abstract members that subclasses must implement.' },
+          { term: 'Interface', def: 'A type that declares members a class promises to provide; it can have default bodies but no constructor or stored state.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Let <code>Button</code> extend <code>View</code> and replace <code>draw()</code>.', code: '[[open]] class View {\n    [[open]] fun draw() = println("view")\n}\nclass Button : View() {\n    [[override]] fun draw() = println("button")\n}', why: 'The class and the function both need <code>open</code>, and the subclass must say <code>override</code>.' },
+          { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'interface Clickable {\n    fun onClick()\n}\n\nclass SaveButton : Clickable() {\n    override fun onClick() = save()\n}', bug: 4, fix: 'class SaveButton : Clickable {', why: 'An interface has no constructor, so there is nothing to call. Drop the parentheses.' },
+        ],
+        quiz: [
+          { q: '<code>class A</code> and <code>class B : A()</code>. Does it compile?', options: ['Yes', 'No, A is final'], a: 1, why: 'Classes are final unless marked <code>open</code> or <code>abstract</code>.' },
+          { q: 'Can you write <code>Shape()</code> when <code>Shape</code> is abstract?', options: ['Yes', 'No'], a: 1, why: 'An abstract class can only be created through a concrete subclass.' },
+          { q: 'How many classes can a Kotlin class extend, and how many interfaces can it implement?', options: ['One class, many interfaces', 'Many of both', 'One of each'], a: 0, why: 'Kotlin has single class inheritance, but a class can implement any number of interfaces.' },
+        ],
+        visual(el) {
+          const dogOpen = 'class Dog : Animal() {\n    override fun sound() = "Woof"\n}';
+          const modes = {
+            final: { label: 'class Animal', tag: 'final', base: 'class Animal {\n    fun sound() = "..."\n}', dog: dogOpen, dogErr: 'This type is final, so it cannot be inherited from.' },
+            open: { label: 'open class Animal', tag: 'open', base: 'open class Animal {\n    open fun sound() = "..."\n}', dog: dogOpen },
+            abstract: { label: 'abstract class Animal', tag: 'abstract', base: 'abstract class Animal {\n    abstract fun sound(): String\n}', dog: dogOpen, makeErr: 'Cannot create an instance of an abstract class.' },
+            iface: { label: 'interface Animal', tag: 'interface', base: 'interface Animal {\n    fun sound() = "..."  // default\n}', dog: 'class Dog : Animal {\n    override fun sound() = "Woof"\n}', makeErr: 'Interface Animal does not have constructors.' },
+          };
+          let mode = 'open', dogOk = false;
+          const baseTag = h('span', { class: 'kt-tag' });
+          const baseCode = h('div', { class: 'kt' });
+          const base = h('div', { class: 'kt-card' }, baseTag, baseCode);
+          const dogTag = h('span', { class: 'kt-tag' }, 'subclass');
+          const dogCode = h('div', { class: 'kt' });
+          const dog = h('div', { class: 'kt-card' }, dogTag, dogCode);
+          const link = h('span', { class: 'kt-up' });
+          const stage = h('div', { class: 'stage kt-tree' }, base);
+          const o = out();
+          const modeBtns = Object.keys(modes).map(k => cmd(modes[k].label, () => { mode = k; paint(); say(o, `Animal is now ${modes[k].tag}. Declare Dog again.`); }));
+          function paint() {
+            const m = modes[mode];
+            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', Object.keys(modes)[i] === mode));
+            baseTag.textContent = m.tag; baseTag.className = 'kt-tag ' + m.tag;
+            baseCode.innerHTML = hl(m.base); replay(base, 'pop-soft');
+            dogOk = false; dog.remove(); link.remove();
+          }
+          function declare() {
+            const m = modes[mode];
+            dogCode.innerHTML = hl(m.dog);
+            link.textContent = mode === 'iface' ? '▲ implements' : '▲ extends';
+            stage.append(link, dog);
+            if (m.dogErr) {
+              dog.className = 'kt-card broken'; replay(dog, 'shake'); dogOk = false;
+              say(o, `<span class="bad">compile error:</span> ${m.dogErr} Mark Animal open.`);
+              return;
+            }
+            dog.className = 'kt-card drop-in'; dogOk = true;
+            say(o, `<span class="good">ok:</span> Dog ${mode === 'iface' ? 'implements' : 'extends'} Animal and overrides sound()`);
+          }
+          function makeBase() {
+            const m = modes[mode];
+            if (m.makeErr) { replay(base, 'shake'); say(o, `<span class="bad">compile error:</span> ${m.makeErr}`); return; }
+            replay(base, 'pop'); say(o, `${hl('Animal().sound()')} <span class="muted">returns</span> ${hl('"..."')}`);
+          }
+          function makeDog() {
+            if (!dogOk) { replay(stage, 'shake'); say(o, '<span class="bad">error:</span> Unresolved reference: Dog. Declare it first.'); return; }
+            replay(dog, 'pop'); say(o, `${hl('Dog().sound()')} <span class="muted">returns</span> ${hl('"Woof"')}`);
+          }
+          paint(); declare();
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            stage,
+            h('div', { class: 'controls' }, cmd('class Dog : Animal…', declare), cmd('Animal().sound()', makeBase), cmd('Dog().sound()', makeDog)),
+            o);
+        },
+      },
+
+      // + objects ─────────────────────────────────────
+      {
+        id: 'objects',
+        title: 'object and companion object',
+        tagline: 'One instance, made for you.',
+        body: `
+<p><code>object</code> declares a class and its only instance in one go. That is a singleton. Kotlin creates it the first time you use it, safely across threads, and every use refers to the same instance. You call it by name: <code>Analytics.log("open")</code>.</p>
+<p>A <code>companion object</code> lives inside a class. You call its members on the class name, like <code>User.guest()</code>, which makes it the place for factory functions and constants. It plays the role of <code>static</code> in Java.</p>
+<p>An <em>object expression</em>, <code>object : Comparator&lt;String&gt; { … }</code>, makes a one-off instance of an unnamed class right where you need it. On Android, avoid singletons that hold a <code>Context</code> or other state you can’t clean up.</p>`,
+        code: `object Analytics {
+    private var events = 0
+    fun log(name: String) {
+        events++
+        println("$name (#$events)")
+    }
+}
+
+class User private constructor(val name: String) {
+    companion object {
+        const val MAX_NAME = 20
+        fun guest() = User("guest")
+        fun from(raw: String) = User(raw.take(MAX_NAME))
+    }
+}
+
+Analytics.log("open")      // open (#1)
+Analytics.log("buy")       // buy (#2): the same object
+val u = User.guest()       // called on the class name
+
+val byLength = object : Comparator<String> {
+    override fun compare(a: String, b: String) = a.length - b.length
+}`,
+        remember: 'object = a singleton. companion object = members on the class name. object : Type { } = a one-off instance.',
+        level: 'beginner',
+        terms: [
+          { term: 'object declaration', def: 'Declares a class and its single instance together, created lazily on first use.' },
+          { term: 'companion object', def: 'An object inside a class whose members are called on the class name, used for factories and constants.' },
+          { term: 'Object expression', def: 'An expression like object : Comparator<String> { … } that creates an instance of an unnamed class on the spot.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Add a factory you can call as <code>Note.empty()</code>.', code: 'class Note(val text: String) {\n    [[companion]] [[object]] {\n        fun empty() = Note("")\n    }\n}\nval n = Note.empty()', why: 'Members of a <code>companion object</code> are called on the class name.' },
+          { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'object Session {\n    var token: String? = null\n}\n\nfun login(t: String) {\n    Session().token = t\n}', bug: 5, fix: '    Session.token = t', why: 'An <code>object</code> already is its instance and has no constructor. Use it by name.' },
+        ],
+        quiz: [
+          { q: 'How many instances of <code>object Analytics</code> exist in a running app?', options: ['One', 'One per call', 'One per thread'], a: 0, why: 'An object declaration is a singleton: every reference points at the same instance.' },
+          { q: '<code>fun guest()</code> sits in <code>User</code>’s companion object. How do you call it?', options: ['<code>User.guest()</code>', '<code>User().guest()</code>', '<code>guest(User)</code>'], a: 0, why: 'Companion members are called on the class name, with no instance needed.' },
+        ],
+        visual(el) {
+          let events = 0;
+          const trackers = [];
+          const count = h('span', { class: 'field changed' }, 'events = 0');
+          const caller = h('span', { class: 'obj-addr' }, 'not used yet');
+          const hub = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'object Analytics'), count, caller);
+          const pile = h('div', { class: 'kt-pile' });
+          const users = h('div', { class: 'kt-pile' });
+          const zone = (title, ...kids) => h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, title), ...kids);
+          const o = out();
+          function log(screen, name) {
+            events++;
+            count.textContent = `events = ${events}`; replay(count, 'pop');
+            caller.textContent = `last call from ${screen}`;
+            replay(hub, 'cmp');
+            say(o, `${hl(`Analytics.log("${name}")`)} <span class="muted">from ${screen}:</span> ${name} (#${events})  <span class="muted">// one shared object</span>`);
+          }
+          function tracker() {
+            const t = h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, 'Tracker()'), h('span', { class: 'field' }, 'events = 1'));
+            pile.append(t); trackers.push(t);
+            if (trackers.length > 3) trackers.shift().remove();
+            say(o, `${hl('Tracker().log()')} <span class="muted">// a new instance each time, so its count is always 1</span>`);
+          }
+          let guests = 0;
+          function guest() {
+            guests++;
+            users.append(h('span', { class: 'chip drop-in' }, 'User("guest")'));
+            if (users.children.length > 3) users.firstElementChild.remove();
+            say(o, `${hl('User.guest()')} <span class="muted">// factory on the class name; User(...) itself is private</span>`);
+          }
+          el.append(
+            h('div', { class: 'stage' },
+              zone('object: one instance', hub),
+              zone('class: new instance per call', pile),
+              zone('companion object', h('div', { class: 'kt', html: hl('User.guest()') }), users)),
+            h('div', { class: 'controls' },
+              cmd('HomeScreen: Analytics.log("open")', () => log('HomeScreen', 'open')),
+              cmd('CartScreen: Analytics.log("buy")', () => log('CartScreen', 'buy')),
+              cmd('Tracker().log()', tracker),
+              cmd('User.guest()', guest),
+              cmd('Analytics === Analytics', () => { replay(hub, 'cmp'); say(o, `${hl('Analytics === Analytics')} <span class="muted">is</span> ${hl('true')}  <span class="muted">// the very same instance</span>`); })),
+            o);
+          log('HomeScreen', 'open');
+        },
+      },
+
+      // + enums ───────────────────────────────────────
+      {
+        id: 'enums',
+        title: 'Enum classes',
+        tagline: 'A fixed list of named values.',
+        body: `
+<p>An <code>enum class</code> lists every value a type can have, like the colors of a traffic light. Each entry is a single object. Entries can take constructor values and the class can have functions, after a semicolon that ends the list.</p>
+<p>Every entry knows its <code>name</code> and its <code>ordinal</code> (its position, from 0). <code>Light.entries</code> lists them all in order, and <code>Light.valueOf("RED")</code> looks one up by name, throwing if there is no match. A <code>when</code> that covers every entry needs no <code>else</code>.</p>
+<p>Enum or sealed? Use an enum when every case has the same shape and there is exactly one of each. Use a sealed type when cases carry different data, like an error with its own message.</p>`,
+        code: `enum class Light(val seconds: Int) {
+    RED(30), YELLOW(5), GREEN(25);
+
+    fun next(): Light = when (this) {
+        RED -> GREEN
+        GREEN -> YELLOW
+        YELLOW -> RED
+    }
+}
+
+Light.entries           // [RED, YELLOW, GREEN]
+Light.RED.ordinal       // 0
+Light.GREEN.seconds     // 25
+Light.valueOf("GREEN")  // GREEN
+Light.RED.next()        // GREEN`,
+        remember: 'enum class = a fixed set of single values. entries lists them; when over all of them needs no else.',
+        level: 'beginner',
+        terms: [
+          { term: 'enum class', def: 'A class with a fixed set of named instances, its entries, declared in its body.' },
+          { term: 'entries', def: 'A list of all of an enum’s values in declaration order, the modern replacement for values().' },
+          { term: 'ordinal', def: 'The zero-based position of an enum entry in its declaration.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print every size by name.', code: 'enum class Size { S, M, L }\n\nfor (s in Size.[[entries]]) {\n    println(s.[[name]])\n}', why: '<code>entries</code> lists every value in order, and <code>name</code> is the entry’s name as a String.' },
+          { type: 'bug', prompt: 'An old app version saved <code>"AUTO"</code>. One line crashes on it. Tap it.', code: 'enum class Theme { LIGHT, DARK, SYSTEM }\n\nfun load(prefs: SharedPreferences): Theme {\n    val saved = prefs.getString("theme", null) ?: return Theme.SYSTEM\n    return Theme.valueOf(saved)\n}', bug: 4, fix: '    return Theme.entries.firstOrNull { it.name == saved } ?: Theme.SYSTEM', why: '<code>valueOf</code> throws IllegalArgumentException for an unknown name. Stored text can be anything, so look it up safely.' },
+        ],
+        quiz: [
+          { q: 'What is <code>Light.entries.size</code> for the code above?', options: ['2', '3', '0'], a: 1, why: 'There are three entries: RED, YELLOW and GREEN.' },
+          { q: 'A <code>when (light)</code> covers RED, YELLOW and GREEN. Does it need <code>else</code>?', options: ['Yes, always', 'No, it is exhaustive'], a: 1, why: 'The compiler knows every entry, so covering them all is enough.' },
+          { q: 'Each error case needs its own message and code. Enum or sealed?', options: ['Enum', 'Sealed'], a: 1, why: 'Sealed subtypes can carry different data per case. Enum entries all share one shape.' },
+        ],
+        visual(el) {
+          const L = [{ name: 'RED', s: 30, c: 'r' }, { name: 'YELLOW', s: 5, c: 'y' }, { name: 'GREEN', s: 25, c: 'g' }];
+          const order = [0, 2, 1]; // branch order in next(): RED, GREEN, YELLOW
+          const nextOf = { 0: 2, 2: 1, 1: 0 };
+          let cur = 0, busy = false;
+          const lamps = L.map(l => h('span', { class: `kt-lamp ${l.c}` }));
+          const light = h('div', { class: 'kt-light', role: 'img', 'aria-label': 'Traffic light' }, lamps);
+          const rows = order.map(i => h('div', { class: 'branch', html: '    ' + hl(`${L[i].name.padEnd(6)} -> ${L[nextOf[i]].name}`) }));
+          const chips = h('div', { class: 'kt-pile' });
+          const o = out();
+          const paint = () => { lamps.forEach((lp, i) => lp.classList.toggle('on', i === cur)); light.setAttribute('aria-label', `Traffic light: ${L[cur].name}`); };
+          async function next(quiet) {
+            rows.forEach(r => { r.className = 'branch'; });
+            for (let k = 0; k < order.length; k++) {
+              rows[k].classList.add('scan'); await sleep(260); rows[k].classList.remove('scan');
+              if (!light.isConnected) return false;
+              if (order[k] === cur) { rows[k].classList.add('hit'); rows.slice(k + 1).forEach(r => r.classList.add('skip')); break; }
+              rows[k].classList.add('miss');
+            }
+            cur = nextOf[cur]; paint(); replay(lamps[cur], 'pop');
+            if (!quiet) say(o, `light = ${hl(`Light.${L[cur].name}`)}  <span class="muted">// seconds = ${L[cur].s}, ordinal = ${cur}</span>`);
+            return true;
+          }
+          async function run(f) { if (busy) return; busy = true; await f(); busy = false; }
+          async function cycle() {
+            for (let n = 0; n < 3; n++) {
+              if (!await next(true)) return;
+              say(o, `${hl(`Light.${L[cur].name}`)} <span class="muted">for ${L[cur].s} s (sped up)</span>`);
+              await sleep(L[cur].s * 40);
+              if (!light.isConnected) return;
+            }
+          }
+          async function entries() {
+            chips.replaceChildren();
+            for (let i = 0; i < L.length; i++) { chips.append(h('span', { class: 'chip drop-in' }, `${L[i].name} · ${i}`)); await sleep(140); }
+            say(o, `${hl('Light.entries')} = [RED, YELLOW, GREEN]  <span class="muted">// name · ordinal</span>`);
+          }
+          paint();
+          el.append(
+            h('div', { class: 'kt-enum-wrap' }, light,
+              h('div', { class: 'when' }, h('div', { class: 'branch head', html: hl('fun next() = when (this) {') }), rows, h('div', { class: 'branch head' }, '}'))),
+            h('div', { class: 'controls' },
+              cmd('light = light.next()', () => run(() => next(false))),
+              cmd('light.ordinal', () => { replay(lamps[cur], 'pop'); say(o, `${hl(`Light.${L[cur].name}.ordinal`)} = ${hl(String(cur))}`); }),
+              cmd('Light.entries', () => run(entries)),
+              cmd('Light.valueOf("BLUE")', () => { replay(light, 'shake'); say(o, '<span class="bad">crash:</span> IllegalArgumentException: No enum constant Light.BLUE'); }),
+              h('button', { class: 'btn primary small', onclick: () => run(cycle) }, 'Run a cycle')),
+            chips, o);
+          say(o, `light = ${hl('Light.RED')}  <span class="muted">// seconds = 30, ordinal = 0</span>`);
+        },
+      },
+
       // 6 ─────────────────────────────────────────────
       {
         id: 'data',
@@ -661,6 +1299,119 @@ fun render(state: UiState) = when (state) {
             h('label', { class: 'switch', for: 'sealed-drop' }, drop, 'Forget the Error branch'),
             o);
           render(states[1]);
+        },
+      },
+
+      // + exceptions ──────────────────────────────────
+      {
+        id: 'exceptions',
+        title: 'Exceptions',
+        tagline: 'throw, catch, and try as an expression.',
+        body: `
+<p><code>throw</code> stops the current function and travels up the call stack until a matching <code>catch</code> handles it. If nothing catches it, the app crashes. Catch the specific type you can handle, like <code>NumberFormatException</code>, not every <code>Exception</code>.</p>
+<p><code>try</code> is an expression. Its value is the last line of the <code>try</code> block, or of the <code>catch</code> block when something was thrown. <code>finally</code> always runs, thrown or not, and doesn’t change the value. Kotlin has no checked exceptions: the compiler never forces you to catch anything.</p>
+<p>Three standard helpers say what went wrong. <code>require(cond)</code> throws <code>IllegalArgumentException</code> for a bad argument. <code>check(cond)</code> throws <code>IllegalStateException</code> when the object is in the wrong state. <code>error("msg")</code> always throws <code>IllegalStateException</code>.</p>`,
+        code: `fun parseAge(input: String): Int {
+    val age = try {
+        input.trim().toInt()
+    } catch (e: NumberFormatException) {
+        -1
+    } finally {
+        println("parsed '$input'")
+    }
+    require(age >= 0) { "Age must be a number, got '$input'" }
+    return age
+}
+
+class Player {
+    private var started = false
+    fun start() { started = true }
+    fun pause() {
+        check(started) { "pause() called before start()" }
+    }
+}
+
+fun fail(): Nothing = error("unreachable")   // IllegalStateException`,
+        remember: 'try gives a value, finally always runs. require for bad arguments, check for bad state.',
+        level: 'beginner',
+        terms: [
+          { term: 'try expression', def: 'A try/catch whose value is the last expression of the block that ran, so it can be assigned.' },
+          { term: 'finally', def: 'A block after try/catch that always runs, whether or not an exception was thrown.' },
+          { term: 'require', def: 'Throws IllegalArgumentException with your message when a condition about an argument is false.' },
+          { term: 'check', def: 'Throws IllegalStateException with your message when a condition about the current state is false.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Parse the text, or use 0 when it is not a number.', code: 'val n = [[try]] {\n    text.toInt()\n} [[catch]] (e: NumberFormatException) {\n    0\n}', why: 'Because <code>try</code> is an expression, <code>n</code> gets the parsed number or the 0 from <code>catch</code>.' },
+          { type: 'bug', prompt: 'A bad argument should throw IllegalArgumentException, but this throws IllegalStateException. Tap the line.', code: 'fun setVolume(level: Int) {\n    check(level in 0..100) { "level out of range: $level" }\n    player.volume = level\n}', bug: 1, fix: '    require(level in 0..100) { "level out of range: $level" }', why: '<code>check</code> is for the object’s state. A wrong value passed in by the caller is an argument problem, so use <code>require</code>.' },
+        ],
+        quiz: [
+          { q: '<code>val x = try { "7".toInt() } catch (e: Exception) { 0 } finally { println("end") }</code>. What is <code>x</code>?', options: ['<code>7</code>', '<code>0</code>', '<code>Unit</code>'], a: 0, why: 'Nothing was thrown, so the value comes from the try block. finally runs but doesn’t change the value.' },
+          { q: 'Does Kotlin force you to catch <code>IOException</code>?', options: ['Yes, like Java', 'No, Kotlin has no checked exceptions'], a: 1, why: 'Every exception is unchecked in Kotlin. You decide where to handle it.' },
+          { q: 'What does <code>require(false)</code> throw?', options: ['<code>IllegalStateException</code>', '<code>IllegalArgumentException</code>', 'Nothing'], a: 1, why: '<code>require</code> is for arguments. <code>check</code> and <code>error</code> throw IllegalStateException.' },
+        ],
+        visual(el) {
+          const src = [
+            'val age = try {',
+            '    input.trim().toInt()',
+            '} catch (e: NumberFormatException) {',
+            '    -1',
+            '} finally {',
+            '    println("parsed")',
+            '}',
+            'require(age >= 0) { "Age must be a number" }',
+          ];
+          const rows = src.map(s => h('div', { class: 'branch', html: hl(s) }));
+          const well = h('div', { class: 'slot' });
+          const con = h('div', { class: 'out', 'aria-live': 'polite' });
+          const o = out();
+          let busy = false;
+          const inputs = ['"42"', '" 7 "', '"abc"', '"-3"'];
+          const mark = async (i, cls = 'kt-on', ms = 420) => { rows[i].classList.add(cls); await sleep(ms); return rows[0].isConnected; };
+          async function run(lit) {
+            if (busy) return; busy = true;
+            rows.forEach(r => { r.className = 'branch'; });
+            well.replaceChildren(); con.replaceChildren();
+            const text = JSON.parse(lit), t = text.trim();
+            const ok = /^-?\d+$/.test(t);
+            const value = ok ? parseInt(t, 10) : -1;
+            say(o, hl(`val input = ${lit}`));
+            if (!await mark(0)) return;
+            if (!await mark(1)) return;
+            if (ok) {
+              rows[2].classList.add('kt-off'); rows[3].classList.add('kt-off');
+              swap(well, String(value));
+              say(o, `try block finished with ${hl(String(value))}, catch is skipped`);
+              if (!await mark(1, 'kt-on', 500)) return;
+            } else {
+              rows[1].classList.add('kt-err'); replay(rows[1], 'shake');
+              say(o, `<span class="bad">throws</span> NumberFormatException: For input string: ${lit}`);
+              if (!await mark(1, 'kt-err', 700)) return;
+              if (!await mark(2)) return;
+              if (!await mark(3)) return;
+              swap(well, '-1');
+              say(o, `catch block gives ${hl('-1')}`);
+            }
+            if (!await mark(4)) return;
+            if (!await mark(5)) return;
+            con.append(h('div', { class: 'line drop-in' }, 'parsed'));
+            if (!await mark(6)) return;
+            if (value < 0) {
+              rows[7].classList.add('kt-err'); replay(rows[7], 'shake');
+              say(o, '<span class="bad">crash:</span> IllegalArgumentException: Age must be a number');
+            } else {
+              await mark(7);
+              say(o, `<span class="good">ok:</span> age = ${value}  <span class="muted">// finally ran either way</span>`);
+            }
+            busy = false;
+          }
+          swap(well, '42');
+          say(o, 'Pick an input and follow the path it takes.');
+          el.append(
+            h('div', { class: 'controls' }, inputs.map(lit => cmd(`input = ${lit}`, () => run(lit)))),
+            h('div', { class: 'sealed-wrap' },
+              h('div', { class: 'when' }, rows),
+              h('div', { class: 'box val' }, h('span', { class: 'box-tag', html: hl('age') }), well)),
+            o, con);
         },
       },
 

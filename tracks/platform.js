@@ -144,6 +144,7 @@
     id: 'platform',
     title: 'Platform and push',
     description: 'Notifications, FCM, deep links and the background rules that decide when your code gets to run.',
+    group: 'Shipping', requires: ['android'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────

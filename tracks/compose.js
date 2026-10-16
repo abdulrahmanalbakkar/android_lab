@@ -137,12 +137,167 @@
 @media (max-width: 640px) {
   .cmp-split, .cmp-mod-wrap { grid-template-columns: minmax(0, 1fr); }
   .cmp-fx-lane { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+
+/* layouts */
+.cmp-ly-parent { position: relative; width: min(440px, 100%); height: 210px; margin: 0 auto; padding: 8px; border-radius: 12px; border: 2px dashed var(--accent); background: var(--surface); display: flex; gap: 8px; min-width: 0; overflow: hidden; }
+.cmp-ly-parent.cmp-ly-col { flex-direction: column; }
+.cmp-ly-parent.cmp-ly-box { display: grid; gap: 0; }
+.cmp-ly-parent.cmp-ly-box > * { grid-area: 1 / 1; }
+.cmp-ly-tag { position: absolute; top: 4px; right: 8px; font: 600 0.68rem var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; pointer-events: none; }
+.cmp-ly-item { flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; border: 2px solid var(--ink); font: 700 0.9rem var(--mono); color: var(--ink); min-width: 0; min-height: 0; overflow: hidden; transition: flex-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-ly-item small { display: block; font: 500 0.62rem var(--mono); color: var(--muted); }
+.cmp-ly-a { width: 56px; height: 56px; background: var(--accent-soft); }
+.cmp-ly-b { width: 76px; height: 40px; background: var(--warm-soft); }
+.cmp-ly-c { width: 44px; height: 84px; background: var(--ok-soft); }
+.cmp-ly-item.cmp-ly-w { flex-grow: 1; border-style: dashed; }
+.cmp-ly-row .cmp-ly-item.cmp-ly-w { width: 76px; }
+.cmp-ly-col .cmp-ly-item.cmp-ly-w { height: 40px; }
+.cmp-ly-spacer { flex: 0 0 0; min-width: 0; min-height: 0; display: grid; place-items: center; border-radius: 8px; background: repeating-linear-gradient(45deg, var(--sunk) 0 6px, transparent 6px 12px); overflow: hidden; transition: flex-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-ly-spacer.cmp-ly-grow { flex-grow: 1; }
+.cmp-ly-spacer span { font: 600 0.62rem var(--mono); color: var(--muted); white-space: nowrap; }
+.cmp-ly-grid { display: grid; grid-template-columns: repeat(3, 34px); gap: 4px; }
+.cmp-ly-cell { width: 34px; height: 26px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; padding: 0; }
+.cmp-ly-cell::after { content: ""; display: block; width: 8px; height: 8px; margin: auto; border-radius: 50%; background: var(--muted); }
+.cmp-ly-cell[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.cmp-ly-cell[aria-pressed="true"]::after { background: var(--accent); }
+.cmp-ly-group { display: grid; gap: 6px; min-width: 0; }
+
+/* scaffold */
+.cmp-sc-wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; min-width: 0; }
+.cmp-sc-phone { position: relative; width: 230px; height: 400px; border-radius: 28px; border: 8px solid var(--code-bg); background: var(--bg); overflow: hidden; justify-self: center; }
+.cmp-sc-status { position: absolute; top: 0; left: 0; right: 0; height: 18px; z-index: 4; display: flex; justify-content: space-between; align-items: center; padding: 0 14px; font: 600 0.6rem var(--mono); color: var(--muted); pointer-events: none; }
+.cmp-sc-top { position: absolute; top: 0; left: 0; right: 0; height: 64px; padding: 18px 14px 0; z-index: 3; display: flex; align-items: center; font: 700 1rem var(--display); background: var(--accent-soft); transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-sc-bottom { position: absolute; bottom: 0; left: 0; right: 0; height: 66px; padding-bottom: 18px; z-index: 3; display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; background: var(--sunk); transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-sc-bottom span { justify-self: center; width: 34px; height: 8px; border-radius: 99px; background: var(--line); }
+.cmp-sc-bottom span:first-child { background: var(--accent); }
+.cmp-sc-phone.cmp-sc-notop .cmp-sc-top { transform: translateY(-100%); }
+.cmp-sc-phone.cmp-sc-nobottom .cmp-sc-bottom { transform: translateY(100%); }
+.cmp-sc-phone.cmp-sc-nopad .cmp-sc-top, .cmp-sc-phone.cmp-sc-nopad .cmp-sc-bottom { opacity: 0.72; }
+.cmp-sc-pill { position: absolute; bottom: 6px; left: 50%; width: 70px; height: 4px; margin-left: -35px; border-radius: 99px; background: var(--muted); z-index: 5; }
+.cmp-sc-content { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none; transition: padding 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-sc-content::-webkit-scrollbar { display: none; }
+.cmp-sc-row { margin: 6px 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 2px solid transparent; font: 700 0.82rem var(--body); transition: border-color 0.25s, background 0.25s; }
+.cmp-sc-row small { display: block; font-weight: 400; color: var(--muted); }
+.cmp-sc-row.cmp-sc-under { border-color: var(--err); background: var(--err-soft); }
+.cmp-sc-fab { position: absolute; right: 14px; bottom: 30px; z-index: 3; width: 50px; height: 50px; border-radius: 16px; border: 0; background: var(--accent); color: var(--accent-ink); font: 700 1.5rem/1 var(--body); cursor: pointer; transition: bottom 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.3s; }
+.cmp-sc-fab.cmp-sc-hide { transform: scale(0); }
+.cmp-sc-snack { position: absolute; left: 10px; right: 10px; bottom: 26px; z-index: 3; padding: 10px 12px; border-radius: 8px; background: var(--code-bg); color: var(--code-ink); font: 500 0.8rem var(--body); display: flex; justify-content: space-between; gap: 8px; opacity: 0; transform: translateY(24px); pointer-events: none; transition: opacity 0.3s, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), bottom 0.35s; }
+.cmp-sc-snack b { color: var(--t-k); }
+.cmp-sc-snack.cmp-on { opacity: 1; transform: none; }
+.cmp-sc-side { display: grid; gap: 10px; min-width: 0; }
+.cmp-sc-pad { display: block; padding: 10px 12px; border-radius: 12px; background: var(--code-bg); color: var(--code-ink); font: 500 0.82rem/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+.cmp-sc-q { font: 600 0.78rem var(--mono); color: var(--muted); }
+
+/* theming */
+.cmp-th-scope { --cmp-seed: var(--t-k); --cmp-bg: var(--code-ink); --cmp-on: var(--code-bg); --cmp-primary: color-mix(in srgb, var(--cmp-seed), var(--code-bg) 42%); --cmp-on-primary: var(--code-ink); --cmp-container: color-mix(in srgb, var(--cmp-seed) 45%, var(--code-ink)); --cmp-on-container: var(--code-bg); --cmp-surface-c: color-mix(in srgb, var(--cmp-seed) 16%, var(--code-ink)); --cmp-radius: 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; min-width: 0; }
+.cmp-th-scope.cmp-th-dark { --cmp-bg: var(--code-bg); --cmp-on: var(--code-ink); --cmp-primary: var(--cmp-seed); --cmp-on-primary: var(--code-bg); --cmp-container: color-mix(in srgb, var(--cmp-seed) 34%, var(--code-bg)); --cmp-on-container: var(--code-ink); --cmp-surface-c: color-mix(in srgb, var(--cmp-seed) 12%, var(--code-bg)); }
+.cmp-th-scope.cmp-th-square { --cmp-radius: 4px; }
+.cmp-th-phone { width: 210px; height: 360px; border-radius: 28px; border: 8px solid var(--code-bg); background: var(--cmp-bg); color: var(--cmp-on); overflow: hidden; display: flex; flex-direction: column; justify-self: center; transition: background-color 0.5s, color 0.5s; }
+.cmp-th-bar { display: flex; align-items: center; padding: 22px 14px 10px; font: 700 1.05rem var(--display); background: var(--cmp-surface-c); transition: background-color 0.5s; }
+.cmp-th-body { flex: 1; display: grid; gap: 10px; align-content: start; padding: 12px; position: relative; }
+.cmp-th-card { display: grid; gap: 4px; padding: 12px; border-radius: var(--cmp-radius); background: var(--cmp-container); color: var(--cmp-on-container); transition: background-color 0.5s, color 0.5s, border-radius 0.4s; }
+.cmp-th-card b { font: 700 1.05rem var(--display); }
+.cmp-th-card span { font-size: 0.8rem; }
+.cmp-th-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.cmp-th-btn { padding: 7px 14px; border-radius: 999px; font: 700 0.78rem var(--body); background: var(--cmp-primary); color: var(--cmp-on-primary); transition: background-color 0.5s, color 0.5s; }
+.cmp-th-btn.cmp-th-out { background: transparent; color: var(--cmp-primary); box-shadow: inset 0 0 0 1px var(--cmp-primary); }
+.cmp-th-text { font-size: 0.8rem; opacity: 0.8; }
+.cmp-th-fab { position: absolute; right: 12px; bottom: 12px; width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font: 700 1.4rem/1 var(--body); background: var(--cmp-container); color: var(--cmp-on-container); transition: background-color 0.5s, color 0.5s, border-radius 0.4s; }
+.cmp-th-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: 8px; min-width: 0; }
+.cmp-th-role { display: flex; gap: 8px; align-items: center; font: 500 0.78rem var(--mono); min-width: 0; overflow-wrap: anywhere; }
+.cmp-th-role i { flex: none; width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line); transition: background-color 0.5s; }
+.cmp-th-side { display: grid; gap: 12px; min-width: 0; }
+.cmp-th-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+/* text input */
+.cmp-ti-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+.cmp-ti-form { display: grid; gap: 6px; padding: 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+.cmp-ti-field { position: relative; display: flex; align-items: center; border: 1.5px solid var(--muted); border-radius: 6px; background: var(--surface); transition: border-color 0.2s, box-shadow 0.2s; min-width: 0; }
+.cmp-ti-field:focus-within { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cmp-ti-field.cmp-ti-err { border-color: var(--err); box-shadow: inset 0 0 0 1px var(--err); }
+.cmp-ti-field input { flex: 1; min-width: 0; width: 100%; font: 500 1rem var(--mono); padding: 16px 12px 8px; border: 0; background: transparent; color: var(--ink); outline: none; }
+.cmp-ti-label { position: absolute; left: 10px; top: 13px; padding: 0 4px; background: var(--surface); color: var(--muted); font-size: 0.95rem; pointer-events: none; transition: top 0.18s, font-size 0.18s, color 0.18s; }
+.cmp-ti-field.cmp-ti-up .cmp-ti-label { top: -9px; font-size: 0.74rem; }
+.cmp-ti-field:focus-within .cmp-ti-label { color: var(--accent); }
+.cmp-ti-field.cmp-ti-err .cmp-ti-label { color: var(--err); }
+.cmp-ti-eye { flex: none; margin-right: 6px; font: 600 0.72rem var(--mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; }
+.cmp-ti-support { min-height: 1.3em; font-size: 0.78rem; color: var(--err); padding-left: 14px; }
+.cmp-ti-state { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--code-bg); color: var(--code-ink); font: 500 0.8rem/1.5 var(--mono); overflow-x: auto; min-width: 0; }
+.cmp-ti-state div { white-space: pre; }
+.cmp-ti-log { display: grid; gap: 2px; min-height: 60px; align-content: start; font: 500 0.76rem/1.45 var(--mono); color: var(--muted); overflow-x: auto; }
+.cmp-ti-log div { white-space: nowrap; }
+.cmp-kb { display: grid; gap: 6px; padding: 10px; border-radius: 14px; background: var(--sunk); min-width: 0; transition: opacity 0.25s; }
+.cmp-kb.cmp-kb-off { opacity: 0.45; }
+.cmp-kb-row { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.cmp-kb-key { min-width: 34px; height: 36px; padding: 0 8px; border-radius: 7px; border: 0; background: var(--surface); color: var(--ink); font: 600 0.9rem var(--mono); cursor: pointer; box-shadow: 0 1px 0 var(--line); }
+.cmp-kb-key.cmp-kb-wide { min-width: 96px; }
+.cmp-kb-key.cmp-kb-act { background: var(--accent); color: var(--accent-ink); min-width: 70px; }
+.cmp-kb-key.cmp-kb-new { animation: pop 0.35s ease-out; outline: 2px solid var(--accent); }
+
+/* lists */
+.cmp-ls-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; min-width: 0; }
+.cmp-ls-frame { position: relative; min-width: 0; border-radius: 18px; border: 6px solid var(--code-bg); background: var(--surface); overflow: hidden; }
+.cmp-ls-view { position: relative; height: 280px; overflow: auto; overscroll-behavior: contain; }
+.cmp-ls-inner { display: grid; gap: 6px; padding: 0 8px; }
+.cmp-ls-frame.cmp-ls-row .cmp-ls-view { height: 150px; }
+.cmp-ls-frame.cmp-ls-row .cmp-ls-inner { display: flex; gap: 8px; padding: 8px 0; width: max-content; }
+.cmp-ls-frame.cmp-ls-grid .cmp-ls-inner { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cmp-ls-frame.cmp-ls-padded .cmp-ls-inner { padding: 24px 8px; }
+.cmp-ls-frame.cmp-ls-row.cmp-ls-padded .cmp-ls-inner { padding: 8px 24px; }
+.cmp-ls-band { position: absolute; z-index: 2; pointer-events: none; background: var(--accent-soft); opacity: 0; transition: opacity 0.3s; }
+.cmp-ls-frame.cmp-ls-padded .cmp-ls-band { opacity: 0.55; }
+.cmp-ls-band.cmp-b1 { top: 0; left: 0; right: 0; height: 24px; }
+.cmp-ls-band.cmp-b2 { bottom: 0; left: 0; right: 0; height: 24px; }
+.cmp-ls-frame.cmp-ls-row .cmp-ls-band.cmp-b1 { right: auto; bottom: 0; width: 24px; height: auto; }
+.cmp-ls-frame.cmp-ls-row .cmp-ls-band.cmp-b2 { left: auto; top: 0; width: 24px; height: auto; }
+.cmp-ls-item { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--sunk); font-weight: 700; font-size: 0.9rem; min-width: 0; min-height: 44px; border: 2px solid transparent; }
+.cmp-ls-item i { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); font: 700 0.8rem/26px var(--mono); text-align: center; font-style: normal; color: var(--accent); }
+.cmp-ls-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-ls-frame.cmp-ls-row .cmp-ls-item { flex-direction: column; justify-content: center; width: 96px; height: 120px; flex: none; }
+.cmp-ls-frame.cmp-ls-grid .cmp-ls-item { flex-direction: column; justify-content: center; height: 86px; padding: 6px; }
+.cmp-ls-frame.cmp-ls-grid .cmp-ls-item span, .cmp-ls-frame.cmp-ls-row .cmp-ls-item span { max-width: 100%; font-size: 0.78rem; }
+.cmp-ls-head { position: sticky; top: 0; z-index: 1; padding: 4px 10px; border-radius: 6px; background: var(--surface); color: var(--accent); font: 700 0.8rem var(--mono); border-bottom: 2px solid var(--accent-soft); }
+.cmp-ls-off { visibility: hidden; }
+.cmp-ls-in { animation: cmp-ls-in 0.8s ease-out; }
+@keyframes cmp-ls-in { from { border-color: var(--accent); background: var(--accent-soft); } }
+.cmp-ls-map { display: grid; grid-template-columns: repeat(5, 12px); gap: 3px; align-content: start; padding: 8px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line); }
+.cmp-ls-tick { width: 12px; height: 12px; border-radius: 3px; background: var(--sunk); transition: background 0.2s; }
+.cmp-ls-tick.cmp-h { border-radius: 50%; }
+.cmp-ls-tick.cmp-on { background: var(--accent); }
+.cmp-ls-count { font: 600 0.8rem var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* gestures */
+.cmp-gs-pad { position: relative; height: 240px; border-radius: 14px; border: 1px dashed var(--line); background: var(--bg); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; min-width: 0; }
+.cmp-gs-target { position: absolute; left: 50%; top: 50%; width: 170px; height: 110px; margin: -55px 0 0 -85px; border-radius: 16px; background: var(--surface); border: 2px solid var(--ink); display: grid; place-items: center; align-content: center; gap: 4px; overflow: hidden; cursor: pointer; text-align: center; }
+.cmp-gs-target b { font: 700 1.6rem var(--display); font-variant-numeric: tabular-nums; position: relative; }
+.cmp-gs-target small { font: 600 0.72rem var(--mono); color: var(--muted); position: relative; }
+.cmp-gs-target.cmp-gs-full { inset: 0; width: auto; height: auto; margin: 0; border: 0; border-radius: 0; background: transparent; }
+.cmp-gs-wave { position: absolute; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: var(--accent); opacity: 0.35; pointer-events: none; animation: cmp-gs-wave 0.6s ease-out forwards; }
+@keyframes cmp-gs-wave { to { transform: scale(14); opacity: 0; } }
+.cmp-gs-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--warm); pointer-events: none; }
+.cmp-gs-dot span { position: absolute; left: 12px; top: -18px; font: 600 0.7rem var(--mono); color: var(--warm); white-space: nowrap; }
+.cmp-gs-puck { position: absolute; left: 0; top: 0; width: 60px; height: 60px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 0.72rem var(--mono); cursor: grab; touch-action: none; }
+.cmp-gs-puck.cmp-gs-held { cursor: grabbing; box-shadow: 0 0 0 8px var(--accent-soft); }
+.cmp-gs-meter { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; pointer-events: none; }
+.cmp-gs-meter span { display: block; height: 100%; width: 0; background: var(--warm); }
+.cmp-gs-meter span.cmp-gs-wait { background: var(--muted); }
+.cmp-gs-log { display: grid; gap: 2px; min-height: 104px; align-content: start; padding: 10px 12px; border-radius: 12px; background: var(--code-bg); color: var(--code-ink); font: 500 0.8rem/1.5 var(--mono); overflow-x: auto; }
+.cmp-gs-log div { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .cmp-sc-wrap, .cmp-th-scope, .cmp-ti-wrap { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 460px) {
+  .cmp-ls-wrap { grid-template-columns: minmax(0, 1fr); }
+  .cmp-ls-map { grid-template-columns: repeat(auto-fill, 12px); }
 }`;
 
   Lab.addTrack({
     id: 'compose',
     title: 'Jetpack Compose',
     description: 'Build Android UI with Kotlin functions that redraw themselves when state changes.',
+    group: 'Building apps', requires: ['kotlin'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────
@@ -257,6 +412,552 @@ fun LikeCount(likes: Int) {
 
       // 2 ─────────────────────────────────────────────
       {
+        id: 'modifiers',
+        title: 'Modifier order',
+        tagline: 'Each modifier wraps everything after it.',
+        body: `
+<p>A <code>Modifier</code> chain reads from the outside in. The first modifier is the outermost layer. Each one wraps all the modifiers that come after it, and the composable’s content sits in the middle.</p>
+<p>So order changes the result. <code>.padding(16.dp).background(Purple)</code> leaves a clear ring and then paints inside it. <code>.background(Purple).padding(16.dp)</code> paints first, so the padding is purple too. Put <code>.clickable</code> before the padding and the whole area responds to taps. Put it after and only the inner part does.</p>
+<p>Tap a modifier below to move it one step earlier, or pick a preset. Then tap inside the box to see the real touch area.</p>`,
+        code: `val Purple = Color(0xFF6C44EC)
+
+// A 96 dp purple square inside a clear 16 dp ring. Only the purple part is tappable.
+Box(
+    Modifier
+        .padding(16.dp)
+        .background(Purple)
+        .clickable { onClick() }
+        .size(96.dp)
+)
+
+// A 128 dp purple square. The whole square is tappable.
+Box(
+    Modifier
+        .clickable { onClick() }
+        .background(Purple)
+        .padding(16.dp)
+        .size(96.dp)
+)`,
+        remember: 'Modifiers apply outside in. The first one wraps everything after it.',
+        level: 'beginner',
+        terms: [
+          { term: 'Modifier', def: 'An ordered chain of decorations like size, padding, background and click handling applied to a composable.' },
+          { term: 'Modifier order', def: 'The rule that each modifier wraps all modifiers after it, so changing the order changes layout, drawing and touch area.' },
+          { term: 'Touch target', def: 'The area that responds to taps, set by where clickable sits in the chain; Material asks for at least 48 dp.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make the whole padded area tappable, not just the text.', code: 'Text(\n    "Retry",\n    Modifier\n        .[[clickable]] { retry() }\n        .[[padding]](12.dp)\n)', why: '<code>clickable</code> comes first, so it wraps the padding and the whole area responds.' },
+          { type: 'bug', prompt: 'This should be a purple circle. It draws a purple square. Tap the line in the wrong place.', code: 'Box(\n    Modifier\n        .size(64.dp)\n        .background(Purple)\n        .clip(CircleShape)\n)', bug: 4, fix: '        // move .clip(CircleShape) above .background(Purple)', why: 'A clip only affects what comes after it. The background is already painted as a square when the clip arrives.' },
+        ],
+        quiz: [
+          { q: 'Which chain paints the padding area purple?', options: ['<code>.padding(16.dp).background(Purple)</code>', '<code>.background(Purple).padding(16.dp)</code>'], a: 1, why: 'The background is outside the padding, so it covers the padded area too.' },
+          { q: 'Which button has the bigger touch target?', options: ['<code>.clickable { }.padding(12.dp)</code>', '<code>.padding(12.dp).clickable { }</code>'], a: 0, why: 'When clickable comes first, it wraps the padding, so the padding area responds to taps.' },
+          { q: 'How big is <code>Modifier.size(96.dp).padding(16.dp)</code>?', options: ['96 × 96 dp', '128 × 128 dp', '64 × 64 dp'], a: 0, why: 'The size is outermost. The padding eats into it and leaves 64 dp for the content.' },
+        ],
+        visual(el) {
+          const MODS = { padding: '.padding(16.dp)', background: '.background(Purple)', clickable: '.clickable { onClick() }', size: '.size(96.dp)' };
+          const PRESETS = [
+            ['padding().background()', ['padding', 'background', 'clickable', 'size']],
+            ['background().padding()', ['background', 'padding', 'clickable', 'size']],
+            ['clickable().padding()', ['clickable', 'padding', 'background', 'size']],
+            ['size().padding()', ['size', 'padding', 'background', 'clickable']],
+          ];
+          let order = PRESETS[0][1].slice();
+          const chain = h('div', { class: 'cmp-chain' });
+          const preview = h('div', { class: 'cmp-preview', onclick: () => { replay(preview, 'shake'); say(o, '<span class="bad">missed:</span> that tap landed outside the clickable area. Nothing ran.'); } });
+          const o = out();
+          const presetBtns = PRESETS.map(([src, ord]) => cmd(src, () => { order = ord.slice(); render(); }));
+          function sizes() {
+            let w = 26;
+            for (const k of [...order].reverse()) { if (k === 'size') w = 96; if (k === 'padding') w += 32; }
+            const total = w, at = {};
+            for (const k of order) { at[k] = w; if (k === 'padding') w -= 32; }
+            return { total, at };
+          }
+          function move(i) {
+            const k = order.splice(i, 1)[0];
+            if (i === 0) order.push(k); else order.splice(i - 1, 0, k);
+            render();
+          }
+          function ripple(ev, layer) {
+            ev.stopPropagation();
+            const r = layer.getBoundingClientRect();
+            layer.append(h('span', { class: 'cmp-ripple', style: `left:${ev.clientX - r.left}px;top:${ev.clientY - r.top}px` }));
+            setTimeout(() => layer.querySelector('.cmp-ripple') && layer.querySelector('.cmp-ripple').remove(), 650);
+            say(o, `<span class="good">onClick()</span> ran. <span class="muted">The touch area is ${sizes().at.clickable} × ${sizes().at.clickable} dp.</span>`);
+          }
+          function render() {
+            presetBtns.forEach((b, i) => b.setAttribute('aria-pressed', PRESETS[i][1].join() === order.join()));
+            chain.replaceChildren(
+              h('div', { class: 'cmp-chain-head', html: hl('Box(Modifier') }),
+              ...order.map((k, i) => h('button', { class: 'cmd', 'aria-label': `Move ${MODS[k]} ${i ? 'one step earlier' : 'to the end'}`, onclick: () => move(i), html: `<span class="muted">${i ? '↑' : '↓'}</span> ${hl(MODS[k])}` })),
+              h('div', { class: 'cmp-chain-head', html: hl(') { Text("Hi") }') }));
+            let node = h('div', { class: 'cmp-content' }, 'Hi');
+            for (const k of [...order].reverse()) {
+              const props = { class: `cmp-layer cmp-l-${k}` };
+              if (k === 'padding') props.style = 'padding:16px';
+              if (k === 'size') props.style = 'width:96px;height:96px';
+              node = h('div', props, node);
+              if (k === 'clickable') { const layer = node; layer.addEventListener('click', ev => ripple(ev, layer)); }
+            }
+            preview.replaceChildren(node); replay(node, 'pop');
+            const s = sizes();
+            say(o, `Box: ${s.total} × ${s.total} dp <span class="muted">·</span> purple: ${s.at.background} × ${s.at.background} <span class="muted">·</span> touch area: ${s.at.clickable} × ${s.at.clickable}`);
+          }
+          render();
+          el.append(
+            h('div', { class: 'controls' }, presetBtns),
+            h('div', { class: 'cmp-mod-wrap' }, chain, preview),
+            h('div', { class: 'cmp-legend' },
+              h('span', {}, h('i', { class: 'lg-bg' }), 'background'),
+              h('span', {}, h('i', { class: 'lg-click' }), 'touch area'),
+              h('span', {}, h('i', { class: 'lg-pad' }), 'padding edge')),
+            h('p', { class: 'tip' }, 'Tap a line in the chain to move it up one step. The first line jumps to the end.'),
+            o);
+        },
+      },
+
+      // 3 ─────────────────────────────────────────────
+      {
+        id: 'layouts',
+        title: 'Row, Column and Box',
+        tagline: 'Arrangement spreads along the main axis. Alignment places across it.',
+        body: `
+<p><code>Column</code> stacks children top to bottom. <code>Row</code> puts them side by side. <code>Box</code> stacks them on top of each other. Most screens are these three, nested.</p>
+<p>Row and Column each take two knobs. <em>Arrangement</em> works along the main axis and decides how leftover space is shared. <em>Alignment</em> works across it and decides where each child sits in the other direction. A Row has <code>horizontalArrangement</code> and <code>verticalAlignment</code>. A Column has the opposite pair. A Box has one <code>contentAlignment</code>.</p>
+<p><code>Modifier.weight(1f)</code> gives a child a share of the leftover space. Once a child has weight, nothing is left over, so arrangement has nothing to spread. A <code>Spacer</code> with weight pushes the children after it to the far end.</p>`,
+        code: `@Composable
+fun MessageRow(name: String, preview: String, time: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Avatar(Modifier.size(40.dp))
+        Column(Modifier.weight(1f)) {          // takes all the leftover width
+            Text(name, style = MaterialTheme.typography.titleMedium)
+            Text(preview, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(time, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+fun BellWithCount(count: Int) {
+    Box(contentAlignment = Alignment.Center) {  // children stack, last on top
+        Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+        Text("$count", Modifier.align(Alignment.TopEnd))
+    }
+}`,
+        remember: 'Arrangement spreads along the main axis. Alignment places across it. weight takes what is left.',
+        level: 'beginner',
+        terms: [
+          { term: 'Arrangement', def: 'How a Row or Column places its children along its main axis and shares the leftover space, such as Start, SpaceBetween or spacedBy.' },
+          { term: 'Alignment', def: 'Where a child sits on the cross axis of a Row or Column, or anywhere inside a Box.' },
+          { term: 'Modifier.weight', def: 'A Row or Column child modifier that gives the child a share of the space left after the unweighted children are measured.' },
+          { term: 'Spacer', def: 'An empty composable that only takes up space, often sized with a modifier like width, height or weight.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Center both children vertically and push the Delete button to the right end.', code: 'Row(\n    modifier = Modifier.fillMaxWidth(),\n    [[verticalAlignment]] = Alignment.CenterVertically,\n) {\n    Text("Draft")\n    Spacer(Modifier.[[weight]](1f))\n    TextButton(onClick = onDelete) { Text("Delete") }\n}', why: 'A Row aligns on the vertical axis with <code>verticalAlignment</code>. The weighted Spacer eats the free space, so Delete lands at the end.' },
+          { type: 'bug', prompt: 'This Row should spread its buttons to both ends, but it does not compile. Tap the broken line.', code: 'Row(\n    modifier = Modifier.fillMaxWidth(),\n    horizontalAlignment = Arrangement.SpaceBetween,\n) {\n    TextButton(onClick = onBack) { Text("Back") }\n    Button(onClick = onNext) { Text("Next") }\n}', bug: 2, fix: '    horizontalArrangement = Arrangement.SpaceBetween,', why: 'A Row spreads children along its main axis with <code>horizontalArrangement</code>. <code>horizontalAlignment</code> belongs to Column.' },
+        ],
+        quiz: [
+          { q: 'In a <code>Row</code>, which parameter moves the children up and down?', options: ['<code>horizontalArrangement</code>', '<code>verticalAlignment</code>', '<code>contentAlignment</code>'], a: 1, why: 'Up and down is the cross axis of a Row, and the cross axis is set by alignment.' },
+          { q: 'One child of a Row has <code>Modifier.weight(1f)</code>. What does <code>Arrangement.SpaceBetween</code> do now?', options: ['Spreads the children to both ends', 'Nothing visible, because the weight used up the leftover space', 'It throws at runtime'], a: 1, why: 'Arrangement only shares leftover space. A weighted child already took all of it.' },
+          { q: 'Which layout draws its children on top of each other?', options: ['<code>Row</code>', '<code>Column</code>', '<code>Box</code>'], a: 2, why: 'A Box stacks its children. The last one draws on top.' },
+        ],
+        visual(el) {
+          const ARR = ['Start', 'Center', 'End', 'SpaceBetween', 'SpaceAround', 'SpaceEvenly'];
+          const JUST = { Start: 'flex-start', Center: 'center', End: 'flex-end', SpaceBetween: 'space-between', SpaceAround: 'space-around', SpaceEvenly: 'space-evenly' };
+          const ALIGN = { Row: ['Top', 'CenterVertically', 'Bottom'], Column: ['Start', 'CenterHorizontally', 'End'] };
+          const CROSS = ['flex-start', 'center', 'flex-end'];
+          const BOX = ['TopStart', 'TopCenter', 'TopEnd', 'CenterStart', 'Center', 'CenterEnd', 'BottomStart', 'BottomCenter', 'BottomEnd'];
+          let kind = 'Row', arr = 'Start', align = 1, boxAlign = 4, weight = false, spacer = false, busy = false;
+          const [a, b, c] = ['A', 'B', 'C'].map(n => h('div', { class: `cmp-ly-item cmp-ly-${n.toLowerCase()}` }, n));
+          const bNote = h('small', {});
+          b.append(bNote);
+          const spacerEl = h('div', { class: 'cmp-ly-spacer' }, h('span', {}, 'Spacer'));
+          const tag = h('span', { class: 'cmp-ly-tag' });
+          const parent = h('div', { class: 'cmp-ly-parent', role: 'img', 'aria-label': 'Layout preview' });
+          const code = h('div', { class: 'kt' });
+          const o = out();
+          const kindBtns = ['Row', 'Column', 'Box'].map(k => cmd(`${k} { A(); B(); C() }`, () => change(() => { kind = k; }, `${k}: ${k === 'Box' ? 'children stack on top of each other. The last one draws on top.' : `the main axis is ${k === 'Row' ? 'horizontal' : 'vertical'}.`}`)));
+          const arrGroup = h('div', { class: 'controls' });
+          const alignGroup = h('div', { class: 'controls' });
+          const weightIn = h('input', { type: 'checkbox', id: 'cmp-ly-weight' });
+          const spacerIn = h('input', { type: 'checkbox', id: 'cmp-ly-spacer' });
+          const switches = h('div', { class: 'controls' },
+            h('label', { class: 'switch', for: 'cmp-ly-weight' }, weightIn, 'B: Modifier.weight(1f)'),
+            h('label', { class: 'switch', for: 'cmp-ly-spacer' }, spacerIn, 'Spacer(Modifier.weight(1f)) before C'));
+
+          // FLIP: measure, change the layout, then slide every child from its old spot.
+          function slide(mutate) {
+            const before = new Map([...parent.children].map(k => [k, k.getBoundingClientRect()]));
+            mutate();
+            for (const k of parent.children) {
+              const r = before.get(k); if (!r) continue;
+              const n = k.getBoundingClientRect(), dx = r.left - n.left, dy = r.top - n.top;
+              if (dx || dy) k.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 450, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+            }
+          }
+          function apply() {
+            const box = kind === 'Box';
+            parent.className = `cmp-ly-parent cmp-ly-${box ? 'box' : kind === 'Row' ? 'row' : 'col'}`;
+            tag.textContent = kind;
+            b.classList.toggle('cmp-ly-w', weight && !box);
+            bNote.textContent = weight && !box ? 'weight(1f)' : '';
+            const kids = [a, b];
+            if (spacer && !box) kids.push(spacerEl);
+            kids.push(c);
+            if (!box) {
+              parent.style.justifyContent = JUST[arr]; parent.style.alignItems = CROSS[align];
+              kids.forEach(k => { k.style.alignSelf = ''; k.style.justifySelf = ''; });
+            } else {
+              parent.style.justifyContent = ''; parent.style.alignItems = '';
+              const r = Math.floor(boxAlign / 3), col = boxAlign % 3;
+              kids.forEach(k => { k.style.alignSelf = ['start', 'center', 'end'][r]; k.style.justifySelf = ['start', 'center', 'end'][col]; });
+            }
+            parent.replaceChildren(tag, ...kids);
+            paintCode(); paintControls();
+          }
+          function paintCode() {
+            const lines = [];
+            if (kind === 'Box') lines.push('Box(', `    contentAlignment = Alignment.${BOX[boxAlign]},`, ') {', '    A()', '    B()', '    C()', '}');
+            else {
+              lines.push(`${kind}(`, `    ${kind === 'Row' ? 'horizontal' : 'vertical'}Arrangement = Arrangement.${arr},`, `    ${kind === 'Row' ? 'vertical' : 'horizontal'}Alignment = Alignment.${ALIGN[kind][align]},`, ') {', '    A()');
+              lines.push(weight ? '    B(Modifier.weight(1f))' : '    B()');
+              if (spacer) lines.push('    Spacer(Modifier.weight(1f))');
+              lines.push('    C()', '}');
+            }
+            code.innerHTML = hl(lines.join('\n'));
+          }
+          let builtFor = '';
+          function paintControls() {
+            kindBtns.forEach((k, i) => k.setAttribute('aria-pressed', String(['Row', 'Column', 'Box'][i] === kind)));
+            if (builtFor === kind) {
+              arrGroup.querySelectorAll('.cmd').forEach((x, i) => x.setAttribute('aria-pressed', String(ARR[i] === arr)));
+              alignGroup.querySelectorAll('.cmd, .cmp-ly-cell').forEach((x, i) => x.setAttribute('aria-pressed', String(i === (kind === 'Box' ? boxAlign : align))));
+              return;
+            }
+            builtFor = kind;
+            if (kind === 'Box') {
+              arrGroup.replaceChildren(h('span', { class: 'cmp-label' }, 'A Box has no arrangement. Pick its contentAlignment below.'));
+              alignGroup.replaceChildren(h('div', { class: 'cmp-ly-grid', role: 'group', 'aria-label': 'contentAlignment' },
+                BOX.map((n, i) => h('button', { class: 'cmp-ly-cell', 'aria-label': `Alignment.${n}`, 'aria-pressed': String(i === boxAlign), onclick: () => change(() => { boxAlign = i; }, `${hl(`contentAlignment = Alignment.${n}`)} <span class="muted">// every child moves to the same spot</span>`) }))));
+            } else {
+              arrGroup.replaceChildren(...ARR.map(x => cmd(x, () => pickArr(x), { 'aria-pressed': String(x === arr), 'aria-label': `Arrangement.${x}` })));
+              alignGroup.replaceChildren(...ALIGN[kind].map((x, i) => cmd(x, () => change(() => { align = i; }, `${hl(`Alignment.${x}`)} <span class="muted">// moves each child across the main axis</span>`), { 'aria-pressed': String(i === align), 'aria-label': `Alignment.${x}` })));
+            }
+            weightIn.disabled = spacerIn.disabled = kind === 'Box';
+          }
+          function pickArr(x) {
+            const used = weight || spacer;
+            change(() => { arr = x; }, used
+              ? `${hl(`Arrangement.${x}`)} <span class="bad">has nothing to spread.</span> <span class="muted">A weighted child already took the leftover space.</span>`
+              : `${hl(`Arrangement.${x}`)} <span class="muted">// shares the leftover space along the main axis</span>`);
+          }
+          function change(mutate, msg) {
+            if (busy) return;
+            busy = true;
+            slide(() => { mutate(); apply(); });
+            say(o, msg);
+            setTimeout(() => { busy = false; }, 200);
+          }
+          weightIn.addEventListener('change', () => {
+            weight = weightIn.checked; apply(); replay(b, 'pop-soft');
+            say(o, weight ? `${hl('B(Modifier.weight(1f))')} <span class="muted">// B grows into all the free space</span>` : 'B is back to its own width. Arrangement works again.');
+          });
+          spacerIn.addEventListener('change', () => {
+            if (busy) { spacerIn.checked = spacer; return; }
+            spacer = spacerIn.checked;
+            if (spacer) {
+              spacerEl.classList.remove('cmp-ly-grow'); apply();
+              requestAnimationFrame(() => requestAnimationFrame(() => spacerEl.classList.add('cmp-ly-grow')));
+              say(o, `${hl('Spacer(Modifier.weight(1f))')} <span class="muted">// fills the gap and pushes C to the far end</span>`);
+            } else {
+              busy = true; spacer = true; spacerEl.classList.remove('cmp-ly-grow');
+              setTimeout(() => { spacer = false; apply(); busy = false; }, 460);
+              say(o, 'Spacer removed. C slides back.');
+            }
+          });
+          apply();
+          say(o, 'Pick an arrangement and an alignment. Each box is a real flex layout.');
+          el.append(
+            parent,
+            h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Main axis · Arrangement.'), arrGroup),
+            h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Cross axis · Alignment.'), alignGroup),
+            switches,
+            h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Container'), h('div', { class: 'controls' }, kindBtns)),
+            code, o);
+        },
+      },
+
+      // 4 ─────────────────────────────────────────────
+      {
+        id: 'scaffold',
+        title: 'Scaffold and Material 3 structure',
+        tagline: 'Slots for the bars, and innerPadding to keep content clear of them.',
+        body: `
+<p><code>Scaffold</code> lays out the standard parts of a Material 3 screen: <code>topBar</code>, <code>bottomBar</code>, <code>floatingActionButton</code>, <code>snackbarHost</code>, and your content in the middle. It knows where each part goes. The FAB sits above the bottom bar and moves up when a snackbar shows.</p>
+<p>The content lambda gets one parameter, <code>innerPadding</code>. It holds the space taken by the bars and by the system bars. Apps that target Android 15 draw edge to edge, so if you drop <code>innerPadding</code>, your first and last items slide under the bars. Apply it with <code>Modifier.padding(innerPadding)</code>, or pass it as <code>contentPadding</code> to a lazy list so items still scroll behind the bars.</p>
+<p>A snackbar needs a <code>SnackbarHostState</code>. Its <code>showSnackbar</code> is a suspend function, so you call it from a coroutine. It shows one message at a time, and the rest wait in line.</p>`,
+        code: `@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InboxScreen(messages: List<Message>, onCompose: () -> Unit) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Inbox") }) },
+        bottomBar = { NavigationBar { /* NavigationBarItem(...) */ } },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                onCompose()
+                scope.launch { snackbarHostState.showSnackbar("Draft saved") }
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Compose")
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { innerPadding ->
+        LazyColumn(contentPadding = innerPadding) {
+            items(messages, key = { it.id }) { MessageRow(it) }
+        }
+    }
+}`,
+        remember: 'Scaffold places the bars. innerPadding tells your content where they are. Always use it.',
+        level: 'beginner',
+        terms: [
+          { term: 'Scaffold', def: 'A Material 3 layout with slots for a top bar, bottom bar, floating action button, snackbar host and the main content.' },
+          { term: 'innerPadding', def: 'The PaddingValues that Scaffold passes to its content, covering the space used by its bars and the system bars.' },
+          { term: 'SnackbarHostState', def: 'The state object that queues snackbar messages; its suspend showSnackbar shows one message and waits until it is dismissed.' },
+          { term: 'Edge-to-edge', def: 'Drawing the app behind the status bar and navigation bar, which is the default for apps that target Android 15.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Keep the first and last notes clear of the bars while the list still scrolls behind them.', code: 'Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { [[innerPadding]] ->\n    LazyColumn([[contentPadding]] = innerPadding) {\n        items(notes, key = { it.id }) { NoteRow(it) }\n    }\n}', why: 'The lambda parameter carries the bar sizes. As <code>contentPadding</code> it pads the list content, so items can still scroll under the bars.' },
+          { type: 'bug', prompt: 'Tapping Save never shows a snackbar. Tap the line that causes it.', code: '@Composable\nfun NoteScreen(onSave: () -> Unit) {\n    val snackbarHostState = remember { SnackbarHostState() }\n    val scope = rememberCoroutineScope()\n    Scaffold(\n        snackbarHost = { SnackbarHost(remember { SnackbarHostState() }) },\n        floatingActionButton = {\n            FloatingActionButton(onClick = {\n                onSave()\n                scope.launch { snackbarHostState.showSnackbar("Saved") }\n            }) { Icon(Icons.Default.Check, contentDescription = "Save") }\n        },\n    ) { innerPadding -> NoteEditor(Modifier.padding(innerPadding)) }\n}', bug: 5, fix: '        snackbarHost = { SnackbarHost(snackbarHostState) },', why: 'The host watches a second, empty state object. Messages go to <code>snackbarHostState</code>, which no host is showing.' },
+        ],
+        quiz: [
+          { q: 'What does <code>innerPadding</code> contain?', options: ['Padding you set on the Scaffold yourself', 'The space taken by the Scaffold bars and the system bars', 'Always 16.dp on every side'], a: 1, why: 'Scaffold measures its bars and the window insets, then tells your content how much room they take.' },
+          { q: 'You call <code>showSnackbar</code> twice in quick succession. What happens?', options: ['The second replaces the first at once', 'The second waits until the first is dismissed', 'Both show, stacked'], a: 1, why: 'SnackbarHostState shows one message at a time and queues the rest.' },
+          { q: 'Why can’t you call <code>showSnackbar</code> straight from <code>onClick</code>?', options: ['It is a suspend function, so it needs a coroutine', 'It only works inside a ViewModel', 'It has to run on a background thread'], a: 0, why: 'It suspends until the snackbar is dismissed. Launch it with <code>rememberCoroutineScope()</code>.' },
+        ],
+        visual(el) {
+          const STATUS = 24, TOPBAR = 64, NAVBAR = 80, NAVINSET = 24, PX = 0.75;
+          let hasTop = true, hasBottom = true, hasFab = true, usePad = true, drafts = 0, showing = false;
+          const queue = [];
+          const rows = h('div', {});
+          const content = h('div', { class: 'cmp-sc-content' }, rows);
+          const top = h('div', { class: 'cmp-sc-top' }, 'Inbox');
+          const bottom = h('div', { class: 'cmp-sc-bottom' }, h('span'), h('span'), h('span'));
+          const fab = h('button', { class: 'cmp-sc-fab', 'aria-label': 'Floating action button', onclick: () => tapFab() }, '+');
+          const snackText = h('span', {});
+          const snack = h('div', { class: 'cmp-sc-snack', 'aria-live': 'polite' }, snackText, h('b', {}, 'Undo'));
+          const phone = h('div', { class: 'cmp-sc-phone' },
+            h('div', { class: 'cmp-sc-status', 'aria-hidden': 'true' }, h('span', {}, '9:41'), h('span', {}, '5G')),
+            content, top, bottom, snack, fab, h('div', { class: 'cmp-sc-pill', 'aria-hidden': 'true' }));
+          const pad = h('div', { class: 'cmp-sc-pad' });
+          const qLine = h('span', { class: 'cmp-sc-q' });
+          const o = out();
+          const sw = (id, label, on, fn) => {
+            const i = h('input', { type: 'checkbox', id, checked: on });
+            i.addEventListener('change', () => fn(i.checked));
+            return h('label', { class: 'switch', for: id }, i, label);
+          };
+          const MESSAGES = ['Welcome to Inbox', 'Your order shipped', 'Team lunch on Friday', 'Invoice #2041', 'New sign-in on Pixel', 'Weekend plans?', 'Build passed', 'Design review notes', 'Flight check-in open', 'Last message'];
+          function addRow(title, sub, first) {
+            const r = h('div', { class: 'cmp-sc-row' }, title, h('small', {}, sub));
+            if (first) { rows.prepend(r); r.classList.add('drop-in'); } else rows.append(r);
+          }
+          MESSAGES.forEach((m, i) => addRow(m, i === 0 ? 'First item' : i === MESSAGES.length - 1 ? 'Scroll down to reach it' : 'Tap to open'));
+          const insets = () => ({ top: hasTop ? STATUS + TOPBAR : STATUS, bottom: hasBottom ? NAVBAR + NAVINSET : NAVINSET });
+          function layout() {
+            const p = insets();
+            phone.classList.toggle('cmp-sc-notop', !hasTop);
+            phone.classList.toggle('cmp-sc-nobottom', !hasBottom);
+            phone.classList.toggle('cmp-sc-nopad', !usePad);
+            content.style.paddingTop = usePad ? `${p.top * PX}px` : '0px';
+            content.style.paddingBottom = usePad ? `${p.bottom * PX}px` : '0px';
+            const base = p.bottom * PX;
+            snack.style.bottom = `${base + 8}px`;
+            fab.style.bottom = `${base + 12 + (showing ? snack.offsetHeight + 10 : 0)}px`;
+            fab.classList.toggle('cmp-sc-hide', !hasFab);
+            pad.innerHTML = hl(`innerPadding = PaddingValues(\n    top = ${p.top}.dp,     // ${hasTop ? 'status bar + TopAppBar' : 'status bar only'}\n    bottom = ${p.bottom}.dp,  // ${hasBottom ? 'NavigationBar + gesture bar' : 'gesture bar only'}\n)\n${usePad ? 'LazyColumn(contentPadding = innerPadding)' : 'LazyColumn()   // innerPadding ignored'}`);
+            setTimeout(markUnder, 430);
+          }
+          function markUnder() {
+            if (!el.isConnected) return 0;
+            const cr = content.getBoundingClientRect(), p = insets();
+            const first = rows.firstElementChild, last = rows.lastElementChild;
+            const atTop = content.scrollTop < 2, atEnd = content.scrollTop + content.clientHeight >= content.scrollHeight - 2;
+            for (const r of rows.children) r.classList.remove('cmp-sc-under');
+            if (atTop && first.getBoundingClientRect().top < cr.top + p.top * PX - 2) first.classList.add('cmp-sc-under');
+            if (atEnd && last.getBoundingClientRect().bottom > cr.bottom - p.bottom * PX + 2) last.classList.add('cmp-sc-under');
+            return usePad ? 0 : 2;
+          }
+          content.addEventListener('scroll', () => requestAnimationFrame(markUnder), { passive: true });
+          function setPart(fn, msg) {
+            fn(); layout();
+            setTimeout(() => {
+              const n = markUnder();
+              say(o, `${msg} ${n ? '<span class="bad">The first and last items stay under the bars, even at the ends of the scroll.</span>' : '<span class="good">The first and last items clear the bars.</span>'}`);
+            }, 450);
+          }
+          async function pump() {
+            if (showing) return;
+            while (queue.length && el.isConnected) {
+              showing = true;
+              snackText.textContent = queue.shift();
+              qLine.textContent = queue.length ? `${queue.length} waiting in SnackbarHostState` : 'Queue empty';
+              snack.classList.add('cmp-on'); layout();
+              await sleep(2400);
+              snack.classList.remove('cmp-on'); showing = false; layout();
+              await sleep(400);
+            }
+            showing = false;
+            qLine.textContent = 'Queue empty';
+          }
+          function show(msg) {
+            queue.push(msg);
+            if (showing) qLine.textContent = `${queue.length} waiting in SnackbarHostState`;
+            if (showing) say(o, `${hl(`showSnackbar("${msg}")`)} <span class="muted">// suspends and waits. One snackbar at a time.</span>`);
+            pump();
+          }
+          function tapFab() {
+            if (!hasFab) return;
+            drafts++;
+            addRow(`Draft ${drafts}`, 'Just now', true);
+            content.scrollTo({ top: 0, behavior: 'smooth' });
+            replay(fab, 'pop');
+            say(o, `${hl('scope.launch { snackbarHostState.showSnackbar("Draft saved") }')} <span class="muted">// the FAB moves up to make room</span>`);
+            show(`Draft ${drafts} saved`);
+          }
+          layout();
+          say(o, 'Turn parts of the Scaffold on and off, then switch off innerPadding.');
+          el.append(
+            h('div', { class: 'cmp-sc-wrap' }, phone,
+              h('div', { class: 'cmp-sc-side' },
+                h('div', { class: 'controls' },
+                  sw('cmp-sc-topbar', 'topBar', true, v => setPart(() => { hasTop = v; }, v ? 'TopAppBar is back. innerPadding.top grows.' : 'No topBar. innerPadding.top is just the status bar.')),
+                  sw('cmp-sc-bottombar', 'bottomBar', true, v => setPart(() => { hasBottom = v; }, v ? 'NavigationBar is back. The FAB sits above it.' : 'No bottomBar. The FAB and snackbar drop to the gesture bar.')),
+                  sw('cmp-sc-fabon', 'floatingActionButton', true, v => setPart(() => { hasFab = v; }, v ? 'FAB slot filled.' : 'FAB slot empty.')),
+                  sw('cmp-sc-usepad', 'use innerPadding', true, v => setPart(() => { usePad = v; }, v ? 'Content padded by innerPadding.' : 'innerPadding ignored. Content starts at the very top of the window.'))),
+                pad,
+                h('div', { class: 'controls' },
+                  act('Tap the FAB', tapFab),
+                  cmd('showSnackbar("Synced")', () => { replay(snack, 'pop-soft'); show('Synced'); say(o, `${hl('showSnackbar("Synced")')} ${showing ? '<span class="muted">// queued behind the current one</span>' : ''}`); })),
+                qLine)),
+            o);
+          qLine.textContent = 'Queue empty';
+        },
+      },
+
+      // 5 ─────────────────────────────────────────────
+      {
+        id: 'theming',
+        title: 'Theming with Material 3',
+        tagline: 'Read colors from roles, then swap the whole scheme at once.',
+        body: `
+<p><code>MaterialTheme</code> hands three things down the tree: a <code>colorScheme</code>, a <code>typography</code> scale and a set of <code>shapes</code>. Material components take their colors and styles from it. Your own composables should too. Write <code>MaterialTheme.colorScheme.primary</code>, not a hard-coded <code>Color</code>.</p>
+<p>A color scheme is a set of roles: <code>primary</code>, <code>onPrimary</code>, <code>primaryContainer</code>, <code>surface</code>, <code>onSurface</code> and more. Each “on” color is the one that reads well on top of its partner. Swap the scheme and every screen follows. Dark theme works this way: pick a dark scheme when <code>isSystemInDarkTheme()</code> is true.</p>
+<p>On Android 12 (API 31) and up, <code>dynamicLightColorScheme</code> and <code>dynamicDarkColorScheme</code> build a scheme from the user’s wallpaper. Those functions require API 31, so check the API level and keep your own schemes as the fallback.</p>`,
+        code: `@Composable
+fun AppTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> DarkColors      // darkColorScheme(primary = ..., ...)
+        else -> LightColors          // lightColorScheme(primary = ..., ...)
+    }
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = AppTypography,
+        shapes = Shapes(medium = RoundedCornerShape(16.dp)),
+        content = content,
+    )
+}
+
+// Read roles from the theme, never fixed colors.
+Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+    Text("Trip to Lisbon", style = MaterialTheme.typography.titleLarge)
+}`,
+        remember: 'Use color roles, not colors. Swap the scheme and everything follows: dark theme, dynamic color, all of it.',
+        level: 'beginner',
+        terms: [
+          { term: 'MaterialTheme', def: 'The composable that provides a color scheme, typography and shapes to every Material component below it.' },
+          { term: 'ColorScheme', def: 'A set of named Material 3 color roles, such as primary, onPrimary and surface, that components read instead of fixed colors.' },
+          { term: 'Dynamic color', def: 'A color scheme generated from the user’s wallpaper, available through dynamicLightColorScheme and dynamicDarkColorScheme on Android 12 and up.' },
+          { term: 'isSystemInDarkTheme', def: 'A composable function that returns true when the device is set to dark theme.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Build the scheme from the wallpaper on Android 12 and up.', code: 'val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.[[S]]) {\n    val context = LocalContext.current\n    if (darkTheme) [[dynamicDarkColorScheme]](context) else dynamicLightColorScheme(context)\n} else {\n    if (darkTheme) DarkColors else LightColors\n}', why: '<code>VERSION_CODES.S</code> is Android 12, API 31. Below that, the dynamic functions can’t run, so fall back to your own schemes.' },
+          { type: 'bug', prompt: 'In dark theme this title is dark gray on a dark background. Tap the line that causes it.', code: '@Composable\nfun SectionTitle(text: String) {\n    Text(\n        text = text,\n        style = MaterialTheme.typography.titleLarge,\n        color = Color(0xFF1B1A24),\n    )\n}', bug: 5, fix: '        color = MaterialTheme.colorScheme.onSurface,', why: 'A fixed color ignores the theme. <code>onSurface</code> is dark in the light scheme and light in the dark one.' },
+        ],
+        quiz: [
+          { q: 'The app runs on Android 11 with <code>dynamicColor = true</code>. Which scheme does <code>AppTheme</code> use?', options: ['<code>dynamicLightColorScheme</code>', 'Your own <code>LightColors</code> or <code>DarkColors</code>', 'It crashes'], a: 1, why: 'The API check fails on Android 11, so the <code>when</code> falls through to your own schemes.' },
+          { q: 'Text inside a filled <code>Button</code> should use which role?', options: ['<code>primary</code>', '<code>onPrimary</code>', '<code>surface</code>'], a: 1, why: 'The button is painted <code>primary</code>. The “on” partner is picked to read well on top of it.' },
+          { q: 'How does a Compose app usually follow the system dark theme?', options: ['<code>isSystemInDarkTheme()</code> picks a dark color scheme for MaterialTheme', 'Android inverts the colors on its own', 'Each composable reads a setting and picks colors'], a: 0, why: 'One check at the theme level swaps the whole scheme. Components just read the roles.' },
+        ],
+        visual(el) {
+          const SEEDS = { brand: 'var(--t-k)', 'wallpaper 1': 'var(--t-n)', 'wallpaper 2': 'var(--t-s)', 'wallpaper 3': 'var(--t-t)' };
+          let dark = false, dynamic = true, api = 34, wall = 'wallpaper 1', square = false;
+          const scope = h('div', { class: 'cmp-th-scope' });
+          const phone = h('div', { class: 'cmp-th-phone', role: 'img', 'aria-label': 'Themed app preview' },
+            h('div', { class: 'cmp-th-bar' }, 'Trips'),
+            h('div', { class: 'cmp-th-body' },
+              h('div', { class: 'cmp-th-card' }, h('b', {}, 'Lisbon'), h('span', {}, 'May 12 to 16 · 2 travelers')),
+              h('div', { class: 'cmp-th-btns' }, h('span', { class: 'cmp-th-btn' }, 'Book'), h('span', { class: 'cmp-th-btn cmp-th-out' }, 'Share')),
+              h('p', { class: 'cmp-th-text' }, 'bodyMedium on surface. Every color here comes from a role.'),
+              h('div', { class: 'cmp-th-fab', 'aria-hidden': 'true' }, '+')));
+          const ROLES = [['primary', '--cmp-primary'], ['onPrimary', '--cmp-on-primary'], ['primaryContainer', '--cmp-container'], ['onPrimaryContainer', '--cmp-on-container'], ['surface', '--cmp-bg'], ['onSurface', '--cmp-on']];
+          const roles = h('div', { class: 'cmp-th-roles' }, ROLES.map(([n, v]) => h('span', { class: 'cmp-th-role' }, h('i', { style: `background: var(${v})` }), n)));
+          const which = h('div', { class: 'kt' });
+          const o = out();
+          const darkIn = h('input', { type: 'checkbox', id: 'cmp-th-dark' });
+          const dynIn = h('input', { type: 'checkbox', id: 'cmp-th-dyn', checked: true });
+          const apiBtns = [[30, 'Android 11 (API 30)'], [34, 'Android 14 (API 34)']].map(([n, label]) => act(label, () => { api = n; paint(api < 31 && dynamic ? `${label}: the API check fails, so the theme falls back to your own scheme.` : `${label}.`); }));
+          const wallBtns = Object.keys(SEEDS).filter(k => k !== 'brand').map(k => h('button', { class: 'cmd', onclick: () => pickWall(k) }, h('i', { class: 'cmp-th-swatch', style: `background:${SEEDS[k]}` }), k));
+          const shapeBtns = [false, true].map(sq => cmd(`medium = RoundedCornerShape(${sq ? 4 : 16}.dp)`, () => { square = sq; paint(`${hl(`RoundedCornerShape(${sq ? 4 : 16}.dp)`)} <span class="muted">// Card reads shapes.medium</span>`); }));
+          const usesDynamic = () => dynamic && api >= 31;
+          function pickWall(k) {
+            wall = k;
+            if (!usesDynamic()) { replay(phone, 'shake'); paint(`The wallpaper changed, but ${dynamic ? 'Android 11 has no dynamic color' : 'dynamicColor is off'}. The app keeps its own scheme.`); return; }
+            paint(`New wallpaper. The system rebuilds the dynamic scheme and the app follows. <span class="muted">// nothing in your code changed</span>`);
+          }
+          function paint(msg) {
+            const seed = usesDynamic() ? SEEDS[wall] : SEEDS.brand;
+            scope.style.setProperty('--cmp-seed', seed);
+            scope.classList.toggle('cmp-th-dark', dark);
+            scope.classList.toggle('cmp-th-square', square);
+            const src = usesDynamic() ? `${dark ? 'dynamicDarkColorScheme' : 'dynamicLightColorScheme'}(context)` : (dark ? 'DarkColors' : 'LightColors');
+            which.innerHTML = hl(`colorScheme = ${src}`);
+            apiBtns.forEach((b, i) => b.setAttribute('aria-pressed', String([30, 34][i] === api)));
+            wallBtns.forEach(b => b.setAttribute('aria-pressed', String(b.textContent.endsWith(wall))));
+            shapeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String([false, true][i] === square)));
+            replay(roles, 'pop-soft');
+            if (msg) say(o, msg);
+          }
+          darkIn.addEventListener('change', () => { dark = darkIn.checked; paint(`${hl(`isSystemInDarkTheme() == ${dark}`)} <span class="muted">// every role swaps at once</span>`); });
+          dynIn.addEventListener('change', () => { dynamic = dynIn.checked; paint(dynamic ? (api >= 31 ? 'dynamicColor on: the scheme comes from the wallpaper.' : 'dynamicColor on, but this is Android 11. The fallback still runs.') : 'dynamicColor off: your brand scheme everywhere.'); });
+          scope.append(phone, h('div', { class: 'cmp-th-side' }, which, roles,
+            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-th-dark' }, darkIn, 'Dark theme'), h('label', { class: 'switch', for: 'cmp-th-dyn' }, dynIn, 'dynamicColor')),
+            h('div', { class: 'controls' }, apiBtns)));
+          paint('Android 14 with dynamic color. Flip dark theme, then pick another wallpaper.');
+          el.append(scope,
+            h('div', { class: 'controls' }, wallBtns),
+            h('div', { class: 'controls' }, shapeBtns),
+            o);
+        },
+      },
+
+      // 6 ─────────────────────────────────────────────
+      {
         id: 'remember',
         title: 'State and remember',
         tagline: 'Keep a value alive between recompositions.',
@@ -358,7 +1059,7 @@ fun BrokenCounter() {
         },
       },
 
-      // 3 ─────────────────────────────────────────────
+      // 7 ─────────────────────────────────────────────
       {
         id: 'saveable',
         title: 'rememberSaveable',
@@ -442,7 +1143,7 @@ fun Counters() {
         },
       },
 
-      // 4 ─────────────────────────────────────────────
+      // 8 ─────────────────────────────────────────────
       {
         id: 'hoisting',
         title: 'State hoisting',
@@ -578,114 +1279,326 @@ fun EmailField(value: String, onValueChange: (String) -> Unit) {
         },
       },
 
-      // 5 ─────────────────────────────────────────────
+      // 9 ─────────────────────────────────────────────
       {
-        id: 'modifiers',
-        title: 'Modifier order',
-        tagline: 'Each modifier wraps everything after it.',
+        id: 'text-input',
+        title: 'Text input',
+        tagline: 'The field shows your state and reports every edit.',
         body: `
-<p>A <code>Modifier</code> chain reads from the outside in. The first modifier is the outermost layer. Each one wraps all the modifiers that come after it, and the composable’s content sits in the middle.</p>
-<p>So order changes the result. <code>.padding(16.dp).background(Purple)</code> leaves a clear ring and then paints inside it. <code>.background(Purple).padding(16.dp)</code> paints first, so the padding is purple too. Put <code>.clickable</code> before the padding and the whole area responds to taps. Put it after and only the inner part does.</p>
-<p>Tap a modifier below to move it one step earlier, or pick a preset. Then tap inside the box to see the real touch area.</p>`,
-        code: `val Purple = Color(0xFF6C44EC)
+<p><code>TextField</code> and <code>OutlinedTextField</code> are the Material 3 inputs. In the classic form you pass <code>value</code> and <code>onValueChange</code>. The field never changes its own text. It reports each edit, and you write the new text into state. Ignore the callback and typing does nothing.</p>
+<p><code>keyboardOptions</code> tells the soft keyboard what to show. <code>KeyboardType.Email</code> adds an @ key, <code>KeyboardType.Number</code> shows digits, and <code>imeAction</code> picks the action key, such as Next or Done. <code>keyboardActions</code> says what that key does. By default, Next moves focus to the next field. The keyboard type does not filter input, so validate the text yourself.</p>
+<p>Show errors with <code>isError</code> and explain them in <code>supportingText</code>. Wait until the user has typed something before you complain. Material 3 also has a newer overload that takes a <code>TextFieldState</code> in place of value and callback.</p>`,
+        code: `@Composable
+fun LoginForm(onSubmit: (String, String) -> Unit) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    val emailError = email.isNotEmpty() && "@" !in email
 
-// A 96 dp purple square inside a clear 16 dp ring. Only the purple part is tappable.
-Box(
-    Modifier
-        .padding(16.dp)
-        .background(Purple)
-        .clickable { onClick() }
-        .size(96.dp)
-)
-
-// A 128 dp purple square. The whole square is tappable.
-Box(
-    Modifier
-        .clickable { onClick() }
-        .background(Purple)
-        .padding(16.dp)
-        .size(96.dp)
-)`,
-        remember: 'Modifiers apply outside in. The first one wraps everything after it.',
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it.trim() },
+            label = { Text("Email") },
+            singleLine = true,
+            isError = emailError,
+            supportingText = { if (emailError) Text("Enter a valid email") },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Email,
+                imeAction = ImeAction.Next,          // moves focus to Password
+            ),
+        )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { onSubmit(email, password) }),
+        )
+    }
+}`,
+        remember: 'The field shows value and reports edits. Your state decides what it shows next.',
         level: 'beginner',
         terms: [
-          { term: 'Modifier', def: 'An ordered chain of decorations like size, padding, background and click handling applied to a composable.' },
-          { term: 'Modifier order', def: 'The rule that each modifier wraps all modifiers after it, so changing the order changes layout, drawing and touch area.' },
-          { term: 'Touch target', def: 'The area that responds to taps, set by where clickable sits in the chain; Material asks for at least 48 dp.' },
+          { term: 'OutlinedTextField', def: 'A Material 3 text input with an outlined border and a label that floats up when the field has focus or text.' },
+          { term: 'KeyboardOptions', def: 'Settings for the soft keyboard of a text field, such as keyboardType, imeAction and capitalization.' },
+          { term: 'ImeAction', def: 'The action key the soft keyboard shows for a field, such as Next, Search or Done.' },
+          { term: 'VisualTransformation', def: 'A change to how a text field draws its text, like hiding a password, without changing the value in state.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Make the whole padded area tappable, not just the text.', code: 'Text(\n    "Retry",\n    Modifier\n        .[[clickable]] { retry() }\n        .[[padding]](12.dp)\n)', why: '<code>clickable</code> comes first, so it wraps the padding and the whole area responds.' },
-          { type: 'bug', prompt: 'This should be a purple circle. It draws a purple square. Tap the line in the wrong place.', code: 'Box(\n    Modifier\n        .size(64.dp)\n        .background(Purple)\n        .clip(CircleShape)\n)', bug: 4, fix: '        // move .clip(CircleShape) above .background(Purple)', why: 'A clip only affects what comes after it. The background is already painted as a square when the clip arrives.' },
+          { type: 'blank', prompt: 'Show a number pad with a Done key for the PIN.', code: 'OutlinedTextField(\n    value = pin,\n    onValueChange = { pin = it.filter(Char::isDigit).take(4) },\n    label = { Text("PIN") },\n    keyboardOptions = KeyboardOptions(\n        keyboardType = KeyboardType.[[NumberPassword|Number]],\n        imeAction = ImeAction.[[Done]],\n    ),\n)', why: '<code>keyboardType</code> picks the keys and <code>imeAction</code> picks the action key. The filter in <code>onValueChange</code> does the real validation.' },
+          { type: 'bug', prompt: 'Typing in this field shows nothing. Tap the broken line.', code: '@Composable\nfun NameField() {\n    var name by remember { mutableStateOf("") }\n    OutlinedTextField(\n        value = name,\n        onValueChange = { },\n        label = { Text("Name") },\n    )\n}', bug: 5, fix: '        onValueChange = { name = it },', why: 'The field only shows <code>value</code>. The callback has to write the new text into state, or the field stays empty.' },
         ],
         quiz: [
-          { q: 'Which chain paints the padding area purple?', options: ['<code>.padding(16.dp).background(Purple)</code>', '<code>.background(Purple).padding(16.dp)</code>'], a: 1, why: 'The background is outside the padding, so it covers the padded area too.' },
-          { q: 'Which button has the bigger touch target?', options: ['<code>.clickable { }.padding(12.dp)</code>', '<code>.padding(12.dp).clickable { }</code>'], a: 0, why: 'When clickable comes first, it wraps the padding, so the padding area responds to taps.' },
-          { q: 'How big is <code>Modifier.size(96.dp).padding(16.dp)</code>?', options: ['96 × 96 dp', '128 × 128 dp', '64 × 64 dp'], a: 0, why: 'The size is outermost. The padding eats into it and leaves 64 dp for the content.' },
+          { q: 'With <code>onValueChange = { }</code>, what happens when the user types?', options: ['The text appears anyway', 'Nothing changes, because the field keeps showing value'], a: 1, why: 'The field is controlled by your state. It never updates itself.' },
+          { q: 'Which option adds an @ key to the soft keyboard?', options: ['<code>imeAction = ImeAction.Next</code>', '<code>keyboardType = KeyboardType.Email</code>', '<code>singleLine = true</code>'], a: 1, why: 'The keyboard type chooses the layout. The IME action only changes the action key.' },
+          { q: 'You set <code>imeAction = ImeAction.Next</code> and no <code>keyboardActions</code>. What does the key do?', options: ['Submits the form', 'Moves focus to the next field', 'Nothing'], a: 1, why: 'Next moves focus by default. Pass <code>KeyboardActions(onNext = ...)</code> only to change that.' },
         ],
         visual(el) {
-          const MODS = { padding: '.padding(16.dp)', background: '.background(Purple)', clickable: '.clickable { onClick() }', size: '.size(96.dp)' };
-          const PRESETS = [
-            ['padding().background()', ['padding', 'background', 'clickable', 'size']],
-            ['background().padding()', ['background', 'padding', 'clickable', 'size']],
-            ['clickable().padding()', ['clickable', 'padding', 'background', 'size']],
-            ['size().padding()', ['size', 'padding', 'background', 'clickable']],
-          ];
-          let order = PRESETS[0][1].slice();
-          const chain = h('div', { class: 'cmp-chain' });
-          const preview = h('div', { class: 'cmp-preview', onclick: () => { replay(preview, 'shake'); say(o, '<span class="bad">missed:</span> that tap landed outside the clickable area. Nothing ran.'); } });
+          let email = '', password = '', active = 'email', type = 'Email', ignore = false, hidePw = true, touched = false, logN = 0, kbSig = '';
+          const log = h('div', { class: 'cmp-ti-log', 'aria-live': 'polite' });
+          const stateBox = h('div', { class: 'cmp-ti-state' });
           const o = out();
-          const presetBtns = PRESETS.map(([src, ord]) => cmd(src, () => { order = ord.slice(); render(); }));
-          function sizes() {
-            let w = 26;
-            for (const k of [...order].reverse()) { if (k === 'size') w = 96; if (k === 'padding') w += 32; }
-            const total = w, at = {};
-            for (const k of order) { at[k] = w; if (k === 'padding') w -= 32; }
-            return { total, at };
+          const field = (id, label) => {
+            const input = h('input', { id, autocomplete: 'off', spellcheck: 'false' });
+            const wrap = h('div', { class: 'cmp-ti-field' }, h('label', { class: 'cmp-ti-label', for: id }, label), input);
+            return { input, wrap };
+          };
+          const em = field('cmp-ti-email', 'Email'), pw = field('cmp-ti-pass', 'Password');
+          const eye = h('button', { class: 'cmp-ti-eye', type: 'button', 'aria-label': 'Toggle password visibility', onmousedown: e => e.preventDefault(), onclick: () => { hidePw = !hidePw; paint(); say(o, hidePw ? `${hl('PasswordVisualTransformation()')} <span class="muted">// draws dots. The value in state is unchanged.</span>` : `${hl('VisualTransformation.None')} <span class="muted">// same value, drawn as plain text</span>`); } }, 'show');
+          pw.wrap.append(eye);
+          const support = h('div', { class: 'cmp-ti-support' });
+          const submit = h('span', { class: 'cmp-pv-btn', 'aria-disabled': 'true' }, 'Sign in');
+          const form = h('div', { class: 'cmp-ti-form' }, em.wrap, support, pw.wrap, h('div', { class: 'cmp-ti-support' }), submit);
+          const kb = h('div', { class: 'cmp-kb', 'aria-label': 'Soft keyboard preview' });
+          const typeBtns = ['Text', 'Email', 'Number'].map(t => cmd(`KeyboardType.${t}`, () => { type = t; focus('email'); paint(); say(o, `${hl(`keyboardType = KeyboardType.${t}`)} <span class="muted">// ${t === 'Email' ? 'adds @ and . keys' : t === 'Number' ? 'digits only on screen. A hardware keyboard can still type letters.' : 'a plain letter layout'}</span>`); }));
+          const ignoreIn = h('input', { type: 'checkbox', id: 'cmp-ti-ignore' });
+          const valid = () => email.includes('@') && email.length > 2 && password.length >= 6;
+          function addLog(html) {
+            log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
+            while (log.children.length > 5) log.lastElementChild.remove();
           }
-          function move(i) {
-            const k = order.splice(i, 1)[0];
-            if (i === 0) order.push(k); else order.splice(i - 1, 0, k);
-            render();
+          function paint() {
+            const err = touched && email.length > 0 && !email.includes('@');
+            em.input.value = email; pw.input.value = password;
+            pw.input.type = hidePw ? 'password' : 'text';
+            eye.textContent = hidePw ? 'show' : 'hide';
+            em.input.setAttribute('inputmode', type === 'Email' ? 'email' : type === 'Number' ? 'numeric' : 'text');
+            em.wrap.classList.toggle('cmp-ti-up', !!email || document.activeElement === em.input);
+            pw.wrap.classList.toggle('cmp-ti-up', !!password || document.activeElement === pw.input);
+            em.wrap.classList.toggle('cmp-ti-err', err);
+            support.textContent = err ? 'Enter a valid email' : '';
+            const on = valid();
+            if ((submit.getAttribute('aria-disabled') === 'false') !== on) replay(submit, 'pop');
+            submit.setAttribute('aria-disabled', String(!on));
+            stateBox.innerHTML = [
+              `email = ${JSON.stringify(email)}`,
+              `password = ${JSON.stringify(password)}`,
+              `emailError = ${err}`,
+            ].map(x => `<div>${hl(x)}</div>`).join('');
+            paintKb();
           }
-          function ripple(ev, layer) {
-            ev.stopPropagation();
-            const r = layer.getBoundingClientRect();
-            layer.append(h('span', { class: 'cmp-ripple', style: `left:${ev.clientX - r.left}px;top:${ev.clientY - r.top}px` }));
-            setTimeout(() => layer.querySelector('.cmp-ripple') && layer.querySelector('.cmp-ripple').remove(), 650);
-            say(o, `<span class="good">onClick()</span> ran. <span class="muted">The touch area is ${sizes().at.clickable} × ${sizes().at.clickable} dp.</span>`);
+          function paintKb() {
+            const letters = [['q', 'w', 'e', 'r', 't', 'y'], ['a', 'd', 'l', 'n', 'o', 's']];
+            const action = active === 'email' ? 'Next →' : 'Done ✓';
+            let rows;
+            if (active === 'email' && type === 'Number') rows = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['0']];
+            else if (active === 'email' && type === 'Email') rows = [...letters, ['@', '.', '.com']];
+            else rows = [...letters, [',', 'space']];
+            kb.classList.toggle('cmp-kb-off', !active);
+            const sig = rows.flat().join() + action;
+            if (sig === kbSig) return;
+            kbSig = sig;
+            kb.replaceChildren(...rows.map((r, i) => h('div', { class: 'cmp-kb-row' }, r.map(k => h('button', {
+              class: `cmp-kb-key${k === 'space' ? ' cmp-kb-wide' : ''}${['@', '.com'].includes(k) ? ' cmp-kb-new' : ''}`,
+              onmousedown: e => e.preventDefault(), onclick: () => key(k === 'space' ? ' ' : k),
+            }, k)), i === rows.length - 1 ? h('button', { class: 'cmp-kb-key cmp-kb-act', onmousedown: e => e.preventDefault(), onclick: imeKey }, action) : null)));
           }
-          function render() {
-            presetBtns.forEach((b, i) => b.setAttribute('aria-pressed', PRESETS[i][1].join() === order.join()));
-            chain.replaceChildren(
-              h('div', { class: 'cmp-chain-head', html: hl('Box(Modifier') }),
-              ...order.map((k, i) => h('button', { class: 'cmd', 'aria-label': `Move ${MODS[k]} ${i ? 'one step earlier' : 'to the end'}`, onclick: () => move(i), html: `<span class="muted">${i ? '↑' : '↓'}</span> ${hl(MODS[k])}` })),
-              h('div', { class: 'cmp-chain-head', html: hl(') { Text("Hi") }') }));
-            let node = h('div', { class: 'cmp-content' }, 'Hi');
-            for (const k of [...order].reverse()) {
-              const props = { class: `cmp-layer cmp-l-${k}` };
-              if (k === 'padding') props.style = 'padding:16px';
-              if (k === 'size') props.style = 'width:96px;height:96px';
-              node = h('div', props, node);
-              if (k === 'clickable') { const layer = node; layer.addEventListener('click', ev => ripple(ev, layer)); }
+          function edit(which, proposed) {
+            const cur = which === 'email' ? email : password;
+            if (ignore) {
+              paint(); replay((which === 'email' ? em : pw).wrap, 'shake');
+              addLog(`${hl(`onValueChange(${JSON.stringify(proposed)})`)} <span class="bad">ignored</span>`);
+              say(o, `The field asked for ${hl(JSON.stringify(proposed))}, but nothing wrote it to state. It still shows ${hl(JSON.stringify(cur))}.`);
+              return;
             }
-            preview.replaceChildren(node); replay(node, 'pop');
-            const s = sizes();
-            say(o, `Box: ${s.total} × ${s.total} dp <span class="muted">·</span> purple: ${s.at.background} × ${s.at.background} <span class="muted">·</span> touch area: ${s.at.clickable} × ${s.at.clickable}`);
+            if (which === 'email') { email = proposed.trim(); touched = true; } else password = proposed;
+            addLog(`${hl(`onValueChange(${JSON.stringify(proposed)})`)} <span class="muted">→ state</span>`);
+            paint();
+            say(o, which === 'email' && email && !email.includes('@')
+              ? `${hl('isError = true')} <span class="muted">// no @ yet, so supportingText explains</span>`
+              : `${hl(`${which} = ${JSON.stringify(which === 'email' ? email : password)}`)} <span class="muted">// state changed, the field recomposed with it</span>`);
           }
-          render();
+          function focus(which) { active = which; (which === 'email' ? em : pw).input.focus(); paint(); }
+          function key(k) {
+            if (!active) focus('email');
+            const f = active === 'email' ? em : pw, cur = active === 'email' ? email : password;
+            if (cur.length > 24) { replay(f.wrap, 'shake'); return; }
+            f.input.focus();
+            edit(active, cur + k);
+          }
+          function imeKey() {
+            if (active === 'email') {
+              addLog(`${hl('ImeAction.Next')} <span class="muted">→ focus moves to Password</span>`);
+              focus('password');
+              say(o, 'Next did its default job: focus moved to the Password field.');
+            } else {
+              addLog(`${hl('KeyboardActions(onDone)')} <span class="muted">→ onSubmit()</span>`);
+              pw.input.blur(); active = null; paint();
+              if (valid()) { replay(submit, 'pop'); say(o, '<span class="good">onSubmit(email, password)</span> ran from the Done key. The keyboard closes.'); }
+              else { replay(form, 'shake'); say(o, '<span class="bad">onDone ran, but the form is not valid yet.</span> It needs an email with @ and a 6+ character password.'); }
+            }
+          }
+          for (const [which, f] of [['email', em], ['password', pw]]) {
+            f.input.addEventListener('focus', () => { active = which; paint(); });
+            f.input.addEventListener('input', () => edit(which, f.input.value));
+            f.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); active = which; imeKey(); } });
+          }
+          ignoreIn.addEventListener('change', () => {
+            ignore = ignoreIn.checked;
+            say(o, ignore ? `${hl('onValueChange = { }')} <span class="muted">// try typing now</span>` : `${hl('onValueChange = { email = it.trim() }')} <span class="muted">// state follows the edits again</span>`);
+          });
+          email = 'ada'; touched = true;
+          log.append(h('div', {}, '// each onValueChange call shows up here'));
+          paint();
+          say(o, 'Type in the fields, or tap the keyboard keys below. Every edit goes through onValueChange.');
           el.append(
-            h('div', { class: 'controls' }, presetBtns),
-            h('div', { class: 'cmp-mod-wrap' }, chain, preview),
-            h('div', { class: 'cmp-legend' },
-              h('span', {}, h('i', { class: 'lg-bg' }), 'background'),
-              h('span', {}, h('i', { class: 'lg-click' }), 'touch area'),
-              h('span', {}, h('i', { class: 'lg-pad' }), 'padding edge')),
-            h('p', { class: 'tip' }, 'Tap a line in the chain to move it up one step. The first line jumps to the end.'),
-            o);
+            h('div', { class: 'controls' }, typeBtns, h('label', { class: 'switch', for: 'cmp-ti-ignore' }, ignoreIn, 'ignore onValueChange')),
+            h('div', { class: 'cmp-ti-wrap' }, form, h('div', { class: 'cmp-sc-side' }, stateBox, log)),
+            kb, o);
+          typeBtns[1].setAttribute('aria-pressed', 'true');
+          typeBtns.forEach((b, i) => b.addEventListener('click', () => typeBtns.forEach((x, j) => x.setAttribute('aria-pressed', String(i === j)))));
         },
       },
 
-      // 6 ─────────────────────────────────────────────
+      // 10 ─────────────────────────────────────────────
+      {
+        id: 'lists',
+        title: 'Lists and grids',
+        tagline: 'Compose only what is on screen.',
+        body: `
+<p>A <code>Column</code> composes every child, even the ones far off screen. For long lists, or lists of unknown length, use a lazy layout. <code>LazyColumn</code> and <code>LazyRow</code> compose only the items in view, plus a little ahead, and drop the ones that scroll away. <code>LazyVerticalGrid</code> does the same in columns.</p>
+<p>You don’t call children directly. You describe them in a small DSL: <code>item { }</code> for one, <code>items(list) { }</code> for many, and <code>stickyHeader { }</code> for a header that pins to the top while its section scrolls past. In a grid, <code>GridCells.Fixed(3)</code> sets the column count and <code>GridCells.Adaptive(120.dp)</code> fits as many columns as it can.</p>
+<p>Use <code>contentPadding</code> for space around the items. It pads the content, not the viewport, so items scroll through that space instead of being clipped at it. Scroll the list below and watch the composed count.</p>`,
+        code: `@Composable
+fun ContactList(groups: Map<Char, List<Contact>>) {
+    LazyColumn(
+        contentPadding = PaddingValues(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        groups.forEach { (letter, contacts) ->
+            stickyHeader(key = letter) { LetterHeader(letter) }
+            items(contacts, key = { it.id }) { contact ->
+                ContactRow(contact)
+            }
+        }
+    }
+}
+
+@Composable
+fun PhotoGrid(photos: List<Photo>) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 120.dp),
+        contentPadding = PaddingValues(8.dp),
+    ) {
+        items(photos, key = { it.id }) { photo -> PhotoTile(photo) }
+    }
+}`,
+        remember: 'Lazy lists compose only what is on screen. Describe items with items { }, never a loop in a scrolling Column.',
+        level: 'beginner',
+        terms: [
+          { term: 'LazyVerticalGrid', def: 'A lazy grid that lays items out in columns and composes only the rows on screen.' },
+          { term: 'GridCells', def: 'The column rule for a lazy grid: Fixed for an exact count, Adaptive for as many columns of a minimum size as fit.' },
+          { term: 'stickyHeader', def: 'A lazy list item that stays pinned to the top while the items after it scroll, until the next header pushes it away.' },
+          { term: 'contentPadding', def: 'Padding around the content of a lazy list, inside the scroll area, so items can scroll through it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show photos in as many 120 dp columns as fit.', code: 'LazyVerticalGrid(\n    columns = GridCells.[[Adaptive]](minSize = 120.dp),\n) {\n    [[items]](photos, key = { it.id }) { PhotoTile(it) }\n}', why: '<code>Adaptive</code> picks the column count from the width. <code>items</code> describes one cell per photo.' },
+          { type: 'bug', prompt: 'This screen crashes as soon as it opens. Tap the line that causes it.', code: '@Composable\nfun FeedScreen(posts: List<Post>) {\n    Column(Modifier.verticalScroll(rememberScrollState())) {\n        FeedHeader()\n        LazyColumn {\n            items(posts, key = { it.id }) { PostCard(it) }\n        }\n    }\n}', bug: 2, fix: '    Column {   // or move FeedHeader() into item { } inside the LazyColumn', why: 'A scrolling Column gives its children infinite height. A LazyColumn can’t measure in infinite height, so it throws.' },
+        ],
+        quiz: [
+          { q: 'A LazyColumn has 10,000 items and 8 fit on screen. About how many are composed?', options: ['10,000', 'About 8 to 10', 'Exactly 1'], a: 1, why: 'Only visible items, plus one or two prefetched ahead, are composed.' },
+          { q: 'What does <code>contentPadding</code> do that <code>Modifier.padding</code> on the list does not?', options: ['Items scroll through the padded space instead of being clipped at it', 'It adds space between items', 'Nothing, they are the same'], a: 0, why: '<code>Modifier.padding</code> shrinks the viewport. <code>contentPadding</code> pads the content inside it.' },
+          { q: 'Which call adds one header that pins to the top while its section scrolls?', options: ['<code>item { }</code>', '<code>stickyHeader { }</code>', '<code>items(list) { }</code>'], a: 1, why: 'A sticky header stays at the top until the next header pushes it out.' },
+        ],
+        visual(el) {
+          const FIRST = ['Ada', 'Alan', 'Anita', 'Arun', 'Ava', 'Ben', 'Bianca', 'Bo', 'Bruno', 'Bea', 'Carla', 'Chen', 'Cleo', 'Cyrus', 'Cora', 'Dana', 'Dev', 'Dina', 'Dmitri', 'Duke', 'Eli', 'Emma', 'Ezra', 'Esme', 'Eve', 'Farah', 'Felix', 'Fiona', 'Femi', 'Finn'];
+          const DATA = FIRST.map((n, i) => ({ id: i + 1, name: n, letter: n[0] }));
+          let mode = 'column', sticky = true, padded = false, raf = 0, busy = false;
+          const inner = h('div', { class: 'cmp-ls-inner' });
+          const view = h('div', { class: 'cmp-ls-view', tabindex: '0', 'aria-label': 'Scrollable lazy list' }, inner);
+          const frame = h('div', { class: 'cmp-ls-frame' }, view, h('div', { class: 'cmp-ls-band cmp-b1' }), h('div', { class: 'cmp-ls-band cmp-b2' }));
+          const map = h('div', { class: 'cmp-ls-map', 'aria-hidden': 'true' });
+          const count = h('span', { class: 'cmp-ls-count' });
+          const code = h('div', { class: 'kt' });
+          const o = out();
+          let nodes = [], ticks = [], seen = new Set();
+          const modeBtns = [['column', 'LazyColumn'], ['row', 'LazyRow'], ['grid', 'LazyVerticalGrid(GridCells.Fixed(3))']].map(([m, src]) => cmd(src, () => setMode(m)));
+          const stickyIn = h('input', { type: 'checkbox', id: 'cmp-ls-sticky', checked: true });
+          const padIn = h('input', { type: 'checkbox', id: 'cmp-ls-pad' });
+          function build() {
+            nodes = [];
+            const withHeads = mode === 'column' && sticky;
+            let last = '';
+            for (const d of DATA) {
+              if (withHeads && d.letter !== last) { last = d.letter; nodes.push(h('div', { class: 'cmp-ls-head' }, d.letter)); }
+              nodes.push(h('div', { class: 'cmp-ls-item', 'data-i': d.id - 1 }, h('i', {}, d.letter), h('span', {}, mode === 'column' ? `${d.name} · #${d.id}` : d.name)));
+            }
+            inner.replaceChildren(...nodes);
+            ticks = nodes.map(n => h('span', { class: `cmp-ls-tick${n.classList.contains('cmp-ls-head') ? ' cmp-h' : ''}` }));
+            map.replaceChildren(...ticks);
+            frame.className = `cmp-ls-frame cmp-ls-${mode}${padded ? ' cmp-ls-padded' : ''}`;
+            seen = new Set();
+            view.scrollTo(0, 0);
+            const lines = {
+              column: `LazyColumn(${padded ? 'contentPadding = PaddingValues(vertical = 24.dp)' : ''}) {\n${withHeads ? '    groups.forEach { (letter, people) ->\n        stickyHeader { Header(letter) }\n        items(people, key = { it.id }) { Row(it) }\n    }' : '    items(people, key = { it.id }) { Row(it) }'}\n}`,
+              row: `LazyRow(${padded ? 'contentPadding = PaddingValues(horizontal = 24.dp)' : ''}) {\n    items(people, key = { it.id }) { Card(it) }\n}`,
+              grid: `LazyVerticalGrid(\n    columns = GridCells.Fixed(3),${padded ? '\n    contentPadding = PaddingValues(vertical = 24.dp),' : ''}\n) {\n    items(people, key = { it.id }) { Tile(it) }\n}`,
+            };
+            code.innerHTML = hl(lines[mode]);
+            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(['column', 'row', 'grid'][i] === mode)));
+            stickyIn.disabled = mode !== 'column';
+            update(true);
+          }
+          function update(quiet) {
+            raf = 0;
+            if (!el.isConnected && !quiet) return;
+            const v = view.getBoundingClientRect(), horiz = mode === 'row', AHEAD = 40;
+            let n = 0, added = 0;
+            nodes.forEach((node, i) => {
+              const r = node.getBoundingClientRect();
+              const on = horiz ? r.right > v.left - AHEAD && r.left < v.right + AHEAD : r.bottom > v.top - AHEAD && r.top < v.bottom + AHEAD;
+              node.classList.toggle('cmp-ls-off', !on);
+              ticks[i].classList.toggle('cmp-on', on);
+              if (on) {
+                n++;
+                if (!seen.has(i)) { seen.add(i); added++; if (!quiet) replay(node, 'cmp-ls-in'); }
+              } else if (seen.has(i)) seen.delete(i);
+            });
+            count.textContent = `composed: ${n} of ${nodes.length}`;
+            if (added && !quiet && !busy) say(o, `Composed ${added} new item${added > 1 ? 's' : ''} as they came into view. <span class="muted">Items that scrolled away were disposed.</span>`);
+          }
+          view.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(() => update(false)); }, { passive: true });
+          function setMode(m) {
+            mode = m; build();
+            say(o, m === 'row' ? 'LazyRow: the same idea sideways. Scroll it horizontally.' : m === 'grid' ? 'LazyVerticalGrid: rows of three, still only the visible rows are composed.' : 'LazyColumn: scroll and watch the composed window slide over the map.');
+          }
+          async function scrollTo(i) {
+            if (busy) return;
+            const node = nodes.find(n => n.dataset.i === String(i));
+            if (!node) return;
+            busy = true;
+            if (mode === 'row') view.scrollTo({ left: node.offsetLeft - (padded ? 24 : 0), behavior: 'smooth' });
+            else view.scrollTo({ top: node.offsetTop - (padded ? 24 : 0) - (mode === 'column' && sticky ? 30 : 0), behavior: 'smooth' });
+            say(o, `${hl(`scope.launch { listState.animateScrollToItem(${i}) }`)} <span class="muted">// scrolling…</span>`);
+            await sleep(700);
+            busy = false; update(false);
+            say(o, `${hl(`animateScrollToItem(${i})`)} done. Still only ${seen.size} items composed, out of ${nodes.length}.`);
+          }
+          stickyIn.addEventListener('change', () => { sticky = stickyIn.checked; build(); say(o, sticky ? 'stickyHeader on: each letter pins to the top while its section scrolls.' : 'No headers. Just items(people).'); });
+          padIn.addEventListener('change', () => {
+            padded = padIn.checked; build();
+            say(o, padded ? `${hl('contentPadding = 24.dp')} <span class="muted">// the shaded band is padding. Scroll: items pass under it, not clipped.</span>` : 'No contentPadding. The first item touches the edge.');
+          });
+          build();
+          say(o, 'Scroll the list. Only items near the viewport are composed.');
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            h('div', { class: 'cmp-ls-wrap' }, frame, h('div', { class: 'cmp-ly-group' }, count, map)),
+            h('div', { class: 'controls' },
+              h('label', { class: 'switch', for: 'cmp-ls-sticky' }, stickyIn, 'stickyHeader'),
+              h('label', { class: 'switch', for: 'cmp-ls-pad' }, padIn, 'contentPadding'),
+              cmd('animateScrollToItem(22)', () => scrollTo(22)), cmd('animateScrollToItem(0)', () => scrollTo(0))),
+            code, o);
+          requestAnimationFrame(() => update(true));
+        },
+      },
+
+      // 11 ─────────────────────────────────────────────
       {
         id: 'lazy-keys',
         title: 'LazyColumn and keys',
@@ -848,7 +1761,217 @@ fun GroceryList(items: List<Grocery>) {
         },
       },
 
-      // 7 ─────────────────────────────────────────────
+      // 12 ─────────────────────────────────────────────
+      {
+        id: 'gestures',
+        title: 'Gestures and clicks',
+        tagline: 'clickable for taps, pointerInput for everything else.',
+        body: `
+<p>For a plain tap, use <code>Modifier.clickable</code>. It handles the press, draws the ripple from the theme, and tells accessibility services the element can be clicked. You can pass <code>indication = null</code> to drop the ripple, but then users get no feedback when they press.</p>
+<p><code>combinedClickable</code> adds <code>onDoubleClick</code> and <code>onLongClick</code>. There is a catch. Once you set <code>onDoubleClick</code>, a single tap has to wait out the double-tap timeout before <code>onClick</code> fires, because it might still turn into a double tap.</p>
+<p>For raw gestures, use <code>Modifier.pointerInput</code> with a detector like <code>detectTapGestures</code>, which gives you the tap position, or <code>detectDragGestures</code>. These are low level: no ripple and no click semantics unless you add them. The key you pass to <code>pointerInput</code> restarts the detector when it changes.</p>`,
+        code: `@Composable
+fun PhotoCard(photo: Photo, onOpen: () -> Unit, onLike: () -> Unit, onMenu: () -> Unit) {
+    Image(
+        painter = painterResource(photo.res),
+        contentDescription = photo.title,
+        modifier = Modifier.combinedClickable(
+            onClick = onOpen,              // waits out the double-tap timeout
+            onDoubleClick = onLike,
+            onLongClick = onMenu,
+            onLongClickLabel = "Photo options",
+        ),
+    )
+}
+
+@Composable
+fun DraggableDot() {
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    Box(
+        Modifier
+            .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    offset += dragAmount
+                }
+            }
+            .size(56.dp)
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
+    )
+}`,
+        remember: 'clickable for taps. combinedClickable for double and long press. pointerInput for raw gestures, with no ripple for free.',
+        level: 'intermediate',
+        terms: [
+          { term: 'combinedClickable', def: 'A modifier like clickable that also reports double taps and long presses through onDoubleClick and onLongClick.' },
+          { term: 'pointerInput', def: 'A modifier that runs a suspend block to read raw pointer events, restarting the block when its keys change.' },
+          { term: 'Indication', def: 'The visual feedback a clickable element draws on press, such as the Material ripple.' },
+          { term: 'detectDragGestures', def: 'A pointerInput detector that reports each drag movement as a change and a dragAmount offset.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Track a drag and move the box by it.', code: 'Modifier.pointerInput(Unit) {\n    [[detectDragGestures]] { change, dragAmount ->\n        change.[[consume]]()\n        offset += dragAmount\n    }\n}', why: 'The detector hands you each movement. Consuming the change stops parents, like a scrolling list, from also handling it.' },
+          { type: 'bug', prompt: 'After a new video loads, taps still seek using the old duration. Tap the line that causes it.', code: '@Composable\nfun SeekBar(durationMs: Long, onSeek: (Float) -> Unit) {\n    Box(\n        Modifier\n            .fillMaxWidth()\n            .height(48.dp)\n            .pointerInput(Unit) {\n                detectTapGestures { offset ->\n                    onSeek(offset.x / size.width * durationMs)\n                }\n            }\n    )\n}', bug: 6, fix: '            .pointerInput(durationMs, onSeek) {', why: 'With <code>Unit</code> as the key, the detector never restarts and keeps the first <code>durationMs</code> it captured. Key it on the values it reads.' },
+        ],
+        quiz: [
+          { q: 'You add <code>onDoubleClick</code> to a <code>combinedClickable</code>. What happens on a single tap?', options: ['<code>onClick</code> fires right away', '<code>onClick</code> fires once the double-tap timeout passes', '<code>onClick</code> never fires'], a: 1, why: 'Compose has to wait to see if a second tap is coming.' },
+          { q: 'Which gives you the exact position of a tap?', options: ['<code>Modifier.clickable</code>', '<code>pointerInput</code> with <code>detectTapGestures</code>', 'Both'], a: 1, why: '<code>onTap</code> in <code>detectTapGestures</code> receives an <code>Offset</code>. <code>clickable</code> only says that a click happened.' },
+          { q: 'Why prefer <code>clickable</code> over <code>pointerInput</code> for a button-like tap?', options: ['It is faster', 'It adds ripple feedback and click semantics for accessibility', '<code>pointerInput</code> can’t detect taps'], a: 1, why: 'A raw detector gives you neither feedback nor semantics. <code>clickable</code> includes both.' },
+        ],
+        visual(el) {
+          const LONG = 400, DOUBLE = 300;
+          const MODES = {
+            click: { label: 'Modifier.clickable', src: 'Modifier.clickable { count++ }', hint: 'Tap the card.' },
+            combined: { label: 'combinedClickable', src: 'combinedClickable(onClick, onDoubleClick, onLongClick)', hint: 'Tap, double tap, or press and hold the card.' },
+            tap: { label: 'detectTapGestures', src: 'pointerInput(Unit) { detectTapGestures { offset -> } }', hint: 'Tap anywhere in the pad.' },
+            drag: { label: 'detectDragGestures', src: 'pointerInput(Unit) { detectDragGestures { change, dragAmount -> } }', hint: 'Drag the dot.' },
+          };
+          let mode = 'click', ripple = true, count = 0, logN = 0, pos = { x: 40, y: 40 };
+          let downAt = 0, longTimer = 0, tapTimer = 0, longFired = false, pendingTap = false, dragging = false, last = null, moved = { x: 0, y: 0 }, lastLog = 0;
+          const pad = h('div', { class: 'cmp-gs-pad' });
+          const num = h('b', {}, '0'), sub = h('small', {});
+          const target = h('div', { class: 'cmp-gs-target', role: 'button', 'aria-label': 'Gesture target' }, num, sub);
+          const meter = h('span', {});
+          const meterBox = h('div', { class: 'cmp-gs-meter', 'aria-hidden': 'true' }, meter);
+          const puck = h('div', { class: 'cmp-gs-puck' }, 'drag');
+          const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
+          const o = out();
+          const rippleIn = h('input', { type: 'checkbox', id: 'cmp-gs-ripple', checked: true });
+          const modeBtns = Object.entries(MODES).map(([k, m]) => cmd(m.label, () => setMode(k), { 'aria-label': m.src }));
+          const clearTimers = () => { clearTimeout(longTimer); clearTimeout(tapTimer); longTimer = tapTimer = 0; };
+          function addLog(html) {
+            log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
+            while (log.children.length > 5) log.lastElementChild.remove();
+          }
+          function bar(ms, wait) {
+            meter.className = wait ? 'cmp-gs-wait' : '';
+            meter.style.transition = 'none'; meter.style.width = '0';
+            void meter.offsetWidth;
+            meter.style.transition = `width ${ms}ms linear`; meter.style.width = '100%';
+          }
+          function stopBar() { const w = getComputedStyle(meter).width; meter.style.transition = 'none'; meter.style.width = w; }
+          function wave(e, host) {
+            if (!ripple || mode === 'tap' || mode === 'drag') return;
+            const r = host.getBoundingClientRect();
+            const w = h('span', { class: 'cmp-gs-wave', style: `left:${e.clientX - r.left}px;top:${e.clientY - r.top}px` });
+            host.prepend(w); setTimeout(() => w.remove(), 650);
+          }
+          function bump(label) { count++; num.textContent = String(count); replay(num, 'pop'); sub.textContent = label; }
+          function setMode(k) {
+            clearTimers(); mode = k; pendingTap = false; longFired = false;
+            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(MODES)[i] === k)));
+            rippleIn.disabled = k === 'tap' || k === 'drag';
+            target.classList.toggle('cmp-gs-full', k === 'tap');
+            count = 0; num.textContent = '0';
+            sub.textContent = k === 'combined' ? 'tap · double · hold' : k === 'tap' ? 'onTap(offset)' : 'onClick';
+            meter.style.transition = 'none'; meter.style.width = '0';
+            const kids = [target];
+            if (k === 'combined') kids.push(meterBox);
+            if (k === 'drag') kids.splice(0, 1, puck);
+            pad.replaceChildren(...kids);
+            if (k === 'drag') place();
+            num.style.display = k === 'tap' ? 'none' : '';
+            log.replaceChildren();
+            addLog(`${hl(MODES[k].src)}`);
+            say(o, `${MODES[k].hint}${k === 'tap' || k === 'drag' ? ' <span class="muted">// pointerInput draws no ripple</span>' : ''}`);
+          }
+          function place() { puck.style.transform = `translate(${pos.x}px, ${pos.y}px)`; puck.textContent = `${Math.round(pos.x)}, ${Math.round(pos.y)}`; }
+          target.addEventListener('pointerdown', e => {
+            if (mode === 'drag') return;
+            wave(e, target);
+            if (mode !== 'combined') return;
+            downAt = performance.now(); longFired = false;
+            clearTimeout(longTimer);
+            bar(LONG, false);
+            longTimer = setTimeout(() => {
+              if (!el.isConnected) return;
+              longFired = true; pendingTap = false; clearTimeout(tapTimer);
+              bump('onLongClick'); replay(target, 'shake');
+              addLog(`<span class="good">onLongClick()</span> <span class="muted">held ${LONG} ms</span>`);
+              say(o, `Held for ${LONG} ms: ${hl('onLongClick()')} fired while your finger was still down.`);
+            }, LONG);
+          });
+          target.addEventListener('pointerup', e => {
+            if (mode === 'drag') return;
+            if (mode === 'click') {
+              bump('onClick');
+              addLog(`<span class="good">onClick()</span> <span class="muted">fires on release</span>`);
+              say(o, `${hl('onClick()')} ran on release${ripple ? ', and the ripple showed the press.' : '. No ripple, so the press gave no feedback.'}`);
+              return;
+            }
+            if (mode === 'tap') {
+              const r = pad.getBoundingClientRect(), x = Math.round(e.clientX - r.left), y = Math.round(e.clientY - r.top);
+              const dot = h('span', { class: 'cmp-gs-dot pop', style: `left:${x}px;top:${y}px` }, h('span', {}, `Offset(${x}, ${y})`));
+              pad.append(dot);
+              while (pad.querySelectorAll('.cmp-gs-dot').length > 3) pad.querySelector('.cmp-gs-dot').remove();
+              addLog(`<span class="good">onTap</span>(${hl(`Offset(${x}.0, ${y}.0)`)})`);
+              say(o, `${hl('detectTapGestures')} gave the exact position. <span class="muted">No ripple and no click semantics come with it.</span>`);
+              return;
+            }
+            clearTimeout(longTimer); stopBar();
+            if (longFired) { longFired = false; return; }
+            if (pendingTap) {
+              clearTimeout(tapTimer); pendingTap = false;
+              bump('onDoubleClick'); replay(target, 'pop');
+              addLog(`<span class="good">onDoubleClick()</span> <span class="muted">second tap inside ${DOUBLE} ms</span>`);
+              say(o, `Two taps inside ${DOUBLE} ms: ${hl('onDoubleClick()')}. onClick never ran.`);
+              return;
+            }
+            pendingTap = true;
+            bar(DOUBLE, true);
+            addLog(`<span class="muted">tap up · waiting ${DOUBLE} ms for a second tap…</span>`);
+            tapTimer = setTimeout(() => {
+              if (!el.isConnected || !pendingTap) return;
+              pendingTap = false; bump('onClick');
+              addLog(`<span class="good">onClick()</span> <span class="muted">${Math.round(performance.now() - downAt)} ms after the press</span>`);
+              say(o, `${hl('onClick()')} ran late: Compose waited ${DOUBLE} ms in case it was a double tap.`);
+            }, DOUBLE);
+          });
+          target.addEventListener('pointerleave', () => { if (mode === 'combined' && !longFired && longTimer) { clearTimeout(longTimer); stopBar(); } });
+          puck.addEventListener('pointerdown', e => {
+            dragging = true; last = { x: e.clientX, y: e.clientY }; moved = { x: 0, y: 0 };
+            puck.setPointerCapture && puck.setPointerCapture(e.pointerId);
+            puck.classList.add('cmp-gs-held');
+            addLog(`<span class="good">onDragStart</span>`);
+          });
+          puck.addEventListener('pointermove', e => {
+            if (!dragging) return;
+            const dx = e.clientX - last.x, dy = e.clientY - last.y;
+            last = { x: e.clientX, y: e.clientY };
+            const maxX = pad.clientWidth - 60, maxY = pad.clientHeight - 60;
+            pos = { x: Math.max(0, Math.min(maxX, pos.x + dx)), y: Math.max(0, Math.min(maxY, pos.y + dy)) };
+            moved.x += dx; moved.y += dy;
+            place();
+            const now = performance.now();
+            if (now - lastLog > 250) { lastLog = now; addLog(`dragAmount = ${hl(`Offset(${dx.toFixed(1)}, ${dy.toFixed(1)})`)} <span class="muted">→ offset += it</span>`); }
+          });
+          const endDrag = () => {
+            if (!dragging) return;
+            dragging = false; puck.classList.remove('cmp-gs-held');
+            addLog(`<span class="good">onDragEnd</span> <span class="muted">moved ${Math.round(moved.x)}, ${Math.round(moved.y)}</span>`);
+            say(o, `The dot sits at ${hl(`offset = Offset(${Math.round(pos.x)}, ${Math.round(pos.y)})`)}. <span class="muted">Each change was consumed so a parent would not also scroll.</span>`);
+          };
+          puck.addEventListener('pointerup', endDrag);
+          puck.addEventListener('pointercancel', endDrag);
+          rippleIn.addEventListener('change', () => {
+            ripple = rippleIn.checked;
+            say(o, ripple ? `${hl('indication = ripple()')} <span class="muted">// press feedback is back</span>` : `${hl('indication = null')} <span class="muted">// clicks still work, but nothing shows the press</span>`);
+          });
+          async function demoDouble() {
+            if (mode !== 'combined') setMode('combined');
+            const r = target.getBoundingClientRect();
+            const ev = t => target.dispatchEvent(new PointerEvent(t, { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true }));
+            ev('pointerdown'); await sleep(80); ev('pointerup'); await sleep(140); ev('pointerdown'); await sleep(80); ev('pointerup');
+          }
+          setMode('click');
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            pad,
+            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-gs-ripple' }, rippleIn, 'indication = ripple()'), act('Simulate a double tap', demoDouble)),
+            log, o);
+        },
+      },
+
+      // 13 ─────────────────────────────────────────────
       {
         id: 'effects',
         title: 'Side effects: LaunchedEffect',

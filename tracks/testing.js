@@ -39,7 +39,7 @@
 .tst-gwt { display: grid; gap: 4px; padding: 10px; border-radius: 12px; background: var(--code-bg); min-width: 0; max-width: 100%; overflow-x: auto; }
 .tst-gwt-line { font: 500 0.8rem/1.5 var(--mono); color: var(--code-ink); white-space: pre; padding: 3px 8px; border-radius: 6px; border-left: 3px solid transparent; transition: background 0.2s, border-color 0.2s; }
 .tst-gwt-line.tst-on { background: rgba(255, 212, 121, 0.14); border-left-color: var(--t-f); }
-.tst-gwt-line.tst-pass { background: rgba(158, 223, 165, 0.15); border-left-color: var(--t-s); }
+.tst-gwt-line.tst-pass { background: rgba(158, 223, 165, 0.15); border-left-color: var(--t-k); }
 .tst-gwt-line.tst-fail { background: rgba(255, 138, 155, 0.18); border-left-color: var(--t-e); }
 .tst-link { font: 700 1.3rem var(--mono); color: var(--muted); transition: color 0.2s; }
 .tst-link.tst-busy { color: var(--accent); animation: pulse 0.6s infinite; }
@@ -110,6 +110,7 @@
     id: 'testing',
     title: 'Testing and quality',
     description: 'Fast, trustworthy tests from ViewModels to Compose screens, plus measuring how fast the app starts.',
+    group: 'Going deeper', requires: ['arch'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────

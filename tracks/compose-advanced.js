@@ -140,6 +140,7 @@ button.cx-tn:hover { border-color: var(--accent); }
     id: 'compose2',
     title: 'Compose, advanced',
     description: 'Make Compose fast and expressive: skipping, phases, locals, animation, custom layouts and typed navigation.',
+    group: 'Going deeper', requires: ['compose'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────

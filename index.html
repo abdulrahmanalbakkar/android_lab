@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Android Lab</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<script>try { var m = localStorage.getItem('android-lab:theme'); if (m === 'light' || m === 'dark') document.documentElement.dataset.theme = m; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -13,29 +14,44 @@
 <body>
 <header class="top">
   <div class="top-in">
-    <a class="brand" href="#home"><span class="brand-mark">fun</span> Android Lab</a>
-    <div class="search">
-      <input id="search" type="search" placeholder="Search lessons and terms  /" aria-label="Search lessons and terms" role="combobox" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">
-      <div id="search-results" class="search-results" role="listbox" hidden></div>
-    </div>
+    <a class="brand" href="#home" aria-label="Android Lab, the map"><span class="brand-mark" aria-hidden="true">fun</span> <span class="brand-text">Android Lab</span></a>
     <nav aria-label="Main">
-      <a href="#home">Lessons</a>
+      <a href="#home">Map</a>
       <a href="#glossary">Glossary</a>
       <a href="#review">Review <span id="due-badge" class="badge" hidden></span></a>
     </nav>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search lessons, tracks, terms  /" aria-label="Search lessons, tracks and terms" role="combobox" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">
+      <div id="search-results" class="search-results" role="listbox" hidden></div>
+    </div>
+    <button id="theme-btn" class="theme-btn" type="button" aria-label="Theme: System. Switch to Light"></button>
   </div>
+  <div id="readbar" class="readbar" hidden><span></span></div>
 </header>
 <main id="app"></main>
+<footer class="foot">
+  <p><span><kbd>←</kbd><kbd>→</kbd> lessons</span><span><kbd>/</kbd> search</span><span><kbd>m</kbd> map</span><span><kbd>r</kbd> review</span><span><kbd>g</kbd> glossary</span><span><kbd>t</kbd> theme</span><button id="keys-btn" type="button"><kbd>?</kbd> all shortcuts</button></p>
+</footer>
 <script src="js/app.js"></script>
-<!-- One script per track. To add a topic, copy tracks/kotlin.js's shape into a new file and list it here. -->
+<!-- One script per track. To add a topic, copy tracks/kotlin.js's shape into a new file and list it here. A missing file just doesn't load. -->
 <script src="tracks/kotlin.js"></script>
+<script src="tracks/kotlin-deep.js"></script>
+<script src="tracks/oop.js"></script>
+<script src="tracks/patterns.js"></script>
 <script src="tracks/android.js"></script>
 <script src="tracks/compose.js"></script>
 <script src="tracks/flow.js"></script>
 <script src="tracks/architecture.js"></script>
+<script src="tracks/data.js"></script>
+<script src="tracks/views.js"></script>
 <script src="tracks/compose-advanced.js"></script>
+<script src="tracks/a11y.js"></script>
 <script src="tracks/testing.js"></script>
+<script src="tracks/perf.js"></script>
+<script src="tracks/media.js"></script>
 <script src="tracks/platform.js"></script>
+<script src="tracks/security.js"></script>
+<script src="tracks/build.js"></script>
 <script src="tracks/kmp.js"></script>
 </body>
 </html>

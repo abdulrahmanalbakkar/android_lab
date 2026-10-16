@@ -129,6 +129,7 @@
     id: 'kmp',
     title: 'Kotlin Multiplatform',
     description: 'Write the logic once in Kotlin and ship it to Android, iOS and desktop, with shared or native UI.',
+    group: 'Shipping', requires: ['kotlin', 'arch'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────

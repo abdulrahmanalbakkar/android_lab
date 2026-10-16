@@ -138,6 +138,7 @@
     id: 'android',
     title: 'Android fundamentals',
     description: 'How an app lives on the phone: screens, state, intents, navigation and permissions.',
+    group: 'Building apps', requires: ['kotlin'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────
