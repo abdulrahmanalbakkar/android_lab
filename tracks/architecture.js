@@ -2450,7 +2450,7 @@ abstract class ArticleDao {
         body: `
 <p>A class shouldn’t build its own dependencies. It asks for them in its constructor, and something else hands them over. That something is Hilt.</p>
 <p>Put <code>@Inject</code> on a constructor and Hilt knows how to build that class. For types you can’t annotate, like Retrofit or a Room database, write a <code>@Module</code> with <code>@Provides</code> functions. Use <code>@Binds</code> to say which implementation fills an interface. Hilt checks the whole graph at compile time, so a missing piece is a build error, not a crash.</p>
-<p>Scopes decide how many instances exist. <code>@Singleton</code> means one for the whole app. A <code>@HiltViewModel</code> lives as long as its screen and survives rotation. Ask for a ViewModel below and watch the graph build bottom-up.</p>`,
+<p>Scopes decide how many instances exist. <code>@Singleton</code> means one for the whole app. A <code>@HiltViewModel</code> lives as long as its screen and survives rotation. The next lesson, Hilt components and scopes, covers every scope. Ask for a ViewModel below and watch the graph build bottom-up.</p>`,
         code: `@HiltAndroidApp
 class NewsApp : Application()
 
@@ -2518,119 +2518,6 @@ val viewModel: NewsViewModel = hiltViewModel()`,
         ],
         deeper: [
           {
-            title: 'Each scope matches a lifetime',
-            body: `
-<p>Hilt builds a tree of components, and each one lives as long as something on Android. <code>SingletonComponent</code> lives as long as the app process. <code>ActivityRetainedComponent</code> survives rotation and ends when the Activity finishes. <code>ViewModelComponent</code> belongs to one ViewModel. <code>ActivityComponent</code> is rebuilt every time the Activity is recreated.</p>
-<p>A scope annotation ties a class to one of them: one instance per component, kept until that component dies. Without a scope, Hilt builds a new instance every time someone asks. Try each event below and watch which instances survive.</p>`,
-            code: `@Singleton
-class Analytics @Inject constructor()                    // one per app process
-
-@ActivityRetainedScoped
-class CheckoutSession @Inject constructor()              // survives rotation
-
-@ViewModelScoped
-class SearchCache @Inject constructor()                  // one per ViewModel
-
-@ActivityScoped
-class PermissionHelper @Inject constructor(
-    private val activity: Activity,                      // safe: dies with the Activity
-)`,
-            visual(el) {
-              const R = [
-                { k: 'app', ann: '@Singleton', cls: 'Analytics', life: 'SingletonComponent · the app process' },
-                { k: 'ret', ann: '@ActivityRetainedScoped', cls: 'CheckoutSession', life: 'ActivityRetainedComponent · until the Activity finishes' },
-                { k: 'vm', ann: '@ViewModelScoped', cls: 'SearchCache', life: 'ViewModelComponent · one ViewModel' },
-                { k: 'act', ann: '@ActivityScoped', cls: 'PermissionHelper', life: 'ActivityComponent · one Activity object' },
-              ];
-              const EV = {
-                nav: { label: 'navigate(Search)', renew: ['vm'], msg: 'A new screen made a new ViewModel. Only the ViewModel-scoped object is new.' },
-                rot: { label: 'rotate()', renew: ['act'], msg: 'The Activity object was rebuilt, so its scoped helper is new. The retained and ViewModel scopes survived.' },
-                fin: { label: 'finish(); relaunch()', renew: ['ret', 'vm', 'act'], msg: 'The Activity finished for real. Everything below the app scope is gone. Analytics stayed.' },
-                die: { label: 'process death', renew: ['app', 'ret', 'vm', 'act'], msg: 'A new process starts from nothing. Even the singleton is new.' },
-              };
-              let busy = false;
-              const rows = R.map(r => Object.assign(r, { inst: addr(), el: node(`${r.ann} ${r.cls}`, r.life) }));
-              const o = out();
-              const chip = (r, fresh) => r.el.box.replaceChildren(h('span', { class: `chip ${fresh ? 'drop-in' : 'arc-reused pop'}` }, `${r.inst} ${fresh ? 'new' : 'kept'}`));
-              async function fire(k) {
-                if (busy) return; busy = true;
-                const ev = EV[k];
-                clearAll(rows.map(r => r.el));
-                rows.forEach(r => r.el.box.replaceChildren(h('span', { class: 'chip arc-old' }, r.inst)));
-                say(o, hl(ev.label));
-                for (const r of rows) {
-                  await sleep(320); if (!el.isConnected) return;
-                  const fresh = ev.renew.includes(r.k);
-                  if (fresh) r.inst = addr();
-                  r.el.classList.add(fresh ? 'on' : 'ok');
-                  chip(r, fresh);
-                }
-                o.append(h('div', { class: 'line drop-in', html: `<span class="muted">${ev.msg}</span>` }));
-                busy = false;
-              }
-              rows.forEach(r => chip(r, true));
-              say(o, 'The app is running with one screen. Fire an event.');
-              el.append(
-                h('div', { class: 'controls arc-fit' }, Object.entries(EV).map(([k, ev]) => cmd(ev.label, () => fire(k)))),
-                h('div', { class: 'arc-col' }, rows.map(r => r.el)),
-                o);
-            },
-          },
-          {
-            title: 'Dependencies come from your own scope or a longer one',
-            body: `
-<p>A component can use bindings from itself and from its parents, never from a child or a sibling. A ViewModel can get <code>@Singleton</code> and <code>@ActivityRetainedScoped</code> objects. It can’t get an <code>@ActivityScoped</code> one, because the ViewModel outlives every Activity object it ever sees.</p>
-<p>Hilt checks this at build time. Pick who is asking and what it asks for, then build.</p>`,
-            visual(el) {
-              const C = {
-                app: { name: 'SingletonComponent', up: null },
-                ret: { name: 'ActivityRetainedComponent', up: 'app' },
-                vm: { name: 'ViewModelComponent', up: 'ret' },
-                act: { name: 'ActivityComponent', up: 'ret' },
-              };
-              const ASK = [['app', '@Singleton NewsRepository'], ['vm', 'NewsViewModel'], ['act', 'MainActivity']];
-              const DEP = [['app', '@Singleton', 'Analytics'], ['ret', '@ActivityRetainedScoped', 'CheckoutSession'], ['vm', '@ViewModelScoped', 'SearchCache'], ['act', '@ActivityScoped', 'PermissionHelper']];
-              let ask = 1, dep = 3, busy = false;
-              for (const c of Object.values(C)) c.el = node(c.name, null);
-              const all = Object.values(C).map(c => c.el);
-              const o = out();
-              const toggle = (label, fn) => h('button', { class: 'cmd', onclick: fn }, label);
-              const press = (btns, i) => btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
-              const askBtns = ASK.map(([, label], i) => toggle(label, () => { if (busy) return; ask = i; press(askBtns, i); clearAll(all); }));
-              const depBtns = DEP.map(([, ann, cls], i) => toggle(`${ann} ${cls}`, () => { if (busy) return; dep = i; press(depBtns, i); clearAll(all); }));
-              const chain = k => { const xs = []; for (let c = k; c; c = C[c].up) xs.push(c); return xs; };
-              async function build() {
-                if (busy) return; busy = true;
-                clearAll(all);
-                const [from, who] = ASK[ask], [to, ann, cls] = DEP[dep];
-                say(o, `<span class="muted">${who} asks for ${cls}…</span>`);
-                for (const k of chain(from)) {
-                  C[k].el.classList.add(k === from ? 'on' : 'ask'); tok(C[k].el, k === from ? 'asks here' : 'visible');
-                  await sleep(380); if (!el.isConnected) return;
-                }
-                const ok = chain(from).includes(to);
-                C[to].el.classList.remove('ask', 'on'); C[to].el.classList.add(ok ? 'ok' : 'bad');
-                tok(C[to].el, `${ann} ${cls}`, ok ? 'arc-back' : 'boom');
-                if (!ok) replay(C[to].el, 'shake');
-                await sleep(300); if (!el.isConnected) return;
-                say(o, ok
-                  ? `<span class="good">builds:</span> ${C[to].name} is ${to === from ? 'the same component' : 'a parent'} of ${C[from].name}, so the instance lives at least as long as ${who}.`
-                  : `<span class="bad">error: [Dagger/IncompatiblyScopedBindings]</span> ${C[from].name} … may not reference bindings with different scopes: ${ann} class ${cls} <span class="muted">(shortened). ${C[to].name} is not above ${C[from].name}, so the object could die before ${who} does.</span>`);
-                busy = false;
-              }
-              press(askBtns, ask); press(depBtns, dep);
-              const row = (...ks) => h('div', { class: 'arc-row' }, ks.map(k => C[k].el));
-              const up = () => h('div', { class: 'arc-dir' }, '↑ parent');
-              say(o, 'Pick who asks and what it asks for, then build.');
-              el.append(
-                h('div', { class: 'controls arc-fit' }, h('span', { class: 'arc-cap' }, 'who asks'), askBtns),
-                h('div', { class: 'controls arc-fit' }, h('span', { class: 'arc-cap' }, 'what it needs'), depBtns),
-                h('div', { class: 'controls arc-fit' }, cmd('build()', build)),
-                h('div', { class: 'arc-graph' }, row('app'), up(), row('ret'), up(), row('vm', 'act')),
-                o);
-            },
-          },
-          {
             title: 'Two bindings of one type need a qualifier',
             body: `
 <p>Hilt finds a binding by its type. If you provide two <code>CoroutineDispatcher</code>s, it can’t tell which one a constructor wants, and the build fails with a duplicate binding error.</p>
@@ -2650,6 +2537,21 @@ class OfflineFirstNewsRepository @Inject constructor(
     private val dao: ArticleDao,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : NewsRepository`,
+          },
+          {
+            title: 'Build it later, or build many: Lazy and Provider',
+            body: `
+<p>Hilt normally builds every constructor argument before your class exists. Ask for <code>Lazy&lt;T&gt;</code> instead and nothing is built until the first <code>get()</code>. Later calls on the same <code>Lazy</code> return that same object. It suits a heavy dependency that only one rare path needs.</p>
+<p><code>Provider&lt;T&gt;</code> is different: every <code>get()</code> asks Hilt again. For an unscoped type that means a new instance each call. For a scoped type you get the one the component keeps. Both types come from <code>javax.inject</code> or <code>dagger</code>, not from Kotlin’s <code>lazy</code>.</p>`,
+            code: `class ExportViewModel @Inject constructor(
+    private val pdfWriter: dagger.Lazy<PdfWriter>,          // built on first get()
+    private val rowBuilder: Provider<RowBuilder>,           // a new one per get()
+) : ViewModel() {
+    fun export(items: List<Article>) {
+        val writer = pdfWriter.get()                         // first call builds it
+        items.forEach { writer.add(rowBuilder.get().build(it)) }
+    }
+}`,
           },
         ],
         underHood: {
@@ -2679,19 +2581,6 @@ class MainActivity : ComponentActivity() {
     }
 }`,
             why: 'Hilt injects Activity fields during <code>super.onCreate()</code>. Before that the field is empty and you get <code>UninitializedPropertyAccessException</code>.',
-          },
-          {
-            title: 'Making everything @Singleton',
-            bad: `@Singleton
-class PriceFormatter @Inject constructor()
-
-@Singleton
-class SearchCache @Inject constructor()   // keeps every search forever`,
-            good: `class PriceFormatter @Inject constructor()        // stateless: no scope
-
-@ViewModelScoped
-class SearchCache @Inject constructor()   // freed with its ViewModel`,
-            why: 'A scope is a promise to keep an object alive. Stateless classes are cheap to build, so leave them unscoped. Scope state to the shortest lifetime that needs it.',
           },
           {
             title: 'Building dependencies by hand inside a class',
@@ -2791,6 +2680,215 @@ class NewsViewModel @Inject constructor(
             h('div', { class: 'controls arc-fit' }, swSingle, swApi),
             h('div', { class: 'arc-graph' }, row('vm'), up(), row('repo'), up(), row('api', 'dao'), up(), row('ok', 'db')),
             screens, o);
+        },
+      },
+
+      // hilt-scopes ───────────────────────────────────
+      {
+        id: 'hilt-scopes',
+        title: 'Hilt components and scopes',
+        tagline: 'A scope ties one instance to one Android lifetime.',
+        level: 'intermediate',
+        body: `
+<p>Hilt builds a tree of components, and each one lives as long as something on Android. <code>SingletonComponent</code> lives as long as the app process. <code>ActivityRetainedComponent</code> survives rotation and ends when the Activity finishes for real. <code>ViewModelComponent</code> belongs to one ViewModel. <code>ActivityComponent</code> is rebuilt every time the Activity object is recreated.</p>
+<p>A scope annotation ties a class to one of them: <code>@Singleton</code>, <code>@ActivityRetainedScoped</code>, <code>@ViewModelScoped</code>, <code>@ActivityScoped</code>. Hilt then keeps one instance per component and reuses it until that component dies. Without a scope, Hilt builds a new instance every time someone asks.</p>
+<p>A scope is a promise to keep an object in memory. Use one when the object holds state that several classes must share, needs synchronization, or is measured to be expensive to build. Leave everything else unscoped. Fire the events below and watch which instances survive.</p>`,
+        code: `@Singleton
+class Analytics @Inject constructor()                    // one per app process
+
+@ActivityRetainedScoped
+class CheckoutSession @Inject constructor()              // survives rotation
+
+@ViewModelScoped
+class SearchCache @Inject constructor()                  // one per ViewModel
+
+@ActivityScoped
+class PermissionHelper @Inject constructor(
+    private val activity: Activity,                      // safe: dies with the Activity
+)
+
+class PriceFormatter @Inject constructor()               // no scope: new on every request`,
+        remember: 'Scope state to the shortest lifetime that needs it; leave stateless classes unscoped.',
+        terms: [
+          { term: 'Hilt component', def: 'A generated container of bindings tied to an Android lifetime, such as SingletonComponent or ViewModelComponent.' },
+          { term: 'Scope annotation', def: 'An annotation like @Singleton or @ViewModelScoped that makes Hilt keep one instance per component instead of building a new one per request.' },
+          { term: '@ActivityRetainedScoped', def: 'The scope of ActivityRetainedComponent, which survives configuration changes and ends when the Activity finishes.' },
+          { term: 'Unscoped binding', def: 'The default: Hilt builds a new instance for every injection point that asks for it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Keep one cache per ViewModel, provided from a module in the matching component.', code: '@Module\n@InstallIn([[ViewModelComponent]]::class)\nobject SearchModule {\n    @Provides @[[ViewModelScoped]]\n    fun cache(): SearchCache = SearchCache(maxEntries = 50)\n}', why: 'A module’s scoped bindings must use the scope of the component it is installed in. ViewModelComponent pairs with <code>@ViewModelScoped</code>.' },
+          { type: 'bug', prompt: 'Every new search screen opens with the last screen’s results, and memory grows all session. Tap the line.', code: '@Singleton\nclass SearchCache @Inject constructor() {\n    val results = mutableMapOf<String, List<Article>>()\n}\n\n@HiltViewModel\nclass SearchViewModel @Inject constructor(\n    private val cache: SearchCache,\n) : ViewModel()', bug: 0, fix: '@ViewModelScoped', why: '<code>@Singleton</code> keeps one cache for the whole process, so every screen shares it and nothing is freed. <code>@ViewModelScoped</code> gives each ViewModel its own cache and frees it with the ViewModel.' },
+        ],
+        quiz: [
+          { q: 'The user rotates the phone. Which scoped object is built again?', options: ['@Singleton', '@ActivityRetainedScoped', '@ViewModelScoped', '@ActivityScoped'], a: 3, why: 'Rotation recreates the Activity object, so ActivityComponent is rebuilt. The retained and ViewModel components survive configuration changes.' },
+          { q: 'An unscoped <code>PriceFormatter</code> is injected into two classes. How many instances exist?', options: ['1', '2'], a: 1, why: 'Unscoped is the default, and it means a new instance per request.' },
+          { q: 'A <code>@HiltViewModel</code> asks for an <code>@ActivityScoped</code> helper. What happens?', options: ['It gets the current Activity’s helper', 'The build fails', 'It gets a new helper each time'], a: 1, why: 'ViewModelComponent is not a child of ActivityComponent. The ViewModel outlives every Activity object, so Hilt refuses the binding at compile time.' },
+        ],
+        deeper: [
+          {
+            title: 'Dependencies come from your own scope or a longer one',
+            body: `
+<p>A component can use bindings from itself and from its parents, never from a child or a sibling. A ViewModel can get <code>@Singleton</code> and <code>@ActivityRetainedScoped</code> objects. It can’t get an <code>@ActivityScoped</code> one, because the ViewModel outlives every Activity object it ever sees.</p>
+<p>Hilt checks this at build time. Pick who is asking and what it asks for, then build.</p>`,
+            visual(el) {
+              const C = {
+                app: { name: 'SingletonComponent', up: null },
+                ret: { name: 'ActivityRetainedComponent', up: 'app' },
+                vm: { name: 'ViewModelComponent', up: 'ret' },
+                act: { name: 'ActivityComponent', up: 'ret' },
+              };
+              const ASK = [['app', '@Singleton NewsRepository'], ['vm', 'NewsViewModel'], ['act', 'MainActivity']];
+              const DEP = [['app', '@Singleton', 'Analytics'], ['ret', '@ActivityRetainedScoped', 'CheckoutSession'], ['vm', '@ViewModelScoped', 'SearchCache'], ['act', '@ActivityScoped', 'PermissionHelper']];
+              let ask = 1, dep = 3, busy = false;
+              for (const c of Object.values(C)) c.el = node(c.name, null);
+              const all = Object.values(C).map(c => c.el);
+              const o = out();
+              const toggle = (label, fn) => h('button', { class: 'cmd', onclick: fn }, label);
+              const press = (btns, i) => btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+              const askBtns = ASK.map(([, label], i) => toggle(label, () => { if (busy) return; ask = i; press(askBtns, i); clearAll(all); }));
+              const depBtns = DEP.map(([, ann, cls], i) => toggle(`${ann} ${cls}`, () => { if (busy) return; dep = i; press(depBtns, i); clearAll(all); }));
+              const chain = k => { const xs = []; for (let c = k; c; c = C[c].up) xs.push(c); return xs; };
+              async function build() {
+                if (busy) return; busy = true;
+                clearAll(all);
+                const [from, who] = ASK[ask], [to, ann, cls] = DEP[dep];
+                say(o, `<span class="muted">${who} asks for ${cls}…</span>`);
+                for (const k of chain(from)) {
+                  C[k].el.classList.add(k === from ? 'on' : 'ask'); tok(C[k].el, k === from ? 'asks here' : 'visible');
+                  await sleep(380); if (!el.isConnected) return;
+                }
+                const ok = chain(from).includes(to);
+                C[to].el.classList.remove('ask', 'on'); C[to].el.classList.add(ok ? 'ok' : 'bad');
+                tok(C[to].el, `${ann} ${cls}`, ok ? 'arc-back' : 'boom');
+                if (!ok) replay(C[to].el, 'shake');
+                await sleep(300); if (!el.isConnected) return;
+                say(o, ok
+                  ? `<span class="good">builds:</span> ${C[to].name} is ${to === from ? 'the same component' : 'a parent'} of ${C[from].name}, so the instance lives at least as long as ${who}.`
+                  : `<span class="bad">error: [Dagger/IncompatiblyScopedBindings]</span> ${C[from].name} … may not reference bindings with different scopes: ${ann} class ${cls} <span class="muted">(shortened). ${C[to].name} is not above ${C[from].name}, so the object could die before ${who} does.</span>`);
+                busy = false;
+              }
+              press(askBtns, ask); press(depBtns, dep);
+              const row = (...ks) => h('div', { class: 'arc-row' }, ks.map(k => C[k].el));
+              const up = () => h('div', { class: 'arc-dir' }, '↑ parent');
+              say(o, 'Pick who asks and what it asks for, then build.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, h('span', { class: 'arc-cap' }, 'who asks'), askBtns),
+                h('div', { class: 'controls arc-fit' }, h('span', { class: 'arc-cap' }, 'what it needs'), depBtns),
+                h('div', { class: 'controls arc-fit' }, cmd('build()', build)),
+                h('div', { class: 'arc-graph' }, row('app'), up(), row('ret'), up(), row('vm', 'act')),
+                o);
+            },
+          },
+          {
+            title: 'Each component hands out a few objects for free',
+            body: `
+<p>Every component comes with default bindings you can ask for without a module. <code>SingletonComponent</code> gives you the <code>Application</code>, also as <code>@ApplicationContext Context</code>. <code>ActivityComponent</code> adds the <code>Activity</code> and <code>@ActivityContext</code>. <code>ViewModelComponent</code> gives you the ViewModel’s <code>SavedStateHandle</code>.</p>
+<p>A component also sees its parents’ defaults. That is why a <code>@ViewModelScoped</code> helper can read the screen’s navigation arguments from <code>SavedStateHandle</code> without the ViewModel passing them down.</p>`,
+            code: `@ViewModelScoped
+class ArticleIdHolder @Inject constructor(
+    savedStateHandle: SavedStateHandle,       // free in ViewModelComponent
+) {
+    val articleId: String = checkNotNull(savedStateHandle["articleId"])
+}
+
+@HiltViewModel
+class ArticleViewModel @Inject constructor(
+    private val ids: ArticleIdHolder,
+    private val repository: NewsRepository,
+) : ViewModel()`,
+          },
+          {
+            title: 'A module’s scope must match its component',
+            body: `
+<p><code>@InstallIn</code> puts a module’s bindings into one component. A scoped <code>@Provides</code> in that module must use that component’s scope: <code>@Singleton</code> in <code>SingletonComponent</code>, <code>@ViewModelScoped</code> in <code>ViewModelComponent</code>, and so on. A mismatch is a build error.</p>
+<p>The same component also decides who can see the binding. A module installed in <code>ActivityComponent</code> is invisible to ViewModels and singletons, even when its function is unscoped.</p>`,
+            code: `@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+    @Provides @Singleton                       // matches SingletonComponent
+    fun okHttp(): OkHttpClient = OkHttpClient()
+}
+
+@Module
+@InstallIn(ActivityComponent::class)
+object ActivityModule {
+    @Provides @Singleton                       // build error: wrong scope for this component
+    fun helper(activity: Activity): PermissionHelper = PermissionHelper(activity)
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Hilt generates one Dagger component per Hilt component and links them as parent and child. A child component can call into its parent, which is how a ViewModel reaches a singleton. A parent has no reference to its children, so the reverse lookup can’t exist.</p>
+<p>A scoped binding is stored in its component behind a thread-safe lazy holder. The first request builds the object, and later requests from the same component get the same one. When Android ends the lifetime, Hilt drops the component, and every object scoped to it becomes garbage with it.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Making everything @Singleton',
+            bad: `@Singleton
+class PriceFormatter @Inject constructor()
+
+@Singleton
+class SearchCache @Inject constructor()   // keeps every search forever`,
+            good: `class PriceFormatter @Inject constructor()        // stateless: no scope
+
+@ViewModelScoped
+class SearchCache @Inject constructor()   // freed with its ViewModel`,
+            why: 'A scope is a promise to keep an object alive. Stateless classes are cheap to build, so leave them unscoped. Scope state to the shortest lifetime that needs it.',
+          },
+          {
+            title: 'Expecting @ActivityScoped to survive rotation',
+            bad: `@ActivityScoped
+class CheckoutSession @Inject constructor() {
+    val items = mutableListOf<CartItem>()     // emptied on every rotation
+}`,
+            good: `@ActivityRetainedScoped
+class CheckoutSession @Inject constructor() {
+    val items = mutableListOf<CartItem>()     // survives rotation
+}`,
+            why: 'ActivityComponent is rebuilt with each Activity object. For state that must outlive a configuration change, use the retained component, or keep the state in a ViewModel.',
+          },
+        ],
+        visual(el) {
+          const R = [
+            { k: 'app', ann: '@Singleton', cls: 'Analytics', life: 'SingletonComponent · the app process' },
+            { k: 'ret', ann: '@ActivityRetainedScoped', cls: 'CheckoutSession', life: 'ActivityRetainedComponent · until the Activity finishes' },
+            { k: 'vm', ann: '@ViewModelScoped', cls: 'SearchCache', life: 'ViewModelComponent · one ViewModel' },
+            { k: 'act', ann: '@ActivityScoped', cls: 'PermissionHelper', life: 'ActivityComponent · one Activity object' },
+            { k: 'none', ann: '(no scope)', cls: 'PriceFormatter', life: 'no component keeps it · new for every request' },
+          ];
+          const EV = {
+            nav: { label: 'navigate(Search)', renew: ['vm', 'none'], msg: 'A new screen made a new ViewModel. The ViewModel-scoped object is new, and so is every unscoped one it asked for.' },
+            rot: { label: 'rotate()', renew: ['act', 'none'], msg: 'The Activity object was rebuilt, so its scoped helper is new. The retained and ViewModel scopes survived. The unscoped formatter is always new.' },
+            fin: { label: 'finish(); relaunch()', renew: ['ret', 'vm', 'act', 'none'], msg: 'The Activity finished for real. Everything below the app scope is gone. Analytics stayed.' },
+            die: { label: 'process death', renew: ['app', 'ret', 'vm', 'act', 'none'], msg: 'A new process starts from nothing. Even the singleton is new.' },
+          };
+          let busy = false;
+          const rows = R.map(r => Object.assign(r, { inst: addr(), el: node(`${r.ann} ${r.cls}`, r.life) }));
+          const o = out();
+          const chip = (r, fresh) => r.el.box.replaceChildren(h('span', { class: `chip ${fresh ? 'drop-in' : 'arc-reused pop'}` }, `${r.inst} ${fresh ? 'new' : 'kept'}`));
+          async function fire(k) {
+            if (busy) return; busy = true;
+            const ev = EV[k];
+            clearAll(rows.map(r => r.el));
+            rows.forEach(r => r.el.box.replaceChildren(h('span', { class: 'chip arc-old' }, r.inst)));
+            say(o, hl(ev.label));
+            for (const r of rows) {
+              await sleep(320); if (!el.isConnected) return;
+              const fresh = ev.renew.includes(r.k);
+              if (fresh) r.inst = addr();
+              r.el.classList.add(fresh ? 'on' : 'ok');
+              chip(r, fresh);
+            }
+            o.append(h('div', { class: 'line drop-in', html: `<span class="muted">${ev.msg}</span>` }));
+            busy = false;
+          }
+          rows.forEach(r => chip(r, true));
+          say(o, 'The app is running with one screen. Fire an event.');
+          el.append(
+            h('div', { class: 'controls arc-fit' }, Object.entries(EV).map(([k, ev]) => cmd(ev.label, () => fire(k)))),
+            h('div', { class: 'arc-col' }, rows.map(r => r.el)),
+            o);
         },
       },
 

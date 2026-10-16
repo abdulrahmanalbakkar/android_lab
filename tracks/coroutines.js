@@ -570,180 +570,32 @@ fun onSaved() {
   const structuredDepth = {
     deeper: [
       {
-        title: 'supervisorScope lets one child fail alone',
-        body: `<p>In <code>coroutineScope</code>, one failing child cancels its siblings and the scope rethrows. Sometimes the children are independent. A broken badge count should not hide the posts.</p>
-<p><code>supervisorScope</code> does not cancel the other children when one fails. A failed <code>async</code> keeps its exception until you call <code>await()</code>. A failed <code>launch</code> sends it to the <code>CoroutineExceptionHandler</code>, or crashes the app if there is none. This is why <code>viewModelScope</code> is built on a <code>SupervisorJob</code>.</p>`,
-        code: `suspend fun loadProfile(): Profile = supervisorScope {
-    val avatar = async { repo.avatar() }
-    val posts = async { repo.posts() }
-    val badges = async { repo.badges() }
-    Profile(
-        avatar = avatar.await(),
-        posts = runCatching { posts.await() }.getOrDefault(emptyList()),
-        badges = badges.await(),
-    )
+        title: 'A suspend function finishes its work before it returns',
+        body: `<p>When a suspend function starts parallel work, wrap it in <code>coroutineScope { }</code>. It returns only after every child is done, and if one fails, the error reaches the caller like any other exception.</p>
+<p>Launching into a scope you were handed, or one you made up, breaks that. The function returns at once, the caller thinks the work is done, and a failure goes somewhere the caller never sees.</p>`,
+        code: `// Returns when both are saved. A failure reaches the caller.
+suspend fun saveAll(note: Note, tags: List<Tag>) = coroutineScope {
+    launch { dao.saveNote(note) }
+    launch { dao.saveTags(tags) }
+}
+
+// Returns before anything is saved. The caller can't wait or catch.
+suspend fun saveAllWrong(note: Note, tags: List<Tag>) {
+    CoroutineScope(Dispatchers.IO).launch { dao.saveNote(note) }
+    CoroutineScope(Dispatchers.IO).launch { dao.saveTags(tags) }
 }`,
-        visual(el) {
-          const KIDS = [['avatar', 'async { avatar() }', 6500], ['posts', 'async { posts() }', 9000], ['badges', 'async { badges() }', 7500]];
-          const MODES = [['scope', 'coroutineScope { }'], ['super', 'supervisorScope { }']];
-          let mode = 'scope', busy = false, N = {}, failed = false;
-          const wrap = h('div');
-          const o = out();
-          const modeBtns = MODES.map(([k, src]) => cmd(src, () => {
-            if (busy) return;
-            mode = k; build();
-            say(o, `<span class="muted">mode:</span> ${hl(src)}. Make posts() throw and watch its siblings.`);
-          }));
-          function build() {
-            N = {}; failed = false;
-            wrap.replaceChildren(h('div', { class: 'flw-tree' },
-              flwTreeNode(N, 'root', mode === 'scope' ? 'coroutineScope' : 'supervisorScope', KIDS.map(([id, src]) => flwTreeNode(N, id, src)))));
-            flwSetNode(N, 'root', 'run', 'waiting for children');
-            KIDS.forEach(([id], i) => { flwSetNode(N, id, 'run', 'running'); N[id].p = 0.12 + i * 0.08; });
-            pressed(modeBtns, MODES.map(m => m[0]), mode);
-          }
-          loop(wrap, (now, dt) => {
-            if (!N.root || N.root.state !== 'run') return;
-            let running = 0;
-            for (const [id, , dur] of KIDS) {
-              const n = N[id];
-              if (n.state !== 'run') continue;
-              running++;
-              n.p = Math.min(1, n.p + dt / dur);
-              n.bar.style.width = n.p * 100 + '%';
-              if (n.p >= 1) { flwSetNode(N, id, 'done', 'returned'); replay(n.box, 'pop'); }
-            }
-            if (!running && !busy) {
-              if (failed) {
-                flwSetNode(N, 'root', 'caught', 'returned, posts empty'); replay(N.root.box, 'pop');
-                say(o, '<span class="good">done:</span> avatar and badges finished. posts.await() threw inside runCatching, so the screen shows an empty post list instead of nothing.');
-              } else {
-                flwSetNode(N, 'root', 'done', 'returned'); replay(N.root.box, 'pop');
-                say(o, '<span class="good">done:</span> all three children returned. Press run again, then make one fail.');
-              }
-            }
-          });
-          build();
-          o.innerHTML = 'Three independent loads run under coroutineScope. Make posts() throw.';
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            wrap,
-            h('div', { class: 'controls' },
-              cmd('posts() throws IOException', async () => {
-                if (busy) return;
-                if (N.posts.state !== 'run') { replay(N.posts.box, 'shake'); say(o, '<span class="muted">no-op:</span> posts is not running. Press run again.'); return; }
-                busy = true;
-                try {
-                  flwSetNode(N, 'posts', 'fail', 'IOException'); replay(N.posts.box, 'shake'); failed = true;
-                  if (mode === 'super') {
-                    say(o, '<span class="good">isolated:</span> supervisorScope left avatar and badges alone. The exception waits inside posts until someone calls await().');
-                    return;
-                  }
-                  say(o, '<span class="bad">fail:</span> coroutineScope cancels the other children…');
-                  for (const id of ['avatar', 'badges']) {
-                    if (N[id].state !== 'run') continue;
-                    await sleep(340); if (!wrap.isConnected) return;
-                    flwSetNode(N, id, 'cancel', 'cancelled'); replay(N[id].box, 'shake');
-                  }
-                  await sleep(340); if (!wrap.isConnected) return;
-                  flwSetNode(N, 'root', 'fail', 'rethrew IOException'); replay(N.root.box, 'shake');
-                  say(o, '<span class="bad">fail:</span> avatar and badges were cancelled and their work was lost. The scope rethrew IOException to its caller.');
-                } finally { busy = false; }
-              }),
-              cmd('run again', () => {
-                if (busy) return;
-                build();
-                say(o, `<span class="muted">restarted:</span> three fresh children under ${mode === 'scope' ? 'coroutineScope' : 'supervisorScope'}.`);
-              })),
-            o);
-        },
       },
       {
-        title: 'Cancellation only lands where the code checks',
-        body: `<p>Calling <code>cancel()</code> only marks a Job as cancelled. The coroutine notices the next time it suspends or checks. A loop that only does math never suspends, so it runs to the end and its result is thrown away.</p>
-<p>Put <code>ensureActive()</code> or a <code>yield()</code> at the top of each iteration. The red stripes below are work done after the cancel, wasted CPU and battery.</p>`,
-        code: `suspend fun resizeAll(photos: List<Photo>) = withContext(Dispatchers.Default) {
-    for (photo in photos) {
-        ensureActive()          // throws CancellationException once cancelled
-        resize(photo)           // CPU only, never suspends
-    }
-}`,
-        visual(el) {
-          const DUR = 7000, CHECKS = 8;
-          const lanes = [
-            { key: 'plain', name: 'no checks', checks: false },
-            { key: 'check', name: 'ensureActive()', checks: true },
-          ];
-          let busy = false;
-          const o = out();
-          const tl = h('div', { class: 'timeline' }, lanes.map(L => {
-            L.run = h('span', { class: 'bar run', style: 'left:0;width:0' });
-            L.waste = h('span', { class: 'bar block', style: 'left:0;width:0' });
-            L.marks = L.checks ? Array.from({ length: CHECKS - 1 }, (_, i) => h('span', { class: 'flw-chk', style: `left:${((i + 1) / CHECKS) * 100}%` })) : [];
-            L.st = h('span', { class: 'flw-note' });
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, L.name, h('br'), L.st), h('div', { class: 'lane-track' }, L.run, L.waste, L.marks));
-          }));
-          function start() {
-            lanes.forEach(L => { L.p = 0; L.cancelAt = null; L.state = 'run'; L.st.textContent = 'running'; L.st.className = 'flw-note'; L.waste.style.width = '0'; });
-          }
-          loop(tl, (now, dt) => {
-            for (const L of lanes) {
-              if (L.state !== 'run' && L.state !== 'cancelling') continue;
-              const before = L.p;
-              L.p = Math.min(1, L.p + dt / DUR);
-              if (L.state === 'cancelling' && L.checks) {
-                const nextCheck = Math.ceil(before * CHECKS - 1e-9) / CHECKS;
-                if (L.p >= nextCheck) {
-                  L.p = nextCheck; L.state = 'stopped';
-                  L.st.textContent = 'stopped at a check'; L.st.className = 'flw-note';
-                  say(o, '<span class="good">stopped:</span> ensureActive() threw CancellationException at the next check. Only a sliver of work was wasted.');
-                }
-              }
-              const cut = L.cancelAt == null ? L.p : L.cancelAt;
-              L.run.style.width = cut * 100 + '%';
-              if (L.cancelAt != null) { L.waste.style.left = L.cancelAt * 100 + '%'; L.waste.style.width = (L.p - L.cancelAt) * 100 + '%'; }
-              if (L.p >= 1 && L.state !== 'stopped') {
-                if (L.state === 'cancelling') {
-                  L.state = 'wasted'; L.st.textContent = 'finished anyway'; L.st.className = 'flw-note warn';
-                  say(o, '<span class="bad">wasted:</span> the loop without checks never noticed the cancel. It ran to the end, then its result was thrown away.');
-                } else { L.state = 'done'; L.st.textContent = 'done'; }
-              }
-            }
-          });
-          start();
-          o.innerHTML = 'Two copies of the same CPU loop are running. Cancel them both.';
-          el.append(
-            h('div', { class: 'controls' },
-              cmd('job.cancel()', () => {
-                if (busy) return;
-                const live = lanes.filter(L => L.state === 'run');
-                if (!live.length) { replay(tl, 'shake'); say(o, '<span class="muted">no-op:</span> nothing is running. Press start.'); return; }
-                live.forEach(L => { L.state = 'cancelling'; L.cancelAt = L.p; L.st.textContent = 'cancel requested'; L.st.className = 'flw-note warn'; });
-                say(o, '<span class="muted">cancel():</span> both Jobs are now marked cancelled. Watch which loop notices.');
-              }),
-              cmd('start', () => {
-                if (lanes.some(L => L.state === 'run' || L.state === 'cancelling')) { replay(tl, 'shake'); say(o, '<span class="muted">busy:</span> wait until both loops have stopped.'); return; }
-                start(); say(o, '<span class="muted">started:</span> two fresh loops.');
-              })),
-            tl,
-            h('div', { class: 'legend' },
-              h('span', {}, h('i', { class: 'bar run' }), 'useful work'),
-              h('span', {}, h('i', { class: 'bar block' }), 'work after cancel'),
-              h('span', {}, h('i', { class: 'flw-chk flw-chk-key' }), 'cancellation check')),
-            o);
-        },
-      },
-      {
-        title: 'Cleanup that suspends needs NonCancellable',
-        body: `<p>A cancelled coroutine still runs its <code>finally</code> blocks. But it is already cancelled, so any suspend call inside <code>finally</code> throws <code>CancellationException</code> at once and the cleanup never happens.</p>
-<p>Wrap suspending cleanup in <code>withContext(NonCancellable)</code>. Keep that block short, because nothing can cancel it.</p>`,
-        code: `viewModelScope.launch {
-    try {
-        uploader.upload(file)
-    } finally {
-        withContext(NonCancellable) {
-            repo.markUploadStopped(file.id)   // a suspend call, safe here
-        }
+        title: 'Work that must outlive the screen',
+        body: `<p>Some work should finish even if the user leaves, like saving a bookmark. <code>viewModelScope</code> would cancel it. Don’t reach for <code>GlobalScope</code>. Inject a longer-lived scope instead, created and owned by something that lives longer than the screen, such as your <code>Application</code> class.</p>
+<p>The coroutine is still part of a tree, just a longer-lived one. Calling <code>join()</code> lets the caller wait for it while the screen is still there.</p>`,
+        code: `class ArticlesRepository(
+    private val dataSource: ArticlesDataSource,
+    private val externalScope: CoroutineScope,   // lives as long as the app
+) {
+    suspend fun bookmark(article: Article) {
+        externalScope.launch { dataSource.bookmark(article) }
+            .join()       // wait while the caller is alive; finishes even if it isn't
     }
 }`,
       },
@@ -994,10 +846,755 @@ parent.cancelChildren()                 // child is resumed with CancellationExc
     ],
   };
 
+  // ─── Promoted lessons: exceptions, cancellation, shared state ─────────────────
+  // Step objects moved here from the structured-concurrency lesson.
+  const superStep = {
+        title: 'supervisorScope lets one child fail alone',
+        body: `<p>In <code>coroutineScope</code>, one failing child cancels its siblings and the scope rethrows. Sometimes the children are independent. A broken badge count should not hide the posts.</p>
+<p><code>supervisorScope</code> does not cancel the other children when one fails. A failed <code>async</code> keeps its exception until you call <code>await()</code>. A failed <code>launch</code> sends it to the <code>CoroutineExceptionHandler</code>, or crashes the app if there is none. This is why <code>viewModelScope</code> is built on a <code>SupervisorJob</code>.</p>`,
+        code: `suspend fun loadProfile(): Profile = supervisorScope {
+    val avatar = async { repo.avatar() }
+    val posts = async { repo.posts() }
+    val badges = async { repo.badges() }
+    Profile(
+        avatar = avatar.await(),
+        posts = runCatching { posts.await() }.getOrDefault(emptyList()),
+        badges = badges.await(),
+    )
+}`,
+        visual(el) {
+          const KIDS = [['avatar', 'async { avatar() }', 6500], ['posts', 'async { posts() }', 9000], ['badges', 'async { badges() }', 7500]];
+          const MODES = [['scope', 'coroutineScope { }'], ['super', 'supervisorScope { }']];
+          let mode = 'scope', busy = false, N = {}, failed = false;
+          const wrap = h('div');
+          const o = out();
+          const modeBtns = MODES.map(([k, src]) => cmd(src, () => {
+            if (busy) return;
+            mode = k; build();
+            say(o, `<span class="muted">mode:</span> ${hl(src)}. Make posts() throw and watch its siblings.`);
+          }));
+          function build() {
+            N = {}; failed = false;
+            wrap.replaceChildren(h('div', { class: 'flw-tree' },
+              flwTreeNode(N, 'root', mode === 'scope' ? 'coroutineScope' : 'supervisorScope', KIDS.map(([id, src]) => flwTreeNode(N, id, src)))));
+            flwSetNode(N, 'root', 'run', 'waiting for children');
+            KIDS.forEach(([id], i) => { flwSetNode(N, id, 'run', 'running'); N[id].p = 0.12 + i * 0.08; });
+            pressed(modeBtns, MODES.map(m => m[0]), mode);
+          }
+          loop(wrap, (now, dt) => {
+            if (!N.root || N.root.state !== 'run') return;
+            let running = 0;
+            for (const [id, , dur] of KIDS) {
+              const n = N[id];
+              if (n.state !== 'run') continue;
+              running++;
+              n.p = Math.min(1, n.p + dt / dur);
+              n.bar.style.width = n.p * 100 + '%';
+              if (n.p >= 1) { flwSetNode(N, id, 'done', 'returned'); replay(n.box, 'pop'); }
+            }
+            if (!running && !busy) {
+              if (failed) {
+                flwSetNode(N, 'root', 'caught', 'returned, posts empty'); replay(N.root.box, 'pop');
+                say(o, '<span class="good">done:</span> avatar and badges finished. posts.await() threw inside runCatching, so the screen shows an empty post list instead of nothing.');
+              } else {
+                flwSetNode(N, 'root', 'done', 'returned'); replay(N.root.box, 'pop');
+                say(o, '<span class="good">done:</span> all three children returned. Press run again, then make one fail.');
+              }
+            }
+          });
+          build();
+          o.innerHTML = 'Three independent loads run under coroutineScope. Make posts() throw.';
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            wrap,
+            h('div', { class: 'controls' },
+              cmd('posts() throws IOException', async () => {
+                if (busy) return;
+                if (N.posts.state !== 'run') { replay(N.posts.box, 'shake'); say(o, '<span class="muted">no-op:</span> posts is not running. Press run again.'); return; }
+                busy = true;
+                try {
+                  flwSetNode(N, 'posts', 'fail', 'IOException'); replay(N.posts.box, 'shake'); failed = true;
+                  if (mode === 'super') {
+                    say(o, '<span class="good">isolated:</span> supervisorScope left avatar and badges alone. The exception waits inside posts until someone calls await().');
+                    return;
+                  }
+                  say(o, '<span class="bad">fail:</span> coroutineScope cancels the other children…');
+                  for (const id of ['avatar', 'badges']) {
+                    if (N[id].state !== 'run') continue;
+                    await sleep(340); if (!wrap.isConnected) return;
+                    flwSetNode(N, id, 'cancel', 'cancelled'); replay(N[id].box, 'shake');
+                  }
+                  await sleep(340); if (!wrap.isConnected) return;
+                  flwSetNode(N, 'root', 'fail', 'rethrew IOException'); replay(N.root.box, 'shake');
+                  say(o, '<span class="bad">fail:</span> avatar and badges were cancelled and their work was lost. The scope rethrew IOException to its caller.');
+                } finally { busy = false; }
+              }),
+              cmd('run again', () => {
+                if (busy) return;
+                build();
+                say(o, `<span class="muted">restarted:</span> three fresh children under ${mode === 'scope' ? 'coroutineScope' : 'supervisorScope'}.`);
+              })),
+            o);
+        },
+      };
+  const cancelChecksStep = {
+        title: 'Cancellation only lands where the code checks',
+        body: `<p>Calling <code>cancel()</code> only marks a Job as cancelled. The coroutine notices the next time it suspends or checks. A loop that only does math never suspends, so it runs to the end and its result is thrown away.</p>
+<p>Put <code>ensureActive()</code> or a <code>yield()</code> at the top of each iteration. The red stripes below are work done after the cancel, wasted CPU and battery.</p>`,
+        code: `suspend fun resizeAll(photos: List<Photo>) = withContext(Dispatchers.Default) {
+    for (photo in photos) {
+        ensureActive()          // throws CancellationException once cancelled
+        resize(photo)           // CPU only, never suspends
+    }
+}`,
+        visual(el) {
+          const DUR = 7000, CHECKS = 8;
+          const lanes = [
+            { key: 'plain', name: 'no checks', checks: false },
+            { key: 'check', name: 'ensureActive()', checks: true },
+          ];
+          let busy = false;
+          const o = out();
+          const tl = h('div', { class: 'timeline' }, lanes.map(L => {
+            L.run = h('span', { class: 'bar run', style: 'left:0;width:0' });
+            L.waste = h('span', { class: 'bar block', style: 'left:0;width:0' });
+            L.marks = L.checks ? Array.from({ length: CHECKS - 1 }, (_, i) => h('span', { class: 'flw-chk', style: `left:${((i + 1) / CHECKS) * 100}%` })) : [];
+            L.st = h('span', { class: 'flw-note' });
+            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, L.name, h('br'), L.st), h('div', { class: 'lane-track' }, L.run, L.waste, L.marks));
+          }));
+          function start() {
+            lanes.forEach(L => { L.p = 0; L.cancelAt = null; L.state = 'run'; L.st.textContent = 'running'; L.st.className = 'flw-note'; L.waste.style.width = '0'; });
+          }
+          loop(tl, (now, dt) => {
+            for (const L of lanes) {
+              if (L.state !== 'run' && L.state !== 'cancelling') continue;
+              const before = L.p;
+              L.p = Math.min(1, L.p + dt / DUR);
+              if (L.state === 'cancelling' && L.checks) {
+                const nextCheck = Math.ceil(before * CHECKS - 1e-9) / CHECKS;
+                if (L.p >= nextCheck) {
+                  L.p = nextCheck; L.state = 'stopped';
+                  L.st.textContent = 'stopped at a check'; L.st.className = 'flw-note';
+                  say(o, '<span class="good">stopped:</span> ensureActive() threw CancellationException at the next check. Only a sliver of work was wasted.');
+                }
+              }
+              const cut = L.cancelAt == null ? L.p : L.cancelAt;
+              L.run.style.width = cut * 100 + '%';
+              if (L.cancelAt != null) { L.waste.style.left = L.cancelAt * 100 + '%'; L.waste.style.width = (L.p - L.cancelAt) * 100 + '%'; }
+              if (L.p >= 1 && L.state !== 'stopped') {
+                if (L.state === 'cancelling') {
+                  L.state = 'wasted'; L.st.textContent = 'finished anyway'; L.st.className = 'flw-note warn';
+                  say(o, '<span class="bad">wasted:</span> the loop without checks never noticed the cancel. It ran to the end, then its result was thrown away.');
+                } else { L.state = 'done'; L.st.textContent = 'done'; }
+              }
+            }
+          });
+          start();
+          o.innerHTML = 'Two copies of the same CPU loop are running. Cancel them both.';
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('job.cancel()', () => {
+                if (busy) return;
+                const live = lanes.filter(L => L.state === 'run');
+                if (!live.length) { replay(tl, 'shake'); say(o, '<span class="muted">no-op:</span> nothing is running. Press start.'); return; }
+                live.forEach(L => { L.state = 'cancelling'; L.cancelAt = L.p; L.st.textContent = 'cancel requested'; L.st.className = 'flw-note warn'; });
+                say(o, '<span class="muted">cancel():</span> both Jobs are now marked cancelled. Watch which loop notices.');
+              }),
+              cmd('start', () => {
+                if (lanes.some(L => L.state === 'run' || L.state === 'cancelling')) { replay(tl, 'shake'); say(o, '<span class="muted">busy:</span> wait until both loops have stopped.'); return; }
+                start(); say(o, '<span class="muted">started:</span> two fresh loops.');
+              })),
+            tl,
+            h('div', { class: 'legend' },
+              h('span', {}, h('i', { class: 'bar run' }), 'useful work'),
+              h('span', {}, h('i', { class: 'bar block' }), 'work after cancel'),
+              h('span', {}, h('i', { class: 'flw-chk flw-chk-key' }), 'cancellation check')),
+            o);
+        },
+      };
+
+  // ─── Exception handling ─────────────────
+  const exceptions = {
+    id: 'exceptions',
+    title: 'Exception handling in coroutines',
+    tagline: 'Where an exception goes depends on the builder and on the parent.',
+    level: 'advanced',
+    body: `
+<p>An exception that is not caught inside a coroutine does not stop there. It goes up the tree. A failed child reports to its parent. Under a normal <code>Job</code>, the parent cancels its other children and fails too. Under a <code>SupervisorJob</code>, like the one in <code>viewModelScope</code>, the parent ignores the failure, so the child has to deal with it alone.</p>
+<p>The builder decides how the failure shows up. <code>launch</code> treats it as uncaught. At the top of the tree it goes to a <code>CoroutineExceptionHandler</code> if the context has one. If not, it goes to the thread’s uncaught exception handler, and an Android app crashes. <code>async</code> stores the exception in its <code>Deferred</code> and throws it when you call <code>await()</code>.</p>
+<p>Your first tool is still a plain <code>try/catch</code> inside the coroutine, around the call that can fail. The handler is a last resort for logging. By the time it runs, the coroutine is already finished.</p>`,
+    code: `class FeedViewModel(private val repo: FeedRepository) : ViewModel() {
+    private val handler = CoroutineExceptionHandler { _, e ->
+        Log.e("Feed", "unexpected failure", e)       // last resort: log it
+    }
+
+    fun refresh() {
+        viewModelScope.launch(handler) {
+            try {
+                _state.value = UiState.Success(repo.feed())
+            } catch (e: IOException) {               // expected: handle it here
+                _state.value = UiState.Error("No connection")
+            }
+        }
+    }
+
+    suspend fun profile(): Profile = supervisorScope {
+        val posts = async { repo.posts() }
+        val badges = async { repo.badges() }
+        val list = try { posts.await() } catch (e: IOException) { emptyList() }
+        Profile(list, badges.await())
+    }
+}`,
+    remember: 'launch: uncaught, goes up to the handler or crashes. async: kept until await(). Under a SupervisorJob each child handles its own failure.',
+    terms: [
+      { term: 'CoroutineExceptionHandler', def: 'A context element that receives uncaught exceptions from root coroutines and from direct children of a supervisor. It cannot recover the coroutine, only report.' },
+      { term: 'SupervisorJob', def: 'A Job whose children can fail without cancelling it or their siblings. viewModelScope uses one.' },
+      { term: 'Deferred', def: 'The result handle that async returns. It holds the value or the exception until await() is called.' },
+      { term: 'Uncaught exception', def: 'A failure no try/catch handled and no parent took over. On Android it reaches the thread’s handler and crashes the app.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Load the home screen. If ads fail, show the news anyway.', code: `suspend fun loadHome(): Home = [[supervisorScope]] {
+    val news = async { repo.news() }
+    val ads = async { repo.ads() }
+    val adList = try { ads.[[await]]() } catch (e: IOException) { emptyList() }
+    Home(news.await(), adList)
+}`, why: 'Under <code>supervisorScope</code> a failed ads call does not cancel news. Its exception waits in the Deferred, and <code>await()</code> throws it where you can catch it.' },
+      { type: 'bug', prompt: 'When sync fails, the app crashes instead of showing “Sync failed”. Tap the bug.', code: `fun sync() {
+    try {
+        viewModelScope.launch { repo.sync() }
+    } catch (e: IOException) {
+        _error.value = "Sync failed"
+    }
+}`, bug: 2, fix: '        viewModelScope.launch { try { repo.sync() } catch (e: IOException) { _error.value = "Sync failed" } }', why: '<code>launch</code> returns at once, before <code>sync()</code> runs, so the outer try has nothing to catch. The exception is thrown later inside the coroutine. Catch it there.' },
+    ],
+    quiz: [
+      { q: 'A <code>viewModelScope.launch { }</code> throws IOException. There is no try/catch and no handler. What happens?', options: ['Nothing, the coroutine just stops', 'The app crashes', 'viewModelScope retries it'], a: 1, why: 'The exception is uncaught. With no CoroutineExceptionHandler it goes to the thread’s uncaught exception handler, which crashes an Android app.' },
+      { q: 'Inside <code>supervisorScope</code>, an <code>async</code> child throws and nobody calls <code>await()</code>. What happens to its siblings?', options: ['They keep running', 'They are cancelled', 'The scope rethrows at once'], a: 0, why: 'A supervisor does not cancel siblings, and async keeps its exception in the Deferred until await().' },
+      { q: 'You pass a CoroutineExceptionHandler to a <code>launch</code> nested inside another <code>launch</code>. Is it used?', options: ['Yes, always', 'No, the child passes its failure to its parent', 'Only on the main thread'], a: 1, why: 'Children delegate exceptions to their parent, up to the root. Only the root’s handler (or one on a direct child of a supervisor) is used.' },
+    ],
+    deeper: [
+      superStep,
+      {
+        title: 'The handler only works at the top',
+        body: `<p>A <code>CoroutineExceptionHandler</code> is only consulted where an exception has nowhere else to go: on a root coroutine, or on a coroutine launched directly in a supervisor scope. A handler on a nested child is never used, because the child passes its failure up to its parent.</p>
+<p><code>async</code> ignores the handler too. It keeps the exception in its <code>Deferred</code>, so the place to deal with it is the <code>await()</code> call.</p>`,
+        code: `val handler = CoroutineExceptionHandler { _, e -> Log.e("Sync", "failed", e) }
+
+viewModelScope.launch(handler) {        // used: a direct child of a SupervisorJob
+    launch(handler) {                   // not used here: the failure goes to the parent,
+        repo.syncPhotos()               // and the outer launch's handler logs it
+    }
+}
+
+viewModelScope.async(handler) {         // not used: async keeps the exception
+    repo.syncNotes()                    // until someone calls await()
+}`,
+      },
+      {
+        title: 'Cancellation is not a failure',
+        body: `<p>A coroutine that ends with a <code>CancellationException</code> was cancelled, not broken. Its parent is not cancelled, its siblings keep running, and no handler sees it. That is how <code>job.cancel()</code> can stop one child without touching the rest.</p>
+<p>It is also why you should never turn a real failure into a <code>CancellationException</code>, or catch one and carry on. The tree would treat a broken job as a quiet stop, or keep a cancelled one running. The lesson Cancellation and timeouts covers this side.</p>`,
+        code: `viewModelScope.launch {
+    val upload = launch { uploader.upload(file) }
+    val preview = launch { thumbnails.render(file) }
+    upload.cancel()            // only upload stops; preview and the parent go on
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Wrapping launch in try/catch',
+        bad: `try {
+    viewModelScope.launch { repo.sync() }
+} catch (e: IOException) {
+    showError()
+}`,
+        good: `viewModelScope.launch {
+    try {
+        repo.sync()
+    } catch (e: IOException) {
+        showError()
+    }
+}`,
+        why: '<code>launch</code> returns as soon as the coroutine is started. The exception is thrown later, inside the coroutine, where the outer try cannot see it.',
+      },
+      {
+        title: 'Catching await() inside coroutineScope',
+        bad: `coroutineScope {
+    val posts = async { repo.posts() }
+    val list = try { posts.await() } catch (e: IOException) { emptyList() }
+    show(list)
+}`,
+        good: `supervisorScope {
+    val posts = async { repo.posts() }
+    val list = try { posts.await() } catch (e: IOException) { emptyList() }
+    show(list)
+}`,
+        why: 'Under a plain Job the failed async also cancels its parent, so <code>coroutineScope</code> still fails even though you caught the exception at <code>await()</code>. Under a supervisor, the catch at <code>await()</code> is enough.',
+      },
+    ],
+    visual(el) {
+      const KIDS = [['news', 'news()'], ['posts', 'posts()'], ['badges', 'badges()']];
+      const BUILDERS = [['launch', 'launch { }'], ['async', 'async { }']];
+      const PARENTS = [['super', 'viewModelScope'], ['job', 'coroutineScope { }']];
+      let builder = 'launch', parent = 'super', handler = false, busy = false, failed = false, held = false, N = {};
+      const wrap = h('div');
+      const dest = h('div', { class: 'flw-shown wait' });
+      const o = out();
+      const bBtns = BUILDERS.map(([k, src]) => cmd(src, () => { if (busy) return; builder = k; build(); say(o, `<span class="muted">builder:</span> each child is now ${hl(src)}. Make posts() throw.`); }));
+      const pBtns = PARENTS.map(([k, src]) => cmd(src, () => { if (busy) return; parent = k; build(); say(o, k === 'super' ? '<span class="muted">parent:</span> viewModelScope, which has a SupervisorJob.' : '<span class="muted">parent:</span> coroutineScope, which has a plain Job.'); }));
+      const sw = h('input', { type: 'checkbox', id: 'cox-ex-handler', onchange() { if (busy) { this.checked = handler; return; } handler = this.checked; build(); say(o, handler ? 'A CoroutineExceptionHandler is now in the context.' : 'No handler in the context.'); } });
+      function build() {
+        N = {}; failed = false; held = false;
+        wrap.replaceChildren(h('div', { class: 'flw-tree' },
+          flwTreeNode(N, 'root', parent === 'super' ? 'viewModelScope' : 'coroutineScope', KIDS.map(([id, f]) => flwTreeNode(N, id, `${builder} { ${f} }`)))));
+        flwSetNode(N, 'root', 'run', parent === 'super' ? 'SupervisorJob' : 'Job');
+        KIDS.forEach(([id], i) => { flwSetNode(N, id, 'run', 'running'); N[id].p = 0.15 + i * 0.1; });
+        dest.className = 'flw-shown wait'; dest.textContent = 'No exception yet';
+        pressed(bBtns, BUILDERS.map(b => b[0]), builder);
+        pressed(pBtns, PARENTS.map(p => p[0]), parent);
+      }
+      loop(wrap, (now, dt) => {
+        for (const [id] of KIDS) {
+          const n = N[id];
+          if (!n || n.state !== 'run') continue;
+          n.p = Math.min(1, n.p + dt / 9000);
+          n.bar.style.width = n.p * 100 + '%';
+          if (n.p >= 1) { flwSetNode(N, id, 'done', 'returned'); replay(n.box, 'pop'); }
+        }
+      });
+      const show = (cls, text) => { dest.className = 'flw-shown' + (cls ? ' ' + cls : ''); dest.textContent = text; replay(dest, 'pop'); };
+      async function fail() {
+        if (busy) return;
+        if (failed) { replay(N.posts.box, 'shake'); say(o, '<span class="muted">already failed:</span> press reset to try another setup.'); return; }
+        if (N.posts.state !== 'run') { replay(N.posts.box, 'shake'); say(o, '<span class="muted">too late:</span> posts already returned. Press reset.'); return; }
+        busy = true; failed = true;
+        try {
+          flwSetNode(N, 'posts', 'fail', 'IOException'); replay(N.posts.box, 'shake');
+          if (parent === 'job') {
+            say(o, '<span class="bad">fail:</span> posts threw. A plain Job cancels the other children…');
+            for (const id of ['news', 'badges']) {
+              if (N[id].state !== 'run') continue;
+              await sleep(340); if (!wrap.isConnected) return;
+              flwSetNode(N, id, 'cancel', 'cancelled'); replay(N[id].box, 'shake');
+            }
+            await sleep(340); if (!wrap.isConnected) return;
+            flwSetNode(N, 'root', 'fail', 'rethrows'); replay(N.root.box, 'shake');
+            show('stale', 'coroutineScope rethrows IOException to its caller. Catch it there.');
+            say(o, builder === 'async'
+              ? `<span class="bad">no await() needed:</span> inside coroutineScope a failed async cancels its parent at once.${handler ? ' The handler was never asked: the error had a parent to go to.' : ''}`
+              : `<span class="bad">fail:</span> the siblings were cancelled and the scope rethrew to the code that called it.${handler ? ' The handler was never asked: the error had a parent to go to.' : ''}`);
+            return;
+          }
+          if (builder === 'async') {
+            held = true; flwSetNode(N, 'posts', 'caught', 'holds IOException');
+            show('wait', 'Kept in the Deferred. Nothing happens until someone calls await().');
+            say(o, `<span class="good">isolated:</span> the supervisor left news and badges alone. async stored the exception.${handler ? ' async ignores the handler.' : ''} Now call await().`);
+          } else if (handler) {
+            show('', 'CoroutineExceptionHandler logged IOException. The app keeps running.');
+            say(o, '<span class="good">handled:</span> the siblings kept running and the uncaught exception went to the handler. The posts coroutine is still over.');
+          } else {
+            show('stale', 'Uncaught: Thread.uncaughtExceptionHandler. The app crashes.');
+            replay(wrap, 'shake');
+            say(o, '<span class="bad">crash:</span> the supervisor did not cancel the siblings, but nobody handled the exception. On Android that ends the process.');
+          }
+        } finally { busy = false; }
+      }
+      function awaitIt() {
+        if (busy) return;
+        if (!held) {
+          replay(dest, 'shake');
+          say(o, builder === 'async' ? '<span class="muted">nothing waiting:</span> pick viewModelScope, make posts() throw, then await().' : '<span class="muted">no Deferred:</span> launch returns a Job, which has no await(). Pick async { }.');
+          return;
+        }
+        held = false; flwSetNode(N, 'posts', 'fail', 'await() threw'); replay(N.posts.box, 'shake');
+        show('stale', 'posts.await() throws IOException in the caller. A try/catch around it shows the error.');
+        say(o, '<span class="good">surfaced:</span> await() rethrew the stored exception where the caller can catch it.');
+      }
+      build();
+      o.innerHTML = 'Pick a builder and a parent, then make posts() throw. Where does the exception end up?';
+      el.append(
+        h('div', { class: 'controls' }, bBtns),
+        h('div', { class: 'controls' }, pBtns),
+        h('label', { class: 'switch', for: 'cox-ex-handler' }, sw, 'CoroutineExceptionHandler in the context'),
+        wrap,
+        h('div', { class: 'controls' }, cmd('posts() throws IOException', fail), cmd('posts.await()', awaitIt), cmd('reset', () => { if (busy) return; build(); say(o, '<span class="muted">reset:</span> three fresh children.'); })),
+        dest, o);
+    },
+  };
+
+  // ─── Cancellation and timeouts ─────────────────
+  const cancellation = {
+    id: 'cancellation',
+    title: 'Cancellation and timeouts',
+    tagline: 'cancel() only asks. The code has to check.',
+    level: 'advanced',
+    body: `
+<p>Cancelling a coroutine is a request. <code>cancel()</code> marks the Job as cancelled, and the coroutine stops the next time it suspends or checks. Suspend functions from kotlinx.coroutines, like <code>delay()</code> and <code>withContext</code>, check for you. A loop of pure CPU work does not. Call <code>ensureActive()</code> or <code>yield()</code> inside it, or check <code>isActive</code>.</p>
+<p>Cancellation travels as a <code>CancellationException</code>. It unwinds the code and runs <code>finally</code> blocks. It is not treated as a failure, so the parent is not cancelled and no handler sees it. That is why a broad <code>catch (e: Exception)</code> that swallows it keeps a cancelled coroutine running.</p>
+<p>A timeout is cancellation on a clock. <code>withTimeout(ms)</code> cancels its block and throws <code>TimeoutCancellationException</code>. <code>withTimeoutOrNull(ms)</code> returns <code>null</code> instead, which is usually easier to handle.</p>`,
+    code: `suspend fun resizeAll(photos: List<Photo>) = withContext(Dispatchers.Default) {
+    for (photo in photos) {
+        ensureActive()                 // throws CancellationException once cancelled
+        resize(photo)                  // CPU only, never suspends
+    }
+}
+
+suspend fun weatherOrCached(): Weather =
+    withTimeoutOrNull(2_000) {         // null after 2 s, no exception
+        api.weather()
+    } ?: cache.lastWeather()`,
+    remember: 'cancel() asks; suspend calls and ensureActive() listen. A timeout is just cancellation on a clock.',
+    terms: [
+      { term: 'Cooperative cancellation', def: 'A coroutine stops only at a suspension point or an explicit check, never in the middle of plain code.' },
+      { term: 'ensureActive', def: 'Throws CancellationException if the current coroutine was cancelled, so CPU-only loops can stop promptly.' },
+      { term: 'withTimeoutOrNull', def: 'Runs a block with a time limit and returns null if the limit is reached, instead of throwing.' },
+      { term: 'NonCancellable', def: 'A Job that is always active. Used with withContext so suspending cleanup can run after cancellation.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Let the loop stop when cancelled, and give up on the network after 2 seconds.', code: `suspend fun checksum(files: List<File>): Long = withContext(Dispatchers.Default) {
+    var sum = 0L
+    for (f in files) {
+        [[ensureActive|yield]]()
+        sum += crc(f)
+    }
+    sum
+}
+
+val weather = [[withTimeoutOrNull]](2_000) { api.weather() } ?: cachedWeather`, why: '<code>ensureActive()</code> gives the loop a place to notice the cancel. <code>withTimeoutOrNull</code> returns null on timeout, so the elvis falls back to the cache.' },
+      { type: 'bug', prompt: 'When the user leaves mid-upload, the upload is never marked as stopped. <code>markUploadStopped</code> is a suspend function. Tap the bug.', code: `viewModelScope.launch {
+    try {
+        uploader.upload(file)
+    } finally {
+        repo.markUploadStopped(file.id)
+    }
+}`, bug: 4, fix: '        withContext(NonCancellable) { repo.markUploadStopped(file.id) }', why: 'The coroutine is already cancelled when <code>finally</code> runs, so the suspend call throws CancellationException at once. <code>NonCancellable</code> lets the cleanup run.' },
+    ],
+    quiz: [
+      { q: '<code>withTimeout(1_000) { api.load() }</code> runs inside <code>viewModelScope.launch</code> with no try/catch. The call takes 3 s. What happens?', options: ['The app crashes', 'The coroutine ends quietly as cancelled', 'It waits the full 3 s'], a: 1, why: 'TimeoutCancellationException is a CancellationException. launch treats it as a normal cancel: no crash, and no error shown either.' },
+      { q: 'Which call inside a CPU loop lets cancellation stop it?', options: ['<code>Thread.sleep(1)</code>', '<code>ensureActive()</code>', '<code>println()</code>'], a: 1, why: '<code>ensureActive()</code> checks the Job and throws if it was cancelled. The others never look at the Job.' },
+      { q: 'In the <code>finally</code> of a cancelled coroutine you call <code>delay(100)</code>. What happens?', options: ['It waits 100 ms', 'It throws CancellationException at once', 'It is skipped silently'], a: 1, why: 'The coroutine is cancelled, so any suspend call that checks throws at once. Wrap such cleanup in <code>withContext(NonCancellable)</code>.' },
+    ],
+    visual: cancelChecksStep.visual,
+    deeper: [
+      {
+        title: 'withTimeout throws, withTimeoutOrNull returns null',
+        body: `<p><code>withTimeout</code> throws <code>TimeoutCancellationException</code>, a kind of <code>CancellationException</code>. Inside a <code>launch</code> with no catch, the coroutine just ends as cancelled. Nothing crashes, but nothing shows an error either, and the spinner stays forever.</p>
+<p><code>withTimeoutOrNull</code> returns <code>null</code> on timeout. Handle it with <code>?:</code> like any other missing value.</p>`,
+        code: `viewModelScope.launch {
+    _state.value = UiState.Loading
+    val weather = withTimeoutOrNull(2_000) { api.weather() }
+    _state.value = if (weather != null) UiState.Success(weather)
+                   else UiState.Cached(cache.lastWeather())
+}`,
+        visual(el) {
+          const LIMIT = 2000, MAX = 3000;
+          const SPEEDS = [['fast', 'server answers in 1 s', 1000], ['slow', 'server answers in 3 s', 3000]];
+          const MODES = [['throw', 'withTimeout(2_000)'], ['null', 'withTimeoutOrNull(2_000)']];
+          let speed = 'slow', mode = 'throw', busy = false;
+          const bar = h('span', { class: 'bar wait', style: 'left:0;width:0' });
+          const track = h('div', { class: 'lane-track' }, bar, h('span', { class: 'flw-chk', style: `left:${(LIMIT / MAX) * 100}%` }));
+          const screen = h('div', { class: 'flw-shown wait' }, 'Weather: not loaded');
+          const o = out();
+          const sBtns = SPEEDS.map(([k, label]) => cmd(label, () => { if (busy) return; speed = k; pressed(sBtns, SPEEDS.map(s => s[0]), k); }));
+          const mBtns = MODES.map(([k, src]) => cmd(src, () => { if (busy) return; mode = k; pressed(mBtns, MODES.map(m => m[0]), k); }));
+          async function run() {
+            if (busy) return; busy = true;
+            try {
+              const ms = SPEEDS.find(s => s[0] === speed)[2];
+              const stop = Math.min(ms, LIMIT);
+              bar.className = 'bar wait'; bar.style.transition = 'none'; bar.style.width = '0'; void bar.offsetWidth;
+              bar.style.transition = `width ${stop}ms linear`; bar.style.width = (stop / MAX) * 100 + '%';
+              screen.className = 'flw-shown wait'; screen.textContent = 'Loading…';
+              say(o, `${hl(MODES.find(m => m[0] === mode)[1] + ' { api.weather() }')}`);
+              await sleep(stop); if (!el.isConnected) return;
+              if (ms <= LIMIT) {
+                bar.className = 'bar run'; screen.className = 'flw-shown'; screen.textContent = 'Weather: 18°C, İstanbul'; replay(screen, 'pop');
+                say(o, '<span class="good">in time:</span> the answer came before the deadline, so both versions just return it.');
+              } else if (mode === 'throw') {
+                bar.className = 'bar block'; replay(track, 'shake'); screen.className = 'flw-shown stale'; screen.textContent = 'Loading… (forever)';
+                say(o, '<span class="bad">silent:</span> TimeoutCancellationException is a CancellationException, so launch ended quietly as cancelled. No crash, no error, and the spinner never stops.');
+              } else {
+                bar.className = 'bar block'; screen.className = 'flw-shown'; screen.textContent = 'Weather: 17°C (cached)'; replay(screen, 'pop');
+                say(o, '<span class="good">handled:</span> the block was cancelled at 2 s and withTimeoutOrNull returned null. The ?: branch showed the cached weather.');
+              }
+            } finally { busy = false; }
+          }
+          pressed(sBtns, SPEEDS.map(s => s[0]), speed); pressed(mBtns, MODES.map(m => m[0]), mode);
+          o.innerHTML = 'The dashed line is the 2 s deadline. Pick a server speed and a timeout function, then run.';
+          el.append(h('div', { class: 'controls' }, sBtns), h('div', { class: 'controls' }, mBtns),
+            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'api.weather()'), track)),
+            h('div', { class: 'controls' }, cmd('viewModelScope.launch { … }', run)), screen, o);
+        },
+      },
+      {
+        title: 'Cleanup that suspends needs NonCancellable',
+        body: `<p>A cancelled coroutine still runs its <code>finally</code> blocks. But it is already cancelled, so a suspend call inside <code>finally</code> throws <code>CancellationException</code> at once and the cleanup never happens.</p>
+<p>Wrap suspending cleanup in <code>withContext(NonCancellable)</code>. Keep that block short, because nothing can cancel it. Use it only with <code>withContext</code>. <code>launch(NonCancellable)</code> cuts the coroutine out of the tree.</p>`,
+        code: `viewModelScope.launch {
+    try {
+        uploader.upload(file)
+    } finally {
+        withContext(NonCancellable) {
+            repo.markUploadStopped(file.id)   // a suspend call, safe here
+        }
+    }
+}`,
+        visual(el) {
+          let wrapIt = false, busy = false, running = false;
+          const sw = h('input', { type: 'checkbox', id: 'cox-nc-wrap', onchange() { if (busy || running) { this.checked = wrapIt; return; } wrapIt = this.checked; paint(); } });
+          const src = h('div', { class: 'kt' });
+          const bar = h('i');
+          const row = h('div', { class: 'flw-shown wait' }, 'uploads table: photo.jpg = idle');
+          const o = out();
+          const paint = () => { src.innerHTML = hl(`} finally {\n${wrapIt ? '    withContext(NonCancellable) {\n        repo.markUploadStopped(id)\n    }' : '    repo.markUploadStopped(id)'}\n}`); };
+          function start() {
+            if (busy || running) { say(o, '<span class="muted">already uploading.</span> Leave the screen to cancel it.'); return; }
+            running = true;
+            bar.style.transition = 'none'; bar.style.width = '0'; void bar.offsetWidth; bar.style.transition = 'width 8000ms linear'; bar.style.width = '100%';
+            row.className = 'flw-shown wait'; row.textContent = 'uploads table: photo.jpg = uploading';
+            say(o, 'Uploading. Now leave the screen before it finishes.');
+          }
+          async function leave() {
+            if (busy) return;
+            if (!running) { replay(row, 'shake'); say(o, '<span class="muted">nothing to cancel.</span> Start the upload first.'); return; }
+            busy = true; running = false;
+            try {
+              const w = getComputedStyle(bar).width; bar.style.transition = 'none'; bar.style.width = w;
+              say(o, 'viewModelScope was cancelled. The upload stops and finally runs…');
+              await sleep(700); if (!el.isConnected) return;
+              if (wrapIt) {
+                row.className = 'flw-shown'; row.textContent = 'uploads table: photo.jpg = stopped'; replay(row, 'pop');
+                say(o, '<span class="good">cleaned up:</span> inside NonCancellable the suspend call ran to the end.');
+              } else {
+                row.className = 'flw-shown stale'; row.textContent = 'uploads table: photo.jpg = uploading (wrong)'; replay(row, 'shake');
+                say(o, '<span class="bad">skipped:</span> markUploadStopped() threw CancellationException at its first suspension. The row still says uploading.');
+              }
+            } finally { busy = false; }
+          }
+          paint();
+          o.innerHTML = 'Start an upload, then leave the screen halfway.';
+          el.append(h('label', { class: 'switch', for: 'cox-nc-wrap' }, sw, 'wrap cleanup in withContext(NonCancellable)'), src,
+            h('span', { class: 'flw-prog' }, bar),
+            h('div', { class: 'controls' }, cmd('uploader.upload(file)', start), cmd('leave the screen', leave)), row, o);
+        },
+      },
+      {
+        title: 'Blocking calls ignore cancel: runInterruptible',
+        body: `<p>A blocking Java call, like <code>BlockingQueue.take()</code> or an old SDK method, never checks the Job. Cancelling the coroutine leaves the thread stuck until the call returns on its own.</p>
+<p><code>runInterruptible</code> runs the block so that cancellation interrupts the thread. The blocking call throws <code>InterruptedException</code>, and <code>runInterruptible</code> turns it into a <code>CancellationException</code>. It only helps with calls that respond to thread interrupts.</p>`,
+        code: `suspend fun <T> BlockingQueue<T>.awaitTake(): T =
+    runInterruptible(Dispatchers.IO) {
+        take()          // interrupted when the coroutine is cancelled
+    }`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'withTimeout that fails silently',
+        bad: `viewModelScope.launch {
+    _state.value = UiState.Loading
+    val w = withTimeout(2_000) { api.weather() }
+    _state.value = UiState.Success(w)
+}`,
+        good: `viewModelScope.launch {
+    _state.value = UiState.Loading
+    val w = withTimeoutOrNull(2_000) { api.weather() }
+    _state.value = if (w != null) UiState.Success(w) else UiState.Error("Too slow")
+}`,
+        why: 'The timeout throws a CancellationException, so the coroutine ends quietly. The state stays Loading forever. <code>withTimeoutOrNull</code> gives you a value to react to.',
+      },
+      {
+        title: 'launch(NonCancellable) to make work survive',
+        bad: `fun save(note: Note) {
+    viewModelScope.launch(NonCancellable) { repo.save(note) }
+}`,
+        good: `class NotesRepository(private val externalScope: CoroutineScope) {
+    suspend fun save(note: Note) {
+        externalScope.launch { dao.insert(note) }.join()
+    }
+}`,
+        why: '<code>NonCancellable</code> passed to a builder cuts the parent-child link: the parent no longer waits for it and is not told if it fails. For work that must outlive the screen, use a longer-lived scope.',
+      },
+    ],
+  };
+
+  // ─── Shared mutable state ─────────────────
+  const sharedState = {
+    id: 'shared-state',
+    title: 'Shared mutable state',
+    tagline: 'Two coroutines, one variable: lock it, make it atomic, or keep it on one thread.',
+    level: 'advanced',
+    body: `
+<p>Coroutines on <code>Dispatchers.Default</code> or <code>IO</code> run on several threads at once. If two of them change the same variable, updates get lost. <code>count++</code> is three steps: read, add, write. Two threads can read the same old value, and the second write overwrites the first.</p>
+<p>There are three fixes. A <code>Mutex</code> lets one coroutine at a time into a block, and the others suspend while they wait instead of blocking a thread. An atomic like <code>AtomicInteger</code> does the read, add and write as one step. It is the fastest fix for a single value but hard to use for bigger state. <b>Confinement</b> keeps every change on one thread, for example the main thread or <code>Dispatchers.Default.limitedParallelism(1)</code>.</p>
+<p><code>@Volatile</code> is not a fix. It makes each read and write visible to other threads, but <code>count++</code> is still three steps. For UI state in a <code>MutableStateFlow</code>, use <code>update { }</code>, which applies your change atomically.</p>`,
+    code: `class DownloadStats {
+    private val mutex = Mutex()
+    private var bytes = 0L
+    private val names = mutableListOf<String>()
+
+    suspend fun record(name: String, size: Long) = mutex.withLock {
+        bytes += size          // both changes happen together,
+        names += name          // so nobody sees one without the other
+    }
+}
+
+val finished = AtomicInteger(0)     // a single counter: an atomic is enough
+
+suspend fun downloadAll(urls: List<String>) = coroutineScope {
+    for (url in urls) launch(Dispatchers.IO) {
+        val file = download(url)
+        stats.record(file.name, file.size)
+        finished.incrementAndGet()
+    }
+}`,
+    remember: 'Shared and mutable across threads? Mutex for a block, an atomic for one value, confinement to keep it on one thread.',
+    terms: [
+      { term: 'Race condition', def: 'A bug where the result depends on how threads happen to interleave, like two count++ calls that both read the old value.' },
+      { term: 'Mutex', def: 'A kotlinx.coroutines lock. withLock lets one coroutine at a time run a block; waiters suspend instead of blocking. It is not reentrant.' },
+      { term: 'Atomic operation', def: 'A read-modify-write that happens as one indivisible step, like AtomicInteger.incrementAndGet().' },
+      { term: 'Thread confinement', def: 'Making sure a piece of state is only ever touched from one thread, so no lock is needed.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Make the cache safe when several coroutines write at once.', code: `private val mutex = [[Mutex]]()
+private var cache: Map<String, User> = emptyMap()
+
+suspend fun put(user: User) = mutex.[[withLock]] {
+    cache = cache + (user.id to user)
+}`, why: '<code>withLock</code> lets one coroutine at a time read and replace the map, so no write is lost.' },
+      { type: 'bug', prompt: 'Tapping Add quickly on several items sometimes loses one from the cart. Tap the bug.', code: `private val _state = MutableStateFlow(CartState())
+
+fun add(item: Item) {
+    viewModelScope.launch(Dispatchers.Default) {
+        _state.value = _state.value.copy(items = _state.value.items + item)
+    }
+}`, bug: 4, fix: '        _state.update { it.copy(items = it.items + item) }', why: 'Two coroutines can read the same old state and each write their own copy, so one item is lost. <code>update</code> retries until its change applies to the latest value.' },
+    ],
+    quiz: [
+      { q: 'Two coroutines on <code>Dispatchers.Default</code> each run <code>counter++</code> 1,000 times on a plain <code>var</code>. What is the result?', options: ['Always 2,000', 'Often less than 2,000', 'Always 1,000'], a: 1, why: 'counter++ is read, add, write. When two threads interleave those steps, one increment overwrites the other.' },
+      { q: 'Does marking the counter <code>@Volatile</code> fix it?', options: ['Yes', 'No'], a: 1, why: 'Volatile makes each read and write visible, but the read and the write are still two separate steps.' },
+      { q: 'Which one waits for the lock without blocking a thread?', options: ['<code>synchronized</code>', '<code>ReentrantLock.lock()</code>', '<code>Mutex.lock()</code>'], a: 2, why: '<code>Mutex.lock()</code> is a suspend function. The other two park the thread while they wait.' },
+    ],
+    deeper: [
+      {
+        title: 'Mutex suspends, synchronized blocks',
+        body: `<p>In plain Java you would reach for <code>synchronized</code> or a <code>ReentrantLock</code>. Both block the waiting thread. In coroutines that wastes a thread from a small pool, or freezes the UI if it happens on Main.</p>
+<p><code>Mutex.lock()</code> is a suspend function, so a waiting coroutine frees its thread. Always use <code>withLock</code>, which unlocks in a <code>finally</code> even when the block throws.</p>`,
+        code: `private val mutex = Mutex()
+
+suspend fun refreshToken(old: String): String = mutex.withLock {
+    if (token != old) return@withLock token   // someone else already refreshed
+    token = api.refresh(old)                  // a suspend call: fine inside withLock
+    token
+}`,
+      },
+      {
+        title: 'MutableStateFlow: update, not value = value.copy()',
+        body: `<p><code>_state.value = _state.value.copy(...)</code> reads, then writes. Two coroutines on different threads can read the same old state, and the second write drops the first change.</p>
+<p><code>update { }</code> applies the change atomically. If the value changed while your lambda ran, it runs the lambda again on the new value. So the lambda may run more than once: keep it free of side effects. The State machine lesson in Design patterns shows this race step by step.</p>`,
+        code: `private val _state = MutableStateFlow(CartState())
+
+fun add(item: Item) {
+    _state.update { it.copy(items = it.items + item) }   // safe from any thread
+}`,
+      },
+      {
+        title: 'Confinement: one thread owns the state',
+        body: `<p>If only one thread ever touches the state, there is nothing to lock. A ViewModel that changes its state only from <code>viewModelScope</code> code running on Main is already confined.</p>
+<p>Off the main thread, <code>limitedParallelism(1)</code> gives you a view of a dispatcher that runs one task at a time. Run the whole job inside it, not each tiny step. Switching for every increment works but is slow.</p>`,
+        code: `private val counterContext = Dispatchers.Default.limitedParallelism(1)
+private var count = 0
+
+suspend fun countWords(lines: List<String>) = withContext(counterContext) {
+    for (line in lines) count += line.split(' ').size   // one task at a time
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: '@Volatile on a counter',
+        bad: `@Volatile var finished = 0
+
+launch(Dispatchers.IO) { download(url); finished++ }`,
+        good: `val finished = AtomicInteger(0)
+
+launch(Dispatchers.IO) { download(url); finished.incrementAndGet() }`,
+        why: 'Volatile makes reads and writes visible across threads but does not make <code>++</code> a single step, so increments are still lost.',
+      },
+      {
+        title: 'Calling withLock inside withLock',
+        bad: `suspend fun save(item: Item) = mutex.withLock {
+    items += item
+    trim()                       // trim() also calls mutex.withLock
+}`,
+        good: `suspend fun save(item: Item) = mutex.withLock {
+    items += item
+    trimLocked()                 // assumes the caller holds the lock
+}`,
+        why: 'A Mutex is not reentrant. The inner <code>withLock</code> waits for a lock its own coroutine holds, so it waits forever.',
+      },
+    ],
+    visual(el) {
+      const MODES = [
+        ['plain', 'var count', [['A', 'read 5', '', 5], ['B', 'read 5', '', 5], ['A', 'write 6', 'acc', 6], ['B', 'write 6', 'bad', 6]]],
+        ['mutex', 'mutex.withLock { }', [['A', 'lock', 'ok'], ['B', 'lock: suspends', 'warn'], ['A', 'read 5', '', 5], ['A', 'write 6', 'acc', 6], ['A', 'unlock', 'ok'], ['B', 'gets lock', 'ok'], ['B', 'read 6', '', 6], ['B', 'write 7', 'acc', 7], ['B', 'unlock', 'ok']]],
+        ['atomic', 'AtomicInteger', [['A', 'incrementAndGet → 6', 'acc', 6], ['B', 'incrementAndGet → 7', 'acc', 7]]],
+        ['confined', 'limitedParallelism(1)', [['B', 'queued', 'warn'], ['A', 'read 5', '', 5], ['A', 'write 6', 'acc', 6], ['B', 'read 6', '', 6], ['B', 'write 7', 'acc', 7]]],
+      ];
+      let mode = 'plain', busy = false;
+      const counter = h('span', { class: 'flw-badge' }, 'count = 5');
+      const lanes = { A: h('div', { class: 'flw-strip flw-wrap' }), B: h('div', { class: 'flw-strip flw-wrap' }) };
+      const o = out();
+      const o2 = out('Then run the big version: 3 coroutines, 1,000 increments each.');
+      const btns = MODES.map(([k, label]) => cmd(label, () => { if (busy) return; mode = k; clear(); pressed(btns, MODES.map(m => m[0]), k); say(o, `<span class="muted">mode:</span> ${hl(label)}. Run count++ on two threads.`); }));
+      function clear() {
+        counter.textContent = 'count = 5'; counter.className = 'flw-badge';
+        Object.values(lanes).forEach(l => l.replaceChildren(h('span', { class: 'flw-note' }, 'idle')));
+      }
+      async function race() {
+        if (busy) return; busy = true;
+        try {
+          clear(); Object.values(lanes).forEach(l => l.replaceChildren());
+          const steps = MODES.find(m => m[0] === mode)[2];
+          for (const [who, text, cls, val] of steps) {
+            lanes[who].append(h('span', { class: `flw-v drop-in ${cls}` }, text));
+            if (text.startsWith('write') || text.startsWith('increment')) { counter.textContent = `count = ${val}`; replay(counter, 'pop'); }
+            await sleep(620); if (!el.isConnected) return;
+          }
+          const final = steps.filter(s => s[3] != null).pop()[3];
+          counter.className = 'flw-badge';
+          if (final === 7) say(o, `<span class="good">7:</span> ${mode === 'mutex' ? 'B waited, suspended, until A unlocked, then read the new value.' : mode === 'atomic' ? 'each increment was one indivisible step, so neither could interleave.' : 'one thread ran A, then B. They could never overlap.'}`);
+          else { replay(counter, 'shake'); say(o, '<span class="bad">6, not 7:</span> both read 5 before either wrote. B’s write overwrote A’s, and one increment was lost.'); }
+        } finally { busy = false; }
+      }
+      async function big() {
+        if (busy) return; busy = true;
+        try {
+          say(o2, `${hl('repeat(3) { launch(Dispatchers.Default) { repeat(1_000) { count++ } } }')}`);
+          await sleep(700); if (!el.isConnected) return;
+          const res = mode === 'plain' ? 3000 - (150 + Math.floor(Math.random() * 900)) : 3000;
+          say(o2, res === 3000
+            ? `<span class="good">3000</span> every time with ${hl(MODES.find(m => m[0] === mode)[1])}.`
+            : `<span class="bad">${res}</span>, not 3000. Run it again and you get a different number. That is a race.`);
+        } finally { busy = false; }
+      }
+      clear(); pressed(btns, MODES.map(m => m[0]), mode);
+      o.innerHTML = 'Two coroutines on different threads both run count++. It starts at 5.';
+      el.append(h('div', { class: 'controls' }, btns),
+        h('div', { class: 'flw-search' },
+          h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'shared'), h('div', {}, counter)),
+          h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'thread A'), lanes.A),
+          h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'thread B'), lanes.B)),
+        h('div', { class: 'controls' }, cmd('both run count++ at once', race), cmd('3 × 1,000 increments', big)),
+        o, o2);
+    },
+  };
+
   Lab.addTrack({
     id: 'coroutines',
     title: 'Coroutines',
-    description: 'How coroutines suspend without blocking, live in a cancellable tree, switch threads with dispatchers and pass values through channels.',
+    description: 'How coroutines suspend without blocking, live in a cancellable tree, fail and time out safely, switch threads, share state and pass values through channels.',
     group: 'Building apps', requires: ['kotlin'],
     css,
     lessons: [
@@ -1040,78 +1637,6 @@ parent.cancelChildren()                 // child is resumed with CancellationExc
           { q: 'Inside a coroutine on Android’s main thread, which one keeps the UI responsive?', options: ['<code>delay(1000)</code>', '<code>Thread.sleep(1000)</code>'], a: 0, why: '<code>delay</code> suspends and frees the main thread to keep drawing.' },
         ],
         deeper: [
-          {
-            title: 'Cancellation is cooperative',
-            body: `<p><code>job.cancel()</code> doesn’t stop a coroutine on the spot. It marks the job as cancelled. The coroutine only notices when it reaches a suspension point such as <code>delay()</code>, or when it checks with <code>ensureActive()</code> or <code>isActive</code>.</p>
-<p>A loop of pure CPU work never suspends, so it ignores the cancel and runs to the end. Add <code>ensureActive()</code> (or <code>yield()</code>) inside long loops so cancellation can get in.</p>`,
-            code: `val job = scope.launch(Dispatchers.Default) {
-    for (chunk in chunks) {
-        ensureActive()      // throws CancellationException if cancelled
-        crunch(chunk)       // CPU work, never suspends
-    }
-}
-
-job.cancel()`,
-            visual(el) {
-              const N = 10;
-              const sw = h('input', { type: 'checkbox', id: 'kt-co-coop', checked: true });
-              const src = h('div', { class: 'kt' });
-              const cells = Array.from({ length: N }, (_, i) => h('div', { class: 'kt-cell' }, String(i + 1)));
-              const grid = h('div', { class: 'kt-work' }, cells);
-              const state = h('span', { class: 'kt-state' });
-              const o = out();
-              let running = false, cancelled = false, run = 0;
-              const setState = (t, cls) => { state.textContent = t; state.className = 'kt-state ' + (cls || ''); replay(state, 'pop'); };
-              const paintSrc = () => {
-                src.innerHTML = hl(`launch(Dispatchers.Default) {\n    for (i in 1..10) {\n${sw.checked ? '        ensureActive()\n' : ''}        crunch(i)   // CPU work\n    }\n}`);
-              };
-              const clear = () => cells.forEach(c => { c.className = 'kt-cell'; });
-              async function start() {
-                if (running) return;
-                running = true; cancelled = false; const me = ++run;
-                clear(); setState('active', 'on');
-                say(o, 'Running. Press job.cancel() halfway through.');
-                const coop = sw.checked;
-                for (let i = 0; i < N; i++) {
-                  if (coop && cancelled) {
-                    for (let j = i; j < N; j++) cells[j].classList.add('skip');
-                    setState('cancelled', 'bad');
-                    say(o, `<span class="good">stopped</span> at i = ${i + 1}: ensureActive() threw CancellationException. ${N - i} chunks never ran.`);
-                    running = false; return;
-                  }
-                  cells[i].classList.add('at');
-                  await sleep(380);
-                  if (!grid.isConnected || me !== run) return;
-                  cells[i].className = 'kt-cell seen';
-                }
-                if (cancelled) {
-                  setState('cancelled', 'bad');
-                  say(o, '<span class="bad">ignored:</span> the loop never checked, so all 10 chunks ran after cancel(). The job only finished as cancelled at the end.');
-                } else {
-                  setState('completed', 'ok');
-                  say(o, 'Completed. Run it again and cancel halfway.');
-                }
-                running = false;
-              }
-              function cancel() {
-                if (!running) { say(o, `${hl('job.cancel()')} <span class="muted">// nothing running. Press Start first.</span>`); return; }
-                if (cancelled) return;
-                cancelled = true; setState('cancelling', 'warn');
-                say(o, sw.checked ? 'cancel() requested. Waiting for the next ensureActive()...' : 'cancel() requested. The loop never checks...');
-              }
-              sw.addEventListener('change', () => { if (running) { sw.checked = !sw.checked; return; } paintSrc(); clear(); setState('new', ''); });
-              paintSrc(); setState('new', '');
-              say(o, 'Start the job, then cancel it. Try both with and without ensureActive().');
-              el.append(
-                h('label', { class: 'switch', for: 'kt-co-coop' }, sw, 'call ensureActive() in the loop'),
-                src, grid,
-                h('div', { class: 'controls' },
-                  h('button', { class: 'btn primary small', onclick: start }, 'Start'),
-                  cmd('job.cancel()', cancel),
-                  h('span', { class: 'kt-up' }, 'job:'), state),
-                o);
-            },
-          },
           {
             title: 'Sequential by default, concurrent when you ask',
             body: `<p>Inside a coroutine, code runs top to bottom. Two suspend calls in a row run one after the other, even when they don’t depend on each other.</p>
@@ -1311,8 +1836,8 @@ fun load(cont: Continuation<User>): Any? {
         tagline: 'Coroutines live in a tree. Cancel the top and everything below stops.',
         body: `
 <p>Every coroutine starts inside a scope, and every coroutine it launches becomes its child. Together they form a tree. A parent finishes only after all of its children finish.</p>
-<p>The tree is what makes cleanup automatic. Cancel a parent and every child below it is cancelled. When a child fails, it cancels its parent, and the parent cancels the other children. <code>viewModelScope</code> is cancelled in <code>onCleared()</code>, so nothing started there outlives the screen. It uses a <code>SupervisorJob</code>, so one failed <code>launch</code> does not cancel its other children.</p>
-<p>Cancellation is cooperative. It takes effect at the next suspension point, like <code>delay()</code> or <code>await()</code>. A long CPU loop with no suspend calls should call <code>ensureActive()</code> now and then so it notices.</p>`,
+<p>The tree is what makes cleanup automatic. Cancel a parent and every child below it is cancelled. When a child fails, it cancels its parent, and the parent cancels the other children. <code>viewModelScope</code> is cancelled in <code>onCleared()</code>, so nothing started there outlives the screen. It uses a <code>SupervisorJob</code>, so one failed <code>launch</code> does not cancel its other children. The next lesson, Exception handling in coroutines, shows where that failure goes instead.</p>
+<p>Cancellation is cooperative. It takes effect at the next suspension point, like <code>delay()</code> or <code>await()</code>. The lesson Cancellation and timeouts covers CPU loops, cleanup and timeouts.</p>`,
         code: `class FeedViewModel(private val repo: FeedRepository) : ViewModel() {
     private var feedJob: Job? = null
 
@@ -1472,6 +1997,9 @@ fun load(cont: Continuation<User>): Any? {
         },
       },
 
+      exceptions,
+      cancellation,
+
       // 3 ─────────────────────────────────────────────
       {
         id: 'dispatchers',
@@ -1588,6 +2116,7 @@ fun load(cont: Continuation<User>): Any? {
         },
       },
 
+      sharedState,
       channels,
     ],
   });

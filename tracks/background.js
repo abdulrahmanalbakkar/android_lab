@@ -122,6 +122,29 @@
 .plt-bg2-cell.plt-bg2-ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
 .plt-bg2-cell.plt-bg2-no { border-color: var(--err); background: var(--err-soft); color: var(--err); }
 .plt-bg2-cell.plt-bg2-wait { border-color: var(--warm); background: var(--warm-soft); color: var(--warm); }
+
+/* promoted: Doze timeline and alarms */
+.plt-dz-board { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); min-width: 0; }
+.plt-dz-lane { display: grid; grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; }
+.plt-dz-name { font: 600 0.68rem/1.25 var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.plt-dz-track { position: relative; height: 22px; border-radius: 6px; background: var(--sunk); overflow: hidden; min-width: 0; }
+.plt-dz-seg { position: absolute; top: 0; bottom: 0; }
+.plt-dz-seg.plt-dz-awake { background: var(--warm-soft); }
+.plt-dz-seg.plt-dz-doze { background: var(--accent-soft); }
+.plt-dz-seg.plt-dz-win { background: var(--ok); }
+.plt-dz-plan { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--muted); }
+.plt-dz-hit { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--ok); }
+.plt-dz-hit.plt-dz-late { background: var(--warm); }
+.plt-dz-hit.plt-dz-fail { background: var(--err); }
+.plt-dz-cur { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); opacity: 0.45; }
+.plt-dz-axis { position: relative; height: 14px; overflow: hidden; font: 600 0.62rem var(--mono); color: var(--muted); min-width: 0; }
+.plt-dz-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.plt-dz-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font: 600 0.68rem var(--mono); color: var(--muted); }
+.plt-dz-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.plt-dz-kv { display: grid; grid-template-columns: minmax(0, 7em) minmax(0, 1fr); gap: 6px 10px; padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); font-size: 0.86rem; min-width: 0; transition: border-color 0.2s; }
+.plt-dz-kv b { font: 600 0.74rem var(--mono); color: var(--muted); }
+.plt-dz-kv span { min-width: 0; overflow-wrap: anywhere; }
+.plt-dz-wrap .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
 `;
 
   // ─── Depth pass 2: foreground services, receivers ──────────────────────
@@ -483,10 +506,422 @@ context.sendBroadcast(Intent(ACTION_SYNC_DONE), "com.example.permission.SYNC")`,
     ],
   };
 
+  // ─── Promoted: Doze, App Standby buckets and alarms ────────────────────
+  const bgAct = (label, onclick) => h('button', { class: 'cmd', onclick }, label);
+  const pct = (t, span) => `${(t / span) * 100}%`;
+  const hhmm = (start, t) => { const m = (start + t) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+  // One timeline row: a name, a track, the planned ring and the actual dot.
+  function dzLane(name, span) {
+    const track = h('div', { class: 'plt-dz-track' });
+    const cur = h('span', { class: 'plt-dz-cur', style: 'left:0' });
+    track.append(cur);
+    return { el: h('div', { class: 'plt-dz-lane' }, h('span', { class: 'plt-dz-name' }, name), track), track, cur,
+      plan(t) { track.append(h('span', { class: 'plt-dz-plan', style: `left:${pct(t, span)}` })); },
+      hit(t, kind = '') { const d = h('span', { class: 'plt-dz-hit pop ' + kind, style: `left:${pct(t, span)}` }); track.append(d); return d; } };
+  }
+  function dzAxis(start, span, marks) {
+    return h('div', { class: 'plt-dz-lane' }, h('span'), h('div', { class: 'plt-dz-axis' }, marks.map(t => h('span', { style: `left:${pct(t, span)}` }, hhmm(start, t)))));
+  }
+
+  const dozeLesson = {
+    id: 'doze',
+    title: 'Doze and App Standby buckets',
+    tagline: 'When the phone sleeps or your app goes unused, the system decides when your code runs.',
+    level: 'advanced',
+    body: `
+<p>When a phone is unplugged, still and has its screen off for a while, it enters <b>Doze</b>. Network access is suspended, wake locks are ignored, jobs and WorkManager work don't run, and normal alarms, even <code>setExact()</code>, wait. Every so often the system opens a short <b>maintenance window</b> and runs everything that waited. The windows come further apart the longer the phone sits. Doze ends when the user moves the phone, turns on the screen or plugs it in.</p>
+<p>A few things still get through: FCM high priority messages, and alarms set with <code>setExactAndAllowWhileIdle()</code> or <code>setAlarmClock()</code>. The first two are meant for things the user must see now.</p>
+<p>Since Android 9 there is also a per-app budget. The system puts every app into an <b>App Standby bucket</b> based on how recently and how often it is used: active, working set, frequent, rare, and since Android 12, restricted. The lower the bucket, the less often your jobs and alarms run. You can't opt out of either. Design for it: let WorkManager pick the time, and keep exact timing for things the user asked for.</p>`,
+    code: `// Fine in Doze: it waits for a maintenance window, then runs.
+val sync = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
+    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+    .build()
+WorkManager.getInstance(context).enqueueUniquePeriodicWork("sync", ExistingPeriodicWorkPolicy.KEEP, sync)
+
+// A reminder the user set for 03:00 must fire on time, even in Doze.
+alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminderAt, reminderIntent)
+
+// Which bucket is this app in right now? (Android 9+)
+val bucket = context.getSystemService(UsageStatsManager::class.java).appStandbyBucket
+if (bucket > UsageStatsManager.STANDBY_BUCKET_ACTIVE) log("throttled: bucket $bucket")`,
+    remember: 'Doze defers almost everything to maintenance windows. Only user-facing work should cut through.',
+    deeper: [
+      {
+        title: 'Buckets set your budget',
+        body: `<p>Buckets apply only while the phone runs on battery. On a charger, the system lifts them, except for the restricted bucket, whose limits are only loosened. The lower the bucket, the stronger the limits on jobs and alarms. In rare, the system also limits network access.</p>
+<p>The restricted bucket is the hard one. Jobs run once a day in a 10-minute batch, and the app gets one alarm a day. On Android 13 and later, an app lands there when the user hasn't touched it for a number of days, or when it sends too many broadcasts or bindings in a day. Manufacturers can set their own rules for buckets, so don't try to game them. Being useful is what moves an app up.</p>`,
+        code: `# Simulate battery power first, then pick a bucket and test your app.
+adb shell dumpsys battery unplug
+adb shell am set-standby-bucket com.example.news rare
+adb shell am get-standby-bucket com.example.news
+adb shell dumpsys battery reset`,
+        visual(el) {
+          const B = {
+            active: { why: 'In use now, or used very recently. A tap on its notification also counts.', jobs: 'minimal limits', alarms: 'minimal limits', plug: 'no bucket limits', k: 'ok' },
+            working_set: { why: 'Used regularly, but not right now.', jobs: 'mild limits', alarms: 'mild limits', plug: 'no bucket limits', k: 'ok' },
+            frequent: { why: 'Used often, but not every day.', jobs: 'stronger limits', alarms: 'stronger limits', plug: 'no bucket limits', k: 'wait' },
+            rare: { why: 'Not used often. Network access is limited too.', jobs: 'strict limits', alarms: 'strict limits', plug: 'no bucket limits', k: 'wait' },
+            restricted: { why: 'Not opened for many days, or too many broadcasts or bindings (Android 13+).', jobs: 'once a day, in a 10-minute batch', alarms: 'one per day', plug: 'limits stay, only loosened', k: 'no' },
+          };
+          let cur = 'frequent';
+          const src = h('div', { class: 'kt' });
+          const kv = h('div', { class: 'plt-dz-kv' });
+          const o = out();
+          function paint(anim) {
+            const b = B[cur];
+            src.innerHTML = hl(`adb shell am set-standby-bucket com.example.news ${cur}`);
+            kv.style.borderColor = `var(--${b.k === 'ok' ? 'ok' : b.k === 'wait' ? 'warm' : 'err'})`;
+            kv.replaceChildren(h('b', {}, 'bucket'), h('span', {}, tag(cur, b.k)), h('b', {}, 'how you get here'), h('span', {}, b.why),
+              h('b', {}, 'jobs'), h('span', {}, b.jobs), h('b', {}, 'alarms'), h('span', {}, b.alarms), h('b', {}, 'on a charger'), h('span', {}, b.plug));
+            if (anim) replay(kv, 'pop-soft');
+          }
+          const pick = choice('bucket', Object.keys(B), cur, v => { cur = v; paint(true); say(o, `Moved to ${v}.`); });
+          function open() { cur = 'active'; pick.set(cur); paint(true); say(o, '<span class="good">The user opened the app.</span> It goes straight to active.'); }
+          function idle() {
+            const order = Object.keys(B), i = order.indexOf(cur);
+            if (i === order.length - 1) { replay(kv, 'shake'); say(o, 'Already restricted. Only real use moves it back up.'); return; }
+            cur = order[i + 1]; pick.set(cur); paint(true); say(o, `Days pass without use: ${cur}.`);
+          }
+          paint(false);
+          o.innerHTML = 'Pick a bucket, or let time pass.';
+          el.append(pick.el, src, h('div', { class: 'controls' }, bgAct('Days pass, no use', idle), bgAct('User opens the app', open)), kv, o);
+        },
+      },
+      {
+        title: 'Test Doze with adb',
+        body: `<p>You don't have to leave a phone on a desk overnight. Force Doze with <code>dumpsys deviceidle force-idle</code>, check what your app does, then wake the device with <code>unforce</code> and reset the battery state. App Standby has its own switch: mark the app inactive and see whether your jobs and notifications still behave.</p>
+<p>Test both the deferred path (does sync catch up after a window?) and the user-facing path (does the 07:00 reminder still ring?).</p>`,
+        code: `# Doze
+adb shell dumpsys deviceidle force-idle
+adb shell dumpsys deviceidle unforce
+adb shell dumpsys battery reset
+
+# App Standby
+adb shell dumpsys battery unplug
+adb shell am set-inactive com.example.news true
+adb shell am get-inactive com.example.news
+adb shell am set-inactive com.example.news false`,
+      },
+      {
+        title: 'Battery optimization exemptions are not a fix',
+        body: `<p>Users can put an app on the battery optimization exemption list. That only partly helps: the app may use the network and hold partial wake locks during Doze, but its regular alarms still don't fire.</p>
+<p>Google Play policy doesn't let apps ask for this exemption directly unless Doze or App Standby breaks their core function. A chat app that can use FCM high priority messages doesn't qualify. Most apps should check with <code>isIgnoringBatteryOptimizations()</code> and, at most, point to the general settings screen.</p>`,
+        code: `val pm = context.getSystemService(PowerManager::class.java)
+if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+    // Most apps: the general list, where the user decides.
+    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+    // ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: only for the use cases Play allows.
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'A wake lock to keep syncing at night',
+        bad: `val lock = powerManager.newWakeLock(PARTIAL_WAKE_LOCK, "news:sync")
+lock.acquire(10 * 60 * 1000L)
+syncAllFeeds()   // runs in Doze, right?`,
+        good: `WorkManager.getInstance(context).enqueueUniqueWork("sync", ExistingWorkPolicy.KEEP,
+    OneTimeWorkRequestBuilder<SyncWorker>()
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .build())`,
+        why: 'Doze ignores wake locks and cuts the network anyway. WorkManager waits for a maintenance window and runs the work with network access.',
+      },
+      {
+        title: 'High priority FCM for silent syncs',
+        bad: `// Server: wake every device for a background refresh
+message.setAndroidConfig(AndroidConfig.builder().setPriority(Priority.HIGH).build())
+       .putData("type", "refresh_cache")`,
+        good: `// Server: normal priority for background data, high only when a notification shows
+message.setAndroidConfig(AndroidConfig.builder().setPriority(Priority.NORMAL).build())
+       .putData("type", "refresh_cache")`,
+        why: 'High priority is meant for messages that lead to a notification. On Android 12L and lower, misusing it can get your later messages deprioritized. Normal priority arrives in the next maintenance window.',
+      },
+      {
+        title: 'Testing only on a charger',
+        bad: `// Phone on USB all day while you test: everything runs on time.`,
+        good: `adb shell dumpsys battery unplug
+adb shell dumpsys deviceidle force-idle`,
+        why: 'Plugged in, the phone never dozes and bucket limits are lifted. Simulate battery power, or the bug shows up only for users.',
+      },
+    ],
+    terms: [
+      { term: 'Doze', def: 'A power mode for an unplugged, still phone with the screen off that defers network, jobs, syncs and normal alarms.' },
+      { term: 'Maintenance window', def: 'A short break from Doze where pending jobs, syncs and alarms run and apps get network access.' },
+      { term: 'App Standby bucket', def: 'One of active, working set, frequent, rare or restricted (Android 9+); lower buckets get fewer jobs and alarms.' },
+      { term: 'Restricted bucket', def: 'The lowest bucket (Android 12+): jobs once a day in a 10-minute batch and one alarm a day, even on a charger.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Put the test device into Doze, then bring it back.', code: 'adb shell dumpsys deviceidle [[force-idle]]\n# ... check the app ...\nadb shell dumpsys deviceidle [[unforce]]\nadb shell dumpsys battery reset', why: '<code>force-idle</code> enters Doze at once. <code>unforce</code> leaves it, and <code>battery reset</code> restores the real battery state.' },
+      { type: 'bug', prompt: 'A medicine reminder set for 03:00 rings at 04:30 on phones left on the nightstand. Tap the line.', code: 'fun scheduleReminder(at: Long) {\n    if (!alarmManager.canScheduleExactAlarms()) return askForAlarmPermission()\n    val pi = PendingIntent.getBroadcast(context, REMINDER, reminderIntent, PendingIntent.FLAG_IMMUTABLE)\n    alarmManager.setExact(AlarmManager.RTC_WAKEUP, at, pi)\n}', bug: 3, fix: '    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)', why: 'Doze defers <code>setExact()</code> to the next maintenance window. <code>setExactAndAllowWhileIdle()</code> fires during Doze, at most once per nine minutes per app.' },
+    ],
+    quiz: [
+      { q: 'The phone is in Doze. Your <code>CoroutineWorker</code> has a network constraint that is met. When does it run?', options: ['Right away', 'In the next maintenance window, or when Doze ends', 'Never, until the app is opened'], a: 1, why: 'Jobs, and so WorkManager work, don’t run in Doze. They run in the next window.' },
+      { q: 'Which of these fires on time while the phone is in Doze?', options: ['<code>setExact()</code>', '<code>setWindow()</code>', '<code>setAlarmClock()</code>'], a: 2, why: 'The system leaves Doze shortly before an alarm clock alarm. setExact and setWindow wait for a window.' },
+      { q: 'Your app is in the restricted bucket. How many alarms can it fire a day?', options: ['One', 'Ten', 'No limit while charging'], a: 0, why: 'Restricted apps get one alarm per day, and the limits stay even on a charger.' },
+    ],
+    visual(el) {
+      // 23:00 to 07:30. Doze from 23:30, windows at 00:30, 02:00 and 04:30, the user picks up the phone at 07:00.
+      const START = 23 * 60, SPAN = 510, DOZE = 30, WAKE = 480, WIN = [[90, 105], [180, 195], [330, 345]];
+      const ROWS = [
+        { name: 'WorkManager job', at: 135, through: false },
+        { name: 'FCM normal', at: 160, through: false },
+        { name: 'FCM high', at: 160, through: true },
+        { name: 'setExact()', at: 240, through: false },
+        { name: 'setExactAndAllowWhileIdle()', at: 240, through: true },
+        { name: 'set() alarm', at: 360, through: false },
+        { name: 'setAlarmClock()', at: 450, through: true },
+      ];
+      let plugged = false, busy = false, lanes = [];
+      const board = h('div', { class: 'plt-dz-board' });
+      const clock = tag('23:00');
+      const o = out();
+      const fireAt = r => {
+        if (plugged || r.through || r.at < DOZE) return r.at;
+        const w = WIN.find(([a, b]) => b > r.at);
+        return w ? Math.max(w[0], r.at) : WAKE;
+      };
+      function build() {
+        const dev = dzLane('phone', SPAN);
+        if (plugged) dev.track.prepend(h('span', { class: 'plt-dz-seg plt-dz-awake', style: 'left:0;width:100%' }));
+        else {
+          dev.track.prepend(h('span', { class: 'plt-dz-seg plt-dz-awake', style: `left:0;width:${pct(DOZE, SPAN)}` }),
+            h('span', { class: 'plt-dz-seg plt-dz-doze', style: `left:${pct(DOZE, SPAN)};width:${pct(WAKE - DOZE, SPAN)}` }),
+            ...WIN.map(([a, b]) => h('span', { class: 'plt-dz-seg plt-dz-win', style: `left:${pct(a, SPAN)};width:${pct(b - a, SPAN)}` })),
+            h('span', { class: 'plt-dz-seg plt-dz-awake', style: `left:${pct(WAKE, SPAN)};width:${pct(SPAN - WAKE, SPAN)}` }));
+        }
+        lanes = [dev, ...ROWS.map(r => { const l = dzLane(r.name, SPAN); l.plan(r.at); l.row = r; l.when = fireAt(r); return l; })];
+        board.replaceChildren(
+          h('div', { class: 'plt-dz-legend' }, h('span', {}, h('i', { style: 'background:var(--warm-soft)' }), 'awake'), h('span', {}, h('i', { style: 'background:var(--accent-soft)' }), 'Doze'), h('span', {}, h('i', { style: 'background:var(--ok)' }), 'window'), h('span', {}, h('i', { style: 'border:2px solid var(--muted);border-radius:50%' }), 'asked for'), h('span', {}, h('i', { style: 'background:var(--warm);border-radius:50%' }), 'ran late')),
+          ...lanes.map(l => l.el), dzAxis(START, SPAN, [60, 180, 300, 420]));
+      }
+      async function play() {
+        if (busy) return; busy = true;
+        try {
+          build(); o.replaceChildren();
+          const fired = new Set();
+          for (let t = 0; t <= SPAN; t += 6) {
+            lanes.forEach(l => { l.cur.style.left = pct(t, SPAN); });
+            clock.textContent = hhmm(START, t);
+            for (const l of lanes.slice(1)) {
+              if (fired.has(l) || l.when > t) continue;
+              fired.add(l);
+              const late = l.when > l.row.at;
+              l.hit(l.when, late ? 'plt-dz-late' : '');
+              o.append(h('div', { class: 'line drop-in', html: `${hhmm(START, l.when)} ${l.row.name}: ${late ? `<span class="bad">asked for ${hhmm(START, l.row.at)}</span>, ${l.when === WAKE ? 'waited until the user picked up the phone' : 'ran in a maintenance window'}` : '<span class="good">on time</span>'}` }));
+              while (o.children.length > 4) o.firstElementChild.remove();
+            }
+            await sleep(40); if (!el.isConnected) return;
+          }
+          o.append(h('div', { class: 'line drop-in', html: plugged ? 'On the charger: no Doze, everything on time.' : 'Only high priority FCM and the AllowWhileIdle and alarm clock alarms cut through.' }));
+        } finally { busy = false; }
+      }
+      const tp = toggle('plt-dz-plug', 'phone on the charger all night', false, v => { if (busy) { tp.input.checked = plugged; return; } plugged = v; build(); say(o, v ? 'Plugged in: the phone never enters Doze.' : 'Unplugged on the nightstand. Doze starts at 23:30.'); });
+      build();
+      o.innerHTML = 'Rings show what the app asked for. Run the night to see when each one really runs.';
+      el.append(h('div', { class: 'controls' }, bgAct('Run the night', play), tp.el, clock), board, o);
+    },
+  };
+
+  const alarmsLesson = {
+    id: 'alarms',
+    title: 'Alarms and exact timing',
+    tagline: 'AlarmManager runs your code at a time, even when the app is closed. Exact time costs a permission.',
+    level: 'advanced',
+    body: `
+<p><code>AlarmManager</code> fires a <code>PendingIntent</code> at a time you choose, even if your process is gone. Most needs don't require precision. <code>set()</code> never fires early, and on Android 12+ it fires within an hour of the time you gave. <code>setWindow()</code> fires inside a window you give, at least 10 minutes long on Android 12+. For repeated background work, WorkManager is the better tool.</p>
+<p>Exact alarms are for things the user set and expects on the minute: an alarm clock, a calendar reminder. <code>setExact()</code> is precise while the phone is awake. <code>setExactAndAllowWhileIdle()</code> also fires in Doze. <code>setAlarmClock()</code> is never moved, and the system leaves Doze for it.</p>
+<p>Exact alarms need a permission. <code>SCHEDULE_EXACT_ALARM</code> is special access the user grants under <b>Alarms &amp; reminders</b>, and on Android 14 it is denied by default for new installs of apps targeting Android 13 or higher. <code>USE_EXACT_ALARM</code> is granted at install, but only alarm clock and calendar apps qualify, and Google Play checks. Call <code>canScheduleExactAlarms()</code> before every exact alarm. Without the permission, setting one throws <code>SecurityException</code>.</p>`,
+    code: `// <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+class ReminderScheduler(private val context: Context) {
+    private val alarmManager = context.getSystemService(AlarmManager::class.java)
+
+    fun schedule(reminder: Reminder) {
+        val pi = PendingIntent.getBroadcast(context, reminder.id,
+            Intent(context, ReminderReceiver::class.java).putExtra("id", reminder.id),
+            PendingIntent.FLAG_IMMUTABLE)
+        if (alarmManager.canScheduleExactAlarms()) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.atMillis, pi)
+        } else {
+            // No permission: still remind, just less precisely.
+            alarmManager.setWindow(AlarmManager.RTC_WAKEUP, reminder.atMillis, 10 * 60_000L, pi)
+        }
+    }
+
+    fun cancel(reminder: Reminder) {
+        val pi = PendingIntent.getBroadcast(context, reminder.id,
+            Intent(context, ReminderReceiver::class.java),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE) ?: return
+        alarmManager.cancel(pi)
+    }
+}`,
+    remember: 'Inexact by default. Exact only for what the user set, and only after canScheduleExactAlarms().',
+    deeper: [
+      {
+        title: 'Ask, check and fall back',
+        body: `<p>If the permission is missing, explain in your own UI why the reminder needs exact timing, then send the user to the settings screen with <code>ACTION_REQUEST_SCHEDULE_EXACT_ALARM</code>. Some users will say no, so keep a less precise fallback that still works.</p>
+<p>The user can also take the permission away later. When that happens, the system stops your app and cancels all its future exact alarms. When it is granted, you receive <code>ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED</code>: check again and reschedule. Re-check in <code>onResume()</code> too, since the user comes back from settings there.</p>`,
+        code: `fun askForExactAlarms(activity: Activity) {
+    // Show your own explanation first, then:
+    activity.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+        "package:\${activity.packageName}".toUri()))
+}
+
+class ExactAlarmPermissionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) return
+        val am = context.getSystemService(AlarmManager::class.java)
+        if (am.canScheduleExactAlarms()) RescheduleWork.enqueue(context)   // upgrade to exact alarms
+    }
+}`,
+      },
+      {
+        title: 'Alarms are gone after a reboot',
+        body: `<p>All alarms are cleared when the phone shuts down. Keep your reminders in storage, and set them again from a <code>BOOT_COMPLETED</code> receiver. That broadcast only reaches apps the user has opened at least once.</p>
+<p>Leave the receiver disabled in the manifest, and enable it when the user creates their first reminder. Then the app isn't started at every boot for nothing.</p>`,
+        code: `// <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+// <receiver android:name=".BootReceiver" android:enabled="false" android:exported="false">
+//     <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
+// </receiver>
+
+fun enableBootReceiver(context: Context) {
+    context.packageManager.setComponentEnabledSetting(
+        ComponentName(context, BootReceiver::class.java),
+        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+        PackageManager.DONT_KILL_APP,
+    )
+}
+
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        RescheduleWork.enqueue(context)   // reads saved reminders and sets them again
+    }
+}`,
+      },
+      {
+        title: 'Elapsed time or wall clock',
+        body: `<p>The alarm type decides which clock it follows. <code>ELAPSED_REALTIME</code> counts time since boot, so it doesn't care about time zones or the user changing the clock. Use it for "in 30 minutes". <code>RTC</code> uses the wall clock. Use it for "at 07:00".</p>
+<p>The <code>_WAKEUP</code> variants wake the phone when the alarm is due. The plain ones wait until the phone is awake for some other reason. Since API 19 every repeating alarm is inexact, so prefer <code>setInexactRepeating()</code> and add a little random jitter if it triggers network calls.</p>`,
+        code: `// "In 30 minutes": elapsed time, unaffected by clock changes
+alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+    SystemClock.elapsedRealtime() + 30 * 60_000L, pi)
+
+// "Every morning around 07:00": wall clock, inexact repeating
+alarmManager.setInexactRepeating(AlarmManager.RTC_WAKEUP,
+    nextSevenAm(), AlarmManager.INTERVAL_DAY, digestIntent)`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Setting an exact alarm without checking',
+        bad: `alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)`,
+        good: `if (alarmManager.canScheduleExactAlarms()) {
+    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+} else {
+    alarmManager.setWindow(AlarmManager.RTC_WAKEUP, at, 10 * 60_000L, pi)
+}`,
+        why: 'On Android 14 the permission is off by default for most new installs, and users can revoke it. Without it the call throws <code>SecurityException</code>.',
+      },
+      {
+        title: 'Exact alarms for background sync',
+        bad: `alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+    SystemClock.elapsedRealtime() + 15 * 60_000L, syncIntent)   // reschedules itself`,
+        good: `WorkManager.getInstance(context).enqueueUniquePeriodicWork("sync",
+    ExistingPeriodicWorkPolicy.KEEP, PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS).build())`,
+        why: 'Nobody notices if a sync runs a few minutes late. Exact alarms wake the phone and drain the battery, and Play only lets alarm clock and calendar apps use USE_EXACT_ALARM.',
+      },
+      {
+        title: 'A one-shot PendingIntent you want to cancel',
+        bad: `val pi = PendingIntent.getBroadcast(context, id, intent,
+    PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE)
+alarmManager.set(AlarmManager.RTC_WAKEUP, at, pi)
+// later: alarmManager.cancel(pi)  → the alarm still fires`,
+        good: `val pi = PendingIntent.getBroadcast(context, id, intent, PendingIntent.FLAG_IMMUTABLE)
+alarmManager.set(AlarmManager.RTC_WAKEUP, at, pi)
+// later: alarmManager.cancel(pi)`,
+        why: 'An alarm whose PendingIntent was created with <code>FLAG_ONE_SHOT</code> can’t be cancelled.',
+      },
+    ],
+    terms: [
+      { term: 'AlarmManager', def: 'The system service that fires a PendingIntent at a set time, even when the app isn’t running.' },
+      { term: 'SCHEDULE_EXACT_ALARM', def: 'Special app access, shown as Alarms & reminders, that the user grants and can revoke; needed for exact alarms.' },
+      { term: 'USE_EXACT_ALARM', def: 'An install-time permission for exact alarms (Android 13+), allowed on Google Play only for alarm clock and calendar apps.' },
+      { term: 'setAlarmClock', def: 'The most visible exact alarm: the system never moves it and leaves Doze shortly before it fires.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Check before setting an exact alarm, and send the user to the right settings screen if needed.', code: 'if (alarmManager.[[canScheduleExactAlarms]]()) {\n    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)\n} else {\n    startActivity(Intent(Settings.[[ACTION_REQUEST_SCHEDULE_EXACT_ALARM]]))\n}', why: '<code>canScheduleExactAlarms()</code> tells you whether the permission is held right now. The settings action opens the Alarms &amp; reminders page.' },
+      { type: 'bug', prompt: 'The wake-up reminder only appears when the user happens to turn on the screen. Tap the line.', code: 'fun scheduleWakeUp(at: Long) {\n    val pi = PendingIntent.getBroadcast(context, WAKE_UP, wakeIntent, PendingIntent.FLAG_IMMUTABLE)\n    if (!alarmManager.canScheduleExactAlarms()) return askForExactAlarms()\n    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi)\n}', bug: 3, fix: '    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)', why: '<code>RTC</code> doesn’t wake the device. The alarm waits until something else wakes it. <code>RTC_WAKEUP</code> wakes the phone at the set time.' },
+    ],
+    quiz: [
+      { q: 'Your app targets Android 14 and is freshly installed on an Android 14 phone. It is not an alarm clock or calendar app. Is <code>SCHEDULE_EXACT_ALARM</code> granted?', options: ['Yes, at install', 'No, the user must allow it in Alarms & reminders', 'Only after a reboot'], a: 1, why: 'Since Android 14 it is denied by default for new installs of apps targeting Android 13 or higher.' },
+      { q: 'On Android 12+, <code>set(RTC_WAKEUP, 07:00, pi)</code>. When can it fire, battery savers aside?', options: ['Exactly at 07:00', 'Between 07:00 and about 08:00', 'Any time before 07:00'], a: 1, why: 'Inexact alarms never fire early, and on Android 12+ they fire within an hour of the time given.' },
+      { q: 'The user revokes Alarms & reminders for your app. What happens to exact alarms already set?', options: ['They still fire', 'They become inexact', 'The app is stopped and future exact alarms are cancelled'], a: 2, why: 'Revoking the permission stops the app and cancels its future exact alarms.' },
+    ],
+    visual(el) {
+      // 06:30 to 08:30. The user asks for 07:00.
+      const START = 6 * 60 + 30, SPAN = 120, AT = 30, WINDOW_DOZE = 82;
+      const M = {
+        set: { exact: false, src: 'set(RTC_WAKEUP, 07:00, pi)' },
+        setWindow: { exact: false, src: 'setWindow(RTC_WAKEUP, 07:00, 10 * 60_000L, pi)' },
+        setExact: { exact: true, src: 'setExact(RTC_WAKEUP, 07:00, pi)' },
+        allowIdle: { exact: true, idle: true, src: 'setExactAndAllowWhileIdle(RTC_WAKEUP, 07:00, pi)' },
+        alarmClock: { exact: true, idle: true, src: 'setAlarmClock(AlarmClockInfo(07:00, showIntent), pi)' },
+      };
+      let m = 'allowIdle', granted = false, doze = true, busy = false, pending = false;
+      const src = h('div', { class: 'kt' });
+      const board = h('div', { class: 'plt-dz-board' });
+      const o = out();
+      let lane;
+      const paintSrc = () => { src.innerHTML = hl('alarmManager.' + M[m].src); };
+      function fresh() {
+        lane = dzLane('alarm', SPAN);
+        if (doze) lane.track.prepend(h('span', { class: 'plt-dz-seg plt-dz-doze', style: `left:0;width:${pct(WINDOW_DOZE, SPAN)}` }), h('span', { class: 'plt-dz-seg plt-dz-win', style: `left:${pct(WINDOW_DOZE, SPAN)};width:${pct(4, SPAN)}` }));
+        board.replaceChildren(lane.el, dzAxis(START, SPAN, [30, 60, 90]),
+          h('div', { class: 'plt-dz-legend' }, h('span', {}, h('i', { style: 'background:var(--accent-soft)' }), 'Doze'), h('span', {}, h('i', { style: 'background:var(--ok)' }), 'window'), h('span', {}, h('i', { style: 'border:2px solid var(--muted);border-radius:50%' }), '07:00 asked')));
+        pending = false;
+      }
+      async function schedule() {
+        if (busy) return; busy = true;
+        try {
+          fresh(); paintSrc();
+          say(o, hl('alarmManager.' + M[m].src));
+          if (M[m].exact && !granted) {
+            lane.hit(AT, 'plt-dz-fail'); replay(board, 'shake');
+            o.append(h('div', { class: 'line drop-in', html: '<span class="bad">SecurityException:</span> no SCHEDULE_EXACT_ALARM. Check canScheduleExactAlarms() first and fall back to setWindow().' }));
+            return;
+          }
+          lane.plan(AT); pending = true;
+          let when = AT, why = '';
+          if (m === 'set') { when = AT + 8 + Math.floor(Math.random() * 45); why = 'inexact: any time within the hour'; }
+          if (m === 'setWindow') { when = AT + Math.floor(Math.random() * 10); why = 'inside the 10-minute window'; }
+          if (doze && !M[m].idle && when < WINDOW_DOZE) { when = WINDOW_DOZE; why = 'Doze held it until the maintenance window'; }
+          if (M[m].idle && doze) why = m === 'alarmClock' ? 'the system left Doze just before it' : 'allowed in Doze (at most once per 9 minutes)';
+          for (let t = 0; t <= when; t += 2) { lane.cur.style.left = pct(t, SPAN); await sleep(25); if (!el.isConnected) return; }
+          if (!pending) return;
+          lane.hit(when, when > AT + 10 ? 'plt-dz-late' : '');
+          o.append(h('div', { class: 'line drop-in', html: `fired at ${hhmm(START, when)}: ${when === AT ? '<span class="good">on the minute</span>' : when > AT + 10 ? `<span class="bad">${when - AT} min late</span>` : `<span class="good">${when - AT} min after</span>`}${why ? `, ${why}` : ''}.` }));
+        } finally { busy = false; }
+      }
+      function reboot() {
+        if (busy) return;
+        fresh();
+        say(o, '<span class="bad">Rebooted. Every alarm is gone.</span> Save reminders and set them again from a BOOT_COMPLETED receiver.');
+        replay(board, 'shake');
+      }
+      const pick = choice('method', Object.keys(M), m, v => { if (busy) return false; m = v; paintSrc(); fresh(); say(o, M[v].exact ? 'An exact alarm: needs the permission.' : 'Inexact: no permission needed.'); }, v => ({ allowIdle: 'setExactAndAllowWhileIdle', alarmClock: 'setAlarmClock' })[v] || v);
+      const tg = toggle('plt-am-perm', 'Alarms & reminders allowed', false, v => { if (busy) { tg.input.checked = granted; return; } granted = v; fresh(); say(o, v ? 'The user allowed exact alarms in settings.' : 'New install on Android 14: exact alarms are denied by default.'); });
+      const td = toggle('plt-am-doze', 'phone in Doze at 07:00', true, v => { if (busy) { td.input.checked = doze; return; } doze = v; fresh(); say(o, v ? 'The phone lies still and unplugged: Doze until a window at 07:52.' : 'The phone is awake.'); });
+      paintSrc(); fresh();
+      o.innerHTML = 'The user wants a reminder at 07:00. Pick a method and schedule it.';
+      el.append(pick.el, src, h('div', { class: 'controls' }, tg.el, td.el), h('div', { class: 'controls' }, bgAct('Schedule for 07:00', schedule), bgAct('Reboot the phone', reboot)), board, o);
+    },
+  };
+
   Lab.addTrack({
     id: 'background',
     title: 'Background work',
-    description: 'WorkManager, foreground services and broadcast receivers, and the rules that decide when your code gets to run.',
+    description: 'WorkManager, Doze and standby buckets, foreground services, broadcast receivers and alarms: the rules that decide when your code gets to run.',
     group: 'Going deeper', requires: ['android', 'coroutines'],
     css,
     lessons: [
@@ -829,6 +1264,9 @@ val status = workManager.getWorkInfoByIdFlow(request.id)`,
         },
       },
 
+      // 1b: promoted from the gap audit
+      dozeLesson,
+
       // 2 ─────────────────────────────────────────────
       {
         id: 'fgs',
@@ -1080,6 +1518,9 @@ sendBroadcast(Intent(ACTION_REFRESH).setPackage(packageName))`,
             o);
         },
       },
+
+      // 3b: promoted from the gap audit
+      alarmsLesson,
     ],
   });
 })();

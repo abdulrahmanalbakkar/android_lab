@@ -1074,67 +1074,13 @@ fun <T> Flow<T>.retryWhen(predicate: suspend FlowCollector<T>.(Throwable, Long) 
         },
       },
       {
-        title: 'One answer? Use suspendCancellableCoroutine',
-        body: `<p>Some callbacks fire once: a single location fix, a dialog result, a one-shot request. A Flow is the wrong shape for that. <code>suspendCancellableCoroutine</code> suspends until you call <code>resume</code>, and returns the value like a normal function.</p>
-<p>Register <code>invokeOnCancellation</code> to cancel the underlying request. Without it, cancelling the coroutine only stops the waiting. The request keeps running, and its late answer is ignored.</p>`,
-        code: `suspend fun FusedLocationProviderClient.currentFix(): Location? =
-    suspendCancellableCoroutine { cont ->
-        val cts = CancellationTokenSource()
-        getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
-            .addOnSuccessListener { cont.resume(it) }
-            .addOnFailureListener { cont.resumeWithException(it) }
-        cont.invokeOnCancellation { cts.cancel() }   // stop the GPS request too
-    }`,
-        visual(el) {
-          let hook = true, busy = false, gen = 0, req = null;
-          const caller = h('span', { class: 'flw-gps off' }, 'idle');
-          const gps = h('span', { class: 'flw-gps off' }, 'GPS off');
-          const bar = h('i');
-          const shown = h('div', { class: 'flw-shown wait' }, 'No location yet');
-          const o = out();
-          const set = (e, cls, text) => { e.className = 'flw-gps' + (cls ? ' ' + cls : ''); e.textContent = text; };
-          async function start() {
-            if (req) { replay(caller, 'shake'); say(o, '<span class="muted">already waiting:</span> cancel it or let it finish.'); return; }
-            const my = ++gen; req = { my, cancelled: false };
-            set(caller, '', 'suspended in currentFix()'); set(gps, 'bad', 'GPS on');
-            shown.className = 'flw-shown wait'; shown.textContent = 'Waiting for a fix…';
-            bar.style.transition = 'none'; bar.style.width = '0%'; void bar.offsetWidth; bar.style.transition = 'width 2000ms linear'; bar.style.width = '100%';
-            say(o, 'The coroutine is suspended. The GPS request is running.');
-            await sleep(2000); if (!el.isConnected || my !== gen) return;
-            set(gps, 'off', 'GPS off');
-            if (req.cancelled) {
-              say(o, '<span class="bad">late answer ignored:</span> the request ran to the end with nobody waiting. resume() on a cancelled continuation does nothing.');
-            } else {
-              set(caller, '', 'resumed'); shown.className = 'flw-shown'; shown.textContent = 'Location: 41.01, 28.97'; replay(shown, 'pop');
-              say(o, '<span class="good">resumed once:</span> the callback called cont.resume(location) and currentFix() returned.');
-            }
-            req = null;
-          }
-          async function cancel() {
-            if (busy) return;
-            if (!req || req.cancelled) { replay(caller, 'shake'); say(o, '<span class="muted">nothing to cancel.</span>'); return; }
-            busy = true; req.cancelled = true;
-            set(caller, 'off', 'cancelled'); shown.className = 'flw-shown stale'; shown.textContent = 'Screen closed before the fix';
-            if (hook) {
-              const w = getComputedStyle(bar).width; bar.style.transition = 'none'; bar.style.width = w;
-              set(gps, 'off', 'GPS off'); gen++; req = null;
-              say(o, '<span class="good">invokeOnCancellation ran:</span> cts.cancel() stopped the GPS request right away.');
-            } else {
-              replay(gps, 'shake');
-              say(o, '<span class="bad">no cancellation hook:</span> the coroutine stopped waiting, but the GPS keeps running until the request ends.');
-            }
-            busy = false;
-          }
-          const sw = h('input', { type: 'checkbox', id: 'flw-d2cb-hook', checked: true, onchange() { hook = this.checked; say(o, hook ? 'invokeOnCancellation { cts.cancel() } is back.' : '<span class="bad">removed</span> invokeOnCancellation. Start, then cancel.'); } });
-          o.innerHTML = 'Ask for one location fix, then try cancelling halfway.';
-          el.append(
-            h('label', { class: 'switch', for: 'flw-d2cb-hook' }, sw, h('span', { html: 'register <code>invokeOnCancellation</code>' })),
-            h('div', { class: 'flw-duo' },
-              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl('currentFix()') }), caller), h('span', { class: 'flw-prog' }, bar)),
-              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src' }, 'location request'), gps), shown)),
-            h('div', { class: 'controls' }, cmd('val fix = currentFix()', start), cmd('job.cancel()', cancel)),
-            o);
-        },
+        title: 'One listener for many collectors: share it',
+        body: `<p>Each collector of a <code>callbackFlow</code> runs the block again, so each one registers its own listener. Two screens watching connectivity means two network callbacks.</p>
+<p>Put <code>stateIn</code> or <code>shareIn</code> after it, in a scope that outlives the screens, and they share one listener. The lesson stateIn vs shareIn covers how to pick.</p>`,
+        code: `class NetworkMonitor(cm: ConnectivityManager, appScope: CoroutineScope) {
+    val isOnline: StateFlow<Boolean> = cm.isOnline()     // the callbackFlow above
+        .stateIn(appScope, SharingStarted.WhileSubscribed(5_000), false)
+}`,
       },
     ],
     underHood: {
@@ -2125,6 +2071,235 @@ fun save() = viewModelScope.launch {
         },
       },
       {
+        title: 'One flow, one call: flowWithLifecycle',
+        body: `<p>When a Fragment or Activity collects a single flow, <code>flowWithLifecycle</code> is a shorter way to write the same thing. It applies <code>repeatOnLifecycle</code> to the upstream. For several flows, keep one <code>repeatOnLifecycle</code> block with a <code>launch</code> per flow.</p>`,
+        code: `viewLifecycleOwner.lifecycleScope.launch {
+    vm.location
+        .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+        .collect { binding.locationText.text = it.toString() }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p><code>repeatOnLifecycle</code> is a suspend function that adds a <code>LifecycleEventObserver</code>. When the lifecycle moves up to the target state, the observer launches a child coroutine that runs your block. When it moves down past that state, the observer cancels that child. When the lifecycle is destroyed, <code>repeatOnLifecycle</code> returns, so the code after it runs only at the very end.</p>
+<p><code>collectAsStateWithLifecycle</code> is built from the same piece. It is a <code>produceState</code> whose producer calls <code>repeatOnLifecycle</code> and collects inside it.</p>
+<p><code>stateIn</code> launches one sharing coroutine in the scope you pass. It watches the StateFlow’s subscriber count. The start policy turns those counts into start and stop commands for the upstream collection.</p>`,
+      code: `// Roughly what collectAsStateWithLifecycle does
+@Composable
+fun <T> StateFlow<T>.collectAsStateWithLifecycleSketch(lifecycle: Lifecycle): State<T> =
+    produceState(initialValue = value, this, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            collect { value = it }
+        }
+    }`,
+    },
+    mistakes: [
+      {
+        title: 'Two collect calls in a row',
+        bad: `repeatOnLifecycle(Lifecycle.State.STARTED) {
+    vm.location.collect { showLocation(it) }
+    vm.events.collect { handle(it) }   // never reached
+}`,
+        good: `repeatOnLifecycle(Lifecycle.State.STARTED) {
+    launch { vm.location.collect { showLocation(it) } }
+    launch { vm.events.collect { handle(it) } }
+}`,
+        why: '<code>collect</code> suspends until the flow completes. A StateFlow never completes, so the second line never runs. Give each flow its own <code>launch</code>.',
+      },
+      {
+        title: 'Calling stateIn in a getter or function',
+        bad: `val items: StateFlow<List<Item>>
+    get() = repo.items().stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
+    )`,
+        good: `val items: StateFlow<List<Item>> = repo.items().stateIn(
+    viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
+)`,
+        why: 'Every access creates a new StateFlow and a new sharing coroutine that lives as long as <code>viewModelScope</code>. Each recomposition can add one. Create it once, as a property.',
+      },
+      {
+        title: 'collectAsState on Android',
+        bad: `@Composable
+fun MapScreen(vm: MapViewModel) {
+    val location by vm.location.collectAsState()
+    LocationText(location)
+}`,
+        good: `@Composable
+fun MapScreen(vm: MapViewModel) {
+    val location by vm.location.collectAsStateWithLifecycle()
+    LocationText(location)
+}`,
+        why: '<code>collectAsState</code> collects as long as the composable is in the composition, which includes time in the background. The lifecycle-aware version stops below STARTED, so <code>WhileSubscribed</code> can stop the upstream.',
+      },
+    ],
+  };
+
+  // ─── Promoted: suspendCancellableCoroutine (from callbackFlow) ─────────────────
+  const oneShotStep = {
+        title: 'One answer? Use suspendCancellableCoroutine',
+        body: `<p>Some callbacks fire once: a single location fix, a dialog result, a one-shot request. A Flow is the wrong shape for that. <code>suspendCancellableCoroutine</code> suspends until you call <code>resume</code>, and returns the value like a normal function.</p>
+<p>Register <code>invokeOnCancellation</code> to cancel the underlying request. Without it, cancelling the coroutine only stops the waiting. The request keeps running, and its late answer is ignored.</p>`,
+        code: `suspend fun FusedLocationProviderClient.currentFix(): Location? =
+    suspendCancellableCoroutine { cont ->
+        val cts = CancellationTokenSource()
+        getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
+            .addOnSuccessListener { cont.resume(it) }
+            .addOnFailureListener { cont.resumeWithException(it) }
+        cont.invokeOnCancellation { cts.cancel() }   // stop the GPS request too
+    }`,
+        visual(el) {
+          let hook = true, busy = false, gen = 0, req = null;
+          const caller = h('span', { class: 'flw-gps off' }, 'idle');
+          const gps = h('span', { class: 'flw-gps off' }, 'GPS off');
+          const bar = h('i');
+          const shown = h('div', { class: 'flw-shown wait' }, 'No location yet');
+          const o = out();
+          const set = (e, cls, text) => { e.className = 'flw-gps' + (cls ? ' ' + cls : ''); e.textContent = text; };
+          async function start() {
+            if (req) { replay(caller, 'shake'); say(o, '<span class="muted">already waiting:</span> cancel it or let it finish.'); return; }
+            const my = ++gen; req = { my, cancelled: false };
+            set(caller, '', 'suspended in currentFix()'); set(gps, 'bad', 'GPS on');
+            shown.className = 'flw-shown wait'; shown.textContent = 'Waiting for a fix…';
+            bar.style.transition = 'none'; bar.style.width = '0%'; void bar.offsetWidth; bar.style.transition = 'width 2000ms linear'; bar.style.width = '100%';
+            say(o, 'The coroutine is suspended. The GPS request is running.');
+            await sleep(2000); if (!el.isConnected || my !== gen) return;
+            set(gps, 'off', 'GPS off');
+            if (req.cancelled) {
+              say(o, '<span class="bad">late answer ignored:</span> the request ran to the end with nobody waiting. resume() on a cancelled continuation does nothing.');
+            } else {
+              set(caller, '', 'resumed'); shown.className = 'flw-shown'; shown.textContent = 'Location: 41.01, 28.97'; replay(shown, 'pop');
+              say(o, '<span class="good">resumed once:</span> the callback called cont.resume(location) and currentFix() returned.');
+            }
+            req = null;
+          }
+          async function cancel() {
+            if (busy) return;
+            if (!req || req.cancelled) { replay(caller, 'shake'); say(o, '<span class="muted">nothing to cancel.</span>'); return; }
+            busy = true; req.cancelled = true;
+            set(caller, 'off', 'cancelled'); shown.className = 'flw-shown stale'; shown.textContent = 'Screen closed before the fix';
+            if (hook) {
+              const w = getComputedStyle(bar).width; bar.style.transition = 'none'; bar.style.width = w;
+              set(gps, 'off', 'GPS off'); gen++; req = null;
+              say(o, '<span class="good">invokeOnCancellation ran:</span> cts.cancel() stopped the GPS request right away.');
+            } else {
+              replay(gps, 'shake');
+              say(o, '<span class="bad">no cancellation hook:</span> the coroutine stopped waiting, but the GPS keeps running until the request ends.');
+            }
+            busy = false;
+          }
+          const sw = h('input', { type: 'checkbox', id: 'flw-d2cb-hook', checked: true, onchange() { hook = this.checked; say(o, hook ? 'invokeOnCancellation { cts.cancel() } is back.' : '<span class="bad">removed</span> invokeOnCancellation. Start, then cancel.'); } });
+          o.innerHTML = 'Ask for one location fix, then try cancelling halfway.';
+          el.append(
+            h('label', { class: 'switch', for: 'flw-d2cb-hook' }, sw, h('span', { html: 'register <code>invokeOnCancellation</code>' })),
+            h('div', { class: 'flw-duo' },
+              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl('currentFix()') }), caller), h('span', { class: 'flw-prog' }, bar)),
+              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src' }, 'location request'), gps), shown)),
+            h('div', { class: 'controls' }, cmd('val fix = currentFix()', start), cmd('job.cancel()', cancel)),
+            o);
+        },
+      };
+  const suspendCallback = {
+    id: 'suspend-callback',
+    title: 'suspendCancellableCoroutine',
+    tagline: 'One callback, one answer: turn it into a suspend function.',
+    level: 'intermediate',
+    body: `
+<p>Many APIs answer once through a callback: one location fix, one dialog choice, one request. A Flow is the wrong shape for a single answer. <code>suspendCancellableCoroutine</code> suspends the caller, hands you a continuation, and returns whatever you pass to <code>resume</code>.</p>
+<p>Call <code>resume(value)</code> on success and <code>resumeWithException(e)</code> on failure, exactly once. Register <code>invokeOnCancellation</code> to stop the underlying request when the caller is cancelled. A cancelled coroutine stays cancelled: a later <code>resume</code> does not bring it back.</p>
+<p>The rule of thumb: a callback that fires many times becomes a <code>callbackFlow</code>, one that fires once becomes a suspend function.</p>`,
+    code: oneShotStep.code,
+    remember: 'One answer: suspendCancellableCoroutine, resume exactly once, cancel the request in invokeOnCancellation. Many answers: callbackFlow.',
+    visual: oneShotStep.visual,
+    terms: [
+      { term: 'Continuation', def: 'The handle to a suspended coroutine. Resuming it with a value or an exception makes the coroutine continue from where it paused.' },
+      { term: 'resume', def: 'Continues the suspended coroutine with a value. Calling it a second time on the same continuation throws IllegalStateException.' },
+      { term: 'invokeOnCancellation', def: 'Registers code that runs if the waiting coroutine is cancelled, so you can cancel the request or free a resource.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Turn a one-shot picker callback into a suspend function that also closes the picker on cancel.', code: `suspend fun ColorPicker.pick(): Color? = [[suspendCancellableCoroutine]] { cont ->
+    show(
+        onPicked = { color -> cont.[[resume]](color) },
+        onDismissed = { cont.resume(null) },
+    )
+    cont.[[invokeOnCancellation]] { dismiss() }
+}`, why: 'The builder suspends until one of the callbacks resumes it. <code>invokeOnCancellation</code> closes the picker if the caller goes away first.' },
+      { type: 'bug', prompt: 'When the network fails, the profile screen spins forever. Tap the bug.', code: `suspend fun ProfileApi.load(id: String): Profile =
+    suspendCancellableCoroutine { cont ->
+        val call = fetch(id,
+            onSuccess = { cont.resume(it) },
+            onError = { e -> Log.e("Profile", "failed", e) },
+        )
+        cont.invokeOnCancellation { call.cancel() }
+    }`, bug: 4, fix: '            onError = { e -> cont.resumeWithException(e) },', why: 'On failure nobody resumes the continuation, so the caller stays suspended forever. <code>resumeWithException</code> throws the error in the caller.' },
+    ],
+    quiz: [
+      { q: 'A listener fires every time connectivity changes. Which builder fits?', options: ['<code>suspendCancellableCoroutine</code>', '<code>callbackFlow</code>'], a: 1, why: 'Many values over time is a stream. suspendCancellableCoroutine returns exactly one value.' },
+      { q: 'The caller is cancelled while waiting, and you did not register <code>invokeOnCancellation</code>. What happens to the request?', options: ['It is cancelled too', 'It keeps running, and its answer is ignored', 'The app crashes'], a: 1, why: 'Cancellation stops the waiting coroutine, not the API behind it. Only your invokeOnCancellation code can stop that.' },
+      { q: 'A buggy callback calls <code>cont.resume(x)</code> twice. What happens on the second call?', options: ['It is ignored', 'It throws IllegalStateException', 'The caller gets the second value'], a: 1, why: 'A continuation can be resumed once. A second resume throws IllegalStateException.' },
+    ],
+    deeper: [
+      {
+        title: 'Resume exactly once',
+        body: `<p>Some callback APIs can call you more than once, for example a success followed by a completion, or a retrying SDK. A second <code>resume</code> throws <code>IllegalStateException</code>.</p>
+<p>If the API may call back twice, check <code>cont.isActive</code> before resuming, and remove the listener after the first answer.</p>`,
+        code: `suspend fun Scanner.firstCode(): String = suspendCancellableCoroutine { cont ->
+    val listener = object : ScanListener {
+        override fun onCode(code: String) {
+            removeListener(this)                 // stop further calls
+            if (cont.isActive) cont.resume(code) // and guard the rare race
+        }
+    }
+    addListener(listener)
+    cont.invokeOnCancellation { removeListener(listener) }
+}`,
+      },
+      {
+        title: 'invokeOnCancellation can run on any thread',
+        body: `<p>Cancellation can happen at any moment, even while the callback is running on another thread. So <code>invokeOnCancellation</code> may run at the same time as your success callback. Whatever it calls, like <code>removeListener</code> or <code>cancel()</code>, must be safe to call from any thread and safe to call after the request already finished.</p>`,
+        code: `cont.invokeOnCancellation {
+    cts.cancel()      // CancellationTokenSource.cancel() is safe to call any time
+}`,
+      },
+      {
+        title: 'suspendCoroutine ignores cancellation',
+        body: `<p>There is also a plain <code>suspendCoroutine</code>. It does not support cancellation: if the caller is cancelled, it keeps waiting until the callback finally resumes it. For anything on Android, where screens come and go, use the cancellable version.</p>`,
+        code: `// Waits for the callback even after the screen is gone
+suspend fun slowFix(): Location = suspendCoroutine { cont -> /* ... */ }
+
+// Stops waiting at once when cancelled, and can cancel the request
+suspend fun fix(): Location = suspendCancellableCoroutine { cont -> /* ... */ }`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Not resuming on the error path',
+        bad: `suspendCancellableCoroutine { cont ->
+    request.addOnSuccessListener { cont.resume(it) }
+}`,
+        good: `suspendCancellableCoroutine { cont ->
+    request.addOnSuccessListener { cont.resume(it) }
+    request.addOnFailureListener { cont.resumeWithException(it) }
+}`,
+        why: 'Every path must resume the continuation. If the failure path is missing, the caller stays suspended forever on an error.',
+      },
+      {
+        title: 'Wrapping a repeating listener',
+        bad: `suspend fun ConnectivityManager.onlineChanges(): Boolean =
+    suspendCancellableCoroutine { cont ->
+        registerDefaultNetworkCallback(callbackThatResumes(cont))
+    }`,
+        good: `fun ConnectivityManager.onlineChanges(): Flow<Boolean> = callbackFlow {
+    val cb = callbackThatSends(this)
+    registerDefaultNetworkCallback(cb)
+    awaitClose { unregisterNetworkCallback(cb) }
+}`,
+        why: 'The network callback fires again and again. The second call would resume a finished continuation and throw, and the listener is never unregistered.',
+      },
+    ],
+  };
+
+  // ─── Promoted: stateIn vs shareIn (from Collecting safely in the UI) ─────────────────
+  const startPolicyStep = {
         title: 'stateIn start policies',
         body: `<p><code>stateIn</code> takes a start policy. <code>Eagerly</code> starts the upstream as soon as the ViewModel exists and never stops it. <code>Lazily</code> waits for the first collector, then never stops. <code>WhileSubscribed(5_000)</code> runs only while someone collects, plus five seconds.</p>
 <p>All three stop when <code>viewModelScope</code> is cancelled. Pick a policy and step through a screen’s life.</p>`,
@@ -2193,75 +2368,168 @@ fun save() = viewModelScope.launch {
             h('div', { class: 'flw-ui' }, upChip, subChip, startsEl, h('div', { style: 'flex:1 1 120px' }, timerBox)),
             o);
         },
+      };
+  const statein = {
+    id: 'statein-sharein',
+    title: 'stateIn vs shareIn',
+    tagline: 'Run one upstream for every collector: as a state, or as a stream.',
+    level: 'advanced',
+    body: `
+<p>A cold flow runs its producer once per collector. Three collectors of a location flow means three GPS listeners. <code>stateIn</code> and <code>shareIn</code> run the upstream once, in a scope you pass, and hand its values to every collector.</p>
+<p><code>stateIn</code> gives a <code>StateFlow</code>. It always has a value, the <code>initialValue</code> until the upstream emits. A late collector gets the current value at once, and a value equal to the current one is skipped. Use it for state the screen draws. <code>shareIn</code> gives a <code>SharedFlow</code>. It has no initial value, every emission goes out even if it repeats, and <code>replay</code> decides how many recent values a late collector gets. The default is 0.</p>
+<p>Both take a <code>SharingStarted</code> policy that decides when the upstream runs, and both need a scope that outlives the collectors: <code>viewModelScope</code> for one screen, an injected app-wide scope for a repository.</p>`,
+    code: `// ViewModel: state the screen draws
+val uiState: StateFlow<UiState> = repo.articles()
+    .map { UiState.Success(it) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)
+
+// Repository: one socket shared by every screen that listens
+class PricesRepository(socket: PriceSocket, externalScope: CoroutineScope) {
+    val ticks: SharedFlow<PriceTick> = socket.ticks()      // a cold callbackFlow
+        .shareIn(externalScope, SharingStarted.WhileSubscribed(), replay = 0)
+}`,
+    remember: 'stateIn: one current value, late collectors get it, repeats skipped. shareIn: a stream, replay decides what late collectors get.',
+    terms: [
+      { term: 'stateIn', def: 'Turns a flow into a StateFlow with an initial value, sharing one upstream among all collectors in a given scope.' },
+      { term: 'shareIn', def: 'Turns a flow into a SharedFlow that runs one upstream for all collectors and replays a set number of recent values.' },
+      { term: 'SharingStarted', def: 'The policy that decides when the shared upstream starts and stops: Eagerly, Lazily or WhileSubscribed.' },
+      { term: 'Replay cache', def: 'The most recent values a SharedFlow keeps and gives to each new collector. Its size is the replay parameter.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Share one news upstream between screens, and give each new screen the latest list.', code: `val news: SharedFlow<List<Article>> = remote.newsUpdates()
+    .[[shareIn]](externalScope, SharingStarted.WhileSubscribed(), replay = [[1]])`, why: '<code>shareIn</code> runs one upstream for all collectors. <code>replay = 1</code> hands the latest list to anyone who starts collecting later.' },
+      { type: 'bug', prompt: 'After a rotation the profile screen stays blank until the profile changes again. Tap the bug.', code: `val profile: SharedFlow<Profile> = repo.profile()
+    .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000))
+
+@Composable
+fun ProfileScreen(vm: ProfileViewModel) {
+    val p by vm.profile.collectAsStateWithLifecycle(initialValue = null)
+    ProfileCard(p)
+}`, bug: 1, fix: '    .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)', why: 'With the default <code>replay = 0</code>, the new screen after rotation gets only future values. Replay the last one, or better, use <code>stateIn</code> for screen state.' },
+    ],
+    quiz: [
+      { q: 'Three screens collect a cold <code>callbackFlow</code> of GPS fixes through one <code>shareIn</code>. How many GPS listeners are registered?', options: ['1', '3', '0'], a: 0, why: 'shareIn collects the upstream once and fans the values out to every collector.' },
+      { q: 'A <code>stateIn</code> upstream emits <code>Online</code> twice in a row. How many times does a collector see it?', options: ['Once', 'Twice'], a: 0, why: 'A StateFlow skips a value equal to the current one.' },
+      { q: 'With <code>shareIn(scope, started)</code> and no replay argument, what does a collector that starts late get first?', options: ['The latest value', 'Nothing until the next emission', 'Every value since the start'], a: 1, why: 'replay defaults to 0, so a late collector only sees values emitted after it arrives.' },
+    ],
+    deeper: [
+      Object.assign({}, startPolicyStep, {
+        title: 'Start policies: Eagerly, Lazily, WhileSubscribed',
+        body: `<p>Both <code>stateIn</code> and <code>shareIn</code> take a start policy. <code>Eagerly</code> starts the upstream as soon as the ViewModel exists and never stops it. <code>Lazily</code> waits for the first collector, then never stops. <code>WhileSubscribed(5_000)</code> runs only while someone collects, plus five seconds.</p>
+<p>All three stop when the scope is cancelled. Pick a policy and step through a screen’s life.</p>`,
+      }),
+      {
+        title: 'Errors end the sharing: catch before stateIn',
+        body: `<p>If the upstream throws, the sharing coroutine ends. Collectors are not told: they keep the last value and wait forever. The exception goes to the scope, and in <code>viewModelScope</code> an uncaught exception crashes the app.</p>
+<p>Put <code>catch</code> (or <code>retry</code>) before <code>stateIn</code> or <code>shareIn</code>, and turn the failure into a value the screen can show.</p>`,
+        code: `val uiState: StateFlow<UiState> = repo.articles()
+    .map<List<Article>, UiState> { UiState.Success(it) }
+    .catch { emit(UiState.Error("Could not load")) }     // before stateIn
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)`,
       },
       {
-        title: 'One flow, one call: flowWithLifecycle',
-        body: `<p>When a Fragment or Activity collects a single flow, <code>flowWithLifecycle</code> is a shorter way to write the same thing. It applies <code>repeatOnLifecycle</code> to the upstream. For several flows, keep one <code>repeatOnLifecycle</code> block with a <code>launch</code> per flow.</p>`,
-        code: `viewLifecycleOwner.lifecycleScope.launch {
-    vm.location
-        .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
-        .collect { binding.locationText.text = it.toString() }
-}`,
+        title: 'WhileSubscribed can also forget the value',
+        body: `<p><code>WhileSubscribed</code> has a second parameter, <code>replayExpirationMillis</code>. It is the time between stopping the upstream and resetting the cache. For <code>stateIn</code>, reset means back to <code>initialValue</code>. For <code>shareIn</code>, the replay cache is emptied. The default keeps the cache forever.</p>
+<p>Use it when an old value would mislead, like a “last seen online” status after the app was in the background for an hour.</p>`,
+        code: `val status = presence.updates()
+    .stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000, replayExpirationMillis = 0),
+        Presence.Unknown,          // shown again after the upstream stopped
+    )`,
+      },
+      {
+        title: 'Need a real first value? The suspending stateIn',
+        body: `<p><code>stateIn(scope)</code> without a policy or initial value is a suspend function. It starts the upstream at once, waits for the first value, and returns a StateFlow that already holds it. If the upstream completes without emitting, it throws <code>NoSuchElementException</code>.</p>`,
+        code: `suspend fun settings(): StateFlow<Settings> =
+    dataStore.data.map { it.toSettings() }.stateIn(appScope)   // never a placeholder`,
       },
     ],
-    underHood: {
-      body: `<p><code>repeatOnLifecycle</code> is a suspend function that adds a <code>LifecycleEventObserver</code>. When the lifecycle moves up to the target state, the observer launches a child coroutine that runs your block. When it moves down past that state, the observer cancels that child. When the lifecycle is destroyed, <code>repeatOnLifecycle</code> returns, so the code after it runs only at the very end.</p>
-<p><code>collectAsStateWithLifecycle</code> is built from the same piece. It is a <code>produceState</code> whose producer calls <code>repeatOnLifecycle</code> and collects inside it.</p>
-<p><code>stateIn</code> launches one sharing coroutine in the scope you pass. It watches the StateFlow’s subscriber count. The start policy turns those counts into start and stop commands for the upstream collection.</p>`,
-      code: `// Roughly what collectAsStateWithLifecycle does
-@Composable
-fun <T> StateFlow<T>.collectAsStateWithLifecycleSketch(lifecycle: Lifecycle): State<T> =
-    produceState(initialValue = value, this, lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            collect { value = it }
-        }
-    }`,
-    },
     mistakes: [
       {
-        title: 'Two collect calls in a row',
-        bad: `repeatOnLifecycle(Lifecycle.State.STARTED) {
-    vm.location.collect { showLocation(it) }
-    vm.events.collect { handle(it) }   // never reached
-}`,
-        good: `repeatOnLifecycle(Lifecycle.State.STARTED) {
-    launch { vm.location.collect { showLocation(it) } }
-    launch { vm.events.collect { handle(it) } }
-}`,
-        why: '<code>collect</code> suspends until the flow completes. A StateFlow never completes, so the second line never runs. Give each flow its own <code>launch</code>.',
+        title: 'shareIn for screen state',
+        bad: `val cart: SharedFlow<Cart> = repo.cart()
+    .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000))`,
+        good: `val cart: StateFlow<Cart> = repo.cart()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Cart.Empty)`,
+        why: 'With no replay, a screen that starts collecting after the last emission, like after a rotation, has nothing to draw. Screen state wants a current value, which is what StateFlow is.',
       },
       {
-        title: 'Calling stateIn in a getter or function',
-        bad: `val items: StateFlow<List<Item>>
-    get() = repo.items().stateIn(
-        viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
-    )`,
-        good: `val items: StateFlow<List<Item>> = repo.items().stateIn(
-    viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
-)`,
-        why: 'Every access creates a new StateFlow and a new sharing coroutine that lives as long as <code>viewModelScope</code>. Each recomposition can add one. Create it once, as a property.',
-      },
-      {
-        title: 'collectAsState on Android',
-        bad: `@Composable
-fun MapScreen(vm: MapViewModel) {
-    val location by vm.location.collectAsState()
-    LocationText(location)
-}`,
-        good: `@Composable
-fun MapScreen(vm: MapViewModel) {
-    val location by vm.location.collectAsStateWithLifecycle()
-    LocationText(location)
-}`,
-        why: '<code>collectAsState</code> collects as long as the composable is in the composition, which includes time in the background. The lifecycle-aware version stops below STARTED, so <code>WhileSubscribed</code> can stop the upstream.',
+        title: 'stateIn for one-off events',
+        bad: `val messages: StateFlow<String?> = events
+    .stateIn(viewModelScope, SharingStarted.Eagerly, null)`,
+        good: `private val _messages = Channel<String>(Channel.BUFFERED)
+val messages: Flow<String> = _messages.receiveAsFlow()`,
+        why: 'A StateFlow skips a message equal to the last one and gives the last message to every new collector, so the same snackbar shows again after a rotation. See the Channels lesson in Coroutines.',
       },
     ],
+    visual(el) {
+      const MODES = [
+        ['cold', 'cold flow', 'val loc = repo.locationUpdates()   // cold'],
+        ['share0', 'shareIn(replay = 0)', 'val loc = repo.locationUpdates()\n    .shareIn(viewModelScope, WhileSubscribed(5_000))'],
+        ['share1', 'shareIn(replay = 1)', 'val loc = repo.locationUpdates()\n    .shareIn(viewModelScope, WhileSubscribed(5_000), replay = 1)'],
+        ['state', 'stateIn(initial = Loading)', 'val loc = repo.locationUpdates()\n    .stateIn(viewModelScope, WhileSubscribed(5_000), Loading)'],
+      ];
+      let mode = 'state', cols = [], seq = 0, last = null;
+      const snippet = h('div', { class: 'kt' });
+      const gps = h('span', { class: 'flw-gps off' }, 'GPS listeners: 0');
+      const rows = h('div', { class: 'flw-search' });
+      const o = out();
+      const btns = MODES.map(([k, label]) => cmd(label, () => { mode = k; reset(); say(o, `<span class="muted">mode:</span> ${hl(label)}. Add a screen, emit, then add another.`); }));
+      const chip = (text, cls = '') => h('span', { class: `flw-v drop-in ${cls}` }, text);
+      function paintGps() {
+        const n = mode === 'cold' ? cols.length : cols.length ? 1 : 0;
+        gps.textContent = `GPS listeners: ${n}`; gps.className = `flw-gps${n ? (n > 1 ? ' bad' : '') : ' off'}`;
+      }
+      function reset() {
+        cols = []; seq = 0; last = null;
+        snippet.innerHTML = hl(MODES.find(m => m[0] === mode)[2]);
+        rows.replaceChildren(h('span', { class: 'flw-note' }, 'No screen is collecting.'));
+        pressed(btns, MODES.map(m => m[0]), mode); paintGps();
+      }
+      function give(c, v, cls) {
+        c.strip.querySelectorAll('.flw-note').forEach(n => n.remove());
+        c.strip.append(chip(v, cls));
+        while (c.strip.children.length > 4) c.strip.firstElementChild.remove();
+      }
+      function add() {
+        if (cols.length >= 3) { replay(rows, 'shake'); say(o, '<span class="muted">enough:</span> three screens make the point. Pick a mode to start over.'); return; }
+        if (!cols.length) rows.replaceChildren();
+        const c = { strip: h('div', { class: 'flw-strip flw-wrap' }, h('span', { class: 'flw-note' }, 'nothing yet')), seq: 0, last: null };
+        cols.push(c);
+        rows.append(h('div', { class: 'flw-srow drop-in' }, h('span', { class: 'lane-name' }, `screen ${cols.length}`), c.strip));
+        paintGps();
+        if (mode === 'cold') { say(o, cols.length > 1 ? `<span class="bad">another producer:</span> screen ${cols.length} started its own upstream. ${cols.length} GPS listeners now, each with its own numbers.` : 'Screen 1 started the upstream. Emit a value.'); return; }
+        if (cols.length === 1 && !last) { if (mode === 'state') { give(c, 'Loading', 'warn'); say(o, '<span class="good">initial value:</span> nothing emitted yet, so the StateFlow hands out Loading.'); } else say(o, 'Screen 1 started the shared upstream. Emit a value.'); return; }
+        if (mode === 'share0') say(o, '<span class="bad">replay = 0:</span> the new screen joined the shared upstream but got nothing. It waits for the next emission.');
+        else if (mode === 'share1') { give(c, last, 'acc'); say(o, `<span class="good">replay = 1:</span> the new screen got ${last} from the replay cache right away.`); }
+        else { give(c, last || 'Loading', last ? 'acc' : 'warn'); say(o, `<span class="good">current value:</span> a StateFlow always has one, so the new screen drew ${last || 'Loading'} at once.`); }
+      }
+      function emit(same) {
+        if (!cols.length) { replay(gps, 'shake'); say(o, '<span class="muted">nobody collects,</span> so the upstream is not running. Add a screen first.'); return; }
+        if (mode === 'cold') {
+          cols.forEach(c => { if (!same || !c.last) c.last = `fix ${++c.seq}`; give(c, c.last); });
+          say(o, same ? 'Each upstream sent its last fix again, and each collector got it.' : '<span class="muted">separate producers:</span> each screen counts its own fixes. They are not even seeing the same data.');
+          return;
+        }
+        if (same && !last) { say(o, '<span class="muted">nothing to repeat yet.</span> Emit a new fix first.'); return; }
+        if (same && mode === 'state') { cols.forEach(c => replay(c.strip, 'shake')); say(o, `<span class="good">skipped:</span> ${last} equals the current value, so the StateFlow did not emit it.`); return; }
+        if (!same) last = `fix ${++seq}`;
+        cols.forEach(c => give(c, last, 'ok'));
+        say(o, same ? `<span class="muted">sent again:</span> a SharedFlow delivers ${last} again to every screen, even though it repeats.` : `<span class="good">shared:</span> one upstream, ${last} went to all ${cols.length} screen${cols.length === 1 ? '' : 's'}.`);
+      }
+      reset();
+      o.innerHTML = 'Add a screen, emit a fix, then add another screen. Compare the modes.';
+      el.append(h('div', { class: 'controls' }, btns), snippet,
+        h('div', { class: 'controls' }, cmd('screen starts collecting', add), cmd('upstream emits', () => emit(false)), cmd('emit the same fix again', () => emit(true))),
+        h('div', { class: 'flw-ui' }, gps), rows, o);
+    },
   };
 
   Lab.addTrack({
     id: 'flow',
     title: 'Flow',
-    description: 'How Flow streams values to your UI, from cold flows and operators to errors, hot flows and lifecycle-aware collection.',
+    description: 'How Flow streams values to your UI, from cold flows and operators to errors, callbacks, hot flows, sharing and lifecycle-aware collection.',
     group: 'Building apps', requires: ['coroutines'],
     css,
     lessons: [
@@ -2681,6 +2949,7 @@ val screen: Flow<List<Article>> = combine(results, favorites) { list, favs ->
       },
 
       callbackflow,
+      suspendCallback,
 
       // 4 ─────────────────────────────────────────────
       {
@@ -2690,7 +2959,7 @@ val screen: Flow<List<Article>> = combine(results, favorites) { list, favs ->
         body: `
 <p>A collector in the UI should run only while the screen is visible. In Compose, <code>collectAsStateWithLifecycle()</code> does this for you. In Views, wrap the collection in <code>repeatOnLifecycle(STARTED)</code>. It starts collecting when the screen reaches STARTED, cancels when it drops below, and starts again on return.</p>
 <p>A plain <code>lifecycleScope.launch { flow.collect { } }</code> keeps collecting in the background until the Activity is destroyed. If the flow reads GPS or a socket, it keeps draining the battery.</p>
-<p>In the ViewModel, <code>stateIn</code> turns a flow into a StateFlow with an initial value. Started with <code>SharingStarted.WhileSubscribed(5_000)</code>, it shares one upstream among all collectors and keeps it alive for 5 seconds after the last one leaves. A rotation takes far less than 5 seconds, so the upstream survives it. A trip to the home screen stops it.</p>`,
+<p>In the ViewModel, <code>stateIn</code> turns a flow into a StateFlow with an initial value. Started with <code>SharingStarted.WhileSubscribed(5_000)</code>, it shares one upstream among all collectors and keeps it alive for 5 seconds after the last one leaves. A rotation takes far less than 5 seconds, so the upstream survives it. A trip to the home screen stops it. The next lesson, stateIn vs shareIn, covers the other start policies and when to share without a state.</p>`,
         code: `// ViewModel: one shared upstream, kept alive 5 s after the UI stops collecting
 val location: StateFlow<Location?> = repo.locationUpdates()
     .stateIn(
@@ -2849,6 +3118,7 @@ viewLifecycleOwner.lifecycleScope.launch {
             o);
         },
       },
+      statein,
     ],
   });
 })();

@@ -1,7 +1,7 @@
-/* Android Lab core: routing, the subway map, track and lesson pages, quizzes, challenges, spaced review, search, glossary.
+/* Android Lab core: routing, the roadmap, track and lesson pages, quizzes, challenges, spaced review, search, glossary.
    To add a topic: create tracks/<id>.js that calls Lab.addTrack({...}) (see tracks/kotlin.js)
-   and add one <script> tag for it in index.html. Nothing in this file needs to change.
-   Optional track fields: group ('Foundations' | 'Building apps' | 'Going deeper' | 'Shipping'),
+   and add one <script> tag for it in index.html. Place it on the roadmap in STAGES below, or give it
+   stage: '<stage title>' (and optional: true). Other optional track fields:
    requires (array of track ids, a soft "recommended first"), hue (0-360, overrides the line color).
    Capstone projects are tracks with kind: 'project' and builds ('what you have at the end'); their lessons are
    build steps and may carry refs: ['track.lesson', ...], shown as "Review first" links. */
@@ -100,13 +100,36 @@ const Lab = (() => {
   // Line colors: curated hues (OKLCH degrees) spaced so neighbours differ; lightness/chroma come from theme tokens.
   const HUES = [300, 150, 250, 45, 195, 350, 95, 270, 20, 170, 325, 125, 225, 70, 285, 5, 140, 210];
   const hue = t => (typeof t.hue === 'number' ? t.hue : HUES[Math.max(0, tracks.indexOf(t)) % HUES.length]);
-  const GROUPS = ['Foundations', 'Building apps', 'Going deeper', 'Shipping'];
-  function grouped() {
-    const map = new Map(GROUPS.map(g => [g, []]));
-    for (const t of tracks) { const g = t.group || 'More'; if (!map.has(g)) map.set(g, []); map.get(g).push(t); }
-    // Capstone projects close their group, whatever order the scripts loaded in.
-    return [...map].filter(([, ts]) => ts.length).map(([g, ts]) => [g, ts.filter(t => !isProject(t)).concat(ts.filter(isProject))]);
+  // The roadmap. Order inside a stage is the suggested order. A track not listed here can set `stage: '<title>'`
+  // (it joins that stage, optional if `optional: true`) or lands in "More" at the end.
+  const STAGES = [
+    { title: 'Programming basics', blurb: 'Write Kotlin and use Git with confidence', tracks: ['kotlin', 'git', 'kdeep'], optional: ['kdeep'] },
+    { title: 'Think in objects', blurb: 'Design code that is easy to change', tracks: ['oop', 'solid', 'patterns', 'capkotlin'] },
+    { title: 'Your first app', blurb: 'Screens, state and navigation', tracks: ['android', 'compose', 'tools', 'views'], optional: ['views'] },
+    { title: 'Async and data', blurb: 'Load, store and stream without freezing the UI', tracks: ['coroutines', 'flow', 'data'] },
+    { title: 'Architecture', blurb: 'Layers, DI and a real app end to end', tracks: ['arch', 'capapp'] },
+    { title: 'Quality', blurb: 'Tested, fast and usable by everyone', tracks: ['testing', 'perf', 'a11y', 'compose2', 'capquality'], optional: ['compose2'] },
+    { title: 'Platform features', blurb: 'Push, background work, security and media', tracks: ['push', 'background', 'security', 'media'], optional: ['media'] },
+    { title: 'Ship it', blurb: 'Build, sign, release and keep the app healthy', tracks: ['build', 'launch', 'capship', 'kmp'], optional: ['kmp'] },
+    { title: 'Get the job', blurb: 'Data structures, algorithms and interview practice', tracks: ['cs'] },
+  ];
+  let stageCache;
+  function stages() {
+    if (stageCache && stageCache.n === tracks.length) return stageCache.list;
+    const list = STAGES.map(s => ({ ...s, optional: [...(s.optional || [])], tracks: s.tracks.map(trackById).filter(Boolean) }));
+    const more = { title: 'More', blurb: 'Extra topics', tracks: [], optional: [] };
+    for (const t of tracks) {
+      if (list.some(s => s.tracks.includes(t))) continue;
+      const s = list.find(x => x.title === t.stage) || more;
+      s.tracks.push(t); if (t.optional) s.optional.push(t.id);
+    }
+    if (more.tracks.length) list.push(more);
+    // Projects close their stage, which also keeps the left/right alternation of topic cards intact.
+    for (const s of list) s.tracks = s.tracks.filter(t => !isProject(t)).concat(s.tracks.filter(isProject));
+    stageCache = { n: tracks.length, list: list.filter(s => s.tracks.length) };
+    return stageCache.list;
   }
+  const stageOf = t => (stages().find(s => s.tracks.includes(t)) || {}).title;
   const andList = xs => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
   const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -158,93 +181,67 @@ const Lab = (() => {
     const pins = tracks.flatMap(t => t.lessons.map(l => ({ t, l })));
     const at = k => { const [tid, lid] = (k || '').split('.'); const t = tracks.find(x => x.id === tid); const l = t && t.lessons.find(x => x.id === lid); return l && { t, l }; };
     const doneTotal = pins.filter(p => state.done[key(p.t, p.l)]).length;
-    // Where to go next: the lesson after the last one opened (or that one, if unfinished); a new visitor starts at the first track.
+    // Where to go next: the lesson after the last one opened (or that one, if unfinished); a new visitor starts at the first roadmap topic.
     let next = at(state.last);
     if (next && state.done[key(next.t, next.l)]) { const nl = nextLesson(next.t); next = state.done[key(next.t, nl)] ? null : { t: next.t, l: nl }; }
-    if (!next && tracks[0]) next = { t: tracks[0], l: nextLesson(tracks[0]) };
+    const first = stages()[0].tracks[0] || tracks[0];
+    if (!next && first) next = { t: first, l: nextLesson(first) };
     const due = dueCards().length;
     const row = (href, label, title, sub, primary) => h('a', { class: 'today-row' + (primary ? ' primary' : ''), href },
       h('span', { class: 'today-label' }, label), h('span', { class: 'today-title' }, title), sub && h('span', { class: 'today-sub' }, sub));
     const card = h('div', { class: 'today', 'aria-label': 'Today' },
-      h('div', { class: 'today-top' }, h('span', { class: 'flash-label' }, doneTotal ? 'Pick up where you left off' : 'Start here'), h('span', {}, `${doneTotal}/${pins.length} done`)),
-      next && row('#' + key(next.t, next.l), doneTotal ? 'Continue' : 'First lesson', next.l.title, `${next.t.title} · ${next.l.tagline || ''}`, true),
+      h('div', { class: 'today-top' }, h('span', { class: 'flash-label' }, state.last ? 'Pick up where you left off' : 'Start here'), h('span', {}, `${doneTotal}/${pins.length} done`)),
+      next && row('#' + key(next.t, next.l), state.last ? 'Continue' : 'First lesson', next.l.title, `${next.t.title} · ${next.l.tagline || ''}`, true),
       due ? row('#review', 'Review', `${due} card${due > 1 ? 's' : ''} due`, 'Answer them before you forget') : row('#review', 'Review', 'Nothing due', 'Quiz answers come back here on a schedule'),
       row('#interview', 'Practice', 'Interview round', '10 mixed questions, optional timer'));
 
-    const lessons = pins.length, projects = tracks.filter(isProject).length;
+    const topics = tracks.filter(t => !isProject(t)).length;
     return h('div', { class: 'wrap home' },
       h('section', { class: 'hero' },
         h('div', { class: 'hero-copy' },
-          h('h1', {}, 'Android Lab'),
-          h('p', { class: 'lede' }, 'Learn Kotlin and Android one live demo at a time, then keep it with spaced review.'),
-          h('p', { class: 'hero-meta' }, [`${tracks.length - projects} lines`, projects && `${projects} capstone${projects > 1 ? 's' : ''}`, `${lessons} stations`].filter(Boolean).join(' · '))),
+          h('h1', {}, 'The Android developer roadmap'),
+          h('p', { class: 'lede' }, 'From your first val to shipping on Google Play. Every topic is a live demo you can poke at, and the quizzes come back before you forget.'),
+          h('p', { class: 'hero-meta' }, `${stages().length} stages · ${topics} topics · ${pins.length} lessons`)),
         card),
-      mapView());
+      roadView(next && next.t));
   }
 
-  // ---------- subway map ----------
-  function mapView() {
-    let i = 0;
-    return h('section', { class: 'metro', 'aria-labelledby': 'map-h' },
-      h('div', { class: 'metro-head' },
-        h('h2', { id: 'map-h' }, 'The map'),
-        h('ul', { class: 'mlegend', 'aria-label': 'Legend' },
-          h('li', {}, h('span', { class: 'mdot done', 'aria-hidden': 'true' }), 'Done'),
-          h('li', {}, h('span', { class: 'mdot', 'aria-hidden': 'true' }), 'Not started'),
-          h('li', {}, h('span', { class: 'mdot here', 'aria-hidden': 'true' }), 'You are here'),
-          h('li', {}, h('span', { class: 'xring', 'aria-hidden': 'true' }), 'Transfer'),
-          tracks.some(isProject) ? h('li', {}, h('span', { class: 'xrail', 'aria-hidden': 'true' }), 'Capstone project') : null)),
-      grouped().map(([g, ts]) => h('section', { class: 'mgroup', 'aria-label': g },
-        h('h3', { class: 'mgroup-h' }, g),
-        h('ol', { class: 'mlines' }, ts.map(t => lineRow(t, i++))))));
+  // ---------- roadmap ----------
+  // One spine, top to bottom. Each stage is a checkpoint; its topics hang off the spine left and right (stacked on phones).
+  function roadView(cur) {
+    const tdone = t => doneCount(t) === t.lessons.length;
+    return h('section', { class: 'rm-road', 'aria-labelledby': 'rm-road-h' },
+      h('div', { class: 'rm-road-head' },
+        h('h2', { id: 'rm-road-h' }, 'Your path'),
+        h('ul', { class: 'rm-legend', 'aria-label': 'Legend' },
+          h('li', {}, h('span', { class: 'rm-key' }), 'Core'),
+          h('li', {}, h('span', { class: 'rm-key is-opt' }), 'Optional'),
+          h('li', {}, h('span', { class: 'rm-key is-proj' }), 'Project'))),
+      h('ol', { class: 'rm-stages' },
+        stages().map((s, i) => {
+          const core = s.tracks.filter(t => !s.optional.includes(t.id));
+          const done = core.length && core.every(tdone);
+          const n = s.tracks.reduce((a, t) => a + t.lessons.length, 0), d = s.tracks.reduce((a, t) => a + doneCount(t), 0);
+          return h('li', { class: 'rm-stage' + (done ? ' is-done' : '') + (s.tracks.includes(cur) ? ' is-cur' : ''), style: `--i:${i}` },
+            h('div', { class: 'rm-stage-head' },
+              h('span', { class: 'rm-stage-n', 'aria-hidden': 'true' }, done ? '✓' : String(i + 1)),
+              h('h3', {}, s.title),
+              h('p', {}, s.blurb, h('span', { class: 'rm-stage-count' }, ` · ${d}/${n}`))),
+            h('ul', { class: 'rm-nodes' }, s.tracks.map(t => nodeCard(t, s.optional.includes(t.id), t === cur))));
+        }),
+        h('li', { class: 'rm-stage is-goal' }, h('div', { class: 'rm-stage-head' }, h('span', { class: 'rm-stage-n', 'aria-hidden': 'true' }, '★'), h('h3', {}, 'Job ready'), h('p', {}, 'Then keep it: Review and Interview practice stay open.')))));
   }
 
-  function lineRow(t, i) {
-    const miss = missing(t), rs = reqs(t), done = doneCount(t), n = t.lessons.length;
-    const proj = isProject(t);
-    return h('li', { class: 'mline' + (proj ? ' project' : '') + (miss.length ? ' soft' : ''), style: `--hue:${hue(t)};--i:${i}` },
-      h('div', { class: 'mline-head' },
-        h('a', { class: 'mpill', href: '#' + t.id }, proj ? [h('span', { class: 'mtag' }, 'Capstone'), ' '] : null, t.title),
-        h('span', { class: 'mcount', 'aria-label': `${done} of ${n} done` }, `${done}/${n}`),
-        rs.length ? h('p', { class: 'xfers' + (miss.length ? ' mnote' : '') },
-          h('span', { class: 'xfers-label' }, miss.length ? 'Recommended after' : 'Transfer from'),
-          rs.map(r => h('span', { class: 'xchip', style: `--hue:${hue(r)}` }, h('span', { class: 'xring', 'aria-hidden': 'true' }), r.title))) : null),
-      lineBody(t, n, proj));
+  function nodeCard(t, optional, cur) {
+    const n = t.lessons.length, done = doneCount(t), proj = isProject(t);
+    const tag = proj ? 'Project' : optional ? 'Optional' : null;
+    return h('li', { class: ['rm-node', proj && 'is-proj', optional && 'is-opt', cur && 'is-cur', done === n && 'is-done'].filter(Boolean).join(' '), style: `--hue:${hue(t)}` },
+      h('a', { href: '#' + t.id, 'aria-label': `${t.title}${tag ? ', ' + tag.toLowerCase() : ''}, ${done} of ${n} done${cur ? ', you are here' : ''}` },
+        h('span', { class: 'rm-node-top' }, h('span', { class: 'rm-node-title' }, t.title), cur ? h('span', { class: 'rm-node-here' }, 'You are here') : tag && h('span', { class: 'rm-node-tag' }, tag)),
+        h('span', { class: 'rm-node-meta' }, done === n ? `Done · ${n} ${proj ? 'steps' : 'lessons'}` : `${done ? done + '/' : ''}${n} ${proj ? 'steps' : 'lessons'}`),
+        h('span', { class: 'rm-node-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${(done / n) * 100}%` }))));
   }
 
-  // Rail + always-visible captions. Names never depend on hover: the "Next" line names a lesson,
-  // tapping a station (touch) shows its name before navigating, and "All lessons" lists every name.
-  function lineBody(t, n, proj) {
-    const nxt = nextLesson(t), allDone = doneCount(t) === n;
-    const unit = proj ? 'steps' : 'lessons';
-    const peek = h('p', { class: 'mpeek', hidden: true, 'aria-live': 'polite' });
-    const list = h('ol', { class: 'mlist', hidden: true }, t.lessons.map((l, j) => {
-      const k = key(t, l), d = state.done[k];
-      return h('li', { class: d ? 'done' : null }, h('a', { href: '#' + k }, h('span', { class: 'mlist-n' }, d ? '✓' : String(j + 1)), l.title));
-    }));
-    const toggle = h('button', { type: 'button', class: 'mtoggle', 'aria-expanded': 'false', onclick() {
-      const open = list.hidden; list.hidden = !open; this.setAttribute('aria-expanded', String(open));
-      this.textContent = open ? `Hide ${unit}` : `All ${n} ${unit}`;
-    } }, `All ${n} ${unit}`);
-    let picked = null;
-    const touch = () => matchMedia('(hover: none)').matches;
-    const rail = h('ol', { class: 'mrail', 'aria-label': `${t.title} ${proj ? 'steps' : 'stations'}` }, t.lessons.map((l, j) => {
-      const k = key(t, l), d = state.done[k], at = state.last === k;
-      const side = j < n / 3 ? 'tip-l' : j >= (n * 2) / 3 ? 'tip-r' : null;
-      return h('li', { class: ['mstop', d && 'done', at && 'here'].filter(Boolean).join(' '), style: `--j:${j}` },
-        h('a', { href: '#' + k, class: side, 'data-tip': l.title, 'aria-label': `${j + 1}. ${l.title}${d ? ', done' : ''}${at ? ', you are here' : ''}`, onclick(e) {
-          if (!touch() || picked === k) return; // desktop, or second tap: go
-          e.preventDefault(); picked = k;
-          rail.querySelectorAll('a.picked').forEach(a => a.classList.remove('picked')); this.classList.add('picked');
-          peek.replaceChildren(...[h('span', { class: 'mpeek-n' }, `${j + 1}/${n}`), ' ', h('a', { href: '#' + k }, l.title, ' →'), d && h('span', { class: 'mpeek-done' }, ' done')].filter(Boolean));
-          peek.hidden = false;
-        } }, h('span', { class: ['mdot', d && 'done', at && 'here'].filter(Boolean).join(' ') })));
-    }));
-    const next = h('p', { class: 'mnext' },
-      nxt ? [h('span', { class: 'mnext-label' }, allDone ? 'Done · start again' : doneCount(t) ? 'Next' : 'Start'), ' ', h('a', { href: '#' + key(t, nxt) }, nxt.title, ' →')] : null,
-      toggle);
-    return h('div', { class: 'mbody' }, rail, peek, next, list);
-  }
 
   function softNote(t, onClose) {
     const miss = missing(t);
@@ -292,7 +289,7 @@ const Lab = (() => {
     wrap.append(
       crumbs([['Map', '#home'], [t.title]]),
       h('header', { class: 'lesson-head track-head' },
-        h('p', { class: 'eyebrow' }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), proj ? `Capstone project · ${t.group || 'Project'} · ${n} steps` : `${t.group || 'Track'} · ${n} lessons`),
+        h('p', { class: 'eyebrow' }, h('span', { class: 'line-swatch', 'aria-hidden': 'true' }), proj ? `Project · ${stageOf(t) || 'Roadmap'} · ${n} steps` : `${stageOf(t) || 'Track'} · ${n} lessons`),
         h('h1', {}, t.title),
         h('p', { class: 'lede' }, t.description),
         progressBar(done, n),
@@ -387,8 +384,9 @@ const Lab = (() => {
           h('div', { class: 'ba-bad' }, h('span', { class: 'ba-tag' }, 'Before'), code(m.bad)),
           h('div', { class: 'ba-good' }, h('span', { class: 'ba-tag' }, 'After'), code(m.good))),
         h('p', { class: 'why', html: m.why })))) : null;
+    const docs = docsView(DOCS[key(t, l)] || l.docs);
     const terms = l.terms && l.terms.length ? h('section', { class: 'terms' }, h('h2', {}, 'Terms'), h('dl', {}, l.terms.map(x => [h('dt', {}, x.term), h('dd', {}, x.def)]))) : null;
-    const sections = [['Demo', bench], ['Code', snippet], ['Pin', pin], ['Go deeper', deeper], ['Under the hood', hood], ['Mistakes', mistakes], ['Practice', practice], ['Terms', terms], ['Check yourself', quiz]].filter(([, el]) => el);
+    const sections = [['Demo', bench], ['Code', snippet], ['Pin', pin], ['Go deeper', deeper], ['Under the hood', hood], ['Mistakes', mistakes], ['Practice', practice], ['Terms', terms], ['Docs', docs], ['Check yourself', quiz]].filter(([, el]) => el);
     const toc = h('nav', { class: 'toc', 'aria-label': 'On this page' }, h('span', { class: 'toc-label' }, 'On this page'),
       sections.map(([label, el]) => h('button', { type: 'button', onclick() {
         el.setAttribute('tabindex', '-1');
@@ -408,7 +406,7 @@ const Lab = (() => {
         reviewFirst(l),
         toc,
         h('div', { class: 'prose', html: l.body }),
-        bench, snippet, pin, deeper, hood, mistakes, practice, terms, quiz,
+        bench, snippet, pin, deeper, hood, mistakes, practice, terms, docs, quiz,
         h('nav', { class: 'pager', 'aria-label': 'Lesson navigation' },
           prev && h('a', { href: '#' + key(t, prev) }, h('small', {}, '← Previous'), prev.title),
           next && h('a', { class: 'next', href: '#' + key(t, next) }, h('small', {}, 'Next →'), next.title))));
@@ -512,7 +510,7 @@ const Lab = (() => {
     };
     for (const t of tracks) {
       const proj = isProject(t);
-      const s = score(t.title, `${t.id} ${t.group || ''} ${t.description || ''} ${t.builds || ''} ${proj ? 'project capstone' : ''}`);
+      const s = score(t.title, `${t.id} ${stageOf(t) || ''} ${t.description || ''} ${t.builds || ''} ${proj ? 'project capstone' : ''}`);
       if (s) hits.push({ s: s + 2 + (words.includes(t.id) ? 4 : 0), href: '#' + t.id, title: t.title, sub: proj ? `Capstone project · ${t.lessons.length} steps` : `Track · ${t.lessons.length} lessons` });
       for (const l of t.lessons) {
         const s2 = score(l.title, `${t.title} ${l.tagline} ${l.remember} ${(l.terms || []).map(x => x.term).join(' ')}`);
@@ -918,9 +916,18 @@ const Lab = (() => {
   }
 
   // A track may carry its own demo styles as a CSS string in t.css.
+  // Official documentation links, kept in js/docs.js: { 'track.lesson': [[title, url], ...], 'track': [...] }.
+  const DOCS = {};
+  function addDocs(map) { Object.assign(DOCS, map); }
+  function docsView(list) {
+    if (!list || !list.length) return null;
+    return h('section', { class: 'docs' }, h('h2', {}, 'Official docs'),
+      h('ul', {}, list.map(([title, url]) => h('li', {}, h('a', { href: url, target: '_blank', rel: 'noopener' }, title, h('span', { class: 'docs-host' }, ' ' + new URL(url).hostname.replace(/^www\./, '')))))));
+  }
+
   function addTrack(t) { tracks.push(t); if (t.css && typeof document !== 'undefined') document.head.append(h('style', {}, t.css)); }
 
-  return { addTrack, start, schedule, h, sleep, hl, code, replay, swap };
+  return { addTrack, addDocs, start, schedule, h, sleep, hl, code, replay, swap };
 })();
 
 if (typeof module !== 'undefined') module.exports = Lab;

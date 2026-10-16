@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-10-16: deep dives promoted to lessons (36 new)
+
+Deep-dive steps that were a concept of their own became full lessons, placed right after their parent. Gap-audit topics were added in the same pass. Existing lesson ids are unchanged, so saved progress is kept.
+
+- **Kotlin:** lateinit and lazy; Maps and Sets; Properties, setters and visibility.
+- **Kotlin, deeper:** sequence { } and yield; Java interop.
+- **Coroutines (4 to 7):** exception handling; cancellation and timeouts; shared mutable state.
+- **Flow:** stateIn vs shareIn; suspendCancellableCoroutine.
+- **Android fundamentals:** launch modes and task affinity; package visibility.
+- **Compose:** DisposableEffect and SideEffect; snapshotFlow; TextFieldState.
+- **Compose, advanced:** drawing with Canvas; shared element transitions; Navigation 3.
+- **Views:** multiple view types; ViewPager2.
+- **Accessibility:** custom actions; keyboard and D-pad focus; Android 17 resizability.
+- **Architecture:** Hilt components and scopes.
+- **Data:** real-time data with WebSockets as a Flow; sharing files with FileProvider.
+- **Testing (6 to 10):** Robolectric; MockK; screenshot tests; Hilt in tests.
+- **Performance:** the main thread (Looper, Handler, MessageQueue).
+- **Media:** recording video with CameraX.
+- **Notifications and push (4 to 6):** styles and actions; verified App Links.
+- **Background work (3 to 5):** Doze and App Standby buckets; alarms.
+- **Official docs:** the new lessons have links too, so all 277 lessons have 1–3 (588 links in total).
+- **Service worker cache:** version bumped to v9.
+- **Testing:** all 30 topics and 277 lessons, at 1280px light and 400px dark. No script errors and no page wider than the screen.
+
+## 2026-10-16: new topics and official docs
+
+- **New topics (34 lessons):**
+  - **Git and the command line** (9 lessons, Programming basics): terminal, commits, .gitignore, branches, merging, rebase, remotes, pull requests, undoing things.
+  - **Android Studio and debugging** (7, Your first app): Studio tour, Logcat, debugger, Layout Inspector, adb, Lint, CI on every PR.
+  - **After launch** (7, Ship it): crashes and vitals, analytics, feature flags, in-app updates, in-app reviews, Play Billing, Play policy.
+  - **CS and interview basics** (11), in the new last stage **Get the job**: Big-O, lists, hashing, stacks and queues, two pointers, binary search, sorting, trees, graphs, dynamic programming, interview approach.
+- **OOP basics** grew from 4 to 11 lessons: objects, identity vs equality, inheritance, delegation, interfaces vs abstract classes, cohesion and coupling, domain modeling.
+- **Gap-audit lessons added:**
+  - Android fundamentals: Context and app components, resources and localization, predictive back, plus a task-affinity step in the back stack lesson.
+  - Compose: Coil images; dialogs, sheets, snackbars and menus.
+  - Data: OkHttp interceptors and token refresh.
+  - Build: API levels and compatibility.
+  - Security: Credential Manager and passkeys.
+- **Official docs:** every lesson (241) ends with 1–3 links to official documentation, 504 links in total, each opened and checked. The links live in `js/docs.js`.
+- **Facts checked in Oct 2026:**
+  - Play target API 36 since Aug 31, 2026.
+  - Billing Library 8+ required.
+  - Vitals thresholds: 1.09% crashes, 0.47% ANRs.
+  - Predictive back is on by default when targeting API 36.
+  - Coil 3.
+  - Credential Manager 1.6.0.
+- **Fixes:** the roadmap now puts projects at the end of each stage, so topic cards keep alternating sides.
+- **Service worker cache:** version bumped to v8.
+- **Testing:** all 30 topics and 241 lessons, at 1280px light and 400px dark. No script errors and no page wider than the screen.
+
+## 2026-10-16: roadmap home
+
+- **New home:** the subway map is replaced by a vertical roadmap with 8 stages: Programming basics, Think in objects, Your first app, Async and data, Architecture, Quality, Platform features, Ship it, then Job ready. Topics branch off the spine as cards marked core, optional or project, each with its progress. On phones the spine runs down the left.
+- **Optional topics:** Kotlin deeper, Views interop, Compose advanced, Media and KMP.
+- **Fix:** the Today panel said "First lesson" for someone who had already opened a lesson. It now says "Continue".
+- **Track placement:** tracks now go on the roadmap through `STAGES` in `js/app.js` or a `stage` field. The old `group` field is no longer used.
+- **Service worker cache:** version bumped to v7.
+- **Testing:** all 26 topics and 192 lessons, at 1280px light and 400px dark. No script errors and no page wider than the screen.
+
 ## 2026-10-16: new logo
 
 - **Logo:** "Parallel lines" (three topic lines bending into one station) replaces the "fun" badge in the header. It switches colors with the theme.

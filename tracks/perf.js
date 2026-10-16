@@ -196,6 +196,23 @@
   .pf-d2-mrow { grid-template-columns: minmax(0, 1fr) auto auto; }
   .pf-d2-mrow .pf-heap-bar { grid-column: 1 / -1; grid-row: 2; }
 }
+/* gap lesson: main thread */
+.pf-mt-wrapcmd .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.pf-mt-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; min-width: 0; }
+.pf-mt-box { display: grid; gap: 8px; align-content: start; padding: 12px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); min-width: 0; min-height: 150px; }
+.pf-mt-q { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pf-mt-msg { font: 600 0.76rem var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); overflow-wrap: anywhere; }
+.pf-mt-msg small { color: var(--muted); font-weight: 500; }
+.pf-mt-msg.pf-mt-frame { border-color: var(--accent); background: var(--accent-soft); }
+.pf-mt-msg.pf-mt-heavy { border-color: var(--err); background: var(--err-soft); }
+.pf-mt-msg.pf-mt-tap { border-color: var(--warm); background: var(--warm-soft); }
+.pf-mt-msg.pf-mt-later { border-style: dashed; opacity: 0.75; }
+.pf-mt-run { font: 700 0.86rem var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.pf-mt-run.pf-mt-hot { color: var(--err); }
+.pf-mt-bar { display: block; height: 8px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
+.pf-mt-fill { display: block; height: 100%; width: 0; background: var(--accent); }
+.pf-mt-spin { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); }
+.pf-mt-dot { display: block; width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(var(--accent) 0 25%, transparent 25%); }
 `;
 
   // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
@@ -1460,6 +1477,201 @@ analytics.log("screen_view", screen.analyticsName)`,
     ],
   };
 
+  // ─── Gap lesson: the main thread's message loop ───────────────────────
+  const mainThreadLesson = {
+    id: 'main-thread',
+    title: 'The main thread: Looper, Handler, MessageQueue',
+    tagline: 'One thread, one queue, one message at a time.',
+    level: 'intermediate',
+    body: `
+<p>When your app starts, the system creates one thread for it, the <em>main thread</em>. It is also called the UI thread, because it dispatches input to views and draws them. Under the hood it runs a <code>Looper</code>: an endless loop that takes the next message from a <code>MessageQueue</code> and runs it, one at a time, in order.</p>
+<p>Everything on the main thread arrives as a message: a tap, the next frame from Choreographer, a lifecycle callback, and the <code>Runnable</code>s you post with a <code>Handler</code>. A <code>Handler</code> is bound to one Looper. <code>post</code> adds a message that is ready now, <code>postDelayed</code> one that becomes ready later, and <code>removeCallbacks</code> takes it out again.</p>
+<p>Because there is only one loop, a slow message makes everything behind it wait. Post a 300 ms task below and watch the frames and your tap queue up behind it. That waiting is jank, and when it lasts seconds, an ANR.</p>`,
+    code: `val mainHandler = Handler(Looper.getMainLooper())
+val showTip = Runnable { tipView.isVisible = true }
+
+// from any thread: run this on the main thread, after what is already queued
+mainHandler.post { statusView.text = "Kaydedildi" }
+
+// run later; the delay is a minimum, not a promise
+mainHandler.postDelayed(showTip, 1_000)
+
+// the screen is going away: take it out of the queue
+mainHandler.removeCallbacks(showTip)
+
+// Today you mostly write the same thing with coroutines
+lifecycleScope.launch {                       // Dispatchers.Main
+    val draft = withContext(Dispatchers.IO) { dao.loadDraft() }
+    editor.setText(draft.text)                // back on the main queue
+}`,
+    remember: 'The main thread is a loop over one queue. Every message waits for the one before it, so keep each one short.',
+    deeper: [
+      {
+        title: 'Your own Looper: HandlerThread',
+        body: `<p>A plain <code>Thread</code> has no queue. <code>Looper.prepare()</code> creates one for the current thread and <code>Looper.loop()</code> runs it until you quit. <code>HandlerThread</code> does both for you. Post to it with a <code>Handler</code> built on its looper, and the work runs on that thread, one message at a time, in order.</p>
+<p>When you are done, call <code>quitSafely()</code>: it handles the messages that are already due and drops the delayed ones. In new code a coroutine dispatcher usually does this job, but you will meet HandlerThread in camera, sensor and media APIs that take a Handler or Looper.</p>`,
+        code: `val writer = HandlerThread("draft-writer").apply { start() }
+val writerHandler = Handler(writer.looper)
+
+writerHandler.post { dao.save(draft) }      // runs on draft-writer, in order
+
+// when the screen is gone
+writer.quitSafely()
+
+// What Looper.prepare() and loop() look like inside a thread
+thread {
+    Looper.prepare()
+    val handler = Handler(Looper.myLooper()!!)
+    Looper.loop()                            // blocks here, handling messages
+}`,
+      },
+      {
+        title: 'Coroutines on Main post messages too',
+        body: `<p><code>Dispatchers.Main</code> on Android is built on a Handler for the main Looper. When a coroutine on Main resumes after <code>withContext(Dispatchers.IO)</code> or a <code>delay</code>, the rest of it is posted as a message to the main queue. So the same rule holds: the code between two suspension points is one message, and it must be short.</p>
+<p><code>Dispatchers.Main.immediate</code>, which <code>lifecycleScope</code> and <code>viewModelScope</code> use, skips the post when you are already on the main thread and runs the code right away. See <em>Dispatchers and withContext</em> in the coroutines track.</p>`,
+        code: `viewModelScope.launch {                      // Main.immediate: starts inline
+    _state.value = Loading
+    val list = withContext(Dispatchers.IO) { repo.load() }
+    _state.value = Success(list)            // resumed by a message on the main queue
+}`,
+      },
+      {
+        title: 'Three shortcuts to the same queue',
+        body: `<p>You don’t always need your own Handler. <code>Activity.runOnUiThread</code>, <code>View.post</code> and <code>View.postDelayed</code> put a message on the main queue as well. <code>runOnUiThread</code> runs the action right away if you are already on the UI thread, and posts it otherwise.</p>`,
+        code: `executor.execute {
+    val bitmap = BitmapFactory.decodeFile(path)          // worker thread
+    imageView.post { imageView.setImageBitmap(bitmap) }  // main thread
+}
+
+runOnUiThread { progress.isVisible = false }`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Handler() without a Looper',
+        bad: `val handler = Handler()            // deprecated: takes the current thread's Looper`,
+        good: `val handler = Handler(Looper.getMainLooper())`,
+        why: 'The no-argument constructor picks a Looper implicitly. On a thread without one it crashes, and on the wrong thread your work runs somewhere you did not expect. Always pass the Looper.',
+      },
+      {
+        title: 'Delayed posts that outlive the screen',
+        bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    handler.postDelayed({ showTip() }, 30_000)
+}`,
+        good: `override fun onDestroy() {
+    handler.removeCallbacksAndMessages(null)
+    super.onDestroy()
+}
+// or: lifecycleScope.launch { delay(30_000); showTip() }`,
+        why: 'The queue holds the Runnable, and the Runnable holds the Activity. After a rotation the old Activity stays in memory until the message runs. See <em>Memory leaks</em>.',
+      },
+      {
+        title: 'Touching views from a worker thread',
+        bad: `thread {
+    val bitmap = download(url)
+    avatarView.setImageBitmap(bitmap)     // CalledFromWrongThreadException
+}`,
+        good: `thread {
+    val bitmap = download(url)
+    avatarView.post { avatarView.setImageBitmap(bitmap) }
+}`,
+        why: 'Views are not thread-safe. Only the thread that created the view hierarchy may touch it, so hand the result back through the main queue.',
+      },
+    ],
+    terms: [
+      { term: 'Main thread', def: 'The thread the system creates for your app at launch. It dispatches input, runs lifecycle callbacks and draws the UI.' },
+      { term: 'Looper', def: 'Runs a message loop for one thread: it takes messages from the thread’s MessageQueue and handles them one by one.' },
+      { term: 'MessageQueue', def: 'The time-ordered list of messages and Runnables waiting to run on a Looper’s thread.' },
+      { term: 'Handler', def: 'Posts messages and Runnables to one Looper’s queue, now or after a delay, and can remove them again.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Show a tip in one second on the main thread, and cancel it when the screen goes away.', code: 'val handler = Handler(Looper.[[getMainLooper]]())\nval showTip = Runnable { tipView.isVisible = true }\nhandler.[[postDelayed]](showTip, 1_000)\n// onDestroy\nhandler.[[removeCallbacks]](showTip)', why: 'The handler is bound to the main Looper. <code>postDelayed</code> queues the Runnable for later, and <code>removeCallbacks</code> takes it out again.' },
+      { type: 'bug', prompt: 'This crashes with CalledFromWrongThreadException. Tap the line.', code: 'fun loadAvatar(url: String) {\n    thread {\n        val bitmap = download(url)\n        avatarView.setImageBitmap(bitmap)\n    }\n}', bug: 3, fix: '        avatarView.post { avatarView.setImageBitmap(bitmap) }', why: 'The download belongs on the worker thread. The view update must go back to the main queue, which <code>View.post</code> does.' },
+    ],
+    quiz: [
+      { q: 'A 300 ms task is running on the main thread when the user taps. What happens to the tap?', options: ['It interrupts the task', 'It waits in the queue until the task finishes', 'It is dropped'], a: 1, why: 'The Looper runs one message at a time. Everything behind a slow message waits.' },
+      { q: 'What does <code>postDelayed(r, 500)</code> promise?', options: ['r runs exactly 500 ms from now', 'r runs within 500 ms', 'r runs no earlier than 500 ms from now, later if the queue is busy'], a: 2, why: 'After 500 ms the message is ready, but it still waits for whatever is running.' },
+      { q: 'Why is <code>Handler()</code> with no arguments deprecated?', options: ['It picks the current thread’s Looper implicitly, which causes bugs', 'Handlers are replaced by coroutines', 'It leaks memory on every post'], a: 0, why: 'Passing the Looper, like <code>Looper.getMainLooper()</code>, makes the target thread explicit.' },
+    ],
+    visual(el) {
+      const SLOW = 8, FRAME = 16.7, STEP = 5;
+      const root = h('div', { class: 'viz' });
+      const live = alive(root);
+      let t = 0, nextVsync = FRAME, running = null, seq = 0, drawn = 0, missed = 0, spin = 0, lastTap = '';
+      const queue = [];
+      const runName = h('span', { class: 'pf-mt-run' }, 'idle');
+      const runFill = h('span', { class: 'pf-mt-fill' });
+      const qList = h('div', { class: 'pf-mt-q', 'aria-label': 'MessageQueue' });
+      const dot = h('span', { class: 'pf-mt-dot' });
+      const clock = h('span', { class: 'clock' });
+      const stat = h('span', { class: 'pf-stat' });
+      const o = out('Frames arrive every 16.7 ms. Post something.');
+      const enqueue = (label, delay, cost, kind) => { const m = { id: ++seq, label, due: t + delay, cost, left: cost, kind, at: t }; queue.push(m); return m; };
+      function step() {
+        t += STEP;
+        while (t >= nextVsync) {
+          const pending = queue.some(m => m.kind === 'frame') || (running && running.kind === 'frame');
+          if (pending) missed++;
+          else { const f = enqueue('Choreographer: doFrame', 0, 3, 'frame'); f.due = nextVsync; }
+          nextVsync += FRAME;
+        }
+        let budget = STEP;
+        while (budget > 0) {
+          if (!running) {
+            const ready = queue.filter(m => m.due <= t).sort((a, b) => a.due - b.due || a.id - b.id)[0];
+            if (!ready) break;
+            queue.splice(queue.indexOf(ready), 1);
+            running = ready;
+          }
+          const d = Math.min(budget, running.left);
+          running.left -= d; budget -= d;
+          if (running.left <= 0) {
+            if (running.kind === 'frame') { drawn++; spin += 24; }
+            if (running.kind === 'tap') {
+              const waited = Math.round(t - running.at);
+              lastTap = `${waited} ms`;
+              o.append(h('div', { class: 'line drop-in', html: `tap handled after <span class="${waited > 100 ? 'bad' : 'good'}">${waited} ms</span>` }));
+            }
+            if (running.kind === 'tip') o.append(h('div', { class: 'line drop-in', html: `showTip ran at ${Math.round(t)} ms, <span class="muted">${Math.round(t - running.due)} ms after it became due</span>` }));
+            if (running.kind === 'heavy') o.append(h('div', { class: 'line drop-in', html: '<span class="bad">parse(json) done.</span> Everything behind it waited 300 ms.' }));
+            running = null;
+          }
+        }
+        while (o.children.length > 4) o.firstElementChild.remove();
+      }
+      function paint() {
+        runName.textContent = running ? running.label : 'idle: waiting for a message';
+        runName.className = 'pf-mt-run' + (running && running.kind === 'heavy' ? ' pf-mt-hot' : '');
+        runFill.style.width = running ? `${(1 - running.left / running.cost) * 100}%` : '0%';
+        const shown = queue.slice().sort((a, b) => a.due - b.due || a.id - b.id);
+        qList.replaceChildren(...shown.slice(0, 6).map(m => h('span', { class: `pf-mt-msg pf-mt-${m.kind}` + (m.due > t ? ' pf-mt-later' : '') },
+          m.label, h('small', {}, m.due > t ? ` in ${Math.ceil(m.due - t)} ms` : ' ready'))),
+          shown.length > 6 ? h('span', { class: 'pf-mt-msg' }, `+${shown.length - 6} more`) : '');
+        dot.style.transform = `rotate(${spin}deg)`;
+        clock.textContent = `${Math.round(t)} ms`;
+        stat.innerHTML = `frames drawn <b>${drawn}</b> · vsyncs missed <span class="${missed ? 'pf-badnum' : ''}">${missed}</span>${lastTap ? ` · last tap waited <b>${lastTap}</b>` : ''}`;
+      }
+      function loop() { if (!live()) return; step(); paint(); setTimeout(loop, STEP * SLOW); }
+      root.append(
+        h('div', { class: 'controls pf-mt-wrapcmd' },
+          cmd('handler.post { saveDraft() }', () => { enqueue('saveDraft()', 0, 2, 'post'); say(o, 'Posted. It runs after whatever is already ready.'); }),
+          cmd('handler.postDelayed(showTip, 500)', () => { if (queue.some(m => m.kind === 'tip')) return; enqueue('showTip', 500, 1, 'tip'); say(o, 'Queued for 500 ms from now.'); }),
+          cmd('handler.removeCallbacks(showTip)', () => { const i = queue.findIndex(m => m.kind === 'tip'); if (i >= 0) { queue.splice(i, 1); say(o, '<span class="good">removed</span> from the queue before it ran.'); } else say(o, '<span class="muted">nothing to remove</span>'); }),
+          cmd('handler.post { parse(json) }  // 300 ms', () => { enqueue('parse(json)', 0, 300, 'heavy'); say(o, '<span class="bad">A 300 ms message is queued.</span> Tap the screen while it runs.'); }),
+          act('Tap the screen', () => { enqueue('input: tap', 0, 1, 'tap'); })),
+        h('div', { class: 'pf-mt-wrap' },
+          h('div', { class: 'pf-mt-box' }, h('span', { class: 'pf-label' }, 'MessageQueue (by due time)'), qList),
+          h('div', { class: 'pf-mt-box' }, h('span', { class: 'pf-label' }, 'Looper.loop() runs'), runName, h('span', { class: 'pf-mt-bar' }, runFill),
+            h('div', { class: 'pf-row' }, h('span', { class: 'pf-mt-spin', 'aria-hidden': 'true' }, dot), h('span', { class: 'pf-stat' }, 'animation: turns once per drawn frame')))),
+        h('div', { class: 'pf-row' }, stat, clock),
+        h('p', { class: 'tip' }, 'Shown 8x slower than real time.'),
+        o);
+      el.append(root);
+      paint(); loop();
+    },
+  };
+
   Lab.addTrack({
     id: 'perf',
     title: 'Performance and debugging',
@@ -1578,6 +1790,8 @@ val jankStats = JankStats.createAndTrack(window) { frame ->
           tick();
         },
       },
+
+      mainThreadLesson,
 
       // 2 ─────────────────────────────────────────────
       {

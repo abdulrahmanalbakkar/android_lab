@@ -155,6 +155,16 @@
 .sec-d2-area { position: absolute; left: 50%; top: 0; width: 25%; height: 50%; box-sizing: border-box; background: var(--accent-soft); border: 2px solid var(--accent); opacity: 0; transition: opacity 0.3s; }
 .sec-d2-dot { position: absolute; left: 61%; top: 33%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); opacity: 0; transition: opacity 0.3s; }
 .sec-d2-map.sec-d2-fine .sec-d2-dot, .sec-d2-map.sec-d2-coarse .sec-d2-area { opacity: 1; }
+/* credential manager */
+.sec-cm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; min-width: 0; }
+.sec-cm-phone { position: relative; justify-content: flex-start; padding-top: 28px; text-align: center; }
+.sec-cm-sheet { gap: 5px; }
+.sec-cm-sheet .cmd { white-space: normal; overflow-wrap: anywhere; }
+.sec-cm-store { display: grid; gap: 4px; min-width: 0; }
+.sec-cm-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.sec-cm-chip { font: 600 0.74rem var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); overflow-wrap: anywhere; transition: background 0.25s, color 0.25s, border-color 0.25s; }
+.sec-cm-chip.sec-cm-on { border-style: solid; border-color: var(--ok); background: var(--ok-soft); color: var(--ink); }
+@media (max-width: 640px) { .sec-cm { grid-template-columns: minmax(0, 1fr); } .sec-cm-phone { order: -1; } }
 `;
 
   Lab.addTrack({
@@ -1611,6 +1621,261 @@ api.redeem(body, token)`,
                 busy = false;
               })),
             h('p', { class: 'tip' }, 'Try every place. Only one keeps the key off the phone.'));
+        },
+      },
+
+      // 5b ────────────────────────────────────────────
+      {
+        id: 'credential-manager',
+        title: 'Sign-in with Credential Manager and passkeys',
+        tagline: 'One request, one sheet: passkeys, saved passwords and Sign in with Google.',
+        level: 'intermediate',
+        body: `
+<p>Credential Manager (<code>androidx.credentials</code>) is the Jetpack API for signing users in. You build one <code>GetCredentialRequest</code> with every option your app supports: passkeys, saved passwords and Sign in with Google. <code>getCredential()</code> shows one system bottom sheet with everything the user has saved for your app. You get back one credential and send it to your server.</p>
+<p>A passkey is a key pair. The private key stays in a credential provider such as Google Password Manager and is unlocked with the screen lock. Your server keeps only the public key. To sign in, the server sends a fresh challenge, the phone signs it, and the server checks the signature. Nothing that crosses the network can be replayed, and a database leak gives away no passwords. A passkey belongs to one domain. Digital Asset Links tie that domain to your app’s signing certificate, so a copycat app never gets offered it. Passkeys through Credential Manager work on Android 9 (API 28) and up.</p>
+<p>It replaces the older APIs. Smart Lock for Passwords was deprecated in 2022 and is gone from <code>play-services-auth</code> 21.0.0, so code that uses it no longer builds. The legacy Google Sign-In API is deprecated and will be removed in a future release. One Tap is listed with the legacy APIs too.</p>`,
+        code: `// androidx.credentials:credentials, androidx.credentials:credentials-play-services-auth,
+// com.google.android.libraries.identity.googleid:googleid
+private val credentialManager = CredentialManager.create(context)
+
+suspend fun signIn(activity: Activity) {
+    val passkeyJson = api.passkeySignInOptions()       // your server makes a fresh challenge
+    val request = GetCredentialRequest(
+        listOf(
+            GetPublicKeyCredentialOption(requestJson = passkeyJson),
+            GetPasswordOption(),
+            GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(true)   // accounts that used this app before
+                .setServerClientId(WEB_CLIENT_ID)
+                .setNonce(api.newNonce())
+                .build(),
+        )
+    )
+    try {
+        val result = credentialManager.getCredential(context = activity, request = request)
+        when (val c = result.credential) {
+            is PublicKeyCredential -> api.finishPasskeySignIn(c.authenticationResponseJson)
+            is PasswordCredential -> api.passwordSignIn(c.id, c.password)
+            is CustomCredential ->
+                if (c.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    api.googleSignIn(GoogleIdTokenCredential.createFrom(c.data).idToken)
+                }
+        }
+    } catch (e: NoCredentialException) {
+        showSignInForm()               // nothing saved for this app yet
+    } catch (e: GetCredentialCancellationException) {
+        // the user closed the sheet: don't open it again by yourself
+    } catch (e: GetCredentialException) {
+        showError(e)
+    }
+}`,
+        remember: 'Ask for every credential type in one getCredential() call, and let the server verify what comes back. The phone proves, the server decides.',
+        terms: [
+          { term: 'Credential Manager', def: 'The Jetpack API (androidx.credentials) that gets and saves passkeys, passwords and federated sign-in credentials through one system UI.' },
+          { term: 'Passkey', def: 'A WebAuthn key pair for one account on one domain. The private key stays with the credential provider and signs server challenges; the server stores only the public key.' },
+          { term: 'Relying party ID (rpId)', def: 'The domain a passkey belongs to, such as haber.example. The provider only offers the passkey to that domain and to apps the domain vouches for.' },
+          { term: 'Digital Asset Links', def: 'An assetlinks.json file on your domain that lists your app’s package name and signing certificate fingerprint. Required for passkeys.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Offer passkeys and saved passwords in one sheet.', code: 'val request = GetCredentialRequest(\n    listOf(GetPublicKeyCredentialOption(requestJson), [[GetPasswordOption]]())\n)\nval result = credentialManager.[[getCredential]](context = activity, request = request)', why: 'Every option goes in one request, so the user sees one sheet with all their credentials. <code>getCredential</code> is a suspend function that returns the one they picked.' },
+          { type: 'bug', prompt: 'Anyone can sign in as anyone with this code. Tap the line.', code: 'when (val c = result.credential) {\n    is CustomCredential -> if (c.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {\n        val google = GoogleIdTokenCredential.createFrom(c.data)\n        session.signInLocally(email = google.id)\n    }\n}', bug: 3, fix: '        api.signInWithGoogle(idToken = google.idToken)', why: 'The app on a rooted phone can be made to report any email. Send the signed ID token to your server, which checks its signature, audience and nonce before it creates a session.' },
+        ],
+        quiz: [
+          { q: 'What does your server store after a user creates a passkey?', options: ['The private key, encrypted', 'The public key and the credential ID', 'A hash of the user’s screen lock PIN'], a: 1, why: 'The private key never leaves the credential provider. The server only needs the public key to check signatures, so a database leak reveals nothing useful.' },
+          { q: '<code>getCredential()</code> throws <code>NoCredentialException</code> on a new user’s phone. What should the app do?', options: ['Call getCredential() again in a loop', 'Show the normal sign-in or sign-up screen', 'Crash, the phone is misconfigured'], a: 1, why: 'Nothing is saved for this app yet. Show your regular form, and offer to create a passkey after the user is signed in.' },
+          { q: 'Your app still calls Smart Lock for Passwords. What happens when you update to <code>play-services-auth</code> 21.0.0?', options: ['Nothing, it still works the same', 'The build fails: the Smart Lock API was removed, so migrate to Credential Manager', 'Passwords are deleted from users’ phones'], a: 1, why: 'Smart Lock was deprecated in 2022 and removed from the SDK. Versions already in the Play Store keep working, but new builds with 21.0.0 can’t use it.' },
+        ],
+        deeper: [
+          {
+            title: 'Creating a passkey',
+            body: `<p>Offer a passkey right after the user signs in with a password or Google. Ask your server for creation options: a fresh challenge, your domain as the relying party, and a user ID. Make the user ID a random value, not an email. Pass the JSON to <code>createCredential()</code>. The user confirms with the screen lock, the provider makes the key pair, and you send <code>registrationResponseJson</code> to the server, which checks the challenge and stores the public key.</p>
+<p>Before this works, host <code>https://your-domain/.well-known/assetlinks.json</code> with your package name and the SHA-256 fingerprint of each signing certificate, debug and release. Tell the user a passkey was made, for example with a snackbar.</p>`,
+            code: `suspend fun offerPasskey(activity: Activity) {
+    val request = CreatePublicKeyCredentialRequest(requestJson = api.passkeyCreationOptions())
+    try {
+        val response = credentialManager.createCredential(activity, request) as CreatePublicKeyCredentialResponse
+        api.finishPasskeyRegistration(response.registrationResponseJson)
+        snackbar("Passkey created. Next time, sign in with your screen lock.")
+    } catch (e: CreateCredentialCancellationException) {
+        // user said no: ask again later, not now
+    } catch (e: CreateCredentialException) {
+        log(e)
+    }
+}`,
+          },
+          {
+            title: 'Sign in with Google, two passes and a button',
+            body: `<p>First ask only for accounts that used your app before: <code>setFilterByAuthorizedAccounts(true)</code>. With <code>setAutoSelectEnabled(true)</code> a returning user with one account is signed in with no tap. If that throws <code>NoCredentialException</code>, ask again with the filter set to <code>false</code> to show every Google account on the phone, which is the sign-up path.</p>
+<p>For an explicit “Sign in with Google” button, use <code>GetSignInWithGoogleOption</code>. Either way you get a <code>CustomCredential</code> holding an ID token. The app does not trust it. The server verifies the token and checks that its nonce matches the one it issued.</p>`,
+            code: `// Pass 2, after NoCredentialException from pass 1
+val signUp = GetGoogleIdOption.Builder()
+    .setFilterByAuthorizedAccounts(false)
+    .setServerClientId(WEB_CLIENT_ID)
+    .setNonce(api.newNonce())
+    .build()
+
+// Behind your own "Sign in with Google" button
+val button = GetSignInWithGoogleOption.Builder(serverClientId = WEB_CLIENT_ID)
+    .setNonce(api.newNonce())
+    .build()`,
+          },
+          {
+            title: 'Signing out, and access to Google APIs',
+            body: `<p>On sign-out, call <code>clearCredentialState()</code>. It tells every credential provider to forget the current session for your app, so the next sheet shows all options instead of auto-selecting the last account. Clear your own tokens too.</p>
+<p>The legacy Google Sign-In mixed two jobs. Now they are split: Credential Manager signs the user in (authentication), and <code>AuthorizationClient</code> asks for access to things like the user’s Google Drive (authorization), at the moment the feature needs it.</p>`,
+            code: `suspend fun signOut() {
+    credentialManager.clearCredentialState(ClearCredentialStateRequest())
+    tokenStore.clear()
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Passkeys are WebAuthn credentials. The sign-in options from your server hold a random <code>challenge</code> and the <code>rpId</code>. The provider finds a passkey for that rpId, but only if the domain’s <code>assetlinks.json</code> lists the calling app’s package and certificate. After the screen lock, it signs the authenticator data together with <code>clientDataJSON</code>, which contains the challenge and the origin.</p>
+<p>For an Android app the origin is <code>android:apk-key-hash:</code> plus the base64url SHA-256 hash of your signing certificate. The server checks four things: the challenge is the one it issued and not used before, the origin is on its allow list, the rpId hash matches, and the signature verifies with the stored public key.</p>`,
+          code: `// authenticationResponseJson, shortened
+{
+  "id": "KEDetxZcUfinhVi6Za5nZQ",
+  "type": "public-key",
+  "response": {
+    "clientDataJSON": "...",     // type, challenge, origin: android:apk-key-hash:...
+    "authenticatorData": "...",  // rpId hash, flags, sign counter
+    "signature": "...",          // made with the private key
+    "userHandle": "..."          // the random user ID from registration
+  }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Trusting the Google ID token on the phone',
+            bad: `val google = GoogleIdTokenCredential.createFrom(c.data)
+prefs.edit { putString("user", google.id) }   // "signed in"`,
+            good: `val google = GoogleIdTokenCredential.createFrom(c.data)
+val session = api.googleSignIn(google.idToken)  // server verifies signature, audience, nonce
+tokenStore.save(session)`,
+            why: 'Anything the app decides on its own can be patched or hooked. The ID token is signed by Google, but only your server can check it safely and turn it into your own session.',
+          },
+          {
+            title: 'Calling getCredential with the application context',
+            bad: `credentialManager.getCredential(context = applicationContext, request = request)`,
+            good: `credentialManager.getCredential(context = activity, request = request)`,
+            why: 'The call shows system UI on top of your screen. The docs ask for an activity-based context; with another context, how the UI launches is undefined.',
+          },
+          {
+            title: 'Leaving out the Play services module',
+            bad: `implementation("androidx.credentials:credentials:1.6.0")`,
+            good: `implementation("androidx.credentials:credentials:1.6.0")
+implementation("androidx.credentials:credentials-play-services-auth:1.6.0")`,
+            why: '<code>credentials-play-services-auth</code> connects Credential Manager to the provider in Google Play services. Without it, calls fail with a <code>ProviderConfigurationException</code>.',
+          },
+        ],
+        visual(el) {
+          const opt = { passkey: true, password: true, google: true };
+          const dev = { passkey: false, password: true };
+          let user = null, busy = false, sheet = null;
+          const o = h('div', { class: 'out', 'aria-live': 'polite' });
+          const log = html => { line(o, html); trim(o, 7); };
+          const title = h('div', { class: 'sec-ph-title' }, 'Haber+');
+          const sub = h('div', { class: 'sec-ph-sub' }, 'Not signed in');
+          const phone = h('div', { class: 'phone sec-cm-phone' }, title, sub);
+          const saved = h('div', { class: 'sec-cm-chips' });
+          const server = h('div', { class: 'sec-cm-chips' });
+          const paint = () => {
+            saved.replaceChildren(
+              h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey · ayse' : 'no passkey'),
+              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password · ayse'),
+              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'Google · ayse.yilmaz'));
+            server.replaceChildren(
+              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password hash'),
+              h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey public key' : 'no public key'));
+            sub.textContent = user ? `Hoş geldin, Ayşe (${user})` : 'Not signed in';
+          };
+          const close = () => { if (sheet) { sheet.remove(); sheet = null; } busy = false; };
+          const wait = async ms => { await sleep(ms); return el.isConnected; };
+          const openSheet = (heading, entries, onCancel) => {
+            sheet = h('div', { class: 'sec-sheet sec-cm-sheet' }, h('b', {}, heading),
+              entries.map(([label, fn]) => act(label, () => { if (sheet) { close(); busy = true; fn(); } })),
+              act('Cancel', () => { if (sheet) { close(); onCancel(); } }));
+            phone.append(sheet);
+          };
+          async function finish(kind) {
+            if (kind === 'passkey') {
+              log('screen lock: <span class="good">fingerprint ok</span> <span class="muted">// unlocks the private key</span>');
+              if (!await wait(450)) return;
+              log('PublicKeyCredential → <span class="muted">authenticationResponseJson: challenge signed</span>');
+              if (!await wait(450)) return;
+              log('<span class="good">server: signature checks out with the stored public key</span>');
+            } else if (kind === 'password') {
+              log('PasswordCredential(id = "ayse@ornek.com", password = ••••••)');
+              if (!await wait(450)) return;
+              log('<span class="good">server: password hash matches</span> <span class="muted">// a password can still be phished</span>');
+            } else {
+              log('CustomCredential <span class="muted">type = TYPE_GOOGLE_ID_TOKEN_CREDENTIAL</span>');
+              if (!await wait(450)) return;
+              log('GoogleIdTokenCredential.createFrom(data).idToken → server');
+              if (!await wait(450)) return;
+              log('<span class="good">server: token signature, audience and nonce ok</span>');
+            }
+            user = kind; paint(); replay(phone, 'pop-soft'); busy = false;
+          }
+          async function get(copycat) {
+            if (busy) return; busy = true;
+            o.replaceChildren();
+            log(`getCredential(<span class="muted">${Object.keys(opt).filter(k => opt[k]).join(' + ') || 'no options'}</span>)${copycat ? ' <span class="muted">// from a copycat app</span>' : ''}`);
+            if (!await wait(350)) return;
+            const entries = [];
+            if (copycat && (opt.passkey || opt.password)) log('<span class="muted">assetlinks.json for haber.example does not list this app’s certificate</span>');
+            if (!copycat && opt.passkey && dev.passkey) entries.push(['Passkey · ayse@ornek.com', () => finish('passkey')]);
+            if (!copycat && opt.password && dev.password) entries.push(['Password · ayse@ornek.com', () => finish('password')]);
+            if (opt.google) entries.push(['Google · ayse.yilmaz@gmail.com', () => copycat ? copyGoogle() : finish('google')]);
+            if (!entries.length) { log('<span class="bad">NoCredentialException</span> <span class="muted">// show the normal sign-in form</span>'); replay(phone, 'shake'); busy = false; return; }
+            openSheet('Sign in to Haber+', entries, () => log('<span class="bad">GetCredentialCancellationException</span> <span class="muted">// don’t reopen it</span>'));
+          }
+          async function copyGoogle() {
+            log('CustomCredential → idToken sent to the copycat’s server');
+            if (!await wait(450)) return;
+            log('<span class="good">Your server never sees it.</span> <span class="muted">// the token’s audience is the copycat’s client ID, not yours</span>');
+            busy = false;
+          }
+          async function create() {
+            if (busy) return;
+            if (!user) { log('<span class="muted">Sign in first. A passkey is created for an account that already exists.</span>'); return; }
+            if (dev.passkey) { log('<span class="muted">A passkey already exists for this account.</span>'); return; }
+            busy = true; o.replaceChildren();
+            log('createCredential(CreatePublicKeyCredentialRequest(<span class="muted">challenge, rpId = haber.example</span>))');
+            if (!await wait(350)) return;
+            openSheet('Create a passkey for ayse@ornek.com?', [['Create with screen lock', async () => {
+              log('screen lock: <span class="good">fingerprint ok</span> <span class="muted">// provider makes the key pair</span>');
+              if (!await wait(450)) return;
+              log('registrationResponseJson → server <span class="muted">// public key only</span>');
+              if (!await wait(450)) return;
+              dev.passkey = true; paint();
+              log('<span class="good">server stored the public key.</span> Sign out and sign in again.');
+              busy = false;
+            }]], () => log('<span class="bad">CreateCredentialCancellationException</span> <span class="muted">// ask again later</span>'));
+          }
+          async function signOut() {
+            if (busy) return;
+            if (!user) { log('<span class="muted">Not signed in.</span>'); return; }
+            user = null; paint();
+            log('clearCredentialState(ClearCredentialStateRequest()) <span class="muted">// providers forget the session</span>');
+          }
+          const sw = (k, label) => toggle('sec-cm-' + k, label, opt[k], v => { opt[k] = v; });
+          paint();
+          log('<span class="muted">Sign in, create a passkey, sign out, then sign in with the passkey.</span>');
+          el.append(
+            h('div', { class: 'sec-cm' },
+              h('div', { class: 'viz' },
+                h('div', { class: 'sec-row' }, h('span', { class: 'sec-label' }, 'Options in the request')),
+                h('div', { class: 'sec-row' }, sw('passkey', 'Passkey').el, sw('password', 'Password').el, sw('google', 'Google').el),
+                h('div', { class: 'sec-cm-store' }, h('span', { class: 'sec-label' }, 'On the phone'), saved),
+                h('div', { class: 'sec-cm-store' }, h('span', { class: 'sec-label' }, 'On your server'), server),
+                h('div', { class: 'controls' },
+                  cmd('getCredential(request)', () => get(false)),
+                  cmd('createCredential(passkey)', create),
+                  cmd('clearCredentialState()', signOut),
+                  act('Same call from a copycat app', () => get(true))),
+                o),
+              phone));
         },
       },
 

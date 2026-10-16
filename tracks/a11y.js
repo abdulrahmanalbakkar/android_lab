@@ -266,6 +266,24 @@
 .ay-d2-fh-book .ay-d2-fh-hinge { width: 16px; background: linear-gradient(90deg, transparent, var(--line), transparent); }
 .ay-d2-fh-dual .ay-d2-fh-hinge { width: 18px; background: var(--code-bg); }
 .ay-d2-fs-val { font: 600 0.8rem var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+/* promoted: Android 17 resizability */
+.ay-rz-dev { position: relative; display: grid; place-items: center; box-sizing: border-box; border: 7px solid var(--code-bg); border-radius: 18px; background: repeating-linear-gradient(45deg, var(--sunk) 0 6px, var(--bg) 6px 12px); overflow: hidden; transition: width 0.35s, height 0.35s; }
+.ay-rz-dev.ay-rz-tablet { width: min(260px, 100%); height: 170px; }
+.ay-rz-dev.ay-rz-phone { width: 104px; height: 190px; border-radius: 20px; }
+.ay-rz-app { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 84px; height: 100%; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.ay-rz-phone .ay-rz-app, .ay-rz-app.ay-rz-fill { width: 100%; }
+.ay-rz-bar { padding: 5px 8px; background: var(--accent); color: var(--accent-ink); font: 700 0.72rem var(--body); }
+.ay-rz-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 5px; padding: 6px; align-content: start; }
+.ay-rz-feed i { display: block; height: 26px; border-radius: 5px; background: var(--sunk); }
+.ay-rz-mani { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); font: 500 0.74rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.ay-rz-win { display: grid; justify-items: stretch; align-content: start; box-sizing: border-box; padding: 10px; border: 6px solid var(--code-bg); border-radius: 14px; background: var(--surface); overflow: hidden; transition: width 0.3s, height 0.3s; }
+.ay-rz-win.ay-rz-wide { width: min(300px, 100%); height: 170px; }
+.ay-rz-win.ay-rz-short { width: min(220px, 100%); height: 110px; }
+.ay-rz-win.ay-rz-fixed { justify-items: center; overflow-y: auto; }
+.ay-rz-form { display: grid; gap: 6px; width: 100%; min-width: 0; }
+.ay-rz-fixed .ay-rz-form { max-width: 150px; }
+.ay-rz-field { display: block; padding: 4px 8px; border-radius: 6px; border: 1.5px solid var(--line); font: 500 0.72rem var(--body); color: var(--muted); }
+.ay-rz-btn { justify-self: stretch; text-align: center; }
 `;
 
   Lab.addTrack({
@@ -619,78 +637,6 @@ BatteryGauge(
             },
           },
           {
-            title: 'Custom actions for hidden gestures',
-            body: `<p>Swipe to archive, long-press menus and drag handles are hard or impossible with TalkBack, which uses swipes for its own navigation. Offer the same actions as <code>customActions</code>. TalkBack lists them in its actions menu, and Switch Access offers them too.</p>
-<p>Keep the gesture for touch users. The custom action is a second way in, not a replacement.</p>`,
-            code: `SwipeToDismissBox(state = dismissState, backgroundContent = { ArchiveBackground() }) {
-    MailRow(
-        mail,
-        Modifier.semantics {
-            customActions = listOf(
-                CustomAccessibilityAction("Archive") { onArchive(mail.id); true },
-                CustomAccessibilityAction("Mark as read") { onMarkRead(mail.id); true },
-            )
-        },
-    )
-}`,
-            visual(el) {
-              const MAIL = [['Rami', 'Trail map for Saturday'], ['Ines', 'Invoice 1042'], ['Kai', 'Photos from the ridge']];
-              let mails, at = 0, busy = false;
-              const s = sw('ay-ca-on', 'customActions');
-              const box = h('div', { class: 'ay-set ay-ca-list' });
-              const menu = h('div', { class: 'ay-ca-menu', hidden: true });
-              const o = out();
-              function paint() {
-                box.replaceChildren(...(mails.length ? mails.map((m, i) => h('div', { class: 'ay-ca-row' + (i === at ? ' ay-focus' : '') + (m.read ? ' ay-ca-read' : '') }, h('b', {}, m.from), h('small', {}, m.subject)))
-                  : [h('p', { class: 'ay-empty' }, 'Inbox empty.')]));
-              }
-              const label = m => `${m.from}, ${m.subject}${m.read ? '' : ', unread'}`;
-              function reset() { mails = MAIL.map(([from, subject]) => ({ from, subject, read: false })); at = 0; menu.hidden = true; paint(); }
-              function next() {
-                if (busy || !mails.length) return;
-                menu.hidden = true; at = (at + 1) % mails.length; paint();
-                say(o, `TalkBack: <span class="good">"${esc(label(mails[at]))}"</span>`);
-              }
-              function swipeLeft() {
-                if (busy || !mails.length) return;
-                menu.hidden = true; at = (at - 1 + mails.length) % mails.length; paint();
-                say(o, `<span class="bad">No archive.</span> With TalkBack on, a swipe left moves focus back: "${esc(label(mails[at]))}".`);
-              }
-              async function run(name) {
-                if (busy) return; busy = true;
-                menu.hidden = true;
-                const row = box.children[at], m = mails[at];
-                if (name === 'Archive') {
-                  row.classList.add('leave'); await sleep(420);
-                  if (!el.isConnected) return;
-                  mails.splice(at, 1); at = Math.min(at, Math.max(0, mails.length - 1)); paint();
-                  say(o, `<span class="good">Archived "${esc(m.subject)}".</span>${mails.length ? ` Focus moves to "${esc(label(mails[at]))}".` : ''}`);
-                } else {
-                  m.read = true; paint(); replay(box.children[at], 'pop');
-                  say(o, `<span class="good">Marked as read.</span> TalkBack: "${esc(label(m))}"`);
-                }
-                busy = false;
-              }
-              function openMenu() {
-                if (busy) return;
-                if (!mails.length) { say(o, 'Nothing focused.'); return; }
-                const acts = s.input.checked ? ['Archive', 'Mark as read'] : [];
-                menu.replaceChildren(h('span', { class: 'ay-label' }, 'Actions'),
-                  ...(acts.length ? acts.map(a => act(a, () => run(a))) : [h('p', { class: 'ay-empty' }, 'No actions available')]));
-                menu.hidden = false; replay(menu, 'drop-in');
-                say(o, acts.length ? 'TalkBack’s actions menu lists your custom actions. Pick one.' : '<span class="bad">// the only way to archive is a swipe, which TalkBack takes for itself</span>');
-              }
-              s.input.addEventListener('change', () => { if (!busy) { reset(); say(o, s.input.checked ? 'Each row now carries Archive and Mark as read.' : 'Rows have only the swipe gesture.'); } });
-              reset();
-              say(o, 'Focus is on the first mail. Try to archive it with TalkBack on.');
-              el.append(
-                h('div', { class: 'ay-split' }, box, h('div', { class: 'ay-col' },
-                  h('div', { class: 'controls' }, act('Swipe right', next), act('Swipe left', swipeLeft), act('Open actions menu', openMenu)),
-                  menu, s.el)),
-                o);
-            },
-          },
-          {
             title: 'Announce changes with liveRegion',
             body: `<p>Content that changes while focus stays elsewhere, like a cart total or an error under a form, is silent by default. Mark it with <code>liveRegion = LiveRegionMode.Polite</code> and TalkBack reads the new text once it finishes speaking. Use <code>Assertive</code> only for urgent changes, since it interrupts.</p>`,
             code: `Text(
@@ -815,6 +761,171 @@ BatteryGauge(
         },
       },
 
+      // 2b ────────────────────────────────────────────
+      {
+        id: 'custom-actions',
+        title: 'Custom accessibility actions',
+        tagline: 'Give every hidden gesture a named action TalkBack and Switch Access can offer.',
+        level: 'intermediate',
+        body: `
+<p>Swipe to archive, long-press menus and drag handles are hard for many users. With TalkBack on they often don’t work at all, because TalkBack uses swipes for its own navigation. A swipe left moves focus back instead of archiving the mail.</p>
+<p>Offer the same actions as <code>customActions</code> in the element’s semantics. Each <code>CustomAccessibilityAction</code> has a label and a lambda that returns <code>true</code> when it handled the action. TalkBack tells the user more actions are available and lists them in its actions menu. Switch Access offers them too.</p>
+<p>Keep the gesture for touch users. The custom action is a second way in, not a replacement.</p>`,
+        code: `@Composable
+fun MailRow(mail: Mail, onArchive: (Long) -> Unit, onMarkRead: (Long) -> Unit) {
+    val dismissState = rememberSwipeToDismissBoxState()
+    LaunchedEffect(dismissState.currentValue) {
+        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) onArchive(mail.id)
+    }
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = { ArchiveBackground() },
+        modifier = Modifier.semantics {
+            customActions = listOf(
+                CustomAccessibilityAction("Archive") { onArchive(mail.id); true },
+                CustomAccessibilityAction("Mark as read") { onMarkRead(mail.id); true },
+            )
+        },
+    ) {
+        MailSummary(mail)
+    }
+}`,
+        remember: 'Every gesture-only action also needs a customActions entry with a clear label.',
+        terms: [
+          { term: 'CustomAccessibilityAction', def: 'A semantics action with a label and a lambda. Accessibility services offer it in their actions menu.' },
+          { term: 'customActions', def: 'The semantics property that holds an element’s list of CustomAccessibilityAction objects.' },
+          { term: 'Actions menu', def: 'The TalkBack menu that lists the actions available on the focused element, including custom actions.' },
+          { term: 'Switch Access', def: 'An Android accessibility service that lets people use the device with one or more switches instead of the touch screen.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Offer Archive to TalkBack users and report that it was handled.', code: 'Modifier.semantics {\n    customActions = listOf(\n        [[CustomAccessibilityAction]]("Archive") {\n            onArchive(mail.id)\n            [[true]]\n        },\n    )\n}', why: 'Each action is a <code>CustomAccessibilityAction</code>. The lambda returns <code>true</code> when the action was performed.' },
+          { type: 'bug', prompt: 'The row offers Open and Bookmark as actions, yet TalkBack still stops on the bookmark button too. Tap the line to change.', code: 'ArticleRow(\n    Modifier.semantics {\n        customActions = listOf(\n            CustomAccessibilityAction("Open article") { open(); true },\n            CustomAccessibilityAction("Add to bookmarks") { bookmark(); true },\n        )\n    }\n) {\n    ArticleText(article, Modifier.clearAndSetSemantics { })\n    BookmarkButton(onClick = bookmark)\n}', bug: 9, fix: '    BookmarkButton(onClick = bookmark, modifier = Modifier.clearAndSetSemantics { })', why: 'When you move children’s actions into custom actions on the container, clear the children’s own semantics. Otherwise the button is still a separate stop.' },
+        ],
+        quiz: [
+          { q: 'TalkBack is on. The user swipes left on a mail row that archives on swipe. What happens?', options: ['TalkBack moves focus to the previous element', 'The mail is archived', 'Nothing'], a: 0, why: 'TalkBack takes swipes for navigation. The archive gesture never reaches your row, which is why the custom action is needed.' },
+          { q: 'Which label is best for a custom action?', options: ['"Archive"', '"Swipe left"', '"Action 1"'], a: 0, why: 'Name what happens. The user is choosing a result from a menu, not a gesture.' },
+          { q: 'You added <code>customActions</code>. Should the swipe gesture stay?', options: ['Yes, touch users still swipe', 'No, actions replace gestures', 'Only on tablets'], a: 0, why: 'Custom actions are an extra way in for people who can’t use the gesture.' },
+        ],
+        deeper: [
+          {
+            title: 'Fewer stops: move inner buttons into the row',
+            body: `<p>A list row with a title, a bookmark button and a share button is three focus stops per row. In a long list that is a lot of swiping. Put the actions on the row as custom actions instead, and clear the children’s semantics with <code>clearAndSetSemantics { }</code>, since their actions now live on the row.</p>
+<p>TalkBack reads one stop per row and lists the actions in its menu. Switch Access opens the same list when the user selects the row.</p>`,
+            code: `Row(
+    Modifier
+        .clickable(onClick = onOpen)
+        .semantics {
+            customActions = listOf(
+                CustomAccessibilityAction("Add to bookmarks") { onBookmark(); true },
+                CustomAccessibilityAction("Share") { onShare(); true },
+            )
+        },
+) {
+    ArticleSummary(article, Modifier.weight(1f))
+    BookmarkButton(onClick = onBookmark, modifier = Modifier.clearAndSetSemantics { })
+    ShareButton(onClick = onShare, modifier = Modifier.clearAndSetSemantics { })
+}`,
+          },
+          {
+            title: 'Name the result, not the gesture',
+            body: `<p>The label is all the user hears. “Archive”, “Move up”, “Delete draft” say what will happen. “Swipe left” or “Long press” describe a gesture the user may not be able to make. Use the app’s language, so a Turkish build says “Arşivle”: pass a string resource, not a hard-coded English word.</p>`,
+            code: `val archive = stringResource(R.string.action_archive)   // "Arşivle" in values-tr
+Modifier.semantics {
+    customActions = listOf(CustomAccessibilityAction(archive) { onArchive(); true })
+}`,
+          },
+          {
+            title: 'The same idea in Views',
+            body: `<p>In a View-based list, <code>ViewCompat.addAccessibilityAction</code> adds a custom action to a view. It returns an id you can use to remove the action later, for example when the row is rebound to another item.</p>`,
+            code: `override fun onBindViewHolder(holder: MailHolder, position: Int) {
+    val mail = getItem(position)
+    holder.archiveActionId?.let { ViewCompat.removeAccessibilityAction(holder.itemView, it) }
+    holder.archiveActionId = ViewCompat.addAccessibilityAction(holder.itemView, "Archive") { _, _ ->
+        onArchive(mail.id)
+        true
+    }
+}`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'A gesture as the only way',
+            bad: `SwipeToDismissBox(state, backgroundContent = { DeleteBackground() }) {
+    DraftRow(draft)   // swipe is the only way to delete
+}`,
+            good: `SwipeToDismissBox(
+    state, backgroundContent = { DeleteBackground() },
+    modifier = Modifier.semantics {
+        customActions = listOf(CustomAccessibilityAction("Delete draft") { onDelete(); true })
+    },
+) { DraftRow(draft) }`,
+            why: 'With TalkBack the swipe moves focus instead. Without a custom action, the draft can’t be deleted at all.',
+          },
+          {
+            title: 'Labels that describe the gesture',
+            bad: `CustomAccessibilityAction("Swipe left") { onArchive(); true }`,
+            good: `CustomAccessibilityAction("Archive") { onArchive(); true }`,
+            why: 'The menu is for people who can’t swipe. Tell them what the action does.',
+          },
+        ],
+        visual(el) {
+          const MAIL = [['Rami', 'Trail map for Saturday'], ['Ines', 'Invoice 1042'], ['Kai', 'Photos from the ridge']];
+          let mails, at = 0, busy = false;
+          const s = sw('ay-ca-on', 'customActions');
+          const box = h('div', { class: 'ay-set ay-ca-list' });
+          const menu = h('div', { class: 'ay-ca-menu', hidden: true });
+          const o = out();
+          function paint() {
+            box.replaceChildren(...(mails.length ? mails.map((m, i) => h('div', { class: 'ay-ca-row' + (i === at ? ' ay-focus' : '') + (m.read ? ' ay-ca-read' : '') }, h('b', {}, m.from), h('small', {}, m.subject)))
+              : [h('p', { class: 'ay-empty' }, 'Inbox empty.')]));
+          }
+          const label = m => `${m.from}, ${m.subject}${m.read ? '' : ', unread'}`;
+          function reset() { mails = MAIL.map(([from, subject]) => ({ from, subject, read: false })); at = 0; menu.hidden = true; paint(); }
+          function next() {
+            if (busy || !mails.length) return;
+            menu.hidden = true; at = (at + 1) % mails.length; paint();
+            say(o, `TalkBack: <span class="good">"${esc(label(mails[at]))}"</span>`);
+          }
+          function swipeLeft() {
+            if (busy || !mails.length) return;
+            menu.hidden = true; at = (at - 1 + mails.length) % mails.length; paint();
+            say(o, `<span class="bad">No archive.</span> With TalkBack on, a swipe left moves focus back: "${esc(label(mails[at]))}".`);
+          }
+          async function run(name) {
+            if (busy) return; busy = true;
+            menu.hidden = true;
+            const row = box.children[at], m = mails[at];
+            if (name === 'Archive') {
+              row.classList.add('leave'); await sleep(420);
+              if (!el.isConnected) return;
+              mails.splice(at, 1); at = Math.min(at, Math.max(0, mails.length - 1)); paint();
+              say(o, `<span class="good">Archived "${esc(m.subject)}".</span>${mails.length ? ` Focus moves to "${esc(label(mails[at]))}".` : ''}`);
+            } else {
+              m.read = true; paint(); replay(box.children[at], 'pop');
+              say(o, `<span class="good">Marked as read.</span> TalkBack: "${esc(label(m))}"`);
+            }
+            busy = false;
+          }
+          function openMenu() {
+            if (busy) return;
+            if (!mails.length) { say(o, 'Nothing focused.'); return; }
+            const acts = s.input.checked ? ['Archive', 'Mark as read'] : [];
+            menu.replaceChildren(h('span', { class: 'ay-label' }, 'Actions'),
+              ...(acts.length ? acts.map(a => act(a, () => run(a))) : [h('p', { class: 'ay-empty' }, 'No actions available')]));
+            menu.hidden = false; replay(menu, 'drop-in');
+            say(o, acts.length ? 'TalkBack’s actions menu lists your custom actions. Pick one.' : '<span class="bad">// the only way to archive is a swipe, which TalkBack takes for itself</span>');
+          }
+          s.input.addEventListener('change', () => { if (!busy) { reset(); say(o, s.input.checked ? 'Each row now carries Archive and Mark as read.' : 'Rows have only the swipe gesture.'); } });
+          reset();
+          say(o, 'Focus is on the first mail. Try to archive it with TalkBack on.');
+          el.append(
+            h('div', { class: 'ay-split' }, box, h('div', { class: 'ay-col' },
+              h('div', { class: 'controls' }, act('Swipe right', next), act('Swipe left', swipeLeft), act('Open actions menu', openMenu)),
+              menu, s.el)),
+            o);
+        },
+      },
+
       // 3 ─────────────────────────────────────────────
       {
         id: 'targets',
@@ -824,7 +935,7 @@ BatteryGauge(
         body: `
 <p>Fingers are not precise. Material asks for touch targets of at least 48 by 48 dp, about 9 mm, even when the icon you see is 24 dp. <code>IconButton</code>, <code>Checkbox</code>, <code>RadioButton</code> and <code>Switch</code> reserve that space already. For your own tappable element, add the <code>minimumInteractiveComponentSize()</code> modifier. It grows the layout to 48 dp and keeps the visual size.</p>
 <p>TalkBack, Switch Access and keyboards move through a screen in one order: top to bottom, then start to end. That breaks for side-by-side columns, which get read across in rows. Set <code>isTraversalGroup = true</code> on each column so one is read in full before the next. Inside a group, <code>traversalIndex</code> moves an element earlier or later. Lower values come first, and the default is 0.</p>
-<p>Keyboard and D-pad users also need to see where focus is. Material components draw a focus state, and <code>clickable</code> shows one through its indication. Keep it visible on your custom controls.</p>`,
+<p>Keyboard and D-pad users also need to see where focus is. Material components draw a focus state, and <code>clickable</code> shows one through its indication. Keep it visible on your custom controls. The next lesson, Keyboard and D-pad focus, shows how focus moves between them.</p>`,
         code: `// Material reserves 48.dp for touch around a 24.dp icon
 IconButton(onClick = onClose) {
     Icon(Icons.Default.Close, contentDescription = "Close")
@@ -865,75 +976,6 @@ Button(onClick = onChoose, Modifier.semantics { traversalIndex = -1f }) {
           { q: 'Which element is visited first?', options: ['<code>traversalIndex = 1f</code>', '<code>traversalIndex = 0f</code>', '<code>traversalIndex = -1f</code>'], a: 2, why: 'Lower values come first within the traversal group. The default is 0.' },
         ],
         deeper: [
-          {
-            title: 'Keyboard and D-pad: two kinds of focus moves',
-            body: `<p>Tablets with keyboards, Chromebooks and TVs move focus with keys. Tab and Shift+Tab move in one dimension, through the focusable elements in the order they appear on screen, and wrap at the end. Arrow keys and the D-pad move in two dimensions: to the closest element in that direction, with no wrapping.</p>
-<p>When the closest element is the wrong one, override a direction with <code>focusProperties</code>. Below, Down from the message field lands on Cancel, the nearest button. The fix sends it to Send. A mouse click clears focus, and the next Tab starts again from the first element.</p>`,
-            code: `val send = remember { FocusRequester() }
-
-OutlinedTextField(
-    message, onMessage,
-    Modifier.focusProperties { down = send },
-)
-Button(onClick = onSend, Modifier.focusRequester(send)) { Text("Send") }`,
-            visual(el) {
-              const IT = [
-                { id: 'name', label: 'Name', x: 0, y: 0, w: 40, h: 20 },
-                { id: 'email', label: 'Email', x: 44, y: 0, w: 56, h: 20 },
-                { id: 'msg', label: 'Message', x: 0, y: 28, w: 100, h: 32 },
-                { id: 'cancel', label: 'Cancel', x: 40, y: 68, w: 28, h: 20, btn: true },
-                { id: 'send', label: 'Send', x: 72, y: 68, w: 28, h: 20, btn: true },
-              ];
-              let at = null, lastPos = null, override = false;
-              for (const it of IT) it.el = h('div', { class: 'ay-d2-kf-item' + (it.btn ? ' ay-d2-kf-btn' : ''), style: `left:${it.x}%;top:${it.y}%;width:${it.w}%;height:${it.h}%` }, it.label);
-              const form = h('div', { class: 'ay-d2-kf', role: 'img', 'aria-label': 'Form with five focusable elements' }, IT.map(i => i.el));
-              const o = out();
-              const ov = sw('ay-d2-kf-ov', 'Message: focusProperties { down = send }');
-              const cx = i => i.x + i.w / 2, cy = i => i.y + i.h / 2;
-              function show(i, how) {
-                IT.forEach(x => x.el.classList.remove('ay-focus', 'ay-d2-kf-click'));
-                if (i == null) return;
-                at = i; lastPos = i;
-                IT[i].el.classList.add('ay-focus'); replay(IT[i].el, 'pop-soft');
-                say(o, `${esc(how)} <span class="muted">→</span> <span class="good">${IT[i].label}</span>`);
-              }
-              function tab(dir) {
-                const i = at == null ? (dir > 0 ? 0 : IT.length - 1) : (at + dir + IT.length) % IT.length;
-                const wrapped = at != null && ((dir > 0 && i === 0) || (dir < 0 && i === IT.length - 1));
-                show(i, `${dir > 0 ? 'Tab' : 'Shift+Tab'}${at == null ? ' (nothing focused, start from the first)' : wrapped ? ' (wraps around)' : ''}`);
-              }
-              function arrow(dx, dy, name) {
-                const from = at != null ? at : lastPos;
-                if (from == null) { say(o, 'Nothing focused yet. Press Tab first.'); return; }
-                const c = IT[from];
-                if (override && c.id === 'msg' && dy > 0) { show(IT.findIndex(x => x.id === 'send'), `${name} (focusProperties override)`); return; }
-                let best = null, score = Infinity;
-                IT.forEach((t, j) => {
-                  if (j === from) return;
-                  const major = dy > 0 ? t.y - (c.y + c.h) : dy < 0 ? c.y - (t.y + t.h) : dx > 0 ? t.x - (c.x + c.w) : c.x - (t.x + t.w);
-                  if (major < -0.01) return;
-                  const minor = dy ? Math.abs(cx(t) - cx(c)) : Math.abs(cy(t) - cy(c));
-                  const s = major * 2 + minor;
-                  if (s < score) { score = s; best = j; }
-                });
-                if (best == null) { replay(c.el, 'shake'); say(o, `${name}: <span class="muted">nothing further that way. 2D focus does not wrap.</span>`); at = from; c.el.classList.add('ay-focus'); return; }
-                show(best, `${name} (closest in that direction)`);
-              }
-              function click() {
-                IT.forEach(x => x.el.classList.remove('ay-focus'));
-                at = null; lastPos = 1;
-                IT[1].el.classList.add('ay-d2-kf-click'); replay(IT[1].el, 'pop');
-                say(o, '<span class="muted">Mouse click on Email: keyboard focus is cleared. Tab restarts at the first element. Arrows start from where you clicked.</span>');
-              }
-              ov.input.addEventListener('change', () => { override = ov.input.checked; say(o, override ? 'Down from Message now goes to Send.' : 'Down from Message goes to the nearest element below.'); });
-              say(o, 'Press Tab to start. Then try the arrows from Message.');
-              el.append(
-                h('div', { class: 'stage' }, form),
-                h('div', { class: 'controls' }, act('Tab', () => tab(1)), act('Shift+Tab', () => tab(-1)), act('←', () => arrow(-1, 0, 'Left'), { 'aria-label': 'Arrow left' }), act('↑', () => arrow(0, -1, 'Up'), { 'aria-label': 'Arrow up' }), act('↓', () => arrow(0, 1, 'Down'), { 'aria-label': 'Arrow down' }), act('→', () => arrow(1, 0, 'Right'), { 'aria-label': 'Arrow right' }), act('Click Email with the mouse', click)),
-                h('div', { class: 'controls' }, ov.el),
-                o);
-            },
-          },
           {
             title: 'clickable gives more than a tap handler',
             body: `<p>A tap handler made with <code>pointerInput { detectTapGestures }</code> only handles touch. The element cannot take keyboard focus, has no role, and TalkBack does not offer to activate it. <code>clickable</code> adds focus, Enter key handling, the click action and an indication. For something with an on and off state, <code>toggleable</code> with a role also reports the state.</p>
@@ -1119,6 +1161,157 @@ LaunchedEffect(Unit) { searchFocus.requestFocus() }`,
             h('div', { class: 'stage' }, plans),
             h('div', { class: 'controls' }, act('Swipe right', step), groups.el, first.el),
             o2);
+        },
+      },
+
+      // 3b ────────────────────────────────────────────
+      {
+        id: 'keyboard-nav',
+        title: 'Keyboard and D-pad focus',
+        tagline: 'Tab walks a line, arrow keys jump to the nearest neighbour.',
+        level: 'intermediate',
+        body: `
+<p>Tablets with keyboards, Chromebooks and TVs move focus with keys. Compose supports two kinds of moves. <em>One-dimensional</em>: Tab and Shift+Tab go through the focusable elements in the order they appear on screen, and wrap from the last back to the first. <em>Two-dimensional</em>: arrow keys and the D-pad look at positions and go to the closest element in that direction. They don’t wrap. Down on the bottom element stays put.</p>
+<p>A mouse click clears keyboard focus. The next Tab starts again from the first element, not from where focus was.</p>
+<p>When the nearest element is the wrong one, override a direction with <code>focusProperties</code>. Attach a <code>FocusRequester</code> to the target and assign it to <code>down</code>, <code>up</code>, <code>left</code>, <code>right</code>, or to <code>next</code> and <code>previous</code> for Tab.</p>`,
+        code: `@Composable
+fun MessageForm(message: String, onMessage: (String) -> Unit, onSend: () -> Unit, onCancel: () -> Unit) {
+    val send = remember { FocusRequester() }
+    Column {
+        OutlinedTextField(
+            message, onMessage,
+            Modifier.focusProperties { down = send },   // nearest is Cancel; Send is what users want
+        )
+        Row {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+            Button(onClick = onSend, Modifier.focusRequester(send)) { Text("Send") }
+        }
+    }
+}`,
+        remember: 'Tab follows screen order and wraps. Arrows go to the nearest element and stop at the edge.',
+        terms: [
+          { term: 'One-dimensional traversal', def: 'Focus movement with Tab and Shift+Tab through focusable elements in their visual order. It wraps at the ends.' },
+          { term: 'Two-dimensional traversal', def: 'Focus movement with arrow keys or a D-pad to the geometrically closest element in that direction. It does not wrap.' },
+          { term: 'focusProperties', def: 'A Compose modifier that overrides where focus goes next in each direction, or blocks a direction with FocusRequester.Cancel.' },
+          { term: 'focusGroup', def: 'A modifier that makes a set of children one navigation unit. Focus enters it, moves among its children, then leaves to the next element outside.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Send Down from the field to the Send button.', code: 'val send = remember { [[FocusRequester]]() }\n\nOutlinedTextField(text, onText, Modifier.focusProperties { [[down]] = send })\nButton(onClick = onSend, Modifier.[[focusRequester]](send)) { Text("Send") }', why: 'The target holds a <code>FocusRequester</code>. The source names it as its <code>down</code> neighbour.' },
+          { type: 'bug', prompt: 'Tab from First should jump to Third, but it still goes to Second. Tap the line.', code: 'val (first, second, third) = remember { FocusRequester.createRefs() }\nColumn {\n    Button(onClick = {}, Modifier.focusRequester(first)\n        .focusProperties { down = third }) { Text("First") }\n    Button(onClick = {}, Modifier.focusRequester(second)) { Text("Second") }\n    Button(onClick = {}, Modifier.focusRequester(third)) { Text("Third") }\n}', bug: 3, fix: '        .focusProperties { next = third }) { Text("First") }', why: 'Tab uses <code>next</code>. <code>down</code> only changes the arrow key and D-pad move.' },
+        ],
+        quiz: [
+          { q: 'Focus is on the last element. The user presses Tab. Where does focus go?', options: ['The first element: Tab wraps', 'It stays on the last element', 'Nowhere, focus is cleared'], a: 0, why: 'One-dimensional traversal wraps from the end to the start. Shift+Tab goes the other way.' },
+          { q: 'Focus is on the bottom-most button. The user presses Down. Where does focus go?', options: ['It stays on that button', 'The first element at the top', 'The next element in Tab order'], a: 0, why: 'Two-dimensional traversal does not wrap. There is nothing below, so nothing moves.' },
+          { q: 'The user clicks a field with the mouse, then presses Tab. Where does focus go?', options: ['The first element on screen', 'The element after the clicked field', 'The element before it'], a: 0, why: 'A click clears keyboard focus, so Tab starts over from the first focus target.' },
+        ],
+        deeper: [
+          {
+            title: 'Group controls with focusGroup',
+            body: `<p>A <code>focusGroup()</code> turns its children into one unit for navigation. Focus enters the group, moves among its children, and leaves to the next element outside only after the last one. With Tab, focus enters at the first child. With arrows, it enters at the child closest to where you came from.</p>
+<p>Add <code>focusProperties { onEnter = { ... } }</code> to send focus to the main action when the group is entered. <code>LazyColumn</code>, <code>LazyRow</code> and lazy grids are focus groups already.</p>`,
+            code: `val confirm = remember { FocusRequester() }
+Row(
+    Modifier
+        .focusGroup()
+        .focusProperties { onEnter = { confirm.requestFocus() } },
+) {
+    TextButton(onClick = onCancel) { Text("Vazgeç") }
+    Button(onClick = onConfirm, Modifier.focusRequester(confirm)) { Text("Onayla") }
+}`,
+          },
+          {
+            title: 'Block a direction, or keep the default',
+            body: `<p>Sometimes a move should not happen at all, like Right from the last item of a carousel jumping into an unrelated panel. Assign <code>FocusRequester.Cancel</code> to that direction. Assign <code>FocusRequester.Default</code> to keep the built-in search for a direction after you changed others.</p>`,
+            code: `Card(
+    Modifier.focusProperties {
+        right = FocusRequester.Cancel    // stay at the end of the row
+        down = FocusRequester.Default    // normal search downward
+    },
+) { /* ... */ }`,
+          },
+          {
+            title: 'Make focus visible',
+            body: `<p>Keyboard users need to see where they are. Material components and <code>clickable</code> draw a focus state through their indication. For your own control, observe focus with <code>onFocusChanged</code> and draw a clear ring. Put <code>onFocusChanged</code> before the modifier that makes the element focusable, so it sees that element’s focus.</p>`,
+            code: `var focused by remember { mutableStateOf(false) }
+Box(
+    Modifier
+        .onFocusChanged { focused = it.isFocused }
+        .border(if (focused) 3.dp else 1.dp, if (focused) MaterialTheme.colorScheme.primary else Color.Gray, RoundedCornerShape(12.dp))
+        .clickable(onClick = onPick)
+        .padding(16.dp),
+) { Text(plan.name) }`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'Making plain text focusable',
+            bad: `Text(article.body, Modifier.focusable())   // an extra Tab stop with nothing to do`,
+            good: `Text(article.body)   // screen readers still read it; keyboards skip it`,
+            why: 'Keyboard focus is for things you can act on. Every extra stop makes Tab users press more keys to reach the controls.',
+          },
+          {
+            title: 'Turning off the indication',
+            bad: `Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPick() }`,
+            good: `Modifier.clickable { onPick() }   // keeps the ripple and the focus highlight`,
+            why: '<code>indication = null</code> also removes the focused look. A keyboard user can no longer tell which element Enter will press.',
+          },
+        ],
+        visual(el) {
+          const IT = [
+            { id: 'name', label: 'Name', x: 0, y: 0, w: 40, h: 20 },
+            { id: 'email', label: 'Email', x: 44, y: 0, w: 56, h: 20 },
+            { id: 'msg', label: 'Message', x: 0, y: 28, w: 100, h: 32 },
+            { id: 'cancel', label: 'Cancel', x: 40, y: 68, w: 28, h: 20, btn: true },
+            { id: 'send', label: 'Send', x: 72, y: 68, w: 28, h: 20, btn: true },
+          ];
+          let at = null, lastPos = null, override = false;
+          for (const it of IT) it.el = h('div', { class: 'ay-d2-kf-item' + (it.btn ? ' ay-d2-kf-btn' : ''), style: `left:${it.x}%;top:${it.y}%;width:${it.w}%;height:${it.h}%` }, it.label);
+          const form = h('div', { class: 'ay-d2-kf', role: 'img', 'aria-label': 'Form with five focusable elements' }, IT.map(i => i.el));
+          const o = out();
+          const ov = sw('ay-d2-kf-ov', 'Message: focusProperties { down = send }');
+          const cx = i => i.x + i.w / 2, cy = i => i.y + i.h / 2;
+          function show(i, how) {
+            IT.forEach(x => x.el.classList.remove('ay-focus', 'ay-d2-kf-click'));
+            if (i == null) return;
+            at = i; lastPos = i;
+            IT[i].el.classList.add('ay-focus'); replay(IT[i].el, 'pop-soft');
+            say(o, `${esc(how)} <span class="muted">→</span> <span class="good">${IT[i].label}</span>`);
+          }
+          function tab(dir) {
+            const i = at == null ? (dir > 0 ? 0 : IT.length - 1) : (at + dir + IT.length) % IT.length;
+            const wrapped = at != null && ((dir > 0 && i === 0) || (dir < 0 && i === IT.length - 1));
+            show(i, `${dir > 0 ? 'Tab' : 'Shift+Tab'}${at == null ? ' (nothing focused, start from the first)' : wrapped ? ' (wraps around)' : ''}`);
+          }
+          function arrow(dx, dy, name) {
+            const from = at != null ? at : lastPos;
+            if (from == null) { say(o, 'Nothing focused yet. Press Tab first.'); return; }
+            const c = IT[from];
+            if (override && c.id === 'msg' && dy > 0) { show(IT.findIndex(x => x.id === 'send'), `${name} (focusProperties override)`); return; }
+            let best = null, score = Infinity;
+            IT.forEach((t, j) => {
+              if (j === from) return;
+              const major = dy > 0 ? t.y - (c.y + c.h) : dy < 0 ? c.y - (t.y + t.h) : dx > 0 ? t.x - (c.x + c.w) : c.x - (t.x + t.w);
+              if (major < -0.01) return;
+              const minor = dy ? Math.abs(cx(t) - cx(c)) : Math.abs(cy(t) - cy(c));
+              const s = major * 2 + minor;
+              if (s < score) { score = s; best = j; }
+            });
+            if (best == null) { replay(c.el, 'shake'); say(o, `${name}: <span class="muted">nothing further that way. 2D focus does not wrap.</span>`); at = from; c.el.classList.add('ay-focus'); return; }
+            show(best, `${name} (closest in that direction)`);
+          }
+          function click() {
+            IT.forEach(x => x.el.classList.remove('ay-focus'));
+            at = null; lastPos = 1;
+            IT[1].el.classList.add('ay-d2-kf-click'); replay(IT[1].el, 'pop');
+            say(o, '<span class="muted">Mouse click on Email: keyboard focus is cleared. Tab restarts at the first element. Arrows start from where you clicked.</span>');
+          }
+          ov.input.addEventListener('change', () => { override = ov.input.checked; say(o, override ? 'Down from Message now goes to Send.' : 'Down from Message goes to the nearest element below.'); });
+          say(o, 'Press Tab to start. Then try the arrows from Message.');
+          el.append(
+            h('div', { class: 'stage' }, form),
+            h('div', { class: 'controls' }, act('Tab', () => tab(1)), act('Shift+Tab', () => tab(-1)), act('←', () => arrow(-1, 0, 'Left'), { 'aria-label': 'Arrow left' }), act('↑', () => arrow(0, -1, 'Up'), { 'aria-label': 'Arrow up' }), act('↓', () => arrow(0, 1, 'Down'), { 'aria-label': 'Arrow down' }), act('→', () => arrow(1, 0, 'Right'), { 'aria-label': 'Arrow right' }), act('Click Email with the mouse', click)),
+            h('div', { class: 'controls' }, ov.el),
+            o);
         },
       },
 
@@ -1627,7 +1820,7 @@ else OnePane(selected, onSelect = { selected = it })`,
         body: `
 <p>A foldable has a hinge and a posture. Fully open, it is flat. Half open with the hinge horizontal is tabletop, like a small laptop. Half open with the hinge vertical is book posture. The <code>windowPosture</code> from <code>currentWindowAdaptiveInfo()</code> tells you <code>isTabletop</code> and where each hinge is, so a video player can put the picture above the fold and the controls below it. In Views, <code>WindowInfoTracker</code> reports the same thing as a <code>FoldingFeature</code>.</p>
 <p>Folding, unfolding, rotating and resizing a multi-window split are all configuration changes. By default the Activity is recreated, so state that matters belongs in a ViewModel or <code>rememberSaveable</code>. Test each one: fold and unfold the emulator, and drag the split-screen divider.</p>
-<p>Don’t lock orientation or mark activities non-resizable. On large screens a locked app gets letterboxed: a phone-shaped window with bars around it. From Android 16, for apps that target API 36, the system ignores <code>screenOrientation</code>, <code>resizeableActivity</code> and aspect ratio limits on displays with a smallest width of at least 600dp. Games are exempt. A temporary manifest opt-out exists, but it stops working once you target API 37.</p>`,
+<p>Don’t lock orientation or mark activities non-resizable. On large screens a locked app gets letterboxed: a phone-shaped window with bars around it. From Android 16, for apps that target API 36, the system ignores <code>screenOrientation</code>, <code>resizeableActivity</code> and aspect ratio limits on displays with a smallest width of at least 600dp. Games are exempt. A temporary manifest opt-out exists, but it stops working once you target API 37. The next lesson covers that change.</p>`,
         code: `@Composable
 fun PlayerScreen(player: Player) {
     val posture = currentWindowAdaptiveInfo().windowPosture
@@ -1859,6 +2052,185 @@ val photos by viewModel.photos.collectAsStateWithLifecycle()`,
             h('div', { class: 'ay-dev' }, fold),
             h('div', { class: 'controls' }, btns),
             h('div', { class: 'controls' }, lock.el, t36.el),
+            o);
+        },
+      },
+
+      // 6b ────────────────────────────────────────────
+      {
+        id: 'resizability',
+        title: 'Android 17: orientation locks are ignored on large screens',
+        tagline: 'Target API 37 and your portrait lock no longer holds on tablets and foldables.',
+        level: 'advanced',
+        body: `
+<p>Android 16 started it. For apps that target API 36, on displays whose smallest width is at least 600dp, the system ignores <code>screenOrientation</code>, <code>setRequestedOrientation()</code>, <code>resizeableActivity</code>, <code>minAspectRatio</code> and <code>maxAspectRatio</code>. The app fills the window instead of sitting in a letterbox. There was a temporary opt-out, a manifest property.</p>
+<p>Android 17 (API 37) removes that opt-out. Once you target API 37, the opt-out property has no effect. On Google Play, new apps and updates must target API 37 by August 2027, so every app on Play meets this soon. The exceptions: games (by <code>android:appCategory</code>), screens smaller than sw600dp, and users who pick the app’s default behavior in the device’s aspect ratio settings.</p>
+<p>So a phone-only, portrait-only design now has to work in landscape and in resizable windows on tablets and foldables. The usual breakages are stretched layouts, buttons pushed off screen, a stretched camera preview, and state lost when the Activity is recreated on rotation.</p>`,
+        code: `<!-- AndroidManifest.xml: these no longer hold on sw600dp+ screens once you target API 37 -->
+<activity
+    android:name=".MainActivity"
+    android:screenOrientation="portrait"
+    android:resizeableActivity="false"
+    android:maxAspectRatio="2.0" />
+
+<!-- Android 16 only: a temporary opt-out. Ignored when targeting API 37. -->
+<property
+    android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+    android:value="true" />
+
+<!-- Games are exempt -->
+<application android:appCategory="game" ... />`,
+        remember: 'Targeting API 37: no orientation or resize locks on sw600dp+ screens, and no opt-out. Build layouts for any window.',
+        terms: [
+          { term: 'sw600dp', def: 'A smallest width of at least 600dp: the line Android uses for large screens such as tablets and unfolded foldables.' },
+          { term: 'Pillarboxing', def: 'Showing a narrow app in the middle of a wide screen with empty bars on the sides, as the system does for apps whose orientation lock is honored.' },
+          { term: 'Resizability opt-out property', def: 'An Android 16 manifest property that temporarily opts an app out of ignored orientation and resizability limits. It has no effect once the app targets API 37.' },
+          { term: 'android:appCategory', def: 'A manifest attribute that declares the app’s category. Apps that declare game are exempt from the large-screen rule.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Turn on the API 37 behavior for your debug build, without changing targetSdk.', code: 'adb shell am compat [[enable]] [[UNIVERSAL_RESIZABLE_BY_DEFAULT]] com.example.haber', why: 'The compat framework can switch the change on for a debuggable app. The app is killed so the override takes effect.' },
+          { type: 'bug', prompt: 'On a tablet the app now opens in landscape, and the two-pane layout never appears in portrait split screen. Tap the line that decides the layout wrongly.', code: '@Composable\nfun NewsScreen(state: NewsState) {\n    val config = LocalConfiguration.current\n    val twoPane = config.orientation == Configuration.ORIENTATION_LANDSCAPE\n    if (twoPane) NewsTwoPane(state) else NewsList(state)\n}', bug: 3, fix: '    val twoPane = currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)', why: 'Orientation says nothing about how much room the window has. A wide portrait window and a narrow landscape split both exist. Decide from the window size class.' },
+        ],
+        quiz: [
+          { q: 'Your app targets API 37 and sets <code>screenOrientation="portrait"</code>. A user opens it on a landscape tablet. What happens?', options: ['The lock is ignored and the app fills the screen in landscape', 'The app shows in a portrait box with bars', 'The app crashes on launch'], a: 0, why: 'On screens of sw600dp and larger, orientation locks are ignored for apps targeting API 37. There is no opt-out.' },
+          { q: 'Which app keeps its orientation lock on a tablet, even targeting API 37?', options: ['One with <code>android:appCategory="game"</code>', 'One with the Android 16 opt-out property', 'One with <code>resizeableActivity="false"</code>'], a: 0, why: 'Games are exempt. The opt-out property only worked while targeting API 36, and resizeableActivity is one of the ignored attributes.' },
+          { q: 'Does the change affect a phone with a smallest width of 411dp?', options: ['No, it only applies at sw600dp and above', 'Yes, on every device', 'Only in landscape'], a: 0, why: 'Screens smaller than sw600dp are exempt, so a phone keeps the lock.' },
+        ],
+        deeper: [
+          {
+            title: 'Stretched layouts: cap the width, let it scroll',
+            body: `<p>A form built for a portrait phone, with <code>fillMaxWidth()</code> fields and a button pinned at the bottom, looks odd on a landscape tablet. Fields stretch across the whole screen, and in a short window the bottom button can end up off screen. Cap the content width with <code>widthIn(max = ...)</code>, center it, and make the column scroll.</p>
+<p>Switch the window shape and compare.</p>`,
+            code: `Column(
+    Modifier
+        .fillMaxSize()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+) {
+    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+        OutlinedTextField(name, onName, Modifier.fillMaxWidth())
+        OutlinedTextField(email, onEmail, Modifier.fillMaxWidth())
+        Button(onClick = onSubmit, Modifier.fillMaxWidth()) { Text("Kaydol") }
+    }
+}`,
+            visual(el) {
+              let wide = true, fixed = false;
+              const s = sw('ay-rz-fix', 'widthIn(max = 560.dp) + verticalScroll');
+              const scr = h('div', { class: 'ay-rz-win' });
+              const o = out();
+              const btns = [act('Landscape tablet', () => { wide = true; paint(true); }), act('Short split-screen window', () => { wide = false; paint(true); })];
+              function paint(anim) {
+                fixed = s.input.checked;
+                press(btns, btns[wide ? 0 : 1]);
+                scr.className = 'ay-rz-win' + (wide ? ' ay-rz-wide' : ' ay-rz-short') + (fixed ? ' ay-rz-fixed' : '');
+                scr.replaceChildren(h('div', { class: 'ay-rz-form' },
+                  h('b', {}, 'Kaydol'), h('span', { class: 'ay-rz-field' }, 'Ad'), h('span', { class: 'ay-rz-field' }, 'E-posta'), h('span', { class: 'ay-rz-field' }, 'Şifre'),
+                  h('span', { class: 'ay-pill ay-rz-btn' }, 'Kaydol')));
+                if (anim) replay(scr, 'pop-soft');
+                const msg = fixed
+                  ? '<span class="good">ok:</span> fields keep a readable width, and the column scrolls to the button.'
+                  : wide ? '<span class="bad">stretched:</span> each field runs across the whole tablet.' : '<span class="bad">cut off:</span> the button sits below the window and the column can’t scroll.';
+                say(o, msg);
+              }
+              s.input.addEventListener('change', () => paint(true));
+              paint(false);
+              el.append(h('div', { class: 'stage' }, scr), h('div', { class: 'controls' }, btns), h('div', { class: 'controls' }, s.el), o);
+            },
+          },
+          {
+            title: 'Camera preview: let CameraX handle rotation',
+            body: `<p>A common break on foldables, in multi-window and on desktop windows is a camera preview that is stretched, rotated or cropped. It happens when code assumes a fixed relation between the sensor orientation, the device’s natural orientation and the screen’s aspect ratio.</p>
+<p>Use CameraX’s <code>PreviewView</code> first: it handles rotation and scaling for you. If you must draw the preview yourself with Camera2, compute sizes from the current window metrics, not from the display size or a fixed portrait assumption.</p>`,
+            code: `// CameraX: PreviewView scales and rotates the preview for the window
+val previewView = PreviewView(context).apply {
+    scaleType = PreviewView.ScaleType.FILL_CENTER
+}
+val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview)`,
+          },
+          {
+            title: 'Rotation recreates the Activity: keep the state',
+            body: `<p>Apps that locked portrait never saw rotation on tablets. Now they do, and each rotation is a configuration change that recreates the Activity by default. Scroll positions jump to the top, half-filled forms are wiped and navigation history can be lost, unless the state is saved.</p>
+<p>Keep screen state in a ViewModel, user input in <code>rememberSaveable</code> or a <code>SavedStateHandle</code>, and test by rotating on every screen.</p>`,
+            code: `@Composable
+fun SignUpForm(vm: SignUpViewModel = viewModel()) {
+    var name by rememberSaveable { mutableStateOf("") }    // survives rotation
+    val listState = rememberLazyListState()                 // saved by Compose
+    val email by vm.email.collectAsStateWithLifecycle()     // lives in the ViewModel
+    /* ... */
+}`,
+          },
+          {
+            title: 'Test it before you raise targetSdk',
+            body: `<p>You don’t have to change <code>targetSdk</code> to see what happens. The app compatibility framework has a flag, <code>UNIVERSAL_RESIZABLE_BY_DEFAULT</code>, that switches the behavior on. Enable it for a debuggable build on a large-screen emulator or device. The app is killed so the change takes effect on the next start.</p>`,
+            code: `# Turn the behavior on for your debug build
+adb shell am compat enable UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.haber
+
+# Back to the normal behavior for your targetSdk
+adb shell am compat reset UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.haber`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'Counting on the manifest lock',
+            bad: `<activity android:name=".PlayerActivity"
+    android:screenOrientation="portrait" />   <!-- "the tablet layout can wait" -->`,
+            good: `<activity android:name=".PlayerActivity" />
+<!-- and a layout that works in any window, chosen by window size class -->`,
+            why: 'Targeting API 37, the lock is ignored on sw600dp+ screens. The tablet layout is needed now, not later.',
+          },
+          {
+            title: 'Treating the opt-out as the fix',
+            bad: `<property android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+    android:value="true" />   <!-- and targetSdk = 37 -->`,
+            good: `// targetSdk = 37, no opt-out property.
+// Layouts adapt to the window; state survives rotation.`,
+            why: 'The property was a temporary bridge for API 36. Once you target API 37 it does nothing, and Play requires API 37 for new apps and updates by August 2027.',
+          },
+        ],
+        visual(el) {
+          let dev = 'tablet', sdk = 37;
+          const opt = sw('ay-rz-opt', 'opt-out property = true');
+          const game = sw('ay-rz-game', 'android:appCategory="game"');
+          const screen = h('div', { class: 'ay-rz-dev' });
+          const mani = h('pre', { class: 'ay-rz-mani' });
+          const o = out();
+          const devBtns = [act('Phone, sw 411dp', () => { dev = 'phone'; paint(true); }), act('Tablet, sw 800dp', () => { dev = 'tablet'; paint(true); })];
+          const sdkBtns = [35, 36, 37].map(v => act(`targetSdk ${v}`, () => { sdk = v; paint(true); }));
+          function rule() {
+            const o2 = opt.input.checked, g = game.input.checked;
+            if (dev === 'phone') return { honored: true, why: 'sw 411dp is below 600dp, so the lock is honored. The app is portrait, as asked.' };
+            if (g) return { honored: true, why: 'Games are exempt. The lock is honored: portrait with bars on the sides.' };
+            if (sdk < 36) return { honored: true, why: 'Below API 36 the old rules apply: the lock is honored and the app is pillarboxed.' };
+            if (sdk === 36 && o2) return { honored: true, why: 'API 36 with the opt-out property: the lock still holds. This only works until you target API 37.' };
+            if (sdk === 36) return { honored: false, why: 'API 36 on sw600dp+: orientation and resizability limits are ignored. The app fills the screen.' };
+            return { honored: false, why: o2 ? 'API 37: the opt-out property has no effect. The app fills the screen in landscape.' : 'API 37 on sw600dp+: the portrait lock is ignored. The app fills the screen in landscape.' };
+          }
+          function paint(anim) {
+            press(devBtns, devBtns[dev === 'phone' ? 0 : 1]);
+            press(sdkBtns, sdkBtns[[35, 36, 37].indexOf(sdk)]);
+            const r = rule();
+            screen.className = `ay-rz-dev ay-rz-${dev}`;
+            const app = h('div', { class: 'ay-rz-app' + (r.honored ? '' : ' ay-rz-fill') },
+              h('div', { class: 'ay-rz-bar' }, 'Haber'),
+              h('div', { class: 'ay-rz-feed' }, h('i'), h('i'), h('i'), h('i')));
+            screen.replaceChildren(app);
+            if (anim) replay(app, 'pop-soft');
+            mani.innerHTML = `targetSdk = ${sdk}\n&lt;activity android:screenOrientation="portrait" /&gt;`
+              + (opt.input.checked ? '\n&lt;property ...ALLOW_RESTRICTED_RESIZABILITY = true /&gt;' : '')
+              + (game.input.checked ? '\n&lt;application android:appCategory="game" /&gt;' : '');
+            say(o, `${r.honored ? '<span class="muted">lock honored</span>' : '<span class="good">lock ignored</span>'}: ${esc(r.why)}`);
+          }
+          opt.input.addEventListener('change', () => paint(true));
+          game.input.addEventListener('change', () => paint(true));
+          paint(false);
+          el.append(
+            h('div', { class: 'ay-split' }, h('div', { class: 'stage' }, screen), h('div', { class: 'ay-col' }, h('span', { class: 'ay-label' }, 'The app asks for'), mani)),
+            h('div', { class: 'controls' }, devBtns),
+            h('div', { class: 'controls' }, sdkBtns),
+            h('div', { class: 'controls' }, opt.el, game.el),
+            h('p', { class: 'tip' }, 'The device runs Android 17. Users can still choose the app’s default in the aspect ratio settings.'),
             o);
         },
       },

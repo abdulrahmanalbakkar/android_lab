@@ -144,6 +144,9 @@
 .kd-opr-banner { padding: 8px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; font-size: 0.9rem; transition: background 0.25s, border-color 0.25s; }
 .kd-opr-banner.kd-opr-ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
 .kd-opr-banner.kd-opr-bad { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.slot.kd-ji-slot { width: auto; min-width: min(120px, 100%); padding: 0 12px; font: 600 0.95rem var(--mono); }
+.kd-gen-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; min-width: 0; }
+.chip.kd-gen-chip { min-width: 0; height: 34px; padding: 0 10px; font-size: 0.85rem; border-width: 1.5px; }
 `;
 
   Lab.addTrack({
@@ -1401,7 +1404,7 @@ Object a = Cents.box-impl(p);             // a real Cents object`,
         body: `
 <p>Operations on a <code>List</code> are eager. Each step runs over every element and builds a new list before the next step starts. <code>list.map { }.filter { }.first()</code> maps everything, filters everything, then takes one item.</p>
 <p>A <code>Sequence</code> is lazy. Intermediate steps like <code>map</code> and <code>filter</code> do nothing until a terminal operation like <code>first()</code>, <code>toList()</code> or <code>sum()</code> asks for values. Then each element travels the whole chain on its own, and work stops as soon as the result is known.</p>
-<p>Reach for <code>asSequence()</code> on long chains over large collections, or when you stop early with <code>first</code>, <code>take</code> or <code>find</code>. For a couple of steps over a small list, a plain list is often faster, since a sequence adds a little overhead per element. <code>generateSequence</code> and <code>sequence { yield(x) }</code> can even describe infinite streams.</p>`,
+<p>Reach for <code>asSequence()</code> on long chains over large collections, or when you stop early with <code>first</code>, <code>take</code> or <code>find</code>. For a couple of steps over a small list, a plain list is often faster, since a sequence adds a little overhead per element. <code>generateSequence</code> and <code>sequence { yield(x) }</code> can even describe infinite streams. The next lesson, <strong>sequence { } and yield</strong>, shows how.</p>`,
         code: `val names = listOf("ada", "grace", "linus", "barbara", "ken", "margaret")
 
 // Eager: 6 map calls, 6 filter calls, 2 lists built along the way
@@ -1562,73 +1565,10 @@ val rows = parsed.toList()   // parse once, reuse rows`,
                 o);
             },
           },
-          {
-            title: 'sequence { }: a generator that pauses at yield',
-            body: `<p><code>sequence { }</code> lets you write the producer as ordinary code. Each <code>yield(x)</code> hands one value to the consumer and pauses the block right there. The next pull resumes it on the following line.</p>
-<p>Pulls are driven by the iterator. <code>hasNext()</code> runs the block up to the next <code>yield</code> and keeps that value ready. <code>next()</code> returns it. Once the block ends, <code>hasNext()</code> is false and <code>next()</code> throws <code>NoSuchElementException</code>.</p>`,
-            code: `val ids = sequence {
-    println("start")
-    yield(1)
-    println("after 1")
-    yield(2)
-    yieldAll(listOf(3, 4))
-}
-val it = ids.iterator()
-it.next()   // prints "start", returns 1
-it.next()   // prints "after 1", returns 2`,
-            visual(el) {
-              const SRC = ['val ids = sequence {', '    println("start")', '    yield(1)', '    println("after 1")', '    yield(2)', '    yieldAll(listOf(3, 4))', '}'];
-              const EV = [{ line: 1, print: 'start' }, { line: 2, y: 1 }, { line: 3, print: 'after 1' }, { line: 4, y: 2 }, { line: 5, y: 3 }, { line: 5, y: 4 }, { line: 6, end: true }];
-              let pos, ready, paused, busy = false;
-              const code = h('div', { class: 'kt' });
-              const log = h('div', { class: 'kd-log' });
-              const o = out('');
-              function paint(run) {
-                lines(code, SRC.map((s, i) => ({ src: s, cls: i === run ? 'kd-sqn-run' : (i === paused ? 'kd-new' : ''), note: i === paused && run == null ? (paused === 0 ? 'not started' : paused === 6 ? 'finished' : 'paused here') : '' })));
-              }
-              function reset() { pos = 0; ready = null; paused = 0; log.replaceChildren(h('span', { class: 'kd-empty' }, 'console is empty')); paint(); }
-              const print = t => { if (log.querySelector('.kd-empty')) log.replaceChildren(); log.append(h('div', { class: 'kd-log-line drop-in' }, t)); };
-              async function advance() {
-                while (pos < EV.length) {
-                  const e = EV[pos++];
-                  paint(e.line);
-                  await sleep(380); if (!el.isConnected) return undefined;
-                  if (e.print) print(e.print);
-                  if (e.y != null) { paused = e.line; paint(); return e.y; }
-                  if (e.end) { paused = 6; paint(); return null; }
-                }
-                return null;
-              }
-              async function hasNext() {
-                if (busy) return; busy = true;
-                if (ready == null) {
-                  const v = await advance(); if (v === undefined) return;
-                  ready = v;
-                }
-                say(o, ready != null ? `${hl('it.hasNext()')} = ${hl('true')} <span class="muted">value ${ready} is computed and waiting</span>` : `${hl('it.hasNext()')} = ${hl('false')} <span class="muted">the block has finished</span>`);
-                busy = false;
-              }
-              async function next() {
-                if (busy) return; busy = true;
-                let v = ready, ran = false;
-                if (v == null) { v = await advance(); ran = true; if (v === undefined) return; }
-                ready = null;
-                if (v == null) { replay(code, 'shake'); say(o, `${hl('it.next()')} <span class="bad">NoSuchElementException</span> <span class="muted">nothing left to yield</span>`); }
-                else say(o, `${hl('it.next()')} = ${hl(String(v))} <span class="muted">${ran ? 'ran the block up to the next yield' : 'returned the value hasNext() already computed'}</span>`);
-                busy = false;
-              }
-              reset();
-              say(o, 'Nothing has run yet. Building the sequence executes no line of the block.');
-              el.append(
-                h('div', { class: 'kd-pair' }, code, h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'console'), log)),
-                h('div', { class: 'controls' }, cmd('it.hasNext()', hasNext), cmd('it.next()', next), act('Restart', () => { if (!busy) { reset(); say(o, 'New iterator. The block starts from the top on the first pull.'); } })),
-                o);
-            },
-          },
         ],
         underHood: {
           body: `<p>Each intermediate step wraps the previous sequence in a small object. <code>map</code> returns a <code>TransformingSequence</code> and <code>filter</code> a <code>FilteringSequence</code>. Nothing runs yet. The terminal operation asks the outermost one for an iterator, and each <code>next()</code> pulls one element up through the chain of iterators below it.</p>
-<p>That is also where the per-element overhead comes from. <code>Iterable.map</code> is <code>inline</code>, so the list version has no lambda objects. <code>Sequence.map</code> is not inline, so each step keeps its lambda as an object and every element passes through a few interface calls. <code>sequence { }</code> compiles to a coroutine state machine. Its scope, <code>SequenceScope</code>, is marked <code>@RestrictsSuspension</code>, which is why only <code>yield</code> and <code>yieldAll</code> may suspend inside it.</p>`,
+<p>That is also where the per-element overhead comes from. <code>Iterable.map</code> is <code>inline</code>, so the list version has no lambda objects. <code>Sequence.map</code> is not inline, so each step keeps its lambda as an object and every element passes through a few interface calls.</p>`,
           code: `// What the chain builds, simplified
 names.asSequence()              // a Sequence over the list's iterator
     .map { it.uppercase() }     // TransformingSequence(source, transformer)
@@ -1638,7 +1578,6 @@ names.asSequence()              // a Sequence over the list's iterator
         mistakes: [
           { title: 'Letting a sequence escape useLines', bad: 'fun errors(file: File): Sequence<String> =\n    file.useLines { lines ->\n        lines.filter { "ERROR" in it }\n    }\n\nerrors(log).first()   // the reader is already closed', good: 'fun errors(file: File): List<String> =\n    file.useLines { lines ->\n        lines.filter { "ERROR" in it }.toList()\n    }', why: '<code>useLines</code> closes the file when its lambda returns. The lazy sequence escapes before anything was read, so the first pull hits a closed reader. Finish the work inside the block.' },
           { title: 'Indexing into a sequence in a loop', bad: 'val rows = lines.asSequence().map(::parse)\nfor (i in 0 until rows.count()) {\n    show(rows.elementAt(i))\n}', good: 'val rows = lines.asSequence().map(::parse)\nfor (row in rows) {\n    show(row)\n}', why: '<code>count()</code> runs the whole chain, and every <code>elementAt(i)</code> walks it again from the start. That is quadratic work. Iterate once.' },
-          { title: 'Suspending inside sequence { }', bad: 'val pages = sequence {\n    var page = 1\n    while (true) yield(api.load(page++))   // suspend fun\n}', good: 'val pages = flow {\n    var page = 1\n    while (true) emit(api.load(page++))\n}', why: 'A <code>sequence { }</code> block may only suspend in its own <code>yield</code> calls, so calling a suspend function there doesn\'t compile. A producer that waits belongs in a <code>Flow</code>.' },
         ],
         visual(el) {
           const SRC = [1, 2, 3, 4, 5, 6];
@@ -1697,6 +1636,176 @@ names.asSequence()              // a Sequence over the list's iterator
           }
           paint();
           el.append(h('div', { class: 'controls' }, modes, h('button', { class: 'btn primary small', onclick: run }, 'Run')), chain, grid, h('div', { class: 'kd-stats' }, stat.map, stat.filter, stat.lists), o);
+        },
+      },
+
+      // + generators ──────────────────────────────────
+      {
+        id: 'generators',
+        title: 'sequence { } and yield',
+        tagline: 'Write a producer as a plain loop that pauses after each value.',
+        level: 'intermediate',
+        body: `
+<p><code>sequence { }</code> lets you write the code that produces values as ordinary code, with loops and local variables. Each <code>yield(x)</code> hands one value to whoever is reading and pauses the block right there. The next read resumes it on the following line. With an iterator, <code>hasNext()</code> runs the block up to the next <code>yield</code> and <code>next()</code> returns that value.</p>
+<p>Nothing runs when you build the sequence. The block starts on the first read, and it only runs as far as the reader needs. That is why a <code>while (true)</code> loop is fine: the reader decides when to stop, with <code>take(n)</code> or <code>first { }</code>.</p>
+<p><code>yieldAll(…)</code> hands over a whole list, range or another sequence, one value at a time. For a value that only depends on the previous one, <code>generateSequence</code> is shorter still.</p>`,
+        code: `val fibonacci = sequence {
+    var a = 0L
+    var b = 1L
+    while (true) {
+        yield(a)          // hand out a, pause here
+        val next = a + b
+        a = b
+        b = next
+    }
+}
+
+fibonacci.take(8).toList()       // [0, 1, 1, 2, 3, 5, 8, 13]
+fibonacci.first { it > 100 }     // 144`,
+        remember: 'yield hands out one value and pauses. The reader decides how far the block runs.',
+        terms: [
+          { term: 'yield', def: 'Inside <code>sequence { }</code>, hands one value to the reader and pauses the block until the next value is asked for.' },
+          { term: 'yieldAll', def: 'Hands over every value of a collection, iterator or sequence, one at a time.' },
+          { term: 'SequenceScope', def: 'The receiver of a <code>sequence { }</code> block. It only allows its own <code>yield</code> functions to suspend.' },
+          { term: 'generateSequence', def: 'Builds a sequence from a first value and a function that computes the next one. It ends when the function returns null.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Produce the even numbers 0, 2, 4, … forever.', code: 'val evens = [[sequence]] {\n    var n = 0\n    while (true) {\n        [[yield]](n)\n        n += 2\n    }\n}', why: '<code>sequence { }</code> builds the lazy producer, and <code>yield</code> hands out each value and pauses.' },
+          { type: 'bug', prompt: 'This line never returns. Tap it.', code: 'val powers = generateSequence(1) { it * 2 }\nval firstTen = powers\n    .map { it.toString() }\n    .toList()', bug: 3, fix: '    .take(10).toList()', why: 'The sequence is infinite. <code>toList()</code> keeps pulling forever. Limit it with <code>take(10)</code> first.' },
+        ],
+        quiz: [
+          { q: 'You build <code>val s = sequence { println("hi"); yield(1) }</code> and never read it. What is printed?', options: ['"hi"', 'Nothing', '"hi" twice'], a: 1, why: 'Building a sequence runs no code. The block starts on the first read.' },
+          { q: 'What does <code>it.next()</code> do on a sequence iterator?', options: ['Runs the whole block and returns the first value', 'Runs the block up to the next yield and returns that value', 'Restarts the block from the top'], a: 1, why: 'The block runs only until the next <code>yield</code>, then pauses there.' },
+          { q: 'A block has <code>yieldAll(generateSequence(1) { it + 1 })</code> followed by <code>yield(0)</code>. When is 0 produced?', options: ['After the infinite part', 'Never', 'First'], a: 1, why: 'An infinite <code>yieldAll</code> never finishes, so the code after it never runs. Put it last.' },
+        ],
+        deeper: [
+          {
+            title: 'Infinite generators: the reader sets the limit',
+            body: `<p>A generator with <code>while (true)</code> is safe because it only runs while someone reads. <code>take(8)</code> stops after eight values. <code>first { it > 100 }</code> stops at the first match. The loop never gets further than that.</p>
+<p>Each terminal call asks for a new iterator, and each new iterator starts the block again from the top. Reading the same <code>sequence { }</code> twice runs its code twice.</p>`,
+            code: `fibonacci.take(3).toList()     // [0, 1, 1]        3 yields ran
+fibonacci.take(8).toList()     // [0, 1, 1, 2, 3, 5, 8, 13]
+fibonacci.first { it > 100 }   // 144              13 yields ran`,
+            visual(el) {
+              const FIB = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+              const pile = h('div', { class: 'kd-gen-row' });
+              const count = h('span', { class: 'kd-count' }, 'yields so far: 0');
+              const o = out();
+              let busy = false;
+              async function run(src, n, pick) {
+                if (busy) return; busy = true;
+                pile.replaceChildren(); count.textContent = 'yields so far: 0';
+                say(o, `${hl(src)} <span class="muted">// new iterator, block starts at the top</span>`);
+                for (let i = 0; i < n; i++) {
+                  await sleep(170); if (!el.isConnected) return;
+                  const last = i === n - 1;
+                  pile.append(h('span', { class: 'chip kd-gen-chip drop-in' + (last && pick ? ' kd-hit' : '') }, String(FIB[i])));
+                  count.textContent = `yields so far: ${i + 1}`;
+                }
+                const res = pick ? String(FIB[n - 1]) : `[${FIB.slice(0, n).join(', ')}]`;
+                say(o, `${hl(src)} = ${hl(res)} <span class="muted">// ${n} yields ran, then the loop stayed paused for good</span>`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'values the loop produced'), pile, count),
+                h('div', { class: 'controls' },
+                  cmd('fibonacci.take(3).toList()', () => run('fibonacci.take(3).toList()', 3, false)),
+                  cmd('fibonacci.take(8).toList()', () => run('fibonacci.take(8).toList()', 8, false)),
+                  cmd('fibonacci.first { it > 100 }', () => run('fibonacci.first { it > 100 }', 13, true)),
+                  cmd('fibonacci.toList()', () => { if (busy) return; replay(pile, 'shake'); say(o, `${hl('fibonacci.toList()')} <span class="bad">never returns</span> <span class="muted">it keeps pulling from a loop with no end</span>`); })),
+                o);
+              say(o, 'Each call reads only as far as it needs.');
+            },
+          },
+          {
+            title: 'generateSequence: each value from the last',
+            body: `<p>When every value comes from the previous one, <code>generateSequence(seed) { next(it) }</code> says it in one line. Return <code>null</code> from the function to end the sequence. If it never returns null, the sequence is infinite.</p>
+<p>A handy Android case is walking up a chain of parents: start at a view’s parent and keep asking for the next parent until there is none.</p>`,
+            code: `val odds = generateSequence(1) { if (it < 8) it + 2 else null }
+odds.toList()   // [1, 3, 5, 7, 9]
+
+// every ViewParent above this view, nearest first
+val parents = generateSequence(view.parent) { it.parent }
+val inScroll = parents.any { it is ScrollView }`,
+          },
+          {
+            title: 'Stopping early skips the rest, even finally',
+            body: `<p>If the reader stops before the block ends, the rest of the block never runs. That includes <code>finally</code> blocks, so a <code>sequence { }</code> is a poor place to own a resource that must be closed.</p>
+<p>Open and close the resource around the whole read instead, for example with <code>useLines { }</code>, and finish the work inside it.</p>`,
+            code: `val one = sequence {
+    try {
+        yield(1)
+    } finally {
+        println("cleanup")   // never printed below
+    }
+}
+one.first()   // 1`,
+          },
+        ],
+        underHood: {
+          body: `<p>The block compiles to a coroutine state machine, the same machinery as a <code>suspend</code> function. Each <code>yield</code> is a suspension point: the block saves its local variables and returns to the iterator. The next <code>hasNext()</code> resumes it from that saved state.</p>
+<p>The scope, <code>SequenceScope</code>, is marked <code>@RestrictsSuspension</code>. That is why only <code>yield</code> and <code>yieldAll</code> may suspend inside it, and why you can’t call <code>delay</code> or a network function there. No thread or dispatcher is involved: everything runs on the thread that reads the sequence.</p>`,
+          code: `// simplified signature
+fun <T> sequence(block: suspend SequenceScope<T>.() -> Unit): Sequence<T>
+
+@RestrictsSuspension
+abstract class SequenceScope<in T> {
+    abstract suspend fun yield(value: T)
+    abstract suspend fun yieldAll(iterator: Iterator<T>)
+}`,
+        },
+        mistakes: [
+          { title: 'Suspending inside sequence { }', bad: 'val pages = sequence {\n    var page = 1\n    while (true) yield(api.load(page++))   // suspend fun\n}', good: 'val pages = flow {\n    var page = 1\n    while (true) emit(api.load(page++))\n}', why: 'A <code>sequence { }</code> block may only suspend in its own <code>yield</code> calls, so calling a suspend function there doesn\'t compile. A producer that waits belongs in a <code>Flow</code>.' },
+          { title: 'Code after an infinite yieldAll', bad: 'val ids = sequence {\n    yieldAll(generateSequence(1) { it + 1 })\n    yield(0)   // never reached\n}', good: 'val ids = sequence {\n    yield(0)\n    yieldAll(generateSequence(1) { it + 1 })\n}', why: 'An infinite <code>yieldAll</code> never finishes. Anything after it is dead code. Make it the last call.' },
+          { title: 'Collecting an infinite sequence', bad: 'fibonacci.filter { it % 2 == 0L }.toList()', good: 'fibonacci.filter { it % 2 == 0L }.take(10).toList()', why: '<code>toList()</code>, <code>count()</code> and <code>sum()</code> read until the end, and an infinite sequence has none. Limit it first.' },
+        ],
+        visual(el) {
+          const SRC = ['val ids = sequence {', '    println("start")', '    yield(1)', '    println("after 1")', '    yield(2)', '    yieldAll(listOf(3, 4))', '}'];
+          const EV = [{ line: 1, print: 'start' }, { line: 2, y: 1 }, { line: 3, print: 'after 1' }, { line: 4, y: 2 }, { line: 5, y: 3 }, { line: 5, y: 4 }, { line: 6, end: true }];
+          let pos, ready, paused, busy = false;
+          const code = h('div', { class: 'kt' });
+          const log = h('div', { class: 'kd-log' });
+          const o = out('');
+          function paint(run) {
+            lines(code, SRC.map((s, i) => ({ src: s, cls: i === run ? 'kd-sqn-run' : (i === paused ? 'kd-new' : ''), note: i === paused && run == null ? (paused === 0 ? 'not started' : paused === 6 ? 'finished' : 'paused here') : '' })));
+          }
+          function reset() { pos = 0; ready = null; paused = 0; log.replaceChildren(h('span', { class: 'kd-empty' }, 'console is empty')); paint(); }
+          const print = t => { if (log.querySelector('.kd-empty')) log.replaceChildren(); log.append(h('div', { class: 'kd-log-line drop-in' }, t)); };
+          async function advance() {
+            while (pos < EV.length) {
+              const e = EV[pos++];
+              paint(e.line);
+              await sleep(380); if (!el.isConnected) return undefined;
+              if (e.print) print(e.print);
+              if (e.y != null) { paused = e.line; paint(); return e.y; }
+              if (e.end) { paused = 6; paint(); return null; }
+            }
+            return null;
+          }
+          async function hasNext() {
+            if (busy) return; busy = true;
+            if (ready == null) {
+              const v = await advance(); if (v === undefined) return;
+              ready = v;
+            }
+            say(o, ready != null ? `${hl('it.hasNext()')} = ${hl('true')} <span class="muted">value ${ready} is computed and waiting</span>` : `${hl('it.hasNext()')} = ${hl('false')} <span class="muted">the block has finished</span>`);
+            busy = false;
+          }
+          async function next() {
+            if (busy) return; busy = true;
+            let v = ready, ran = false;
+            if (v == null) { v = await advance(); ran = true; if (v === undefined) return; }
+            ready = null;
+            if (v == null) { replay(code, 'shake'); say(o, `${hl('it.next()')} <span class="bad">NoSuchElementException</span> <span class="muted">nothing left to yield</span>`); }
+            else say(o, `${hl('it.next()')} = ${hl(String(v))} <span class="muted">${ran ? 'ran the block up to the next yield' : 'returned the value hasNext() already computed'}</span>`);
+            busy = false;
+          }
+          reset();
+          say(o, 'Nothing has run yet. Building the sequence executes no line of the block.');
+          el.append(
+            h('div', { class: 'kd-pair' }, code, h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'console'), log)),
+            h('div', { class: 'controls' }, cmd('it.hasNext()', hasNext), cmd('it.next()', next), act('Restart', () => { if (!busy) { reset(); say(o, 'New iterator. The block starts from the top on the first pull.'); } })),
+            o);
         },
       },
 
@@ -2243,6 +2352,173 @@ int n = 2 + 3 * k;     // imul, iadd: no method calls`,
           parts.append(h('span', { class: 'kd-label' }, 'a = Vec(2, 1)'), h('span', { class: 'kd-label' }, 'b = Vec(1, 2)'));
           say(o, 'Pick an expression to see which function it calls.');
           el.append(h('div', { class: 'stage' }, plot, parts), h('div', { class: 'controls' }, btns), o);
+        },
+      },
+      // + java-interop ────────────────────────────────
+      {
+        id: 'java-interop',
+        title: 'Java interop',
+        tagline: 'Calling Java from Kotlin, and making Kotlin pleasant to call from Java.',
+        level: 'intermediate',
+        body: `
+<p>Most of the Android SDK and many libraries are written in Java, and older apps mix both languages. Kotlin and Java compile to the same bytecode, so they call each other directly. A few gaps show up at the border.</p>
+<p><b>Kotlin calling Java:</b> Java types carry no nullability, so Kotlin sees them as <em>platform types</em>, written <code>String!</code> in the IDE. The compiler trusts you either way, which means a null can slip through. Java getters and setters look like properties (<code>view.isEnabled</code>), and a Java interface with one method takes a lambda.</p>
+<p><b>Java calling Kotlin:</b> Java can’t see default arguments or companion objects the way Kotlin does. Annotations fill the gap: <code>@JvmStatic</code> makes a companion function a real static method, <code>@JvmOverloads</code> generates the shorter overloads, <code>@JvmField</code> exposes a plain field, and <code>@Throws</code> declares checked exceptions.</p>`,
+        code: `class Toasts {
+    companion object {
+        @JvmStatic
+        @JvmOverloads
+        fun make(text: String, ms: Int = 2000): Toast = Toast(text, ms)
+    }
+}
+
+// Java, thanks to the annotations:
+// Toasts.make("Kaydedildi");          short overload, static call
+// Toasts.make("Kaydedildi", 3500);
+
+// Kotlin calling Java: a lambda for View.OnClickListener
+button.setOnClickListener { save() }`,
+        remember: 'Give Java values an explicit Kotlin type at the border. Annotate Kotlin APIs that Java code calls.',
+        terms: [
+          { term: 'Platform type', def: 'A type from Java whose nullability is unknown, shown as <code>T!</code>. Kotlin lets you treat it as nullable or not, and doesn’t check.' },
+          { term: 'SAM conversion', def: 'Passing a lambda where an interface with a single abstract method is expected. Works for Java interfaces and Kotlin <code>fun interface</code>s.' },
+          { term: '@JvmStatic', def: 'Makes a function in a companion or named object a static method, so Java calls <code>Foo.bar()</code> instead of <code>Foo.Companion.bar()</code>.' },
+          { term: '@JvmOverloads', def: 'Generates one overload per default parameter, dropping parameters from the right, so Java can leave them out.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Let Java call <code>Router.open("home")</code> directly, without <code>Companion</code> and without the second argument.', code: 'class Router {\n    companion object {\n        [[@JvmStatic]]\n        [[@JvmOverloads]]\n        fun open(route: String, animate: Boolean = true) { }\n    }\n}', why: '<code>@JvmStatic</code> adds the static method, and <code>@JvmOverloads</code> adds <code>open(String)</code> next to <code>open(String, boolean)</code>.' },
+          { type: 'bug', prompt: 'The last line doesn’t compile. Fix the declaration it relies on.', code: 'interface OnPick {\n    fun pick(id: Int)\n}\n\nfun setOnPick(listener: OnPick) { }\n\nsetOnPick { id -> show(id) }', bug: 0, fix: 'fun interface OnPick {', why: 'A lambda converts to a Kotlin interface only if it is declared as a <code>fun interface</code>. Java interfaces with one method convert automatically.' },
+        ],
+        quiz: [
+          { q: 'A Java method returns <code>String</code> with no annotations. What type does Kotlin give it?', options: ['<code>String</code>', '<code>String?</code>', '<code>String!</code>, a platform type'], a: 2, why: 'Without nullability annotations Kotlin can’t know, so it uses a platform type and leaves the choice to you.' },
+          { q: 'Without <code>@JvmStatic</code>, how does Java call <code>fun create()</code> in <code>Foo</code>’s companion object?', options: ['<code>Foo.create()</code>', '<code>Foo.Companion.create()</code>', 'It can’t'], a: 1, why: 'The companion is an object stored in a static field named <code>Companion</code>. Its functions are instance methods on it.' },
+          { q: 'Kotlin <code>fun load(path: String)</code> throws <code>IOException</code>. Java’s <code>catch (IOException e)</code> around it fails to compile. What fixes it?', options: ['<code>@Throws(IOException::class)</code>', '<code>@JvmStatic</code>', 'Nothing can'], a: 0, why: 'Kotlin has no checked exceptions, so the method has no <code>throws</code> clause. <code>@Throws</code> adds it.' },
+        ],
+        deeper: [
+          {
+            title: 'Platform types: decide at the border',
+            body: `<p>When Kotlin reads a Java value of unknown nullability, it lets you call methods on it directly and lets you store it in a non-null variable. If the value is null, you get a <code>NullPointerException</code> at runtime, the very thing Kotlin types are meant to stop.</p>
+<p>The fix is to state the type the moment the value enters Kotlin code. <code>String?</code> is always safe. A non-null type is fine only when you know Java never returns null, and then a null fails right at that line, not three calls later. Java code annotated with nullability annotations, such as JSpecify or <code>androidx.annotation</code>, gives Kotlin real types instead.</p>`,
+            code: `// Java
+public class UserRepo {
+    public String getNickname() { return null; }
+}
+
+// Kotlin
+repo.nickname.length              // compiles, NPE at runtime
+val b: String? = repo.nickname    // safe: now the compiler checks
+val c: String = repo.nickname     // NPE right here if it was null`,
+            visual(el) {
+              const java = h('div', { class: 'kt', html: hl('// Java\npublic String getNickname() { return null; }') });
+              const result = h('div', { class: 'slot kd-ji-slot' });
+              const o = out();
+              const CASES = [
+                ['repo.nickname.length', null, 'compiles, then NullPointerException when the line runs'],
+                ['val c: String = repo.nickname', null, 'compiles, then NullPointerException on this assignment'],
+                ['val b: String? = repo.nickname', 'null', 'safe: b is String?, so the compiler makes you handle null'],
+                ['repo.nickname?.length ?: 0', '0', 'safe: treated as nullable on purpose'],
+              ];
+              el.append(
+                h('div', { class: 'stage' }, java, result),
+                h('div', { class: 'controls' }, CASES.map(([src, v, note]) => cmd(src, () => {
+                  if (v == null) {
+                    replay(java, 'shake'); swap(result, 'NPE');
+                    say(o, `${hl(src)} <span class="bad">crash:</span> <span class="muted">${note}</span>`);
+                  } else {
+                    swap(result, v);
+                    say(o, `${hl(src)} = ${hl(v)} <span class="good">ok:</span> <span class="muted">${note}</span>`);
+                  }
+                }))),
+                o);
+              say(o, 'The Java getter returns null. Try each way of reading it from Kotlin.');
+            },
+          },
+          {
+            title: 'SAM conversion and fun interface',
+            body: `<p>A Java interface with exactly one abstract method, like <code>View.OnClickListener</code> or <code>Runnable</code>, accepts a Kotlin lambda. Kotlin builds the object for you.</p>
+<p>Your own Kotlin interfaces only get this if you declare them with <code>fun interface</code>. If a Java method has overloads that take different single-method interfaces, name the one you mean: <code>Runnable { … }</code>.</p>`,
+            code: `button.setOnClickListener { view -> save() }       // Java interface
+executor.execute(Runnable { sync() })             // pick the overload
+
+fun interface OnRetry { fun retry(attempt: Int) }  // Kotlin interface
+fun onRetry(listener: OnRetry) { }
+onRetry { attempt -> log("try $attempt") }`,
+          },
+          {
+            title: '@JvmField, @Throws and file names',
+            body: `<p>Top-level functions in <code>Dates.kt</code> become static methods on a class named <code>DatesKt</code>. <code>@file:JvmName("Dates")</code> picks a nicer name for Java callers.</p>
+<p><code>@JvmField</code> turns a property into a plain public field with no getter, for Java code or libraries that read fields directly. It can’t be used on private, <code>open</code>, <code>override</code>, <code>const</code> or delegated properties. <code>@Throws</code> adds a <code>throws</code> clause so Java code can catch a checked exception from Kotlin.</p>`,
+            code: `@file:JvmName("Dates")
+package app.util
+
+fun today(): String = LocalDate.now().toString()   // Java: Dates.today()
+
+class Config { @JvmField val retries = 3 }         // Java: config.retries
+
+@Throws(IOException::class)
+fun readToken(file: File): String = file.readText()`,
+          },
+        ],
+        underHood: {
+          body: `<p>A companion object is a nested class <code>Toasts.Companion</code> with one instance stored in a static field <code>Toasts.Companion</code>. Its functions are instance methods on that object. <code>@JvmStatic</code> adds a static method on <code>Toasts</code> that forwards to the companion, so both call styles work.</p>
+<p>Default arguments compile to one full method plus a synthetic <code>make$default</code> method that takes a bit mask of which arguments were left out. Java can’t call the synthetic one. <code>@JvmOverloads</code> writes ordinary overloads that fill in the defaults and call the full method.</p>`,
+          code: `// roughly what Java sees with both annotations
+public final class Toasts {
+    public static final Companion Companion = new Companion();
+    public static Toast make(String text, int ms) { return Companion.make(text, ms); }
+    public static Toast make(String text) { return Companion.make(text); }
+
+    public static final class Companion {
+        public Toast make(String text, int ms) { ... }
+        public Toast make(String text) { return make(text, 2000); }
+    }
+}`,
+        },
+        mistakes: [
+          { title: 'Trusting a Java return value to be non-null', bad: '// LegacyAuth is an old Java class with no annotations\nval token: String = legacyAuth.getToken()', good: 'val token: String? = legacyAuth.getToken()\nif (token == null) return showLogin()', why: 'Kotlin can’t tell whether the Java method may return null, so it accepts both. If it does return null, the non-null version crashes. Pick the nullable type unless you know better, and handle null at the border.' },
+          { title: 'A plain Kotlin interface for a callback', bad: 'interface OnDone { fun done() }\nfun upload(onDone: OnDone) { }\nupload { toast("ok") }   // doesn\'t compile', good: 'fun interface OnDone { fun done() }\nfun upload(onDone: OnDone) { }\nupload { toast("ok") }', why: 'Only <code>fun interface</code> declarations accept a lambda in Kotlin. For Kotlin-only code, a function type <code>() -> Unit</code> is often simpler still.' },
+          { title: 'Hiding a checked exception from Java', bad: 'fun loadConfig(): Config {\n    if (!file.exists()) throw IOException("missing")\n    ...\n}', good: '@Throws(IOException::class)\nfun loadConfig(): Config {\n    if (!file.exists()) throw IOException("missing")\n    ...\n}', why: 'Without <code>@Throws</code> the Java signature has no <code>throws</code> clause, so Java callers aren’t told and can’t even write a <code>catch (IOException e)</code> for it.' },
+        ],
+        visual(el) {
+          let st = false, ov = false;
+          const swS = h('input', { type: 'checkbox', id: 'kd-ji-static' });
+          const swO = h('input', { type: 'checkbox', id: 'kd-ji-over' });
+          const kt = h('div', { class: 'kt' });
+          const java = h('div', { class: 'kt' });
+          const o = out();
+          const CALLS = [
+            { src: 'Toasts.Companion.make("Hi", 2000);', need: [] },
+            { src: 'Toasts.make("Hi", 2000);', need: ['s'] },
+            { src: 'Toasts.Companion.make("Hi");', need: ['o'] },
+            { src: 'Toasts.make("Hi");', need: ['s', 'o'] },
+          ];
+          function paint(flash) {
+            lines(kt, [
+              { src: 'class Toasts {' }, { src: '    companion object {' },
+              { src: '        @JvmStatic', cls: st ? 'kd-new' : 'kd-off' + (flash === 's' ? ' kd-flash' : '') },
+              { src: '        @JvmOverloads', cls: ov ? 'kd-new' : 'kd-off' + (flash === 'o' ? ' kd-flash' : '') },
+              { src: '        fun make(text: String,' }, { src: '                 ms: Int = 2000)' }, { src: '    }' }, { src: '}' },
+            ]);
+            const has = k => (k === 's' ? st : ov);
+            lines(java, [{ src: '// Java' }, ...CALLS.map(c => {
+              const ok = c.need.every(has);
+              return { src: c.src, cls: (ok ? 'kd-new' : 'kd-warn') + (flash ? ' kd-flash' : ''), note: ok ? 'ok' : 'error', noteCls: ok ? 'good' : 'bad' };
+            })]);
+            const n = CALLS.filter(c => c.need.every(has)).length;
+            say(o, `${n} of 4 Java calls compile; the others fail with “cannot find symbol”. <span class="muted">${!st && !ov ? 'Java sees only the companion instance and the full parameter list.' : st && ov ? 'Both styles work, with or without ms.' : st ? 'Static call works, but Java must still pass ms.' : 'Java may leave out ms, but has to go through Companion.'}</span>`);
+          }
+          swS.addEventListener('change', () => { st = swS.checked; paint('s'); });
+          swO.addEventListener('change', () => { ov = swO.checked; paint('o'); });
+          paint();
+          el.append(
+            h('div', { class: 'kd-pair' },
+              h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'Kotlin'), kt),
+              h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'Java call sites'), java)),
+            h('div', { class: 'controls' },
+              h('label', { class: 'switch', for: 'kd-ji-static' }, swS, '@JvmStatic'),
+              h('label', { class: 'switch', for: 'kd-ji-over' }, swO, '@JvmOverloads'),
+              act('Show Java’s view', () => { replay(java, 'pop-soft'); paint('all'); })),
+            o);
         },
       },
     ],

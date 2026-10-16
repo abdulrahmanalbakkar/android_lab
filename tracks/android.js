@@ -189,15 +189,385 @@
 .and-d2-tabs { display: flex; flex: none; border-top: 1px solid var(--line); }
 .and-d2-tab { flex: 1; text-align: center; padding: 6px 2px; font: 600 0.62rem var(--mono); color: var(--muted); }
 .and-d2-tab.and-on { color: var(--accent); background: var(--accent-soft); }
+/* context and components */
+.and-cx-heap { display: grid; gap: 6px; flex: 1 1 220px; max-width: 320px; min-width: 0; align-content: start; }
+.and-cx-obj { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); font: 600 0.76rem var(--mono); min-width: 0; transition: border-color 0.25s, background 0.25s, color 0.25s; }
+.and-cx-obj > span { min-width: 0; overflow-wrap: anywhere; }
+.and-cx-obj small { font: 500 0.66rem var(--mono); color: var(--muted); text-align: right; }
+.and-cx-obj.and-cx-app { border-color: var(--accent); background: var(--accent-soft); }
+.and-cx-obj.and-cx-live { border-color: var(--ok); }
+.and-cx-obj.and-cx-dead { border-style: dashed; color: var(--muted); }
+.and-cx-obj.and-cx-leak { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.and-cx-obj.and-cx-leak small { color: var(--err); }
+.and-cx-single { border: 2px solid var(--warm); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; font: 600 0.76rem var(--mono); background: var(--warm-soft); min-width: 0; overflow-wrap: anywhere; }
+.and-cx-single.and-cx-none { border-style: dashed; border-color: var(--line); background: none; color: var(--muted); }
+.and-cx-mem { display: grid; gap: 4px; font: 500 0.72rem var(--mono); color: var(--muted); }
+.and-cx-mem .and-d2-fill.and-cx-hot { background: var(--err); }
+.and-cx-jobs { display: grid; gap: 6px; flex: 1 1 280px; max-width: 420px; min-width: 0; }
+
+/* resources */
+.and-rs-tree { display: grid; gap: 4px; flex: 1 1 200px; max-width: 290px; min-width: 0; align-content: start; }
+.and-rs-dir { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font: 600 0.74rem var(--mono); min-width: 0; transition: border-color 0.25s, background 0.25s, opacity 0.25s; }
+.and-rs-dir > span { min-width: 0; overflow-wrap: anywhere; }
+.and-rs-dir small { font: 500 0.66rem var(--mono); color: var(--muted); text-align: right; }
+.and-rs-dir.and-on { border-color: var(--accent); background: var(--accent-soft); }
+.and-rs-dir.and-on small { color: var(--accent); }
+.and-rs-dir.and-miss { opacity: 0.42; }
+.and-dev.and-rs-tab { width: 236px; height: 220px; }
+.and-dev.and-rs-night { background: var(--code-bg); color: var(--code-ink); }
+.and-rs-night .and-ln, .and-rs-night .and-rs-item { background: rgba(255, 255, 255, 0.14); }
+.and-rs-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.and-rs-grid.and-rs-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.and-rs-item { height: 30px; border-radius: 6px; background: var(--sunk); }
+.and-rs-count { font: 600 0.74rem var(--body); overflow-wrap: anywhere; }
+.and-rs-q { font: 600 0.64rem var(--mono); color: var(--warm); }
+.and-rs-words { display: grid; gap: 6px; flex: 1 1 300px; max-width: 460px; min-width: 0; }
+
+/* predictive back */
+.and-pb-layers { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--code-bg); }
+.and-pb-under, .and-pb-top { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 7px; padding: 9px; background: var(--surface); font-size: 0.8rem; }
+.and-pb-under { filter: brightness(0.92); }
+.and-pb-top { transition: transform 0.35s ease, border-radius 0.35s ease, opacity 0.3s; box-shadow: 0 0 0 1px var(--line); }
+.and-pb-top.and-pb-peek { transform: translateX(16%) scale(0.86); border-radius: 14px; }
+.and-pb-top.and-pb-out { transform: translateX(110%) scale(0.86); border-radius: 14px; }
+.and-pb-field { border: 2px solid var(--line); border-radius: 8px; padding: 6px; min-height: 52px; font: 500 0.7rem var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.and-pb-field.and-on { border-color: var(--accent); color: var(--ink); }
+.and-pb-arrow { position: absolute; left: 4px; top: 45%; z-index: 2; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--bg); display: grid; place-items: center; font: 700 0.8rem var(--mono); }
+.and-pb-arrow[hidden] { display: none; }
+.and-pb-card { width: min(230px, 100%); border-radius: 14px; border: 2px solid var(--accent); background: var(--surface); padding: 12px; display: grid; gap: 7px; transform-origin: center; }
+.and-pb-range { width: min(320px, 100%); accent-color: var(--accent); }
+
+/* task affinity */
+.and-ta-tasks { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; min-width: 0; width: 100%; }
+.and-ta-task { flex: 1 1 130px; max-width: 200px; min-width: 0; display: grid; gap: 6px; align-content: start; padding: 8px; border-radius: 12px; border: 2px dashed var(--line); background: var(--surface); transition: border-color 0.25s; }
+.and-ta-task.and-on { border-style: solid; border-color: var(--accent); }
+.and-ta-task .and-stack { min-height: 60px; }
+.and-ta-task .and-card { font-size: 0.74rem; padding: 6px 8px; }
+.and-ta-task .and-lbl, .and-ta-task .and-user { overflow-wrap: anywhere; }
 `;
 
   Lab.addTrack({
     id: 'android',
     title: 'Android fundamentals',
-    description: 'How an app lives on the phone: screens, state, intents, navigation and permissions.',
+    description: 'How an app lives on the phone: components and Context, screens, state, resources, intents, navigation, Back and permissions.',
     group: 'Building apps', requires: ['kotlin'],
     css,
     lessons: [
+      // 0 ─────────────────────────────────────────────
+      {
+        id: 'context',
+        title: 'Context and app components',
+        tagline: 'An app is a few components the system starts, and Context is their handle to the system.',
+        level: 'beginner',
+        body: `
+<p>An Android app has no single <code>main()</code>. It is a set of <em>components</em> the system starts for you: activities (screens), services (work without a screen), broadcast receivers (react to events) and content providers (share data). You list them in <code>AndroidManifest.xml</code>, and the system reads that list to know what your app can do.</p>
+<p>A <code>Context</code> is the handle a component uses to talk to the system. It loads resources, opens files and databases, starts activities and gets system services. Two kinds come up every day. The <em>Application</em> context lives as long as the app's process. An <em>Activity</em> context is the Activity itself: it lives only as long as that one screen, and it carries the screen's theme and window.</p>
+<p>That difference causes the classic leak. Hand an Activity to something that lives longer, like a singleton, and the old screen can never be freed after a rotation. Try both versions below, rotate a few times, then run the garbage collector.</p>`,
+        code: `// A singleton lives as long as the process
+object ImageCache {
+    private lateinit var appContext: Context
+
+    fun init(context: Context) {
+        appContext = context.applicationContext   // never keep the Activity itself
+    }
+
+    fun dir(): File = File(appContext.cacheDir, "images")
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ImageCache.init(this)    // safe: init keeps only the application context
+        setContent { NewsApp() }
+    }
+}`,
+        remember: 'Anything that outlives a screen gets applicationContext. Screen work (dialogs, themed views, starting activities) uses the Activity.',
+        terms: [
+          { term: 'Context', def: 'The handle a component uses to reach the system: resources, files, system services, starting other components.' },
+          { term: 'Application context', def: 'The one Context for the whole process. Safe to keep in long-lived objects, but it has no window and no Activity theme.' },
+          { term: 'App component', def: 'An entry point the system can start: Activity, Service, BroadcastReceiver or ContentProvider.' },
+          { term: 'AndroidManifest.xml', def: 'The file that declares the app’s components, permissions and requirements to the system and to Google Play.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'This class is kept for the whole process. Store the right context.', code: 'class Analytics(context: Context) {\n    private val appContext = context.[[applicationContext]]\n}', why: '<code>applicationContext</code> lives as long as the process, so keeping it does not hold on to any screen.' },
+          { type: 'bug', prompt: 'MainActivity calls <code>NewsRepository.get(this)</code>. After a rotation, the old MainActivity is reported as leaked. Tap the line.', code: 'class NewsRepository private constructor(private val context: Context) {\n    fun cacheFile() = File(context.cacheDir, "news.json")\n    companion object {\n        @Volatile private var instance: NewsRepository? = null\n        fun get(context: Context): NewsRepository = instance ?: synchronized(this) {\n            instance ?: NewsRepository(context).also { instance = it }\n        }\n    }\n}', bug: 5, fix: '            instance ?: NewsRepository(context.applicationContext).also { instance = it }', why: 'The singleton keeps the first Context it gets for ever. Passing <code>applicationContext</code> means it never holds a screen.' },
+        ],
+        quiz: [
+          { q: 'Which of these needs an Activity context?', options: ['Reading a string resource', 'Showing an <code>AlertDialog</code>', 'Opening a Room database'], a: 1, why: 'A dialog is a window on top of a screen. It needs the Activity’s window and theme. The other two work with the application context.' },
+          { q: 'A singleton stores the Activity it was given. The user rotates the phone. What happens to the old Activity?', options: ['The singleton switches to the new Activity by itself', 'It is destroyed but stays in memory with all its views', 'The app crashes at once'], a: 1, why: 'The singleton still points at it, so the garbage collector can’t free it. Each leaked screen keeps its whole view tree.' },
+          { q: 'Which component can run without a line in the manifest?', options: ['An Activity', 'A BroadcastReceiver registered in code with <code>registerReceiver()</code>', 'A ContentProvider'], a: 1, why: 'Activities, services and providers that are not declared are invisible to the system and never run. Receivers can also be registered at runtime.' },
+        ],
+        deeper: [
+          {
+            title: 'Four components, all listed in the manifest',
+            body: `<p>Each component is a door the system can open into your app. An <strong>Activity</strong> shows a screen. A <strong>Service</strong> does work without a screen, like music playback. A <strong>BroadcastReceiver</strong> reacts to an event, like the phone finishing boot. A <strong>ContentProvider</strong> serves data to other apps, like <code>FileProvider</code> handing a photo to the share sheet.</p>
+<p>The system starts them, not your code, and it can do that while your process is not running. Then it starts the process first, creates your <code>Application</code>, and only then the component. That is why the manifest matters: activities, services and providers that are not declared there never run.</p>`,
+            code: `<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <application android:name=".NewsApp" android:label="@string/app_name">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".PlaybackService" android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="com.example.news.fileprovider"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const COMP = [
+                { k: 'act', name: 'MainActivity', kind: '<activity>', cb: 'MainActivity.onCreate()', ev: 'tap the launcher icon' },
+                { k: 'svc', name: 'PlaybackService', kind: '<service>', cb: 'PlaybackService.onStartCommand()', ev: 'start playback, then lock the phone' },
+                { k: 'rcv', name: 'BootReceiver', kind: '<receiver>', cb: 'BootReceiver.onReceive(BOOT_COMPLETED)', ev: 'phone finishes booting' },
+                { k: 'prv', name: 'FileProvider', kind: '<provider>', cb: 'FileProvider.openFile(content://…/photo.jpg)', ev: 'another app opens a shared photo' },
+              ];
+              let alive = false, busy = false;
+              const tiles = Object.fromEntries(COMP.map(c => [c.k, h('div', { class: 'and-tile' }, c.name, h('small', {}, c.kind))]));
+              const pid = h('span', { class: 'and-pid and-dead' }, 'process not running');
+              const appObj = h('span', { class: 'and-perm' }, 'NewsApp: not created');
+              const o = out();
+              function paint() {
+                pid.className = 'and-pid' + (alive ? '' : ' and-dead');
+                pid.textContent = alive ? 'process running' : 'process not running';
+                appObj.className = 'and-perm' + (alive ? ' and-ok' : '');
+                appObj.textContent = alive ? 'NewsApp: created' : 'NewsApp: not created';
+              }
+              async function fire(c) {
+                if (busy) return; busy = true;
+                Object.values(tiles).forEach(t => t.classList.remove('and-match', 'and-scan', 'and-miss'));
+                say(o, note(c.ev));
+                if (c.k === 'svc' && !alive) {
+                  line(o, `<span class="bad">nothing to start:</span> ${note('your own code starts this service from a running app. Open the app first.')}`);
+                  replay(tiles.svc, 'shake'); busy = false; return;
+                }
+                for (const x of COMP) { tiles[x.k].classList.add('and-scan'); await sleep(110); tiles[x.k].classList.remove('and-scan'); if (!el.isConnected) return; }
+                line(o, `${hl('system')} ${note(`reads the manifest: ${c.kind} ${c.name}`)}`);
+                COMP.forEach(x => tiles[x.k].classList.add(x === c ? 'and-match' : 'and-miss'));
+                await sleep(380); if (!el.isConnected) return;
+                if (!alive) {
+                  alive = true; paint(); replay(pid, 'pop');
+                  line(o, `${hl('fork process')}  ${note('the process was not running')}`);
+                  await sleep(320); if (!el.isConnected) return;
+                  replay(appObj, 'pop');
+                  line(o, `${hl('NewsApp.onCreate()')}  ${note('Application first, once per process')}`);
+                  await sleep(320); if (!el.isConnected) return;
+                } else line(o, note('process already running: no new Application'));
+                line(o, hl(c.cb));
+                busy = false;
+              }
+              function kill() {
+                if (busy) return;
+                if (!alive) { replay(pid, 'shake'); say(o, note('the process is not running')); return; }
+                alive = false; paint(); replay(pid, 'pop');
+                Object.values(tiles).forEach(t => t.classList.remove('and-match', 'and-miss'));
+                say(o, `${hl('am kill com.example.news')}  ${note('the system reclaims memory. All objects are gone.')}`);
+              }
+              paint();
+              say(o, note('Nothing is running yet. Send the system an event.'));
+              el.append(
+                h('div', { class: 'and-sys' },
+                  h('span', { class: 'and-lbl' }, 'AndroidManifest.xml'),
+                  h('div', { class: 'and-apps' }, COMP.map(c => tiles[c.k])),
+                  h('div', { class: 'and-row' }, pid, appObj)),
+                h('div', { class: 'controls' }, COMP.map(c => cmd(c.ev, () => fire(c))), cmd('system kills the process', kill)),
+                o);
+            },
+          },
+          {
+            title: 'Which context for which job',
+            body: `<p>The two contexts are not interchangeable. An Activity context has a window and a theme, so dialogs and views need it. Starting an Activity from it simply adds the new screen to the current task. The application context has no window: a dialog fails with <code>BadTokenException</code>, and <code>startActivity</code> throws unless you add <code>FLAG_ACTIVITY_NEW_TASK</code>. Views inflated with it lose the Activity's theme.</p>
+<p>The other way round, anything that lives longer than one screen, a database, a repository, WorkManager, a singleton, must get the application context. Pick a context below and see which jobs work.</p>`,
+            code: `// Screen work: the Activity (in Compose, LocalContext.current)
+AlertDialog.Builder(this).setMessage(R.string.delete_draft).show()
+startActivity(Intent(this, SettingsActivity::class.java))
+
+// Long-lived objects: the application
+val db = Room.databaseBuilder(applicationContext, NewsDb::class.java, "news.db").build()
+WorkManager.getInstance(applicationContext).enqueue(syncRequest)`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const JOBS = [
+                { job: 'getString(R.string.title)', act: ['ok', 'works'], app: ['ok', 'works'] },
+                { job: 'AlertDialog.Builder(ctx).show()', act: ['ok', 'works'], app: ['no', 'BadTokenException'] },
+                { job: 'ctx.startActivity(intent)', act: ['ok', 'works'], app: ['no', 'needs FLAG_ACTIVITY_NEW_TASK'] },
+                { job: 'LayoutInflater.from(ctx).inflate(…)', act: ['ok', 'themed'], app: ['mid', 'no Activity theme'] },
+                { job: 'keep ctx in a singleton', act: ['no', 'leaks the screen'], app: ['ok', 'safe'] },
+              ];
+              let which = 'act';
+              const rows = JOBS.map(j => { const res = h('span', { class: 'and-res' }); const r = h('div', { class: 'and-step' }, h('span', {}, j.job), res); r.res = res; return r; });
+              const o = out();
+              function paint() {
+                JOBS.forEach((j, i) => {
+                  const [k, txt] = j[which];
+                  rows[i].res.textContent = txt;
+                  rows[i].res.className = 'and-res ' + (k === 'ok' ? 'and-ok' : k === 'no' ? 'and-no' : '');
+                  rows[i].className = 'and-step' + (k === 'ok' ? '' : ' and-on');
+                  replay(rows[i], 'pop-soft');
+                });
+                btns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k === which)));
+                say(o, which === 'act' ? note('ctx = this (the Activity): great for the screen, dangerous to keep') : note('ctx = applicationContext: safe to keep, but no window and no theme'));
+              }
+              const btns = [['act', 'ctx = this'], ['app', 'ctx = applicationContext']].map(([k, label]) => { const b = cmd(label, () => { which = k; paint(); }); b.dataset.k = k; return b; });
+              el.append(h('div', { class: 'controls' }, btns), h('div', { class: 'stage' }, h('div', { class: 'and-cx-jobs' }, rows)), o);
+              paint();
+            },
+          },
+          {
+            title: 'Context in Compose, ViewModels and Hilt',
+            body: `<p>In Compose, <code>LocalContext.current</code> gives the context of the host, usually the Activity. Use it right there, for example to start the share sheet, and don't store it in anything that outlives the screen.</p>
+<p>A ViewModel outlives its Activity, so it must never hold one. Better still, keep Context out of ViewModels: move file, database and system-service work into a repository that gets the application context. With Hilt, ask for <code>@ApplicationContext</code>. If a ViewModel truly needs one, <code>AndroidViewModel</code> receives the <code>Application</code>.</p>`,
+            code: `@Composable
+fun ShareButton(url: String) {
+    val context = LocalContext.current          // the host Activity, use it and let go
+    Button(onClick = {
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url)
+        context.startActivity(Intent.createChooser(send, null))
+    }) { Text(stringResource(R.string.share)) }
+}
+
+class NewsRepository @Inject constructor(
+    @ApplicationContext private val context: Context,   // Hilt passes the Application
+) {
+    fun cacheFile() = File(context.cacheDir, "news.json")
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>Context</code> is an abstract class. <code>Application</code>, <code>Service</code> and <code>Activity</code> are all <code>ContextWrapper</code>s: they forward every call to a base <code>ContextImpl</code> the system creates for them. <code>Activity</code> goes through <code>ContextThemeWrapper</code>, which adds the theme. <code>applicationContext</code> returns the one <code>Application</code> object of the process.</p>
+<p>When the process starts, <code>ActivityThread</code> creates the <code>Application</code>, then installs the app's content providers and calls their <code>onCreate</code>, and only then calls <code>Application.onCreate()</code>. Libraries used that order to initialize themselves through an empty provider. The App Startup library merges those providers into one.</p>`,
+          code: `// The Context family
+// Context (abstract)
+//  └─ ContextWrapper            forwards to a ContextImpl
+//      ├─ Application
+//      ├─ Service
+//      └─ ContextThemeWrapper   adds a theme
+//          └─ Activity
+//
+// Process start: Application created → providers' onCreate → Application.onCreate() → your component`,
+        },
+        mistakes: [
+          {
+            title: 'Showing a dialog with the application context',
+            bad: `AlertDialog.Builder(applicationContext)
+    .setMessage(R.string.delete_draft)
+    .show()   // WindowManager.BadTokenException`,
+            good: `AlertDialog.Builder(this)   // the Activity
+    .setMessage(R.string.delete_draft)
+    .show()`,
+            why: 'A dialog is a window that belongs to a screen. The application context has no window token, so adding the window fails.',
+          },
+          {
+            title: 'Keeping the Activity in a companion object',
+            bad: `class MainActivity : ComponentActivity() {
+    companion object { lateinit var current: MainActivity }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        current = this
+    }
+}`,
+            good: `class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ImageCache.init(applicationContext)   // share the app context, not the screen
+    }
+}`,
+            why: 'A companion object is static: it lives as long as the process. It keeps the destroyed screen and its views in memory, and code that uses it later talks to a dead Activity.',
+          },
+        ],
+        visual(el) {
+          el.classList.add('and-viz');
+          let acts = [], held = null, seq = 0, busy = false;
+          const heap = h('div', { class: 'and-cx-heap' });
+          const single = h('div', { class: 'and-cx-single' });
+          const fill = h('span', { class: 'and-d2-fill' });
+          const memTxt = h('span', {});
+          const o = out();
+          const { dev, view } = device();
+          const mk = () => ({ no: ++seq, at: addr(), state: 'live' });
+          const cur = () => acts.find(a => a.state === 'live');
+          function paint() {
+            const rows = [h('div', { class: 'and-cx-obj and-cx-app' }, h('span', {}, 'NewsApp (Application)'), h('small', {}, 'whole process'))];
+            for (const a of acts) {
+              const leak = a.state === 'dead' && held === a;
+              rows.push(h('div', { class: 'and-cx-obj ' + (a.state === 'live' ? 'and-cx-live' : leak ? 'and-cx-leak' : 'and-cx-dead') },
+                h('span', {}, `MainActivity #${a.no} ${a.at}`),
+                h('small', {}, a.state === 'live' ? 'on screen' : leak ? 'destroyed, held: leak' : 'destroyed, unreachable')));
+            }
+            heap.replaceChildren(h('span', { class: 'and-lbl' }, 'heap'), ...rows);
+            single.className = 'and-cx-single' + (held ? '' : ' and-cx-none');
+            single.replaceChildren(h('span', {}, 'object ImageCache'), h('span', {}, held ? (held === 'app' ? 'context → NewsApp' : `context → MainActivity #${held.no}`) : 'not created yet'));
+            const mb = 14 + acts.length * 6;
+            fill.style.width = Math.min(100, mb) + '%';
+            fill.classList.toggle('and-cx-hot', acts.some(a => a.state === 'dead' && held === a));
+            memTxt.textContent = `used heap ≈ ${mb} MB`;
+            const c = cur();
+            view.replaceChildren(h('div', { class: 'and-scr' }, appbar(c ? `MainActivity #${c.no}` : '…'), bars(85, 60, 75, 50)));
+          }
+          function init(kind) {
+            if (busy) return;
+            if (held) { replay(single, 'shake'); say(o, `${hl(kind === 'app' ? 'ImageCache.init(applicationContext)' : 'ImageCache.init(this)')}  ${note('already initialized: it keeps its first context. Reset to try again.')}`); return; }
+            held = kind === 'app' ? 'app' : cur();
+            paint(); replay(single, 'pop');
+            say(o, `${hl(kind === 'app' ? 'ImageCache.init(applicationContext)' : 'ImageCache.init(this)')}  ${note(kind === 'app' ? 'holds the Application: lives as long as the process anyway' : `holds MainActivity #${held.no}`)}`);
+          }
+          async function rot() {
+            if (busy) return;
+            if (acts.length >= 6) { replay(heap, 'shake'); say(o, note('run GC or reset first')); return; }
+            busy = true;
+            const old = cur();
+            say(o, note('rotate the phone'));
+            await rotate(dev); if (!el.isConnected) return;
+            old.state = 'dead';
+            line(o, `${hl(`MainActivity #${old.no}.onDestroy()`)}`);
+            const n = mk(); acts.push(n);
+            line(o, `${hl(`MainActivity #${n.no}.onCreate()`)}  ${note('a new object')}`);
+            paint(); busy = false;
+          }
+          async function gc() {
+            if (busy) return; busy = true;
+            say(o, `${hl('System.gc()')}  ${note('free what nothing points to')}`);
+            const dead = acts.filter(a => a.state === 'dead');
+            if (!dead.length) line(o, note('no destroyed screens to free'));
+            for (const a of dead) {
+              if (held === a) { line(o, `<span class="bad">kept:</span> MainActivity #${a.no} ${note('ImageCache still points to it, with its whole view tree')}`); continue; }
+              const idx = acts.indexOf(a);
+              const node = heap.children[idx + 2];
+              if (node) node.classList.add('leave');
+              line(o, `<span class="good">freed:</span> MainActivity #${a.no}`);
+              await sleep(300); if (!el.isConnected) return;
+              acts = acts.filter(x => x !== a);
+            }
+            paint(); busy = false;
+          }
+          function reset() {
+            if (busy) return;
+            seq = 0; held = null; acts = [mk()]; paint();
+            say(o, note('fresh process: one MainActivity, ImageCache not created'));
+          }
+          reset();
+          say(o, note('Initialize the cache with one of the two contexts, rotate twice, then run GC.'));
+          el.append(
+            h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev),
+              h('div', { class: 'and-cx-heap' }, single, heap, h('div', { class: 'and-cx-mem' }, memTxt, h('span', { class: 'and-d2-bar' }, fill)))),
+            h('div', { class: 'controls' }, cmd('ImageCache.init(this)', () => init('act')), cmd('ImageCache.init(applicationContext)', () => init('app'))),
+            h('div', { class: 'controls' }, cmd('rotate', rot), cmd('System.gc()', gc), cmd('reset', reset)),
+            o);
+        },
+      },
+
       // 1 ─────────────────────────────────────────────
       {
         id: 'lifecycle',
@@ -1072,6 +1442,247 @@ fun FeedRoute(vm: FeedViewModel = viewModel()) {
         },
       },
 
+      // 2b ────────────────────────────────────────────
+      {
+        id: 'resources',
+        title: 'Resources and localization',
+        tagline: 'Text and values live in res/, and Android picks the best folder for each phone.',
+        level: 'beginner',
+        body: `
+<p>Text, colors, sizes and images live in <code>res/</code>, not in code. A folder name can carry <em>qualifiers</em>: <code>values-tr/</code> holds Turkish strings, <code>values-night/</code> holds dark-theme values, <code>values-sw600dp/</code> holds values for screens at least 600 dp wide. At runtime Android picks the best match for the current configuration, and falls back to the plain <code>values/</code> folder.</p>
+<p>That fallback is why <code>values/strings.xml</code> must hold every string. A translation may skip some, the default may not. A missing default means a crash on a phone set to a language you don't ship.</p>
+<p>Counts need <code>&lt;plurals&gt;</code>, because languages split numbers differently. English has one and other. Arabic has six forms, and it reads right to left, so the whole layout mirrors. Change the phone below and watch which folder wins each value.</p>`,
+        code: `<!-- res/values/strings.xml: the default, must have every string -->
+<resources>
+    <string name="title">News</string>
+    <plurals name="new_articles">
+        <item quantity="one">%d new article</item>
+        <item quantity="other">%d new articles</item>
+    </plurals>
+</resources>
+
+<!-- res/values-tr/strings.xml -->
+<resources>
+    <string name="title">Haberler</string>
+    <plurals name="new_articles">
+        <item quantity="one">%d yeni haber</item>
+        <item quantity="other">%d yeni haber</item>
+    </plurals>
+</resources>
+
+// Compose: the first count picks the form, the second fills %d
+@Composable
+fun Header(count: Int) {
+    Text(stringResource(R.string.title))
+    Text(pluralStringResource(R.plurals.new_articles, count, count))
+}`,
+        remember: 'values/ has every string; qualified folders override some. Counts use plurals, and the count goes in twice.',
+        terms: [
+          { term: 'Resource qualifier', def: 'A suffix on a res/ folder name, like -tr, -night or -sw600dp, that says which configuration the folder is for.' },
+          { term: 'Default resources', def: 'The folders without qualifiers, like values/. Android falls back to them, so they must contain every resource.' },
+          { term: 'Plurals', def: 'A string resource with one item per quantity category (zero, one, two, few, many, other) that Android picks by the count and the language.' },
+          { term: 'Per-app language', def: 'A language the user picks for one app, separate from the system language. Built into system settings since Android 13.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give English the two forms every language needs.', code: '<plurals name="comments">\n    <item quantity="[[one]]">%d comment</item>\n    <item quantity="[[other]]">%d comments</item>\n</plurals>', why: 'Always supply <code>one</code> and <code>other</code>. Translators add the extra categories their language needs.' },
+          { type: 'bug', prompt: 'The app crashes with <code>Resources.NotFoundException</code> on a phone set to German. Tap the line.', code: 'res/\n    values-en/strings.xml      (every string)\n    values-tr/strings.xml\n    values-night/colors.xml', bug: 1, fix: '    values/strings.xml         (every string)', why: 'German matches neither <code>-en</code> nor <code>-tr</code>, and there is no unqualified <code>values/</code> to fall back to. Put the full set in <code>values/</code>.' },
+        ],
+        quiz: [
+          { q: 'The app has <code>values/</code> and <code>values-tr/</code>. The phone is set to German. Which strings show?', options: ['From <code>values-tr/</code>', 'From <code>values/</code>', 'None: the app crashes'], a: 1, why: 'No folder matches German, so Android uses the default folder.' },
+          { q: 'Which folder holds Turkish values for dark theme?', options: ['<code>values-night-tr</code>', '<code>values-tr-night</code>', 'Both work'], a: 1, why: 'Qualifiers must follow the order of the qualifier table, and language comes before night mode. A folder in the wrong order is ignored.' },
+          { q: 'What does Kotlin’s <code>"istanbul".uppercase()</code> return on a Turkish phone?', options: ['<code>ISTANBUL</code>', '<code>İSTANBUL</code>', 'It depends on the app language'], a: 0, why: 'The no-argument <code>uppercase()</code> uses the invariant locale on every phone. For Turkish display text, pass a Turkish <code>Locale</code>.' },
+        ],
+        deeper: [
+          {
+            title: 'The Turkish dotted i',
+            body: `<p>Turkish has two letter i's: dotted <code>i İ</code> and dotless <code>ı I</code>. So the uppercase of <code>i</code> is <code>İ</code> in Turkish and <code>I</code> everywhere else. Case conversion depends on a locale, and the bug is using the wrong one.</p>
+<p>Kotlin's <code>uppercase()</code> and <code>lowercase()</code> without an argument use the invariant locale: the same on every phone. That is right for keys, ids and enum names, but wrong for Turkish text you show. Pass a locale there: <code>uppercase(Locale.forLanguageTag("tr"))</code>. Java's <code>toUpperCase()</code> without an argument is the opposite trap: it uses the phone's default locale, so on a Turkish phone <code>"title"</code> becomes <code>"TİTLE"</code> and a key lookup fails.</p>`,
+            code: `val tr = Locale.forLanguageTag("tr")
+
+// Text the user reads: use the language of the text
+"istanbul".uppercase(tr)           // "İSTANBUL"
+"istanbul".uppercase()             // "ISTANBUL": wrong for a Turkish headline
+
+// Keys, ids, enum names: invariant, the same on every phone
+Category.valueOf(raw.uppercase())  // "sport" -> SPORT on every phone
+
+// Java code, or Java libraries, without a Locale use the phone's default:
+// on a Turkish phone "title".toUpperCase() == "TİTLE" and "ID".toLowerCase() == "ıd"`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const WORDS = [
+                { w: 'istanbul', op: 'up', use: 'headline shown to a Turkish reader', want: 'İSTANBUL' },
+                { w: 'title', op: 'up', use: 'key compared with "TITLE"', want: 'TITLE' },
+                { w: 'ID', op: 'low', use: 'key compared with "id"', want: 'id' },
+              ];
+              let word = WORDS[0], phone = 'tr';
+              const conv = (s, op, loc) => (op === 'up' ? s.toLocaleUpperCase(loc) : s.toLocaleLowerCase(loc));
+              const fn = op => (op === 'up' ? 'uppercase' : 'lowercase');
+              const jfn = op => (op === 'up' ? 'toUpperCase' : 'toLowerCase');
+              const rows = [0, 1, 2].map(() => { const res = h('span', { class: 'and-res' }); const lbl = h('span', {}); const r = h('div', { class: 'and-step' }, lbl, res); r.res = res; r.lbl = lbl; return r; });
+              const useEl = h('span', { class: 'and-perm' });
+              const o = out();
+              function paint() {
+                const calls = [
+                  [`"${word.w}".${fn(word.op)}()`, conv(word.w, word.op, 'en'), 'Kotlin: invariant locale'],
+                  [`"${word.w}".${fn(word.op)}(tr)`, conv(word.w, word.op, 'tr'), 'Kotlin: Turkish rules'],
+                  [`"${word.w}".${jfn(word.op)}()  // Java`, conv(word.w, word.op, phone), `Java: phone default (${phone === 'tr' ? 'tr-TR' : 'en-US'})`],
+                ];
+                calls.forEach(([src, res], i) => {
+                  const ok = res === word.want;
+                  rows[i].lbl.innerHTML = hl(src);
+                  rows[i].res.textContent = `"${res}" ${ok ? '✓' : '✗'}`;
+                  rows[i].res.className = 'and-res ' + (ok ? 'and-ok' : 'and-no');
+                  rows[i].className = 'and-step' + (ok ? '' : ' and-on');
+                });
+                useEl.textContent = `want "${word.want}": ${word.use}`;
+                wBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(WORDS[i] === word)));
+                pBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === phone)));
+                say(o, note(word.op === 'up' && word.w === 'istanbul'
+                  ? 'display text: only the explicit Turkish locale gets the dotted İ'
+                  : `key: the invariant call is right everywhere. ${phone === 'tr' ? 'The Java call breaks on a Turkish phone.' : 'Switch the phone to Turkish and watch the Java call.'}`));
+              }
+              const wBtns = WORDS.map(x => cmd(`"${x.w}"`, () => { word = x; paint(); }));
+              const pBtns = [['en', 'phone: English'], ['tr', 'phone: Türkçe']].map(([p, label]) => { const b = cmd(label, () => { phone = p; paint(); }); b.dataset.p = p; return b; });
+              el.append(
+                h('div', { class: 'controls' }, wBtns),
+                h('div', { class: 'controls' }, pBtns),
+                h('div', { class: 'stage' }, h('div', { class: 'and-rs-words' }, useEl, rows)),
+                o);
+              paint();
+            },
+          },
+          {
+            title: 'Per-app language',
+            body: `<p>Since Android 13, users can pick a language for one app in system settings. Your app shows up there only if it declares its languages. With Android Studio Giraffe and AGP 8.1 or newer, turn on <code>generateLocaleConfig</code> and name the default in <code>res/resources.properties</code>. Otherwise write <code>res/xml/locale_config.xml</code> by hand and point <code>android:localeConfig</code> at it.</p>
+<p>For an in-app language picker, call <code>AppCompatDelegate.setApplicationLocales()</code>. With AppCompat 1.6.0 or newer it also works on Android 12 and lower, where you add the <code>autoStoreLocales</code> service so AndroidX remembers the choice. The call recreates the Activity. In a Compose app the Activity must extend <code>AppCompatActivity</code>, or it does nothing.</p>`,
+            code: `// app/build.gradle.kts
+android {
+    androidResources { generateLocaleConfig = true }
+}
+// app/src/main/res/resources.properties
+// unqualifiedResLocale=en-US
+
+class MainActivity : AppCompatActivity()     // needed for setApplicationLocales with Compose
+
+fun setAppLanguage(tag: String) {            // "tr", "en", ...
+    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+}
+
+fun followSystemLanguage() {
+    AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+}`,
+          },
+          {
+            title: 'Right-to-left layouts',
+            body: `<p>Arabic, Hebrew, Persian and Urdu read right to left. With <code>android:supportsRtl="true"</code> in the manifest, the layout mirrors: in Compose a <code>Row</code> starts on the right and <code>padding(start = …)</code> becomes right padding, all from <code>LocalLayoutDirection</code>.</p>
+<p>Your part is to say <em>start</em> and <em>end</em>, never left and right, and to use auto-mirrored icons for anything with a direction, like a back arrow. Check it with a preview in an RTL locale.</p>`,
+            code: `Row(Modifier.padding(start = 16.dp)) {      // right side in Arabic
+    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+    Text(stringResource(R.string.title))
+}
+
+@Preview(locale = "ar")
+@Composable
+fun HeaderRtlPreview() = Header(count = 3)`,
+          },
+        ],
+        underHood: {
+          body: `<p>At build time AAPT2 compiles every value from every folder into one table, <code>resources.arsc</code>, and gives each resource a single id in <code>R</code>, like <code>R.string.title</code>. The id doesn't know about folders. Each table entry lists one value per configuration.</p>
+<p>At lookup time, <code>Resources</code> asks the <code>AssetManager</code> for the value of that id in the current <code>Configuration</code>. It drops the folders that contradict the phone, then goes through the qualifiers in table order, so language outranks night mode. When the configuration changes, the Activity is recreated by default and the lookups run again with the new configuration.</p>`,
+          code: `// One id, many values
+// R.string.title  ->  values/        "News"
+//                     values-tr/     "Haberler"
+//                     values-ar/     "الأخبار"
+//
+// Qualifier order matters: values-tr-night is read, values-night-tr is ignored`,
+        },
+        mistakes: [
+          {
+            title: 'Building sentences with +',
+            bad: `Text("You have " + count + " new articles")`,
+            good: `Text(pluralStringResource(R.plurals.new_articles, count, count))`,
+            why: 'The text can’t be translated, word order differs between languages, and "1 new articles" is wrong even in English.',
+          },
+          {
+            title: 'Left and right instead of start and end',
+            bad: `Icon(Icons.Filled.ArrowBack, contentDescription = null)
+Text(text, Modifier.absolutePadding(left = 16.dp))   // never flips`,
+            good: `Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+Text(text, Modifier.padding(start = 16.dp))`,
+            why: 'In Arabic the back arrow must point right and the padding must sit on the right. Start, end and auto-mirrored icons flip by themselves.',
+          },
+          {
+            title: 'Uppercasing Turkish text without a locale',
+            bad: `Text(headline.uppercase())   // "istanbul" -> "ISTANBUL"`,
+            good: `Text(headline.uppercase(Locale.forLanguageTag("tr")))   // "İSTANBUL"`,
+            why: 'The no-argument call uses the invariant locale. It is fine for keys, but Turkish readers see a misspelled word.',
+          },
+        ],
+        visual(el) {
+          el.classList.add('and-viz');
+          const STR = {
+            en: { title: 'News', forms: { one: '%d new article', other: '%d new articles' } },
+            tr: { title: 'Haberler', forms: { one: '%d yeni haber', other: '%d yeni haber' } },
+            ar: { title: 'الأخبار', forms: { zero: 'لا توجد مقالات جديدة', one: 'مقال جديد واحد', two: 'مقالان جديدان', few: '%d مقالات جديدة', many: '%d مقالًا جديدًا', other: '%d مقال جديد' } },
+          };
+          const COUNTS = [0, 1, 2, 3, 11, 100];
+          let lang = 'en', night = false, wide = false, ci = 1;
+          const { dev, view } = device();
+          const dirs = {};
+          const dir = (name) => (dirs[name] = h('div', { class: 'and-rs-dir' }, h('span', {}, name + '/'), h('small', {})));
+          const tree = h('div', { class: 'and-rs-tree' }, h('span', { class: 'and-lbl' }, 'res/'), dir('values'), dir('values-tr'), dir('values-ar'), dir('values-night'), dir('values-sw600dp'));
+          const o = out();
+          const cat = (l, n) => { try { return new Intl.PluralRules(l).select(n); } catch (e) { return n === 1 ? 'one' : 'other'; } };
+          function paint() {
+            const n = COUNTS[ci];
+            const S = STR[lang];
+            const q = cat(lang, n);
+            const form = S.forms[q] || S.forms.other;
+            const strFrom = lang === 'en' ? 'values' : 'values-' + lang;
+            const colorFrom = night ? 'values-night' : 'values';
+            const colsFrom = wide ? 'values-sw600dp' : 'values';
+            const got = { values: [], 'values-tr': [], 'values-ar': [], 'values-night': [], 'values-sw600dp': [] };
+            got[strFrom].push('title', 'new_articles');
+            got[colorFrom].push('background');
+            got[colsFrom].push('columns');
+            const match = { values: true, 'values-tr': lang === 'tr', 'values-ar': lang === 'ar', 'values-night': night, 'values-sw600dp': wide };
+            Object.entries(dirs).forEach(([k, d]) => {
+              d.className = 'and-rs-dir' + (got[k].length ? ' and-on' : match[k] ? '' : ' and-miss');
+              d.lastChild.textContent = got[k].length ? got[k].join(', ') : match[k] ? 'matches, nothing left to give' : 'does not match';
+            });
+            dev.className = 'and-dev' + (wide ? ' and-rs-tab' : '') + (night ? ' and-rs-night' : '');
+            const rtl = lang === 'ar';
+            const scr = h('div', { class: 'and-scr', dir: rtl ? 'rtl' : 'ltr' },
+              appbar(`${rtl ? '→' : '←'} ${S.title}`),
+              h('span', { class: 'and-rs-count' }, form.replace('%d', n)),
+              h('span', { class: 'and-rs-q', dir: 'ltr' }, `quantity="${q}"`),
+              h('div', { class: 'and-rs-grid' + (wide ? ' and-rs-two' : '') }, Array.from({ length: 4 }, () => h('span', { class: 'and-rs-item' }))));
+            view.replaceChildren(scr);
+            replay(view, 'pop-soft');
+            lBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === lang)));
+            nBtn.setAttribute('aria-pressed', String(night));
+            wBtn.setAttribute('aria-pressed', String(wide));
+            cBtn.innerHTML = hl(`count = ${n}`);
+          }
+          function explain(msg) { say(o, msg); }
+          const lBtns = [['en', 'English'], ['tr', 'Türkçe'], ['ar', 'العربية']].map(([l, label]) => {
+            const b = cmd(`language: ${label}`, () => { lang = l; paint(); explain(l === 'en' ? note('no values-en folder: English comes from the default values/') : l === 'tr' ? note('values-tr wins for strings. Turkish has one and other, but both read "haber".') : note('values-ar wins, the layout mirrors right to left, and Arabic plurals have six forms')); });
+            b.dataset.l = l; return b;
+          });
+          const nBtn = cmd('dark theme', () => { night = !night; paint(); explain(note(night ? 'values-night supplies the background color. Strings still come from the language folder.' : 'back to values/ for colors')); });
+          const wBtn = cmd('tablet (sw ≥ 600dp)', () => { wide = !wide; paint(); explain(note(wide ? 'values-sw600dp supplies columns = 2' : 'phone: columns = 1 from values/')); });
+          const cBtn = cmd('', () => { ci = (ci + 1) % COUNTS.length; paint(); explain(`${hl(`pluralStringResource(R.plurals.new_articles, ${COUNTS[ci]}, ${COUNTS[ci]})`)}  ${note(`category "${cat(lang, COUNTS[ci])}" in ${lang}`)}`); });
+          paint();
+          explain(note('An English phone. Every value comes from the default folder.'));
+          el.append(
+            h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), tree),
+            h('div', { class: 'controls' }, lBtns),
+            h('div', { class: 'controls' }, nBtn, wBtn, cBtn),
+            o);
+        },
+      },
+
       // 3 ─────────────────────────────────────────────
       {
         id: 'savedstate',
@@ -1385,7 +1996,7 @@ fun onQuery(text: String) { state["query"] = text }`,
         body: `
 <p>An <code>Intent</code> is a message that asks Android to start something. An <em>explicit</em> intent names the exact class, as in <code>Intent(this, DetailActivity::class.java)</code>. Use it for screens inside your own app.</p>
 <p>An <em>implicit</em> intent describes the job instead: an action like <code>ACTION_VIEW</code> or <code>ACTION_SEND</code>, plus data or a MIME type. Android compares it with the intent filters that apps declare in their manifests. One match opens directly. With several, the user picks. <code>Intent.createChooser()</code> always shows the picker.</p>
-<p>No match throws <code>ActivityNotFoundException</code>, so wrap implicit <code>startActivity</code> calls in try/catch. Since Android 11, apps can’t see every other installed app by default, so catching the exception is more reliable than checking first.</p>`,
+<p>No match throws <code>ActivityNotFoundException</code>, so wrap implicit <code>startActivity</code> calls in try/catch. Since Android 11, apps can’t see every other installed app by default, so catching the exception is more reliable than checking first. The next lesson, Package visibility, explains why.</p>`,
         code: `// Explicit: you name the class. Only your DetailActivity receives it.
 startActivity(Intent(this, DetailActivity::class.java).putExtra("id", 42))
 
@@ -1495,70 +2106,15 @@ startActivity(Intent.createChooser(send, null))   // the chooser passes the gran
             },
           },
           {
-            title: 'Package visibility: seeing apps is not starting them',
-            body: `<p>Since Android 11, an app that targets it sees only some of the other installed apps when it asks the package manager. <code>resolveActivity()</code> and <code>queryIntentActivities()</code> filter out apps you can't see, so a check can answer "no app" while a maps app is installed.</p>
-<p><code>startActivity()</code> is not filtered. An implicit intent still reaches every matching app, which is why the advice is to call it and catch <code>ActivityNotFoundException</code>. Declare a <code>&lt;queries&gt;</code> entry only when you must know in advance, for example to hide a button.</p>`,
-            code: `// Works without any declaration
-try {
-    startActivity(Intent(Intent.ACTION_VIEW, "geo:0,0?q=cafe".toUri()))
-} catch (e: ActivityNotFoundException) {
-    showMessage("No maps app installed")
-}
-
-// Only to check in advance. AndroidManifest.xml:
-// <queries>
-//     <intent>
-//         <action android:name="android.intent.action.VIEW" />
-//         <data android:scheme="geo" />
-//     </intent>
-// </queries>
-val canShowMap = Intent(Intent.ACTION_VIEW, "geo:0,0".toUri()).resolveActivity(packageManager) != null`,
-            visual(el) {
-              el.classList.add('and-viz');
-              let target30 = true, queries = false, busy = false, checked = null;
-              const { dev, view } = device();
-              const mapsTile = h('div', { class: 'and-tile' }, 'Maps', h('small', {}, 'VIEW · geo:'));
-              const youTile = h('div', { class: 'and-tile and-open' }, 'Your app', h('small', {}, 'always visible to itself'));
-              const o = out();
-              const visible = () => !target30 || queries;
-              function paintApps() {
-                mapsTile.classList.toggle('and-miss', !visible());
-                mapsTile.lastChild.textContent = visible() ? 'VIEW · geo: · visible' : 'VIEW · geo: · hidden from queries';
-              }
-              function cafe(anim) {
-                const btn = checked === null ? h('span', { class: 'and-user' }, 'Map button: not checked') : checked ? h('span', { class: 'and-ui drop-in' }, 'Open in Maps') : h('span', { class: 'and-user drop-in' }, 'Map button hidden');
-                view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Café Lumen'), bars(80, 60), btn));
-              }
-              function resolve() {
-                if (busy) return;
-                checked = visible(); cafe(); replay(mapsTile, checked ? 'pop' : 'shake');
-                say(o, `${hl('intent.resolveActivity(packageManager)')} = ${checked ? '<span class="good">ComponentInfo{com.maps/.MapActivity}</span>' : '<span class="bad">null</span>'}  ${note(checked ? (target30 ? '&lt;queries&gt; makes Maps visible' : 'targetSdk 29: every app is visible') : 'Maps is installed, you just can’t see it')}`);
-              }
-              async function start() {
-                if (busy) return; busy = true;
-                say(o, `${hl('startActivity(Intent(ACTION_VIEW, "geo:0,0?q=cafe".toUri()))')}`);
-                mapsTile.classList.add('and-scan'); await sleep(400); if (!el.isConnected) return;
-                mapsTile.classList.remove('and-scan'); mapsTile.classList.add('and-open'); replay(mapsTile, 'pop');
-                view.replaceChildren(h('div', { class: 'and-scr drop-in' }, appbar('Maps'), h('div', { class: 'and-d2-map' }), bars(60)));
-                line(o, `<span class="good">opened Maps</span> ${note('startActivity is not filtered by package visibility')}`);
-                await sleep(1300); if (!el.isConnected) return;
-                mapsTile.classList.remove('and-open'); cafe(true);
-                line(o, note('back to the café screen'));
-                busy = false;
-              }
-              const sw = (id, label, on, set) => h('label', { class: 'switch', for: id }, h('input', { type: 'checkbox', id, checked: on, onchange(e) {
-                if (busy) { e.target.checked = !e.target.checked; return; }
-                set(e.target.checked); checked = null; paintApps(); cafe(); replay(mapsTile, 'pop-soft');
-                say(o, note(`targetSdk ${target30 ? '30+' : '29'}, ${queries ? 'with' : 'no'} <queries> entry for geo`.replace('<', '&lt;').replace('>', '&gt;')));
-              } }), label);
-              paintApps(); cafe();
-              say(o, 'Maps is installed. Ask about it, then just start it.');
-              el.append(
-                h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'what your app can see'), youTile, mapsTile)),
-                h('div', { class: 'controls' }, sw('and-d2-pv-target', 'targetSdk 30 or higher', true, v => { target30 = v; }), sw('and-d2-pv-queries', '<queries> for geo', false, v => { queries = v; })),
-                h('div', { class: 'controls' }, cmd('intent.resolveActivity(packageManager)', resolve), cmd('startActivity(intent)', start)),
-                o);
-            },
+            title: 'Getting a result back',
+            body: `<p>Some intents are questions: pick a file, take a photo. Start them through the Activity Result API and the answer comes back to a callback. <code>ActivityResultContracts.GetContent</code> wraps the implicit <code>ACTION_GET_CONTENT</code> intent and returns the chosen <code>Uri</code>, or <code>null</code> if the user backed out.</p>`,
+            code: `@Composable
+fun AttachButton(onPicked: (Uri) -> Unit) {
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) onPicked(uri)        // null: the user cancelled
+    }
+    Button(onClick = { pick.launch("application/pdf") }) { Text("Attach PDF") }
+}`,
           },
         ],
         underHood: {
@@ -1705,6 +2261,196 @@ startActivity(Intent("com.example.OPEN_EDITOR"))`,
         },
       },
 
+      // 4a ────────────────────────────────────────────
+      {
+        id: 'package-visibility',
+        title: 'Package visibility',
+        tagline: 'Since Android 11 your app sees only some installed apps, but it can still start any of them.',
+        level: 'intermediate',
+        body: `
+<p>An app that targets Android 11 (API level 30) or higher no longer sees every installed app. <code>PackageManager</code> calls that return other apps, such as <code>queryIntentActivities()</code>, <code>getPackageInfo()</code> and <code>getInstalledApplications()</code>, leave out the ones you can't see. <code>intent.resolveActivity()</code> asks the same package manager, so a check can answer "no app" while a maps app is installed.</p>
+<p>Starting an Activity is not filtered. You can start another app's Activity with an implicit or explicit intent whether or not that app is visible to you. So the usual answer is to call <code>startActivity</code> and catch <code>ActivityNotFoundException</code>.</p>
+<p>When you must know in advance, for example to hide a button, declare what you need in a <code>&lt;queries&gt;</code> element in the manifest. Ask for the smallest set that works. Apps that target Android 10 or lower still see everything.</p>`,
+        code: `// Works without any declaration
+try {
+    startActivity(Intent(Intent.ACTION_VIEW, "geo:0,0?q=cafe".toUri()))
+} catch (e: ActivityNotFoundException) {
+    showMessage("No maps app installed")
+}
+
+// Only to check in advance. AndroidManifest.xml:
+// <queries>
+//     <intent>
+//         <action android:name="android.intent.action.VIEW" />
+//         <data android:scheme="geo" />
+//     </intent>
+// </queries>
+val canShowMap = Intent(Intent.ACTION_VIEW, "geo:0,0".toUri()).resolveActivity(packageManager) != null`,
+        remember: 'Seeing other apps needs a queries entry. Starting them does not: call startActivity and catch ActivityNotFoundException.',
+        terms: [
+          { term: 'Package visibility', def: 'The Android 11+ rule that PackageManager results only include the other apps your app is allowed to see.' },
+          { term: 'queries element', def: 'A manifest element that lists the packages, intents or provider authorities your app needs to see.' },
+          { term: 'QUERY_ALL_PACKAGES', def: 'A permission that makes every installed app visible. Meant for rare cases, and limited by Google Play policy.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Your app needs to know whether the partner store app is installed.', code: '// AndroidManifest.xml\n// <[[queries]]>\n//     <[[package]] android:name="com.example.store" />\n// </queries>\n\nval hasStore = try {\n    packageManager.getPackageInfo("com.example.store", 0); true\n} catch (e: PackageManager.NameNotFoundException) { false }', why: 'A <code>&lt;package&gt;</code> entry inside <code>&lt;queries&gt;</code> makes that one app visible, so <code>getPackageInfo</code> can find it.' },
+          { type: 'bug', prompt: 'targetSdk 35, no queries entry. The chat app is installed, but tapping Share does nothing. Tap the line.', code: 'fun shareToChat(text: String) {\n    val send = Intent(Intent.ACTION_SEND)\n        .setPackage("com.example.chat")\n        .setType("text/plain")\n        .putExtra(Intent.EXTRA_TEXT, text)\n    if (send.resolveActivity(packageManager) != null) startActivity(send)\n}', bug: 5, fix: '    try { startActivity(send) } catch (e: ActivityNotFoundException) { showMessage("Chat is not installed") }', why: '<code>resolveActivity</code> is filtered and returns null for an app you can’t see. <code>startActivity</code> is not filtered, so call it and catch the exception.' },
+        ],
+        quiz: [
+          { q: 'targetSdk 34, no <code>&lt;queries&gt;</code>. A maps app is installed. What does <code>Intent(ACTION_VIEW, geoUri).resolveActivity(packageManager)</code> return?', options: ['The maps Activity', '<code>null</code>', 'It throws SecurityException'], a: 1, why: 'The maps app is not visible to you, so the package manager leaves it out of the answer.' },
+          { q: 'Same app, same setup. What does <code>startActivity(Intent(ACTION_VIEW, geoUri))</code> do?', options: ['Opens the maps app', 'Throws ActivityNotFoundException', 'Asks for QUERY_ALL_PACKAGES'], a: 0, why: 'Starting an Activity is not filtered by package visibility.' },
+          { q: 'Which app is visible to yours without any declaration?', options: ['Every app with a launcher icon', 'The app that installed your app', 'Any app that shares your signing key'], a: 1, why: 'The installer is on the automatic list, along with your own app, some system packages and apps that interact with yours.' },
+        ],
+        deeper: [
+          {
+            title: 'Apps you see without asking',
+            body: `<p>Some apps are always visible: your own app, some system packages (the set depends on the device), and the app that installed yours. An app also becomes visible when it interacts with yours: it starts your Activity with <code>startActivityForResult()</code>, starts or binds your service, uses your content provider, or owns a provider you were granted a URI permission for.</p>
+<p>To see which system packages are always visible on a device, run <code>adb shell dumpsys package queries</code> and look for the <code>forceQueryable</code> section.</p>`,
+            code: `# Packages every app can see on this device
+adb shell dumpsys package queries
+# look for the forceQueryable section`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const APPS = [
+                { name: 'Play Store', btn: 'installs your app', ev: 'installed your app', why: 'the installer of your app' },
+                { name: 'Mail', btn: 'startActivityForResult(yourIntent)', ev: 'starts your Activity with startActivityForResult()', why: 'it started your Activity for a result' },
+                { name: 'Gallery', btn: 'queries your provider', ev: 'reads your content provider', why: 'it accessed your provider' },
+                { name: 'Chat', ev: null, why: '' },
+              ];
+              const o = out();
+              APPS.forEach(a => { a.seen = false; a.tile = h('div', { class: 'and-tile and-miss' }, a.name, h('small', {}, 'hidden')); });
+              const youTile = h('div', { class: 'and-tile and-open' }, 'Your app', h('small', {}, 'always visible to itself'));
+              function paint() { APPS.forEach(a => { a.tile.classList.toggle('and-miss', !a.seen); a.tile.classList.toggle('and-match', a.seen); a.tile.lastChild.textContent = a.seen ? `visible: ${a.why}` : 'hidden'; }); }
+              function happen(a) {
+                if (a.seen) { replay(a.tile, 'pop'); say(o, note(`${a.name} is already visible`)); return; }
+                a.seen = true; paint(); replay(a.tile, 'pop');
+                say(o, `${a.name} ${a.ev}. <span class="good">${a.name} is now visible to you</span> ${note('no queries entry needed')}`);
+              }
+              function chat() {
+                replay(APPS[3].tile, 'shake');
+                say(o, `${hl('getPackageInfo("com.example.chat", 0)')} <span class="bad">NameNotFoundException</span> ${note('no interaction, no queries entry: still hidden')}`);
+              }
+              function reset() { APPS.forEach(a => { a.seen = false; }); paint(); say(o, note('Before any interaction, other apps are hidden. Make something happen.')); }
+              reset();
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'what your app can see (targetSdk 30+)'), youTile, APPS.map(a => a.tile))),
+                h('div', { class: 'controls' }, APPS.slice(0, 3).map(a => cmd(`${a.name} ${a.btn}`, () => happen(a))), cmd('getPackageInfo("com.example.chat")', chat), cmd('reset', reset)),
+                o);
+            },
+          },
+          {
+            title: 'Three ways to declare what you need',
+            body: `<p><code>&lt;queries&gt;</code> takes three kinds of entries. <code>&lt;package&gt;</code> names one app. <code>&lt;intent&gt;</code> makes visible every app with a matching filter. <code>&lt;provider&gt;</code> names content provider authorities.</p>
+<p>An <code>&lt;intent&gt;</code> entry needs exactly one <code>&lt;action&gt;</code>. Its <code>&lt;data&gt;</code> can't use <code>path</code>, <code>pathPrefix</code>, <code>pathPattern</code> or <code>port</code>. And <code>scheme</code>, <code>host</code> and <code>mimeType</code> may each appear once.</p>`,
+            code: `<queries>
+    <!-- one app by package name -->
+    <package android:name="com.example.store" />
+
+    <!-- every app that can view geo: links -->
+    <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="geo" />
+    </intent>
+
+    <!-- apps that own these provider authorities -->
+    <provider android:authorities="com.example.settings.files" />
+</queries>`,
+          },
+          {
+            title: 'QUERY_ALL_PACKAGES is for rare apps',
+            body: `<p>The <code>QUERY_ALL_PACKAGES</code> permission makes every installed app visible. The docs call it not recommended and list the kinds of apps that may need it: browsers, accessibility, device management, security and antivirus apps. On Google Play, its use is subject to approval under Play policy.</p>
+<p>A news or shopping app almost never needs it. If you know which apps or which kind of intent you care about, a <code>&lt;queries&gt;</code> entry is enough.</p>`,
+            code: `<!-- Only for apps whose core feature needs the full list -->
+<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />`,
+          },
+        ],
+        underHood: {
+          body: `<p>The filtering happens in the system, for each calling app. When your app asks the package manager about another app, the system checks whether you may see it. If not, the answer simply leaves it out, as if it were not installed. Nothing throws, which is why visibility bugs are quiet.</p>
+<p>To watch it happen, turn on visibility logging for your package. Each filtered call then shows up in logcat as an <code>AppsFilter</code> line ending in <code>BLOCKED</code>. The logging slows the app, so turn it off when you're done.</p>`,
+          code: `adb shell pm log-visibility --enable com.example.myapp
+adb logcat -s AppsFilter
+# I/AppsFilter: interaction: PackageSetting{… com.example.myapp/…} -> PackageSetting{…} BLOCKED`,
+        },
+        mistakes: [
+          {
+            title: 'Hiding a feature behind resolveActivity',
+            bad: `val canNavigate = Intent(Intent.ACTION_VIEW, geoUri).resolveActivity(packageManager) != null
+if (canNavigate) NavigateButton()`,
+            good: `NavigateButton(onClick = {
+    try { startActivity(Intent(Intent.ACTION_VIEW, geoUri)) }
+    catch (e: ActivityNotFoundException) { showMessage("No maps app installed") }
+})`,
+            why: 'Without a matching <code>&lt;queries&gt;</code> entry, the check returns null on Android 11+ even when a maps app is installed, and the button disappears for everyone. Either always show it and catch, or declare the intent in <code>&lt;queries&gt;</code>.',
+          },
+          {
+            title: 'QUERY_ALL_PACKAGES to check one app',
+            bad: `<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />`,
+            good: `<queries>
+    <package android:name="com.example.store" />
+</queries>`,
+            why: 'Seeing every app is a privacy cost the user pays, and Play reviews the permission. A <code>&lt;package&gt;</code> entry gives you exactly the one app you need.',
+          },
+          {
+            title: 'Expecting a path to narrow an intent query',
+            bad: `<intent>
+    <action android:name="android.intent.action.VIEW" />
+    <data android:scheme="https" android:host="example.com" android:pathPrefix="/news" />
+</intent>`,
+            good: `<intent>
+    <action android:name="android.intent.action.VIEW" />
+    <data android:scheme="https" android:host="example.com" />
+</intent>`,
+            why: 'Path and port attributes are not allowed in a queries intent. The system treats them as a wildcard, so the entry already means the whole host. Write it that way.',
+          },
+        ],
+        visual(el) {
+          el.classList.add('and-viz');
+          let target30 = true, queries = false, busy = false, checked = null;
+          const { dev, view } = device();
+          const mapsTile = h('div', { class: 'and-tile' }, 'Maps', h('small', {}, 'VIEW · geo:'));
+          const youTile = h('div', { class: 'and-tile and-open' }, 'Your app', h('small', {}, 'always visible to itself'));
+          const o = out();
+          const visible = () => !target30 || queries;
+          function paintApps() {
+            mapsTile.classList.toggle('and-miss', !visible());
+            mapsTile.lastChild.textContent = visible() ? 'VIEW · geo: · visible' : 'VIEW · geo: · hidden from queries';
+          }
+          function cafe(anim) {
+            const btn = checked === null ? h('span', { class: 'and-user' }, 'Map button: not checked') : checked ? h('span', { class: 'and-ui drop-in' }, 'Open in Maps') : h('span', { class: 'and-user drop-in' }, 'Map button hidden');
+            view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Café Lumen'), bars(80, 60), btn));
+          }
+          function resolve() {
+            if (busy) return;
+            checked = visible(); cafe(); replay(mapsTile, checked ? 'pop' : 'shake');
+            say(o, `${hl('intent.resolveActivity(packageManager)')} = ${checked ? '<span class="good">ComponentInfo{com.maps/.MapActivity}</span>' : '<span class="bad">null</span>'}  ${note(checked ? (target30 ? '&lt;queries&gt; makes Maps visible' : 'targetSdk 29: every app is visible') : 'Maps is installed, you just can’t see it')}`);
+          }
+          async function start() {
+            if (busy) return; busy = true;
+            say(o, `${hl('startActivity(Intent(ACTION_VIEW, "geo:0,0?q=cafe".toUri()))')}`);
+            mapsTile.classList.add('and-scan'); await sleep(400); if (!el.isConnected) return;
+            mapsTile.classList.remove('and-scan'); mapsTile.classList.add('and-open'); replay(mapsTile, 'pop');
+            view.replaceChildren(h('div', { class: 'and-scr drop-in' }, appbar('Maps'), h('div', { class: 'and-d2-map' }), bars(60)));
+            line(o, `<span class="good">opened Maps</span> ${note('startActivity is not filtered by package visibility')}`);
+            await sleep(1300); if (!el.isConnected) return;
+            mapsTile.classList.remove('and-open'); cafe(true);
+            line(o, note('back to the café screen'));
+            busy = false;
+          }
+          const sw = (id, label, on, set) => h('label', { class: 'switch', for: id }, h('input', { type: 'checkbox', id, checked: on, onchange(e) {
+            if (busy) { e.target.checked = !e.target.checked; return; }
+            set(e.target.checked); checked = null; paintApps(); cafe(); replay(mapsTile, 'pop-soft');
+            say(o, note(`targetSdk ${target30 ? '30+' : '29'}, ${queries ? 'with' : 'no'} <queries> entry for geo`.replace('<', '&lt;').replace('>', '&gt;')));
+          } }), label);
+          paintApps(); cafe();
+          say(o, 'Maps is installed. Ask about it, then just start it.');
+          el.append(
+            h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'what your app can see'), youTile, mapsTile)),
+            h('div', { class: 'controls' }, sw('and-d2-pv-target', 'targetSdk 30 or higher', true, v => { target30 = v; }), sw('and-d2-pv-queries', '<queries> for geo', false, v => { queries = v; })),
+            h('div', { class: 'controls' }, cmd('intent.resolveActivity(packageManager)', resolve), cmd('startActivity(intent)', start)),
+            o);
+        },
+      },
+
       // 5 ─────────────────────────────────────────────
       {
         id: 'backstack',
@@ -1713,7 +2459,7 @@ startActivity(Intent("com.example.OPEN_EDITOR"))`,
         body: `
 <p>A <em>task</em> is the stack of screens the user has walked through, newest on top. Opening a screen pushes it onto the stack. Back pops the top one and shows the one below.</p>
 <p>In a Compose app with a single Activity, Navigation keeps this stack for you. <code>navController.navigate(route)</code> pushes, <code>popBackStack()</code> pops, and the system Back gesture pops too. Back on the start destination leaves the app.</p>
-<p>Two options change a push. <code>launchSingleTop = true</code> skips the push when that destination is already on top, so a double tap can’t stack two copies. <code>popUpTo&lt;Home&gt;()</code> pops everything above Home first, which keeps the stack short. Activities have matching intent flags: <code>FLAG_ACTIVITY_SINGLE_TOP</code> and <code>FLAG_ACTIVITY_CLEAR_TOP</code>.</p>`,
+<p>Two options change a push. <code>launchSingleTop = true</code> skips the push when that destination is already on top, so a double tap can’t stack two copies. <code>popUpTo&lt;Home&gt;()</code> pops everything above Home first, which keeps the stack short. Activities have matching intent flags: <code>FLAG_ACTIVITY_SINGLE_TOP</code> and <code>FLAG_ACTIVITY_CLEAR_TOP</code>. The next lesson, Launch modes and task affinity, covers how a stack of Activities behaves.</p>`,
         code: `@Serializable object Home
 @Serializable object Search
 @Serializable object Settings
@@ -1748,105 +2494,6 @@ navController.navigate(Settings) { popUpTo<Home>() }         // clear down to Ho
           { q: 'The stack is Home, A, B. You call <code>navigate(C) { popUpTo&lt;Home&gt;() }</code>. The stack is now', options: ['Home, A, B, C', 'Home, C', 'C'], a: 1, why: 'Everything above Home is popped, then C is pushed. Add <code>inclusive = true</code> to pop Home too.' },
         ],
         deeper: [
-          {
-            title: 'Activities have launch modes',
-            body: `<p>With several Activities, the task is a stack of Activity instances, and the <em>launch mode</em> decides what <code>startActivity</code> does. <code>standard</code>, the default, always creates a new instance on top. <code>singleTop</code> reuses the instance when it is already on top and calls its <code>onNewIntent()</code> instead.</p>
-<p><code>singleTask</code> allows only one instance: starting it again clears every Activity above it and delivers <code>onNewIntent()</code>. <code>singleInstance</code> puts the Activity alone in its own task. Most apps need only <code>standard</code>, plus intent flags for the odd case. Remember <code>setIntent()</code> in <code>onNewIntent</code>, or <code>intent</code> keeps returning the old one.</p>`,
-            code: `// AndroidManifest.xml
-// <activity android:name=".ArticleActivity" android:launchMode="singleTop" />
-
-class ArticleActivity : ComponentActivity() {
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)                          // otherwise getIntent() stays old
-        show(intent.getLongExtra("id", -1))
-    }
-}
-
-// Clear everything above MainActivity and reuse it, no manifest change
-startActivity(Intent(this, MainActivity::class.java)
-    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))`,
-            visual(el) {
-              el.classList.add('and-viz');
-              const MODES = ['standard', 'singleTop', 'singleTask'];
-              let mode = 'standard', stack = [], n = 2, seq = 1, busy = false;
-              const col = h('div', { class: 'and-stack' });
-              const o = out();
-              const mk = (name, id) => ({ name, id, no: seq++ });
-              function paint(mark) {
-                col.replaceChildren(...stack.map((a, i) => {
-                  const top = i === stack.length - 1;
-                  return h('div', { class: 'and-card' + (top ? ' and-top' : '') + (mark === a ? ' drop-in' : '') },
-                    h('span', {}, `${a.name} #${a.no}`), h('small', {}, a.id != null ? `id=${a.id}` : top ? 'on screen' : ''));
-                }));
-              }
-              function reset() {
-                seq = 1; n = 2;
-                stack = [mk('MainActivity', null), mk('ArticleActivity', 1)];
-                paint(); press(); artBtn.innerHTML = hl(`startActivity(Article(id = ${n}))`);
-              }
-              const modeBtns = MODES.map(m => cmd(`launchMode="${m}"`, () => {
-                if (busy) return;
-                mode = m; reset();
-                say(o, note(`ArticleActivity is now ${m}. The task was reset.`));
-              }));
-              const press = () => modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(MODES[i] === mode)));
-              function nope(msg) { if (busy) return; replay(col, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
-              async function openArticle() {
-                if (busy) return;
-                if (stack.length >= 7) return nope('the task is getting tall. Press Back or pick a mode to reset.');
-                busy = true;
-                const id = n++;
-                artBtn.innerHTML = hl(`startActivity(Article(id = ${n}))`);
-                say(o, `${hl(`startActivity(Article(id = ${id}))`)}  ${note(`launchMode = ${mode}`)}`);
-                const top = stack[stack.length - 1];
-                const existing = stack.findIndex(a => a.name === 'ArticleActivity');
-                if (mode === 'singleTop' && top.name === 'ArticleActivity') {
-                  top.id = id; paint(); replay(col.lastElementChild, 'pop');
-                  line(o, `${hl(`ArticleActivity #${top.no}.onNewIntent(id = ${id})`)}  ${note('already on top: reused')}`);
-                } else if (mode === 'singleTask' && existing >= 0) {
-                  const above = stack.slice(existing + 1).reverse();
-                  for (const a of above) {
-                    col.children[stack.indexOf(a)].classList.add('leave');
-                    line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}  ${note('cleared: it was above ArticleActivity')}`);
-                    await sleep(320); if (!el.isConnected) return;
-                  }
-                  stack = stack.slice(0, existing + 1);
-                  const t = stack[existing]; t.id = id; paint(); replay(col.lastElementChild, 'pop');
-                  line(o, `${hl(`ArticleActivity #${t.no}.onNewIntent(id = ${id})`)}  ${note('the one instance, brought to the top')}`);
-                } else {
-                  const a = mk('ArticleActivity', id); stack.push(a); paint(a);
-                  line(o, `${hl(`ArticleActivity #${a.no}.onCreate()`)}  ${note(mode === 'standard' ? 'standard: always a new instance' : 'not on top, so a new instance')}`);
-                }
-                busy = false;
-              }
-              function openSettings() {
-                if (busy) return;
-                if (stack.length >= 7) return nope('the task is getting tall. Press Back or pick a mode to reset.');
-                const a = mk('SettingsActivity', null); stack.push(a); paint(a);
-                say(o, `${hl('startActivity(Settings)')}  ${note(`SettingsActivity #${a.no}.onCreate()`)}`);
-              }
-              async function back() {
-                if (busy) return;
-                if (stack.length === 1) return nope('MainActivity is the root. On Android 12+, Back here moves the task to the background.');
-                busy = true;
-                const a = stack.pop();
-                col.lastElementChild.classList.add('leave');
-                say(o, `${note('press Back')}`);
-                line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}`);
-                await sleep(420); if (!el.isConnected) return;
-                paint(); busy = false;
-              }
-              const artBtn = cmd('', openArticle);
-              reset();
-              say(o, note('MainActivity, then an article. Pick a launch mode, then open another article.'));
-              el.append(
-                h('div', { class: 'controls' }, modeBtns),
-                h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'task: newest on top'))),
-                h('div', { class: 'controls' }, artBtn, cmd('startActivity(Settings)', openSettings), cmd('press Back', back)),
-                o);
-            },
-          },
           {
             title: 'Intercepting Back the modern way',
             body: `<p>Sometimes Back should not pop yet, for example when a form has unsaved changes. Don't override <code>onBackPressed()</code>. It is deprecated, and for apps that target Android 16 it is no longer called at all. Register a callback with the <code>OnBackPressedDispatcher</code>, or use <code>BackHandler</code> in Compose.</p>
@@ -2056,6 +2703,647 @@ navController.navigate(Detail(article.id))
             h('div', { class: 'controls' },
               detailBtn, cmd('navigate(Search)', () => push('Search')), cmd('popBackStack()  // Back', back),
               cmd('navigate(Search) { launchSingleTop = true }', single), cmd('navigate(Settings) { popUpTo<Home>() }', clearTo)),
+            o);
+        },
+      },
+
+      // 5a ────────────────────────────────────────────
+      {
+        id: 'launch-modes',
+        title: 'Launch modes and task affinity',
+        tagline: 'With several Activities, the manifest and intent flags decide whether a screen is reused and which task it joins.',
+        level: 'intermediate',
+        body: `
+<p>With one Activity and Compose, the Navigation back stack is all you manage. Once there are several Activities, or other apps start yours, the system's own stack matters too: a <em>task</em> of Activity instances, newest on top. What <code>startActivity</code> does to that task depends on the target's <em>launch mode</em> in the manifest, and on any intent flags.</p>
+<p><code>standard</code>, the default, always creates a new instance on top of the caller's task. <code>singleTop</code> reuses the instance if it is already on top. <code>singleTask</code> keeps one instance: starting it again finishes every Activity above it. <code>singleInstance</code> works like <code>singleTask</code>, but the Activity is alone in its task.</p>
+<p>A reused Activity doesn't run <code>onCreate</code> again. The new Intent arrives in <code>onNewIntent()</code>, and <code>getIntent()</code> keeps returning the old one until you call <code>setIntent()</code>. Most apps need only <code>standard</code>, plus an intent flag for the odd case.</p>`,
+        code: `// AndroidManifest.xml
+// <activity android:name=".ArticleActivity" android:launchMode="singleTop" />
+
+class ArticleActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)                          // otherwise getIntent() stays old
+        show(intent.getLongExtra("id", -1))
+    }
+}
+
+// Clear everything above MainActivity and reuse it, no manifest change
+startActivity(Intent(this, MainActivity::class.java)
+    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))`,
+        remember: 'standard always adds, singleTop reuses the top, singleTask keeps one and clears above it. A reused Activity gets onNewIntent, not onCreate.',
+        terms: [
+          { term: 'Launch mode', def: 'The manifest setting (standard, singleTop, singleTask, singleInstance, singleInstancePerTask) that decides how startActivity places an Activity in a task.' },
+          { term: 'onNewIntent', def: 'The callback a reused Activity instance receives with the new Intent, instead of a fresh onCreate.' },
+          { term: 'Task affinity', def: 'The task an Activity prefers to join. By default it is the app’s namespace, shared by all its Activities.' },
+          { term: 'FLAG_ACTIVITY_CLEAR_TOP', def: 'An intent flag that finishes every Activity above the target when the target is already in the task.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Reuse ArticleActivity when it is on top, and keep getIntent() current.', code: '// <activity android:name=".ArticleActivity" android:launchMode="[[singleTop]]" />\n\noverride fun [[onNewIntent]](intent: Intent) {\n    super.onNewIntent(intent)\n    [[setIntent]](intent)\n    show(intent.getLongExtra("id", -1))\n}', why: '<code>singleTop</code> sends the Intent to the instance on top through <code>onNewIntent</code>. <code>setIntent</code> makes later <code>getIntent()</code> calls see it.' },
+          { type: 'bug', prompt: 'Tapping a second article notification keeps showing the first article. Tap the line.', code: 'class ArticleActivity : ComponentActivity() {\n    override fun onNewIntent(intent: Intent) {\n        super.onNewIntent(intent)\n        val id = getIntent().getLongExtra("id", -1)\n        show(id)\n    }\n}', bug: 3, fix: '        val id = intent.getLongExtra("id", -1)', why: '<code>getIntent()</code> still returns the Intent that created the Activity. The new one is the parameter of <code>onNewIntent</code>.' },
+        ],
+        quiz: [
+          { q: 'The task is Main, Article. Article is <code>singleTop</code>. You start Article again. What happens?', options: ['A second Article is pushed', 'The Article on top gets <code>onNewIntent()</code>', 'Article is finished and recreated'], a: 1, why: 'It is already on top, so singleTop reuses it and delivers the Intent to <code>onNewIntent()</code>.' },
+          { q: 'The task is Main, Article, Settings. Article is <code>singleTask</code>. You start Article. The task becomes', options: ['Main, Article, Settings, Article', 'Main, Article', 'Article'], a: 1, why: 'singleTask keeps one instance and finishes everything above it. Article then gets <code>onNewIntent()</code>.' },
+          { q: 'The manifest says <code>standard</code>, but the caller adds <code>FLAG_ACTIVITY_SINGLE_TOP</code>. Which wins?', options: ['The manifest', 'The intent flag'], a: 1, why: 'When both are set, the caller’s intent flags are honored over the manifest launch mode.' },
+        ],
+        deeper: [
+          {
+            title: 'Task affinity: which task an Activity joins',
+            body: `<p>Every Activity has a <em>task affinity</em>, the task it prefers. By default it is the app's package name, so all screens of one app prefer the same task. A plain <code>standard</code> start ignores it: the new Activity goes on top of the task it was started from, even if it belongs to another app.</p>
+<p>Affinity decides only when the system must pick a task. With <code>FLAG_ACTIVITY_NEW_TASK</code>, or the <code>singleTask</code> launch mode, the system puts the Activity into an existing task with the same affinity, or starts a new task if there is none. <code>singleInstance</code> goes further: the Activity is the only member of its own task. <code>singleInstancePerTask</code> must be the root of a task, but can have one instance in each of several tasks. Open an article from Mail below with each option, with and without News running.</p>`,
+            code: `<!-- The News app's manifest: pick one -->
+<activity android:name=".ReaderActivity" android:exported="true" />                            <!-- standard -->
+<activity android:name=".ReaderActivity" android:exported="true" android:launchMode="singleTask" />
+<activity android:name=".ReaderActivity" android:exported="true" android:launchMode="singleInstance" />
+<activity android:name=".ReaderActivity" android:exported="true"
+    android:taskAffinity="com.example.news.reader" />                                        <!-- its own affinity -->
+
+// The Mail app: let the system pick the task by affinity
+startActivity(Intent(Intent.ACTION_VIEW, articleUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const OPTS = { standard: 'standard', flag: 'FLAG_ACTIVITY_NEW_TASK', singleTask: 'launchMode="singleTask"', singleInstance: 'launchMode="singleInstance"' };
+              let opt = 'standard', newsRunning = true, tasks = [], front = null, opened = false;
+              const box = h('div', { class: 'and-ta-tasks' });
+              const o = out();
+              function reset() {
+                tasks = [{ id: 'mail', aff: 'com.example.mail', stack: ['InboxActivity', 'MessageActivity'] }];
+                if (newsRunning) tasks.push({ id: 'news', aff: 'com.example.news', stack: ['NewsHomeActivity'] });
+                front = 'mail'; opened = false; paint();
+              }
+              function paint(newId) {
+                box.replaceChildren(...tasks.map(t => h('div', { class: 'and-ta-task' + (t.id === front ? ' and-on' : '') + (t.id === newId ? ' drop-in' : '') },
+                  h('span', { class: 'and-lbl' }, `${t.id === 'mail' ? 'Mail' : t.id === 'solo' ? 'Reader' : 'News'} task`), h('small', { class: 'and-user' }, `affinity ${t.aff}`),
+                  h('div', { class: 'and-stack' }, t.stack.map((a, i) => h('div', { class: 'and-card' + (i === t.stack.length - 1 ? ' and-top' : '') }, h('span', {}, a.replace('Activity', '')), h('small', {}, i === 0 ? 'root' : '')))),
+                  h('small', { class: 'and-user' }, t.id === front ? 'in front' : 'in Recents'))));
+                oBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(OPTS)[i] === opt)));
+                rBtn.setAttribute('aria-pressed', String(newsRunning));
+              }
+              function open() {
+                if (opened) { replay(box, 'shake'); say(o, note('Reader is already open. Pick an option or reset to try again.')); return; }
+                opened = true;
+                const mail = tasks.find(t => t.id === 'mail');
+                const news = tasks.find(t => t.aff === 'com.example.news');
+                say(o, `${hl('startActivity(Intent(ACTION_VIEW, articleUri))')}  ${note(OPTS[opt])}`);
+                if (opt === 'standard') {
+                  mail.stack.push('ReaderActivity'); front = 'mail'; paint();
+                  line(o, note('affinity ignored: Reader joins the Mail task. Back returns to the message.'));
+                } else if (opt === 'singleInstance') {
+                  tasks.push({ id: 'solo', aff: 'com.example.news', stack: ['ReaderActivity'] }); front = 'solo'; paint('solo');
+                  line(o, note('a new task with Reader alone. Nothing else is ever launched into it.'));
+                } else if (news) {
+                  news.stack.push('ReaderActivity'); front = news.id; paint();
+                  line(o, note('a task with affinity com.example.news exists: Reader goes on top of it. Back returns to News home, not to Mail.'));
+                } else {
+                  tasks.push({ id: 'news', aff: 'com.example.news', stack: ['ReaderActivity'] }); front = 'news'; paint('news');
+                  line(o, note('no task with affinity com.example.news: a new task starts with Reader as its root'));
+                }
+              }
+              const oBtns = Object.entries(OPTS).map(([k, label]) => cmd(label, () => { opt = k; reset(); say(o, note(`ReaderActivity: ${label}. Tasks reset.`)); }));
+              const rBtn = cmd('News app is running', () => { newsRunning = !newsRunning; reset(); say(o, note(newsRunning ? 'News has a task in Recents' : 'News is not running: no task with its affinity')); });
+              reset();
+              say(o, note('Mail shows a message. Pick an option, then open the article.'));
+              el.append(
+                h('div', { class: 'controls' }, oBtns),
+                h('div', { class: 'controls' }, rBtn),
+                h('div', { class: 'stage' }, box),
+                h('div', { class: 'controls' }, cmd('Mail: open the article in News', open), cmd('reset', reset)),
+                o);
+            },
+          },
+          {
+            title: 'Intent flags override the manifest',
+            body: `<p>The caller can ask for these behaviors per call. <code>FLAG_ACTIVITY_SINGLE_TOP</code> acts like <code>singleTop</code>. <code>FLAG_ACTIVITY_NEW_TASK</code> picks a task by affinity, like <code>singleTask</code> does. If the flags and the manifest disagree, the flags win.</p>
+<p><code>FLAG_ACTIVITY_CLEAR_TOP</code> has no manifest twin. If the target is already in the task, every Activity above it is finished. A <code>standard</code> target is then finished too and created again, unless you also add <code>FLAG_ACTIVITY_SINGLE_TOP</code>, which keeps the instance and calls <code>onNewIntent()</code>. Try both on the list below.</p>`,
+            code: `// Back to the list from deep inside, without a second List instance
+startActivity(
+    Intent(this, ListActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+)
+
+// CLEAR_TOP alone on a standard Activity:
+// Settings and Article finish, then List is finished and created again`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let stack = [], seq = 1, busy = false;
+              const col = h('div', { class: 'and-stack' });
+              const o = out();
+              const mk = name => ({ name, no: seq++ });
+              function paint(mark) {
+                col.replaceChildren(...stack.map((a, i) => h('div', { class: 'and-card' + (i === stack.length - 1 ? ' and-top' : '') + (a === mark ? ' drop-in' : '') },
+                  h('span', {}, `${a.name} #${a.no}`), h('small', {}, i === stack.length - 1 ? 'on screen' : i === 0 ? 'root' : ''))));
+              }
+              function reset() {
+                if (busy) return;
+                seq = 1; stack = ['MainActivity', 'ListActivity', 'ArticleActivity', 'SettingsActivity'].map(mk); paint();
+                say(o, note('Four Activities deep. Go back to the list two ways.'));
+              }
+              async function clearTop(single) {
+                if (busy) return;
+                const li = stack.findIndex(a => a.name === 'ListActivity');
+                if (li === stack.length - 1) { replay(col, 'shake'); say(o, note('List is already on top. Press reset to stack more screens.')); return; }
+                busy = true;
+                say(o, `${hl(`startActivity(List, ${single ? 'CLEAR_TOP or SINGLE_TOP' : 'CLEAR_TOP'})`)}`);
+                for (const a of stack.slice(li + 1).reverse()) {
+                  col.children[stack.indexOf(a)].classList.add('leave');
+                  line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}  ${note('it was above List')}`);
+                  await sleep(330); if (!el.isConnected) return;
+                }
+                stack = stack.slice(0, li + 1); paint();
+                const list = stack[li];
+                if (single) {
+                  replay(col.lastElementChild, 'pop');
+                  line(o, `${hl(`ListActivity #${list.no}.onNewIntent()`)}  <span class="good">same instance, its state kept</span>`);
+                } else {
+                  col.lastElementChild.classList.add('leave');
+                  line(o, `${hl(`ListActivity #${list.no}.onDestroy()`)}  ${note('standard target: finished too')}`);
+                  await sleep(380); if (!el.isConnected) return;
+                  const fresh = mk('ListActivity'); stack[li] = fresh; paint(fresh);
+                  line(o, `${hl(`ListActivity #${fresh.no}.onCreate()`)}  <span class="bad">a new instance: scroll position and state are gone</span>`);
+                }
+                busy = false;
+              }
+              reset();
+              el.append(
+                h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'task: newest on top'))),
+                h('div', { class: 'controls' }, cmd('CLEAR_TOP', () => clearTop(false)), cmd('CLEAR_TOP or SINGLE_TOP', () => clearTop(true)), cmd('reset', reset)),
+                o);
+            },
+          },
+          {
+            title: 'singleTask and singleInstance are for special screens',
+            body: `<p>The docs mark <code>singleTask</code> as not for general use, and say <code>singleTask</code> and <code>singleInstance</code> should only be used on an Activity with an <code>ACTION_MAIN</code> and <code>CATEGORY_LAUNCHER</code> filter, so the user can always get back to that task from the launcher.</p>
+<p>Back still pops one Activity at a time. But if a <code>singleTask</code> Activity already lives in a task in the background, that whole task comes forward, and Back walks through it before it reaches the app that started it. <code>singleInstancePerTask</code> is the newer middle ground: the Activity must be the root of its task, so there is one per task, but <code>FLAG_ACTIVITY_MULTIPLE_TASK</code> or <code>FLAG_ACTIVITY_NEW_DOCUMENT</code> can open it in several tasks.</p>`,
+            code: `<!-- A launcher entry point that should exist once -->
+<activity android:name=".HomeActivity" android:exported="true"
+    android:launchMode="singleTask">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+</activity>
+
+<!-- Everything else: leave launchMode out (standard) -->
+<activity android:name=".ArticleActivity" />`,
+          },
+        ],
+        underHood: {
+          body: `<p>Tasks are kept by the system, not by your process. Recents shows tasks, so one app can appear twice if its Activities sit in two tasks. When your process dies, its tasks stay in Recents, and the top Activity is created again from its saved state when the user returns.</p>
+<p>On Android 12 and higher, Back on the root Activity of a launcher task no longer finishes it. The task moves to the background, like Home, so the next launch is warm. To look at the real stacks on a device, dump them with adb.</p>`,
+          code: `# Every task with its Activities, top first
+adb shell dumpsys activity activities`,
+        },
+        mistakes: [
+          {
+            title: 'Reading getIntent() in onNewIntent',
+            bad: `override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    render(getIntent().getStringExtra("q"))   // the old Intent
+}`,
+            good: `override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    render(intent.getStringExtra("q"))
+}`,
+            why: 'A reused instance keeps the Intent that created it. Use the parameter, and call <code>setIntent</code> so code that reads <code>intent</code> later, for example after rotation, sees the new one.',
+          },
+          {
+            title: 'Starting an Activity from the application Context',
+            bad: `class Router(private val app: Application) {
+    fun openSettings() = app.startActivity(Intent(app, SettingsActivity::class.java))
+}`,
+            good: `class Router {
+    fun openSettings(activity: Activity) =
+        activity.startActivity(Intent(activity, SettingsActivity::class.java))
+}`,
+            why: 'Outside an Activity there is no task to join, so the call throws and asks for <code>FLAG_ACTIVITY_NEW_TASK</code>. Adding the flag hides the problem and can open the screen in another task. Start screens from an Activity.',
+          },
+          {
+            title: 'singleInstance to avoid duplicate screens',
+            bad: `<activity android:name=".ArticleActivity" android:launchMode="singleInstance" />`,
+            good: `<activity android:name=".ArticleActivity" android:launchMode="singleTop" />
+<!-- or keep standard and add FLAG_ACTIVITY_SINGLE_TOP when starting it -->`,
+            why: 'A singleInstance Activity lives alone in its own task, and every Activity it starts opens in another task. Back and Recents then jump between tasks in ways users don’t expect. singleTop is enough to stop double taps.',
+          },
+        ],
+        visual(el) {
+          el.classList.add('and-viz');
+          const MODES = ['standard', 'singleTop', 'singleTask'];
+          let mode = 'standard', stack = [], n = 2, seq = 1, busy = false;
+          const col = h('div', { class: 'and-stack' });
+          const o = out();
+          const mk = (name, id) => ({ name, id, no: seq++ });
+          function paint(mark) {
+            col.replaceChildren(...stack.map((a, i) => {
+              const top = i === stack.length - 1;
+              return h('div', { class: 'and-card' + (top ? ' and-top' : '') + (mark === a ? ' drop-in' : '') },
+                h('span', {}, `${a.name} #${a.no}`), h('small', {}, a.id != null ? `id=${a.id}` : top ? 'on screen' : ''));
+            }));
+          }
+          function reset() {
+            seq = 1; n = 2;
+            stack = [mk('MainActivity', null), mk('ArticleActivity', 1)];
+            paint(); press(); artBtn.innerHTML = hl(`startActivity(Article(id = ${n}))`);
+          }
+          const modeBtns = MODES.map(m => cmd(`launchMode="${m}"`, () => {
+            if (busy) return;
+            mode = m; reset();
+            say(o, note(`ArticleActivity is now ${m}. The task was reset.`));
+          }));
+          const press = () => modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(MODES[i] === mode)));
+          function nope(msg) { if (busy) return; replay(col, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+          async function openArticle() {
+            if (busy) return;
+            if (stack.length >= 7) return nope('the task is getting tall. Press Back or pick a mode to reset.');
+            busy = true;
+            const id = n++;
+            artBtn.innerHTML = hl(`startActivity(Article(id = ${n}))`);
+            say(o, `${hl(`startActivity(Article(id = ${id}))`)}  ${note(`launchMode = ${mode}`)}`);
+            const top = stack[stack.length - 1];
+            const existing = stack.findIndex(a => a.name === 'ArticleActivity');
+            if (mode === 'singleTop' && top.name === 'ArticleActivity') {
+              top.id = id; paint(); replay(col.lastElementChild, 'pop');
+              line(o, `${hl(`ArticleActivity #${top.no}.onNewIntent(id = ${id})`)}  ${note('already on top: reused')}`);
+            } else if (mode === 'singleTask' && existing >= 0) {
+              const above = stack.slice(existing + 1).reverse();
+              for (const a of above) {
+                col.children[stack.indexOf(a)].classList.add('leave');
+                line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}  ${note('cleared: it was above ArticleActivity')}`);
+                await sleep(320); if (!el.isConnected) return;
+              }
+              stack = stack.slice(0, existing + 1);
+              const t = stack[existing]; t.id = id; paint(); replay(col.lastElementChild, 'pop');
+              line(o, `${hl(`ArticleActivity #${t.no}.onNewIntent(id = ${id})`)}  ${note('the one instance, brought to the top')}`);
+            } else {
+              const a = mk('ArticleActivity', id); stack.push(a); paint(a);
+              line(o, `${hl(`ArticleActivity #${a.no}.onCreate()`)}  ${note(mode === 'standard' ? 'standard: always a new instance' : 'not on top, so a new instance')}`);
+            }
+            busy = false;
+          }
+          function openSettings() {
+            if (busy) return;
+            if (stack.length >= 7) return nope('the task is getting tall. Press Back or pick a mode to reset.');
+            const a = mk('SettingsActivity', null); stack.push(a); paint(a);
+            say(o, `${hl('startActivity(Settings)')}  ${note(`SettingsActivity #${a.no}.onCreate()`)}`);
+          }
+          async function back() {
+            if (busy) return;
+            if (stack.length === 1) return nope('MainActivity is the root. On Android 12+, Back here moves the task to the background.');
+            busy = true;
+            const a = stack.pop();
+            col.lastElementChild.classList.add('leave');
+            say(o, `${note('press Back')}`);
+            line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}`);
+            await sleep(420); if (!el.isConnected) return;
+            paint(); busy = false;
+          }
+          const artBtn = cmd('', openArticle);
+          reset();
+          say(o, note('MainActivity, then an article. Pick a launch mode, then open another article.'));
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'task: newest on top'))),
+            h('div', { class: 'controls' }, artBtn, cmd('startActivity(Settings)', openSettings), cmd('press Back', back)),
+            o);
+        },
+      },
+
+      // 5b ────────────────────────────────────────────
+      {
+        id: 'predictive-back',
+        title: 'Predictive back',
+        tagline: 'The system previews where Back leads, so it must know before the swipe ends.',
+        level: 'intermediate',
+        body: `
+<p>With predictive back, the user starts the back swipe and sees where it leads, the previous screen or the home screen, before letting go. They can still cancel. To draw that preview, the system must know <em>when the gesture starts</em> whether your app wants Back for itself. A method that runs after the fact, like the old <code>onBackPressed()</code>, can't tell it that.</p>
+<p>So you register an <code>OnBackPressedCallback</code> and keep it enabled only while Back must do something else, for example while a draft is unsaved. In Compose that is <code>BackHandler(enabled = …)</code>. When no callback is enabled, the system handles Back and animates the preview.</p>
+<p>For apps that target Android 16 (API 36) and run on Android 16 or higher, this is the default: the system animations are on, <code>onBackPressed()</code> is not called, and <code>KEYCODE_BACK</code> is not dispatched. Switch the target and the implementation below, then try the gesture with and without a draft.</p>`,
+        code: `class EditorActivity : ComponentActivity() {
+    private val discardCallback = object : OnBackPressedCallback(false) {   // starts disabled
+        override fun handleOnBackPressed() = showDiscardDialog()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, discardCallback)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.hasUnsavedChanges.collect { discardCallback.isEnabled = it }
+            }
+        }
+    }
+}
+
+// The same in Compose
+@Composable
+fun EditorScreen(state: EditorState) {
+    var confirm by remember { mutableStateOf(false) }
+    BackHandler(enabled = state.hasUnsavedChanges) { confirm = true }
+    if (confirm) DiscardDialog(onDismiss = { confirm = false })
+}`,
+        remember: 'Never override onBackPressed. Enable a back callback only while Back must do something else; otherwise let the system animate.',
+        terms: [
+          { term: 'Predictive back', def: 'A back gesture that shows a preview of the destination while the user swipes, and can be cancelled.' },
+          { term: 'OnBackPressedCallback', def: 'An AndroidX callback that handles Back while its isEnabled is true.' },
+          { term: 'OnBackPressedDispatcher', def: 'The Activity’s list of back callbacks. It asks the most recently added enabled callback first.' },
+          { term: 'enableOnBackInvokedCallback', def: 'A manifest attribute on <application> or <activity> that opts in to, or temporarily out of, predictive back.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Register a callback that handles Back.', code: 'val callback = object : OnBackPressedCallback(false) {\n    override fun [[handleOnBackPressed]]() = showDiscardDialog()\n}\nonBackPressedDispatcher.[[addCallback]](this, callback)', why: 'The dispatcher calls <code>handleOnBackPressed()</code> on the latest enabled callback. Passing <code>this</code> ties the callback to the Activity’s lifecycle.' },
+          { type: 'bug', prompt: 'Before the user types anything, Back already shows the discard dialog and there is no back preview. Tap the line.', code: 'class EditorActivity : ComponentActivity() {\n    private val discardCallback = object : OnBackPressedCallback(true) {\n        override fun handleOnBackPressed() = showDiscardDialog()\n    }\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        onBackPressedDispatcher.addCallback(this, discardCallback)\n        editor.doAfterTextChanged { discardCallback.isEnabled = true }\n    }\n}', bug: 1, fix: '    private val discardCallback = object : OnBackPressedCallback(false) {', why: 'The callback starts enabled, so the app claims Back from the first frame. Start it disabled and enable it when there is something to lose.' },
+        ],
+        quiz: [
+          { q: 'An app targets API 36, runs on Android 16, and overrides <code>onBackPressed()</code> to show a dialog. The user presses Back.', options: ['The dialog shows, as before', '<code>onBackPressed()</code> is not called and the screen closes', 'The app crashes'], a: 1, why: 'For these apps the system no longer calls <code>onBackPressed()</code>. Use an <code>OnBackPressedCallback</code> or <code>BackHandler</code>.' },
+          { q: 'Why keep a back callback disabled when it has nothing to do?', options: ['It saves battery', 'An enabled callback tells the system the app takes Back, so no preview can be shown', 'Disabled callbacks run faster'], a: 1, why: 'The system decides at the start of the gesture. An enabled callback means "my app handles this", which rules out the preview animation.' },
+          { q: 'The Activity added a callback, then a Fragment added one. Both are enabled. Back is pressed. Which runs?', options: ['The Activity’s', 'The Fragment’s, the one added last', 'Both, in order'], a: 1, why: 'Callbacks are asked in reverse order of adding, and only the first enabled one runs.' },
+        ],
+        deeper: [
+          {
+            title: 'Several callbacks: the last added is asked first',
+            body: `<p>An Activity, its Fragments and open sheets can all register callbacks with the same dispatcher. On Back, the dispatcher asks them in reverse order of adding, and the first <em>enabled</em> one handles it. If none is enabled, Back goes to the system.</p>
+<p>Use <code>addCallback(lifecycleOwner, callback)</code>: the callback is only active while that owner is at least <code>STARTED</code>, and it is removed when the owner is destroyed. To pause a callback for a while, flip <code>isEnabled</code> rather than removing and adding it again, which would change its place in the order.</p>`,
+            code: `// The Activity adds first
+onBackPressedDispatcher.addCallback(this, closeSearchCallback)
+
+// The Fragment adds later, so it is asked first
+requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, discardDraftCallback)
+
+discardDraftCallback.isEnabled = false   // now Back reaches closeSearchCallback`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const CBS = [
+                { who: 'MainActivity', name: 'closeSearch', on: false, act: 'close the search bar' },
+                { who: 'EditorFragment', name: 'discardDraft', on: true, act: 'show the discard dialog' },
+                { who: 'BottomSheet', name: 'collapseSheet', on: false, act: 'collapse the sheet' },
+              ];
+              let busy = false;
+              const rows = CBS.map(c => {
+                const tog = cmd('', () => { if (busy) return; c.on = !c.on; paint(); say(o, `${hl(`${c.name}.isEnabled = ${c.on}`)}`); });
+                const r = h('div', { class: 'and-step' }, h('span', {}, `${c.who}: ${c.name}`), tog);
+                r.tog = tog; return r;
+              });
+              const sys = h('div', { class: 'and-step' }, h('span', {}, 'system: animate and go back'), h('span', { class: 'and-res' }, 'fallback'));
+              const o = out();
+              function paint() {
+                CBS.forEach((c, i) => { rows[i].tog.textContent = c.on ? 'enabled' : 'disabled'; rows[i].tog.setAttribute('aria-pressed', String(c.on)); rows[i].className = 'and-step'; });
+                sys.className = 'and-step';
+              }
+              async function back() {
+                if (busy) return; busy = true;
+                paint();
+                say(o, note('press Back: ask the newest callback first'));
+                for (let i = CBS.length - 1; i >= 0; i--) {
+                  const c = CBS[i];
+                  rows[i].classList.add(c.on ? 'and-on' : 'and-skip');
+                  replay(rows[i], 'pop-soft');
+                  await sleep(380); if (!el.isConnected) return;
+                  if (c.on) { line(o, `${hl(`${c.name}.handleOnBackPressed()`)}  ${note(c.act + '. Nobody else is asked.')}`); busy = false; return; }
+                  line(o, note(`${c.name} is disabled: skip`));
+                }
+                sys.classList.add('and-on'); replay(sys, 'pop');
+                line(o, `<span class="good">no enabled callback:</span> ${note('the system owns Back and can show the preview')}`);
+                busy = false;
+              }
+              paint();
+              say(o, note('Three callbacks, added top to bottom. Toggle them and press Back.'));
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-cx-jobs' }, h('span', { class: 'and-lbl' }, 'callbacks, oldest first'), rows, h('span', { class: 'and-lbl' }, 'none enabled'), sys)),
+                h('div', { class: 'controls' }, cmd('press Back', back)),
+                o);
+            },
+          },
+          {
+            title: 'Move the UI with the finger',
+            body: `<p><code>BackHandler</code> runs once, when the user lets go. To animate your own UI during the swipe, use <code>PredictiveBackHandler</code> from <code>activity-compose</code> 1.8.0 or newer. It hands you a <code>Flow&lt;BackEventCompat&gt;</code> with the swipe <code>progress</code> from 0 to 1, the touch position and the swipe edge.</p>
+<p>When the flow completes, the user committed: do the back action. When the user cancels, the collection throws <code>CancellationException</code>: animate back to rest. In Views, the same events arrive in <code>handleOnBackStarted</code>, <code>handleOnBackProgressed</code> and <code>handleOnBackCancelled</code> of <code>OnBackPressedCallback</code> (AndroidX Activity 1.8.0 or newer), on Android 14 and higher.</p>`,
+            code: `@Composable
+fun FilterSheet(onClose: () -> Unit) {
+    var progress by remember { mutableFloatStateOf(0f) }
+    PredictiveBackHandler { events ->
+        try {
+            events.collect { progress = it.progress }   // 0f..1f while swiping
+            onClose()                                   // committed
+        } catch (e: CancellationException) {
+            progress = 0f                               // cancelled: back to rest
+            throw e
+        }
+    }
+    Sheet(Modifier.graphicsLayer {
+        scaleX = 1f - progress * 0.1f
+        scaleY = 1f - progress * 0.1f
+        translationX = progress * 48.dp.toPx()
+    })
+}`,
+            visual(el) {
+              el.classList.add('and-viz');
+              el.style.overflowX = 'clip'; // the closed sheet slides off to the right
+              let p = 0, open = true, events = 0;
+              const card = h('div', { class: 'and-pb-card' }, h('span', { class: 'and-lbl' }, 'FilterSheet'), ...bars(80, 60, 70));
+              const range = h('input', { type: 'range', min: '0', max: '100', value: '0', class: 'and-pb-range', 'aria-label': 'back swipe progress' });
+              const o = out();
+              function draw() {
+                card.style.transform = open ? `translateX(${p * 48}px) scale(${1 - p * 0.1})` : 'translateX(120%) scale(0.9)';
+                card.style.opacity = open ? '1' : '0';
+              }
+              range.addEventListener('input', () => {
+                if (!open) { range.value = '0'; return; }
+                p = range.value / 100; events++; draw();
+                if (events % 4 === 1) say(o, `${hl(`BackEventCompat(progress = ${p.toFixed(2)}, swipeEdge = EDGE_LEFT)`)}  ${note('emitted to the flow')}`);
+              });
+              function commit() {
+                if (!open) return say(o, note('the sheet is closed. Reset to open it.'));
+                open = false; card.style.transition = 'transform 0.35s, opacity 0.35s'; draw();
+                say(o, `${note('the user lets go')}`);
+                line(o, `${hl('onClose()')}  ${note('the flow completed: committed')}`);
+              }
+              function cancel() {
+                if (!open) return say(o, note('the sheet is closed. Reset to open it.'));
+                card.style.transition = 'transform 0.35s'; p = 0; range.value = '0'; draw();
+                say(o, `${hl('catch (e: CancellationException)')}  ${note('the user swiped back to the edge: animate to rest')}`);
+              }
+              function reset() { open = true; p = 0; range.value = '0'; events = 0; card.style.transition = 'transform 0.35s, opacity 0.35s'; draw(); say(o, note('sheet open again. Drag the slider like a back swipe.')); }
+              range.addEventListener('pointerdown', () => { card.style.transition = 'none'; });
+              draw();
+              say(o, note('Drag the slider like a back swipe, then let go or cancel.'));
+              el.append(
+                h('div', { class: 'stage' }, card),
+                h('div', { class: 'controls' }, range),
+                h('div', { class: 'controls' }, cmd('let go (commit)', commit), cmd('swipe back to the edge (cancel)', cancel), cmd('reset', reset)),
+                o);
+            },
+          },
+          {
+            title: 'What changed, release by release',
+            body: `<ul>
+<li><strong>Android 13</strong> introduced predictive back as an opt-in with <code>android:enableOnBackInvokedCallback="true"</code>. On Android 13 and 14 the back-to-home animation showed only with a developer option.</li>
+<li><strong>Android 14</strong> added in-app progress: predictive back transitions and the progress callbacks work on Android 14 and higher.</li>
+<li><strong>Android 15</strong> removed the developer option. The back-to-home, cross-task and cross-activity animations show for apps that opted in.</li>
+<li><strong>Target Android 16 (API 36)</strong> and run on Android 16 or higher: the animations are on by default, <code>onBackPressed()</code> is not called, and <code>KEYCODE_BACK</code> is not dispatched. If you still rely on them, migrate, or opt out <em>temporarily</em> with <code>enableOnBackInvokedCallback="false"</code> on <code>&lt;application&gt;</code> or one <code>&lt;activity&gt;</code>.</li>
+</ul>`,
+            code: `<!-- Temporary opt-out while you migrate, for the whole app -->
+<application android:enableOnBackInvokedCallback="false">
+
+    <!-- Or keep predictive back on, and opt out one screen -->
+    <activity android:name=".LegacyEditorActivity"
+        android:enableOnBackInvokedCallback="false" />
+</application>`,
+          },
+        ],
+        underHood: {
+          body: `<p>Since Android 13 the platform has its own <code>OnBackInvokedDispatcher</code> on each window. The AndroidX <code>OnBackPressedDispatcher</code> sits on top of it. While at least one AndroidX callback is enabled, it registers a single platform callback, which tells the system "this app handles Back". When the last one is disabled, it unregisters that callback, and the system is free to play its own animation.</p>
+<p>That is why <code>isEnabled</code> matters more than what happens inside the callback: the system reads the registration when the gesture starts, long before your code would run.</p>`,
+          code: `// Roughly what androidx.activity does on Android 13+
+// any AndroidX callback enabled?  -> register one OnBackInvokedCallback with the window
+// none enabled?                   -> unregister it: the system owns Back and can animate`,
+        },
+        mistakes: [
+          {
+            title: 'Overriding onBackPressed()',
+            bad: `override fun onBackPressed() {
+    if (hasUnsavedChanges) showDiscardDialog() else super.onBackPressed()
+}`,
+            good: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    val discard = onBackPressedDispatcher.addCallback(this, enabled = false) { showDiscardDialog() }
+    viewModel.hasUnsavedChanges.observe(this) { discard.isEnabled = it }
+}`,
+            why: 'It is deprecated, and for apps targeting Android 16 it is not called at all, so the dialog silently disappears and drafts are lost.',
+          },
+          {
+            title: 'A callback that is always on',
+            bad: `onBackPressedDispatcher.addCallback(this) {
+    if (hasUnsavedChanges) showDiscardDialog()
+    else finish()          // Back never reaches the system
+}`,
+            good: `val cb = onBackPressedDispatcher.addCallback(this, enabled = false) {
+    showDiscardDialog()
+}
+cb.isEnabled = hasUnsavedChanges`,
+            why: 'The always-enabled callback takes every Back, so the user never gets the preview, and you re-implement what the system does better.',
+          },
+          {
+            title: 'Calling the dispatcher from your own callback',
+            bad: `override fun handleOnBackPressed() {
+    saveDraft()
+    onBackPressedDispatcher.onBackPressed()   // calls this same callback again
+}`,
+            good: `override fun handleOnBackPressed() {
+    saveDraft()
+    isEnabled = false
+    onBackPressedDispatcher.onBackPressed()   // now reaches the next one, or the system
+}`,
+            why: 'While the callback is enabled, the dispatcher sends Back straight back to it. Disable it first so Back moves on.',
+          },
+        ],
+        visual(el) {
+          el.classList.add('and-viz');
+          const IMPL = { override: 'override onBackPressed()', always: 'callback, always enabled', toggle: 'callback, enabled while unsaved' };
+          let t36 = true, impl = 'toggle', unsaved = false, phase = 'idle', busy = false;
+          const { dev, view } = device('and-tall');
+          const field = h('div', { class: 'and-pb-field' }, 'Write a comment…');
+          const top = h('div', { class: 'and-pb-top' }, appbar('← New comment'), field, ...bars(70, 50));
+          const under = h('div', { class: 'and-pb-under' }, appbar('Article'), ...bars(90, 70, 85, 60, 75, 55));
+          const layers = h('div', { class: 'and-pb-layers' }, under, top);
+          const arrow = h('span', { class: 'and-pb-arrow', hidden: true }, '‹');
+          const cbEl = h('span', { class: 'and-perm' });
+          const obpEl = h('span', { class: 'and-perm' });
+          const draftEl = h('span', { class: 'and-perm' });
+          const o = out();
+          const enabled = () => (impl === 'always' ? true : impl === 'toggle' ? unsaved : false);
+          const preview = () => t36 && !enabled();
+          function paint() {
+            cbEl.textContent = impl === 'override' ? 'no callback' : `callback.isEnabled = ${enabled()}`;
+            cbEl.className = 'and-perm' + (impl === 'override' ? '' : enabled() ? ' and-d2-mid' : ' and-ok');
+            obpEl.textContent = impl !== 'override' ? 'onBackPressed(): not used' : t36 ? 'onBackPressed(): never called' : 'onBackPressed(): called';
+            obpEl.className = 'and-perm' + (impl === 'override' ? (t36 ? ' and-no' : ' and-ok') : '');
+            draftEl.textContent = unsaved ? 'draft: unsaved' : 'draft: empty or saved';
+            draftEl.className = 'and-perm' + (unsaved ? ' and-d2-mid' : '');
+            field.textContent = unsaved ? 'Harika bir yazı, teşekkürler!' : 'Write a comment…';
+            field.classList.toggle('and-on', unsaved);
+            Object.keys(IMPL).forEach((k, i) => iBtns[i].setAttribute('aria-pressed', String(k === impl)));
+            tBtn.setAttribute('aria-pressed', String(t36));
+            tBtn.innerHTML = hl(t36 ? 'targetSdk = 36, Android 16' : 'targetSdk = 35, Android 16');
+          }
+          function clearOverlays() { dev.querySelectorAll('.and-dlg').forEach(x => x.remove()); }
+          function reopen() {
+            if (busy) return;
+            phase = 'idle'; unsaved = false; clearOverlays(); arrow.hidden = true;
+            top.className = 'and-pb-top'; paint();
+            say(o, note('the editor is open on top of the article'));
+          }
+          function closeEditor(how) {
+            phase = 'gone'; top.className = 'and-pb-top and-pb-out'; arrow.hidden = true;
+            line(o, `${hl('EditorActivity.finish()')}  ${note(how)}`);
+            if (unsaved) line(o, '<span class="bad">draft lost</span>');
+            unsaved = false; paint();
+          }
+          function dialog() {
+            phase = 'dialog';
+            const d = h('div', { class: 'and-dlg drop-in' }, h('b', {}, 'Discard comment?'),
+              h('span', { class: 'and-row' },
+                h('button', { class: 'and-ui', onclick() { d.remove(); unsaved = false; closeEditor('user chose Discard'); } }, 'Discard'),
+                h('button', { class: 'and-ui and-ghost', onclick() { d.remove(); phase = 'idle'; say(o, note('keep editing: the draft is safe')); } }, 'Keep')));
+            dev.append(d);
+          }
+          function nope(msg) { if (busy) return; replay(dev, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+          function type() {
+            if (phase !== 'idle') return nope('the editor is not in front.');
+            unsaved = true; paint(); replay(field, 'pop-soft');
+            say(o, note(impl === 'toggle' ? 'text changed: callback.isEnabled = true' : 'text changed'));
+          }
+          function save() {
+            if (phase !== 'idle') return nope('the editor is not in front.');
+            if (!unsaved) return nope('nothing to save.');
+            unsaved = false; paint();
+            say(o, note(impl === 'toggle' ? 'saved: callback.isEnabled = false. Back belongs to the system again.' : 'saved'));
+          }
+          function swipe() {
+            if (phase !== 'idle') return nope(phase === 'gone' ? 'the editor is closed. Open it again.' : 'finish the current gesture or dialog first.');
+            phase = 'swipe';
+            say(o, note('the user starts a back swipe'));
+            if (preview()) {
+              top.classList.add('and-pb-peek');
+              line(o, `<span class="good">preview:</span> ${note('no enabled callback, so the system shows the article behind')}`);
+            } else {
+              arrow.hidden = false;
+              line(o, note(!t36 ? 'targetSdk 35: no predictive animation, just the back arrow' : 'a callback is enabled: the app claimed Back, so no preview'));
+            }
+          }
+          function cancel() {
+            if (phase !== 'swipe') return nope('start a back swipe first.');
+            phase = 'idle'; top.classList.remove('and-pb-peek'); arrow.hidden = true;
+            say(o, note('the user swipes back to the edge: cancelled, nothing happens'));
+          }
+          function release() {
+            if (phase !== 'swipe') return nope('start a back swipe first.');
+            top.classList.remove('and-pb-peek'); arrow.hidden = true;
+            say(o, note('the user lets go'));
+            if (impl === 'override') {
+              if (t36) { line(o, `<span class="bad">onBackPressed() not called</span> ${note('targetSdk 36: the system handles Back')}`); closeEditor('by the system'); return; }
+              line(o, hl('onBackPressed()'));
+              if (unsaved) { dialog(); return; }
+              closeEditor('super.onBackPressed()'); return;
+            }
+            if (enabled()) {
+              line(o, hl('callback.handleOnBackPressed()'));
+              if (unsaved) { dialog(); return; }
+              closeEditor('the callback calls finish() itself, without a preview'); return;
+            }
+            closeEditor(t36 ? 'by the system, after the preview' : 'by the system');
+          }
+          const iBtns = Object.entries(IMPL).map(([k, label]) => cmd(label, () => { if (busy) return; impl = k; reopen(); say(o, note(`implementation: ${label}`)); }));
+          const tBtn = cmd('', () => { if (busy) return; t36 = !t36; reopen(); say(o, note(t36 ? 'targetSdk 36 on Android 16: predictive back on by default' : 'targetSdk 35 without opt-in: the old behavior')); });
+          view.replaceChildren(layers);
+          dev.append(arrow);
+          reopen();
+          say(o, note('Try the swipe with an empty draft, then type and try again.'));
+          el.append(
+            h('div', { class: 'controls' }, tBtn),
+            h('div', { class: 'controls' }, iBtns),
+            h('div', { class: 'stage' }, dev, h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'EditorActivity'), cbEl, obpEl, draftEl)),
+            h('div', { class: 'controls' }, cmd('type a comment', type), cmd('save draft', save), cmd('open editor again', reopen)),
+            h('div', { class: 'controls' }, cmd('start back swipe', swipe), cmd('let go', release), cmd('swipe back to the edge', cancel)),
             o);
         },
       },

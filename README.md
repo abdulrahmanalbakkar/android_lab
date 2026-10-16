@@ -8,23 +8,24 @@ Live at https://android-lab.abedalrahmanalbakkar.workers.dev/
 
 ## Features
 
-- **Subway map** (`#home`): every track is a colored line and every lesson a station, grouped as Foundations, Building apps, Going deeper and Shipping. A "you are here" marker shows your last lesson. Tracks you haven't reached yet are dimmed but still open.
+- **Roadmap** (`#home`): one path from Programming basics to Ship it, in 8 stages. Each stage lists its topics as cards (core, optional or project) with progress, and "You are here" marks the topic you're on.
 - **Track pages** (`#<track>`) and **lesson pages** (`#<track>.<lesson>`): demo, code, "Pin this" rule, optional Go deeper / Under the hood / Common mistakes, practice, terms and a quiz.
-- **Capstone projects**: guided builds drawn on the map as a double "express" rail at the end of their group. A project page shows "What you'll build" and its steps; each step links the lessons to review first.
+- **Capstone projects**: guided builds shown as a double-bordered card at the end of their stage. A project page shows "What you'll build" and its steps; each step links the lessons to review first.
 - **Interview practice** (`#interview`): timed, mixed-topic questions drawn from every quiz. Pick topics or a preset, 10/20/30 questions and no limit, 30 s or 60 s per question. Results show a per-topic breakdown, explanations for every miss, and a button that adds the misses to Review. Best scores are kept per setup.
 - **Spaced review** (`#review`): quiz questions come back after 1, 3, 7, 21 and 60 days while you keep getting them right.
 - **Search** (`/`) across tracks, projects, lessons and glossary terms, and a **glossary** (`#glossary`).
 - **Keyboard**: `←` `→` lessons, `/` search, `m` map, `r` review, `i` interview, `g` glossary, `t` theme, `?` all shortcuts. In interview mode, `1`–`4` answer and `Enter` moves on.
+- **Official docs**: each lesson links 1–3 official pages, listed in `js/docs.js` (keys are `track.lesson`).
 - Light and dark themes (System, Light, Dark), works offline once visited, installable as an app.
 
 Progress lives in this browser's `localStorage` under `android-lab:v1`.
 
 ## Add a track
 
-1. Copy the shape of `tracks/kotlin.js` into `tracks/<name>.js` and call `Lab.addTrack({...})`. The header comment in `js/app.js` lists the optional fields (`group`, `requires`, `hue`, lesson `deeper` / `underHood` / `mistakes`).
+1. Copy the shape of `tracks/kotlin.js` into `tracks/<name>.js` and call `Lab.addTrack({...})`. Put it on the roadmap by adding its id to a stage in `STAGES` in `js/app.js` (or give the track `stage: '<stage title>'`, plus `optional: true` if it's optional). The header comment in `js/app.js` lists the other optional fields (`requires`, `hue`, lesson `deeper` / `underHood` / `mistakes`).
 2. Add `<script src="tracks/<name>.js"></script>` to `index.html`, before the capstone scripts.
 
-The map, search, glossary, level filters, review, interview mode and the offline cache pick it up automatically.
+The roadmap, search, glossary, level filters, review, interview mode and the offline cache pick it up automatically.
 
 ## Add a capstone project
 
@@ -32,7 +33,7 @@ A project is a track with two extra fields, and its lessons are build steps:
 
 ```js
 Lab.addTrack({
-  id: 'cap-notes', kind: 'project', group: 'Building apps',
+  id: 'cap-notes', kind: 'project', stage: 'Architecture',
   title: 'Build a notes app', requires: ['compose', 'arch'],
   description: 'One sentence about the project.',
   builds: 'One sentence: what the learner has at the end.',
@@ -40,7 +41,7 @@ Lab.addTrack({
 });
 ```
 
-`refs` are `track.lesson` ids shown as "Review first" links; ids that don't resolve are skipped. List the script after the regular tracks in `index.html`. The map puts a project at the end of its group whatever the load order.
+`refs` are `track.lesson` ids shown as "Review first" links; ids that don't resolve are skipped. List the script after the regular tracks in `index.html`.
 
 ## Check
 

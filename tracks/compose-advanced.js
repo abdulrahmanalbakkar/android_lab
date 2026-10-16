@@ -225,12 +225,51 @@ button.cx-tn:hover { border-color: var(--accent); }
 .cx-d2-pp.cx-d2-ok { color: var(--t-k); box-shadow: inset 0 -2px 0 currentColor; }
 .cx-d2-pp.cx-d2-err { color: var(--t-e); box-shadow: inset 0 -2px 0 currentColor; }
 .cx-d2-dstack { min-height: 100px; }
+/* promoted: drawing */
+.cx-dr-wrap { display: grid; grid-template-columns: minmax(0, 230px) minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+.cx-dr-svgbox { min-width: 0; }
+.cx-dr-svg { display: block; width: 100%; max-width: 230px; height: auto; margin: 0 auto; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.cx-dr-grid { stroke: var(--line); stroke-width: 0.6; }
+.cx-dr-frame { fill: var(--surface); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.cx-dr-axis { fill: none; stroke: var(--err); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cx-dr-lbl { fill: var(--muted); font: 600 10px var(--mono); }
+.cx-dr-new { animation: cx-dr-in 0.5s ease-out; }
+@keyframes cx-dr-in { from { opacity: 0; } }
+.cx-dr-ops { margin: 0; padding-left: 1.6em; display: grid; gap: 6px; font: 500 0.78rem var(--mono); min-width: 0; }
+.cx-dr-ops li { overflow-wrap: anywhere; }
+.cx-dr-chip { position: relative; display: inline-grid; place-items: center; min-width: 150px; min-height: 64px; border-radius: 12px; border: 1px dashed var(--line); overflow: hidden; }
+.cx-dr-txt { position: relative; padding: 10px 22px; font: 800 1.5rem var(--display); color: var(--ink); }
+.cx-dr-txt.cx-dr-gone { visibility: hidden; }
+.cx-dr-bg { position: absolute; inset: 8px; border-radius: 10px; background: var(--warm-soft); box-shadow: inset 0 0 0 2px var(--warm); }
+.cx-dr-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 62%, transparent); }
+/* promoted: shared elements */
+.cx-se-stage { position: relative; width: 100%; max-width: 280px; height: 280px; box-sizing: border-box; border-radius: 22px; border: 6px solid var(--code-bg); background: var(--surface); overflow: hidden; }
+.cx-se-scr { position: absolute; inset: 0; padding: 12px; display: grid; align-content: start; gap: 8px; transition: opacity 0.35s; min-width: 0; }
+.cx-se-scr.cx-se-hide { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity 0.35s, visibility 0s 0.35s; }
+.cx-se-h { font: 800 1.1rem var(--display); }
+.cx-se-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cx-se-card { display: grid; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink); font: 600 0.74rem var(--body); text-align: left; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.cx-se-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.cx-se-img { display: block; aspect-ratio: 1; border-radius: 10px; }
+.cx-se-hero { display: block; height: 110px; border-radius: 14px; }
+.cx-se-back { justify-self: start; padding: 2px 8px; border: 0; border-radius: 8px; background: var(--sunk); color: var(--ink); font: 600 0.76rem var(--mono); cursor: pointer; }
+.cx-se-title { font: 800 1.15rem var(--display); }
+.cx-se-blurb { font-size: 0.84rem; color: var(--muted); }
+.cx-se-lines i { display: block; height: 9px; margin-top: 6px; border-radius: 5px; background: var(--sunk); }
+.cx-se-fly { position: absolute; z-index: 3; border-radius: 12px; transition: left 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cx-se-ghost { visibility: hidden; }
+/* promoted: nav3 */
+.cx-n3-code { padding: 8px 12px; border-radius: 9px; background: var(--code-bg); color: var(--code-ink); font: 600 0.8rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
+.cx-n3-stack { min-height: 200px; }
+@media (max-width: 640px) {
+  .cx-dr-wrap { grid-template-columns: minmax(0, 1fr); }
+}
 `;
 
   Lab.addTrack({
     id: 'compose2',
     title: 'Compose, advanced',
-    description: 'Make Compose fast and expressive: skipping, phases, locals, animation, custom layouts and typed navigation.',
+    description: 'Make Compose fast and expressive: skipping, phases, drawing, locals, animation, shared elements, custom layouts and navigation.',
     group: 'Going deeper', requires: ['compose'],
     css,
     lessons: [
@@ -757,7 +796,7 @@ fun SubmitButton(form: SignUpFormState, onSubmit: () -> Unit) {
         level: 'advanced',
         body: `
 <p>Compose builds each frame in three phases. <em>Composition</em> runs your composable functions and decides what UI exists. <em>Layout</em> measures and places every node. <em>Drawing</em> paints the pixels. Compose tracks each state read by the phase it happens in, and a change reruns that phase and the ones after it.</p>
-<p>Read a scroll value in the composable body and every scrolled frame goes through all three phases. Move the read into a lambda that runs later and Compose skips the earlier work. The lambda form <code>Modifier.offset { }</code> reads during layout. <code>Modifier.graphicsLayer { }</code> and <code>drawBehind { }</code> read during drawing.</p>
+<p>Read a scroll value in the composable body and every scrolled frame goes through all three phases. Move the read into a lambda that runs later and Compose skips the earlier work. The lambda form <code>Modifier.offset { }</code> reads during layout. <code>Modifier.graphicsLayer { }</code> and <code>drawBehind { }</code> read during drawing. The next lesson, Drawing with Canvas and draw modifiers, shows what you can paint there.</p>
 <p>This is also why fast-changing values are often passed as <code>() -&gt; Int</code> instead of <code>Int</code>. The child calls the lambda inside its own layout or draw block, so the read never happens during composition.</p>`,
         code: `@Composable
 fun CollapsingHeader(scrollProvider: () -> Int) {
@@ -852,62 +891,6 @@ fun ArticleScreen() {
             },
           },
           {
-            title: 'Draw-only reads: drawBehind',
-            body: `<p><code>Modifier.background(color)</code> takes the color as a value, so an animated color recomposes the composable on every frame. The new modifier only needs a redraw, so layout is skipped, but composition still runs.</p>
-<p><code>drawBehind { drawRect(color) }</code> reads the color while drawing. Same pixels, and composition sits still. The same goes for <code>Modifier.alpha(a)</code> versus <code>graphicsLayer { alpha = a }</code>.</p>`,
-            code: `val color by animateColorAsState(if (selected) Selected else Idle, label = "chip")
-
-// Recomposes on every frame of the animation
-Box(Modifier.size(80.dp).background(color))
-
-// Draw phase only
-Box(Modifier.size(80.dp).drawBehind { drawRect(color) })`,
-            visual(el) {
-              const FR = 12;
-              let draw = false, sel = false, busy = false;
-              const chip = h('div', { class: 'cx-dc-chip' }, 'Chip');
-              const names = ['Composition', 'Layout', 'Drawing'];
-              const grid = h('div', { class: 'cx-ph-grid', role: 'img', 'aria-label': 'Phases run per frame' });
-              const cells = names.map(n => {
-                grid.append(h('span', { class: 'cx-ph-name' }, n));
-                return Array.from({ length: FR }, () => { const c = h('span', { class: 'cx-ph-cell' }); grid.append(c); return c; });
-              });
-              const btns = [cmd('Modifier.background(color)', () => pick(false)), cmd('Modifier.drawBehind { drawRect(color) }', () => pick(true))];
-              const o = out();
-              const runs = p => (p === 2 || (p === 0 && !draw));
-              function pick(v) {
-                if (busy) return;
-                draw = v; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (v ? 1 : 0))));
-                cells.flat().forEach(c => c.classList.remove('cx-on', 'cx-off'));
-                say(o, `${hl(v ? 'drawBehind { }' : 'background(color)')} <span class="muted">// press selected = !selected</span>`);
-              }
-              async function anim() {
-                if (busy) return; busy = true;
-                sel = !sel;
-                cells.flat().forEach(c => c.classList.remove('cx-on', 'cx-off'));
-                for (let f = 0; f < FR; f++) {
-                  const p = Math.round(((f + 1) / FR) * 100);
-                  chip.style.background = `color-mix(in srgb, var(--accent) ${sel ? p : 100 - p}%, var(--sunk))`;
-                  chip.style.color = (sel ? p : 100 - p) > 50 ? 'var(--accent-ink)' : 'var(--ink)';
-                  cells.forEach((row, ph) => row[f].classList.add(runs(ph) ? 'cx-on' : 'cx-off'));
-                  await sleep(90);
-                  if (!el.isConnected) return;
-                }
-                const work = [0, 1, 2].filter(runs).length * FR;
-                say(o, draw
-                  ? `<span class="good">${work} phase runs</span> for ${FR} frames: drawing only.`
-                  : `<span class="bad">${work} phase runs</span> for ${FR} frames: composition and drawing. Layout skipped, since the size never changed.`);
-                busy = false;
-              }
-              pick(false);
-              el.append(
-                h('div', { class: 'cx-split' }, grid, chip),
-                h('div', { class: 'controls cx-ctl' }, btns),
-                h('div', { class: 'controls cx-ctl' }, cmd('selected = !selected', anim)),
-                o);
-            },
-          },
-          {
             title: 'Backward writes cost a frame',
             body: `<p>The phases run in order inside a frame. If layout writes a State that composition already read, Compose can only act on it in the next frame. For one frame the screen shows the old layout, and the work runs twice.</p>
 <p><code>onSizeChanged</code> feeding a <code>mutableStateOf</code> is the classic case. When one child’s size must shape its siblings, measure them together in a custom <code>Layout</code>, or use <code>SubcomposeLayout</code> when the content itself depends on a size.</p>`,
@@ -993,6 +976,243 @@ TopBar(showTitle = showTitle)`,
             h('div', { class: 'cx-phases' }, pv, h('div', { class: 'timeline cx-tl' }, lanes.map(L => L.el))),
             h('div', { class: 'controls cx-ctl' }, buttons),
             h('div', { class: 'controls cx-ctl' }, h('button', { class: 'btn primary small', onclick: play }, 'Play 14 frames')),
+            o);
+        },
+      },
+
+      // 3b ────────────────────────────────────────────
+      {
+        id: 'drawing',
+        title: 'Drawing with Canvas and draw modifiers',
+        tagline: 'Paint shapes yourself with DrawScope, behind or on top of any composable.',
+        level: 'intermediate',
+        body: `
+<p>When no ready-made composable draws what you need, paint it yourself. <code>Canvas(modifier) { }</code> gives you a <code>DrawScope</code>: a drawing area with a <code>size</code> and functions like <code>drawRect</code>, <code>drawCircle</code>, <code>drawLine</code> and <code>drawPath</code>. <code>Canvas</code> is only a wrapper around <code>Modifier.drawBehind</code>, so you can draw behind any composable the same way.</p>
+<p>The origin <code>(0, 0)</code> is the top-left corner. <code>x</code> grows to the right and <code>y</code> grows down. Every number is in pixels, so convert with <code>8.dp.toPx()</code> or work in fractions of <code>size</code>. Calls run in order, and each one paints over the ones before it.</p>
+<p><code>rotate</code>, <code>scale</code>, <code>translate</code> and <code>inset</code> move what you draw inside their block. They only touch the draw phase, so the composable keeps its size and place in the layout.</p>`,
+        code: `@Composable
+fun ProgressRing(progress: Float, modifier: Modifier = Modifier) {
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    val fill = MaterialTheme.colorScheme.primary
+    Canvas(modifier.size(64.dp)) {
+        val stroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+        val inset = stroke.width / 2
+        // A full circle for the track, then the progress arc on top of it
+        drawArc(track, startAngle = 0f, sweepAngle = 360f, useCenter = false,
+            topLeft = Offset(inset, inset), size = Size(size.width - stroke.width, size.height - stroke.width), style = stroke)
+        drawArc(fill, startAngle = -90f, sweepAngle = 360f * progress, useCenter = false,
+            topLeft = Offset(inset, inset), size = Size(size.width - stroke.width, size.height - stroke.width), style = stroke)
+    }
+}
+
+// A highlight behind a Text, no extra Box needed
+Text(
+    "Yeni",
+    Modifier
+        .drawBehind { drawRoundRect(Color(0xFFFFE08A), cornerRadius = CornerRadius(8.dp.toPx())) }
+        .padding(horizontal = 8.dp, vertical = 2.dp),
+)`,
+        remember: '(0, 0) is the top-left, units are pixels, and later draw calls paint on top.',
+        terms: [
+          { term: 'DrawScope', def: 'The receiver of Canvas and the draw modifiers. It knows the drawing area’s size and offers drawRect, drawCircle, drawPath and the transforms.' },
+          { term: 'Canvas (Compose)', def: 'A composable that gives you a DrawScope to paint in. It is a wrapper around Modifier.drawBehind.' },
+          { term: 'drawWithContent', def: 'A draw modifier where you call drawContent() yourself, so you choose what is drawn before and after the composable’s own content.' },
+          { term: 'drawWithCache', def: 'A draw modifier that keeps objects such as brushes and paths between frames until the size or a state it read changes.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Draw a dot 8 dp wide in the center, then a scrim on top of the content.', code: 'Canvas(Modifier.size(48.dp)) {\n    drawCircle(Color.Red, radius = 4.dp.[[toPx]]())\n}\n\nModifier.drawWithContent {\n    [[drawContent]]()\n    drawRect(Color.Black.copy(alpha = 0.4f))\n}', why: 'DrawScope works in pixels, so dp values need <code>toPx()</code>. In <code>drawWithContent</code>, whatever you draw after <code>drawContent()</code> lands on top.' },
+          { type: 'bug', prompt: 'The badge shows a yellow box and no text. Tap the line to fix.', code: 'Text(\n    "Yeni",\n    Modifier.drawWithContent {\n        drawRect(Color.Yellow)\n    }\n)', bug: 3, fix: '        drawRect(Color.Yellow); drawContent()', why: '<code>drawWithContent</code> replaces the normal drawing. If you never call <code>drawContent()</code>, the text is not drawn at all.' },
+        ],
+        quiz: [
+          { q: 'In a <code>DrawScope</code>, where is <code>Offset(0f, 0f)</code>?', options: ['Top-left corner', 'Center', 'Bottom-left corner'], a: 0, why: 'x grows to the right and y grows down from the top-left pixel.' },
+          { q: 'What is <code>Canvas(modifier) { }</code> built on?', options: ['<code>Modifier.drawBehind</code>', 'An Android <code>View</code> with <code>onDraw</code>', '<code>SubcomposeLayout</code>'], a: 0, why: 'Canvas is a convenient wrapper around <code>Modifier.drawBehind</code>.' },
+          { q: 'You wrap drawing in <code>rotate(45f) { }</code>. What happens to the composable’s layout size?', options: ['Nothing, transforms only affect drawing', 'It grows to fit the rotated shape', 'Its parent measures it again'], a: 0, why: 'DrawScope transforms run in the draw phase only. Layout never sees them.' },
+        ],
+        deeper: [
+          {
+            title: 'Before or after the content: drawWithContent',
+            body: `<p><code>drawBehind</code> always paints under the composable’s own content. <code>drawWithContent</code> hands you the order: call <code>drawContent()</code> where you want the content to appear. Draw after it for a scrim or a badge on top. Draw before it for a background.</p>
+<p>Pick an order and watch the layers stack, bottom first.</p>`,
+            code: `// A dark scrim over an image, without an extra Box
+Image(
+    painter, contentDescription = null,
+    modifier = Modifier.drawWithContent {
+        drawContent()                                   // the image
+        drawRect(Color.Black.copy(alpha = 0.45f))       // then the scrim on top
+    },
+)`,
+            visual(el) {
+              const MODES = [
+                { src: 'drawBehind { drawRoundRect(highlight) }', layers: ['bg', 'txt'], note: 'drawBehind: always under the content' },
+                { src: 'drawWithContent { drawContent(); drawRect(scrim) }', layers: ['txt', 'scrim'], note: 'scrim after drawContent(): on top' },
+                { src: 'drawWithContent { drawRect(scrim); drawContent() }', layers: ['scrim', 'txt'], note: 'scrim before drawContent(): under the text' },
+                { src: 'drawWithContent { drawRect(scrim) }', layers: ['scrim'], note: 'no drawContent(): the text is gone' },
+              ];
+              const NAME = { bg: 'drawRoundRect(highlight)', txt: 'drawContent()  // the Text', scrim: 'drawRect(scrim)' };
+              const chip = h('div', { class: 'cx-dr-chip', role: 'img', 'aria-label': 'Text with drawn layers' });
+              const list = h('ol', { class: 'cx-dr-ops' });
+              const o = out();
+              const btns = MODES.map((m, i) => cmd(m.src, () => pick(i)));
+              function pick(i) {
+                const m = MODES[i];
+                btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+                chip.replaceChildren(...m.layers.map(k => k === 'txt' ? h('span', { class: 'cx-dr-txt' }, 'İndirim') : h('span', { class: k === 'bg' ? 'cx-dr-bg' : 'cx-dr-scrim' })));
+                if (!m.layers.includes('txt')) chip.append(h('span', { class: 'cx-dr-txt cx-dr-gone' }, 'İndirim'));
+                list.replaceChildren(...m.layers.map((k, j) => h('li', { class: 'drop-in', style: `animation-delay:${j * 0.12}s` }, NAME[k])));
+                replay(chip, 'pop-soft');
+                say(o, `${hl(m.src)} <span class="muted">// ${m.note}</span>`);
+              }
+              pick(0);
+              el.append(
+                h('div', { class: 'cx-dr-wrap' }, h('div', { class: 'stage' }, chip), h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Draw calls, bottom first'), list)),
+                h('div', { class: 'controls cx-ctl' }, btns),
+                o);
+            },
+          },
+          {
+            title: 'Draw-only reads: drawBehind',
+            body: `<p><code>Modifier.background(color)</code> takes the color as a value, so an animated color recomposes the composable on every frame. The new modifier only needs a redraw, so layout is skipped, but composition still runs.</p>
+<p><code>drawBehind { drawRect(color) }</code> reads the color while drawing. Same pixels, and composition sits still. The same goes for <code>Modifier.alpha(a)</code> versus <code>graphicsLayer { alpha = a }</code>.</p>`,
+            code: `val color by animateColorAsState(if (selected) Selected else Idle, label = "chip")
+
+// Recomposes on every frame of the animation
+Box(Modifier.size(80.dp).background(color))
+
+// Draw phase only
+Box(Modifier.size(80.dp).drawBehind { drawRect(color) })`,
+            visual(el) {
+              const FR = 12;
+              let draw = false, sel = false, busy = false;
+              const chip = h('div', { class: 'cx-dc-chip' }, 'Chip');
+              const names = ['Composition', 'Layout', 'Drawing'];
+              const grid = h('div', { class: 'cx-ph-grid', role: 'img', 'aria-label': 'Phases run per frame' });
+              const cells = names.map(n => {
+                grid.append(h('span', { class: 'cx-ph-name' }, n));
+                return Array.from({ length: FR }, () => { const c = h('span', { class: 'cx-ph-cell' }); grid.append(c); return c; });
+              });
+              const btns = [cmd('Modifier.background(color)', () => pick(false)), cmd('Modifier.drawBehind { drawRect(color) }', () => pick(true))];
+              const o = out();
+              const runs = p => (p === 2 || (p === 0 && !draw));
+              function pick(v) {
+                if (busy) return;
+                draw = v; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (v ? 1 : 0))));
+                cells.flat().forEach(c => c.classList.remove('cx-on', 'cx-off'));
+                say(o, `${hl(v ? 'drawBehind { }' : 'background(color)')} <span class="muted">// press selected = !selected</span>`);
+              }
+              async function anim() {
+                if (busy) return; busy = true;
+                sel = !sel;
+                cells.flat().forEach(c => c.classList.remove('cx-on', 'cx-off'));
+                for (let f = 0; f < FR; f++) {
+                  const p = Math.round(((f + 1) / FR) * 100);
+                  chip.style.background = `color-mix(in srgb, var(--accent) ${sel ? p : 100 - p}%, var(--sunk))`;
+                  chip.style.color = (sel ? p : 100 - p) > 50 ? 'var(--accent-ink)' : 'var(--ink)';
+                  cells.forEach((row, ph) => row[f].classList.add(runs(ph) ? 'cx-on' : 'cx-off'));
+                  await sleep(90);
+                  if (!el.isConnected) return;
+                }
+                const work = [0, 1, 2].filter(runs).length * FR;
+                say(o, draw
+                  ? `<span class="good">${work} phase runs</span> for ${FR} frames: drawing only.`
+                  : `<span class="bad">${work} phase runs</span> for ${FR} frames: composition and drawing. Layout skipped, since the size never changed.`);
+                busy = false;
+              }
+              pick(false);
+              el.append(
+                h('div', { class: 'cx-split' }, grid, chip),
+                h('div', { class: 'controls cx-ctl' }, btns),
+                h('div', { class: 'controls cx-ctl' }, cmd('selected = !selected', anim)),
+                o);
+            },
+          },
+          {
+            title: 'drawWithCache: build once, draw every frame',
+            body: `<p>The draw lambda can run on every frame, for example during an animation. Creating a <code>Brush</code> or a <code>Path</code> inside it creates a new object each time. <code>drawWithCache</code> splits the work: the outer block builds objects, and <code>onDrawBehind</code> or <code>onDrawWithContent</code> uses them.</p>
+<p>The cache is kept as long as the size stays the same and no State read in the outer block changes. Only use it when you really create objects. For plain colors, <code>drawBehind</code> is enough.</p>`,
+            code: `Box(
+    Modifier
+        .size(120.dp)
+        .drawWithCache {
+            // Runs again only when the size or a read State changes
+            val brush = Brush.linearGradient(listOf(Color(0xFFE30A17), Color(0xFFFFB4A8)))
+            val corner = CornerRadius(16.dp.toPx())
+            onDrawBehind {
+                drawRoundRect(brush, cornerRadius = corner)   // every frame, no allocation
+            }
+        },
+)`,
+          },
+          {
+            title: 'graphicsLayer: change how it draws, not where it sits',
+            body: `<p><code>Modifier.graphicsLayer</code> draws the composable into its own layer, then applies <code>scaleX</code>, <code>scaleY</code>, <code>rotationZ</code>, <code>translationX</code>, <code>alpha</code>, <code>clip</code> and <code>shape</code> to that layer. It does not change the measured size or the placement, so neighbours never move.</p>
+<p>When a value comes from State or an animation, use the lambda form. The read then happens in the draw phase, as the Phases lesson showed.</p>`,
+            code: `val pressed by interactionSource.collectIsPressedAsState()
+val scale by animateFloatAsState(if (pressed) 0.94f else 1f, label = "press")
+
+Card(
+    Modifier.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+        shadowElevation = 8.dp.toPx()
+        shape = RoundedCornerShape(16.dp)
+        clip = true
+    },
+) { /* ... */ }`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'Creating a Brush on every frame',
+            bad: `Modifier.drawBehind {
+    val brush = Brush.verticalGradient(listOf(top, bottom))   // new object each frame
+    drawRect(brush)
+}`,
+            good: `Modifier.drawWithCache {
+    val brush = Brush.verticalGradient(listOf(top, bottom))   // built once per size
+    onDrawBehind { drawRect(brush) }
+}`,
+            why: 'During an animation the draw block runs every frame. Allocating there creates garbage and can cause dropped frames. <code>drawWithCache</code> keeps the brush until the size changes.',
+          },
+          {
+            title: 'Treating numbers as dp',
+            bad: `Canvas(Modifier.size(48.dp)) {
+    drawCircle(Color.Red, radius = 8f)   // 8 pixels, tiny on a dense screen
+}`,
+            good: `Canvas(Modifier.size(48.dp)) {
+    drawCircle(Color.Red, radius = 8.dp.toPx())
+}`,
+            why: 'All DrawScope sizes are pixels. On a high-density phone 8 px is about 3 dp. Convert with <code>toPx()</code>, or use fractions of <code>size</code>.',
+          },
+        ],
+        visual(el) {
+          const OPS = [
+            { src: 'drawRect(primary, size = size / 2f)', svg: '<rect x="0" y="0" width="100" height="100" style="fill:var(--accent)"/>', note: 'starts at the origin, top-left, and covers a quarter' },
+            { src: 'drawCircle(tertiary, radius = 40f)', svg: '<circle cx="100" cy="100" r="40" style="fill:var(--warm)"/>', note: 'no center given: it uses the center of size' },
+            { src: 'drawLine(onSurface, start = Offset(size.width, 0f), end = Offset(0f, size.height), strokeWidth = 6f)', svg: '<line x1="200" y1="0" x2="0" y2="200" style="stroke:var(--ink);stroke-width:6"/>', note: 'top-right to bottom-left: y grows downward' },
+            { src: 'rotate(45f) { drawRect(secondary, topLeft = Offset(70f, 70f), size = size / 3.3f) }', svg: '<rect x="70" y="70" width="60" height="60" transform="rotate(45 100 100)" style="fill:var(--ok);opacity:0.9"/>', note: 'rotated around the center. Layout did not change' },
+          ];
+          const done = [];
+          const grid = [];
+          for (let i = 20; i < 200; i += 20) grid.push(`<line class="cx-dr-grid" x1="${i}" y1="0" x2="${i}" y2="200"/><line class="cx-dr-grid" x1="0" y1="${i}" x2="200" y2="${i}"/>`);
+          const svg = h('div', { class: 'cx-dr-svgbox', role: 'img', 'aria-label': 'A 200 by 200 pixel canvas' });
+          const list = h('ol', { class: 'cx-dr-ops' });
+          const o = out();
+          function paint(fresh) {
+            svg.innerHTML = `<svg class="cx-dr-svg" viewBox="-14 -14 228 228" aria-hidden="true">${grid.join('')}<rect x="0" y="0" width="200" height="200" class="cx-dr-frame"/>`
+              + done.map((k, i) => `<g class="${i === fresh ? 'cx-dr-new' : ''}">${OPS[k].svg}</g>`).join('')
+              + '<path class="cx-dr-axis" d="M0 0 H60 M54 -4 L60 0 L54 4 M0 0 V60 M-4 54 L0 60 L4 54"/><text class="cx-dr-lbl" x="64" y="4">x</text><text class="cx-dr-lbl" x="-4" y="72">y</text><text class="cx-dr-lbl" x="3" y="-4">(0, 0)</text><text class="cx-dr-lbl" x="150" y="212">200 × 200 px</text></svg>';
+            list.replaceChildren(...(done.length ? done.map(k => h('li', { html: hl(OPS[k].src) })) : [h('li', { class: 'muted' }, 'nothing drawn yet')]));
+          }
+          const btns = OPS.map((op, k) => cmd(op.src, () => {
+            done.push(k); paint(done.length - 1);
+            say(o, `<span class="good">drawn</span> <span class="muted">// ${op.note}${done.length > 1 ? '. It paints over earlier calls' : ''}</span>`);
+          }));
+          paint(-1);
+          say(o, 'The Canvas is 200 by 200 pixels. Add draw calls in any order.');
+          el.append(
+            h('div', { class: 'cx-dr-wrap' }, svg, h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Canvas(Modifier.size(...)) {'), list, h('span', { class: 'cx-label' }, '}'))),
+            h('div', { class: 'controls cx-ctl' }, btns),
+            h('div', { class: 'controls cx-ctl' }, act('Clear the canvas', () => { done.length = 0; paint(-1); say(o, 'Cleared. Order matters: try the circle before the square.'); })),
             o);
         },
       },
@@ -1622,6 +1842,182 @@ Box(Modifier.offset { IntOffset(x.roundToPx(), 0) })`,
         },
       },
 
+      // 5b ────────────────────────────────────────────
+      {
+        id: 'shared-elements',
+        title: 'Shared element transitions',
+        tagline: 'One element travels from the old screen to the new one.',
+        level: 'advanced',
+        body: `
+<p>A shared element transition connects two screens through something they both show. Tap a photo in a grid and the same photo grows into the header of the detail screen, so the user can see where they went. In Compose these APIs are stable since Compose Animation 1.10.</p>
+<p>Three pieces work together. <code>SharedTransitionLayout</code> wraps both screens and gives you a <code>SharedTransitionScope</code>. The screens switch inside an <code>AnimatedContent</code>, an <code>AnimatedVisibility</code> or a <code>NavHost</code>, which supplies the <code>AnimatedVisibilityScope</code>. On each side, <code>Modifier.sharedElement(rememberSharedContentState(key), animatedVisibilityScope)</code> marks the element. When the keys match, Compose animates the bounds from the old spot to the new one.</p>
+<p>The key is the contract. Use something unique per item, like <code>"image-${'$'}{dish.id}"</code>, and use the same key on both screens.</p>`,
+        code: `@Composable
+fun MenuApp(dishes: List<Dish>) {
+    var selected by remember { mutableStateOf<Dish?>(null) }
+    SharedTransitionLayout {
+        AnimatedContent(selected, label = "menu") { dish ->
+            if (dish == null) {
+                DishGrid(dishes, onOpen = { selected = it }, this@SharedTransitionLayout, this@AnimatedContent)
+            } else {
+                DishDetail(dish, onBack = { selected = null }, this@SharedTransitionLayout, this@AnimatedContent)
+            }
+        }
+    }
+}
+
+@Composable
+fun DishDetail(
+    dish: Dish, onBack: () -> Unit,
+    shared: SharedTransitionScope, visibility: AnimatedVisibilityScope,
+) = with(shared) {
+    Column {
+        Image(
+            painterResource(dish.photo), contentDescription = dish.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .sharedElement(rememberSharedContentState(key = "image-\${dish.id}"), animatedVisibilityScope = visibility)
+                .fillMaxWidth()
+                .height(220.dp),
+        )
+        Text(dish.name, style = MaterialTheme.typography.headlineSmall)
+    }
+}`,
+        remember: 'SharedTransitionLayout outside, AnimatedContent inside, the same unique key on both screens.',
+        terms: [
+          { term: 'SharedTransitionLayout', def: 'The outer composable for shared element transitions. It provides the SharedTransitionScope that the shared modifiers need.' },
+          { term: 'Modifier.sharedElement', def: 'Marks a composable as the same element on two screens. Only the target content is drawn while its bounds animate.' },
+          { term: 'Modifier.sharedBounds', def: 'Shares only the container bounds between two visually different pieces of content, fading one out and the other in.' },
+          { term: 'rememberSharedContentState', def: 'Remembers the SharedContentState that holds the key used to match elements across screens.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Mark the photo as shared, keyed by the dish id.', code: 'Image(\n    painter, contentDescription = dish.name,\n    modifier = Modifier.[[sharedElement]](\n        [[rememberSharedContentState]](key = "image-${dish.id}"),\n        animatedVisibilityScope = this@AnimatedContent,\n    ),\n)', why: '<code>sharedElement</code> needs the shared content state, which carries the key, and the scope of the AnimatedContent that switches the screens.' },
+          { type: 'bug', prompt: 'Tapping any dish animates the wrong photo, or none at all. Tap the broken line in the grid cell.', code: '@Composable\nfun SharedTransitionScope.DishCell(dish: Dish, scope: AnimatedVisibilityScope) {\n    Image(\n        painterResource(dish.photo), contentDescription = dish.name,\n        modifier = Modifier.sharedElement(\n            rememberSharedContentState(key = "image"),\n            animatedVisibilityScope = scope,\n        ),\n    )\n}', bug: 5, fix: '            rememberSharedContentState(key = "image-${dish.id}"),', why: 'Every cell uses the same key, so Compose can’t tell which grid photo matches the detail header. Make the key unique per item.' },
+        ],
+        quiz: [
+          { q: 'Where does the <code>AnimatedVisibilityScope</code> come from?', options: ['From the <code>AnimatedContent</code>, <code>AnimatedVisibility</code> or <code>NavHost</code> that switches the screens', 'From <code>SharedTransitionLayout</code>', 'From <code>rememberSharedContentState</code>'], a: 0, why: '<code>SharedTransitionLayout</code> gives the shared scope. The thing that animates the screens in and out gives the visibility scope.' },
+          { q: 'The list shows a title in small grey text. The detail shows it large and bold. Which modifier fits?', options: ['<code>sharedBounds</code>', '<code>sharedElement</code>', '<code>animateContentSize</code>'], a: 0, why: '<code>sharedBounds</code> is for content that looks different on each side. The guide prefers it for text, so font and color can change.' },
+          { q: 'When do two shared elements animate together?', options: ['When their keys are equal', 'When they are the same composable function', 'When they have the same size'], a: 0, why: 'Matching is by key only. Same key on both screens, one element moves.' },
+        ],
+        deeper: [
+          {
+            title: 'sharedElement or sharedBounds',
+            body: `<p><code>sharedElement</code> is for the same content on both sides, like the same photo. During the move only the target content is drawn inside the moving bounds.</p>
+<p><code>sharedBounds</code> is for content that looks different but takes the same area, like a card that grows into a full screen. Both the old and the new content are visible during the move, and you choose how they fade with <code>enter</code> and <code>exit</code>. Use it for text too, so the font and color can change on the way.</p>`,
+            code: `// A card that becomes the whole detail screen: container transform
+Surface(
+    Modifier.sharedBounds(
+        rememberSharedContentState(key = "card-\${dish.id}"),
+        animatedVisibilityScope = visibility,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+    ),
+) { DishCard(dish) }`,
+          },
+          {
+            title: 'With Navigation, NavHost is the AnimatedContent',
+            body: `<p>Navigation Compose switches screens with an animation already, so each <code>composable&lt;Route&gt; { }</code> block runs inside an <code>AnimatedContentScope</code>. Wrap the <code>NavHost</code> in <code>SharedTransitionLayout</code> and pass both scopes down.</p>
+<p>Passing two scopes through every screen gets noisy. A <code>CompositionLocal</code> for the shared scope is a common way to keep signatures short.</p>`,
+            code: `SharedTransitionLayout {
+    NavHost(navController, startDestination = Menu) {
+        composable<Menu> {
+            DishGrid(onOpen = { navController.navigate(Detail(it.id)) },
+                shared = this@SharedTransitionLayout, visibility = this@composable)
+        }
+        composable<Detail> { entry ->
+            DishDetail(entry.toRoute<Detail>().id,
+                shared = this@SharedTransitionLayout, visibility = this@composable)
+        }
+    }
+}`,
+          },
+          {
+            title: 'Know the limits',
+            body: `<p>Shared elements work between composables only. There is no shared transition between Views and Compose, and that includes <code>Dialog</code> and <code>ModalBottomSheet</code>. <code>ContentScale</code> is not animated: it snaps to the end value. Shapes don’t morph by themselves, so a square does not round into a circle.</p>
+<p>To check that a match was found, keep the state in a variable and read <code>isMatchFound</code>. A false value usually means a typo in the key, or one side was not composed.</p>`,
+            code: `val imageState = rememberSharedContentState(key = "image-\${dish.id}")
+Image(painter, null, Modifier.sharedElement(imageState, animatedVisibilityScope = visibility))
+
+// While debugging
+Log.d("Shared", "match for \${dish.id}: \${imageState.isMatchFound}")`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'One key for every item',
+            bad: `items(dishes) { dish ->
+    Image(painter, null, Modifier.sharedElement(
+        rememberSharedContentState(key = "photo"), animatedVisibilityScope = visibility))
+}`,
+            good: `items(dishes, key = { it.id }) { dish ->
+    Image(painter, null, Modifier.sharedElement(
+        rememberSharedContentState(key = "photo-\${dish.id}"), animatedVisibilityScope = visibility))
+}`,
+            why: 'Matching is by key. With one key for the whole list there is no single match, so the transition picks the wrong element or none.',
+          },
+          {
+            title: 'sharedElement on text that changes style',
+            bad: `Text(dish.name, style = titleSmall,
+    modifier = Modifier.sharedElement(rememberSharedContentState("name-\${dish.id}"), visibility))`,
+            good: `Text(dish.name, style = titleSmall,
+    modifier = Modifier.sharedBounds(rememberSharedContentState("name-\${dish.id}"), visibility))`,
+            why: '<code>sharedElement</code> draws only the target during the move, so the small text jumps to the large style at once. <code>sharedBounds</code> shows both and fades between them.',
+          },
+        ],
+        visual(el) {
+          const DISHES = [
+            { id: 1, name: 'Simit', tone: 'var(--warm)', blurb: 'Sesame ring bread, best with tea.' },
+            { id: 2, name: 'Baklava', tone: 'var(--ok)', blurb: 'Thin layers, pistachio and syrup.' },
+            { id: 3, name: 'Künefe', tone: 'var(--accent)', blurb: 'Served hot, cheese inside.' },
+          ];
+          let shared = true, open = null, busy = false;
+          const s = h('input', { type: 'checkbox', id: 'cx-se-on', checked: true });
+          const toggle = h('label', { class: 'switch', for: 'cx-se-on' }, s, h('span', { html: hl('Modifier.sharedElement(...)') }));
+          const thumbs = {};
+          const grid = h('div', { class: 'cx-se-grid' }, DISHES.map(d => {
+            thumbs[d.id] = h('span', { class: 'cx-se-img', style: `background:${d.tone}` });
+            return h('button', { class: 'cx-se-card', onclick: () => go(d), 'aria-label': `Open ${d.name}` }, thumbs[d.id], h('span', {}, d.name));
+          }));
+          const listScr = h('div', { class: 'cx-se-scr' }, h('p', { class: 'cx-se-h' }, 'Menü'), grid);
+          const hero = h('span', { class: 'cx-se-hero' });
+          const title = h('p', { class: 'cx-se-title' });
+          const blurb = h('p', { class: 'cx-se-blurb' });
+          const back = h('button', { class: 'cx-se-back', onclick: () => go(null) }, '‹ Back');
+          const detScr = h('div', { class: 'cx-se-scr cx-se-hide' }, back, hero, title, blurb, h('div', { class: 'cx-se-lines' }, h('i', { style: 'width:90%' }), h('i', { style: 'width:70%' })));
+          const stage = h('div', { class: 'cx-se-stage' }, listScr, detScr);
+          const o = out();
+          const rel = node => { const a = node.getBoundingClientRect(), b = stage.getBoundingClientRect(); return { l: a.left - b.left - 6, t: a.top - b.top - 6, w: a.width, h: a.height }; };
+          async function go(dish) {
+            if (busy) return; busy = true;
+            const d = dish || open;
+            const from = dish ? thumbs[d.id] : hero, to = dish ? hero : thumbs[d.id];
+            if (dish) { hero.style.background = d.tone; title.textContent = d.name; blurb.textContent = d.blurb; }
+            const a = rel(from);
+            listScr.classList.toggle('cx-se-hide', !!dish); detScr.classList.toggle('cx-se-hide', !dish);
+            if (shared) {
+              const b = rel(to);
+              from.classList.add('cx-se-ghost'); to.classList.add('cx-se-ghost');
+              const fly = h('span', { class: 'cx-se-fly', style: `background:${d.tone};left:${a.l}px;top:${a.t}px;width:${a.w}px;height:${a.h}px` });
+              stage.append(fly);
+              void fly.offsetWidth;
+              Object.assign(fly.style, { left: b.l + 'px', top: b.t + 'px', width: b.w + 'px', height: b.h + 'px' });
+              say(o, `key <b>"image-${d.id}"</b> found on both screens: <span class="good">the photo moves</span> from its old bounds to the new ones.`);
+              await sleep(560);
+              fly.remove(); from.classList.remove('cx-se-ghost'); to.classList.remove('cx-se-ghost');
+            } else {
+              say(o, '<span class="muted">No shared element: AnimatedContent cross-fades two separate screens. The eye loses the photo.</span>');
+              await sleep(380);
+            }
+            open = dish;
+            busy = false;
+          }
+          s.addEventListener('change', () => { shared = s.checked; say(o, shared ? 'Both screens mark the photo with the same key. Tap a dish.' : 'The modifier is gone. Tap a dish.'); });
+          say(o, 'Tap a dish to open it, then go back. Turn the modifier off and compare.');
+          el.append(h('div', { class: 'stage' }, stage), h('div', { class: 'controls cx-ctl' }, toggle), o);
+        },
+      },
+
       // 6 ─────────────────────────────────────────────
       {
         id: 'layout',
@@ -1931,7 +2327,7 @@ HorizontalDivider(
         body: `
 <p>Navigation Compose 2.8 and later uses Kotlin types as routes. Mark each destination <code>@Serializable</code>: a <code>data object</code> when it takes no arguments, a <code>data class</code> when it does. A typo in a route or a missing argument is now a compile error.</p>
 <p>Build the graph with <code>NavHost</code> and one <code>composable&lt;Route&gt;</code> per screen. Navigate with <code>navController.navigate(Product(id = 42))</code>. On the other side, <code>entry.toRoute&lt;Product&gt;()</code> gives you the typed object back, and a ViewModel can call <code>savedStateHandle.toRoute&lt;Product&gt;()</code>. Pass ids, then load the data from a repository.</p>
-<p>Each <code>navigate</code> pushes an entry onto the back stack, and <code>popBackStack()</code> removes the top one. <code>launchSingleTop</code> and <code>popUpTo</code> keep the stack tidy. Navigation 3, a newer library where you hold the back stack as a plain list, keeps the same idea of typed keys.</p>`,
+<p>Each <code>navigate</code> pushes an entry onto the back stack, and <code>popBackStack()</code> removes the top one. <code>launchSingleTop</code> and <code>popUpTo</code> keep the stack tidy. Navigation 3, a newer library where you hold the back stack as a plain list, keeps the same idea of typed keys. It has its own lesson next.</p>`,
         code: `@Serializable data object Home
 @Serializable data class Product(val id: Int)
 @Serializable data object Cart
@@ -2238,6 +2634,230 @@ composable<Results> { /* ... */ }`,
           el.append(
             h('div', { class: 'cx-nav' }, h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Back stack (top is current)'), stackEl), phone),
             h('div', { class: 'controls cx-ctl' }, productBtn, cartBtn, popBtn, homeBtn),
+            o);
+        },
+      },
+      // 8 ─────────────────────────────────────────────
+      {
+        id: 'nav3',
+        title: 'Navigation 3: you own the back stack',
+        tagline: 'The back stack is a list you hold. Add to go forward, remove to go back.',
+        level: 'intermediate',
+        body: `
+<p>Navigation 3 (<code>androidx.navigation3</code>, stable since 1.0 in November 2025) is a navigation library built for Compose. There is no <code>NavController</code> and no graph. The back stack is a list of keys that you create and change yourself. To go forward, <code>backStack.add(Product("42"))</code>. To go back, <code>backStack.removeLastOrNull()</code>.</p>
+<p><code>NavDisplay</code> watches that list and shows the content for the keys in it. Its <code>entryProvider</code> turns each key into a <code>NavEntry</code>, usually with the <code>entry&lt;Key&gt; { }</code> DSL. The list must be backed by snapshot state, so Compose sees every change.</p>
+<p>Because it is your list, odd moves are plain list operations. Drop every product screen with <code>removeAll</code>, or replace the whole stack after login. Keys are usually small serializable classes, the same idea as typed routes in the previous lesson.</p>`,
+        code: `@Serializable data object Home : NavKey
+@Serializable data class Product(val id: String) : NavKey
+@Serializable data object Cart : NavKey
+
+@Composable
+fun ShopApp() {
+    val backStack = rememberNavBackStack(Home)   // survives rotation and process death
+
+    NavDisplay(
+        backStack = backStack,
+        onBack = { backStack.removeLastOrNull() },
+        entryProvider = entryProvider {
+            entry<Home> {
+                HomeScreen(onProduct = { id -> backStack.add(Product(id)) })
+            }
+            entry<Product> { key ->
+                ProductScreen(id = key.id, onCart = { backStack.add(Cart) })
+            }
+            entry<Cart> {
+                CartScreen(onDone = {
+                    backStack.removeAll { it != Home }   // back to Home in one step
+                })
+            }
+        },
+    )
+}`,
+        remember: 'Navigation 3: the back stack is your list. NavDisplay draws it, entryProvider turns keys into screens.',
+        terms: [
+          { term: 'NavDisplay', def: 'The Navigation 3 composable that observes a back stack list and shows the content for its entries.' },
+          { term: 'NavEntry', def: 'A Navigation 3 destination: a key plus the composable content to show for it, with optional metadata.' },
+          { term: 'entryProvider', def: 'The function, or entryProvider { entry<Key> { } } DSL, that turns a back stack key into a NavEntry.' },
+          { term: 'NavKey', def: 'A marker interface for @Serializable keys, so rememberNavBackStack can save the back stack.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Open the product, wire up back, and map the key to its screen.', code: 'backStack.[[add]](Product(id = "42"))\n\nNavDisplay(\n    backStack = backStack,\n    onBack = { backStack.[[removeLastOrNull]]() },\n    entryProvider = entryProvider {\n        entry<[[Product]]> { key -> ProductScreen(key.id) }\n    },\n)', why: 'Forward and back are list operations. The <code>entry</code> type parameter says which key class this content handles.' },
+          { type: 'bug', prompt: 'Tapping a product does nothing on screen, but the log shows the key was added. Tap the line.', code: '@Composable\nfun ShopApp() {\n    val backStack = remember { mutableListOf<Any>(Home) }\n    NavDisplay(\n        backStack = backStack,\n        onBack = { backStack.removeLastOrNull() },\n        entryProvider = shopEntries(backStack),\n    )\n}', bug: 2, fix: '    val backStack = rememberNavBackStack(Home)', why: 'A plain <code>mutableListOf</code> is not snapshot state, so Compose never hears about the change. <code>rememberNavBackStack</code> (or <code>mutableStateListOf</code>) is observable, and it is also saved.' },
+        ],
+        quiz: [
+          { q: 'In Navigation 3, how do you open a screen?', options: ['Add its key to the back stack list', 'Call <code>navController.navigate()</code>', 'Add a destination to the graph'], a: 0, why: 'There is no controller. <code>NavDisplay</code> shows what is in the list, so adding a key is navigating.' },
+          { q: 'Which back stack survives process death?', options: ['<code>rememberNavBackStack(Home)</code> with @Serializable keys that implement NavKey', '<code>remember { mutableStateListOf(Home) }</code>', 'Any list, NavDisplay saves it'], a: 0, why: '<code>rememberNavBackStack</code> saves the keys, which is why they must be serializable. Plain <code>remember</code> is lost on rotation too.' },
+          { q: 'Stack: Home, Product(1), Product(2), Cart. You run <code>backStack.removeAll { it is Product }</code>. What is shown?', options: ['Cart, with Home below it', 'Product(2)', 'Home'], a: 0, why: 'The list becomes Home, Cart. The top is still Cart, and back now goes straight to Home.' },
+        ],
+        deeper: [
+          {
+            title: 'Save the stack: NavKey and rememberNavBackStack',
+            body: `<p><code>remember { mutableStateListOf(Home) }</code> works until the Activity is recreated. Rotation or process death resets it to Home. <code>rememberNavBackStack</code> saves the list for you, through configuration changes and process death.</p>
+<p>To be saved, each key must be marked <code>@Serializable</code> and implement <code>NavKey</code>, a marker interface. Keep keys small: ids, not loaded objects.</p>`,
+            code: `@Serializable data object Inbox : NavKey
+@Serializable data class Thread(val id: Long) : NavKey
+
+@Composable
+fun MailApp() {
+    val backStack = rememberNavBackStack(Inbox)   // NavBackStack<NavKey>, saved for you
+    NavDisplay(backStack = backStack, onBack = { backStack.removeLastOrNull() }, entryProvider = mailEntries(backStack))
+}`,
+          },
+          {
+            title: 'One back stack per tab',
+            body: `<p>Bottom tabs usually keep their own history. With Navigation 3 that is just more lists: one back stack per tab, and a state for the selected tab. <code>NavDisplay</code> shows the list of the current tab, and back pops from that list.</p>
+<p>What back does on a tab’s first screen is your choice. A common one: go to the Home tab first, then leave the app. Open screens in each tab, switch, and press back.</p>`,
+            code: `val stacks = mapOf(
+    Home to rememberNavBackStack(Home),
+    Search to rememberNavBackStack(Search),
+    Profile to rememberNavBackStack(Profile),
+)
+var tab: NavKey by remember { mutableStateOf(Home) }
+val current = stacks.getValue(tab)
+
+Scaffold(bottomBar = { ShopTabs(selected = tab, onSelect = { tab = it }) }) { padding ->
+    NavDisplay(
+        backStack = current,
+        onBack = { if (current.size > 1) current.removeLastOrNull() else tab = Home },
+        entryProvider = shopEntries(current),
+        modifier = Modifier.padding(padding),
+    )
+}`,
+            visual(el) {
+              const TABS = ['Home', 'Search', 'Profile'];
+              const NEXT = { Home: ['Product(42)', 'Product(7)', 'Cart'], Search: ['Results("simit")', 'Product(3)', 'Product(9)'], Profile: ['Orders', 'Order(1001)', 'Help'] };
+              const stacks = Object.fromEntries(TABS.map(t => [t, [t]]));
+              let tab = 'Home';
+              const shelf = h('div', { class: 'cx-d2-shelf' });
+              const scr = h('div', { class: 'cx-d2-nscreen' });
+              const tabBtns = TABS.map(t => h('button', { class: 'cx-d2-tab', onclick: () => pick(t) }, t));
+              const phone = h('div', { class: 'cx-d2-nphone' }, scr, h('div', { class: 'cx-d2-tabs' }, tabBtns));
+              const o = out();
+              function paint() {
+                tabBtns.forEach((b, i) => { b.classList.toggle('cx-d2-tab-on', TABS[i] === tab); b.setAttribute('aria-pressed', String(TABS[i] === tab)); });
+                shelf.replaceChildren(h('span', { class: 'cx-label' }, 'One list per tab'), ...TABS.map(t => h('div', { class: 'cx-d2-saved' + (t === tab ? ' cx-d2-saved-on' : '') }, h('b', {}, t + ':'), h('span', {}, '[' + stacks[t].join(', ') + ']'))));
+                const top = stacks[tab][stacks[tab].length - 1];
+                scr.replaceChildren(h('div', {}, h('p', { class: 'cx-scr-title' }, top), h('p', { class: 'cx-scr-code' }, `${tab} stack, depth ${stacks[tab].length}`)));
+                replay(scr, 'pop-soft');
+              }
+              function pick(t) { tab = t; paint(); say(o, `tab = ${t} <span class="muted">// NavDisplay now shows the ${t} list. Its history is intact.</span>`); }
+              function open() {
+                const s = stacks[tab], nxt = NEXT[tab][(s.length - 1) % NEXT[tab].length];
+                s.push(nxt); paint();
+                say(o, `${hl(`current.add(${nxt})`)} <span class="muted">// only the ${tab} list grows</span>`);
+              }
+              function back() {
+                const s = stacks[tab];
+                if (s.length > 1) { const gone = s.pop(); paint(); say(o, `${hl('current.removeLastOrNull()')} <span class="muted">// removed ${gone} from ${tab}</span>`); return; }
+                if (tab !== 'Home') { const from = tab; pick('Home'); say(o, `First screen of ${from}: <span class="muted">this app switches to the Home tab before leaving. ${from} keeps its list.</span>`); return; }
+                replay(phone, 'shake'); say(o, 'Home tab at its root: back would leave the app.');
+              }
+              paint();
+              say(o, 'Open a few screens in each tab, switch tabs, then press back.');
+              el.append(
+                h('div', { class: 'cx-nav' }, shelf, phone),
+                h('div', { class: 'controls cx-ctl' }, act('Open a screen in this tab', open), act('System back', back)),
+                o);
+            },
+          },
+          {
+            title: 'A ViewModel per entry: entry decorators',
+            body: `<p>Without help, <code>viewModel()</code> inside an entry is scoped to the Activity, so two Product screens would share one ViewModel. <code>NavDisplay</code> takes <code>entryDecorators</code> that wrap each entry. The saveable state decorator gives each entry its own <code>rememberSaveable</code> storage. The ViewModel store decorator, from <code>androidx.lifecycle:lifecycle-viewmodel-navigation3</code>, gives each entry its own ViewModel store and clears it when the key leaves the back stack.</p>`,
+            code: `NavDisplay(
+    backStack = backStack,
+    onBack = { backStack.removeLastOrNull() },
+    entryDecorators = listOf(
+        rememberSaveableStateHolderNavEntryDecorator(),   // keep this one first
+        rememberViewModelStoreNavEntryDecorator(),
+    ),
+    entryProvider = entryProvider {
+        entry<Product> { key ->
+            val vm: ProductViewModel = viewModel()   // one per Product entry
+            ProductScreen(key.id, vm)
+        }
+    },
+)`,
+          },
+          {
+            title: 'Scenes: more than one entry on screen',
+            body: `<p>Navigation 2 shows one destination at a time. <code>NavDisplay</code> can read more than one entry from the back stack at once. A <em>scene strategy</em> decides how the top entries are laid out: one at a time on a phone, or a list and its detail side by side on a wide window.</p>
+<p>Your back stack stays the same list in both cases. Only the scene changes, which is why Navigation 3 fits adaptive layouts well. The official guide and the nav3-recipes repository show list-detail and two-pane scenes.</p>`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'A back stack that forgets on rotation',
+            bad: `val backStack = remember { mutableStateListOf<Any>(Home) }`,
+            good: `@Serializable data object Home : NavKey
+
+val backStack = rememberNavBackStack(Home)`,
+            why: '<code>remember</code> is lost when the Activity is recreated, so a rotation drops the user back on Home. <code>rememberNavBackStack</code> saves the keys.',
+          },
+          {
+            title: 'Navigating from the composable body',
+            bad: `entry<Login> {
+    val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
+    if (loggedIn) backStack.add(Home)   // runs on every recomposition
+    LoginScreen(vm)
+}`,
+            good: `entry<Login> {
+    val loggedIn by vm.loggedIn.collectAsStateWithLifecycle()
+    LaunchedEffect(loggedIn) {
+        if (loggedIn) { backStack.clear(); backStack.add(Home) }
+    }
+    LoginScreen(vm)
+}`,
+            why: 'Changing the list is a side effect. In the body it repeats on each recomposition and piles up Home keys. Do it in an effect, and replace the stack so back does not return to Login.',
+          },
+        ],
+        visual(el) {
+          const ids = ['42', '7', '108'];
+          let next = 0, busy = false;
+          const stack = [];
+          const stackEl = h('div', { class: 'cx-stack cx-n3-stack', 'aria-label': 'Back stack list, first item at the bottom' });
+          const listCode = h('div', { class: 'cx-n3-code' });
+          const sTitle = h('p', { class: 'cx-scr-title' }), sCode = h('p', { class: 'cx-scr-code' });
+          const phone = h('div', { class: 'phone', role: 'img', 'aria-label': 'What NavDisplay shows' }, h('span', { class: 'cx-label' }, 'NavDisplay'), sTitle, sCode);
+          const o = out('');
+          const TITLE = k => k === 'Home' ? 'Ana sayfa' : k === 'Cart' ? 'Sepet' : `Ürün #${k.match(/\d+/)[0]}`;
+          function paint() {
+            listCode.textContent = `backStack = [${stack.map(e => e.key).join(', ')}]`;
+            stack.forEach((e, i) => e.el.classList.toggle('cx-top', i === stack.length - 1));
+            const top = stack[stack.length - 1];
+            sTitle.textContent = top ? TITLE(top.key) : '(empty)';
+            sCode.textContent = top ? `entry<${top.key.split('(')[0]}>` : 'nothing to show';
+            replay(phone, 'pop-soft');
+            prodBtn.innerHTML = hl(`backStack.add(Product("${ids[next]}"))`);
+          }
+          function push(key) { const e = { key, el: h('div', { class: 'cx-entry drop-in' }, h('span', { class: 'cx-entry-route' }, key)) }; stack.push(e); stackEl.append(e.el); }
+          async function drop(e) { e.el.classList.remove('drop-in'); e.el.classList.add('leave'); await sleep(420); e.el.remove(); }
+          const guard = fn => async () => { if (busy) return; busy = true; await fn(); busy = false; };
+          const prodBtn = cmd('', guard(async () => {
+            const id = ids[next]; next = (next + 1) % ids.length;
+            push(`Product("${id}")`); paint();
+            say(o, `<span class="muted">// one key appended. NavDisplay saw the list change and shows the new top.</span>`);
+          }));
+          const cartBtn = cmd('backStack.add(Cart)', guard(async () => { push('Cart'); paint(); say(o, '<span class="muted">// nothing stops a second Cart. Check the top yourself if you want single-top.</span>'); }));
+          const popBtn = cmd('backStack.removeLastOrNull()', guard(async () => {
+            if (stack.length === 1) { replay(stack[0].el, 'shake'); say(o, 'Only Home is left. Let system back finish the Activity instead of emptying the list.'); return; }
+            const e = stack.pop(); await drop(e); if (!el.isConnected) return; paint();
+            say(o, `<span class="muted">// removed ${e.key}. The entry below comes back.</span>`);
+          }));
+          const prunBtn = cmd('backStack.removeAll { it is Product }', guard(async () => {
+            const gone = stack.filter(e => e.key.startsWith('Product'));
+            if (!gone.length) { say(o, '<span class="muted">// no Product keys in the list</span>'); return; }
+            for (const e of gone) stack.splice(stack.indexOf(e), 1);
+            await Promise.all(gone.map(drop)); if (!el.isConnected) return; paint();
+            say(o, `<span class="good">removed ${gone.length} from the middle</span> <span class="muted">// a plain list operation, no special API</span>`);
+          }));
+          push('Home'); push('Product("42")'); next = 1;
+          const ctl = h('div', { class: 'controls cx-ctl' }, prodBtn, cartBtn, popBtn, prunBtn);
+          paint();
+          say(o, 'You own the list. Change it and watch NavDisplay follow.');
+          el.append(
+            listCode,
+            h('div', { class: 'cx-nav' }, h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Your back stack (last is shown)'), stackEl), phone),
+            ctl,
             o);
         },
       },

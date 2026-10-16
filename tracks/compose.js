@@ -448,6 +448,69 @@
 .cmp-d2g-card b { font: 700 1rem var(--display); }
 .cmp-d2g-card small { font-size: 0.78rem; color: var(--muted); }
 .cmp-d2g-card.cmp-d2g-held { cursor: grabbing; border-color: var(--accent); }
+/* images (Coil) */
+.cmp-im-wrap { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; min-width: 0; }
+.cmp-im-left { flex: 1 1 230px; display: grid; gap: 8px; min-width: 0; }
+.cmp-im-row { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
+.cmp-im-frame { position: relative; flex: none; width: 96px; height: 96px; border-radius: 12px; overflow: hidden; background: var(--bg); border: 1px dashed var(--line); }
+.cmp-im-frame > * { position: absolute; inset: 0; opacity: 0; }
+.cmp-im-frame > .cmp-im-show { opacity: 1; }
+.cmp-im-ph { display: grid; place-items: center; background: var(--sunk); color: var(--muted); font: 600 0.66rem var(--mono); animation: cmp-im-shimmer 1.4s ease-in-out infinite; }
+@keyframes cmp-im-shimmer { 50% { background: var(--line); } }
+.cmp-im-pic { background: linear-gradient(180deg, var(--warm-soft), var(--accent-soft)); }
+.cmp-im-sun { position: absolute; top: 16px; left: 14px; width: 26px; height: 26px; border-radius: 50%; background: var(--warm); }
+.cmp-im-tower { position: absolute; bottom: 0; left: 50%; width: 24px; height: 66px; margin-left: -4px; background: var(--ink); opacity: 0.85; clip-path: polygon(50% 0, 78% 24%, 78% 100%, 22% 100%, 22% 24%); }
+.cmp-im-err { display: grid; place-content: center; justify-items: center; gap: 2px; background: var(--err-soft); color: var(--err); font: 600 0.7rem var(--mono); }
+.cmp-im-err b { font-size: 1.3rem; }
+.cmp-im-text { display: grid; gap: 4px; min-width: 0; }
+.cmp-im-text b { font: 700 0.95rem var(--display); overflow-wrap: anywhere; }
+.cmp-im-text small { color: var(--muted); font-size: 0.8rem; }
+.cmp-im-state { text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+.cmp-im-pipe { flex: 1 1 200px; display: grid; gap: 4px; min-width: 0; }
+.cmp-im-pipe .arrow { justify-self: center; }
+.cmp-im-stage { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.2s, background 0.2s, opacity 0.2s; }
+.cmp-im-stage b { font: 600 0.82rem var(--mono); }
+.cmp-im-stage small { flex: 1 1 90px; color: var(--muted); font-size: 0.76rem; }
+.cmp-im-pill { font: 600 0.72rem var(--mono); padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.cmp-im-pill.cmp-im-has { background: var(--ok-soft); color: var(--ok); }
+.cmp-im-stage.cmp-im-on { border-color: var(--accent); background: var(--accent-soft); }
+.cmp-im-stage.cmp-im-hit { border-color: var(--ok); background: var(--ok-soft); }
+.cmp-im-stage.cmp-im-miss { opacity: 0.55; }
+.meter.cmp-im-meter span { transition: width 0.4s; }
+.meter.cmp-im-meter.cmp-im-hot span { background: var(--err); }
+
+/* dialogs, sheets, menus */
+.cmp-ov-wrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; min-width: 0; }
+.cmp-ov-side { flex: 1 1 220px; display: grid; gap: 10px; min-width: 0; }
+.cmp-ov-phone { position: relative; flex: none; width: min(100%, 260px); height: 340px; border-radius: 26px; border: 8px solid var(--code-bg); background: var(--bg); overflow: hidden; }
+.cmp-ov-phone.cmp-ov-mini { height: 220px; }
+.cmp-ov-bar { display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 6px 0 14px; background: var(--surface); border-bottom: 1px solid var(--line); font: 700 0.95rem var(--display); }
+.cmp-ov-more { width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: var(--ink); font: 700 1.2rem var(--body); cursor: pointer; }
+.cmp-ov-more:hover, .cmp-ov-mi:hover, .cmp-ov-sheet button.cmp-ov-sitem:hover { background: var(--sunk); }
+.cmp-ov-list { display: grid; gap: 8px; padding: 10px; }
+.cmp-ov-note { padding: 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-weight: 600; font-size: 0.86rem; overflow-wrap: anywhere; }
+.cmp-ov-mini .cmp-ov-note { margin: 10px; }
+.cmp-ov-catch { position: absolute; inset: 0; z-index: 2; display: none; }
+.cmp-ov-catch.cmp-on { display: block; }
+.cmp-ov-menu { position: absolute; top: 40px; right: 8px; z-index: 3; display: grid; min-width: 130px; padding: 6px 0; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 6px 20px rgb(0 0 0 / 0.25); transform-origin: top right; transform: scale(0.8); opacity: 0; pointer-events: none; transition: transform 0.15s, opacity 0.15s; }
+.cmp-ov-menu.cmp-on { transform: none; opacity: 1; pointer-events: auto; }
+.cmp-ov-mi, .cmp-ov-sitem { border: 0; background: none; text-align: left; padding: 10px 16px; font: 500 0.88rem var(--body); color: var(--ink); cursor: pointer; }
+div.cmp-ov-sitem { cursor: default; }
+.cmp-ov-scrim { position: absolute; inset: 0; z-index: 4; background: rgb(0 0 0 / 0.45); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+.cmp-ov-scrim.cmp-on { opacity: 1; pointer-events: auto; }
+.cmp-ov-dialog { position: absolute; z-index: 5; left: 14px; right: 14px; top: 50%; display: grid; gap: 8px; padding: 18px 16px 10px; border-radius: 22px; background: var(--surface); transform: translateY(-50%) scale(0.9); opacity: 0; pointer-events: none; transition: transform 0.2s, opacity 0.2s; }
+.cmp-ov-dialog.cmp-on { transform: translateY(-50%); opacity: 1; pointer-events: auto; }
+.cmp-ov-dialog b { font: 700 1rem var(--display); }
+.cmp-ov-dialog p { margin: 0; font-size: 0.82rem; color: var(--muted); overflow-wrap: anywhere; }
+.cmp-ov-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.cmp-ov-btns button { border: 0; border-radius: 999px; background: none; color: var(--accent); font: 700 0.86rem var(--body); padding: 8px 10px; cursor: pointer; }
+.cmp-ov-btns button:hover { background: var(--accent-soft); }
+.cmp-ov-sheet { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; padding: 8px 0 14px; border-radius: 18px 18px 0 0; background: var(--surface); transform: translateY(105%); transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1); }
+.cmp-ov-sheet.cmp-on { transform: none; }
+.cmp-ov-handle { justify-self: center; width: 32px; height: 4px; margin-bottom: 6px; border-radius: 2px; background: var(--line); }
+.cmp-ov-snack { position: absolute; z-index: 6; left: 10px; right: 10px; bottom: 10px; padding: 10px 12px; border-radius: 6px; background: var(--ink); color: var(--bg); font-size: 0.8rem; overflow-wrap: anywhere; transform: translateY(160%); transition: transform 0.25s; }
+.cmp-ov-snack.cmp-on { transform: none; }
+
 @media (max-width: 560px) {
   .cmp-d2h-cols { grid-template-columns: minmax(0, 1fr); }
 }
@@ -2840,6 +2903,288 @@ fun OverflowMenu(onSignOut: () -> Unit) {
         },
       },
 
+      // Overlays ─────────────────────────────────────────────
+      {
+        id: 'overlays',
+        title: 'Dialogs, bottom sheets, snackbars and menus',
+        tagline: 'A Boolean in state decides if the overlay exists. Your code turns it off.',
+        level: 'beginner',
+        body: `
+<p>Material 3 gives you four everyday overlays. <code>AlertDialog</code> asks a short question with confirm and dismiss buttons. <code>ModalBottomSheet</code> slides up a panel of choices. <code>DropdownMenu</code> opens a small list next to the button that opened it. A snackbar shows a brief message at the bottom, through the <code>SnackbarHost</code> in your <code>Scaffold</code> (see the Scaffold lesson).</p>
+<p>Dialogs, sheets and menus are not opened with a call. You keep a flag in state, like <code>var confirmDelete by remember { mutableStateOf(false) }</code>, and write <code>if (confirmDelete) AlertDialog(...)</code>. A tap sets the flag to <code>true</code> and the dialog enters composition. Setting it back to <code>false</code> removes it.</p>
+<p>When the user taps outside or presses back, the component calls <code>onDismissRequest</code>. It does not close itself: your lambda must set the flag to <code>false</code>. Each button must do the same. Use <code>rememberSaveable</code> for the flag if the dialog should survive rotation.</p>`,
+        code: `@OptIn(ExperimentalMaterial3Api::class)   // ModalBottomSheet is still experimental
+@Composable
+fun NoteActions(note: Note, onDelete: () -> Unit, onShare: (String) -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var showShare by rememberSaveable { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+
+    Box {                                       // the menu anchors to this Box
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(text = { Text("Share") }, onClick = { menuOpen = false; showShare = true })
+            DropdownMenuItem(text = { Text("Delete") }, onClick = { menuOpen = false; confirmDelete = true })
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete note?") },
+            text = { Text("“\${note.title}” will be removed from all your devices.") },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (showShare) {
+        ModalBottomSheet(onDismissRequest = { showShare = false }, sheetState = sheetState) {
+            listOf("WhatsApp", "E-posta", "Copy link").forEach { target ->
+                ListItem(
+                    headlineContent = { Text(target) },
+                    modifier = Modifier.clickable {
+                        onShare(target)
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            if (!sheetState.isVisible) showShare = false
+                        }
+                    },
+                )
+            }
+        }
+    }
+}`,
+        remember: 'A flag in state shows the overlay. onDismissRequest and every button must set it back to false.',
+        terms: [
+          { term: 'AlertDialog', def: 'A Material 3 dialog with a title, text and confirm and dismiss buttons, shown while it is in composition.' },
+          { term: 'onDismissRequest', def: 'The callback a dialog, sheet or menu calls when the user taps outside or presses back. Your code decides whether to close it.' },
+          { term: 'ModalBottomSheet', def: 'A panel that slides up from the bottom over a scrim. Its SheetState drives the show and hide animations.' },
+          { term: 'DropdownMenu', def: 'A popup list anchored to its parent, open while expanded is true.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Open the menu from the button and close it when the user taps outside.', code: 'var expanded by remember { mutableStateOf(false) }\nBox {\n    IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, "More options") }\n    DropdownMenu(expanded = [[expanded]], onDismissRequest = { expanded = [[false]] }) {\n        DropdownMenuItem(text = { Text("Share") }, onClick = { expanded = false; onShare() })\n    }\n}', why: 'The menu shows while <code>expanded</code> is true. A tap outside calls <code>onDismissRequest</code>, and only your lambda turns the flag off.' },
+          { type: 'bug', prompt: 'Tapping Delete removes the note, but the dialog stays on screen. Tap the wrong line.', code: 'var confirmDelete by rememberSaveable { mutableStateOf(false) }\nif (confirmDelete) {\n    AlertDialog(\n        onDismissRequest = { confirmDelete = false },\n        title = { Text("Delete note?") },\n        confirmButton = { TextButton(onClick = { onDelete() }) { Text("Delete") } },\n        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },\n    )\n}', bug: 5, fix: '        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },', why: 'The dialog is on screen because <code>confirmDelete</code> is true. Clicking a button does not change that. Each button must set the flag to false itself.' },
+        ],
+        quiz: [
+          { q: 'The user taps the scrim outside an <code>AlertDialog</code>. What happens?', options: ['The dialog closes by itself', '<code>onDismissRequest</code> runs; the dialog closes only if your code sets the flag to false', 'Nothing, dialogs ignore outside taps'], a: 1, why: 'The dialog asks to be dismissed. It stays as long as the <code>if</code> around it is true.' },
+          { q: 'Why call <code>sheetState.hide()</code> before setting <code>showShare = false</code>?', options: ['So the slide-down animation plays before the sheet leaves composition', 'Because <code>hide()</code> saves the state', 'It is not needed; the result is the same'], a: 0, why: 'Removing the sheet from composition takes it away at once. <code>hide()</code> animates it down first, and <code>invokeOnCompletion</code> removes it afterwards.' },
+          { q: 'Where does a <code>DropdownMenu</code> appear?', options: ['Always at the top of the screen', 'Next to its parent, such as the Box that holds the button', 'In the middle of the screen'], a: 1, why: 'The menu is placed relative to its parent layout. Put it in the same <code>Box</code> as the button that opens it.' },
+        ],
+        deeper: [
+          {
+            title: 'Hide the sheet, then remove it',
+            body: `
+<p><code>SheetState</code> has suspend functions <code>show()</code> and <code>hide()</code> that animate the sheet. If a button inside the sheet just sets <code>showShare = false</code>, the sheet leaves composition at once and the slide-down never plays.</p>
+<p>The pattern from the docs: launch <code>sheetState.hide()</code>, and in <code>invokeOnCompletion</code> set the flag to <code>false</code> once <code>sheetState.isVisible</code> is false. Swipes down and taps on the scrim already animate before they call <code>onDismissRequest</code>.</p>`,
+            code: `Button(onClick = {
+    scope.launch { sheetState.hide() }.invokeOnCompletion {
+        if (!sheetState.isVisible) showShare = false   // remove only after the animation
+    }
+}) { Text("Done") }`,
+            visual(el) {
+              let open = false, busy = false;
+              const sheet = h('div', { class: 'cmp-ov-sheet' }, h('i', { class: 'cmp-ov-handle' }), h('div', { class: 'cmp-ov-sitem' }, 'WhatsApp'), h('div', { class: 'cmp-ov-sitem' }, 'E-posta'));
+              const scrim = h('div', { class: 'cmp-ov-scrim' });
+              const phone = h('div', { class: 'cmp-ov-phone cmp-ov-mini' }, h('div', { class: 'cmp-ov-bar' }, 'Notlar'), h('div', { class: 'cmp-ov-note' }, 'Alışveriş listesi'), scrim, sheet);
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              const paint = (vis) => { read.innerHTML = hl(`showShare = ${open}\nsheetState.isVisible = ${vis}`); };
+              const openSheet = async () => {
+                if (busy || open) return; busy = true; open = true; paint(false);
+                scrim.classList.add('cmp-on'); sheet.style.transition = ''; void sheet.offsetWidth; sheet.classList.add('cmp-on');
+                await sleep(350); if (!el.isConnected) return; paint(true); busy = false;
+                say(o, 'Sheet open. Close it both ways and compare.');
+              };
+              async function closeDirect() {
+                if (busy || !open) return say(o, 'Open the sheet first.');
+                open = false; paint(true);
+                sheet.style.transition = 'none'; sheet.classList.remove('cmp-on'); scrim.classList.remove('cmp-on');
+                paint(false);
+                say(o, `${hl('showShare = false')} <span class="bad">// gone in one frame, no slide</span>`);
+              }
+              async function closeHide() {
+                if (busy || !open) return say(o, 'Open the sheet first.');
+                busy = true; sheet.style.transition = '';
+                say(o, `${hl('scope.launch { sheetState.hide() }')} <span class="muted">// animating…</span>`);
+                sheet.classList.remove('cmp-on'); scrim.classList.remove('cmp-on');
+                await sleep(450); if (!el.isConnected) return;
+                open = false; paint(false); replay(read, 'pop-soft');
+                say(o, `${hl('invokeOnCompletion { if (!sheetState.isVisible) showShare = false }')} <span class="good">// removed after the slide</span>`);
+                busy = false;
+              }
+              paint(false);
+              say(o, 'Open the sheet, then close it.');
+              el.append(h('div', { class: 'cmp-ov-wrap' }, phone, h('div', { class: 'cmp-ov-side' },
+                h('div', { class: 'controls' }, act('Open sheet', openSheet)),
+                h('div', { class: 'controls' }, cmd('showShare = false', closeDirect), cmd('sheetState.hide() then false', closeHide)),
+                read)), o);
+            },
+          },
+          {
+            title: 'Keep the item, not just a Boolean',
+            body: `
+<p>A dialog that confirms an action on one item needs to know which item. Two separate variables, a Boolean and a selected note, can drift apart. Keep one nullable value instead: the note waiting for confirmation. Non-null means the dialog is open, and the dialog always has the right note.</p>
+<p>When the dialog comes from data rather than a tap, such as “Your session expired”, put it in the ViewModel’s UI state and let the screen render it like everything else.</p>`,
+            code: `var pendingDelete by remember { mutableStateOf<Note?>(null) }
+
+NoteList(notes, onDeleteClick = { note -> pendingDelete = note })
+
+pendingDelete?.let { note ->
+    AlertDialog(
+        onDismissRequest = { pendingDelete = null },
+        title = { Text("Delete “\${note.title}”?") },
+        confirmButton = { TextButton(onClick = { pendingDelete = null; vm.delete(note.id) }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+    )
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>AlertDialog</code> is built on <code>Dialog</code>, and <code>ModalBottomSheet</code> uses its own dialog. Both open a separate Android window above your activity’s window. <code>DropdownMenu</code> uses a <code>Popup</code>, which is also its own window. That is why they draw above everything, including the Scaffold bars, no matter where in the tree you write them.</p>
+<p>The window lives exactly as long as the composable is in composition. The <code>if</code> around it is the switch: when it becomes false, Compose disposes the composable and the window is removed.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'An empty onDismissRequest',
+            bad: `if (confirmDelete) {
+    AlertDialog(
+        onDismissRequest = { },
+        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
+        title = { Text("Delete note?") },
+    )
+}`,
+            good: `if (confirmDelete) {
+    AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        title = { Text("Delete note?") },
+    )
+}`,
+            why: 'With an empty lambda, back and outside taps do nothing, and with no Cancel button the only way out is to delete. Block dismissal only when you really must, and say why on screen.',
+          },
+          {
+            title: 'Closing the sheet without hide()',
+            bad: `ListItem(
+    headlineContent = { Text("Copy link") },
+    modifier = Modifier.clickable { copy(); showShare = false },
+)`,
+            good: `ListItem(
+    headlineContent = { Text("Copy link") },
+    modifier = Modifier.clickable {
+        copy()
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) showShare = false
+        }
+    },
+)`,
+            why: 'Setting the flag removes the sheet in one frame. It looks like a glitch next to the smooth slide the user gets when they swipe it down.',
+          },
+          {
+            title: 'remember for a dialog that must survive rotation',
+            bad: `var confirmDelete by remember { mutableStateOf(false) }`,
+            good: `var confirmDelete by rememberSaveable { mutableStateOf(false) }`,
+            why: 'Rotation recreates the activity. A plain <code>remember</code> flag resets to false and the question the user was reading disappears.',
+          },
+        ],
+        visual(el) {
+          let menuOpen = false, confirm = false, share = false, dismissOk = true, snackT = 0;
+          const notes = ['Alışveriş listesi', 'Toplantı notları'];
+          const list = h('div', { class: 'cmp-ov-list' });
+          const moreBtn = h('button', { class: 'cmp-ov-more', type: 'button', 'aria-label': 'More options', onclick: () => setMenu(true) }, '⋮');
+          const menu = h('div', { class: 'cmp-ov-menu', role: 'menu' },
+            h('button', { type: 'button', class: 'cmp-ov-mi', onclick: () => { setMenu(false, true); setShare(true); } }, 'Share'),
+            h('button', { type: 'button', class: 'cmp-ov-mi', onclick: () => { setMenu(false, true); setConfirm(true); } }, 'Delete'));
+          const catcher = h('div', { class: 'cmp-ov-catch', onclick: () => dismiss('menu') });
+          const scrim = h('div', { class: 'cmp-ov-scrim', onclick: () => dismiss(confirm ? 'dialog' : 'sheet') });
+          const dlgText = h('p', {});
+          const dialog = h('div', { class: 'cmp-ov-dialog', role: 'dialog' }, h('b', {}, 'Delete note?'), dlgText,
+            h('div', { class: 'cmp-ov-btns' },
+              h('button', { type: 'button', onclick: () => { setConfirm(false, 'Cancel'); } }, 'Cancel'),
+              h('button', { type: 'button', onclick: () => { setConfirm(false, 'Delete'); remove(); } }, 'Delete')));
+          const sheet = h('div', { class: 'cmp-ov-sheet' }, h('i', { class: 'cmp-ov-handle' }),
+            ...['WhatsApp', 'E-posta', 'Copy link'].map(t => h('button', { type: 'button', class: 'cmp-ov-sitem', onclick: () => pick(t) }, t)));
+          const snack = h('div', { class: 'cmp-ov-snack', 'aria-live': 'polite' });
+          const phone = h('div', { class: 'cmp-ov-phone' },
+            h('div', { class: 'cmp-ov-bar' }, h('span', {}, 'Notlar'), moreBtn), list, catcher, menu, scrim, dialog, sheet, snack);
+          const read = h('div', { class: 'kt' });
+          const o = out();
+          const paintList = () => list.replaceChildren(...notes.map(n => h('div', { class: 'cmp-ov-note' }, n)));
+          const paint = () => {
+            read.innerHTML = hl(`menuOpen = ${menuOpen}\nconfirmDelete = ${confirm}\nshowShare = ${share}`);
+            replay(read, 'pop-soft');
+            menu.classList.toggle('cmp-on', menuOpen); catcher.classList.toggle('cmp-on', menuOpen);
+            scrim.classList.toggle('cmp-on', confirm || share);
+            dialog.classList.toggle('cmp-on', confirm); sheet.classList.toggle('cmp-on', share);
+          };
+          function setMenu(v, quiet) {
+            if (v && !notes.length) return say(o, 'No notes left. Reset below.');
+            menuOpen = v; paint();
+            if (!quiet) say(o, v ? `${hl('menuOpen = true')} <span class="muted">// DropdownMenu enters composition next to the ⋮ button</span>` : `${hl('onDismissRequest = { menuOpen = false }')}`);
+          }
+          function setConfirm(v, why) {
+            confirm = v; dlgText.textContent = `“${notes[0] || ''}” will be removed from all your devices.`; paint();
+            say(o, v ? `${hl('confirmDelete = true')} <span class="muted">// if (confirmDelete) AlertDialog(…) now runs</span>` : `${hl(`${why}: confirmDelete = false`)} <span class="muted">// the dialog leaves composition</span>`);
+          }
+          function setShare(v) {
+            share = v; paint();
+            if (v) say(o, `${hl('showShare = true')} <span class="muted">// ModalBottomSheet slides up</span>`);
+          }
+          async function pick(t) {
+            say(o, `${hl(`onShare("${t}")`)} then ${hl('sheetState.hide()')} <span class="muted">// slide down…</span>`);
+            sheet.classList.remove('cmp-on'); scrim.classList.remove('cmp-on');
+            await sleep(420); if (!el.isConnected) return;
+            share = false; paint();
+            toast(`Shared to ${t}`);
+          }
+          function dismiss(what) {
+            const flag = what === 'menu' ? 'menuOpen' : what === 'dialog' ? 'confirmDelete' : 'showShare';
+            if (!dismissOk && what !== 'sheet') {
+              replay(what === 'menu' ? menu : dialog, 'shake');
+              say(o, `${hl('onDismissRequest = { }')} <span class="bad">// called, but nothing changes: ${flag} is still true</span>`);
+              return;
+            }
+            if (what === 'menu') { menuOpen = false; paint(); }
+            else if (what === 'dialog') { confirm = false; paint(); }
+            else { share = false; paint(); }
+            say(o, `${hl(`onDismissRequest = { ${flag} = false }`)} <span class="muted">// outside tap or back</span>`);
+          }
+          function back() {
+            if (confirm) dismiss('dialog'); else if (share) dismiss('sheet'); else if (menuOpen) dismiss('menu');
+            else say(o, 'Nothing is open. Back would leave the screen.');
+          }
+          function remove() {
+            const n = notes.shift(); paintList();
+            toast(`“${n}” deleted`);
+          }
+          function toast(msg) {
+            clearTimeout(snackT);
+            snack.textContent = msg; snack.classList.add('cmp-on');
+            snackT = setTimeout(() => snack.classList.remove('cmp-on'), 2400);
+          }
+          const sw = h('input', { type: 'checkbox', id: 'cmp-ov-dismiss', checked: true });
+          sw.addEventListener('change', () => {
+            dismissOk = sw.checked;
+            say(o, dismissOk ? `${hl('onDismissRequest = { confirmDelete = false }')} <span class="good">// outside taps and back close it</span>` : `${hl('onDismissRequest = { }')} <span class="bad">// open the dialog or menu, then tap outside</span>`);
+          });
+          paintList(); paint();
+          say(o, 'Tap ⋮ in the phone. Open the dialog and the sheet, then tap outside or press back.');
+          el.append(
+            h('div', { class: 'cmp-ov-wrap' }, phone,
+              h('div', { class: 'cmp-ov-side' }, read,
+                h('label', { class: 'switch', for: 'cmp-ov-dismiss' }, sw, 'onDismissRequest sets the flag'),
+                h('div', { class: 'controls' },
+                  act('Press back', back),
+                  act('Reset notes', () => { notes.splice(0, notes.length, 'Alışveriş listesi', 'Toplantı notları'); menuOpen = confirm = share = false; paintList(); paint(); say(o, 'Notes restored.'); })))),
+            o);
+        },
+      },
+
       // 9 ─────────────────────────────────────────────
       {
         id: 'text-input',
@@ -2848,7 +3193,7 @@ fun OverflowMenu(onSignOut: () -> Unit) {
         body: `
 <p><code>TextField</code> and <code>OutlinedTextField</code> are the Material 3 inputs. In the classic form you pass <code>value</code> and <code>onValueChange</code>. The field never changes its own text. It reports each edit, and you write the new text into state. Ignore the callback and typing does nothing.</p>
 <p><code>keyboardOptions</code> tells the soft keyboard what to show. <code>KeyboardType.Email</code> adds an @ key, <code>KeyboardType.Number</code> shows digits, and <code>imeAction</code> picks the action key, such as Next or Done. <code>keyboardActions</code> says what that key does. By default, Next moves focus to the next field. The keyboard type does not filter input, so validate the text yourself.</p>
-<p>Show errors with <code>isError</code> and explain them in <code>supportingText</code>. Wait until the user has typed something before you complain. Material 3 also has a newer overload that takes a <code>TextFieldState</code> in place of value and callback.</p>`,
+<p>Show errors with <code>isError</code> and explain them in <code>supportingText</code>. Wait until the user has typed something before you complain. Material 3 also has a newer overload that takes a <code>TextFieldState</code> in place of value and callback. The next lesson, TextFieldState and transformations, covers it.</p>`,
         code: `@Composable
 fun LoginForm(onSubmit: (String, String) -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
@@ -2900,85 +3245,6 @@ fun LoginForm(onSubmit: (String, String) -> Unit) {
           { q: 'You set <code>imeAction = ImeAction.Next</code> and no <code>keyboardActions</code>. What does the key do?', options: ['Submits the form', 'Moves focus to the next field', 'Nothing'], a: 1, why: 'Next moves focus by default. Pass <code>KeyboardActions(onNext = ...)</code> only to change that.' },
         ],
         deeper: [
-          {
-            title: 'TextFieldState and transformations',
-            body: `<p>The newer text field API takes a <code>TextFieldState</code> in place of <code>value</code> and <code>onValueChange</code>. Create it with <code>rememberTextFieldState()</code>, which also survives rotation and process death. Read the text with <code>state.text</code>, and change it with <code>state.edit { }</code> or <code>state.setTextAndPlaceCursorAtEnd()</code>.</p>
-<p>Two hooks shape the text. An <code>InputTransformation</code> runs on every edit before it is stored. It can change the edit or reject it with <code>revertAllChanges()</code>, and <code>InputTransformation.maxLength(10)</code> is built in. An <code>OutputTransformation</code> only changes what is drawn. Below, the state holds 10 plain digits while the field shows a formatted phone number.</p>`,
-            code: `object DigitsOnly : InputTransformation {
-    override fun TextFieldBuffer.transformInput() {
-        if (!asCharSequence().all { it.isDigit() }) revertAllChanges()
-    }
-}
-
-object PhoneFormat : OutputTransformation {
-    override fun TextFieldBuffer.transformOutput() {
-        if (length > 0) insert(0, "(")
-        if (length > 4) insert(4, ")")
-        if (length > 8) insert(8, "-")
-    }
-}
-
-val phone = rememberTextFieldState()
-OutlinedTextField(
-    state = phone,
-    label = { Text("Phone") },
-    lineLimits = TextFieldLineLimits.SingleLine,
-    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-    inputTransformation = InputTransformation.maxLength(10).then(DigitsOnly),
-    outputTransformation = PhoneFormat,     // draws (555)123-4567, stores 5551234567
-)`,
-            visual(el) {
-              let text = '555', fmt = true;
-              const shown = h('span', { class: 'cmp-d2i-shown' });
-              const field = h('div', { class: 'cmp-field cmp-d2i-field' }, h('span', { class: 'cmp-field-label' }, 'Phone'), h('span', { class: 'cmp-field-line' }, shown, h('span', { class: 'cmp-caret' })));
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2i-fmt', checked: true });
-              const format = s => {
-                let b = s;
-                if (b.length > 0) b = '(' + b;
-                if (b.length > 4) b = b.slice(0, 4) + ')' + b.slice(4);
-                if (b.length > 8) b = b.slice(0, 8) + '-' + b.slice(8);
-                return b;
-              };
-              function paint() {
-                shown.textContent = fmt ? format(text) : text;
-                read.innerHTML = hl(`phone.text = "${text}"   // what is stored\nshown on screen = "${fmt ? format(text) : text}"`);
-              }
-              function edit(proposed, label) {
-                if (proposed.length > 10) {
-                  replay(field, 'shake');
-                  say(o, `${hl('InputTransformation.maxLength(10)')} <span class="bad">rejected</span> ${esc(label)}. The state keeps 10 digits.`);
-                  return;
-                }
-                if (!/^\d*$/.test(proposed)) {
-                  replay(field, 'shake');
-                  say(o, `${hl('DigitsOnly')} called ${hl('revertAllChanges()')}: ${esc(label)} had characters that are not digits. <span class="muted">Nothing was stored.</span>`);
-                  return;
-                }
-                text = proposed; paint(); replay(shown, 'pop-soft');
-                say(o, `${esc(label)} <span class="muted">→</span> ${hl(`phone.text = "${text}"`)}${fmt ? ' <span class="muted">// PhoneFormat only changes the drawing</span>' : ''}`);
-              }
-              const key = d => h('button', { class: 'cmp-kb-key', type: 'button', onclick: () => edit(text + d, `typed ${d}`) }, d);
-              const pad = h('div', { class: 'cmp-d2i-pad' },
-                ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(key),
-                h('button', { class: 'cmp-kb-key', type: 'button', 'aria-label': 'Delete', onclick: () => edit(text.slice(0, -1), 'backspace') }, '⌫'),
-                key('0'));
-              sw.addEventListener('change', () => {
-                fmt = sw.checked; paint(); replay(shown, 'pop-soft');
-                say(o, fmt ? `${hl('outputTransformation = PhoneFormat')} <span class="muted">// same state, formatted drawing</span>` : 'No OutputTransformation. The field draws exactly what is stored.');
-              });
-              paint();
-              say(o, 'Type digits on the pad. Then try pasting a formatted number.');
-              el.append(
-                h('div', { class: 'cmp-ti-wrap' }, h('div', { class: 'cmp-ly-group' }, field, pad), read),
-                h('div', { class: 'controls' },
-                  cmd('phone.setTextAndPlaceCursorAtEnd("")', () => { text = ''; paint(); say(o, `${hl('setTextAndPlaceCursorAtEnd("")')} <span class="muted">// code edits go through the state too</span>`); }),
-                  act('Paste "+1 (555) 010-9999"', () => edit('+1 (555) 010-9999', 'the paste'))),
-                h('label', { class: 'switch', for: 'cmp-d2i-fmt' }, sw, 'outputTransformation = PhoneFormat'),
-                o);
-            },
-          },
           {
             title: 'Keep value updates synchronous',
             body: `<p>With <code>value</code> and <code>onValueChange</code>, the field reports an edit and then shows whatever <code>value</code> you pass back on the next frame. If that write is late, for example because it goes through a <code>Flow</code>, a debounce or a database first, the keyboard keeps typing on top of an old value. Letters get lost or the cursor jumps.</p>
@@ -3037,6 +3303,21 @@ OutlinedTextField(
               el.append(field, h('div', { class: 'controls' }, modeBtns), h('div', { class: 'controls' }, act(`Type “${WORD}” fast`, typeFast)), log, o);
             },
           },
+          {
+            title: 'Move focus from code',
+            body: `<p>To put the cursor in a field when the screen opens, attach a <code>FocusRequester</code> with <code>Modifier.focusRequester</code> and call <code>requestFocus()</code> from an effect, after the field is in the composition. To close the keyboard after submit, clear focus with <code>LocalFocusManager</code>.</p>`,
+            code: `val searchFocus = remember { FocusRequester() }
+val focusManager = LocalFocusManager.current
+
+OutlinedTextField(
+    value = query,
+    onValueChange = { query = it },
+    modifier = Modifier.focusRequester(searchFocus),
+    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus(); search(query) }),
+    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+)
+LaunchedEffect(Unit) { searchFocus.requestFocus() }`,
+          },
         ],
         underHood: {
           body: `<p>The soft keyboard is a separate app, the IME. It talks to the focused field through an input connection and sends edit commands: commit this text, set this composing text, delete around the cursor. The field applies them to its own editing buffer.</p>
@@ -3062,16 +3343,6 @@ TextField(
     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
 )`,
             why: 'The dots only change the drawing. With a normal text keyboard, the IME may suggest words and learn what was typed. <code>KeyboardType.Password</code> tells it this is a password.',
-          },
-          {
-            title: 'Expecting initialText to follow your data',
-            bad: `val name = rememberTextFieldState(initialText = user.name)
-// user loads later: the field stays empty`,
-            good: `val name = rememberTextFieldState()
-LaunchedEffect(user.id) {
-    name.setTextAndPlaceCursorAtEnd(user.name)
-}`,
-            why: '<code>initialText</code> is used once, when the state is created. A different value on a later recomposition is ignored. Set the text with an edit call when the data arrives.',
           },
         ],
         visual(el) {
@@ -3188,6 +3459,176 @@ LaunchedEffect(user.id) {
             kb, o);
           typeBtns[1].setAttribute('aria-pressed', 'true');
           typeBtns.forEach((b, i) => b.addEventListener('click', () => typeBtns.forEach((x, j) => x.setAttribute('aria-pressed', String(i === j)))));
+        },
+      },
+
+      // 9a ─────────────────────────────────────────────
+      {
+        id: 'text-field-state',
+        title: 'TextFieldState and transformations',
+        tagline: 'The state is the edit buffer: change it directly, and shape input before it lands.',
+        level: 'intermediate',
+        body: `
+<p>The newer text field API takes a <code>TextFieldState</code> in place of <code>value</code> and <code>onValueChange</code>. Create it with <code>rememberTextFieldState()</code>, which also survives rotation and process death. Read the text with <code>state.text</code>, and change it with <code>state.edit { }</code>, <code>setTextAndPlaceCursorAtEnd()</code> or <code>clearText()</code>. There is no callback to forget, and no round trip that can fall behind the keyboard.</p>
+<p>Two hooks shape the text. An <code>InputTransformation</code> runs right after each user edit, before it is stored. It can change the edit or reject it with <code>revertAllChanges()</code>, and <code>InputTransformation.maxLength(10)</code> is built in. An <code>OutputTransformation</code> only changes what is drawn. Below, the state holds 10 plain digits while the field shows a formatted phone number.</p>`,
+        code: `object DigitsOnly : InputTransformation {
+    override fun TextFieldBuffer.transformInput() {
+        if (!asCharSequence().all { it.isDigit() }) revertAllChanges()
+    }
+}
+
+object PhoneFormat : OutputTransformation {
+    override fun TextFieldBuffer.transformOutput() {
+        if (length > 0) insert(0, "(")
+        if (length > 4) insert(4, ")")
+        if (length > 8) insert(8, "-")
+    }
+}
+
+val phone = rememberTextFieldState()
+OutlinedTextField(
+    state = phone,
+    label = { Text("Phone") },
+    lineLimits = TextFieldLineLimits.SingleLine,
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+    inputTransformation = InputTransformation.maxLength(10).then(DigitsOnly),
+    outputTransformation = PhoneFormat,     // draws (555)123-4567, stores 5551234567
+)`,
+        remember: 'TextFieldState is the buffer. InputTransformation changes what is stored, OutputTransformation only what is drawn.',
+        terms: [
+          { term: 'TextFieldState', def: 'A snapshot-backed holder for a text field’s text and selection, edited directly instead of through onValueChange.' },
+          { term: 'InputTransformation', def: 'A filter that runs on each user edit before it is saved to the TextFieldState. It can change or revert the edit.' },
+          { term: 'OutputTransformation', def: 'A formatter that changes only how the text is drawn, while the stored text stays as it is.' },
+          { term: 'TextFieldBuffer', def: 'The editable buffer passed to edit { } and to transformations, with insert, replace, append, delete and selection.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A 4-digit PIN field: digits only, at most 4.', code: 'val pin = [[rememberTextFieldState]]()\nOutlinedTextField(\n    state = pin,\n    label = { Text("PIN") },\n    inputTransformation = InputTransformation.[[maxLength]](4).then(DigitsOnly),\n    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),\n)', why: '<code>rememberTextFieldState</code> creates and saves the state. <code>maxLength</code> rejects the fifth digit before it is stored.' },
+          { type: 'bug', prompt: 'This does not compile: <code>send</code> takes a String. Tap the line.', code: 'val message = rememberTextFieldState()\nOutlinedTextField(state = message, label = { Text("Mesaj") })\nButton(onClick = {\n    chat.send(message.text)\n    message.clearText()\n}) { Text("Gönder") }', bug: 3, fix: '    chat.send(message.text.toString())', why: '<code>state.text</code> is a <code>CharSequence</code> snapshot, not a String. Call <code>toString()</code> when you hand it on.' },
+        ],
+        quiz: [
+          { q: 'An OutputTransformation adds dashes to a card number. What does <code>state.text</code> hold?', options: ['The digits with dashes', 'Only the digits the user typed'], a: 1, why: 'Output transformations change the drawing only. The stored text stays plain.' },
+          { q: 'You call <code>rememberTextFieldState(initialText = user.name)</code> and <code>user</code> loads later. What does the field show?', options: ['The loaded name', 'The value from the first composition'], a: 1, why: '<code>initialText</code> is used once, when the state is created. Set the text with an edit call when the data arrives.' },
+          { q: 'Inside <code>transformInput()</code>, the buffer holds letters in a digits-only field. What do you call?', options: ['<code>revertAllChanges()</code>', '<code>clearText()</code> on the state', 'Nothing, the keyboard type filters it'], a: 0, why: '<code>revertAllChanges()</code> drops this edit and keeps the previous text. The keyboard type never filters input.' },
+        ],
+        deeper: [
+          {
+            title: 'Change the text from code',
+            body: `<p>Every change goes through the state. <code>edit { }</code> hands you a <code>TextFieldBuffer</code> with <code>insert</code>, <code>replace</code>, <code>append</code>, <code>delete</code> and <code>selectAll()</code>. Shortcuts cover the common cases: <code>setTextAndPlaceCursorAtEnd()</code> replaces everything and puts the cursor at the end, and <code>clearText()</code> empties the field. <code>state.selection</code> tells you where the cursor is.</p>`,
+            code: `val state = rememberTextFieldState("Merhaba Android")
+
+state.edit { insert(7, ",") }                    // "Merhaba, Android"
+state.edit { replace(9, 16, "Compose") }         // "Merhaba, Compose"
+state.edit { selectAll() }                       // selection = TextRange(0, 16)
+state.setTextAndPlaceCursorAtEnd("Selam")        // selection = TextRange(5, 5)
+state.clearText()                                // selection = TextRange(0, 0)`,
+          },
+          {
+            title: 'Observe the text',
+            body: `<p>With no <code>onValueChange</code>, you watch the state instead. In a composable, collect <code>snapshotFlow { state.text.toString() }</code> inside a <code>LaunchedEffect</code>. Or keep the <code>TextFieldState</code> in the ViewModel and build a Flow there. A state created in a ViewModel does not save itself the way <code>rememberTextFieldState()</code> does, so restore it yourself if it must survive process death.</p>`,
+            code: `val username = rememberTextFieldState(initialUiState.username)
+LaunchedEffect(username) {
+    snapshotFlow { username.text.toString() }.collectLatest {
+        loginViewModel.updateUsername(it)
+    }
+}
+TextField(state = username)
+
+// or hold it in the ViewModel
+class LoginViewModel : ViewModel() {
+    val username = TextFieldState()
+    val password = TextFieldState()
+}`,
+          },
+          {
+            title: 'Passwords: SecureTextField',
+            body: `<p>For passwords there is <code>SecureTextField</code>, built on the same state-based field. It hides the text for you, so you don't need <code>PasswordVisualTransformation</code>. It takes the same <code>TextFieldState</code>, so reading and clearing work as above.</p>`,
+            code: `val password = rememberTextFieldState()
+SecureTextField(state = password)`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>TextFieldState</code> is a plain snapshot state holder, like <code>mutableStateOf</code>. Reading <code>state.text</code> during composition subscribes to it, and an edit from the keyboard or from your code is a snapshot write that triggers recomposition.</p>
+<p>The keyboard's edit commands are applied to a <code>TextFieldBuffer</code>. Your <code>InputTransformation</code> runs on that buffer right away, and only the result is committed to the state. That is why transformations should only edit the buffer and never write other state: they run in the middle of committing an edit.</p>`,
+          code: `// The order of one user edit
+// keyboard command → TextFieldBuffer
+//   → inputTransformation.transformInput()   (change or revert)
+//   → committed to TextFieldState            (recomposition)
+//   → outputTransformation.transformOutput() (drawing only)`,
+        },
+        mistakes: [
+          {
+            title: 'Expecting initialText to follow your data',
+            bad: `val name = rememberTextFieldState(initialText = user.name)
+// user loads later: the field stays empty`,
+            good: `val name = rememberTextFieldState()
+LaunchedEffect(user.id) {
+    name.setTextAndPlaceCursorAtEnd(user.name)
+}`,
+            why: '<code>initialText</code> is used once, when the state is created. A different value on a later recomposition is ignored. Set the text with an edit call when the data arrives.',
+          },
+          {
+            title: 'Writing other state inside transformInput',
+            bad: `object CountingFilter : InputTransformation {
+    override fun TextFieldBuffer.transformInput() {
+        viewModel.charCount = length       // writes state mid-edit
+    }
+}`,
+            good: `LaunchedEffect(state) {
+    snapshotFlow { state.text.length }.collect { viewModel.charCount = it }
+}`,
+            why: 'The docs say not to change state inside a transformation. Edit the buffer there, and observe the committed text elsewhere.',
+          },
+        ],
+        visual(el) {
+          let text = '555', fmt = true;
+          const shown = h('span', { class: 'cmp-d2i-shown' });
+          const field = h('div', { class: 'cmp-field cmp-d2i-field' }, h('span', { class: 'cmp-field-label' }, 'Phone'), h('span', { class: 'cmp-field-line' }, shown, h('span', { class: 'cmp-caret' })));
+          const read = h('div', { class: 'kt' });
+          const o = out();
+          const sw = h('input', { type: 'checkbox', id: 'cmp-d2i-fmt', checked: true });
+          const format = s => {
+            let b = s;
+            if (b.length > 0) b = '(' + b;
+            if (b.length > 4) b = b.slice(0, 4) + ')' + b.slice(4);
+            if (b.length > 8) b = b.slice(0, 8) + '-' + b.slice(8);
+            return b;
+          };
+          function paint() {
+            shown.textContent = fmt ? format(text) : text;
+            read.innerHTML = hl(`phone.text = "${text}"   // what is stored\nshown on screen = "${fmt ? format(text) : text}"`);
+          }
+          function edit(proposed, label) {
+            if (proposed.length > 10) {
+              replay(field, 'shake');
+              say(o, `${hl('InputTransformation.maxLength(10)')} <span class="bad">rejected</span> ${esc(label)}. The state keeps 10 digits.`);
+              return;
+            }
+            if (!/^\d*$/.test(proposed)) {
+              replay(field, 'shake');
+              say(o, `${hl('DigitsOnly')} called ${hl('revertAllChanges()')}: ${esc(label)} had characters that are not digits. <span class="muted">Nothing was stored.</span>`);
+              return;
+            }
+            text = proposed; paint(); replay(shown, 'pop-soft');
+            say(o, `${esc(label)} <span class="muted">→</span> ${hl(`phone.text = "${text}"`)}${fmt ? ' <span class="muted">// PhoneFormat only changes the drawing</span>' : ''}`);
+          }
+          const key = d => h('button', { class: 'cmp-kb-key', type: 'button', onclick: () => edit(text + d, `typed ${d}`) }, d);
+          const pad = h('div', { class: 'cmp-d2i-pad' },
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(key),
+            h('button', { class: 'cmp-kb-key', type: 'button', 'aria-label': 'Delete', onclick: () => edit(text.slice(0, -1), 'backspace') }, '⌫'),
+            key('0'));
+          sw.addEventListener('change', () => {
+            fmt = sw.checked; paint(); replay(shown, 'pop-soft');
+            say(o, fmt ? `${hl('outputTransformation = PhoneFormat')} <span class="muted">// same state, formatted drawing</span>` : 'No OutputTransformation. The field draws exactly what is stored.');
+          });
+          paint();
+          say(o, 'Type digits on the pad. Then try pasting a formatted number.');
+          el.append(
+            h('div', { class: 'cmp-ti-wrap' }, h('div', { class: 'cmp-ly-group' }, field, pad), read),
+            h('div', { class: 'controls' },
+              cmd('phone.setTextAndPlaceCursorAtEnd("")', () => { text = ''; paint(); say(o, `${hl('setTextAndPlaceCursorAtEnd("")')} <span class="muted">// code edits go through the state too</span>`); }),
+              act('Paste "+1 (555) 010-9999"', () => edit('+1 (555) 010-9999', 'the paste'))),
+            h('label', { class: 'switch', for: 'cmp-d2i-fmt' }, sw, 'outputTransformation = PhoneFormat'),
+            o);
         },
       },
 
@@ -3816,6 +4257,299 @@ fun GroceryList(items: List<Grocery>) {
         },
       },
 
+      // Images ─────────────────────────────────────────────
+      {
+        id: 'images',
+        title: 'Loading images with Coil',
+        tagline: 'AsyncImage downloads, sizes, caches and fades in a picture from a URL.',
+        level: 'beginner',
+        body: `
+<p>Compose has no built-in way to show a picture from a URL. The common choice is Coil, a Kotlin image library built on coroutines. <code>AsyncImage</code> takes a <code>model</code> (a URL string or an <code>ImageRequest</code>), downloads it off the main thread, decodes it and draws it. In Coil 3 the network code is a separate artifact: add <code>coil-network-okhttp</code> next to <code>coil-compose</code>, or every URL ends in the error state.</p>
+<p>While the image loads, <code>AsyncImage</code> draws your <code>placeholder</code>. If the request fails it draws <code>error</code>. If the model is <code>null</code>, no request runs and it draws <code>fallback</code>, which defaults to the error painter. <code>crossfade(true)</code> fades the picture in over the placeholder instead of popping it in.</p>
+<p>Coil keeps two caches, both on by default. The memory cache holds decoded bitmaps, so a row you scroll back to shows its image at once. The disk cache holds the downloaded bytes, so after the app restarts Coil reads from disk instead of the network.</p>
+<p>Give every meaningful image a <code>contentDescription</code> that TalkBack can read aloud. Pass <code>null</code> for pure decoration.</p>`,
+        code: `// build.gradle.kts (check coil-kt.github.io for the latest version)
+// implementation("io.coil-kt.coil3:coil-compose:3.6.3")
+// implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
+
+@Composable
+fun ArticleRow(article: Article, onClick: () -> Unit) {
+    Row(Modifier.clickable(onClick = onClick).padding(12.dp)) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalPlatformContext.current)
+                .data(article.imageUrl)              // String?; null shows the fallback
+                .crossfade(true)
+                .build(),
+            contentDescription = article.imageAlt,   // "Galata Kulesi at dusk"
+            placeholder = painterResource(R.drawable.image_placeholder),
+            error = painterResource(R.drawable.image_broken),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(article.title, style = MaterialTheme.typography.titleMedium)
+    }
+}`,
+        remember: 'AsyncImage with a URL, a placeholder, an error painter and a real contentDescription. Coil sizes and caches it for you.',
+        terms: [
+          { term: 'AsyncImage', def: 'Coil’s composable that runs an image request in the background and draws the result, a placeholder or an error painter.' },
+          { term: 'ImageRequest', def: 'A Coil object that describes one load: the data (URL), crossfade, size and cache options.' },
+          { term: 'Memory cache', def: 'Coil’s in-memory store of recently decoded bitmaps. A hit draws the image in the same frame, with no crossfade.' },
+          { term: 'Disk cache', def: 'Coil’s on-disk store of downloaded image bytes. It survives an app restart, so the network is not needed again.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show a grey box while loading, a broken-image icon on failure, and fill the square without stretching.', code: 'AsyncImage(\n    model = article.imageUrl,\n    contentDescription = article.imageAlt,\n    [[placeholder]] = painterResource(R.drawable.image_placeholder),\n    [[error]] = painterResource(R.drawable.image_broken),\n    contentScale = ContentScale.[[Crop]],\n    modifier = Modifier.size(96.dp),\n)', why: '<code>placeholder</code> draws during loading and <code>error</code> after a failure. <code>ContentScale.Crop</code> fills the square and trims the edges, keeping the aspect ratio.' },
+          { type: 'bug', prompt: 'Every image shows the error painter, even with a working URL. Tap the wrong line.', code: 'AsyncImage(\n    model = ImageRequest.Builder(LocalPlatformContext.current)\n        .data(article.imageUrl)\n        .crossfade(true),\n    contentDescription = article.imageAlt,\n    modifier = Modifier.size(96.dp),\n)', bug: 3, fix: '        .crossfade(true).build(),', why: '<code>model</code> is <code>Any?</code>, so passing the builder compiles. Coil then treats the builder itself as the data, finds no fetcher for it, and the request fails. Call <code>build()</code>.' },
+        ],
+        quiz: [
+          { q: 'You scroll an image off screen and straight back. Where does Coil get it?', options: ['From the network again', 'From the memory cache, drawn at once with no crossfade', 'From the disk cache, with a crossfade'], a: 1, why: 'The decoded bitmap is still in the memory cache. Coil skips the crossfade for memory hits because there is nothing to wait for.' },
+          { q: 'The model is <code>null</code> and you set only <code>placeholder</code> and <code>error</code>. What is drawn?', options: ['The placeholder, forever', 'The error painter', 'Nothing'], a: 1, why: 'A null model shows <code>fallback</code>, and <code>fallback</code> defaults to <code>error</code>.' },
+          { q: 'A Coil 3 app shows the error painter for every https URL. The URLs work in a browser. Likely cause?', options: ['The disk cache is full', 'The <code>coil-network-okhttp</code> (or Ktor) artifact is missing', 'crossfade is off'], a: 1, why: 'Since Coil 3 the core artifacts cannot load from the network. You add one of the network artifacts.' },
+        ],
+        deeper: [
+          {
+            title: 'Decode at the size you draw',
+            body: `
+<p>A phone photo can be 4000 × 3000 pixels. At 4 bytes a pixel that is about 48 MB of memory once decoded, for a thumbnail that is 96 dp wide on screen.</p>
+<p><code>AsyncImage</code> waits for its layout constraints and asks Coil to decode near that size, so the same photo costs well under 1 MB. <code>rememberAsyncImagePainter</code> cannot see the on-screen size and loads the image at its original dimensions unless you give it a size resolver. Use <code>AsyncImage</code> unless you have a reason not to.</p>`,
+            code: `// Decodes near 96 dp × 96 dp: AsyncImage reads the constraints.
+AsyncImage(model = url, contentDescription = null, modifier = Modifier.size(96.dp))
+
+// Decodes at the original size: the painter cannot see the layout.
+Image(painter = rememberAsyncImagePainter(url), contentDescription = null, modifier = Modifier.size(96.dp))`,
+            visual(el) {
+              const ROWS = 10, FULL = 48, SMALL = 0.6;
+              let mode = 'async', rows = 1;
+              const fill = h('span', { style: 'width:0%' });
+              const meter = h('div', { class: 'meter cmp-im-meter' }, fill);
+              const mb = h('div', { class: 'cmp-label' });
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              const btns = [
+                cmd('AsyncImage(model = url)', () => set('async')),
+                cmd('rememberAsyncImagePainter(url)', () => set('painter')),
+              ];
+              function paint() {
+                const per = mode === 'async' ? SMALL : FULL;
+                const total = per * rows;
+                const cap = 256;
+                fill.style.width = `${Math.min(100, (total / cap) * 100)}%`;
+                meter.classList.toggle('cmp-im-hot', total > cap * 0.75);
+                mb.textContent = `${rows} row${rows > 1 ? 's' : ''} × ${mode === 'async' ? 'under 1 MB' : 'about 48 MB'} = ${mode === 'async' ? `under ${rows} MB` : `about ${total} MB`} of bitmaps`;
+                read.innerHTML = hl(mode === 'async'
+                  ? '// size comes from the constraints (96.dp)\ndecoded ≈ thumbnail size'
+                  : '// no size resolver\ndecoded = 4000 × 3000 (original)');
+              }
+              function set(m) {
+                mode = m; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (m === 'async' ? 0 : 1)))); paint(); replay(meter, 'pop-soft');
+                say(o, m === 'async'
+                  ? '<span class="good">AsyncImage</span> decodes near the drawn size. Ten rows still fit easily.'
+                  : '<span class="bad">rememberAsyncImagePainter</span> without a size decodes the full photo. Show ten rows and memory runs out.');
+              }
+              const more = act('Show 10 rows', () => { rows = rows === 1 ? ROWS : 1; more.textContent = rows === 1 ? 'Show 10 rows' : 'Show 1 row'; paint(); });
+              el.append(h('div', { class: 'controls' }, btns, more), meter, mb, read, o);
+              set('async');
+            },
+          },
+          {
+            title: 'Describe the picture, or say nothing',
+            body: `
+<p>TalkBack reads <code>contentDescription</code> aloud. Write what the image shows, in the user’s language, from a string resource so it gets translated. A news photo gets a description. A decorative divider or a background pattern gets <code>null</code>, so TalkBack skips it.</p>
+<p>Don’t write “image” or the file name. When the text next to the image already says everything, the image is decoration too.</p>`,
+            code: `// Meaningful: say what it shows
+AsyncImage(
+    model = author.photoUrl,
+    contentDescription = stringResource(R.string.cd_author_photo, author.name),  // "Ayşe Demir’s photo"
+)
+
+// Decorative: the headline next to it already says it all
+AsyncImage(model = article.bannerUrl, contentDescription = null)`,
+          },
+          {
+            title: 'One ImageLoader for the whole app',
+            body: `
+<p><code>AsyncImage</code> uses a singleton <code>ImageLoader</code>. Each loader owns its own memory cache, disk cache and HTTP client, so make one and share it. On Android, implement <code>SingletonImageLoader.Factory</code> on your <code>Application</code> to set app-wide defaults such as crossfade and the cache sizes.</p>`,
+            code: `class NewsApp : Application(), SingletonImageLoader.Factory {
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .crossfade(true)                               // default for every request
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.25)         // share of app memory
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(context.cacheDir.resolve("image_cache"))
+                    .maxSizePercent(0.02)                  // share of free disk space
+                    .build()
+            }
+            .build()
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>AsyncImage</code> creates an <code>AsyncImagePainter</code>. When the painter enters composition it launches the request in a coroutine. When it leaves composition, for example when a row scrolls out of a lazy list, that job is cancelled, so a fast fling does not finish downloads nobody will see.</p>
+<p>The request walks the caches in order: memory cache (decoded bitmap), then disk cache (raw bytes, decoded again), then the network (bytes saved to disk, decoded, then saved in memory). The crossfade is skipped when the memory cache answers, because the image is ready on the first frame.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Only the Compose artifact',
+            bad: `implementation("io.coil-kt.coil3:coil-compose:3.6.3")`,
+            good: `implementation("io.coil-kt.coil3:coil-compose:3.6.3")
+implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")`,
+            why: 'Coil 3 moved network loading out of the core. Without a network artifact every http and https URL fails and you only ever see the error painter.',
+          },
+          {
+            title: 'SubcomposeAsyncImage in a long list',
+            bad: `items(articles, key = { it.id }) { a ->
+    SubcomposeAsyncImage(
+        model = a.imageUrl,
+        loading = { CircularProgressIndicator() },
+        contentDescription = a.imageAlt,
+    )
+}`,
+            good: `items(articles, key = { it.id }) { a ->
+    AsyncImage(
+        model = a.imageUrl,
+        placeholder = painterResource(R.drawable.image_placeholder),
+        contentDescription = a.imageAlt,
+    )
+}`,
+            why: 'SubcomposeAsyncImage composes its slots during layout, which is slower than normal composition. Coil’s docs advise against it in performance-critical places such as lazy lists. A placeholder painter is cheap.',
+          },
+          {
+            title: 'A useless description',
+            bad: `AsyncImage(model = article.imageUrl, contentDescription = "image")`,
+            good: `AsyncImage(model = article.imageUrl, contentDescription = article.imageAlt)`,
+            why: 'TalkBack reads “image”, which tells the user nothing. Describe what the picture shows, or pass null if it is decoration.',
+          },
+        ],
+        visual(el) {
+          const URL = 'https://cdn.example.com/galata.jpg';
+          let ph = true, cf = true, busy = false, model = URL;
+          const mem = new Set(), disk = new Set();
+          const pic = h('div', { class: 'cmp-im-pic', 'aria-hidden': 'true' }, h('i', { class: 'cmp-im-sun' }), h('i', { class: 'cmp-im-tower' }));
+          const phLayer = h('div', { class: 'cmp-im-ph' }, 'placeholder');
+          const errLayer = h('div', { class: 'cmp-im-err' }, h('b', {}, '⚠'), 'error');
+          const frame = h('div', { class: 'cmp-im-frame' }, phLayer, pic, errLayer);
+          const row = h('div', { class: 'cmp-im-row' }, frame, h('div', { class: 'cmp-im-text' }, h('b', {}, 'Galata Kulesi at dusk'), h('small', {}, 'İstanbul · 3 min read')));
+          const stage = (name, sub) => {
+            const pill = h('span', { class: 'cmp-im-pill' }, 'empty');
+            const n = h('div', { class: 'cmp-im-stage' }, h('b', {}, name), h('small', {}, sub), pill);
+            return Object.assign(n, { pill });
+          };
+          const sMem = stage('Memory cache', 'decoded bitmaps');
+          const sDisk = stage('Disk cache', 'downloaded bytes');
+          const sNet = stage('Network', 'cdn.example.com');
+          sNet.pill.textContent = 'origin';
+          const stages = [sMem, sDisk, sNet];
+          const stateLine = h('div', { class: 'cmp-label cmp-im-state' });
+          const read = h('div', { class: 'kt' });
+          const o = out();
+          const paintRead = () => {
+            read.innerHTML = hl(`AsyncImage(\n    model = ImageRequest.Builder(context)\n        .data(${model === null ? 'null' : model === 'bad' ? '"…/missing.jpg"' : 'url'})\n        .crossfade(${cf})\n        .build(),\n    placeholder = ${ph ? 'painterResource(R.drawable.ph)' : 'null'},\n    error = painterResource(R.drawable.broken),\n    contentDescription = "Galata Kulesi at dusk",\n)`);
+          };
+          const paintCaches = () => {
+            sMem.pill.textContent = mem.size ? 'galata.jpg' : 'empty';
+            sDisk.pill.textContent = disk.size ? 'galata.jpg' : 'empty';
+            sMem.pill.classList.toggle('cmp-im-has', mem.size > 0);
+            sDisk.pill.classList.toggle('cmp-im-has', disk.size > 0);
+          };
+          const setState = s => { stateLine.textContent = `painter.state = ${s}`; };
+          const calm = () => stages.forEach(s => s.classList.remove('cmp-im-on', 'cmp-im-hit', 'cmp-im-miss'));
+          function show(layer, fade) {
+            [phLayer, pic, errLayer].forEach(l => { l.classList.remove('cmp-im-show'); l.style.transition = 'none'; });
+            if (!layer) return;
+            void layer.offsetWidth;
+            layer.style.transition = fade ? 'opacity 0.9s ease' : 'none';
+            layer.classList.add('cmp-im-show');
+          }
+          const check = async (s, ms, hit) => {
+            calm(); s.classList.add('cmp-im-on');
+            await sleep(ms);
+            if (!el.isConnected) return false;
+            s.classList.remove('cmp-im-on'); s.classList.add(hit ? 'cmp-im-hit' : 'cmp-im-miss');
+            return true;
+          };
+          async function load(m) {
+            if (busy) return; busy = true;
+            model = m; paintRead(); calm();
+            if (m === null) {
+              show(errLayer, false); setState('Error (fallback)');
+              say(o, `${hl('model = null')} <span class="muted">// no request at all. fallback defaults to the error painter.</span>`);
+              busy = false; return;
+            }
+            const key = m === URL ? 'galata' : 'bad';
+            if (mem.has(key)) {
+              await check(sMem, 160, true); if (!el.isConnected) return;
+              show(pic, false); setState('Success(dataSource = MEMORY_CACHE)');
+              say(o, '<span class="good">memory cache hit:</span> drawn in the first frame. No crossfade, because there was nothing to wait for.');
+              busy = false; return;
+            }
+            show(ph ? phLayer : null, false); setState('Loading');
+            if (!await check(sMem, 260, false)) return;
+            if (disk.has(key)) {
+              if (!await check(sDisk, 500, true)) return;
+              mem.add(key); paintCaches();
+              show(pic, cf); setState('Success(dataSource = DISK)');
+              say(o, `<span class="good">disk cache hit:</span> no network. Coil decoded the saved bytes and put the bitmap in memory. ${cf ? '<span class="muted">Crossfade (slowed down here).</span>' : ''}`);
+              busy = false; return;
+            }
+            if (!await check(sDisk, 260, false)) return;
+            calm(); sNet.classList.add('cmp-im-on');
+            say(o, `<span class="muted">downloading… ${ph ? 'the placeholder holds the space.' : 'no placeholder: the box is empty.'}</span>`);
+            await sleep(1300); if (!el.isConnected) return;
+            sNet.classList.remove('cmp-im-on');
+            if (key === 'bad') {
+              sNet.classList.add('cmp-im-miss'); replay(sNet, 'shake');
+              show(errLayer, cf); setState('Error(HTTP 404)');
+              say(o, '<span class="bad">404:</span> the error painter replaces the placeholder. Nothing is cached.');
+              busy = false; return;
+            }
+            sNet.classList.add('cmp-im-hit');
+            disk.add(key); mem.add(key); paintCaches();
+            show(pic, cf); setState('Success(dataSource = NETWORK)');
+            say(o, `<span class="good">network:</span> bytes saved to disk, bitmap saved in memory. ${cf ? 'The image fades in over the placeholder <span class="muted">(slowed down here)</span>.' : 'crossfade(false): the image pops in.'}`);
+            busy = false;
+          }
+          function scrollBack() {
+            if (busy) return;
+            show(null); setState('Empty'); calm();
+            say(o, '<span class="muted">The row left composition, then came back. AsyncImage asks again…</span>');
+            setTimeout(() => load(URL), 350);
+          }
+          function restart() {
+            if (busy) return;
+            mem.clear(); paintCaches(); show(null); calm(); setState('Empty');
+            replay(sMem, 'shake');
+            say(o, 'The process died: the memory cache is gone. The disk cache is still there. Load the photo again.');
+          }
+          const sw = (id, label, on, fn) => {
+            const i = h('input', { type: 'checkbox', id, checked: on });
+            i.addEventListener('change', () => { fn(i.checked); paintRead(); });
+            return h('label', { class: 'switch', for: id }, i, label);
+          };
+          paintRead(); paintCaches(); setState('Empty');
+          say(o, 'Load the photo, scroll it away and back, then restart the app and load it again.');
+          el.append(
+            h('div', { class: 'controls' },
+              cmd('load(url)', () => load(URL)),
+              act('Scroll away and back', scrollBack),
+              act('Restart the app', restart)),
+            h('div', { class: 'controls' },
+              cmd('load("…/missing.jpg")', () => load('bad')),
+              cmd('load(null)', () => load(null)),
+              sw('cmp-im-phon', 'placeholder', true, v => { ph = v; }),
+              sw('cmp-im-cfon', 'crossfade(true)', true, v => { cf = v; })),
+            h('div', { class: 'cmp-im-wrap' },
+              h('div', { class: 'cmp-im-left' }, row, stateLine),
+              h('div', { class: 'cmp-im-pipe' }, sMem, h('span', { class: 'arrow' }, '↓'), sDisk, h('span', { class: 'arrow' }, '↓'), sNet)),
+            read, o);
+        },
+      },
+
       // 12 ─────────────────────────────────────────────
       {
         id: 'gestures',
@@ -4268,7 +5002,7 @@ Box(
         body: `
 <p>A composable can run at any time and many times, so it must not start work directly in its body. To run suspend code tied to the screen, use <code>LaunchedEffect(key) { ... }</code>.</p>
 <p>When the effect enters the composition, it launches a coroutine. If a key changes, Compose <em>cancels</em> that coroutine and launches a new one with the new key. A recomposition with the same key leaves it alone. When the composable leaves the screen, the coroutine is cancelled.</p>
-<p><code>LaunchedEffect</code> is a composable, so you can’t call it from an <code>onClick</code>. For work started by an event, get a scope with <code>rememberCoroutineScope()</code> and call <code>scope.launch</code>. Its jobs live until the composable leaves.</p>`,
+<p><code>LaunchedEffect</code> is a composable, so you can’t call it from an <code>onClick</code>. For work started by an event, get a scope with <code>rememberCoroutineScope()</code> and call <code>scope.launch</code>. Its jobs live until the composable leaves. Setup that is not a coroutine, like a listener, belongs in the next lesson, DisposableEffect and SideEffect.</p>`,
         code: `@Composable
 fun ProfileScreen(userId: Int, repo: UserRepository) {
     var user by remember { mutableStateOf<User?>(null) }
@@ -4371,98 +5105,14 @@ fun Splash(onTimeout: () -> Unit) {
             },
           },
           {
-            title: 'DisposableEffect: undo what you register',
-            body: `<p>Some setup is not a coroutine: adding a listener, a lifecycle observer or a sensor callback. <code>DisposableEffect(key)</code> runs its block when it enters and must end with <code>onDispose { }</code>. Compose calls <code>onDispose</code> before the effect restarts for a new key, and when the composable leaves.</p>
-<p>Register in a <code>LaunchedEffect</code> or <code>SideEffect</code> instead and nothing ever unregisters. Each restart adds another listener. They all keep firing and keep the old screen in memory.</p>`,
+            title: 'produceState: an effect that returns State',
+            body: `<p>A common pattern is a LaunchedEffect that loads something into a remembered State. <code>produceState</code> packs that up: it returns a State with an initial value and runs a producer coroutine that sets <code>value</code>. Keys work like LaunchedEffect keys, so a new <code>url</code> cancels the old producer and starts a new one. It is built from <code>remember { mutableStateOf() }</code> and a <code>LaunchedEffect</code>.</p>`,
             code: `@Composable
-fun TiltSensor(sensorManager: SensorManager, sensor: Sensor, onTilt: (Float) -> Unit) {
-    val currentOnTilt by rememberUpdatedState(onTilt)
-    DisposableEffect(sensor) {
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(e: SensorEvent) = currentOnTilt(e.values[0])
-            override fun onAccuracyChanged(s: Sensor, accuracy: Int) = Unit
-        }
-        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
-        onDispose { sensorManager.unregisterListener(listener) }
-    }
-}`,
-            visual(el) {
-              let good = false, sensor = 'Accelerometer', onScreen = true, n = 0, listeners = [];
-              const toggle = h('input', { type: 'checkbox', id: 'cmp-de-on' });
-              const pool = h('div', { class: 'cmp-jobs cmp-de-pool' });
-              const head = h('div', { class: 'kt' });
-              const count = h('span', { class: 'cmp-badge' }, '0');
-              const leaveBtn = act('Leave the screen', () => leave());
-              const o = out();
-              const paintHead = () => { head.innerHTML = hl(good ? 'DisposableEffect(sensor) {\n    register(listener)\n    onDispose { unregister(listener) }\n}' : 'LaunchedEffect(sensor) {\n    register(listener)   // no cleanup\n}'); };
-              function paint() {
-                pool.replaceChildren(...(listeners.length ? listeners.map(l => l.chip) : [h('span', { class: 'cmp-status' }, 'no listeners')]));
-                count.textContent = listeners.length; replay(count, 'pop');
-              }
-              function register() {
-                const chip = h('span', { class: 'cmp-job cmp-done drop-in' }, h('span', { class: 'cmp-job-label' }, `#${++n} ${sensor}`), h('span', { class: 'cmp-job-state' }, onScreen ? 'live' : ''));
-                listeners.push({ n, sensor, chip });
-              }
-              function dispose() {
-                listeners.forEach(l => { l.chip.classList.add('fly-out'); });
-                const gone = listeners.length; listeners = [];
-                return gone;
-              }
-              function markLeaks() {
-                listeners.forEach((l, i) => { if (i < listeners.length - 1 || !onScreen) { l.chip.classList.remove('cmp-done'); l.chip.classList.add('cmp-cancel'); l.chip.lastChild.textContent = 'leaked'; } });
-              }
-              async function setSensor(s) {
-                if (!onScreen) { replay(pool, 'shake'); say(o, 'The screen is gone. Come back first.'); return; }
-                if (s === sensor) { say(o, `${hl(`sensor = ${s}`)} <span class="muted">// same key: nothing restarts</span>`); return; }
-                if (listeners.length >= 6) { replay(pool, 'shake'); say(o, '<span class="bad">Six live listeners.</span> Reset by flipping the switch.'); return; }
-                sensor = s;
-                const removed = good ? dispose() : 0;
-                if (removed) await sleep(380);
-                if (!el.isConnected) return;
-                register(); if (!good) markLeaks(); paint();
-                say(o, good ? `Key changed. <span class="good">onDispose removed the old listener</span>, then the effect added one for ${s}.` : `Key changed. A new listener for ${s} was added. <span class="bad">The old one is still registered.</span>`);
-              }
-              async function leave() {
-                if (onScreen) {
-                  onScreen = false; leaveBtn.textContent = 'Come back';
-                  if (good) { dispose(); await sleep(380); if (!el.isConnected) return; } else markLeaks();
-                  paint();
-                  say(o, good ? '<span class="good">Left the composition. onDispose ran.</span> Nothing is registered.' : `<span class="bad">Left the composition. ${listeners.length} listener${listeners.length === 1 ? '' : 's'} still registered</span>, holding the old screen.`);
-                } else {
-                  onScreen = true; leaveBtn.textContent = 'Leave the screen';
-                  register(); if (!good) markLeaks(); paint();
-                  say(o, 'Back on screen. The effect registered a listener again.');
-                }
-              }
-              function shake() {
-                if (!listeners.length) { replay(pool, 'shake'); say(o, 'Phone moved. No listener heard it.'); return; }
-                listeners.forEach(l => replay(l.chip, 'pop'));
-                say(o, `Phone moved: <span class="${listeners.length > 1 ? 'bad' : 'good'}">${listeners.length} callback${listeners.length === 1 ? '' : 's'}</span> for one event.`);
-              }
-              function reset() {
-                good = toggle.checked; sensor = 'Accelerometer'; onScreen = true; listeners = []; leaveBtn.textContent = 'Leave the screen';
-                paintHead(); register(); paint();
-                say(o, good ? 'DisposableEffect registered one listener.' : 'LaunchedEffect registered one listener. Now change the key a few times.');
-              }
-              toggle.addEventListener('change', reset);
-              el.append(
-                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-de-on' }, toggle, 'DisposableEffect with onDispose')),
-                head,
-                h('div', { class: 'cmp-fx' }, h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'registered listeners'), h('div', { class: 'cmp-jobs' }, count, pool))),
-                h('div', { class: 'controls' }, cmd('sensor = Gyroscope', () => setSensor('Gyroscope')), cmd('sensor = Accelerometer', () => setSensor('Accelerometer')), leaveBtn, act('Move the phone', shake)),
-                o);
-              reset();
-            },
-          },
-          {
-            title: 'snapshotFlow: turn State into a Flow',
-            body: `<p>To react to State changes inside an effect, wrap the read in <code>snapshotFlow { }</code>. It emits each time the State it read changes, and you get every Flow operator. The effect itself keeps running, so nothing is cancelled or relaunched.</p>`,
-            code: `LaunchedEffect(listState) {
-    snapshotFlow { listState.firstVisibleItemIndex }
-        .map { it > 0 }
-        .distinctUntilChanged()
-        .collect { scrolled -> analytics.log("scrolled", scrolled) }
-}`,
+fun loadNetworkImage(url: String, repo: ImageRepository): State<Result<Image>> =
+    produceState<Result<Image>>(initialValue = Result.Loading, url, repo) {
+        val image = repo.load(url)
+        value = if (image == null) Result.Error else Result.Success(image)
+    }`,
           },
         ],
         underHood: {
@@ -4620,6 +5270,440 @@ LaunchedEffect(SearchRequest(query, page)) {
             h('div', { class: 'controls' }, idBtns, cmd('count++', recompose)),
             h('div', { class: 'controls' }, cmd('onClick = { scope.launch { ... } }', save), leaveBtn),
             o);
+        },
+      },
+
+      // 13a ────────────────────────────────────────────
+      {
+        id: 'disposable-effect',
+        title: 'DisposableEffect and SideEffect',
+        tagline: 'Effects that are not coroutines: register and clean up, or publish state after each composition.',
+        level: 'intermediate',
+        body: `
+<p>Some setup is not a coroutine: adding a listener, a lifecycle observer or a sensor callback. <code>DisposableEffect(key) { }</code> runs its block when it enters the composition, and the block must end with <code>onDispose { }</code>. Compose calls <code>onDispose</code> before the effect restarts for a new key, and when the composable leaves.</p>
+<p>So whatever the block registers, <code>onDispose</code> unregisters. Register in a <code>LaunchedEffect</code> or in the body instead, and nothing ever unregisters: each restart adds another listener, and they all keep firing and keep the old screen in memory.</p>
+<p><code>SideEffect { }</code> is the other non-coroutine effect. It has no keys and no cleanup. It runs after every successful recomposition, and is meant for publishing Compose state to code that Compose doesn't manage.</p>`,
+        code: `@Composable
+fun ScreenAnalytics(onStart: () -> Unit, onStop: () -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnStart by rememberUpdatedState(onStart)
+    val currentOnStop by rememberUpdatedState(onStop)
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) currentOnStart()
+            else if (event == Lifecycle.Event.ON_STOP) currentOnStop()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }   // undo it
+    }
+}`,
+        remember: 'DisposableEffect: what the block registers, onDispose removes. SideEffect: publish state after each successful composition.',
+        terms: [
+          { term: 'DisposableEffect', def: 'An effect for setup that needs cleanup. Its block must end with onDispose, which runs before a key restart and when the composable leaves.' },
+          { term: 'onDispose', def: 'The cleanup block of a DisposableEffect, where you undo what the effect registered.' },
+          { term: 'SideEffect', def: 'An effect that runs after every successful recomposition, used to publish Compose state to non-Compose objects.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Observe the lifecycle of the current owner and stop observing when it changes or the screen leaves.', code: 'val owner = LocalLifecycleOwner.current\n[[DisposableEffect]](owner) {\n    val observer = LifecycleEventObserver { _, e -> log(e) }\n    owner.lifecycle.addObserver(observer)\n    [[onDispose]] { owner.lifecycle.removeObserver(observer) }\n}', why: 'The owner is the key, so a new owner disposes the old observer first. <code>onDispose</code> is the last statement of the block.' },
+          { type: 'bug', prompt: 'Open and leave this screen a few times. Every network change now fires several callbacks. Tap the line.', code: '@Composable\nfun OfflineBanner(manager: ConnectivityManager, onOnline: (Boolean) -> Unit) {\n    DisposableEffect(manager) {\n        val callback = bannerCallback(onOnline)\n        manager.registerDefaultNetworkCallback(callback)\n        onDispose { }\n    }\n}', bug: 5, fix: '        onDispose { manager.unregisterNetworkCallback(callback) }', why: 'An empty <code>onDispose</code> compiles, but nothing unregisters. Each visit adds another callback that outlives the screen.' },
+        ],
+        quiz: [
+          { q: 'A <code>DisposableEffect(sensor)</code> is running. <code>sensor</code> changes. What runs, in order?', options: ['The new block only', 'onDispose of the old effect, then the block with the new sensor', 'The block, then onDispose'], a: 1, why: 'A key change disposes the old effect first, then starts the new one.' },
+          { q: 'When does <code>SideEffect { }</code> run?', options: ['Once, when it enters the composition', 'After every successful recomposition', 'Only when its key changes'], a: 1, why: 'SideEffect has no keys. It runs each time a composition that contains it is applied.' },
+          { q: 'You add a click listener to a classic View from Compose. Which effect?', options: ['<code>LaunchedEffect</code>', '<code>DisposableEffect</code>', '<code>SideEffect</code>'], a: 1, why: 'Registering needs a matching unregister, and only DisposableEffect has a cleanup block.' },
+        ],
+        deeper: [
+          {
+            title: 'SideEffect: publish state after a composition is applied',
+            body: `<p>Sometimes an object outside Compose needs the current value, for example an analytics client that tags events with the user type. Writing it in the composable body looks the same, but a composition can be thrown away before it is applied. A write from the body then leaks a value the screen never showed.</p>
+<p><code>SideEffect { }</code> runs only after a composition succeeds, so the outside object always matches the screen. Keep it cheap: it runs after every recomposition of that composable.</p>`,
+            code: `@Composable
+fun rememberAnalytics(user: User): Analytics {
+    val analytics = remember { Analytics() }
+    SideEffect {
+        analytics.setUserProperty("userType", user.userType)
+    }
+    return analytics
+}`,
+            visual(el) {
+              let inSide = true, screen = 'free', ext = 'free', runs = 0;
+              const toggle = h('input', { type: 'checkbox', id: 'cmp-se-on', checked: true });
+              const head = h('div', { class: 'kt' });
+              const scrEl = h('span', { class: 'cmp-obj' }), extEl = h('span', { class: 'cmp-obj' }), runEl = h('span', { class: 'cmp-badge' }, '0');
+              const o = out();
+              function paint() {
+                head.innerHTML = hl(inSide ? 'SideEffect { analytics.userType = user.type }' : 'analytics.userType = user.type   // in the body');
+                scrEl.textContent = `screen: ${screen}`;
+                extEl.textContent = `analytics: ${ext}`;
+                extEl.className = 'cmp-obj ' + (ext === screen ? 'cmp-reuse' : 'cmp-new');
+                runEl.textContent = runs; replay(runEl, 'pop');
+              }
+              function applied(v) {
+                screen = v; ext = v; runs++; paint(); replay(scrEl, 'pop');
+                say(o, `Recomposed with ${hl(`user.type = ${v}`)} and applied. ${inSide ? 'SideEffect ran after it.' : 'The body wrote it during composition.'} <span class="good">They match.</span>`);
+              }
+              function abandoned() {
+                if (inSide) {
+                  replay(scrEl, 'shake'); paint();
+                  say(o, `A composition with ${hl('user.type = trial')} was thrown away. <span class="good">SideEffect never ran</span>, so analytics still says ${ext}.`);
+                } else {
+                  ext = 'trial'; runs++; paint(); replay(extEl, 'shake');
+                  say(o, `A composition with ${hl('user.type = trial')} was thrown away, but <span class="bad">the body already wrote trial</span>. Events are now tagged with a value the screen never showed.`);
+                }
+              }
+              toggle.addEventListener('change', () => { inSide = toggle.checked; screen = 'free'; ext = 'free'; runs = 0; paint(); say(o, inSide ? 'The write is in SideEffect. Reset to free.' : 'The write is in the body. Reset to free.'); });
+              paint();
+              say(o, 'Recompose a few times, then throw a composition away.');
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-se-on' }, toggle, 'write inside SideEffect')),
+                head,
+                h('div', { class: 'cmp-fx' },
+                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'values'), h('div', { class: 'cmp-jobs' }, scrEl, extEl)),
+                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'writes'), h('div', { class: 'cmp-jobs' }, runEl))),
+                h('div', { class: 'controls' }, cmd('user.type = pro  // applied', () => applied('pro')), cmd('user.type = free  // applied', () => applied('free')), act('Throw away a composition', abandoned)),
+                o);
+            },
+          },
+          {
+            title: 'Lifecycle effects do the observer for you',
+            body: `<p>Lifecycle 2.7.0 added effects for the most common DisposableEffect: watching the lifecycle. <code>LifecycleStartEffect</code> runs its block on <code>ON_START</code> and needs an <code>onStopOrDispose</code> block, which runs on <code>ON_STOP</code> or when the composable leaves. <code>LifecycleResumeEffect</code> does the same for resume and pause. For a one-shot action with no cleanup, use <code>LifecycleEventEffect</code>.</p>`,
+            code: `LifecycleStartEffect(locationManager) {
+    val listener = LocationListener { location -> /* update UI */ }
+    locationManager.requestLocationUpdates(listener)
+    onStopOrDispose { locationManager.removeUpdates(listener) }
+}
+
+LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+    analytics.logView("haber_detay")
+}`,
+          },
+          {
+            title: 'Pick the effect by the job',
+            body: `<p>The question is what the work looks like. Suspend work tied to the screen: <code>LaunchedEffect</code>. Work started by a click: <code>rememberCoroutineScope</code>. Something you register and must unregister: <code>DisposableEffect</code>. A value an outside object should mirror: <code>SideEffect</code>. If a choice feels awkward, the work often belongs in a ViewModel instead.</p>`,
+            code: `LaunchedEffect(id) { article = repo.load(id) }          // suspend, follows a key
+val scope = rememberCoroutineScope()                      // for onClick
+DisposableEffect(view) { view.add(l); onDispose { view.remove(l) } }
+SideEffect { player.volume = volume }                     // mirror state outward`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>DisposableEffect</code> is built like <code>LaunchedEffect</code>: a remembered object that implements <code>RememberObserver</code>. When the composition is applied, <code>onRemembered()</code> runs your block and keeps the result. When the key changes or the composable leaves, <code>onForgotten()</code> calls the <code>onDispose</code> you returned.</p>
+<p>The block's type is <code>DisposableEffectScope.() -&gt; DisposableEffectResult</code>, and only <code>onDispose { }</code> creates that result. That is why it must be the last statement, and why the compiler complains when it is missing. <code>SideEffect</code> skips the remember step: it queues your block to run once the current composition has been applied.</p>`,
+          code: `// Simplified from androidx.compose.runtime
+@Composable
+fun DisposableEffect(key1: Any?, effect: DisposableEffectScope.() -> DisposableEffectResult) {
+    remember(key1) { DisposableEffectImpl(effect) }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'An empty onDispose',
+            bad: `DisposableEffect(view) {
+    view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    onDispose { }
+}`,
+            good: `DisposableEffect(view) {
+    view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+}`,
+            why: 'The docs call an empty onDispose a bad sign. If nothing needs undoing, you likely wanted LaunchedEffect or SideEffect. If something does, undo it here.',
+          },
+          {
+            title: 'Keying on Unit when the object can change',
+            bad: `val owner = LocalLifecycleOwner.current
+DisposableEffect(Unit) {
+    owner.lifecycle.addObserver(observer)
+    onDispose { owner.lifecycle.removeObserver(observer) }
+}`,
+            good: `val owner = LocalLifecycleOwner.current
+DisposableEffect(owner) {
+    owner.lifecycle.addObserver(observer)
+    onDispose { owner.lifecycle.removeObserver(observer) }
+}`,
+            why: 'With Unit, the effect keeps watching the first owner forever, even after the composable moves to a new one. Key on every object the block registers with.',
+          },
+          {
+            title: 'Real work in SideEffect',
+            bad: `SideEffect {
+    repo.refresh()     // runs after every recomposition
+}`,
+            good: `LaunchedEffect(Unit) {
+    repo.refresh()     // once per entry, cancelled on leave
+}`,
+            why: 'SideEffect runs after every successful recomposition, so a refresh there fires again and again. It is for cheap writes that mirror state.',
+          },
+        ],
+        visual(el) {
+          let good = false, sensor = 'Accelerometer', onScreen = true, n = 0, listeners = [];
+          const toggle = h('input', { type: 'checkbox', id: 'cmp-de-on' });
+          const pool = h('div', { class: 'cmp-jobs cmp-de-pool' });
+          const head = h('div', { class: 'kt' });
+          const count = h('span', { class: 'cmp-badge' }, '0');
+          const leaveBtn = act('Leave the screen', () => leave());
+          const o = out();
+          const paintHead = () => { head.innerHTML = hl(good ? 'DisposableEffect(sensor) {\n    register(listener)\n    onDispose { unregister(listener) }\n}' : 'LaunchedEffect(sensor) {\n    register(listener)   // no cleanup\n}'); };
+          function paint() {
+            pool.replaceChildren(...(listeners.length ? listeners.map(l => l.chip) : [h('span', { class: 'cmp-status' }, 'no listeners')]));
+            count.textContent = listeners.length; replay(count, 'pop');
+          }
+          function register() {
+            const chip = h('span', { class: 'cmp-job cmp-done drop-in' }, h('span', { class: 'cmp-job-label' }, `#${++n} ${sensor}`), h('span', { class: 'cmp-job-state' }, onScreen ? 'live' : ''));
+            listeners.push({ n, sensor, chip });
+          }
+          function dispose() {
+            listeners.forEach(l => { l.chip.classList.add('fly-out'); });
+            const gone = listeners.length; listeners = [];
+            return gone;
+          }
+          function markLeaks() {
+            listeners.forEach((l, i) => { if (i < listeners.length - 1 || !onScreen) { l.chip.classList.remove('cmp-done'); l.chip.classList.add('cmp-cancel'); l.chip.lastChild.textContent = 'leaked'; } });
+          }
+          async function setSensor(s) {
+            if (!onScreen) { replay(pool, 'shake'); say(o, 'The screen is gone. Come back first.'); return; }
+            if (s === sensor) { say(o, `${hl(`sensor = ${s}`)} <span class="muted">// same key: nothing restarts</span>`); return; }
+            if (listeners.length >= 6) { replay(pool, 'shake'); say(o, '<span class="bad">Six live listeners.</span> Reset by flipping the switch.'); return; }
+            sensor = s;
+            const removed = good ? dispose() : 0;
+            if (removed) await sleep(380);
+            if (!el.isConnected) return;
+            register(); if (!good) markLeaks(); paint();
+            say(o, good ? `Key changed. <span class="good">onDispose removed the old listener</span>, then the effect added one for ${s}.` : `Key changed. A new listener for ${s} was added. <span class="bad">The old one is still registered.</span>`);
+          }
+          async function leave() {
+            if (onScreen) {
+              onScreen = false; leaveBtn.textContent = 'Come back';
+              if (good) { dispose(); await sleep(380); if (!el.isConnected) return; } else markLeaks();
+              paint();
+              say(o, good ? '<span class="good">Left the composition. onDispose ran.</span> Nothing is registered.' : `<span class="bad">Left the composition. ${listeners.length} listener${listeners.length === 1 ? '' : 's'} still registered</span>, holding the old screen.`);
+            } else {
+              onScreen = true; leaveBtn.textContent = 'Leave the screen';
+              register(); if (!good) markLeaks(); paint();
+              say(o, 'Back on screen. The effect registered a listener again.');
+            }
+          }
+          function shake() {
+            if (!listeners.length) { replay(pool, 'shake'); say(o, 'Phone moved. No listener heard it.'); return; }
+            listeners.forEach(l => replay(l.chip, 'pop'));
+            say(o, `Phone moved: <span class="${listeners.length > 1 ? 'bad' : 'good'}">${listeners.length} callback${listeners.length === 1 ? '' : 's'}</span> for one event.`);
+          }
+          function reset() {
+            good = toggle.checked; sensor = 'Accelerometer'; onScreen = true; listeners = []; leaveBtn.textContent = 'Leave the screen';
+            paintHead(); register(); paint();
+            say(o, good ? 'DisposableEffect registered one listener.' : 'LaunchedEffect registered one listener. Now change the key a few times.');
+          }
+          toggle.addEventListener('change', reset);
+          el.append(
+            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-de-on' }, toggle, 'DisposableEffect with onDispose')),
+            head,
+            h('div', { class: 'cmp-fx' }, h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'registered listeners'), h('div', { class: 'cmp-jobs' }, count, pool))),
+            h('div', { class: 'controls' }, cmd('sensor = Gyroscope', () => setSensor('Gyroscope')), cmd('sensor = Accelerometer', () => setSensor('Accelerometer')), leaveBtn, act('Move the phone', shake)),
+            o);
+          reset();
+        },
+      },
+
+      // 13b ────────────────────────────────────────────
+      {
+        id: 'snapshot-flow',
+        title: 'snapshotFlow: from State to Flow',
+        tagline: 'React to State changes with Flow operators, without restarting the effect.',
+        level: 'intermediate',
+        body: `
+<p>Keying a <code>LaunchedEffect</code> on a value that changes all the time, like the scroll position, cancels and relaunches the coroutine on every change. Often you want one long collector instead. <code>snapshotFlow { }</code> turns Compose State into a cold <code>Flow</code>.</p>
+<p>When collected, it runs the block, records which State objects it read, and emits the result. When one of them changes, it runs the block again and emits only if the result is different from the last one, like <code>distinctUntilChanged()</code>. From there you have every Flow operator: <code>map</code>, <code>filter</code>, <code>debounce</code>.</p>
+<p>Collect it inside a <code>LaunchedEffect</code> keyed on the state holder, such as the <code>LazyListState</code>, so the collector starts once and lives with the screen. It works in a ViewModel too, for state the ViewModel owns.</p>`,
+        code: `val listState = rememberLazyListState()
+
+LaunchedEffect(listState) {
+    snapshotFlow { listState.firstVisibleItemIndex }
+        .map { index -> index > 0 }
+        .distinctUntilChanged()
+        .filter { it }
+        .collect { analytics.log("scrolled_past_first") }
+}
+
+LazyColumn(state = listState) { /* ... */ }`,
+        remember: 'snapshotFlow re-runs its block when a State it read changes, and emits only new values. One collector, no restarts.',
+        terms: [
+          { term: 'snapshotFlow', def: 'A function that turns the State objects read in its block into a cold Flow that emits when the result changes.' },
+          { term: 'Conflation', def: 'Keeping only the latest value when several changes happen before the collector looks, so intermediate values can be skipped.' },
+          { term: 'distinctUntilChanged', def: 'A Flow operator that drops a value equal to the one just emitted. snapshotFlow already behaves this way for its block.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show the scroll-to-top button only once the user has scrolled, with one long collector.', code: 'LaunchedEffect(listState) {\n    [[snapshotFlow]] { listState.[[firstVisibleItemIndex]] }\n        .map { it > 0 }\n        .[[distinctUntilChanged]]()\n        .collect { showTop = it }\n}', why: 'The block reads State, so it re-runs on scroll. After <code>map</code> many indexes give the same Boolean, so <code>distinctUntilChanged</code> passes only the flips.' },
+          { type: 'bug', prompt: 'This crashes with IllegalStateException as soon as it is collected. Tap the line.', code: 'var lastSeen by mutableStateOf(0)\n\nLaunchedEffect(listState) {\n    snapshotFlow { lastSeen = listState.firstVisibleItemIndex; lastSeen }\n        .collect { analytics.log("seen", it) }\n}', bug: 3, fix: '    snapshotFlow { listState.firstVisibleItemIndex }', why: 'The block runs in a read-only snapshot and must not write State. Read in the block, and do writes in <code>collect</code>.' },
+        ],
+        quiz: [
+          { q: 'The block reads <code>count</code>. <code>count</code> goes 3 → 3. Does snapshotFlow emit?', options: ['Yes, every write emits', 'No, the result is equal to the last one'], a: 1, why: 'It emits only when the result differs from the previous one.' },
+          { q: 'Why prefer snapshotFlow over <code>LaunchedEffect(listState.firstVisibleItemIndex)</code>?', options: ['It is the only way to read the index', 'The keyed effect cancels and relaunches on every scroll step', 'LaunchedEffect cannot read State'], a: 1, why: 'A fast-changing key restarts the coroutine constantly. snapshotFlow keeps one collector running.' },
+          { q: '<code>count</code> is set to 1, 2, 3 in one click handler. A collector of <code>snapshotFlow { count }</code> is guaranteed to see', options: ['1, 2 and 3', 'At least the latest value, 3, but maybe not 1 and 2', 'Nothing'], a: 1, why: 'snapshotFlow is for state, not events. Changes made before the collector looks can be conflated to the latest value.' },
+        ],
+        deeper: [
+          {
+            title: 'State, not events: values can be skipped',
+            body: `<p>snapshotFlow is conflated. It reacts when changes are applied, and the docs say the block may skip intermediate changes. Several writes in one click handler show up as one emission with the last value. Writes spread over separate frames usually show up one by one.</p>
+<p>So use it for "what is the value now", never for "count every click". For events, call a function or send them through a Channel or a SharedFlow.</p>`,
+            code: `var count by mutableIntStateOf(0)
+
+Button(onClick = { count++; count++; count++ }) { Text("+3") }
+
+LaunchedEffect(Unit) {
+    snapshotFlow { count }.collect { println("count = $it") }
+}
+// one tap usually prints one line with the latest value, not three`,
+            visual(el) {
+              let count = 0;
+              const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
+              const val = h('span', { class: 'cmp-obj' });
+              const o = out();
+              const paint = () => { val.textContent = `count = ${count}`; };
+              function emit(v) { log.prepend(h('div', { class: 'drop-in', html: hl(`collect: count = ${v}`) })); while (log.children.length > 6) log.lastElementChild.remove(); }
+              async function sameFrame() {
+                const from = count; count += 3; paint(); replay(val, 'pop');
+                say(o, `${hl('count++; count++; count++')} in one handler: ${from + 1}, ${from + 2}, ${from + 3}. <span class="muted">The collector looks once.</span>`);
+                await sleep(300); if (!el.isConnected) return;
+                emit(count);
+              }
+              async function frames() {
+                say(o, 'Three writes, one per frame. The collector catches up between them.');
+                for (let i = 0; i < 3; i++) {
+                  count++; paint(); replay(val, 'pop');
+                  await sleep(260); if (!el.isConnected) return;
+                  emit(count);
+                }
+              }
+              function same() {
+                replay(val, 'pop');
+                say(o, `${hl(`count = ${count}`)} <span class="muted">// same value: the block re-runs, nothing is emitted</span>`);
+              }
+              paint(); emit(0);
+              say(o, 'The first value is emitted as soon as collection starts.');
+              el.append(val, h('div', { class: 'controls' }, cmd('count += 3 in one handler', sameFrame), cmd('count++ in three frames', frames), cmd('count = count', same)), log, o);
+            },
+          },
+          {
+            title: 'The block only reads',
+            body: `<p>The block runs in a read-only snapshot. Writing State inside it fails with <code>IllegalStateException</code>. Keep the block a plain read with no side effects, because it can run more than once for the same inputs. Do writes and other work in <code>collect</code>.</p>
+<p>Only snapshot State is tracked. A plain <code>var</code> or a field of a normal class can be read in the block, but changing it never makes the flow emit.</p>`,
+            code: `// Good: read in the block, act in collect
+snapshotFlow { listState.isScrollInProgress }
+    .collect { scrolling -> player.dimControls(scrolling) }
+
+// Never re-emits: page is not snapshot State
+class Paging { var page = 0 }
+snapshotFlow { paging.page }`,
+          },
+          {
+            title: 'From a ViewModel',
+            body: `<p>snapshotFlow is not tied to composition. A ViewModel that keeps its input in <code>mutableStateOf</code>, or a <code>TextFieldState</code>, can turn it into a Flow, add <code>debounce</code>, and expose results with <code>stateIn</code>.</p>`,
+            code: `class SearchViewModel(private val repo: SearchRepository) : ViewModel() {
+    val query = TextFieldState()
+
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val results = snapshotFlow { query.text.toString() }
+        .debounce(300)
+        .mapLatest { repo.search(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Compose State lives in snapshots. When snapshotFlow is collected, it runs the block in a read-only snapshot with a read observer, so it learns exactly which State objects the block touched. It also registers to hear when other snapshots are applied.</p>
+<p>When an applied change touches one of the recorded objects, the block runs again, the read set is recorded again, and the new result is compared with the last one. Changes to objects the block didn't read are ignored. This is the same tracking that decides which composables recompose.</p>`,
+          code: `// The idea, simplified
+val reads = mutableSetOf<Any>()
+var last = Snapshot.takeSnapshot { reads += it }.run { enter(block) }
+emit(last)
+// on every applied change that touches something in reads:
+//     reads.clear(); val next = run block again; if (next != last) emit(next)`,
+        },
+        mistakes: [
+          {
+            title: 'Keying an effect on a fast-changing value',
+            bad: `LaunchedEffect(listState.firstVisibleItemIndex) {
+    if (listState.firstVisibleItemIndex > 0) analytics.log("scrolled")
+}`,
+            good: `LaunchedEffect(listState) {
+    snapshotFlow { listState.firstVisibleItemIndex > 0 }
+        .filter { it }
+        .collect { analytics.log("scrolled") }
+}`,
+            why: 'The keyed version relaunches on every scroll step and logs again and again. The snapshotFlow version starts once and logs only when the Boolean becomes true.',
+          },
+          {
+            title: 'Counting events with snapshotFlow',
+            bad: `snapshotFlow { tapCount }.collect { sendTapToServer() }`,
+            good: `Button(onClick = { viewModel.onTap() }) { Text("Like") }`,
+            why: 'Several taps before the collector looks become one emission. Events should go through a callback, a Channel or a SharedFlow.',
+          },
+        ],
+        visual(el) {
+          let restart = false, index = 0, jobN = 0, launches = 0, logs = 0, last = null, job = null, busy = false;
+          const lane = h('div', { class: 'cmp-jobs' });
+          const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
+          const idx = h('span', { class: 'cmp-obj' });
+          const stats = h('span', { class: 'cmp-status' });
+          const head = h('div', { class: 'kt' });
+          const o = out();
+          const modeBtns = [[false, 'snapshotFlow { index }.map { it > 0 }'], [true, 'LaunchedEffect(index)']].map(([r, src]) => cmd(src, () => setMode(r)));
+          function addLog(html) { log.prepend(h('div', { class: 'drop-in', html })); while (log.children.length > 6) log.lastElementChild.remove(); }
+          function paint() {
+            idx.textContent = `firstVisibleItemIndex = ${index}`;
+            stats.textContent = `launches: ${launches} · analytics events: ${logs}`;
+            head.innerHTML = hl(restart ? 'LaunchedEffect(listState.firstVisibleItemIndex) {\n    if (index > 0) analytics.log("scrolled")\n}' : 'LaunchedEffect(listState) {\n    snapshotFlow { listState.firstVisibleItemIndex }\n        .map { it > 0 }.distinctUntilChanged()\n        .collect { if (it) analytics.log("scrolled") }\n}');
+            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 1) === restart)));
+          }
+          function launch(label) {
+            if (job) { job.classList.remove('cmp-done'); job.classList.add('cmp-cancel'); job.lastChild.textContent = 'cancelled'; }
+            launches++;
+            job = h('span', { class: 'cmp-job cmp-done drop-in' }, h('span', { class: 'cmp-job-label' }, `#${++jobN} ${label}`), h('span', { class: 'cmp-job-state' }, restart ? 'ran' : 'collecting'));
+            lane.append(job);
+            while (lane.children.length > 4) lane.firstElementChild.remove();
+          }
+          function setMode(r) {
+            if (busy) return;
+            restart = r; index = 0; launches = 0; logs = 0; last = null; job = null;
+            lane.replaceChildren(); log.replaceChildren();
+            launch(restart ? 'index = 0' : 'collect');
+            if (!restart) { last = false; addLog(hl('emit 0 → map → false')); }
+            paint();
+            say(o, restart ? 'The index is the key. Watch the launches.' : 'One collector. The block re-runs on each change.');
+          }
+          function change(to) {
+            if (to === index) { replay(idx, 'pop'); addLog(hl(`index = ${to}`) + ' <span class="muted">// same value, nothing happens</span>'); return; }
+            index = to;
+            if (restart) {
+              launch(`index = ${to}`);
+              if (to > 0) { logs++; addLog(hl('analytics.log("scrolled")') + ' <span class="bad">again</span>'); }
+              else addLog(hl(`relaunched with index = 0`));
+            } else {
+              const b = to > 0;
+              if (b === last) addLog(hl(`emit ${to} → map → ${b}`) + ' <span class="muted">// distinctUntilChanged drops it</span>');
+              else {
+                last = b;
+                addLog(hl(`emit ${to} → map → ${b}`) + (b ? ` → ${hl('analytics.log("scrolled")')}` : ''));
+                if (b) logs++;
+              }
+              replay(job, 'pop');
+            }
+            paint(); replay(idx, 'pop');
+          }
+          async function fling() {
+            if (busy) return; busy = true;
+            for (let i = 0; i < 5; i++) { change(index + 1); await sleep(180); if (!el.isConnected) return; }
+            say(o, restart ? `<span class="bad">${launches} launches</span> so far, and the event was logged each time.` : `<span class="good">Still one collector.</span> The event was logged once.`);
+            busy = false;
+          }
+          el.append(
+            h('div', { class: 'controls' }, modeBtns),
+            head,
+            h('div', { class: 'cmp-fx' },
+              h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'list'), h('div', { class: 'cmp-jobs' }, idx)),
+              h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'coroutines'), lane)),
+            h('div', { class: 'controls' }, cmd('scroll down one item', () => { if (!busy) change(index + 1); }), cmd('fling: five items', fling), cmd('scrollToItem(0)', () => { if (!busy) change(0); })),
+            stats, log, o);
+          setMode(false);
         },
       },
     ],

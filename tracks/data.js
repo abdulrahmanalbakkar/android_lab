@@ -240,6 +240,32 @@
 .dt-d2-avatar.dt-bad { border-color: var(--err); background: var(--err-soft); color: var(--err); }
 .dt-file.dt-d2-tmp { transition: opacity 0.25s; }
 .dt-file.dt-d2-off { opacity: 0.35; }
+/* auth: interceptors and token refresh */
+.dt-au-wrap { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; min-width: 0; }
+.dt-au-vault { flex: 0 1 210px; display: grid; gap: 8px; padding: 12px; border-radius: 14px; border: 2px solid var(--line); background: var(--bg); min-width: 0; }
+.dt-au-kv { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; font: 500 0.8rem var(--mono); }
+.dt-au-lanes { flex: 1 1 260px; display: grid; gap: 8px; min-width: 0; }
+.dt-au-lane { display: grid; gap: 6px; padding: 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
+.dt-au-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; }
+.dt-au-head b { font: 600 0.84rem var(--mono); overflow-wrap: anywhere; }
+.dt-au-track { display: flex; flex-wrap: wrap; gap: 5px; min-height: 24px; min-width: 0; }
+.dt-au-chip { max-width: 100%; padding: 2px 8px; border-radius: 6px; background: var(--sunk); color: var(--ink); font: 600 0.72rem var(--mono); overflow-wrap: anywhere; }
+.dt-au-chip.dt-au-ok { background: var(--ok-soft); color: var(--ok); }
+.dt-au-chip.dt-au-bad { background: var(--err-soft); color: var(--err); }
+.dt-au-chip.dt-au-wait { background: var(--warm-soft); color: var(--warm); }
+.dt-au-stats { display: flex; flex-wrap: wrap; gap: 24px; }
+.dt-au-big { font: 700 1.8rem var(--mono); font-variant-numeric: tabular-nums; }
+.meter.dt-au-meter span { transition: width 0.1s linear; }
+.meter.dt-au-meter.dt-au-hot span { background: var(--err); }
+/* share-files (dt-sh-) and realtime (dt-ws-) */
+.dt-sh-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; min-width: 0; }
+.dt-sh-uri { font: 500 0.76rem var(--mono); padding: 6px 8px; border-radius: 8px; background: var(--sunk); color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.dt-ws-board { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-width: 0; }
+.dt-ws-board > .dt-side { flex: 1 1 160px; justify-items: start; }
+.dt-ws-score { flex: 1 1 220px; display: grid; justify-items: center; gap: 6px; padding: 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
+.dt-ws-teams { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 10px; font-weight: 700; font-size: 0.9rem; text-align: center; }
+.dt-d2-log.dt-ws-log > div { white-space: normal; overflow-wrap: anywhere; }
+.dt-ws-big { font: 700 1.9rem var(--mono); font-variant-numeric: tabular-nums; }
 `;
 
   Lab.addTrack({
@@ -2225,6 +2251,626 @@ fun newsApi(client: OkHttpClient): NewsApi = Retrofit.Builder()
         },
       },
 
+      // Auth ─────────────────────────────────────────────
+      {
+        id: 'auth',
+        title: 'OkHttp interceptors and token refresh',
+        tagline: 'Add the token in one place, refresh it once on 401, and never loop.',
+        level: 'intermediate',
+        body: `
+<p>Most APIs want <code>Authorization: Bearer &lt;token&gt;</code> on every call. Don’t add it in each Retrofit method. An application interceptor, registered with <code>addInterceptor</code>, adds it in one place. It runs once per call, before OkHttp’s own retry, redirect and cache handling.</p>
+<p>Access tokens expire, and the server then answers <code>401</code>. On a 401, OkHttp calls your <code>Authenticator</code> with that response. Return a new request carrying a fresh token and OkHttp sends it again. Return <code>null</code> and OkHttp gives up and hands the 401 to your code, which usually means “log the user out”.</p>
+<p>A screen often fires several calls at once, so several 401s arrive together. If each one refreshes, you send several refresh calls. Many servers rotate refresh tokens, so each one works only once: the second refresh is rejected and the user is logged out for no reason. Put the refresh behind a <code>Mutex</code>. The first call refreshes. The others wait, see that the token already changed, and reuse it.</p>
+<p>Two more rules. Give up after one retry, or a server that keeps answering 401 makes OkHttp try again and again. And never log the token: redact the <code>Authorization</code> header in your logging interceptor.</p>`,
+        code: `interface TokenStore {
+    fun accessToken(): String?           // in memory, cheap
+    suspend fun refresh(): String?       // POST /token on a separate client; null if rejected (tokens cleared)
+}
+
+class AuthInterceptor(private val tokens: TokenStore) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val token = tokens.accessToken() ?: return chain.proceed(chain.request())
+        return chain.proceed(
+            chain.request().newBuilder().header("Authorization", "Bearer $token").build(),
+        )
+    }
+}
+
+class TokenAuthenticator(private val tokens: TokenStore) : Authenticator {
+    private val mutex = Mutex()
+
+    override fun authenticate(route: Route?, response: Response): Request? {
+        if (response.responseCount >= 2) return null           // already retried once: give up
+        val sent = response.request.header("Authorization")?.removePrefix("Bearer ")
+        val fresh = runBlocking {                              // an OkHttp thread, never main
+            mutex.withLock {
+                val current = tokens.accessToken()
+                if (current != null && current != sent) current   // another call already refreshed
+                else tokens.refresh()
+            }
+        } ?: return null                                       // refresh failed: the 401 reaches the app
+        return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()
+    }
+
+    private val Response.responseCount: Int
+        get() = generateSequence(this) { it.priorResponse }.count()
+}
+
+val client = OkHttpClient.Builder()
+    .addInterceptor(AuthInterceptor(tokens))
+    .authenticator(TokenAuthenticator(tokens))
+    .addNetworkInterceptor(HttpLoggingInterceptor().apply {
+        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS else HttpLoggingInterceptor.Level.NONE
+        redactHeader("Authorization")
+    })
+    .build()`,
+        remember: 'Interceptor adds the token, Authenticator refreshes it on 401 behind a Mutex, and one retry is the limit.',
+        terms: [
+          { term: 'Interceptor', def: 'OkHttp code that sees each request on its way out and each response on its way back, and may change them.' },
+          { term: 'Authenticator', def: 'An OkHttp callback that runs on a 401 and returns a new request to retry, or null to give up.' },
+          { term: 'priorResponse', def: 'On an OkHttp Response, the earlier response that caused this request (a redirect or an auth retry), or null for the first one.' },
+          { term: 'Mutex', def: 'A kotlinx.coroutines lock. withLock lets one coroutine at a time run a block; it is not reentrant.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Add the token to every call, and refresh it when the server answers 401.', code: 'val client = OkHttpClient.Builder()\n    .[[addInterceptor]](AuthInterceptor(tokens))\n    .[[authenticator]](TokenAuthenticator(tokens))\n    .build()', why: '<code>addInterceptor</code> registers an application interceptor that runs once per call. <code>authenticator</code> registers the callback OkHttp runs on a 401.' },
+          { type: 'bug', prompt: 'Three calls fail with 401 together. The server rotates refresh tokens, and the user gets logged out. Tap the wrong line.', code: 'override fun authenticate(route: Route?, response: Response): Request? {\n    if (response.responseCount >= 2) return null\n    val sent = response.request.header("Authorization")?.removePrefix("Bearer ")\n    val fresh = runBlocking {\n        mutex.withLock { tokens.refresh() }\n    } ?: return null\n    return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()\n}', bug: 4, fix: '        mutex.withLock { tokens.accessToken()?.takeIf { it != sent } ?: tokens.refresh() }', why: 'The lock makes the calls refresh one after another, but each still refreshes. The second refresh sends a refresh token that was already used, the server rejects it, and the tokens are cleared. Check first whether another call already got a new token.' },
+        ],
+        quiz: [
+          { q: 'Five calls get 401 at the same moment. With the Mutex and the “did it change?” check, how many refresh calls go out?', options: ['5', '1', '0'], a: 1, why: 'The first call refreshes while holding the lock. The other four get the lock later, see a token different from the one they sent, and reuse it.' },
+          { q: '<code>authenticate()</code> returns <code>null</code>. What happens?', options: ['OkHttp retries with the same request', 'OkHttp stops and returns the 401 response to the caller', 'OkHttp throws IllegalStateException'], a: 1, why: 'Null means “I can’t fix this”. Retrofit then throws <code>HttpException</code> with code 401 for a <code>suspend</code> function that returns the body.' },
+          { q: 'After the Authenticator returns a new request, which interceptors run again for the retry?', options: ['Application and network interceptors', 'Only network interceptors', 'None'], a: 1, why: 'The retry starts inside OkHttp’s retry-and-follow-up step, which sits below the application interceptors and above the network interceptors.' },
+        ],
+        deeper: [
+          {
+            title: 'The retry starts below your interceptor',
+            body: `
+<p>OkHttp builds the chain in this order: your application interceptors, then its own retry-and-follow-up step (where the Authenticator is called), then the cache and connection steps, then your network interceptors, then the server. A retry starts at the retry step. Your <code>AuthInterceptor</code> does not run again.</p>
+<p>So the Authenticator must put the new token on the request itself. If it returns <code>response.request</code> unchanged, the retry carries the same expired header and gets the same 401. The network logging interceptor, on the other hand, sees both requests.</p>`,
+            code: `// Wrong: the retry still carries "Bearer abc1"
+return response.request
+
+// Right: replace the header on the request you return
+return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()`,
+            visual(el) {
+              let busy = false, same = false;
+              const tok = (n, text, cls = '') => { const t = h('span', { class: `token ${cls}` }, text); n.box.replaceChildren(t); replay(t, 'pop'); };
+              const cnt = { app: 0, auth: 0, net: 0 };
+              const appB = h('span', { class: 'arc-badge' }, 'ran 0×'), authB = h('span', { class: 'arc-badge' }, 'ran 0×'), netB = h('span', { class: 'arc-badge' }, 'ran 0×');
+              const appI = node('AuthInterceptor', 'application interceptor', appB);
+              const auth = node('Authenticator', 'inside retry-and-follow-up', authB);
+              const netI = node('HttpLoggingInterceptor', 'network interceptor', netB);
+              const server = node('api.example.com', 'access token def2 is valid');
+              const all = [appI, auth, netI, server];
+              const o = out();
+              const bump = (k, b) => { cnt[k]++; b.textContent = `ran ${cnt[k]}×`; replay(b, 'pop'); };
+              async function hit(n, text, cls = '') {
+                all.forEach(x => x.classList.remove('on'));
+                n.classList.add('on'); tok(n, text, cls);
+                await sleep(560);
+                return o.isConnected;
+              }
+              async function run() {
+                if (busy) return; busy = true;
+                cnt.app = cnt.auth = cnt.net = 0; [appB, authB, netB].forEach(b => { b.textContent = 'ran 0×'; });
+                all.forEach(n => { n.classList.remove('on', 'bad', 'ok'); n.box.replaceChildren(); });
+                say(o, `${hl('api.feed()')} <span class="muted">→ GET /feed with an expired token</span>`);
+                bump('app', appB);
+                if (!await hit(appI, '+ Bearer abc1')) return;
+                bump('net', netB);
+                if (!await hit(netI, 'log GET /feed')) return;
+                if (!await hit(server, '401', 'boom')) return;
+                bump('auth', authB);
+                if (!await hit(auth, same ? 'return response.request' : '+ Bearer def2')) return;
+                bump('net', netB);
+                if (!await hit(netI, `log GET /feed (retry)`)) return;
+                if (same) {
+                  if (!await hit(server, '401 again', 'boom')) return;
+                  bump('auth', authB);
+                  if (!await hit(auth, 'responseCount = 2 → null')) return;
+                  appI.classList.add('bad');
+                  if (!await hit(appI, '401', 'boom')) return;
+                  line(o, '<span class="bad">same request:</span> the retry went out with the old header, because AuthInterceptor never ran again. The guard stopped it after one lap.');
+                } else {
+                  if (!await hit(server, '200 OK', 'arc-back')) return;
+                  appI.classList.add('ok');
+                  if (!await hit(appI, '200 OK', 'arc-back')) return;
+                  line(o, '<span class="good">fresh header:</span> AuthInterceptor ran once. The logging interceptor saw both the 401 and the retry.');
+                }
+                all.forEach(x => x.classList.remove('on'));
+                busy = false;
+              }
+              const sw = toggle('dt-au-same', 'Authenticator returns response.request', function () { if (busy) { this.checked = same; return; } same = this.checked; say(o, same ? 'The Authenticator now returns the request unchanged.' : 'The Authenticator sets the new header again.'); });
+              say(o, 'Send one call with an expired token and count who runs.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('api.feed() // token expired', run), sw),
+                h('div', { class: 'dt-d2-chain' }, appI, h('span', { class: 'arrow' }, '→'), auth, h('span', { class: 'arrow' }, '→'), netI, h('span', { class: 'arrow' }, '→'), server),
+                o);
+            },
+          },
+          {
+            title: 'Stop the loop',
+            body: `
+<p>Some 401s cannot be fixed by a refresh: the account was disabled, or the server rejects every token because of a bug. Without a limit, your Authenticator refreshes and returns a new request every time. OkHttp follows up to 20 times, then throws <code>ProtocolException: Too many follow-up requests: 21</code>. That is 21 requests and 21 refresh calls for one tap.</p>
+<p>Count the earlier responses through <code>priorResponse</code>, as the OkHttp recipe does, and return <code>null</code> once you have already retried. The 401 then reaches your code, which can show the login screen.</p>`,
+            code: `override fun authenticate(route: Route?, response: Response): Request? {
+    if (response.responseCount >= 2) return null   // the retry with a fresh token failed too
+    // ... refresh and return the new request
+}
+
+private val Response.responseCount: Int
+    get() = generateSequence(this) { it.priorResponse }.count()`,
+            visual(el) {
+              let guard = true, busy = false;
+              const n = h('b', { class: 'dt-au-big' }, '0');
+              const r = h('b', { class: 'dt-au-big' }, '0');
+              const bar = h('span', { style: 'width:0%' });
+              const meter = h('div', { class: 'meter dt-au-meter' }, bar);
+              const o = out();
+              async function run() {
+                if (busy) return; busy = true;
+                n.textContent = '0'; r.textContent = '0'; bar.style.width = '0%'; meter.classList.remove('dt-au-hot');
+                say(o, `${hl('api.feed()')} <span class="muted">// the server answers 401 to everything</span>`);
+                let req = 0, ref = 0;
+                for (;;) {
+                  req++; n.textContent = req; bar.style.width = `${Math.min(100, req / 21 * 100)}%`;
+                  await sleep(guard ? 450 : 110); if (!o.isConnected) return;
+                  if (guard && req >= 2) {
+                    line(o, `<span class="good">responseCount = 2 → return null.</span> 2 requests, 1 refresh. The 401 reaches the app, which shows login.`);
+                    break;
+                  }
+                  ref++; r.textContent = ref;
+                  if (req > 20) {
+                    meter.classList.add('dt-au-hot'); replay(meter, 'shake');
+                    line(o, `<span class="bad">ProtocolException: Too many follow-up requests: 21</span> <span class="muted">${req} requests and ${ref} refresh calls for one tap.</span>`);
+                    break;
+                  }
+                }
+                busy = false;
+              }
+              const sw = toggle('dt-au-guard', 'if (responseCount >= 2) return null', function () { if (busy) { this.checked = guard; return; } guard = this.checked; say(o, guard ? 'Guard on: one retry, then give up.' : 'Guard off: the Authenticator always returns a new request.'); });
+              sw.input.checked = true;
+              say(o, 'Send a call to a server that always says 401. Then turn the guard off and try again.');
+              el.append(
+                h('div', { class: 'controls' }, cmd('api.feed() // always 401', run), sw),
+                h('div', { class: 'dt-au-stats' },
+                  h('div', {}, h('div', { class: 'dt-label' }, 'requests sent'), n),
+                  h('div', {}, h('div', { class: 'dt-label' }, 'refresh calls'), r)),
+                meter, o);
+            },
+          },
+          {
+            title: 'Refresh on a client without the Authenticator',
+            body: `
+<p>The refresh call itself must not go through the client that has the Authenticator. If <code>POST /token</code> answers 401, the Authenticator runs again on the same thread while it still holds the <code>Mutex</code>. A <code>Mutex</code> is not reentrant, so <code>withLock</code> waits for itself forever and that OkHttp thread is stuck.</p>
+<p>Build a plain base client and derive the API client from it with <code>newBuilder()</code>. Both share one connection pool, but only the API client has the auth pieces.</p>`,
+            code: `val baseClient = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .build()
+
+// Refresh calls: no AuthInterceptor, no Authenticator
+val authApi: AuthApi = retrofit(baseClient).create(AuthApi::class.java)
+
+// Everything else: same pool, plus the auth pieces
+val apiClient = baseClient.newBuilder()
+    .addInterceptor(AuthInterceptor(tokens))
+    .authenticator(TokenAuthenticator(tokens))
+    .build()`,
+          },
+          {
+            title: 'Logs that never show a token',
+            body: `
+<p><code>HttpLoggingInterceptor</code> prints whatever passes through it. With <code>Level.HEADERS</code> it prints the <code>Authorization</code> header unless you call <code>redactHeader("Authorization")</code>. With <code>Level.BODY</code> it also prints the refresh response, which holds both tokens in plain JSON.</p>
+<p>Use <code>NONE</code> in release builds, redact the auth headers in debug, and keep BODY for short local debugging sessions only.</p>`,
+            code: `HttpLoggingInterceptor().apply {
+    level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS
+            else HttpLoggingInterceptor.Level.NONE
+    redactHeader("Authorization")   // logged as Authorization: ██
+    redactHeader("Cookie")
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>For every call, OkHttp builds a list of interceptors: yours from <code>addInterceptor</code>, then <code>RetryAndFollowUpInterceptor</code>, <code>BridgeInterceptor</code>, <code>CacheInterceptor</code>, <code>ConnectInterceptor</code>, yours from <code>addNetworkInterceptor</code>, and finally <code>CallServerInterceptor</code>, which writes to the socket.</p>
+<p><code>RetryAndFollowUpInterceptor</code> runs a loop. When a response is a redirect or a 401, it asks for a follow-up request: the redirect target, or whatever your Authenticator returns. It links the old response as <code>priorResponse</code> of the new one and goes round again. A null follow-up ends the loop and returns the response. More than 20 follow-ups throws <code>ProtocolException</code>.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Refreshing on the main client',
+            bad: `val client = OkHttpClient.Builder()
+    .authenticator(TokenAuthenticator(tokens))
+    .build()
+val authApi = retrofit(client).create(AuthApi::class.java)   // refresh uses it too`,
+            good: `val baseClient = OkHttpClient.Builder().build()
+val authApi = retrofit(baseClient).create(AuthApi::class.java)
+val client = baseClient.newBuilder()
+    .authenticator(TokenAuthenticator(tokens))
+    .build()`,
+            why: 'A 401 from the refresh endpoint re-enters the Authenticator while it holds the non-reentrant Mutex, and the thread waits forever.',
+          },
+          {
+            title: 'Returning the same request',
+            bad: `override fun authenticate(route: Route?, response: Response): Request? {
+    runBlocking { mutex.withLock { tokens.refresh() } }
+    return response.request   // AuthInterceptor will add the new token… it won't
+}`,
+            good: `override fun authenticate(route: Route?, response: Response): Request? {
+    val fresh = runBlocking { mutex.withLock { tokens.refresh() } } ?: return null
+    return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()
+}`,
+            why: 'The retry starts below the application interceptors. The request you return is sent as it is, so it must carry the new header.',
+          },
+          {
+            title: 'No retry limit',
+            bad: `override fun authenticate(route: Route?, response: Response): Request? {
+    val fresh = refreshBlocking() ?: return null
+    return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()
+}`,
+            good: `override fun authenticate(route: Route?, response: Response): Request? {
+    if (response.responseCount >= 2) return null
+    val fresh = refreshBlocking() ?: return null
+    return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()
+}`,
+            why: 'If the server rejects even fresh tokens, OkHttp follows up to 20 times and then throws ProtocolException, after 21 refresh calls.',
+          },
+        ],
+        visual(el) {
+          const CALLS = ['GET /feed', 'GET /profile', 'GET /notifications'];
+          let useMutex = true, busy = false, seq = 1;
+          const v = { access: 'abc1', refresh: 'r1', calls: 0 };
+          const srv = { access: null, refresh: 'r1' };
+          const vAcc = h('span', { class: 'dt-pill' }), vRef = h('span', { class: 'dt-pill' }), vCalls = h('span', { class: 'dt-pill' });
+          const vault = h('div', { class: 'dt-au-vault' },
+            h('div', { class: 'dt-label' }, 'TokenStore'),
+            h('div', { class: 'dt-au-kv' }, h('span', {}, 'access'), vAcc),
+            h('div', { class: 'dt-au-kv' }, h('span', {}, 'refresh'), vRef),
+            h('div', { class: 'dt-au-kv' }, h('span', {}, 'refresh calls'), vCalls));
+          const lanes = CALLS.map(name => {
+            const track = h('div', { class: 'dt-au-track' });
+            const status = h('span', { class: 'dt-pill' }, 'idle');
+            const row = h('div', { class: 'dt-au-lane' }, h('div', { class: 'dt-au-head' }, h('b', {}, name), status), track);
+            return { row, track, status };
+          });
+          const o = out();
+          const paintVault = (busyRefresh) => {
+            vAcc.textContent = v.access ? `${v.access}${v.access === srv.access ? '' : ' (expired)'}` : 'none';
+            vAcc.className = `dt-pill ${v.access && v.access === srv.access ? 'dt-ok' : v.access ? '' : 'dt-bad'}`;
+            vRef.textContent = v.refresh || 'none';
+            vRef.className = `dt-pill ${v.refresh ? '' : 'dt-bad'}`;
+            vCalls.textContent = busyRefresh ? `${v.calls} (running…)` : String(v.calls);
+            vCalls.className = `dt-pill ${v.calls > 1 ? 'dt-bad' : ''}`;
+          };
+          const chip = (L, text, cls = '') => { const c = h('span', { class: `dt-au-chip ${cls}` }, text); L.track.append(c); replay(c, 'drop-in'); };
+          const setStatus = (L, text, cls = '') => { L.status.textContent = text; L.status.className = `dt-pill ${cls}`; };
+          // A tiny FIFO lock that behaves like Mutex.withLock for the demo.
+          let tail = Promise.resolve(), holders = 0;
+          const lock = () => { let release; const next = new Promise(r => { release = r; }); const wait = tail; tail = tail.then(() => next); holders++; return wait.then(() => () => { holders--; release(); }); };
+          let refreshing = 0;
+          async function refresh(L) {
+            if (!v.refresh) { chip(L, 'no refresh token → null'); return null; }
+            const rt = v.refresh;
+            v.calls++; refreshing++; paintVault(true);
+            chip(L, `POST /token (${rt})`);
+            await sleep(900);
+            refreshing--;
+            if (rt !== srv.refresh) {
+              chip(L, '400 invalid_grant', 'dt-au-bad');
+              v.access = null; v.refresh = null; paintVault(refreshing > 0);
+              return null;
+            }
+            seq++;
+            const acc = ['abc1', 'def2', 'ghi3', 'jkl4', 'mno5'][Math.min(seq - 1, 4)];
+            srv.access = acc; srv.refresh = `r${seq}`;
+            v.access = acc; v.refresh = `r${seq}`; paintVault(refreshing > 0);
+            chip(L, `200: ${acc}, r${seq}`, 'dt-au-ok');
+            return acc;
+          }
+          async function call(L, i) {
+            await sleep(i * 120);
+            const sent = v.access;
+            setStatus(L, 'sending');
+            chip(L, `Bearer ${sent}`);
+            await sleep(420);
+            if (sent && sent === srv.access) { chip(L, '200', 'dt-au-ok'); setStatus(L, '200', 'dt-ok'); return 'ok'; }
+            chip(L, '401', 'dt-au-bad');
+            await sleep(300);
+            chip(L, 'authenticate()');
+            let release = null;
+            if (useMutex) {
+              if (holders > 0) chip(L, 'waiting for lock…', 'dt-au-wait');
+              release = await lock();
+              chip(L, 'lock ✓');
+            }
+            let fresh;
+            const current = v.access;
+            if (useMutex && current && current !== sent) { chip(L, `changed → reuse ${current}`, 'dt-au-ok'); fresh = current; await sleep(250); }
+            else fresh = await refresh(L);
+            if (release) release();
+            if (!fresh) { chip(L, 'return null'); setStatus(L, '401 → app', 'dt-bad'); return 'fail'; }
+            await sleep(200);
+            chip(L, `retry Bearer ${fresh}`);
+            await sleep(420);
+            if (fresh === srv.access) { chip(L, '200', 'dt-au-ok'); setStatus(L, '200', 'dt-ok'); return 'ok'; }
+            chip(L, '401', 'dt-au-bad'); setStatus(L, '401 → app', 'dt-bad'); return 'fail';
+          }
+          function reset(revoked) {
+            v.access = 'abc1'; v.refresh = 'r1'; v.calls = 0; seq = 1;
+            srv.access = null; srv.refresh = revoked ? null : 'r1';
+            lanes.forEach(L => { L.track.replaceChildren(); setStatus(L, 'idle'); });
+            paintVault(false);
+          }
+          async function run(revoked) {
+            if (busy) return; busy = true;
+            reset(revoked);
+            say(o, revoked
+              ? '<span class="muted">The server revoked refresh token r1 (password changed on another device). Three calls start…</span>'
+              : `<span class="muted">Token abc1 expired. The home screen starts three calls${useMutex ? '' : ', with no Mutex'}…</span>`);
+            const res = await Promise.all(lanes.map((L, i) => call(L, i)));
+            if (!el.isConnected) return;
+            const fails = res.filter(x => x === 'fail').length;
+            if (revoked) line(o, `<span class="good">refresh rejected:</span> ${v.calls} refresh call${v.calls > 1 ? 's' : ''}, tokens cleared, every call returned 401. The app shows login, which is right this time.`);
+            else if (!fails) line(o, `<span class="good">${v.calls} refresh call.</span> The other calls waited for the lock, saw a new token and reused it.`);
+            else line(o, `<span class="bad">${v.calls} refresh calls.</span> The first one rotated r1 → r2, so the others sent a used refresh token, got 400, and cleared the tokens. ${fails} call${fails > 1 ? 's' : ''} failed and the user is logged out.`);
+            busy = false;
+          }
+          const sw = toggle('dt-au-mutex', 'mutex.withLock { … }', function () { if (busy) { this.checked = useMutex; return; } useMutex = this.checked; say(o, useMutex ? 'Refresh runs behind the Mutex, with the “did it change?” check.' : 'No Mutex: each 401 refreshes on its own.'); });
+          sw.input.checked = true;
+          reset(false);
+          say(o, 'Run three calls with an expired token. Then turn the Mutex off and run them again.');
+          el.append(
+            h('div', { class: 'controls' }, cmd('3 calls, token expired', () => run(false)), cmd('refresh token revoked', () => run(true)), sw),
+            h('div', { class: 'dt-au-wrap' }, vault, h('div', { class: 'dt-au-lanes' }, lanes.map(L => L.row))),
+            o);
+        },
+      },
+
+      // realtime ─────────────────────────────────────
+      {
+        id: 'realtime',
+        title: 'Real-time data: WebSockets as a Flow',
+        tagline: 'One open connection, wrapped in callbackFlow, closed when nobody listens.',
+        level: 'advanced',
+        body: `
+<p>A Retrofit call is one question and one answer. Live scores, chat and stock prices need the server to speak first, many times. A <strong>WebSocket</strong> keeps one connection open, and either side can send a message at any time.</p>
+<p>OkHttp opens one with <code>client.newWebSocket(request, listener)</code> and calls your <code>WebSocketListener</code> on its own background thread: <code>onOpen</code>, <code>onMessage</code>, then <code>onClosed</code> or <code>onFailure</code>. That is a callback API, so wrap it in <code>callbackFlow</code>. Each message goes in with <code>trySend</code>. A failure closes the flow with the error. <code>awaitClose</code> closes the socket when the collector leaves.</p>
+<p>The result is a cold <code>Flow</code>: the socket opens when someone collects and closes when they stop. Server-Sent Events, a one-way stream over plain HTTP, fit the same shape; OkHttp’s <code>okhttp-sse</code> module gives you an <code>EventSourceListener</code> with an <code>onEvent</code> callback.</p>`,
+        code: `class LiveScoreSocket(private val client: OkHttpClient) {
+    fun messages(matchId: String): Flow<String> = callbackFlow {
+        val request = Request.Builder()
+            .url("wss://live.example.com/matches/$matchId")
+            .build()
+        val socket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                trySend(text)                         // from OkHttp's thread into the flow
+            }
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(1000, null)           // answer the server's close
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                channel.close()                       // normal end
+            }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                channel.close(t)                      // an error, so retryWhen can reconnect
+            }
+        })
+        awaitClose { socket.close(1000, "collector left") }
+    }
+}
+
+class ScoreRepository(private val socket: LiveScoreSocket, private val json: Json) {
+    fun score(matchId: String): Flow<ScoreEvent> = socket.messages(matchId)
+        .map { json.decodeFromString<ScoreEvent>(it) }
+        .retryWhen { cause, attempt ->
+            if (cause !is IOException) return@retryWhen false
+            delay(1_000L shl attempt.coerceAtMost(5).toInt())   // 1 s, 2 s, 4 s … 32 s
+            true
+        }
+}`,
+        remember: 'callbackFlow plus awaitClose { socket.close() }: the socket lives exactly as long as someone collects.',
+        terms: [
+          { term: 'WebSocket', def: 'A long-lived, two-way connection that starts as an HTTP request and then carries messages in both directions.' },
+          { term: 'callbackFlow', def: 'A flow builder that turns a callback API into a cold Flow; values go in with trySend or send.' },
+          { term: 'awaitClose', def: 'Suspends inside callbackFlow until the collector cancels or the channel closes, then runs your cleanup block.' },
+          { term: 'Ping frame', def: 'A small control message that checks the connection is alive; OkHttp sends them when pingInterval is set.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Push each message into the flow and close the socket when the collector leaves.', code: 'callbackFlow {\n    val socket = client.newWebSocket(request, object : WebSocketListener() {\n        override fun onMessage(webSocket: WebSocket, text: String) {\n            [[trySend|trySendBlocking]](text)\n        }\n    })\n    [[awaitClose]] { socket.[[close]](1000, null) }\n}', why: '<code>trySend</code> works from any thread without suspending. <code>awaitClose</code> keeps the flow alive and runs its block when collection stops, which is where the socket must close.' },
+          { type: 'bug', prompt: 'When Wi-Fi drops, the score freezes and never reconnects, although the flow uses <code>retryWhen</code>. Tap the line.', code: 'val socket = client.newWebSocket(request, object : WebSocketListener() {\n    override fun onMessage(webSocket: WebSocket, text: String) {\n        trySend(text)\n    }\n    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {\n        channel.close()\n    }\n})', bug: 5, fix: '        channel.close(t)', why: '<code>close()</code> without a cause ends the flow normally, and <code>retryWhen</code> only runs on an exception. Pass the error so the collector sees a failure and reconnects.' },
+        ],
+        quiz: [
+          { q: 'When does the block inside <code>awaitClose { }</code> run?', options: ['After every message', 'When the collector cancels or the channel is closed', 'Only when the server closes the socket'], a: 1, why: 'It runs once, at the end, whichever side ends it. That makes it the one place to close the socket.' },
+          { q: 'Two screens collect the same cold <code>messages()</code> flow. How many sockets are open?', options: ['1', '2'], a: 1, why: 'Each collector runs the <code>callbackFlow</code> block again. Share one with <code>shareIn</code> when several screens need the same stream.' },
+          { q: 'Why call <code>trySend</code> instead of <code>emit</code> inside the listener?', options: ['emit is slower', 'The listener is a plain callback on OkHttp’s thread, not a suspend function in the flow’s coroutine', 'trySend retries on failure'], a: 1, why: '<code>emit</code> must be called from the flow’s own coroutine. <code>callbackFlow</code> gives you a channel that accepts values from any thread.' },
+        ],
+        deeper: [
+          {
+            title: 'Reconnect with backoff',
+            body: `
+<p>Mobile connections drop all the time: a tunnel, a Wi-Fi handoff, a server deploy. Because <code>onFailure</code> closes the flow with the error, <code>retryWhen</code> sees it and can start the <code>callbackFlow</code> again, which opens a fresh socket.</p>
+<p>Wait longer after each failure, and cap the wait. Retrying instantly in a loop drains the battery and hammers a server that is already struggling. Only retry errors that can heal, like <code>IOException</code>; a bad message format will fail the same way every time.</p>`,
+            code: `fun <T> Flow<T>.retryWithBackoff(maxDelayMs: Long = 30_000): Flow<T> =
+    retryWhen { cause, attempt ->
+        if (cause !is IOException) return@retryWhen false   // a parse error won't heal
+        val wait = (1_000L shl attempt.coerceAtMost(5).toInt()).coerceAtMost(maxDelayMs)
+        delay(wait)
+        true                                                // run the upstream again
+    }`,
+          },
+          {
+            title: 'One socket for every screen: shareIn',
+            body: `
+<p>A cold flow opens a new socket for each collector. If the match screen and a score banner both collect, the server sees two connections. Turn the stream into a hot <code>SharedFlow</code> in a long-lived scope with <code>shareIn</code>.</p>
+<p><code>WhileSubscribed(5_000)</code> opens the socket when the first collector arrives and closes it 5 seconds after the last one leaves, so a rotation does not reconnect. <code>replay = 1</code> hands the latest score to a screen that subscribes late.</p>`,
+            code: `@Singleton
+class ScoreRepository @Inject constructor(
+    socket: LiveScoreSocket,
+    json: Json,
+    @ApplicationScope scope: CoroutineScope,
+) {
+    val galatasarayFenerbahce: SharedFlow<ScoreEvent> = socket.messages("gs-fb")
+        .map { json.decodeFromString<ScoreEvent>(it) }
+        .retryWithBackoff()
+        .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+}`,
+          },
+          {
+            title: 'Sending goes the other way',
+            body: `
+<p>A WebSocket is two-way. <code>socket.send(text)</code> queues a message and returns at once. It returns <code>false</code> once the socket is closing or closed, and that message is not sent.</p>
+<p>The producer block of <code>callbackFlow</code> is a coroutine scope, so it can collect an outgoing flow and send each item on the same socket. When the collector leaves, that inner job is cancelled with the rest.</p>`,
+            code: `fun chat(roomId: String, outgoing: Flow<String>): Flow<String> = callbackFlow {
+    val socket = client.newWebSocket(request(roomId), listenerFor(this))
+    launch {
+        outgoing.collect { text ->
+            if (!socket.send(text)) close(IOException("socket is closing"))
+        }
+    }
+    awaitClose { socket.close(1000, null) }
+}`,
+          },
+          {
+            title: 'Find dead connections with pings',
+            body: `
+<p>A connection can die without either side noticing, for example when a mobile network silently drops it. Nothing fails until you try to send, so a quiet score feed would just look like a quiet match.</p>
+<p>Set <code>pingInterval</code> on the <code>OkHttpClient</code>. OkHttp then sends ping frames on that interval. If the server does not answer in time, OkHttp cancels the socket and calls <code>onFailure</code>, and your backoff takes over. Pings are off by default.</p>`,
+            code: `val wsClient = okHttpClient.newBuilder()
+    .pingInterval(20, TimeUnit.SECONDS)   // default 0 = no pings
+    .build()`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>A WebSocket starts as an ordinary HTTP request with an <code>Upgrade: websocket</code> header. The server answers <code>101 Switching Protocols</code>, which is the <code>Response</code> passed to <code>onOpen</code>, and from then on the same TCP connection carries small frames: text, binary, ping, pong and close.</p>
+<p>OkHttp reads frames on a background thread and calls your listener there. <code>callbackFlow</code> puts a channel between that thread and your collector, with room for 64 items by default. <code>trySend</code> drops a value and returns a failure when the channel is full, so for a fast feed where only the newest value matters, add <code>.conflate()</code> or <code>.buffer(Channel.CONFLATED)</code>.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Forgetting awaitClose',
+            bad: `fun messages() = callbackFlow {
+    client.newWebSocket(request, listener)
+}`,
+            good: `fun messages() = callbackFlow {
+    val socket = client.newWebSocket(request, listener)
+    awaitClose { socket.close(1000, null) }
+}`,
+            why: 'Without <code>awaitClose</code> the block returns at once and <code>callbackFlow</code> throws <code>IllegalStateException</code>. Even if it did not, the socket would stay open after the screen is gone.',
+          },
+          {
+            title: 'A socket per collector',
+            bad: `// Match screen and score banner each call:
+repository.score("gs-fb").collect { … }   // two sockets to one match`,
+            good: `val score = repository.score("gs-fb")
+    .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)`,
+            why: 'Every collector of a cold flow runs the producer again. Share one hot stream so each match has one connection, however many screens watch it.',
+          },
+        ],
+        visual(el) {
+          const TEAMS = ['Galatasaray', 'Fenerbahçe'];
+          let collecting = false, open = false, leaked = 0, attempt = 0, epoch = 0, closeOn = true, busy = false;
+          const goals = [0, 0];
+          let minute = 12;
+          const big = h('div', { class: 'dt-ws-big' }, '0 – 0');
+          const minuteEl = h('span', { class: 'dt-pill' }, "12'");
+          const status = h('span', { class: 'dt-pill' }, 'not collecting');
+          const count = h('span', { class: 'dt-pill' }, 'open sockets: 0');
+          const wire = h('div', { class: 'arc-wire' });
+          const o = h('div', { class: 'dt-d2-log dt-ws-log', 'aria-live': 'polite' });
+          const log = html => { o.append(h('div', { class: 'drop-in', html })); while (o.children.length > 7) o.firstChild.remove(); };
+          const sockets = () => (open ? 1 : 0) + leaked;
+          function paint() {
+            const n = sockets();
+            count.textContent = `open sockets: ${n}`;
+            count.className = 'dt-pill ' + (n > (collecting ? 1 : 0) ? 'dt-bad' : n ? 'dt-ok' : '');
+            status.textContent = collecting ? (open ? 'collecting · onOpen' : 'collecting · connecting…') : 'not collecting';
+            status.className = 'dt-pill ' + (collecting ? (open ? 'dt-ok' : 'dt-warn') : '');
+            big.textContent = `${goals[0]} – ${goals[1]}`;
+            minuteEl.textContent = `${minute}'`;
+          }
+          async function packet(text, cls, back) {
+            const p = h('span', { class: `arc-packet ${cls}${back ? ' far' : ''}` }, text);
+            wire.append(p); void p.offsetWidth;
+            p.classList.toggle('far', !back);
+            await sleep(900); p.remove();
+          }
+          async function connect(my) {
+            paint();
+            log(`<span class="muted">newWebSocket(wss://live.example.com/matches/gs-fb)</span>`);
+            await packet('GET  Upgrade: websocket', '', true);
+            if (!el.isConnected || my !== epoch || !collecting) return;
+            await packet('101 Switching Protocols', 'okp', false);
+            if (!el.isConnected || my !== epoch || !collecting) return;
+            open = true; paint();
+            log('<span class="good">onOpen</span> the socket is live');
+          }
+          async function collect() {
+            if (collecting) { log('<span class="muted">Already collecting.</span>'); return; }
+            collecting = true; attempt = 0; epoch++;
+            await connect(epoch);
+          }
+          async function goal() {
+            if (busy) return;
+            if (!sockets()) { log('<span class="muted">server: nobody is connected, the goal is not sent anywhere</span>'); return; }
+            busy = true;
+            const t = Math.random() < 0.55 ? 0 : 1;
+            minute = Math.min(90, minute + 3 + Math.floor(Math.random() * 9));
+            await packet(`{"goal":"${TEAMS[t]}","min":${minute}}`, '', false);
+            if (!el.isConnected) return;
+            if (open && collecting) {
+              goals[t]++; paint(); replay(big, 'pop');
+              log(`<span class="good">onMessage → trySend</span> GOL! ${TEAMS[t]} ${minute}'`);
+            } else {
+              paint();
+              log('<span class="bad">onMessage on a leaked socket:</span> trySend fails, the channel is closed. The bytes still cost data and battery.');
+            }
+            busy = false;
+          }
+          async function drop() {
+            if (!open) { log('<span class="muted">No live socket to drop.</span>'); return; }
+            open = false; paint(); replay(wire, 'shake');
+            log('<span class="bad">onFailure(SocketException)</span> → channel.close(t)');
+            const my = epoch;
+            while (collecting && my === epoch) {
+              const wait = 1 << Math.min(attempt, 5);
+              attempt++;
+              status.textContent = `retryWhen: delay(${wait} s)`; status.className = 'dt-pill dt-warn';
+              log(`<span class="muted">retryWhen: IOException, attempt ${attempt}, waiting ${wait} s (sped up here)</span>`);
+              await sleep(500 + wait * 250);
+              if (!el.isConnected || my !== epoch || !collecting) return;
+              await connect(my);
+              return;
+            }
+          }
+          async function leave() {
+            if (!collecting) { log('<span class="muted">Nothing is collecting.</span>'); return; }
+            collecting = false; epoch++;
+            if (!open) { paint(); log('Collector cancelled while reconnecting. The pending retry is cancelled too.'); return; }
+            if (closeOn) {
+              open = false; paint();
+              log('<span class="good">awaitClose ran:</span> socket.close(1000, "collector left")');
+              packet('close 1000', 'errp', true);
+            } else {
+              open = false; leaked++; paint(); replay(count, 'shake');
+              log('<span class="bad">awaitClose { } is empty:</span> the flow ended, but the socket is still open.');
+            }
+          }
+          const sw = toggle('dt-ws-close', 'awaitClose closes the socket', function () {
+            closeOn = this.checked;
+            log(closeOn ? 'awaitClose { socket.close(1000, null) } is back.' : '<span class="bad">bug mode:</span> awaitClose { } does nothing now. Collect, leave, collect again.');
+          });
+          sw.input.checked = true;
+          paint();
+          log('Collect to open the socket. Score goals, drop the network, then leave the screen.');
+          el.append(
+            h('div', { class: 'controls' }, cmd('scores.collect { }', collect), act('server: goal!', goal), act('drop the network', drop), act('leave the screen', leave)),
+            h('div', { class: 'controls' }, sw),
+            h('div', { class: 'arc-wire-row' }, h('span', { class: 'arc-end' }, 'server'), wire, h('span', { class: 'arc-end' }, 'app')),
+            h('div', { class: 'dt-ws-board' },
+              h('div', { class: 'dt-ws-score' }, h('div', { class: 'dt-ws-teams' }, h('span', {}, 'Galatasaray'), minuteEl, h('span', {}, 'Fenerbahçe')), big),
+              h('div', { class: 'dt-side' }, status, count)),
+            o);
+        },
+      },
+
       // 7 ─────────────────────────────────────────────
       {
         id: 'caching',
@@ -3186,21 +3832,6 @@ fun load(): String = draft.readFully().decodeToString()`,
                 h('div', { class: 'dt-grid' }, file, tmpBox), o);
             },
           },
-          {
-            title: 'Share a private file with FileProvider',
-            body: `
-<p>Other apps can’t read <code>filesDir</code>, and a <code>file://</code> Uri in an Intent throws <code>FileUriExposedException</code> in apps that target Android 7 or later. To let the user send a PDF by mail, wrap the file in a <code>content://</code> Uri from <code>FileProvider</code> and grant read access in the Intent. The receiving app gets that one file, only for as long as it needs it.</p>
-<p>Declare the provider in the manifest with <code>android:authorities="\${applicationId}.fileprovider"</code>, and list the shared folders in <code>res/xml/file_paths.xml</code>, for example <code>&lt;files-path name="exports" path="exports/" /&gt;</code>.</p>`,
-            code: `val file = File(context.filesDir, "exports/issue-42.pdf")
-val uri = FileProvider.getUriForFile(context, "\${context.packageName}.fileprovider", file)
-
-val send = Intent(Intent.ACTION_SEND).apply {
-    type = "application/pdf"
-    putExtra(Intent.EXTRA_STREAM, uri)
-    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-}
-context.startActivity(Intent.createChooser(send, null))`,
-          },
         ],
         underHood: {
           body: `
@@ -3328,6 +3959,225 @@ bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)`,
             sheetSlot,
             h('div', { class: 'controls' }, writeFile, writeExt, insert, readPath, picker, uninstall),
             o);
+        },
+      },
+      // share-files ──────────────────────────────────
+      {
+        id: 'share-files',
+        title: 'Sharing files with FileProvider',
+        tagline: 'Hand another app one file through a content:// Uri and a temporary grant.',
+        level: 'intermediate',
+        body: `
+<p>Other apps can’t read your <code>filesDir</code>. To let the user mail an exported PDF or send a photo you made, you have to hand over one file without opening the folder. A <code>file://</code> Uri doesn’t work: apps that target Android 7.0 or later crash with <code>FileUriExposedException</code> when one leaves the app in an Intent.</p>
+<p><code>FileProvider</code> is a ready-made <code>ContentProvider</code> from AndroidX. You declare it in the manifest, list the folders it may serve in <code>res/xml/file_paths.xml</code>, and call <code>FileProvider.getUriForFile()</code>. You get a <code>content://</code> Uri that names the file without showing its real path.</p>
+<p>The Uri alone grants nothing. Add <code>FLAG_GRANT_READ_URI_PERMISSION</code> to the Intent, and the receiving app may read that one Uri. The grant is temporary: it ends when the receiving app’s task stack is finished.</p>`,
+        code: `<!-- AndroidManifest.xml -->
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="\${applicationId}.fileprovider"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths" />
+</provider>
+
+<!-- res/xml/file_paths.xml -->
+<paths>
+    <files-path name="exports" path="exports/" />
+</paths>
+
+// Kotlin: share filesDir/exports/issue-42.pdf
+fun sharePdf(context: Context, file: File) {
+    val uri = FileProvider.getUriForFile(context, "\${context.packageName}.fileprovider", file)
+    // content://com.example.news.fileprovider/exports/issue-42.pdf
+
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(send, null))
+}`,
+        remember: 'Never send file://. Send a FileProvider content:// Uri with FLAG_GRANT_READ_URI_PERMISSION.',
+        terms: [
+          { term: 'FileProvider', def: 'An AndroidX ContentProvider that serves files from folders you list in XML through content:// Uris.' },
+          { term: 'Content Uri', def: 'A content:// address that names data inside a provider. The receiver opens it through ContentResolver, not as a file path.' },
+          { term: 'URI permission grant', def: 'Temporary access to one Uri for one receiving app, given with FLAG_GRANT_READ_URI_PERMISSION or FLAG_GRANT_WRITE_URI_PERMISSION on an Intent.' },
+          { term: 'FileUriExposedException', def: 'The exception thrown when an app targeting Android 7.0+ lets a file:// Uri leave the app in an Intent.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Turn the file into a shareable Uri and let the receiver read it.', code: 'val uri = FileProvider.[[getUriForFile]](context, "${context.packageName}.fileprovider", file)\n\nval send = Intent(Intent.ACTION_SEND).apply {\n    type = "application/pdf"\n    putExtra(Intent.EXTRA_STREAM, uri)\n    addFlags(Intent.[[FLAG_GRANT_READ_URI_PERMISSION]])\n}', why: '<code>getUriForFile</code> maps the file to a content Uri using your file_paths.xml. The flag gives the chosen app temporary read access to that Uri.' },
+          { type: 'bug', prompt: 'Sharing crashes with “IllegalArgumentException: Failed to find configured root”. file_paths.xml has <code>&lt;files-path name="exports" path="exports/" /&gt;</code>. Tap the line.', code: 'fun shareIssue(context: Context) {\n    val file = File(context.cacheDir, "exports/issue-42.pdf")\n    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)\n    val send = Intent(Intent.ACTION_SEND).apply {\n        type = "application/pdf"\n        putExtra(Intent.EXTRA_STREAM, uri)\n        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)\n    }\n    context.startActivity(Intent.createChooser(send, null))\n}', bug: 1, fix: '    val file = File(context.filesDir, "exports/issue-42.pdf")', why: '<code>&lt;files-path&gt;</code> covers <code>filesDir</code> only. A file in <code>cacheDir</code> needs a <code>&lt;cache-path&gt;</code> entry; any file outside the listed folders makes <code>getUriForFile</code> throw.' },
+        ],
+        quiz: [
+          { q: 'Your app targets Android 14 and puts <code>Uri.fromFile(pdf)</code> in a share Intent. What happens?', options: ['The receiver reads it normally', 'The app throws FileUriExposedException', 'Android converts it to a content Uri'], a: 1, why: 'Since Android 7.0, apps that target it or higher may not let a <code>file://</code> Uri leave the app. Use FileProvider.' },
+          { q: 'How long can the receiving app read the Uri you granted with <code>FLAG_GRANT_READ_URI_PERMISSION</code>?', options: ['Forever', 'Until your app is uninstalled', 'Until the receiving app’s task stack is finished'], a: 2, why: 'Intent grants are temporary and expire on their own. That is why the docs prefer them to <code>Context.grantUriPermission()</code>.' },
+          { q: 'What does the <code>name</code> attribute in <code>&lt;files-path name="exports" path="exports/" /&gt;</code> do?', options: ['It becomes the path segment in the content Uri, hiding the real folder', 'It renames the folder on disk', 'It sets the MIME type'], a: 0, why: 'The Uri reads <code>…fileprovider/exports/issue-42.pdf</code>. FileProvider maps that name back to the real folder when the Uri is opened.' },
+        ],
+        deeper: [
+          {
+            title: 'file_paths.xml maps folders to Uri names',
+            body: `
+<p>Each child of <code>&lt;paths&gt;</code> picks a base folder, and <code>path</code> picks a subfolder inside it. <code>&lt;files-path&gt;</code> is <code>filesDir</code>, <code>&lt;cache-path&gt;</code> is <code>cacheDir</code>, and <code>&lt;external-files-path&gt;</code> is <code>getExternalFilesDir()</code>. The <code>name</code> becomes the first segment of the Uri, so the receiver never sees your real path.</p>
+<p>Share the smallest folder that works. <code>path="."</code> on <code>&lt;files-path&gt;</code> makes your whole <code>filesDir</code>, with everything else you keep there, reachable through the provider for anyone you grant a Uri to. A dedicated <code>exports/</code> folder keeps the rest private. You can’t add folders from code; the XML is the only list.</p>`,
+            code: `<paths>
+    <files-path name="exports" path="exports/" />      <!-- filesDir/exports -->
+    <cache-path name="shared_images" path="images/" /> <!-- cacheDir/images -->
+</paths>
+
+// cacheDir/images/card.png → content://com.example.news.fileprovider/shared_images/card.png`,
+          },
+          {
+            title: 'Share several files at once',
+            body: `
+<p>For more than one file, use <code>ACTION_SEND_MULTIPLE</code> and put an <code>ArrayList&lt;Uri&gt;</code> in <code>EXTRA_STREAM</code>. Set a MIME type that covers them all: <code>image/jpeg</code> for three JPEGs, <code>image/*</code> for mixed images, and <code>*/*</code> only when the types really differ.</p>`,
+            code: `val uris = arrayListOf(
+    FileProvider.getUriForFile(context, authority, File(exports, "card-1.jpg")),
+    FileProvider.getUriForFile(context, authority, File(exports, "card-2.jpg")),
+)
+val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+    type = "image/jpeg"
+    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}
+context.startActivity(Intent.createChooser(send, null))`,
+          },
+          {
+            title: 'Don’t delete the file right after startActivity',
+            body: `
+<p><code>startActivity</code> returns as soon as the share sheet opens. The user may take a minute to pick an app, and the receiver reads the file after that, maybe in the background while it uploads.</p>
+<p>Export shared files into a dedicated cache folder, such as <code>cacheDir/images</code>, and clean that folder up the next time you export, or on the next app start. Deleting the file in the same function that shares it leaves the receiver with a Uri that points at nothing.</p>`,
+            code: `suspend fun exportCard(context: Context, bitmap: Bitmap): File = withContext(Dispatchers.IO) {
+    val dir = File(context.cacheDir, "images").apply {
+        deleteRecursively()                 // clean up last time's export, not this one
+        mkdirs()
+    }
+    File(dir, "card.png").also { f ->
+        f.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>FileProvider is a normal <code>ContentProvider</code>. <code>getUriForFile</code> finds the <code>&lt;paths&gt;</code> entry whose folder contains your file and swaps that folder for its <code>name</code>. When the receiver calls <code>openInputStream(uri)</code>, the system routes the call into your app’s process, and FileProvider maps the name back to the real file and opens it.</p>
+<p>The provider is declared with <code>exported="false"</code>, so no app can reach it by default, and <code>grantUriPermissions="true"</code>, which allows exceptions for single Uris. The grant flag on your Intent makes the system record one of those exceptions for that Uri and that receiving app, and it checks the record on every open.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Sending a file:// Uri',
+            bad: `putExtra(Intent.EXTRA_STREAM, Uri.fromFile(pdf))`,
+            good: `putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(context, authority, pdf))
+addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)`,
+            why: 'A <code>file://</code> Uri crashes apps that target Android 7.0 or later with <code>FileUriExposedException</code>, and the receiver could not read your private folder anyway.',
+          },
+          {
+            title: 'Forgetting the grant flag',
+            bad: `val send = Intent(Intent.ACTION_SEND).apply {
+    type = "application/pdf"
+    putExtra(Intent.EXTRA_STREAM, uri)
+}`,
+            good: `val send = Intent(Intent.ACTION_SEND).apply {
+    type = "application/pdf"
+    putExtra(Intent.EXTRA_STREAM, uri)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}`,
+            why: 'Without the flag the provider is still closed to everyone. The receiving app gets a <code>SecurityException</code> when it opens the Uri, and usually shows a vague “couldn’t attach file” error.',
+          },
+          {
+            title: 'Granting with Context.grantUriPermission()',
+            bad: `context.grantUriPermission("com.mail.app", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)`,
+            good: `send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)   // expires on its own`,
+            why: 'A grant from <code>grantUriPermission()</code> lasts until you call <code>revokeUriPermission()</code>. Flags on the Intent expire when the receiver’s task stack finishes.',
+          },
+        ],
+        visual(el) {
+          const PATH = 'files/exports/issue-42.pdf';
+          const URI = 'content://com.example.news.fileprovider/exports/issue-42.pdf';
+          let uri = null, flag = false, granted = false, busy = false;
+          const uriBox = h('div', { class: 'dt-sh-uri' }, 'uri = (none yet)');
+          const grantPill = h('span', { class: 'dt-pill' }, 'no grant');
+          const recv = h('div', { class: 'dt-files' });
+          const sheetSlot = h('div');
+          const o = out();
+          const mine = h('div', { class: 'dt-zone' },
+            h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'com.example.news'), h('span', { class: 'dt-pill' }, 'your app')),
+            h('span', { class: 'dt-path' }, '/data/data/com.example.news/'),
+            h('div', { class: 'dt-files' }, h('span', { class: 'dt-fileic dt-ours' }, PATH), h('span', { class: 'dt-fileic' }, 'databases/news.db')),
+            uriBox);
+          const them = h('div', { class: 'dt-zone' },
+            h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'com.mail.app'), grantPill),
+            h('span', { class: 'dt-path' }, 'receiving app'),
+            recv);
+          function paintGrant() {
+            grantPill.className = 'dt-pill ' + (granted ? 'dt-ok' : '');
+            grantPill.textContent = granted ? 'read grant: issue-42.pdf' : 'no grant';
+          }
+          const fileUri = cmd('Uri.fromFile(pdf)', () => {
+            if (busy) return;
+            uri = 'file'; uriBox.textContent = 'uri = file:///data/data/com.example.news/files/exports/issue-42.pdf'; replay(uriBox, 'pop');
+            say(o, 'A file:// Uri. Now try to share it.');
+          });
+          const getUri = cmd('FileProvider.getUriForFile(…)', () => {
+            if (busy) return;
+            uri = 'content'; uriBox.textContent = `uri = ${URI}`; replay(uriBox, 'pop');
+            say(o, '<span class="good">ok:</span> "exports" is the name from file_paths.xml. The real folder stays hidden.');
+          });
+          const badPath = cmd('getUriForFile(…, dbFile)', () => {
+            if (busy) return;
+            replay(mine, 'shake');
+            say(o, `${hl('val dbFile = getDatabasePath("news.db")')}<br><span class="bad">IllegalArgumentException:</span> Failed to find configured root that contains /data/data/com.example.news/databases/news.db <span class="muted">// only exports/ is listed</span>`);
+          });
+          const flagSw = toggle('dt-sh-flag', 'FLAG_GRANT_READ_URI_PERMISSION', function () { if (busy) { this.checked = flag; return; } flag = this.checked; say(o, flag ? 'The Intent will carry a read grant for its Uri.' : 'The Intent will carry the Uri but no grant.'); });
+          const share = cmd('startActivity(chooser)', () => {
+            if (busy) return;
+            if (!uri) { say(o, 'Make a Uri first.'); return; }
+            if (uri === 'file') {
+              replay(mine, 'shake');
+              say(o, '<span class="bad">FileUriExposedException:</span> file:///data/data/com.example.news/files/exports/issue-42.pdf exposed beyond app <span class="muted">// targetSdk ≥ 24</span>');
+              return;
+            }
+            busy = true;
+            const sheet = h('div', { class: 'dt-sheet drop-in', role: 'dialog', 'aria-label': 'Share sheet' },
+              h('div', { class: 'dt-head' }, h('b', {}, 'Share sheet (system UI)'), h('span', { class: 'dt-pill' }, 'application/pdf')),
+              h('div', { class: 'controls' }, act('Mail', () => pick(sheet)), act('Drive', () => pick(sheet))),
+              h('span', { class: 'dt-sub' }, 'Pick the app that receives the file.'));
+            sheetSlot.replaceChildren(sheet);
+            say(o, 'startActivity() returned. The user is choosing an app.');
+          });
+          async function pick(sheet) {
+            sheet.classList.add('leave');
+            await sleep(400); if (!el.isConnected) return;
+            sheetSlot.replaceChildren();
+            granted = flag; paintGrant(); replay(grantPill, 'pop');
+            line(o, `${hl('contentResolver.openInputStream(uri)')} <span class="muted">in the receiving app</span>`);
+            await sleep(600); if (!el.isConnected) return;
+            if (granted) {
+              recv.replaceChildren(h('span', { class: 'dt-fileic dt-ours drop-in' }, 'issue-42.pdf · 84 KB'));
+              line(o, '<span class="good">read 84 KB.</span> The receiver sees this one file and nothing else in your app.');
+            } else {
+              replay(them, 'shake');
+              line(o, '<span class="bad">SecurityException: Permission Denial</span> <span class="muted">// the provider is not exported and no grant was given</span>');
+            }
+            busy = false;
+          }
+          const finish = act('receiver finishes its task', async () => {
+            if (busy) return;
+            if (!granted) { say(o, 'There is no grant to end.'); return; }
+            busy = true;
+            granted = false; paintGrant(); recv.replaceChildren();
+            say(o, 'The mail app sent the message and its task finished. <span class="muted">The grant expired with it.</span>');
+            await sleep(500); if (!el.isConnected) return;
+            line(o, `<span class="bad">openInputStream(uri) later → SecurityException</span>`);
+            busy = false;
+          });
+          say(o, 'Make a Uri, choose whether to grant, share, and pick an app.');
+          el.append(
+            h('div', { class: 'controls' }, fileUri, getUri, badPath),
+            h('div', { class: 'controls' }, flagSw, share, finish),
+            h('div', { class: 'dt-sh-wrap' }, mine, them),
+            sheetSlot, o);
         },
       },
     ],

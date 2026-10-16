@@ -195,7 +195,214 @@ input#md-d2-zoom { flex: 1 1 140px; min-width: 0; accent-color: var(--accent); }
 .md-d2-spark polyline.md-d2-lin { stroke: var(--warm); }
 .md-d2-dense { position: absolute; left: 0; top: 6px; bottom: 6px; background: repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 4px); }
 .md-d2-dense.md-d2-hot { background: repeating-linear-gradient(90deg, var(--err) 0 1px, transparent 1px 4px); }
+/* promoted: video capture */
+.md-vc-cmds .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.md-vc-rec { position: absolute; top: 10px; left: 10px; z-index: 2; font: 700 0.74rem var(--mono); color: #fff; padding: 3px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.5); font-variant-numeric: tabular-nums; }
+.md-vc-rec:empty { display: none; }
+.md-vc-rec.md-vc-on { background: rgba(200, 30, 50, 0.85); }
 `;
+
+  // ─── Promoted from camerax: recording video ───────────────────────────
+  const videoCaptureLesson = {
+    id: 'video-capture',
+    title: 'Recording video with CameraX',
+    tagline: 'VideoCapture, a Recorder, and a stream of events that ends in Finalize.',
+    level: 'intermediate',
+    body: `
+<p>Video is the fourth CameraX use case. <code>VideoCapture</code> wraps a <code>Recorder</code>, which encodes and writes the file. Ask for a quality with a <code>QualitySelector</code> and a fallback, because devices differ in what they can record. Then bind it like the other use cases, usually next to <code>Preview</code>.</p>
+<p>A recording has three steps. <code>prepareRecording()</code> picks the output, such as MediaStore, and returns a <code>PendingRecording</code> that records nothing yet. <code>start()</code> returns an active <code>Recording</code> that you can pause, resume and stop. Along the way your listener receives <code>VideoRecordEvent</code>s: <code>Start</code>, a <code>Status</code> with the duration and size so far, and finally <code>Finalize</code>, which tells you the file is done, or why it stopped.</p>
+<p>Sound needs the <code>RECORD_AUDIO</code> runtime permission before you call <code>withAudioEnabled()</code>. Saving to MediaStore needs no storage permission on Android 10 and higher. A Recorder handles one recording at a time.</p>`,
+    code: `val recorder = Recorder.Builder()
+    .setQualitySelector(
+        QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD))
+    )
+    .build()
+val videoCapture = VideoCapture.withOutput(recorder)
+provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
+
+val output = MediaStoreOutputOptions.Builder(context.contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+    .setContentValues(contentValuesOf(MediaStore.Video.Media.DISPLAY_NAME to "klip-\${System.currentTimeMillis()}"))
+    .build()
+
+var recording: Recording? = videoCapture.output
+    .prepareRecording(context, output)
+    .withAudioEnabled()                                   // only after RECORD_AUDIO is granted
+    .start(ContextCompat.getMainExecutor(context)) { event ->
+        when (event) {
+            is VideoRecordEvent.Start -> showRecDot()
+            is VideoRecordEvent.Status -> showTime(event.recordingStats.recordedDurationNanos)
+            is VideoRecordEvent.Finalize ->
+                if (event.hasError()) showError(event.error)
+                else showSaved(event.outputResults.outputUri)
+        }
+    }
+
+// later
+recording?.stop()
+recording = null`,
+    remember: 'prepareRecording, start, and wait for Finalize. Check hasError() there before you tell the user the video is saved.',
+    deeper: [
+      {
+        title: 'Quality, fallback and use case combinations',
+        body: `<p>Not every camera records 4K. <code>QualitySelector.fromOrderedList()</code> takes your preferences in order, and a <code>FallbackStrategy</code> says what to do when none of them fit. The result is chosen when you bind.</p>
+<p>The qualities listed by <code>getSupportedQualities()</code> are only guaranteed for <code>VideoCapture</code> alone or with <code>Preview</code>. Add <code>ImageCapture</code> or <code>ImageAnalysis</code> on top and binding can fail on some devices, so catch the exception from <code>bindToLifecycle()</code> and offer fewer features.</p>`,
+        code: `val selector = QualitySelector.fromOrderedList(
+    listOf(Quality.UHD, Quality.FHD, Quality.HD, Quality.SD),
+    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD),
+)
+
+try {
+    provider.bindToLifecycle(owner, lens, preview, videoCapture, imageCapture)
+} catch (e: IllegalArgumentException) {
+    provider.bindToLifecycle(owner, lens, preview, videoCapture)   // no photos while filming
+}`,
+      },
+      {
+        title: 'A Finalize error does not always mean no file',
+        body: `<p>Some errors still leave a usable video. With a size or duration limit, the data recorded before the limit is saved and Finalize reports <code>ERROR_FILE_SIZE_LIMIT_REACHED</code> or <code>ERROR_DURATION_LIMIT_REACHED</code>. If the camera closes mid-recording, you get <code>ERROR_SOURCE_INACTIVE</code> and a file with the frames up to that point. With <code>ERROR_NO_VALID_DATA</code> the file is not valid and you should delete it.</p>
+<p>So read the error code instead of treating every error the same.</p>`,
+        code: `val output = FileOutputOptions.Builder(file)
+    .setFileSizeLimit(50L * 1024 * 1024)          // 50 MB
+    .build()
+
+is VideoRecordEvent.Finalize -> when (event.error) {
+    VideoRecordEvent.Finalize.ERROR_NONE,
+    VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED,
+    VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE -> showSaved(event.outputResults.outputUri)
+    VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA -> file.delete()
+    else -> showError(event.error)
+}`,
+      },
+      {
+        title: 'Keep recording across a lens switch',
+        body: `<p>Normally a recording stops when its <code>VideoCapture</code> is unbound, for example when the user flips to the front camera. <code>asPersistentRecording()</code> keeps it going until you call <code>stop()</code>. While nothing is bound, no video frames arrive, but audio keeps recording, so pause around the switch. The API is marked experimental, so you have to opt in.</p>`,
+        code: `@OptIn(ExperimentalPersistentRecording::class)
+val recording = videoCapture.output
+    .prepareRecording(context, output)
+    .asPersistentRecording()
+    .start(executor, listener)
+
+fun flip() {
+    recording.pause()
+    provider.unbindAll()
+    provider.bindToLifecycle(owner, otherLens, preview, videoCapture)
+    recording.resume()
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Recording sound without the permission',
+        bad: `videoCapture.output.prepareRecording(context, output)
+    .withAudioEnabled()            // SecurityException if RECORD_AUDIO is not granted
+    .start(executor, listener)`,
+        good: `val pending = videoCapture.output.prepareRecording(context, output)
+val withSound = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+    PackageManager.PERMISSION_GRANTED
+(if (withSound) pending.withAudioEnabled() else pending).start(executor, listener)`,
+        why: '<code>withAudioEnabled()</code> requires RECORD_AUDIO and throws without it. Ask first, and record silent video if the user says no.',
+      },
+      {
+        title: 'Starting a second recording',
+        bad: `fun onRecordClick() {
+    recording = videoCapture.output.prepareRecording(context, output).start(executor, listener)
+}`,
+        good: `fun onRecordClick() {
+    recording?.let { it.stop(); recording = null; return }
+    recording = videoCapture.output.prepareRecording(context, output).start(executor, listener)
+}`,
+        why: 'A Recorder has at most one active recording. <code>start()</code> throws IllegalStateException while the previous one is unfinished.',
+      },
+    ],
+    terms: [
+      { term: 'VideoCapture', def: 'The CameraX use case for video. It feeds camera frames to a video output such as a Recorder.' },
+      { term: 'Recorder', def: 'The CameraX video output that encodes audio and video and writes the file. It runs one recording at a time.' },
+      { term: 'PendingRecording', def: 'A prepared recording with its output chosen. Nothing is recorded until you call start(), which returns a Recording.' },
+      { term: 'VideoRecordEvent', def: 'Events sent to the recording listener: Start, Status, Pause, Resume and Finalize.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Prepare a recording, start it, and save the file when it is done.', code: 'val recording = videoCapture.output\n    .[[prepareRecording]](context, output)\n    .withAudioEnabled()\n    .[[start]](ContextCompat.getMainExecutor(context)) { event ->\n        if (event is VideoRecordEvent.[[Finalize]] && !event.hasError())\n            save(event.outputResults.outputUri)\n    }', why: '<code>prepareRecording</code> picks the output, <code>start</code> begins recording, and <code>Finalize</code> is the last event.' },
+      { type: 'bug', prompt: 'The app says “Video saved” even when the recording failed. Tap the line.', code: '.start(executor) { event ->\n    when (event) {\n        is VideoRecordEvent.Start -> showRecDot()\n        is VideoRecordEvent.Finalize -> showSaved(event.outputResults.outputUri)\n        else -> Unit\n    }\n}', bug: 3, fix: '        is VideoRecordEvent.Finalize -> if (event.hasError()) showError(event.error) else showSaved(event.outputResults.outputUri)', why: 'Finalize arrives for success and failure alike. Check <code>hasError()</code> and the error code before you report success.' },
+    ],
+    quiz: [
+      { q: 'What does <code>prepareRecording()</code> give you?', options: ['A PendingRecording that records nothing until start()', 'A Recording that is already running', 'The finished file'], a: 0, why: 'Preparing only picks the output and options. start() returns the active Recording.' },
+      { q: 'The user presses Home while recording (not a persistent recording). What does the listener get?', options: ['Pause, and recording resumes later', 'Finalize with ERROR_SOURCE_INACTIVE, and a file with the frames so far', 'Nothing until the app returns'], a: 1, why: 'The camera closes on ON_STOP, so the recording ends. The frames before that are saved.' },
+      { q: 'You call <code>start()</code> while another recording on the same Recorder is still active. What happens?', options: ['Both record to separate files', 'The first one stops on its own', 'It throws IllegalStateException'], a: 2, why: 'A Recorder handles one recording at a time. Stop the first one before you start another.' },
+    ],
+    visual(el) {
+      const DEVICES = { 'flagship (up to UHD)': ['UHD', 'FHD', 'HD', 'SD'], 'budget (up to HD)': ['HD', 'SD'] };
+      const RATE = { FHD: 2.1, HD: 1.1 };
+      const S = { dev: 'flagship (up to UHD)', perm: true, audio: true, st: 'idle', fg: true, secs: 0, n: 0, tok: 0 };
+      const scene = h('div', { class: 'md-scene' });
+      const label = h('span', { class: 'md-vf-label' });
+      const rec = h('span', { class: 'md-vc-rec' });
+      const vf = h('div', { class: 'md-vf md-open' }, scene, rec, label);
+      const qTag = tag(''), stTag = tag(''), audTag = tag('');
+      const { el: logEl, log } = logger(5);
+      const quality = () => { const sup = DEVICES[S.dev]; return sup.includes('FHD') ? 'FHD' : sup.find(q => ['HD', 'SD'].includes(q)); };
+      function paint() {
+        setTag(qTag, `quality: ${quality()}${quality() === 'FHD' ? '' : ' (fallback)'}`, 'acc');
+        setTag(stTag, { idle: 'no recording', rec: 'recording', paused: 'paused' }[S.st], { idle: '', rec: 'no', paused: 'wait' }[S.st]);
+        setTag(audTag, S.perm ? 'RECORD_AUDIO granted' : 'RECORD_AUDIO denied', S.perm ? 'ok' : '');
+        vf.classList.toggle('md-open', S.fg);
+        scene.classList.toggle('md-run', S.fg && S.st === 'rec');
+        rec.textContent = S.st === 'idle' ? '' : `${S.st === 'rec' ? '● REC' : '❚❚'} 0:${String(S.secs).padStart(2, '0')}`;
+        rec.classList.toggle('md-vc-on', S.st === 'rec');
+        label.textContent = S.fg ? '' : 'camera closed';
+      }
+      const finalize = (err, note) => {
+        S.st = 'idle'; S.tok++;
+        log(`Finalize: ${err === 'ERROR_NONE' ? '<span class="good">ERROR_NONE</span>' : `<span class="bad">${err}</span>`}${note ? ` <span class="muted">${note}</span>` : ''}`);
+        paint();
+      };
+      async function ticker(my) {
+        for (;;) {
+          await sleep(1000);
+          if (my !== S.tok || !vf.isConnected) return;
+          if (S.st !== 'rec') continue;
+          S.secs++;
+          const mb = (S.secs * RATE[quality()]).toFixed(1);
+          if (S.secs % 2 === 0) log(`Status: ${S.secs} s, numBytesRecorded ≈ ${mb} MB`);
+          paint();
+        }
+      }
+      function start() {
+        if (!S.fg) { log('<span class="muted">the camera is closed: open the app first</span>'); return; }
+        if (S.audio && !S.perm) { replay(vf, 'shake'); log('withAudioEnabled(): <span class="bad">SecurityException</span>, RECORD_AUDIO not granted'); return; }
+        if (S.st !== 'idle') { replay(vf, 'shake'); log('start(): <span class="bad">IllegalStateException</span>, the Recorder has an unfinished recording'); return; }
+        S.st = 'rec'; S.secs = 0; S.n++;
+        log(`Start <span class="muted">(${quality()}, ${S.audio ? 'with audio' : 'silent'})</span>`);
+        paint(); ticker(++S.tok);
+      }
+      const root = h('div', { class: 'md-root' },
+        h('div', { class: 'md-split' },
+          h('div', { class: 'md-col' },
+            h('div', { class: 'md-tags' }, qTag, stTag, audTag),
+            choice('device', Object.keys(DEVICES), S.dev, v => { if (S.st !== 'idle') { log('<span class="muted">stop first: quality is chosen when you bind</span>'); return false; } S.dev = v; paint(); log(`bound: QualitySelector.from(FHD, lowerQualityOrHigherThan(FHD)) → ${quality()}`); }).el,
+            h('div', { class: 'controls md-vc-cmds' },
+              toggle('md-vc-perm', 'RECORD_AUDIO granted', true, v => { S.perm = v; paint(); }),
+              toggle('md-vc-audio', '<code>.withAudioEnabled()</code>', true, v => { S.audio = v; })),
+            h('div', { class: 'controls md-vc-cmds' },
+              cmd('prepareRecording(context, output).start(executor, listener)', start),
+              cmd('recording.pause()', () => { if (S.st !== 'rec') return; S.st = 'paused'; log('Pause'); paint(); }),
+              cmd('recording.resume()', () => { if (S.st !== 'paused') return; S.st = 'rec'; log('Resume'); paint(); }),
+              cmd('recording.stop()', () => { if (S.st === 'idle') { log('<span class="muted">no active recording</span>'); return; } finalize('ERROR_NONE', `content://media/…/video/${2000 + S.n}, ${S.secs} s`); })),
+            h('div', { class: 'controls md-vc-cmds' },
+              act('Press Home (ON_STOP)', () => {
+                if (!S.fg) return;
+                S.fg = false;
+                if (S.st !== 'idle') finalize('ERROR_SOURCE_INACTIVE', `camera closed: the ${S.secs} s before it are saved`);
+                else { log('ON_STOP: camera closed'); paint(); }
+              }),
+              act('Open app (ON_START)', () => { if (S.fg) return; S.fg = true; log('ON_START: camera open, preview running'); paint(); }))),
+          vf),
+        logEl,
+        h('p', { class: 'tip' }, 'File sizes are rough examples. Times run at real speed.'));
+      el.append(root);
+      paint();
+      log('Bound: Preview + VideoCapture. Start a recording.');
+    },
+  };
 
   Lab.addTrack({
     id: 'media',
@@ -1235,7 +1442,7 @@ mediaPlayer.start()`,
         tagline: 'Pick use cases, bind them to a lifecycle, let CameraX open and close the camera.',
         level: 'intermediate',
         body: `
-<p>CameraX wraps Camera2 in use cases. <code>Preview</code> streams frames to the screen. <code>ImageCapture</code> takes photos. <code>ImageAnalysis</code> and <code>VideoCapture</code> are the other two. You build the ones you need and hand them to the provider’s <code>bindToLifecycle()</code> with a <code>CameraSelector</code> such as <code>DEFAULT_BACK_CAMERA</code>.</p>
+<p>CameraX wraps Camera2 in use cases. <code>Preview</code> streams frames to the screen. <code>ImageCapture</code> takes photos. <code>ImageAnalysis</code> and <code>VideoCapture</code> are the other two; video has its own lesson, <em>Recording video with CameraX</em>. You build the ones you need and hand them to the provider’s <code>bindToLifecycle()</code> with a <code>CameraSelector</code> such as <code>DEFAULT_BACK_CAMERA</code>.</p>
 <p>The lifecycle owner does the hard part. The camera opens when the owner is started and closes when it stops, so pressing Home frees the camera for other apps without any code from you. To switch lenses, call <code>unbindAll()</code> and bind again with the other selector. You still need the <code>CAMERA</code> runtime permission first.</p>
 <p>In Compose, use <code>CameraXViewfinder</code> from <code>camera-compose</code>. <code>Preview</code> asks for a surface through its <code>SurfaceProvider</code>. Put the <code>SurfaceRequest</code> it gives you into state, and the viewfinder draws it. Get the provider with <code>awaitInstance(context)</code>, a suspend function on <code>ProcessCameraProvider</code>.</p>`,
         code: `class CameraViewModel : ViewModel() {
@@ -1425,31 +1632,6 @@ fun onPinch(scale: Float) {
               log('The phone is turned sideways, the UI is locked. Take a picture.');
             },
           },
-          {
-            title: 'Recording video',
-            body: `<p>Video is the fourth use case. <code>VideoCapture</code> wraps a <code>Recorder</code>, which encodes and writes the file. Ask for a quality with a <code>QualitySelector</code> and a fallback, because devices differ in what they can record. Prepare a recording into MediaStore and <code>start()</code> it. Events arrive as <code>VideoRecordEvent</code>s, and <code>Finalize</code> tells you the file is done, or why it failed.</p>
-<p>Sound needs the <code>RECORD_AUDIO</code> permission before you call <code>withAudioEnabled()</code>. Saving to MediaStore needs no storage permission on Android 10 and higher.</p>`,
-            code: `val recorder = Recorder.Builder()
-    .setQualitySelector(
-        QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD))
-    )
-    .build()
-val videoCapture = VideoCapture.withOutput(recorder)
-provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
-
-val output = MediaStoreOutputOptions.Builder(context.contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
-    .setContentValues(contentValuesOf(MediaStore.Video.Media.DISPLAY_NAME to "clip-\${System.currentTimeMillis()}"))
-    .build()
-
-val recording = videoCapture.output.prepareRecording(context, output)
-    .withAudioEnabled()                                   // after RECORD_AUDIO is granted
-    .start(ContextCompat.getMainExecutor(context)) { event ->
-        if (event is VideoRecordEvent.Finalize) {
-            if (event.hasError()) showError(event.error) else show(event.outputResults.outputUri)
-        }
-    }
-// later: recording.stop()`,
-          },
         ],
         underHood: {
           body: `<p>CameraX is a layer over Camera2. When you bind, it collects one output surface per use case: the preview surface from your <code>SurfaceRequest</code>, an <code>ImageReader</code> for <code>ImageCapture</code>, another for <code>ImageAnalysis</code>, an encoder surface for video. It picks a size for each from the stream combinations the device reports as supported, opens the <code>CameraDevice</code>, and creates one capture session with all of those surfaces.</p>
@@ -1560,6 +1742,8 @@ provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview)`,
           log('Bound and open. Tap the shutter, then press Home.');
         },
       },
+
+      videoCaptureLesson,
 
       // 5 ─────────────────────────────────────────────
       {

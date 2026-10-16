@@ -127,6 +127,48 @@
   .tst-d2-msg { grid-column: 1 / -1; }
   .tst-d2-pages { grid-template-columns: repeat(15, minmax(0, 1fr)); }
 }
+
+/* promoted: robolectric */
+.tst-wrap .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.tst-rb-loop { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; min-width: 0; }
+.tst-rb-box { display: grid; gap: 6px; align-content: start; min-height: 96px; padding: 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
+.tst-rb-box.tst-rb-hot { border-color: var(--accent); }
+.tst-rb-msg { font: 600 0.76rem var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--warm-soft); color: var(--ink); border: 1px solid var(--warm); overflow-wrap: anywhere; }
+.tst-rb-msg.tst-rb-ran { background: var(--ok-soft); border-color: var(--ok); }
+.tst-rb-arrow { font: 700 1.2rem var(--mono); color: var(--muted); }
+@media (max-width: 520px) { .tst-rb-loop { grid-template-columns: minmax(0, 1fr); } .tst-rb-arrow { transform: rotate(90deg); justify-self: center; } }
+
+/* promoted: mockk */
+.tst-mk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; min-width: 0; }
+.tst-mk-calls { display: grid; gap: 4px; min-height: 64px; align-content: start; }
+.tst-mk-call { font: 600 0.78rem var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--sunk); color: var(--ink); overflow-wrap: anywhere; }
+.tst-mk-call.tst-mk-boom { background: var(--err-soft); color: var(--err); }
+.tst-mk-slot { font: 600 0.8rem var(--mono); color: var(--accent); overflow-wrap: anywhere; }
+
+/* promoted: screenshots */
+.tst-ss-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; min-width: 0; }
+.tst-ss-pane { display: grid; gap: 6px; min-width: 0; }
+.tst-ss-img { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 1px; padding: 4px; border-radius: 10px; background: var(--line); border: 1px solid var(--line); }
+.tst-ss-px { aspect-ratio: 1; background: var(--surface); min-width: 0; }
+.tst-ss-px.k-card { background: var(--sunk); }
+.tst-ss-px.k-title { background: var(--ink); }
+.tst-ss-px.k-text { background: var(--muted); }
+.tst-ss-px.k-btn { background: var(--accent); }
+.tst-ss-px.k-btn2 { background: var(--warm); }
+.tst-ss-px.k-aa { background: var(--line); }
+.tst-ss-img.tst-ss-diff .tst-ss-px { background: var(--surface); }
+.tst-ss-img.tst-ss-diff .tst-ss-px.tst-ss-hit { background: var(--err); }
+.tst-ss-img.tst-ss-empty .tst-ss-px { background: var(--sunk); opacity: 0.5; }
+
+/* promoted: hilt testing */
+.tst-hl-tests { display: grid; gap: 8px; min-width: 0; }
+.tst-hl-row { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
+.tst-hl-row b { font: 600 0.8rem var(--mono); overflow-wrap: anywhere; }
+.tst-hl-bind { font: 600 0.76rem var(--mono); padding: 3px 8px; border-radius: 999px; justify-self: start; overflow-wrap: anywhere; }
+.tst-hl-bind.tst-hl-real { background: var(--err-soft); color: var(--err); }
+.tst-hl-bind.tst-hl-fake { background: var(--ok-soft); color: var(--ok); }
+.tst-hl-comp { font: 600 0.72rem var(--mono); color: var(--muted); }
+@media (max-width: 520px) { .tst-hl-row { grid-template-columns: minmax(0, 1fr) auto; } .tst-hl-row b { grid-column: 1 / -1; } }
 `;
 
   // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
@@ -504,82 +546,6 @@ rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
   const pyramidDepth = {
     deeper: [
       {
-        title: 'Robolectric: Android classes without a device',
-        body: `<p>Some logic needs Android classes but no screen, like code that reads a <code>Uri</code> or a string resource. In <code>src/test</code> those calls throw, because the JVM only has a stub of the Android framework. Robolectric runs the same test on the JVM with a simulated framework. It needs no device, but it boots a sandbox first, so the first test in a run takes a few seconds.</p>
-<p>Run one test on each layer, then run 50 and watch how the setup cost spreads out.</p>`,
-        code: `// app/src/test/java/.../LinkParserTest.kt
-@RunWith(AndroidJUnit4::class)   // in src/test this runs on Robolectric
-class LinkParserTest {
-    @Test fun extractsArticleId() {
-        val uri = Uri.parse("https://example.com/news/42")
-        assertEquals("42", LinkParser.articleId(uri))
-    }
-}
-
-// app/build.gradle.kts
-// testImplementation("org.robolectric:robolectric:<version>")
-// android { testOptions { unitTests.isIncludeAndroidResources = true } }`,
-        visual(el) {
-          const MODES = {
-            jvm: { label: 'plain JVM', setup: 0, per: 4, setupName: 'nothing to start' },
-            robo: { label: 'Robolectric', setup: 3200, per: 45, setupName: 'boot the Android sandbox' },
-            dev: { label: 'device', setup: 38000, per: 650, setupName: 'build and install two APKs' },
-          };
-          const MAX = 38000 + 50 * 650;
-          let mode = 'robo', n = 1, busy = false;
-          const setupBar = h('span', { class: 'bar queued', style: 'left:0;width:0' });
-          const testBar = h('span', { class: 'bar run', style: 'left:0;width:0' });
-          const clock = h('span', { class: 'clock' }, '0 ms');
-          const verdict = h('span', { class: 'tst-res' }, 'not run');
-          const o = out();
-          const keys = Object.keys(MODES);
-          const modeBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; mode = k; paint(); say(o, `<span class="muted">runner:</span> ${MODES[k].label}. Setup: ${MODES[k].setupName}.`); } }, MODES[k].label));
-          const nBtns = [1, 50].map(v => h('button', { class: 'cmd', onclick() { if (busy) return; n = v; paint(); } }, v === 1 ? '1 test' : '50 tests'));
-          const paint = () => { pressed(modeBtns, keys, mode); pressed(nBtns, [1, 50], n); };
-          const draw = (setup, t) => {
-            setupBar.style.width = (Math.min(t, setup) / MAX) * 100 + '%';
-            testBar.style.left = (setup / MAX) * 100 + '%';
-            testBar.style.width = (Math.max(0, t - setup) / MAX) * 100 + '%';
-            clock.textContent = fmt(t);
-          };
-          async function run() {
-            if (busy) return; busy = true;
-            const m = MODES[mode], fail = mode === 'jvm';
-            const total = m.setup + (fail ? m.per : m.per * n);
-            verdict.textContent = 'running'; verdict.className = 'tst-res';
-            say(o, `<span class="muted">$</span> run ${fail ? 1 : n} test${!fail && n > 1 ? 's' : ''} on ${m.label}`);
-            const t0 = performance.now(), DUR = 400 + 1600 * (total / MAX);
-            try {
-              for (;;) {
-                const p = Math.min(1, (performance.now() - t0) / DUR);
-                draw(m.setup, p * total);
-                if (p >= 1) break;
-                await sleep(30); if (!el.isConnected) return;
-              }
-              if (fail) {
-                verdict.textContent = 'FAILED'; verdict.className = 'tst-res tst-bad drop-in';
-                o.append(h('div', { class: 'line drop-in', html: '<span class="bad">java.lang.RuntimeException: Method parse in android.net.Uri not mocked.</span>' }));
-                o.append(h('div', { class: 'line drop-in' }, 'Fast, but the stub framework throws. This test needs more than plain Kotlin.'));
-              } else {
-                verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
-                o.append(h('div', { class: 'line drop-in', html: `<span class="good">PASSED</span> in ${fmt(total)}: ${fmt(m.setup)} setup, then ${fmt(m.per)} per test.` }));
-              }
-            } finally { busy = false; }
-          }
-          paint(); draw(MODES.robo.setup, MODES.robo.setup + MODES.robo.per);
-          verdict.textContent = 'PASSED';
-          o.innerHTML = 'Last run: 1 test on Robolectric, 3.2 s of it was booting the sandbox. Pick a runner and a test count.';
-          el.append(
-            h('div', { class: 'controls' }, h('span', { class: 'tst-label' }, 'runner'), modeBtns),
-            h('div', { class: 'controls' }, h('span', { class: 'tst-label' }, 'tests'), nBtns, h('button', { class: 'btn primary small', onclick: run }, 'Run'), verdict, clock),
-            h('div', { class: 'timeline' },
-              h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'setup + tests'), h('div', { class: 'lane-track' }, setupBar, testBar))),
-            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar queued' }), 'setup'), h('span', {}, h('i', { class: 'bar run' }), 'running tests')),
-            h('p', { class: 'tip' }, 'Times are typical, not exact. The bar scale is the slowest case: 50 tests on a device.'),
-            o);
-        },
-      },
-      {
         title: 'Test each bug at the lowest layer that catches it',
         body: `<p>When a bug reaches users, ask which layer could have caught it, and add the test at the lowest one that can. A wrong price format is pure logic, so a unit test catches it in milliseconds. A wrong Room query needs a real SQLite engine, so it needs an integration test with an in-memory database. A button wired to the wrong screen only shows up when something drives the UI.</p>
 <p>Pick a bug and try each layer.</p>`,
@@ -634,7 +600,7 @@ class LinkParserTest {
     ],
     underHood: {
       body: `<p>Local tests compile against <code>android.jar</code>, which holds the API signatures and no real code. To make it runnable on the JVM, the Android Gradle plugin generates a copy where every method throws <code>RuntimeException("Method ... not mocked.")</code>. That is the error you see when plain unit test code touches <code>Uri</code> or <code>TextUtils</code>.</p>
-<p>An instrumented run builds two APKs, your app and a test APK, and installs both. Gradle then starts them with <code>am instrument</code>. The system starts your app's process with <code>AndroidJUnitRunner</code> inside it, so the tests run in the same process as your code and use the real framework. Robolectric sits in between: it loads real Android framework code into a sandboxed class loader on the JVM and swaps the parts that need native code or hardware for Java "shadows".</p>`,
+<p>An instrumented run builds two APKs, your app and a test APK, and installs both. Gradle then starts them with <code>am instrument</code>. The system starts your app's process with <code>AndroidJUnitRunner</code> inside it, so the tests run in the same process as your code and use the real framework. Robolectric sits in between: it loads real Android framework code into a sandboxed class loader on the JVM and swaps the parts that need native code or hardware for Java "shadows". The next lesson, <em>Robolectric: Android on the JVM</em>, shows when to use it.</p>`,
     },
     mistakes: [
       {
@@ -1174,6 +1140,827 @@ PLcom/example/news/feed/FeedScreenKt;->FeedRow(Lcom/example/news/Article;Landroi
     ],
   };
 
+  // ─── Promoted and gap lessons ─────────────────────────────────────────
+  const robolectricLesson = {
+    id: 'robolectric',
+    title: 'Robolectric: Android on the JVM',
+    tagline: 'Run tests that need Android classes on your computer, with no device.',
+    level: 'intermediate',
+    body: `
+<p>Some logic needs Android classes but no real screen, like code that reads a <code>Uri</code>, a string resource or <code>SharedPreferences</code>. In <code>src/test</code> those calls throw, because the JVM only has a stub of the Android framework. Robolectric runs the same test on the JVM with a simulated framework. Google maintains it, and it supports Android versions back to API 21.</p>
+<p>It needs no device, but it boots a sandbox first, so the first test in a run takes a few seconds. After that each test is fast. It is not a full emulator: some things, like <code>WebView</code> or system UI such as edge-to-edge, still need a device test.</p>
+<p>Run one test on each runner, then run 50 and watch how the setup cost spreads out.</p>`,
+    code: `// app/build.gradle.kts
+android {
+    testOptions { unitTests { isIncludeAndroidResources = true } }
+}
+dependencies {
+    testImplementation("org.robolectric:robolectric:<version>")
+    testImplementation("androidx.test.ext:junit:<version>")
+}
+
+// app/src/test/java/.../LinkParserTest.kt
+@RunWith(AndroidJUnit4::class)   // in src/test this runs on Robolectric
+class LinkParserTest {
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    @Test fun extractsArticleId() {
+        val uri = Uri.parse("https://example.com/news/42")
+        assertEquals("42", LinkParser.articleId(uri))
+    }
+
+    @Test fun readsTheBreakingLabel() {
+        assertEquals("Son dakika", context.getString(R.string.breaking))
+    }
+}`,
+    remember: 'Need Android classes but not a device? Robolectric runs them on the JVM. You pay the sandbox boot once per run.',
+    deeper: [
+      {
+        title: 'The main looper is paused',
+        body: `<p>Since Robolectric 4.4 the default looper mode is <code>PAUSED</code>. It works like a real phone: a <code>Runnable</code> posted to the main looper does not run inline. It waits in the queue until the test lets the looper run with <code>shadowOf(getMainLooper()).idle()</code>.</p>
+<p>The clock is frozen too. <code>idle()</code> runs only what is due now. <code>idleFor(...)</code> moves the clock forward and runs what became due on the way. Post a few things, assert, then idle.</p>`,
+        code: `@Test fun showsBannerAfterPost() {
+    banner.showLater()                          // posts to the main looper
+    assertFalse(banner.isShown)                 // nothing ran yet
+    shadowOf(getMainLooper()).idle()            // run what is due now
+    assertTrue(banner.isShown)
+}
+
+@Test fun hidesAfterThreeSeconds() {
+    banner.show()                               // posts hide() with a 3 s delay
+    shadowOf(getMainLooper()).idleFor(Duration.ofSeconds(3))
+    assertFalse(banner.isShown)
+}`,
+        visual(el) {
+          let now = 0, shown = false, busy = false;
+          const queue = [];
+          const qBox = h('div', { class: 'tst-rb-box', 'aria-label': 'Main looper queue' });
+          const ranBox = h('div', { class: 'tst-rb-box', 'aria-label': 'Ran' });
+          const clock = h('span', { class: 'clock' });
+          const state = h('span', { class: 'tst-res' });
+          const o = out();
+          function paint() {
+            clock.textContent = `clock ${fmt(now)}`;
+            state.textContent = `banner.isShown = ${shown}`;
+            state.className = 'tst-res' + (shown ? '' : ' tst-bad');
+            qBox.replaceChildren(h('span', { class: 'tst-label' }, 'queued'),
+              ...queue.slice().sort((a, b) => a.due - b.due).map(m => h('span', { class: 'tst-rb-msg drop-in' }, `${m.name}  due ${fmt(m.due)}`)));
+          }
+          const post = (name, delay, fn) => { queue.push({ name, due: now + delay, fn }); paint(); };
+          async function runUntil(t, label) {
+            if (busy) return; busy = true;
+            say(o, `<span class="muted">$</span> ${label}`);
+            qBox.classList.add('tst-rb-hot');
+            for (;;) {
+              const due = queue.filter(m => m.due <= t).sort((a, b) => a.due - b.due)[0];
+              if (!due) break;
+              await sleep(350); if (!el.isConnected) return;
+              queue.splice(queue.indexOf(due), 1);
+              now = Math.max(now, due.due); due.fn();
+              ranBox.append(h('span', { class: 'tst-rb-msg tst-rb-ran drop-in' }, `${due.name} at ${fmt(now)}`));
+              while (ranBox.children.length > 5) ranBox.children[1].remove();
+              paint();
+            }
+            now = Math.max(now, t); paint();
+            qBox.classList.remove('tst-rb-hot');
+            const left = queue.length;
+            o.append(h('div', { class: 'line drop-in' }, left ? `${left} message${left > 1 ? 's' : ''} still waiting: not due yet.` : 'Queue empty.'));
+            busy = false;
+          }
+          function check(expect) {
+            if (busy) return;
+            const ok = shown === expect;
+            say(o, ok ? `<span class="good">PASSED</span> banner.isShown is ${shown}` : `<span class="bad">AssertionError:</span> expected ${expect}, was ${shown}.${queue.length ? ' The post is still in the queue.' : ''}`);
+          }
+          ranBox.append(h('span', { class: 'tst-label' }, 'ran'));
+          paint();
+          o.innerHTML = 'Post the banner, then assert before and after idle().';
+          el.append(
+            h('div', { class: 'controls tst-wrap' },
+              cmd('banner.showLater()', () => { if (!busy) { post('show()', 0, () => { shown = true; }); say(o, 'Posted show(). It waits in the queue.'); } }),
+              cmd('postDelayed(hide, 3_000)', () => { if (!busy) { post('hide()', 3000, () => { shown = false; }); say(o, 'Posted hide() for 3 s from now.'); } })),
+            h('div', { class: 'controls tst-wrap' },
+              cmd('assertTrue(banner.isShown)', () => check(true)),
+              cmd('assertFalse(banner.isShown)', () => check(false))),
+            h('div', { class: 'controls tst-wrap' },
+              cmd('shadowOf(getMainLooper()).idle()', () => runUntil(now, 'idle()')),
+              cmd('idleFor(Duration.ofSeconds(3))', () => runUntil(now + 3000, 'idleFor(3 s)')),
+              h('button', { class: 'btn small', onclick() { if (busy) return; queue.length = 0; now = 0; shown = false; ranBox.replaceChildren(h('span', { class: 'tst-label' }, 'ran')); paint(); say(o, 'New test.'); } }, 'New test'),
+              clock),
+            h('div', { class: 'tst-rb-loop' }, qBox, h('span', { class: 'tst-rb-arrow', 'aria-hidden': 'true' }, '→'), ranBox),
+            h('div', { class: 'controls tst-wrap' }, state),
+            o);
+        },
+      },
+      {
+        title: 'Pick the API level and resources with @Config',
+        body: `<p>By default Robolectric runs your tests at the <code>targetSdk</code> of the app. Put <code>@Config(sdk = [...])</code> on a class or a test to choose levels yourself. With several levels listed, the test runs once per level, which is a cheap way to check code that branches on <code>Build.VERSION.SDK_INT</code>.</p>
+<p><code>@Config(qualifiers = "...")</code> sets resource qualifiers like language, night mode or screen size, so you can check that Turkish strings or dark colors are picked up.</p>`,
+        code: `@RunWith(AndroidJUnit4::class)
+@Config(sdk = [26, 35])                    // every test runs twice
+class NotificationFactoryTest {
+    @Test fun usesAChannelOnOreoAndLater() { /* ... */ }
+}
+
+@Test
+@Config(qualifiers = "tr-rTR-night")
+fun picksTurkishDarkResources() {
+    assertEquals("Son dakika", context.getString(R.string.breaking))
+}`,
+      },
+      {
+        title: 'Compose UI tests without a device',
+        body: `<p>Robolectric can run Espresso and Compose UI tests too. The same <code>createComposeRule()</code> test can live in <code>src/test</code> with <code>@RunWith(AndroidJUnit4::class)</code> and run in seconds on the JVM. That is a good home for most behavior tests of a single screen: tap this, see that.</p>
+<p>Keep a few tests on a device for what Robolectric does not simulate well, like system UI, <code>WebView</code> or real hardware.</p>`,
+        code: `// app/src/test/... runs on Robolectric
+// debugImplementation("androidx.compose.ui:ui-test-manifest") provides the host activity
+@RunWith(AndroidJUnit4::class)
+class LikeButtonTest {
+    @get:Rule val rule = createComposeRule()
+
+    @Test fun tapTogglesLike() {
+        rule.setContent { LikeButton() }
+        rule.onNodeWithContentDescription("Beğen").performClick()
+        rule.onNodeWithContentDescription("Beğenildi").assertExists()
+    }
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Asserting before the looper runs',
+        bad: `banner.showLater()
+Thread.sleep(500)                 // the paused looper never runs on its own
+assertTrue(banner.isShown)`,
+        good: `banner.showLater()
+shadowOf(getMainLooper()).idle()
+assertTrue(banner.isShown)`,
+        why: 'In paused looper mode posted work only runs when the test idles the looper. Sleeping the test thread just wastes time.',
+      },
+      {
+        title: 'Resources not included',
+        bad: `android {
+    // no testOptions: Robolectric can't see the merged resources
+}`,
+        good: `android {
+    testOptions { unitTests { isIncludeAndroidResources = true } }
+}`,
+        why: 'Robolectric reads your app’s merged resources and manifest. Without this flag Gradle does not hand them to the test, and resource lookups fail.',
+      },
+      {
+        title: 'Robolectric for things it cannot simulate',
+        bad: `// src/test
+@Test fun articleWebViewLoadsPage() { /* WebView on Robolectric */ }`,
+        good: `// src/androidTest: a real WebView on a device
+@Test fun articleWebViewLoadsPage() { /* ... */ }`,
+        why: 'Robolectric covers most of the framework, not all of it. WebView, system UI and hardware behavior need a device or emulator.',
+      },
+    ],
+    terms: [
+      { term: 'Robolectric', def: 'A Google-maintained framework that runs Android tests on the JVM with a simulated Android framework.' },
+      { term: 'Shadow', def: 'A Robolectric class that stands in for part of a framework class, such as ShadowLooper for Looper.' },
+      { term: 'Paused looper mode', def: 'Robolectric’s default since 4.4: posted work waits in the main looper until the test idles it.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Run this test on Robolectric and let the posted work run.', code: '@RunWith([[AndroidJUnit4]]::class)\nclass BannerTest {\n    @Test fun shows() {\n        banner.showLater()\n        shadowOf(getMainLooper()).[[idle]]()\n        assertTrue(banner.isShown)\n    }\n}', why: '<code>AndroidJUnit4</code> picks Robolectric in <code>src/test</code>. <code>idle()</code> runs everything the main looper has due.' },
+      { type: 'bug', prompt: 'This Robolectric test fails with “expected true”. Tap the line that should let the post run.', code: '@Test fun showsSavedMessage() {\n    val vm = SaveViewModel(context)\n    vm.save()                     // posts the message to the main looper\n    Thread.sleep(500)\n    assertTrue(vm.savedMessageShown)\n}', bug: 3, fix: '    shadowOf(getMainLooper()).idle()', why: 'The main looper is paused. Only idle() or idleFor() runs what is queued; sleeping does not.' },
+    ],
+    quiz: [
+      { q: 'Where do Robolectric tests live and run?', options: ['<code>src/androidTest</code>, on a device', '<code>src/test</code>, on the JVM', 'Only on a CI emulator'], a: 1, why: 'Robolectric is a local test runner. No device, no APK install.' },
+      { q: 'Why does the first Robolectric test in a run take seconds?', options: ['It boots the simulated Android sandbox', 'It installs an APK', 'It waits for an emulator'], a: 0, why: 'The sandbox loads the framework once. The tests after it are fast.' },
+      { q: 'In paused looper mode, a Runnable posted to the main looper…', options: ['runs right away', 'never runs', 'waits until the test calls idle() or idleFor()'], a: 2, why: 'Like on a real device, posting only queues the work. The test decides when the looper runs.' },
+    ],
+    visual(el) {
+          const MODES = {
+            jvm: { label: 'plain JVM', setup: 0, per: 4, setupName: 'nothing to start' },
+            robo: { label: 'Robolectric', setup: 3200, per: 45, setupName: 'boot the Android sandbox' },
+            dev: { label: 'device', setup: 38000, per: 650, setupName: 'build and install two APKs' },
+          };
+          const MAX = 38000 + 50 * 650;
+          let mode = 'robo', n = 1, busy = false;
+          const setupBar = h('span', { class: 'bar queued', style: 'left:0;width:0' });
+          const testBar = h('span', { class: 'bar run', style: 'left:0;width:0' });
+          const clock = h('span', { class: 'clock' }, '0 ms');
+          const verdict = h('span', { class: 'tst-res' }, 'not run');
+          const o = out();
+          const keys = Object.keys(MODES);
+          const modeBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; mode = k; paint(); say(o, `<span class="muted">runner:</span> ${MODES[k].label}. Setup: ${MODES[k].setupName}.`); } }, MODES[k].label));
+          const nBtns = [1, 50].map(v => h('button', { class: 'cmd', onclick() { if (busy) return; n = v; paint(); } }, v === 1 ? '1 test' : '50 tests'));
+          const paint = () => { pressed(modeBtns, keys, mode); pressed(nBtns, [1, 50], n); };
+          const draw = (setup, t) => {
+            setupBar.style.width = (Math.min(t, setup) / MAX) * 100 + '%';
+            testBar.style.left = (setup / MAX) * 100 + '%';
+            testBar.style.width = (Math.max(0, t - setup) / MAX) * 100 + '%';
+            clock.textContent = fmt(t);
+          };
+          async function run() {
+            if (busy) return; busy = true;
+            const m = MODES[mode], fail = mode === 'jvm';
+            const total = m.setup + (fail ? m.per : m.per * n);
+            verdict.textContent = 'running'; verdict.className = 'tst-res';
+            say(o, `<span class="muted">$</span> run ${fail ? 1 : n} test${!fail && n > 1 ? 's' : ''} on ${m.label}`);
+            const t0 = performance.now(), DUR = 400 + 1600 * (total / MAX);
+            try {
+              for (;;) {
+                const p = Math.min(1, (performance.now() - t0) / DUR);
+                draw(m.setup, p * total);
+                if (p >= 1) break;
+                await sleep(30); if (!el.isConnected) return;
+              }
+              if (fail) {
+                verdict.textContent = 'FAILED'; verdict.className = 'tst-res tst-bad drop-in';
+                o.append(h('div', { class: 'line drop-in', html: '<span class="bad">java.lang.RuntimeException: Method parse in android.net.Uri not mocked.</span>' }));
+                o.append(h('div', { class: 'line drop-in' }, 'Fast, but the stub framework throws. This test needs more than plain Kotlin.'));
+              } else {
+                verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
+                o.append(h('div', { class: 'line drop-in', html: `<span class="good">PASSED</span> in ${fmt(total)}: ${fmt(m.setup)} setup, then ${fmt(m.per)} per test.` }));
+              }
+            } finally { busy = false; }
+          }
+          paint(); draw(MODES.robo.setup, MODES.robo.setup + MODES.robo.per);
+          verdict.textContent = 'PASSED';
+          o.innerHTML = 'Last run: 1 test on Robolectric, 3.2 s of it was booting the sandbox. Pick a runner and a test count.';
+          el.append(
+            h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'runner'), modeBtns),
+            h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'tests'), nBtns, h('button', { class: 'btn primary small', onclick: run }, 'Run'), verdict, clock),
+            h('div', { class: 'timeline' },
+              h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'setup + tests'), h('div', { class: 'lane-track' }, setupBar, testBar))),
+            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar queued' }), 'setup'), h('span', {}, h('i', { class: 'bar run' }), 'running tests')),
+            h('p', { class: 'tip' }, 'Times are typical, not exact. The bar scale is the slowest case: 50 tests on a device.'),
+            o);
+        },
+  };
+
+  const mockkLesson = {
+    id: 'mockk',
+    title: 'Mocks with MockK',
+    tagline: 'Script an answer, then check the one call that matters.',
+    level: 'intermediate',
+    body: `
+<p>A fake is the default choice (see <em>Unit tests with fakes</em>). Sometimes the thing you want to check is the call itself: did the ViewModel log an analytics event, send a message, delete a file? Those functions often return <code>Unit</code>, so there is no state to read back. A mock records every call, so the test can check it.</p>
+<p>MockK is a mocking library for Kotlin. <code>mockk&lt;T&gt;()</code> creates a mock. <code>every { ... } returns x</code> scripts an answer, and <code>just Runs</code> scripts a <code>Unit</code> function. <code>verify { ... }</code> checks that a call happened with the arguments you expect. A plain mock is strict: any call you did not script throws <code>MockKException</code>.</p>
+<p>Keep mocks for side effects you can’t observe another way. Verifying every call ties the test to how the code works instead of what it does.</p>`,
+    code: `interface Analytics {
+    fun log(event: String, articleId: Int)
+}
+
+class ArticleViewModelTest {
+    private val analytics = mockk<Analytics>()
+
+    @Test fun openingAnArticleLogsOnce() {
+        every { analytics.log(any(), any()) } just Runs
+        val vm = ArticleViewModel(analytics)
+
+        vm.open(articleId = 7)
+
+        verify(exactly = 1) { analytics.log("article_open", 7) }
+        confirmVerified(analytics)            // and nothing else was called
+    }
+}
+
+// testImplementation("io.mockk:mockk:<version>")`,
+    remember: 'Fakes for state, mocks for side effects. Verify the call that matters, not every call.',
+    deeper: [
+      {
+        title: 'Suspend functions: coEvery and coVerify',
+        body: `<p>Inside <code>every { }</code> you can’t call a suspend function, because that block is not a coroutine. MockK has coroutine versions: <code>coEvery</code> to script and <code>coVerify</code> to check. They take the same matchers, and <code>throws</code> works for error paths.</p>`,
+        code: `val repo = mockk<NewsRepository>()
+coEvery { repo.latest() } returns listOf(article)
+// or the error path
+coEvery { repo.latest() } throws IOException("offline")
+
+vm.load()
+coVerify(exactly = 1) { repo.latest() }`,
+      },
+      {
+        title: 'Capture an argument with slot',
+        body: `<p>Sometimes the code builds the argument itself, like an event with a timestamp. Matching it exactly is hard. Capture it instead: create a <code>slot</code>, pass <code>capture(slot)</code> as the matcher, then assert on the fields you care about.</p>`,
+        code: `val sent = slot<ChatMessage>()
+coEvery { chatApi.send(capture(sent)) } just Runs
+
+vm.send("Merhaba")
+
+assertEquals("Merhaba", sent.captured.text)
+assertEquals(UserId(42), sent.captured.from)`,
+      },
+      {
+        title: 'Strict, relaxed and relaxUnitFun',
+        body: `<p>A strict mock fails loudly on any call you did not script. <code>mockk(relaxed = true)</code> answers every call with a default instead: 0, an empty string, an empty list, or another relaxed mock. That is convenient and hides bugs, because a wrong call quietly returns something.</p>
+<p><code>relaxUnitFun = true</code> is the middle ground. Only functions that return <code>Unit</code> are relaxed. Anything that returns data must still be scripted.</p>`,
+        code: `val analytics = mockk<Analytics>(relaxUnitFun = true)   // log() just runs
+val repo = mockk<NewsRepository>()                       // latest() must be scripted
+
+val careless = mockk<NewsRepository>(relaxed = true)
+careless.latest()   // returns an empty list without complaint`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Verifying the query instead of the result',
+        bad: `coEvery { repo.latest() } returns listOf(article)
+vm.load()
+coVerify { repo.latest() }   // the screen could still be broken`,
+        good: `coEvery { repo.latest() } returns listOf(article)
+vm.load()
+assertEquals(UiState.Success(listOf(article)), vm.state.value)`,
+        why: 'The user sees the state, not the call. Check the output when there is one, and keep verify for side effects.',
+      },
+      {
+        title: 'A relaxed repository',
+        bad: `val repo = mockk<NewsRepository>(relaxed = true)
+vm.load()
+assertEquals(UiState.Empty, vm.state.value)   // passes for the wrong reason`,
+        good: `coEvery { repo.latest() } returns emptyList()
+vm.load()
+assertEquals(UiState.Empty, vm.state.value)`,
+        why: 'A relaxed mock returns an empty list for anything. The test passes even if load() calls the wrong function.',
+      },
+      {
+        title: 'Mocking types you don’t own',
+        bad: `val context = mockk<Context>()
+every { context.getString(R.string.breaking) } returns "Son dakika"`,
+        good: `interface Strings { fun breaking(): String }
+class FakeStrings : Strings { override fun breaking() = "Son dakika" }`,
+        why: 'You don’t know every call a framework class makes inside. Wrap it behind your own small interface, or use the real thing on Robolectric.',
+      },
+    ],
+    terms: [
+      { term: 'Mock', def: 'A test double that you program per call and that records its calls so the test can verify them.' },
+      { term: 'Stub', def: 'A scripted answer for a call, such as every { repo.latest() } returns list.' },
+      { term: 'Verification', def: 'A check that a call happened with certain arguments and a certain number of times, such as verify(exactly = 1).' },
+      { term: 'Relaxed mock', def: 'A MockK mock that returns default values for calls you did not script instead of throwing.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Create a mock whose Unit functions just run, then check the event was logged once.', code: 'val analytics = [[mockk]]<Analytics>(relaxUnitFun = true)\nArticleViewModel(analytics).open(articleId = 7)\n[[verify]](exactly = 1) { analytics.log("article_open", 7) }', why: '<code>relaxUnitFun</code> lets <code>log()</code> run without a script. <code>verify</code> checks the call and its arguments.' },
+      { type: 'bug', prompt: 'This test does not compile: “Suspend function can be called only from a coroutine”. Tap the line.', code: '@Test fun showsArticles() = runTest {\n    val repo = mockk<NewsRepository>()\n    every { repo.latest() } returns listOf(article)\n    val vm = NewsViewModel(repo)\n    vm.load()\n    assertEquals(UiState.Success(listOf(article)), vm.state.value)\n}', bug: 2, fix: '    coEvery { repo.latest() } returns listOf(article)', why: '<code>latest()</code> is a suspend function. Script it with <code>coEvery</code>, whose block is a coroutine.' },
+    ],
+    quiz: [
+      { q: 'When is a mock a better fit than a fake?', options: ['To give a ViewModel data to show', 'To check a side effect with no state to read back, like an analytics event', 'In every unit test'], a: 1, why: 'A fake covers state. A mock shines when the call itself is the behavior.' },
+      { q: 'A plain <code>mockk&lt;Analytics&gt;()</code> gets a call you never scripted. What happens?', options: ['It returns a default value', 'The call is ignored', 'It throws MockKException'], a: 2, why: 'Plain mocks are strict. Use relaxed or relaxUnitFun to change that, knowingly.' },
+      { q: 'Which pair scripts and checks suspend functions?', options: ['coEvery and coVerify', 'every and verify', 'suspendEvery and suspendVerify'], a: 0, why: 'The co versions run their block as a coroutine, so suspend calls are allowed.' },
+    ],
+    visual(el) {
+      const S = { relax: false, stubbed: false, twice: false, calls: [], boom: false };
+      const calls = h('div', { class: 'tst-mk-calls', 'aria-live': 'polite' });
+      const o = out();
+      const modeBtns = [false, true].map(v => h('button', { class: 'cmd', html: hl(v ? 'mockk<Analytics>(relaxUnitFun = true)' : 'mockk<Analytics>()'), onclick() { S.relax = v; reset(); paint(); say(o, v ? 'Unit functions now just run, scripted or not.' : 'Strict: every call must be scripted.'); } }));
+      const stub = h('input', { type: 'checkbox', id: 'tst-mk-stub' });
+      const bug = h('input', { type: 'checkbox', id: 'tst-mk-bug' });
+      stub.addEventListener('change', () => { S.stubbed = stub.checked; reset(); say(o, S.stubbed ? 'Scripted: log() with any arguments just runs.' : 'No script for log().'); });
+      bug.addEventListener('change', () => { S.twice = bug.checked; reset(); say(o, S.twice ? 'Bug added: open() now logs twice.' : 'Bug removed.'); });
+      function paint() { modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String([false, true][i] === S.relax))); }
+      function reset() { S.calls = []; S.boom = false; calls.replaceChildren(h('span', { class: 'tst-label' }, 'calls recorded by the mock')); }
+      async function open() {
+        reset();
+        const n = S.twice ? 2 : 1;
+        for (let i = 0; i < n; i++) {
+          await sleep(250); if (!el.isConnected) return;
+          if (!S.relax && !S.stubbed) {
+            S.boom = true;
+            calls.append(h('span', { class: 'tst-mk-call tst-mk-boom drop-in' }, 'log("article_open", 7)  no answer'));
+            say(o, '<span class="bad">MockKException:</span> no answer found for Analytics(#1).log(article_open, 7)');
+            return;
+          }
+          S.calls.push(['article_open', 7]);
+          calls.append(h('span', { class: 'tst-mk-call drop-in' }, 'log("article_open", 7)'));
+        }
+        say(o, `vm.open(7) finished. The mock recorded ${S.calls.length} call${S.calls.length > 1 ? 's' : ''}.`);
+      }
+      function check(event, id, exactly) {
+        if (S.boom) { say(o, 'The test already failed at the call. Fix the mock first.'); return; }
+        const hits = S.calls.filter(c => c[0] === event && c[1] === id).length;
+        const ok = exactly ? hits === exactly : hits > 0;
+        const rec = S.calls.length ? S.calls.map(c => `log(${c[0]}, ${c[1]})`).join(', ') : 'none';
+        say(o, ok ? `<span class="good">verified</span> log("${event}", ${id})${exactly ? ` exactly ${exactly}×` : ''}`
+          : `<span class="bad">Verification failed:</span> expected log(${event}, ${id})${exactly ? ` ${exactly}×` : ''}, matched ${hits}. Recorded: ${rec}`);
+      }
+      reset(); paint();
+      o.innerHTML = 'Run the ViewModel with a strict mock first.';
+      el.append(
+        h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'create'), modeBtns),
+        h('div', { class: 'controls tst-wrap' },
+          h('label', { class: 'switch', for: 'tst-mk-stub' }, stub, h('span', { html: hl('every { analytics.log(any(), any()) } just Runs') })),
+          h('label', { class: 'switch', for: 'tst-mk-bug' }, bug, h('span', {}, 'bug: open() logs twice'))),
+        h('div', { class: 'tst-mk-grid' },
+          h('div', { class: 'tst-sub' }, h('span', { class: 'tst-label' }, 'when'), h('div', { class: 'controls tst-wrap' }, cmd('vm.open(articleId = 7)', open))),
+          h('div', { class: 'tst-sub' }, calls)),
+        h('div', { class: 'controls tst-wrap' },
+          cmd('verify(exactly = 1) { analytics.log("article_open", 7) }', () => check('article_open', 7, 1)),
+          cmd('verify { analytics.log("article_open", 8) }', () => check('article_open', 8, 0))),
+        o);
+    },
+  };
+
+  const screenshotsLesson = {
+    id: 'screenshots',
+    title: 'Screenshot tests',
+    tagline: 'Save a picture of the UI and fail when it changes.',
+    level: 'intermediate',
+    body: `
+<p>A behavior test checks that a button exists and does the right thing. It does not notice that the padding shrank, the title now wraps, or the dark theme made text unreadable. A screenshot test renders a composable, saves the image as a <em>reference</em> (also called a golden), and on later runs compares a fresh render to it. One test checks colors, sizes, spacing and fonts at once.</p>
+<p>There are two commands. <b>Record</b> writes reference images, which you commit. <b>Verify</b> renders again and fails if an image differs, with a report that shows the reference, the new image and the difference. A failure is not always a bug. If the change was on purpose, you record again, and the reviewer approves the new image in the pull request.</p>
+<p>Most teams run them on the JVM for speed. Roborazzi renders through Robolectric. Google’s Compose Preview Screenshot Testing renders your previews and is still experimental.</p>`,
+    code: `// module build.gradle.kts: plugins { id("io.github.takahirom.roborazzi") }
+// plus the Roborazzi and Robolectric test dependencies
+
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)        // real rendering on Robolectric
+class ArticleCardScreenshotTest {
+    @get:Rule val composeRule = createComposeRule()
+
+    @Test fun articleCard() {
+        composeRule.setContent { AppTheme { ArticleCard(sampleArticle) } }
+        composeRule.onRoot().captureRoboImage("src/test/screenshots/article_card.png")
+    }
+}
+
+// ./gradlew recordRoborazziDebug    write the reference images, then commit them
+// ./gradlew verifyRoborazziDebug    fail when a render differs from its reference`,
+    remember: 'Record a reference, verify against it on the same machine, and read the diff before you record again.',
+    deeper: [
+      {
+        title: 'Pixel-perfect needs one machine',
+        body: `<p>Fonts, the OS, the CPU architecture and library versions all change rendering a little. A reference recorded on a Mac can fail on a Linux CI server with nothing wrong in your code.</p>
+<p>Either record and verify in the same place, usually CI, or allow a small tolerance. Tolerance has a cost: a real change smaller than the threshold passes too. A common CI flow runs verify on every pull request, records new images when it fails, and commits them to the branch so the reviewer sees and approves them.</p>`,
+      },
+      {
+        title: 'Compose Preview Screenshot Testing',
+        body: `<p>Google’s own tool turns previews into tests. Put <code>@PreviewTest</code> on a <code>@Preview</code> in the <code>screenshotTest</code> source set, then run the update and validate tasks. It renders on your computer with Layoutlib, the same engine as the Android Studio preview, so it needs no Robolectric.</p>
+<p>It is experimental and its setup is still changing: the standalone Gradle plugin is being replaced by AGP test suites. Check the current docs before you set it up.</p>`,
+        code: `// app/src/screenshotTest/kotlin/.../ArticleCardScreenshots.kt
+@PreviewTest
+@Preview(showBackground = true)
+@Composable
+fun ArticleCardPreview() {
+    AppTheme { ArticleCard(sampleArticle) }
+}
+
+// ./gradlew updateDebugScreenshotTest     record references
+// ./gradlew validateDebugScreenshotTest   compare and write an HTML report`,
+      },
+      {
+        title: 'Pick a few cases, not every combination',
+        body: `<p>Themes, font sizes, screen widths and languages multiply. Test every combination and you get hundreds of images to review each time a color changes. Pick the cases that can break in a different way: dark theme, the largest font scale, the narrowest width, and the language with the longest words.</p>
+<p>Turn the switches below and watch the count.</p>`,
+        code: `@Preview(name = "light")
+@Preview(name = "dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large font", fontScale = 2f)
+@Preview(name = "Turkish", locale = "tr")
+@Composable
+fun ArticleCardCases() { AppTheme { ArticleCard(sampleArticle) } }`,
+        visual(el) {
+          const AX = [
+            { k: 'theme', label: 'themes', opts: [1, 2] },
+            { k: 'font', label: 'font scales', opts: [1, 3, 5] },
+            { k: 'width', label: 'widths', opts: [1, 3] },
+            { k: 'lang', label: 'languages', opts: [1, 2, 6] },
+          ];
+          const S = { theme: 2, font: 1, width: 1, lang: 1, screens: 12 };
+          const total = h('b');
+          const o = out();
+          const rows = AX.map(a => {
+            const btns = a.opts.map(v => h('button', { class: 'cmd', onclick() { S[a.k] = v; paint(); } }, String(v)));
+            a.btns = btns;
+            return h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, a.label), btns);
+          });
+          function paint() {
+            AX.forEach(a => a.btns.forEach((b, i) => b.setAttribute('aria-pressed', String(a.opts[i] === S[a.k]))));
+            const per = AX.reduce((p, a) => p * S[a.k], 1), n = per * S.screens;
+            total.textContent = String(n);
+            say(o, `${S.screens} screens × ${per} cases = <b>${n}</b> reference images. ${n > 300 ? '<span class="bad">One color change breaks all of them.</span>' : n > 60 ? 'Getting heavy to review.' : '<span class="good">Small enough to review.</span>'}`);
+          }
+          el.append(...rows, h('div', { class: 'tst-stats' }, h('span', {}, 'images to keep: ', total)), o);
+          paint();
+        },
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Recording on a laptop, verifying on CI',
+        bad: `# on your Mac
+./gradlew recordRoborazziDebug && git commit -am "update screenshots"
+# CI on Linux: verifyRoborazziDebug fails on anti-aliasing`,
+        good: `# CI records when verify fails and pushes the images to the branch;
+# the reviewer approves them in the pull request`,
+        why: 'Rendering differs between machines. Keep recording and verifying in one environment.',
+      },
+      {
+        title: 'Recording just to make the build green',
+        bad: `./gradlew verifyRoborazziDebug   # 14 images failed
+./gradlew recordRoborazziDebug   # all green now`,
+        good: `./gradlew verifyRoborazziDebug
+# open build/reports/roborazzi/index.html, check every diff,
+# then record only if each change was intended`,
+        why: 'Recording accepts whatever the code draws now. Without reading the diff, the test catches nothing.',
+      },
+    ],
+    terms: [
+      { term: 'Reference image', def: 'The approved screenshot a test compares against, also called a golden. It is committed with the code.' },
+      { term: 'Diff report', def: 'The output of a failed screenshot test, showing the reference, the new render and the pixels that changed.' },
+      { term: 'Tolerance', def: 'How much difference a screenshot comparison allows before it fails, such as a percentage of changed pixels.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Name the two Roborazzi tasks for the debug variant.', code: '// write new reference images\n./gradlew [[recordRoborazziDebug]]\n// fail when a render differs\n./gradlew [[verifyRoborazziDebug]]', why: 'Record writes references. Verify compares and fails on a difference.' },
+      { type: 'bug', prompt: 'This screenshot test fails on every run, even with no code change. Tap the line.', code: '@Test fun articleCard() {\n    composeRule.setContent {\n        AppTheme { ArticleCard(sampleArticle.copy(publishedAt = Clock.System.now())) }\n    }\n    composeRule.onRoot().captureRoboImage("src/test/screenshots/article_card.png")\n}', bug: 2, fix: '        AppTheme { ArticleCard(sampleArticle.copy(publishedAt = fixedInstant)) }', why: 'The card shows “2 minutes ago”, which changes every run. Screenshot inputs must be fixed: times, random values and network data.' },
+    ],
+    quiz: [
+      { q: 'A screenshot test fails after you made the title bigger on purpose. What next?', options: ['Raise the tolerance until it passes', 'Check the diff, record new references, and let the reviewer approve them', 'Delete the test'], a: 1, why: 'An intended change means a new reference. The diff in the pull request is how the team approves it.' },
+      { q: 'Why record and verify on the same machine?', options: ['Gradle refuses otherwise', 'It is faster', 'Fonts, OS and hardware change rendering slightly'], a: 2, why: 'Small rendering differences make pixel-perfect comparisons fail across machines.' },
+      { q: 'What is the risk of a high tolerance?', options: ['A small real regression can pass', 'Tests run slower', 'More reference images'], a: 0, why: 'Anything under the threshold passes, including a missing icon or a 1 dp shift.' },
+    ],
+    visual(el) {
+      const W = 20, H = 12;
+      const CHANGES = [
+        { k: 'pad', label: 'padding 16 → 8 dp' },
+        { k: 'font', label: 'title font larger' },
+        { k: 'color', label: 'button color' },
+        { k: 'dot', label: 'unread dot removed' },
+        { k: 'machine', label: 'render on another machine' },
+      ];
+      const S = { pad: false, font: false, color: false, dot: false, machine: false, tol: 0, ref: null };
+      function render() {
+        const g = Array(W * H).fill('');
+        const set = (x, y, k) => { if (x >= 0 && x < W && y >= 0 && y < H) g[y * W + x] = k; };
+        for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) set(x, y, 'card');
+        const p = S.pad ? 1 : 2, x0 = 1 + p, y0 = 1 + p;
+        const tw = S.font ? 12 : 9, th = S.font ? 2 : 1;
+        for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) set(x0 + x, y0 + y, 'title');
+        if (!S.dot) set(W - 2 - p, y0, 'btn2');
+        const ty = y0 + th + 1;
+        for (let x = 0; x < 14; x++) set(x0 + x, ty, 'text');
+        for (let x = 0; x < 9; x++) set(x0 + x, ty + 1, 'text');
+        for (let y = 0; y < 2; y++) for (let x = 0; x < 5; x++) set(x0 + x, H - 2 - p - 1 + y, S.color ? 'btn2' : 'btn');
+        if (S.machine) { set(x0 + tw, y0, 'aa'); set(x0 + 14, ty, 'aa'); }
+        return g;
+      }
+      const mk = () => { const cells = Array.from({ length: W * H }, () => h('span', { class: 'tst-ss-px' })); return { cells, el: h('div', { class: 'tst-ss-img', role: 'img' }, cells) }; };
+      const ref = mk(), now = mk(), diff = mk();
+      ref.el.setAttribute('aria-label', 'Reference image'); now.el.setAttribute('aria-label', 'New render'); diff.el.setAttribute('aria-label', 'Difference');
+      diff.el.classList.add('tst-ss-diff');
+      const paintImg = (img, g) => img.cells.forEach((c, i) => { c.className = 'tst-ss-px' + (g && g[i] ? ' k-' + g[i] : ''); });
+      const verdict = h('span', { class: 'tst-res' }, 'not run');
+      const o = out();
+      const boxes = CHANGES.map(c => {
+        const input = h('input', { type: 'checkbox', id: 'tst-ss-' + c.k });
+        input.addEventListener('change', () => { S[c.k] = input.checked; paint(); verdict.textContent = 'not run'; verdict.className = 'tst-res'; diff.cells.forEach(x => x.classList.remove('tst-ss-hit')); });
+        return h('label', { class: 'switch', for: 'tst-ss-' + c.k }, input, h('span', {}, c.label));
+      });
+      const tolBtns = [0, 1].map(v => h('button', { class: 'cmd', onclick() { S.tol = v; tolBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === v))); say(o, v ? 'Tolerance: up to 1% of pixels may differ.' : 'Pixel-perfect: any changed pixel fails.'); } }, v ? '1% tolerance' : 'pixel-perfect'));
+      function paint() { paintImg(now, render()); paintImg(ref, S.ref); ref.el.classList.toggle('tst-ss-empty', !S.ref); }
+      function record() {
+        S.ref = render(); paint();
+        diff.cells.forEach(x => x.classList.remove('tst-ss-hit'));
+        verdict.textContent = 'recorded'; verdict.className = 'tst-res drop-in';
+        say(o, '<span class="muted">$</span> ./gradlew recordRoborazziDebug  <span class="good">1 reference written</span>');
+      }
+      async function verify() {
+        if (!S.ref) { say(o, '<span class="bad">No reference image.</span> Record first.'); return; }
+        const g = render();
+        let n = 0;
+        diff.cells.forEach(x => x.classList.remove('tst-ss-hit'));
+        say(o, '<span class="muted">$</span> ./gradlew verifyRoborazziDebug');
+        for (let i = 0; i < g.length; i++) if (g[i] !== S.ref[i]) { n++; diff.cells[i].classList.add('tst-ss-hit'); }
+        await sleep(200); if (!el.isConnected) return;
+        const pct = (n / g.length) * 100, pass = pct <= S.tol;
+        verdict.textContent = pass ? 'PASSED' : 'FAILED'; verdict.className = 'tst-res drop-in' + (pass ? '' : ' tst-bad');
+        const real = S.pad || S.font || S.color || S.dot;
+        let note = '';
+        if (pass && n && real) note = ' <span class="bad">A real change slipped under the threshold.</span>';
+        else if (!pass && !real) note = ' Nothing changed in the code: only the machine.';
+        o.append(h('div', { class: 'line drop-in', html: `${n} of ${g.length} pixels differ (${pct.toFixed(1)}%).${note}` }));
+      }
+      tolBtns[0].setAttribute('aria-pressed', 'true');
+      record();
+      o.innerHTML = 'A reference is recorded. Change something, then verify.';
+      el.append(
+        h('div', { class: 'controls tst-wrap' }, boxes),
+        h('div', { class: 'tst-ss-wrap' },
+          h('div', { class: 'tst-ss-pane' }, h('span', { class: 'tst-label' }, 'reference'), ref.el),
+          h('div', { class: 'tst-ss-pane' }, h('span', { class: 'tst-label' }, 'new render'), now.el),
+          h('div', { class: 'tst-ss-pane' }, h('span', { class: 'tst-label' }, 'diff'), diff.el)),
+        h('div', { class: 'controls tst-wrap' }, tolBtns),
+        h('div', { class: 'controls tst-wrap' }, cmd('./gradlew recordRoborazziDebug', record), cmd('./gradlew verifyRoborazziDebug', verify), verdict),
+        o);
+    },
+  };
+
+  const hiltTestingLesson = {
+    id: 'hilt-testing',
+    title: 'Hilt in tests',
+    tagline: 'Swap a real binding for a fake in the graph the test app uses.',
+    level: 'advanced',
+    body: `
+<p>A unit test builds a ViewModel by hand and passes fakes to its constructor. A UI test starts a real Activity, and Hilt builds that Activity’s dependencies. To get fakes in there, you change the Hilt graph for the test.</p>
+<p>Mark the test class with <code>@HiltAndroidTest</code> and add a <code>HiltAndroidRule</code>. Hilt then generates components for the test and runs it in <code>HiltTestApplication</code> instead of your app class. To replace a module for every test in the source set, write a test module with <code>@TestInstallIn(components = ..., replaces = ...)</code>. To replace it for one test class only, use <code>@UninstallModules</code> with <code>@BindValue</code> or a nested module.</p>
+<p>Prefer <code>@TestInstallIn</code>. Each class with <code>@UninstallModules</code> gets its own generated components, which can slow test builds a lot.</p>`,
+    code: `// app/src/androidTest/java/.../FakeNetworkModule.kt   (every test in androidTest)
+@Module
+@TestInstallIn(components = [SingletonComponent::class], replaces = [NetworkModule::class])
+abstract class FakeNetworkModule {
+    @Singleton @Binds
+    abstract fun bindApi(fake: FakeNewsApi): NewsApi
+}
+
+@Singleton
+class FakeNewsApi @Inject constructor() : NewsApi {
+    var articles = listOf(Article("Kotlin 2.3 çıktı"))
+    var error: Exception? = null
+    var calls = 0
+    override suspend fun latest(): List<Article> { calls++; error?.let { throw it }; return articles }
+}
+
+@HiltAndroidTest
+class NewsScreenTest {
+    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
+    @get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @Inject lateinit var api: FakeNewsApi
+
+    @Before fun setUp() { hiltRule.inject() }
+
+    @Test fun showsHeadlinesFromTheFake() {
+        composeRule.onNodeWithText("Kotlin 2.3 çıktı").assertIsDisplayed()
+        assertEquals(1, api.calls)
+    }
+}
+
+// androidTestImplementation("com.google.dagger:hilt-android-testing:<version>")
+// kspAndroidTest("com.google.dagger:hilt-android-compiler:<version>")`,
+    remember: '@HiltAndroidTest plus HiltAndroidRule first. Replace modules with @TestInstallIn; use @UninstallModules only when one class needs something different.',
+    deeper: [
+      {
+        title: 'A test runner that swaps the Application',
+        body: `<p>Hilt tests must run in <code>HiltTestApplication</code>, not your <code>@HiltAndroidApp</code> class. For instrumented tests, write a small runner that creates it, and point <code>testInstrumentationRunner</code> at it. For Robolectric, set the application with <code>@Config</code> on the class, or once for all tests in <code>robolectric.properties</code>.</p>`,
+        code: `class HiltTestRunner : AndroidJUnitRunner() {
+    override fun newApplication(cl: ClassLoader?, name: String?, context: Context?): Application =
+        super.newApplication(cl, HiltTestApplication::class.java.name, context)
+}
+// android { defaultConfig { testInstrumentationRunner = "com.example.HiltTestRunner" } }
+
+// Robolectric
+@HiltAndroidTest
+@Config(application = HiltTestApplication::class)
+class SettingsScreenTest { /* ... */ }`,
+      },
+      {
+        title: 'Rule order: Hilt first',
+        body: `<p>The Compose rule launches the Activity, and the Activity asks Hilt for its dependencies. So <code>HiltAndroidRule</code> must run before every other rule. Give it <code>order = 0</code> and the others higher numbers, or wrap them in a <code>RuleChain</code> with the Hilt rule outside.</p>`,
+        code: `@get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
+@get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()
+@get:Rule(order = 2) val screenshotRule = SomeOtherRule()`,
+      },
+      {
+        title: '@BindValue for one test class',
+        body: `<p>When one class needs a different binding, uninstall the production module there and bind a field with <code>@BindValue</code>. Hilt binds the field under its declared type. You can only uninstall modules marked <code>@InstallIn</code>, not other <code>@TestInstallIn</code> modules, and each class that does this costs extra build time.</p>
+<p>Often a configurable shared fake is simpler: inject <code>FakeNewsApi</code> and set its error field in the test.</p>`,
+        code: `@UninstallModules(NetworkModule::class)
+@HiltAndroidTest
+class OfflineScreenTest {
+    @BindValue @JvmField
+    val api: NewsApi = FakeNewsApi().apply { error = IOException("offline") }
+
+    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
+    // ...
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Forgetting hiltRule.inject()',
+        bad: `@Inject lateinit var api: FakeNewsApi
+
+@Test fun showsHeadlines() {
+    api.articles = emptyList()   // lateinit property api has not been initialized
+}`,
+        good: `@Inject lateinit var api: FakeNewsApi
+
+@Before fun setUp() { hiltRule.inject() }`,
+        why: 'Hilt fills <code>@Inject</code> fields in the test only when you call <code>inject()</code>.',
+      },
+      {
+        title: 'Uninstalling a @TestInstallIn module',
+        bad: `@UninstallModules(FakeNetworkModule::class)   // a @TestInstallIn module
+@HiltAndroidTest
+class CheckoutErrorTest { /* ... */ }`,
+        good: `@HiltAndroidTest
+class CheckoutErrorTest {
+    @Inject lateinit var api: FakeNewsApi
+    @Before fun setUp() { hiltRule.inject(); api.error = IOException("offline") }
+}`,
+        why: '<code>@UninstallModules</code> only accepts <code>@InstallIn</code> modules, so this does not compile. Make the shared fake configurable instead.',
+      },
+      {
+        title: '@UninstallModules in every class',
+        bad: `@UninstallModules(NetworkModule::class) @HiltAndroidTest class NewsScreenTest { /* nested fake module */ }
+@UninstallModules(NetworkModule::class) @HiltAndroidTest class SettingsScreenTest { /* the same again */ }`,
+        good: `@TestInstallIn(components = [SingletonComponent::class], replaces = [NetworkModule::class])
+@Module abstract class FakeNetworkModule { /* once, for all tests */ }`,
+        why: 'Hilt generates a separate set of components for each class that uninstalls modules. The same fake everywhere belongs in one @TestInstallIn module.',
+      },
+    ],
+    terms: [
+      { term: '@HiltAndroidTest', def: 'Marks a test class that uses Hilt, so Hilt generates components for it.' },
+      { term: 'HiltAndroidRule', def: 'The JUnit rule that sets up the Hilt components for each test and injects the test’s @Inject fields.' },
+      { term: '@TestInstallIn', def: 'Marks a test module that replaces a production module for every test in the source set.' },
+      { term: '@BindValue', def: 'Binds a field of the test class into the Hilt graph under its declared type.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Replace NetworkModule with a fake for every test in this source set.', code: '@Module\n@[[TestInstallIn]](\n    components = [SingletonComponent::class],\n    [[replaces]] = [NetworkModule::class],\n)\nabstract class FakeNetworkModule {\n    @Singleton @Binds\n    abstract fun bindApi(fake: FakeNewsApi): NewsApi\n}', why: '<code>@TestInstallIn</code> installs this module and removes the one named in <code>replaces</code>, for all tests in the folder.' },
+      { type: 'bug', prompt: 'The Activity starts before Hilt has set up the test components. Tap the line to change.', code: '@HiltAndroidTest\nclass NewsScreenTest {\n    @get:Rule(order = 0) val composeRule = createAndroidComposeRule<MainActivity>()\n    @get:Rule(order = 1) val hiltRule = HiltAndroidRule(this)\n\n    @Test fun showsHeadlines() { /* ... */ }\n}', bug: 2, fix: '    @get:Rule(order = 2) val composeRule = createAndroidComposeRule<MainActivity>()', why: 'Rules run from the lowest order. The Hilt rule must come first, so the Compose rule needs a higher number.' },
+    ],
+    quiz: [
+      { q: 'Every test in <code>androidTest</code> should use <code>FakeNewsApi</code>. What do you write?', options: ['@UninstallModules in each test class', 'One module with @TestInstallIn(replaces = [NetworkModule::class])', 'A @BindValue field in each class'], a: 1, why: 'One test module replaces the binding everywhere, with no extra components per class.' },
+      { q: 'Why prefer @TestInstallIn over @UninstallModules?', options: ['Hilt generates new components for each class that uses @UninstallModules, which slows builds', '@UninstallModules is deprecated', '@TestInstallIn tests run faster on the device'], a: 0, why: 'The Hilt docs warn about the build time cost and recommend @TestInstallIn whenever possible.' },
+      { q: 'What does <code>hiltRule.inject()</code> do?', options: ['Launches the Activity', 'Replaces the production modules', 'Fills the @Inject fields of the test class'], a: 2, why: 'Module replacement happens at compile time. inject() populates the test’s own fields.' },
+    ],
+    visual(el) {
+      const CLASSES = ['NewsScreenTest', 'SettingsScreenTest', 'CheckoutErrorTest'];
+      const STRATS = [
+        { k: 'none', label: 'no test module' },
+        { k: 'tii', label: '@TestInstallIn' },
+        { k: 'each', label: '@UninstallModules in each class' },
+      ];
+      const NEEDS = [
+        { k: 'same', label: 'same fake' },
+        { k: 'uninstall', label: '@UninstallModules + @BindValue' },
+        { k: 'inject', label: 'inject the fake, set error' },
+      ];
+      const S = { strat: 'none', need: 'same' };
+      let busy = false;
+      const rows = CLASSES.map(name => {
+        const bind = h('span', { class: 'tst-hl-bind' }), comp = h('span', { class: 'tst-hl-comp' }), res = h('span', { class: 'tst-res' }, 'not run');
+        return { name, bind, comp, res, el: h('div', { class: 'tst-hl-row' }, h('b', {}, name), h('div', { class: 'controls tst-wrap' }, bind, comp), res) };
+      });
+      const buildBar = h('span', { class: 'bar run', style: 'left:0;width:0' });
+      const stat = h('span', { class: 'tst-stats' });
+      const o = out();
+      const pick = (list, key) => list.map(x => h('button', { class: 'cmd', onclick() { if (busy) return; S[key] = x.k; plan(); } }, x.label));
+      const sBtns = pick(STRATS, 'strat'), nBtns = pick(NEEDS, 'need');
+      function plan() {
+        sBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(STRATS[i].k === S.strat)));
+        nBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(NEEDS[i].k === S.need)));
+        let comps = 1, compileError = null;
+        const list = rows.map((r, i) => {
+          const checkout = i === 2;
+          let fake = S.strat !== 'none', own = S.strat === 'each', fail = false;
+          if (checkout && S.need === 'uninstall') {
+            if (S.strat === 'tii') compileError = '@UninstallModules can only uninstall @InstallIn modules, not FakeNetworkModule';
+            fake = true; fail = true; own = true;
+          }
+          if (checkout && S.need === 'inject') fail = fake;
+          if (own) comps++;
+          let result;
+          if (!fake) result = [false, i === 0 ? 'SocketTimeoutException' : checkout && S.need === 'inject' ? 'app used the real API' : 'real server data changed'];
+          else if (checkout && !fail) result = [false, 'expected the error text, saw the receipt'];
+          else result = [true, checkout ? 'error text shown' : 'headlines from the fake'];
+          return { r, fake, own, result, fail };
+        });
+        return { out: list, comps, compileError };
+      }
+      function paintPlan(p) {
+        p.out.forEach(({ r, fake, own, fail }) => {
+          r.bind.textContent = fake ? (fail ? 'NewsApi → failing fake' : 'NewsApi → FakeNewsApi') : 'NewsApi → real HTTPS';
+          r.bind.className = 'tst-hl-bind ' + (fake ? 'tst-hl-fake' : 'tst-hl-real');
+          r.comp.textContent = own ? 'own components' : 'shared components';
+          r.res.textContent = 'not run'; r.res.className = 'tst-res';
+        });
+        buildBar.style.width = (p.comps / 4) * 100 + '%';
+        stat.innerHTML = `Hilt component sets generated: <b>${p.comps}</b>`;
+      }
+      async function run() {
+        if (busy) return; busy = true;
+        const p = plan(); paintPlan(p);
+        say(o, '<span class="muted">$</span> ./gradlew connectedAndroidTest');
+        if (p.compileError) {
+          await sleep(400); busy = false; if (!el.isConnected) return;
+          o.append(h('div', { class: 'line drop-in', html: `<span class="bad">error:</span> ${p.compileError}` }));
+          return;
+        }
+        let failed = 0;
+        for (const { r, result } of p.out) {
+          r.res.textContent = 'running'; await sleep(450); if (!el.isConnected) return;
+          r.res.textContent = result[0] ? 'PASSED' : 'FAILED'; r.res.className = 'tst-res drop-in' + (result[0] ? '' : ' tst-bad');
+          o.append(h('div', { class: 'line drop-in', html: `${r.name}: ${result[0] ? '<span class="good">passed</span>' : '<span class="bad">failed</span>'}, ${result[1]}` }));
+          if (!result[0]) failed++;
+        }
+        o.append(h('div', { class: 'line drop-in' }, failed ? `${failed} failed.` : `All passed with ${p.comps} component set${p.comps > 1 ? 's' : ''}.`));
+        busy = false;
+      }
+      const repaint = () => paintPlan(plan());
+      sBtns.concat(nBtns).forEach(b => b.addEventListener('click', repaint));
+      repaint();
+      o.innerHTML = 'Pick how the tests get their NewsApi, then run them.';
+      el.append(
+        h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'all tests'), sBtns),
+        h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'CheckoutErrorTest needs a failing API'), nBtns),
+        h('div', { class: 'tst-hl-tests' }, rows.map(r => r.el)),
+        h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'test build time'), h('div', { class: 'lane-track' }, buildBar))),
+        stat,
+        h('div', { class: 'controls tst-wrap' }, h('button', { class: 'btn primary small', onclick: run }, 'Run tests')),
+        o);
+    },
+  };
+
   Lab.addTrack({
     id: 'testing',
     title: 'Testing and quality',
@@ -1298,6 +2085,8 @@ class CheckoutFlowTest {
             o);
         },
       },
+
+      robolectricLesson,
 
       // 2 ─────────────────────────────────────────────
       {
@@ -1427,6 +2216,8 @@ class NewsViewModelTest {
             o);
         },
       },
+
+      mockkLesson,
 
       // 3 ─────────────────────────────────────────────
       {
@@ -1895,6 +2686,8 @@ class InboxScreenTest {
             o);
         },
       },
+
+      screenshotsLesson, hiltTestingLesson,
 
       // 6 ─────────────────────────────────────────────
       {

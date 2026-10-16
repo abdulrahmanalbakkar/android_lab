@@ -89,6 +89,25 @@
 .kt-pile.kt-d2-se-head { justify-content: space-between; align-items: center; min-height: 0; }
 .kt-d2-ex-tag { font: 600 0.7rem var(--mono); padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: var(--t-c); }
 .kt-d2-ex-tag.ok { background: rgba(126, 226, 168, 0.18); color: var(--t-k); }
+.kt-li-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; min-width: 0; }
+.obj.kt-li-obj { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.kt-li-count { font: 600 0.78rem var(--mono); color: var(--muted); }
+.machine.kt-li-machine, .machine.kt-pr-machine { min-width: 0; max-width: 100%; padding: 10px 12px; }
+.kt-li-machine .kt, .kt-pr-machine .kt { white-space: normal; overflow-wrap: anywhere; }
+.kt-pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px; min-width: 0; }
+.kt-pr-cell { display: grid; gap: 4px; padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: background 0.2s, border-color 0.2s; }
+.kt-pr-cell.ok { border-color: var(--ok); background: var(--ok-soft); }
+.kt-pr-cell.no { border-color: var(--err); background: var(--err-soft); }
+.kt-pr-where { font: 600 0.82rem var(--mono); color: var(--ink); }
+.kt-pr-mark { font-size: 0.85rem; color: var(--muted); }
+.kt-pr-cell.ok .kt-pr-mark { color: var(--ok); }
+.kt-pr-cell.no .kt-pr-mark { color: var(--err); }
+.kt-ms-three { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 10px; min-width: 0; }
+.kt-zone.kt-ms-zone { align-content: start; }
+.kt-ms-map { display: grid; gap: 4px; justify-items: center; font: 500 0.85rem var(--mono); min-width: 0; }
+.kt-ms-empty { font-size: 0.85rem; }
+.slot.kt-ms-slot { width: auto; min-width: min(140px, 100%); max-width: 100%; padding: 0 12px; font: 600 0.95rem var(--mono); }
+.kt-pile.kt-ms-res { min-height: 40px; }
 `;
 
   Lab.addTrack({
@@ -189,57 +208,11 @@ const val MAX_ITEMS = 50           // compile-time constant`,
             },
           },
           {
-            title: 'lateinit: set it later, before you read it',
-            body: `<p>Some non-null properties can’t get a value in the constructor. A test builds its subject in <code>@Before</code>, and a Fragment creates its adapter in <code>onViewCreated</code>. <code>lateinit var</code> lets you declare those without making them nullable.</p>
-<p>The price: read it before anything assigned it and you get <code>UninitializedPropertyAccessException</code>. Inside the class you can ask <code>::adapter.isInitialized</code>. It only works on a non-null <code>var</code> of a non-primitive type. For a value computed once on first read, use <code>val x by lazy { }</code>, covered in the Delegation lesson of the Kotlin deep dive track.</p>`,
-            code: `class FeedFragment : Fragment(R.layout.feed) {
-    private lateinit var adapter: FeedAdapter
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        adapter = FeedAdapter()
-    }
-
-    fun show(items: List<Item>) {
-        if (::adapter.isInitialized) adapter.submitList(items)
-    }
-}`,
-            visual(el) {
-              let set = false;
-              const field = h('span', { class: 'field kt-unset' }, 'adapter = (not set)');
-              const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'FeedFragment'),
-                h('span', { class: 'field', html: hl('lateinit var adapter: FeedAdapter') }), field);
-              const o = out();
-              const paint = () => {
-                field.textContent = set ? 'adapter = FeedAdapter@3b9a' : 'adapter = (not set)';
-                field.className = 'field ' + (set ? 'kt-ptr' : 'kt-unset');
-              };
-              el.append(
-                h('div', { class: 'stage' }, obj),
-                h('div', { class: 'controls' },
-                  cmd('adapter.submitList(items)', () => {
-                    if (!set) {
-                      field.className = 'field kt-stale'; replay(obj, 'shake');
-                      say(o, '<span class="bad">crash:</span> UninitializedPropertyAccessException: lateinit property adapter has not been initialized');
-                      return;
-                    }
-                    replay(field, 'pop');
-                    say(o, `<span class="good">ok:</span> ${hl('adapter.submitList(items)')} <span class="muted">// the adapter exists now</span>`);
-                  }),
-                  cmd('::adapter.isInitialized', () => {
-                    paint(); replay(field, 'pop');
-                    say(o, `${hl('::adapter.isInitialized')} = ${hl(String(set))}`);
-                  }),
-                  cmd('adapter = FeedAdapter()', () => {
-                    set = true; paint(); replay(field, 'pop');
-                    say(o, `${hl('adapter = FeedAdapter()')} <span class="muted">// onViewCreated ran</span>`);
-                  }),
-                  cmd('FeedFragment()', () => {
-                    set = false; paint(); replay(obj, 'pop-soft');
-                    say(o, '<span class="muted">A new FeedFragment instance starts with the property unset again.</span>');
-                  })),
-                o);
-              say(o, 'Read the adapter before and after it is set.');
-            },
+            title: 'When the value isn’t ready at construction',
+            body: `<p>A property must get its value when the object is built. Sometimes that value only exists later, like a Fragment’s adapter or a test’s subject. Don’t reach for a nullable <code>var</code> straight away.</p>
+<p>Kotlin has two tools for this: <code>lateinit var</code>, which you assign yourself later, and <code>val … by lazy { }</code>, which computes itself on first read. The next lesson, <strong>lateinit and lazy</strong>, compares them.</p>`,
+            code: `private lateinit var adapter: FeedAdapter       // assigned in onViewCreated
+private val formatter by lazy { NumberFormat.getInstance() }  // built on first use`,
           },
         ],
         underHood: {
@@ -263,7 +236,6 @@ public final class Rect {
         mistakes: [
           { title: 'A var just to fill it from branches', bad: 'var label = ""\nif (count == 0) {\n    label = "Empty"\n} else {\n    label = "$count items"\n}', good: 'val label = if (count == 0) "Empty" else "$count items"', why: '<code>if</code> is an expression, so the value can be built in one step. The <code>val</code> also proves nothing changes it later.' },
           { title: 'Mutating a var inside screen state', bad: 'data class CartState(var count: Int)\n\n_state.value.count += 1   // screen never updates', good: 'data class CartState(val count: Int)\n\n_state.update { it.copy(count = it.count + 1) }', why: 'Changing a field inside the current object never sets a new value, so <code>StateFlow</code> has nothing to emit. With <code>val</code> fields the only way to change state is a new object, which observers see.' },
-          { title: 'lateinit on a primitive', bad: 'private lateinit var retries: Int', good: 'private var retries = 0\n// or: private var retries: Int by Delegates.notNull()', why: '<code>lateinit</code> needs a field that can hold null while unset, so it isn’t allowed on <code>Int</code>, <code>Boolean</code> and the other primitive types. Give it a start value, or use <code>Delegates.notNull()</code>.' },
         ],
         visual(el) {
           const box = (kw, name, value, note) => {
@@ -280,6 +252,157 @@ public final class Rect {
               cmd('name = "Grace"', () => { replay(name, 'shake'); say(o, '<span class="bad">error:</span> \'val\' cannot be reassigned'); }),
               cmd('score += 5', () => { n += 5; swap(score.well, String(n)); say(o, `<span class="good">ok:</span> score is now ${n}`); })),
             o);
+        },
+      },
+
+      // + lateinit ────────────────────────────────────
+      {
+        id: 'lateinit',
+        title: 'lateinit and lazy',
+        tagline: 'Non-null properties whose value arrives after the constructor.',
+        body: `
+<p>Some properties can’t get their value in the constructor. A Fragment builds its adapter in <code>onViewCreated</code>. A test builds its subject in <code>@Before</code>. Making them nullable would force a <code>?.</code> on every use, even though they are never null once the screen is running.</p>
+<p><code>lateinit var</code> says: “this is non-null, I will assign it before anyone reads it.” If you break that promise, the read throws <code>UninitializedPropertyAccessException</code> with the property’s name in the message.</p>
+<p><code>val x by lazy { }</code> solves a different problem. Nobody assigns it. The block runs on the first read, the result is kept, and every later read returns the same value. Use it for something costly that may never be needed.</p>`,
+        code: `class FeedFragment : Fragment(R.layout.feed) {
+    // assigned later, by you
+    private lateinit var adapter: FeedAdapter
+
+    // computed on first read, then kept
+    private val dateFormat by lazy {
+        SimpleDateFormat("d MMMM yyyy", Locale.forLanguageTag("tr"))
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        adapter = FeedAdapter(dateFormat)
+    }
+}`,
+        remember: 'lateinit: you assign it later. lazy: it computes itself on first read. Neither is for values that can really be missing.',
+        level: 'beginner',
+        terms: [
+          { term: 'lateinit', def: 'A modifier for a non-null <code>var</code> that is assigned after construction. Reading it first throws.' },
+          { term: 'UninitializedPropertyAccessException', def: 'The exception thrown when a <code>lateinit</code> property is read before anything assigned it.' },
+          { term: 'by lazy', def: 'A delegate that runs its block on the first read of a <code>val</code> and returns the stored result after that.' },
+          { term: 'isInitialized', def: 'Checks whether a <code>lateinit</code> property has been assigned, written <code>::name.isInitialized</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'The adapter is assigned in <code>onViewCreated</code>. The formatter should be built only when first used.', code: 'private [[lateinit]] var adapter: FeedAdapter\nprivate val dateFormat by [[lazy]] {\n    SimpleDateFormat("d MMMM", Locale.forLanguageTag("tr"))\n}', why: '<code>lateinit</code> marks a <code>var</code> you assign yourself later. <code>lazy</code> builds the value on the first read.' },
+          { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'class LoginTest {\n    private lateinit val repo: FakeRepo\n\n    @Before fun setUp() {\n        repo = FakeRepo()\n    }\n}', bug: 1, fix: '    private lateinit var repo: FakeRepo', why: '<code>lateinit</code> only works on <code>var</code>. It has to be assigned after construction, and a <code>val</code> can’t be assigned there.' },
+        ],
+        quiz: [
+          { q: 'A <code>lateinit</code> property is read before it was assigned. What happens?', options: ['It returns null', 'It throws UninitializedPropertyAccessException', 'It returns a default value'], a: 1, why: 'The getter checks the field and throws, naming the property in the message.' },
+          { q: 'Which declaration compiles?', options: ['<code>lateinit var count: Int</code>', '<code>lateinit var name: String?</code>', '<code>lateinit var name: String</code>'], a: 2, why: '<code>lateinit</code> needs a non-null type that isn’t a primitive like <code>Int</code>.' },
+          { q: '<code>val db by lazy { openDb() }</code> is read three times. How many times does <code>openDb()</code> run?', options: ['Once', 'Three times', 'Never, until you call it'], a: 0, why: '<code>lazy</code> runs the block on the first read and stores the result for every later read.' },
+        ],
+        deeper: [
+          {
+            title: 'Ask before you read: isInitialized',
+            body: `<p>Inside the class (or the same file, for a top-level property) you can check <code>::adapter.isInitialized</code> before reading. It is handy in teardown code that may run even when setup failed half way.</p>
+<p>If you find yourself checking it in many places, the value really can be missing. Make it nullable and let the compiler help instead.</p>`,
+            code: `@After fun tearDown() {
+    if (::db.isInitialized) db.close()
+}`,
+          },
+          {
+            title: 'Primitives: Delegates.notNull()',
+            body: `<p><code>lateinit</code> is not allowed on <code>Int</code>, <code>Boolean</code> and the other primitive types. When you need the same “assign later, crash if read early” rule for a number, use <code>by Delegates.notNull()</code>. A read before the first assignment throws <code>IllegalStateException</code>.</p>
+<p>Often a plain start value is simpler: <code>var retries = 0</code>.</p>`,
+            code: `import kotlin.properties.Delegates
+
+var pageSize: Int by Delegates.notNull()
+
+pageSize = 20
+println(pageSize)   // 20`,
+          },
+          {
+            title: 'Fragment bindings outlive their views',
+            body: `<p>A Fragment object can live on after its view is destroyed, for example on the back stack. A <code>lateinit var binding</code> keeps pointing at the old view tree, so the whole tree stays in memory.</p>
+<p>The Android docs use a nullable backing property instead: assign it in <code>onCreateView</code>, set it to <code>null</code> in <code>onDestroyView</code>, and read it through a non-null getter that is only valid in between.</p>`,
+            code: `private var _binding: ResultProfileBinding? = null
+// only valid between onCreateView and onDestroyView
+private val binding get() = _binding!!
+
+override fun onDestroyView() {
+    super.onDestroyView()
+    _binding = null
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>lateinit</code> property is stored in a normal field that the JVM allows to be null. The generated getter checks that field, and if it is null it throws <code>UninitializedPropertyAccessException</code> instead of returning it. That is why primitives are excluded: an <code>int</code> field can’t hold null, so there would be no way to mark it unset.</p>
+<p><code>by lazy</code> stores a <code>Lazy</code> object next to the property. Its first <code>value</code> read runs your block and keeps the result. By default that first run is synchronized, so two threads never both run the block.</p>`,
+          code: `// private lateinit var adapter: FeedAdapter
+// roughly what the getter does:
+FeedAdapter getAdapter() {
+    if (adapter == null) throw new UninitializedPropertyAccessException("lateinit property adapter has not been initialized");
+    return adapter;
+}`,
+        },
+        mistakes: [
+          { title: 'lateinit on a primitive', bad: 'private lateinit var retries: Int', good: 'private var retries = 0\n// or: private var retries: Int by Delegates.notNull()', why: '<code>lateinit</code> needs a field that can hold null while unset, so it isn’t allowed on <code>Int</code>, <code>Boolean</code> and the other primitive types. Give it a start value, or use <code>Delegates.notNull()</code>.' },
+          { title: 'lateinit for a value that may never come', bad: 'lateinit var avatarUrl: String   // some users have none\n\nif (::avatarUrl.isInitialized) load(avatarUrl)', good: 'var avatarUrl: String? = null\n\navatarUrl?.let { load(it) }', why: 'When “no value” is a normal state, say so in the type. A nullable property makes every reader handle it, and the compiler checks that they do.' },
+          { title: 'lazy that reads something not ready yet', bad: 'class ProfileFragment : Fragment() {\n    private val userId by lazy { requireArguments().getString("id")!! }\n    init { log(userId) }   // arguments not set yet\n}', good: 'class ProfileFragment : Fragment() {\n    private val userId by lazy { requireArguments().getString("id")!! }\n    override fun onViewCreated(view: View, s: Bundle?) { log(userId) }\n}', why: '<code>lazy</code> runs on the first read, wherever that is. Read it only once the things it depends on exist.' },
+        ],
+        visual(el) {
+          let set = false, loaded = false, loads = 0, busy = false;
+          const field = h('span', { class: 'field kt-unset' }, 'adapter = (not set)');
+          const lazyField = h('span', { class: 'field kt-unset' }, 'dateFormat = (not computed)');
+          const count = h('span', { class: 'kt-li-count' }, 'block ran 0 times');
+          const gear = h('div', { class: 'machine kt-li-machine' }, h('div', { class: 'gear' }), h('div', { class: 'kt', html: hl('lazy { SimpleDateFormat(…) }') }));
+          const left = h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'lateinit var'),
+            h('div', { class: 'obj kt-li-obj' }, h('span', { class: 'field', html: hl('adapter: FeedAdapter') }), field));
+          const right = h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'val … by lazy'),
+            h('div', { class: 'obj kt-li-obj' }, h('span', { class: 'field', html: hl('dateFormat: SimpleDateFormat') }), lazyField), gear, count);
+          const o = out();
+          const paint = () => {
+            field.textContent = set ? 'adapter = FeedAdapter@3b9a' : 'adapter = (not set)';
+            field.className = 'field ' + (set ? 'kt-ptr' : 'kt-unset');
+            lazyField.textContent = loaded ? 'dateFormat = SimpleDateFormat@7c21' : 'dateFormat = (not computed)';
+            lazyField.className = 'field ' + (loaded ? 'kt-ptr' : 'kt-unset');
+            count.textContent = `block ran ${loads} time${loads === 1 ? '' : 's'}`;
+          };
+          async function readLazy() {
+            if (busy) return; busy = true;
+            if (!loaded) {
+              gear.classList.add('busy');
+              say(o, '<span class="muted">First read: running the lazy block…</span>');
+              await sleep(700);
+              gear.classList.remove('busy');
+              if (!el.isConnected) return;
+              loaded = true; loads += 1; paint(); replay(lazyField, 'pop');
+              say(o, `${hl('dateFormat.format(today)')} <span class="good">ok:</span> <span class="muted">built it now, kept it for next time</span>`);
+            } else {
+              replay(lazyField, 'pop');
+              say(o, `${hl('dateFormat.format(today)')} <span class="good">ok:</span> <span class="muted">same object, the block did not run again</span>`);
+            }
+            busy = false;
+          }
+          el.append(
+            h('div', { class: 'kt-li-pair' }, left, right),
+            h('div', { class: 'controls' },
+              cmd('adapter.submitList(items)', () => {
+                if (busy) return;
+                if (!set) {
+                  field.className = 'field kt-stale'; replay(left, 'shake');
+                  say(o, '<span class="bad">crash:</span> UninitializedPropertyAccessException: lateinit property adapter has not been initialized');
+                  return;
+                }
+                replay(field, 'pop');
+                say(o, `<span class="good">ok:</span> ${hl('adapter.submitList(items)')} <span class="muted">// assigned in onViewCreated</span>`);
+              }),
+              cmd('adapter = FeedAdapter()', () => {
+                if (busy) return;
+                set = true; paint(); replay(field, 'pop');
+                say(o, `${hl('adapter = FeedAdapter()')} <span class="muted">// you assigned it</span>`);
+              }),
+              cmd('dateFormat.format(today)', readLazy),
+              cmd('FeedFragment()', () => {
+                if (busy) return;
+                set = false; loaded = false; loads = 0; paint(); replay(left, 'pop-soft'); replay(right, 'pop-soft');
+                say(o, '<span class="muted">A new instance: nothing assigned, nothing computed.</span>');
+              })),
+            o);
+          say(o, 'Read each property before and after it has a value.');
         },
       },
 
@@ -828,7 +951,7 @@ fun show(form: Form) {
           {
             title: 'Values from Java carry no promise',
             body: `<p>Java code without nullability annotations returns a <em>platform type</em>, shown as <code>String!</code>. Kotlin lets you treat it as <code>String</code> or <code>String?</code>. Pick wrong and you get a NullPointerException at runtime, not a compile error.</p>
-<p>Most Android SDK and AndroidX APIs are annotated now, so you see a real <code>String</code> or <code>String?</code>. For older or third-party Java code, write the nullable type yourself where the value enters Kotlin.</p>`,
+<p>Most Android SDK and AndroidX APIs are annotated now, so you see a real <code>String</code> or <code>String?</code>. For older or third-party Java code, write the nullable type yourself where the value enters Kotlin. The <strong>Java interop</strong> lesson in the Kotlin deep dive track covers the rest of the border.</p>`,
             code: `// Java: public String getNickname() { ... }   no annotation
 
 val a = legacy.nickname            // String! : the compiler trusts you
@@ -1359,6 +1482,187 @@ public inline fun <T, R, C : MutableCollection<in R>>
         },
       },
 
+      // + maps-sets ───────────────────────────────────
+      {
+        id: 'maps-sets',
+        title: 'Maps and Sets',
+        tagline: 'Unique items, and values you look up by key.',
+        body: `
+<p>A <code>List</code> keeps every item in order, duplicates included. A <code>Set</code> keeps each item once: adding one that is already there changes nothing. A <code>Map</code> stores pairs of key and value, like a dictionary, with each key at most once.</p>
+<p>Build them with <code>setOf(…)</code> and <code>mapOf("tr" to "Türkçe")</code>. The word <code>to</code> makes a <code>Pair</code>. Like lists, the plain versions are read-only, and <code>mutableSetOf</code> and <code>mutableMapOf</code> give you ones you can change.</p>
+<p><code>map[key]</code> returns a nullable value, because the key may not be there. The default implementations remember insertion order, so iterating gives items back in the order you added them.</p>`,
+        code: `val basket = mutableListOf<String>()
+val kinds = mutableSetOf<String>()
+val counts = mutableMapOf<String, Int>()
+
+fun add(fruit: String) {
+    basket.add(fruit)                          // keeps duplicates
+    kinds.add(fruit)                           // false if already there
+    counts[fruit] = (counts[fruit] ?: 0) + 1   // key -> value
+}
+
+add("elma"); add("armut"); add("elma")
+// basket = [elma, armut, elma]
+// kinds  = [elma, armut]
+// counts = {elma=2, armut=1}`,
+        remember: 'List for order and duplicates, Set for uniqueness, Map for lookup by key. map[key] can be null.',
+        level: 'beginner',
+        terms: [
+          { term: 'Set', def: 'A collection of unique items. Adding an item that is already there leaves the set unchanged.' },
+          { term: 'Map', def: 'A collection of key-value pairs. Keys are unique; different keys may share a value.' },
+          { term: 'to', def: 'An infix function that builds a <code>Pair</code>, used to write map entries: <code>"tr" to "Türkçe"</code>.' },
+          { term: 'LinkedHashMap', def: 'The default <code>MutableMap</code>. It keeps entries in insertion order. <code>HashMap</code> makes no promise about order.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Build a read-only map from language code to name.', code: 'val langs = [[mapOf]](\n    "tr" [[to]] "Türkçe",\n    "en" to "English",\n)', why: '<code>mapOf</code> takes pairs, and <code>a to b</code> builds a pair.' },
+          { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'val langs = mapOf("tr" to "Türkçe", "en" to "English")\nval code = "de"\nval name: String = langs[code]\nprintln(name)', bug: 2, fix: 'val name: String = langs[code] ?: "Unknown"', why: '<code>langs[code]</code> is a <code>String?</code>, because the key may be missing. Give a fallback with <code>?:</code>.' },
+        ],
+        quiz: [
+          { q: '<code>setOf(1, 2, 2, 3).size</code>', options: ['<code>3</code>', '<code>4</code>', 'It doesn’t compile'], a: 0, why: 'A set keeps each item once, so the second 2 is dropped.' },
+          { q: '<code>mapOf("a" to 1)["b"]</code>', options: ['<code>0</code>', '<code>null</code>', 'It throws'], a: 1, why: 'Indexing a map with a missing key returns null.' },
+          { q: 'You check <code>if (id in seen)</code> thousands of times. Which type should <code>seen</code> be?', options: ['<code>List</code>', '<code>Set</code>', 'It makes no difference'], a: 1, why: '<code>in</code> on a list checks items one by one. A hash set finds the item by its hash, in about the same time whatever its size.' },
+        ],
+        deeper: [
+          {
+            title: 'Reading a key that may be missing',
+            body: `<p>There are several ways to read from a map, and they differ only in what happens when the key is not there. <code>map[key]</code> returns null. <code>getValue(key)</code> throws. <code>getOrDefault(key, x)</code> returns <code>x</code>, and <code>getOrElse(key) { … }</code> runs a lambda for the fallback.</p>
+<p>Most of the time, <code>map[key] ?: fallback</code> reads best. Use <code>getValue</code> only when a missing key means a bug.</p>`,
+            code: `val langs = mapOf("tr" to "Türkçe", "en" to "English")
+
+langs["de"]                      // null
+langs["de"] ?: "Unknown"         // "Unknown"
+langs.getOrDefault("de", "?")    // "?"
+langs.getValue("de")             // throws NoSuchElementException`,
+            visual(el) {
+              const map = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'langs'),
+                h('span', { class: 'field' }, '"tr" → "Türkçe"'), h('span', { class: 'field' }, '"en" → "English"'));
+              const result = h('div', { class: 'slot kt-ms-slot' });
+              const o = out();
+              const READS = [
+                ['langs["tr"]', '"Türkçe"', 'the key is there'],
+                ['langs["de"]', 'null', 'missing key, no crash, but the type is String?'],
+                ['langs["de"] ?: "Unknown"', '"Unknown"', 'the usual fallback'],
+                ['langs.getOrDefault("de", "?")', '"?"', 'fallback passed as a value'],
+                ['langs.getValue("de")', null, 'NoSuchElementException'],
+              ];
+              el.append(
+                h('div', { class: 'stage' }, map, result),
+                h('div', { class: 'controls' }, READS.map(([src, v, note]) => cmd(src, () => {
+                  if (v == null) {
+                    replay(map, 'shake'); swap(result, 'throws');
+                    say(o, `${hl(src)} <span class="bad">throws</span> <span class="muted">${note}</span>`);
+                    return;
+                  }
+                  swap(result, v);
+                  say(o, `${hl(src)} = ${hl(v)} <span class="muted">// ${note}</span>`);
+                }))),
+                o);
+              say(o, 'Read a key that exists, then one that doesn’t.');
+            },
+          },
+          {
+            title: 'Set math: union, intersect, subtract',
+            body: `<p>Sets come with the operations you know from school maths. <code>a union b</code> has everything from both. <code>a intersect b</code> keeps what is in both. <code>a subtract b</code> keeps what is in <code>a</code> but not in <code>b</code>, so order matters there.</p>
+<p>They also work on lists, but the result is always a <code>Set</code>, so duplicates disappear.</p>`,
+            code: `val following = setOf("ayse", "can", "deniz")
+val followers = setOf("can", "deniz", "elif")
+
+following intersect followers   // [can, deniz]   mutual
+followers subtract following    // [elif]         follow back?
+following union followers       // [ayse, can, deniz, elif]`,
+            visual(el) {
+              const A = ['ayse', 'can', 'deniz'], B = ['can', 'deniz', 'elif'];
+              const pile = (xs, cls) => h('div', { class: 'kt-pile' }, xs.map(x => h('span', { class: 'chip kt-sm ' + (cls || '') }, x)));
+              const res = h('div', { class: 'kt-pile kt-ms-res' });
+              const o = out();
+              const OPS = [
+                ['following union followers', [...new Set([...A, ...B])], 'everything from both'],
+                ['following intersect followers', A.filter(x => B.includes(x)), 'in both: mutual follows'],
+                ['following subtract followers', A.filter(x => !B.includes(x)), 'you follow them, they don’t follow back'],
+                ['followers subtract following', B.filter(x => !A.includes(x)), 'they follow you, you don’t follow back'],
+              ];
+              el.append(
+                h('div', { class: 'kt-li-pair' },
+                  h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'following'), pile(A)),
+                  h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'followers'), pile(B))),
+                h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'result'), res),
+                h('div', { class: 'controls' }, OPS.map(([src, xs, note]) => cmd(src, () => {
+                  res.replaceChildren(...(xs.length ? xs.map(x => h('span', { class: 'chip kt-sm drop-in' }, x)) : [h('span', { class: 'muted' }, 'empty set')]));
+                  say(o, `${hl(src)} = [${xs.join(', ')}] <span class="muted">// ${note}</span>`);
+                }))),
+                o);
+              say(o, 'Combine the two sets.');
+            },
+          },
+          {
+            title: 'Pick the collection by the question you ask',
+            body: `<p>Ask what the code does most. “Show these in order” is a <code>List</code>. “Have I seen this one?” is a <code>Set</code>. “Find the item with this id” is a <code>Map</code>.</p>
+<p>The difference shows up in loops. <code>x in list</code> checks the items one by one, so a lookup inside a loop gets slow as the list grows. Turn the list into a set or a map once, with <code>toSet()</code> or <code>associateBy { it.id }</code>, and each lookup becomes a hash lookup.</p>`,
+            code: `// slow: scans users for every order
+orders.map { o -> users.first { it.id == o.userId } }
+
+// fast: build the index once
+val byId = users.associateBy { it.id }
+orders.map { o -> byId[o.userId] }`,
+          },
+          {
+            title: 'getOrPut: fill a map on demand',
+            body: `<p>A mutable map makes a simple cache. <code>getOrPut(key) { … }</code> returns the stored value if there is one. If not, it runs the lambda, stores the result under the key, and returns it.</p>`,
+            code: `private val avatars = mutableMapOf<String, Bitmap>()
+
+fun avatar(userId: String): Bitmap =
+    avatars.getOrPut(userId) { decodeAvatar(userId) }`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>mutableSetOf()</code> creates a <code>LinkedHashSet</code> and <code>mutableMapOf()</code> a <code>LinkedHashMap</code>. Both are hash tables with an extra linked list that remembers insertion order. To find a key, the table calls <code>hashCode()</code> to pick a bucket, then <code>equals()</code> to find the match inside it.</p>
+<p>That is why keys need sensible <code>equals</code> and <code>hashCode</code>, which data classes give you, and why a key must not change after you store it. <code>hashSetOf()</code> and <code>hashMapOf()</code> skip the linked list: a bit less memory, no order promise.</p>`,
+          code: `val m = mutableMapOf("b" to 2, "a" to 1)
+println(m)            // {b=2, a=1}  insertion order
+println(m.javaClass)  // class java.util.LinkedHashMap`,
+        },
+        mistakes: [
+          { title: 'Forcing a map read with !!', bad: 'val name = langs[code]!!', good: 'val name = langs[code] ?: "Unknown"\n// or, if a missing key is a bug:\nval name = langs.getValue(code)', why: '<code>!!</code> throws a bare <code>NullPointerException</code>. A fallback handles the case. <code>getValue</code> fails with a message that names the missing key.' },
+          { title: 'A list used for membership checks', bad: 'val blocked = loadBlocked()        // List<String>\nmessages.filter { it.from !in blocked }', good: 'val blocked = loadBlocked().toSet()\nmessages.filter { it.from !in blocked }', why: 'Every <code>in</code> on a list walks it. With many messages and a long list that is a lot of work. Convert once to a set.' },
+          { title: 'Expecting order from hashSetOf', bad: 'val tags = hashSetOf("kotlin", "android", "compose")\ntags.first()   // which one?', good: 'val tags = setOf("kotlin", "android", "compose")\ntags.first()   // "kotlin"', why: '<code>HashSet</code> makes no promise about order. <code>setOf</code> and <code>mutableSetOf</code> keep insertion order. Use <code>sortedSetOf</code> when you want sorted order.' },
+        ],
+        visual(el) {
+          let basket = [], kinds = [], counts = {};
+          const listPile = h('div', { class: 'kt-pile kt-ms-col' });
+          const setPile = h('div', { class: 'kt-pile kt-ms-col' });
+          const mapPile = h('div', { class: 'kt-ms-map' });
+          const zone = (title, pile) => h('div', { class: 'kt-zone kt-ms-zone' }, h('span', { class: 'kt-zone-title' }, title), pile);
+          const zSet = zone('kinds: Set', setPile);
+          const o = out();
+          const empty = () => h('span', { class: 'muted kt-ms-empty' }, 'empty');
+          function paint(fresh) {
+            listPile.replaceChildren(...(basket.length ? basket.map((x, i) => h('span', { class: 'chip kt-sm' + (i === basket.length - 1 && fresh ? ' drop-in' : '') }, x)) : [empty()]));
+            setPile.replaceChildren(...(kinds.length ? kinds.map(x => h('span', { class: 'chip kt-sm' + (x === fresh && kinds.indexOf(x) === kinds.length - 1 && counts[x] === 1 ? ' drop-in' : '') }, x)) : [empty()]));
+            const keys = Object.keys(counts);
+            mapPile.replaceChildren(...(keys.length ? keys.map(k => h('span', { class: 'field kt-ms-entry' + (k === fresh ? ' changed' : '') }, `"${k}" → ${counts[k]}`)) : [empty()]));
+          }
+          function add(f) {
+            basket.push(f);
+            const isNew = !kinds.includes(f);
+            if (isNew) kinds.push(f); else replay(zSet, 'shake');
+            counts[f] = (counts[f] || 0) + 1;
+            paint(f);
+            say(o, `${hl(`add("${f}")`)} <span class="muted">list.add → true, set.add → ${isNew}${isNew ? '' : ' (already there)'}, counts["${f}"] = ${counts[f]}</span>`);
+          }
+          el.append(
+            h('div', { class: 'kt-ms-three' }, zone('basket: List', listPile), zSet, zone('counts: Map', mapPile)),
+            h('div', { class: 'controls' },
+              cmd('add("elma")', () => add('elma')),
+              cmd('add("armut")', () => add('armut')),
+              cmd('add("kiraz")', () => add('kiraz')),
+              cmd('counts["muz"]', () => say(o, `${hl('counts["muz"]')} = ${hl('null')} <span class="muted">// no such key</span>`)),
+              h('button', { class: 'cmd', onclick: () => { basket = []; kinds = []; counts = {}; paint(); say(o, 'All three are empty again.'); } }, 'Clear')),
+            o);
+          paint();
+          say(o, 'Add the same fruit twice and compare the three collections.');
+        },
+      },
+
       // 5 ─────────────────────────────────────────────
       {
         id: 'when',
@@ -1718,22 +2022,6 @@ val d = User("Dee", 1990, 2026)      // secondary: age = 36`,
                 o);
             },
           },
-          {
-            title: 'Guard a property with its setter',
-            body: `<p>A property can have its own setter. Inside it, <code>field</code> is the stored value. Use it to validate or clamp what callers assign, without writing a separate <code>setAge()</code> method.</p>
-<p>Make the setter <code>private set</code> when only the class itself should change the value.</p>`,
-            code: `class Player {
-    var health = 100
-        set(value) { field = value.coerceIn(0, 100) }
-
-    var score = 0
-        private set              // readable everywhere, writable only here
-
-    fun hit(points: Int) { score += points }
-}
-
-player.health = 140   // stored as 100`,
-          },
         ],
         underHood: {
           body: `<p>Each property becomes a private JVM field plus a getter (and a setter for <code>var</code>), so Java sees <code>getName()</code>. A property with only a custom getter that never uses <code>field</code> gets no field at all.</p>
@@ -1814,6 +2102,156 @@ public final class User {
             h('div', { class: 'when' }, rows),
             h('div', { class: 'controls' }, calls.map(c => cmd(c.src, () => create(c)))),
             o, stage, con);
+        },
+      },
+
+      // + properties ──────────────────────────────────
+      {
+        id: 'properties',
+        title: 'Properties, setters and visibility',
+        tagline: 'Control who can read a property, who can change it, and what gets stored.',
+        body: `
+<p>A Kotlin property is not just a field. It is a getter, a setter for a <code>var</code>, and usually a stored value behind them. You can write your own <code>get()</code> or <code>set(value)</code>. Inside them, <code>field</code> means the stored value.</p>
+<p>A custom setter lets you clamp or check what callers assign. <code>private set</code> keeps the getter public but lets only the class change the value. Callers can read the score; only <code>hit()</code> can raise it.</p>
+<p>Visibility modifiers decide who sees a name at all: <code>public</code> (the default), <code>private</code>, <code>protected</code> and <code>internal</code>. Start as private as you can and open up only what other code really needs.</p>`,
+        code: `class Player {
+    var health = 100
+        set(value) { field = value.coerceIn(0, 100) }
+
+    var score = 0
+        private set              // readable everywhere, writable only here
+
+    internal var debugName = "p1"   // visible in this module only
+
+    fun hit(points: Int) { score += points }
+}
+
+player.health = 140   // stored as 100
+player.score = 999    // doesn't compile: the setter is private`,
+        remember: 'Use field inside accessors, private set for read-only from outside, and the narrowest visibility that works.',
+        level: 'beginner',
+        terms: [
+          { term: 'Backing field', def: 'The stored value behind a property. Inside <code>get()</code> or <code>set()</code> you reach it with <code>field</code>.' },
+          { term: 'private set', def: 'Keeps the property readable with its normal visibility while only the declaring class can assign it.' },
+          { term: 'internal', def: 'Visible anywhere in the same module, such as one Gradle module, and hidden from other modules.' },
+          { term: 'protected', def: 'Visible in the class and its subclasses. Not allowed on top-level declarations.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Everyone may read <code>count</code>, but only the class may change it.', code: 'class Cart {\n    var count = 0\n        [[private]] set\n\n    fun add() { count += 1 }\n}', why: 'A modifier before <code>set</code> changes only the setter’s visibility. The getter stays public.' },
+          { type: 'bug', prompt: 'Setting <code>volume</code> crashes with StackOverflowError. Tap the line.', code: 'class Speaker {\n    var volume = 5\n        set(value) {\n            volume = value.coerceIn(0, 10)\n        }\n}', bug: 3, fix: '            field = value.coerceIn(0, 10)', why: 'Assigning <code>volume</code> inside its own setter calls the setter again, forever. Write to <code>field</code> instead.' },
+        ],
+        quiz: [
+          { q: 'What is the visibility of a declaration with no modifier?', options: ['<code>private</code>', '<code>internal</code>', '<code>public</code>'], a: 2, why: 'Kotlin uses <code>public</code> when you write no modifier.' },
+          { q: '<code>var score = 0; private set</code>. What can code outside the class do?', options: ['Read and write it', 'Read it only', 'Nothing'], a: 1, why: 'The getter keeps the property’s visibility. Only the setter is private.' },
+          { q: 'In an app with <code>:app</code> and <code>:core</code> modules, who sees an <code>internal</code> class in <code>:core</code>?', options: ['Only code in :core', 'Code in :app and :core', 'Only the same file'], a: 0, why: '<code>internal</code> means the same module. <code>:app</code> is a different module.' },
+        ],
+        deeper: [
+          {
+            title: 'The four visibility modifiers',
+            body: `<p>For a member of a class: <code>private</code> is visible inside the class only. <code>protected</code> adds subclasses, wherever they live. <code>internal</code> is visible to all code in the same module. <code>public</code> is visible everywhere.</p>
+<p>A module is a set of Kotlin files compiled together, such as one Gradle module. The <code>test</code> source set can also see <code>internal</code> declarations of <code>main</code>. At the top level of a file, <code>private</code> means “this file only”, and <code>protected</code> is not allowed.</p>`,
+            code: `// :core module
+open class Repo {
+    private val cache = mutableMapOf<String, User>()  // this class only
+    protected fun log(msg: String) { }                 // + subclasses
+    internal fun clearCache() { cache.clear() }        // all of :core
+    fun user(id: String): User? = cache[id]            // everyone
+}`,
+            visual(el) {
+              const SPOTS = [
+                ['Inside Repo', [1, 1, 1, 1]],
+                ['Other code in :core', [0, 0, 1, 1]],
+                ['Subclass in :app', [0, 1, 0, 1]],
+                ['Other code in :app', [0, 0, 0, 1]],
+              ];
+              const MODS = ['private', 'protected', 'internal', 'public'];
+              const cells = SPOTS.map(([name]) => h('div', { class: 'kt-pr-cell' }, h('span', { class: 'kt-pr-where' }, name), h('span', { class: 'kt-pr-mark' }, '?')));
+              const o = out();
+              const btns = MODS.map((m, i) => h('button', { class: 'cmd', 'aria-pressed': 'false', html: hl(`${m} fun clearCache()`), onclick: () => pick(i) }));
+              function pick(i) {
+                btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
+                cells.forEach((c, k) => {
+                  const ok = SPOTS[k][1][i];
+                  c.className = 'kt-pr-cell ' + (ok ? 'ok' : 'no');
+                  c.lastChild.textContent = ok ? 'can call it' : 'can’t see it';
+                  replay(c, 'pop-soft');
+                });
+                const n = SPOTS.filter(s => s[1][i]).length;
+                say(o, `${hl(MODS[i])} <span class="muted">visible from ${n} of 4 places</span>`);
+              }
+              el.append(h('div', { class: 'kt-pr-grid' }, cells), h('div', { class: 'controls' }, btns), o);
+              say(o, 'Pick a modifier for clearCache() and see who can call it.');
+            },
+          },
+          {
+            title: 'Backing property: _state and state',
+            body: `<p><code>private set</code> stops reassignment, but if the value is a mutable object, callers can still change what is inside it. The usual fix is two properties: a private mutable one with an underscore, and a public read-only one that returns it.</p>
+<p>You will see this in almost every ViewModel. The screen can collect <code>state</code> but has no way to push a value into it.</p>`,
+            code: `class CartViewModel : ViewModel() {
+    private val _state = MutableStateFlow(CartState())
+    val state: StateFlow<CartState> = _state
+
+    fun add(item: Item) {
+        _state.update { it.copy(items = it.items + item) }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>The JVM has fields and methods, not properties. <code>var health</code> becomes a private field <code>health</code> plus <code>getHealth()</code> and <code>setHealth(int)</code>. Your custom setter is the body of <code>setHealth</code>, and <code>field</code> compiles to the private field. With <code>private set</code>, <code>setHealth</code> is a private method.</p>
+<p>The JVM has no idea of a Kotlin module, so <code>internal</code> members compile to <code>public</code> bytecode with a mangled name. Kotlin code in other modules is blocked by the compiler, not by the JVM.</p>`,
+          code: `// var health = 100
+//     set(value) { field = value.coerceIn(0, 100) }
+// roughly what Java sees:
+private int health = 100;
+public final int getHealth() { return health; }
+public final void setHealth(int value) { health = RangesKt.coerceIn(value, 0, 100); }`,
+        },
+        mistakes: [
+          { title: 'Assigning the property inside its own setter', bad: 'var name = ""\n    set(value) { name = value.trim() }', good: 'var name = ""\n    set(value) { field = value.trim() }', why: '<code>name = …</code> inside the setter calls the setter again, which never ends and throws <code>StackOverflowError</code>. <code>field</code> writes the stored value directly.' },
+          { title: 'A public mutable list', bad: 'class Playlist {\n    val songs = mutableListOf<Song>()\n}\n\nplaylist.songs.clear()   // anyone can do this', good: 'class Playlist {\n    private val _songs = mutableListOf<Song>()\n    val songs: List<Song> get() = _songs\n    fun add(s: Song) { _songs.add(s) }\n}', why: '<code>val</code> stops reassignment, not changes inside the list. Expose a read-only type and keep the mutable one private.' },
+          { title: 'Java-style getter functions', bad: 'private var count = 0\nfun getCount(): Int = count', good: 'var count = 0\n    private set', why: 'A Kotlin property already has a getter. A hand-written <code>getCount()</code> is extra code, and callers have to remember to use the function instead of the property.' },
+        ],
+        visual(el) {
+          let health = 100, score = 0, busy = false;
+          const fH = h('span', { class: 'field' }, `health = ${health}`);
+          const fS = h('span', { class: 'field' }, `score = ${score}`);
+          const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'player: Player'), fH, fS,
+            h('span', { class: 'obj-addr' }, 'score: private set'));
+          const calc = h('div', { class: 'kt', html: hl('set(value) { field = value.coerceIn(0, 100) }') });
+          const setter = h('div', { class: 'machine kt-pr-machine' }, h('div', { class: 'gear' }), calc);
+          const o = out();
+          async function setHealth(v) {
+            if (busy) return; busy = true;
+            calc.innerHTML = hl(`field = (${v}).coerceIn(0, 100)`);
+            setter.classList.add('busy');
+            await sleep(600);
+            setter.classList.remove('busy');
+            if (!el.isConnected) return;
+            health = Math.min(100, Math.max(0, v));
+            fH.textContent = `health = ${health}`; fH.className = 'field changed'; replay(fH, 'pop');
+            calc.innerHTML = hl('set(value) { field = value.coerceIn(0, 100) }');
+            say(o, `${hl(`player.health = ${v}`)} <span class="muted">// stored ${health}${health !== v ? ', the setter clamped it' : ''}</span>`);
+            busy = false;
+          }
+          el.append(
+            h('div', { class: 'stage' }, obj, setter),
+            h('div', { class: 'controls' },
+              cmd('player.health = 140', () => setHealth(140)),
+              cmd('player.health = -5', () => setHealth(-5)),
+              cmd('player.health = 60', () => setHealth(60)),
+              cmd('player.score = 999', () => {
+                if (busy) return;
+                replay(obj, 'shake'); fS.className = 'field kt-stale';
+                say(o, '<span class="bad">error:</span> the setter of score is private, so code outside Player can’t assign it');
+              }),
+              cmd('player.hit(10)', () => {
+                if (busy) return;
+                score += 10; fS.textContent = `score = ${score}`; fS.className = 'field changed'; replay(fS, 'pop');
+                say(o, `${hl('player.hit(10)')} <span class="good">ok:</span> <span class="muted">code inside Player may use the private setter</span>`);
+              })),
+            o);
+          say(o, 'Assign values from outside the class and watch the setter decide what gets stored.');
         },
       },
 

@@ -174,6 +174,23 @@
 /* depth 2: AndroidView */
 .vw-d2a-spark { margin-left: auto; flex: none; display: flex; align-items: flex-end; gap: 3px; height: 24px; }
 .vw-d2a-spark i { display: block; width: 6px; border-radius: 2px; background: var(--accent); }
+/* promoted: ViewPager2 */
+.vw-vp-view { width: 100%; max-width: 240px; height: 130px; justify-self: center; overflow: hidden; border-radius: 16px; border: 6px solid var(--code-bg); background: var(--surface); }
+.vw-vp-strip { display: flex; height: 100%; transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.vw-vp-page { flex: 0 0 100%; display: grid; place-content: center; gap: 4px; text-align: center; font: 500 0.78rem var(--mono); color: var(--muted); }
+.vw-vp-page b { font: 800 1.2rem var(--display); color: var(--ink); }
+.vw-vp-chips { display: grid; gap: 4px; min-width: 0; }
+.vw-vp-chip { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font: 600 0.76rem var(--mono); min-width: 0; }
+.vw-vp-name { color: var(--ink); }
+.vw-vp-st { color: var(--muted); }
+.vw-vp-chip.vw-vp-resumed { border-color: var(--ok); background: var(--ok-soft); }
+.vw-vp-chip.vw-vp-resumed .vw-vp-st { color: var(--ok); }
+.vw-vp-chip.vw-vp-started { border-color: var(--accent); }
+.vw-vp-chip.vw-vp-started .vw-vp-st { color: var(--accent); }
+.vw-vp-chip.vw-vp-none, .vw-vp-chip.vw-vp-saved { opacity: 0.6; }
+.vw-vp-log { display: grid; gap: 4px; min-height: 1.6em; min-width: 0; }
+.vw-vp-ev { padding: 4px 10px; border-radius: 8px; background: var(--sunk); font: 600 0.76rem var(--mono); overflow-wrap: anywhere; }
+.vw-vp-ev.vw-vp-wrong { background: var(--err-soft); }
 `;
 
   // ─── Depth pass 2: xml, passes, diff, compose-in-views, android-view ─────────────────
@@ -1440,82 +1457,6 @@ binding.list.adapter = ContactAdapter(contacts) { openDetail(it.id) }`,
         ],
         deeper: [
           {
-            title: 'View types get their own pools',
-            body: `<p>A list with headers and contacts has two row layouts. Override <code>getItemViewType</code> and the adapter gets that type in <code>onCreateViewHolder</code>. The pool keeps holders per type, so a header holder is never handed to a contact row.</p>
-<p>Scroll down and watch: a contact that scrolls in can only take a contact holder. If that bin is empty, a new one is created even when a header holder is waiting.</p>`,
-            code: `override fun getItemViewType(position: Int) = when (items[position]) {
-    is Row.Header -> TYPE_HEADER
-    is Row.Person -> TYPE_PERSON
-}
-
-override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-    val inflater = LayoutInflater.from(parent.context)
-    return when (viewType) {
-        TYPE_HEADER -> HeaderHolder(ItemHeaderBinding.inflate(inflater, parent, false))
-        else -> PersonHolder(ItemContactBinding.inflate(inflater, parent, false))
-    }
-}`,
-            visual(el) {
-              const DATA = ['A', 'Ada', 'Alan', 'B', 'Barbara', 'D', 'Dennis', 'E', 'Edsger', 'F', 'Frances', 'G', 'Grace', 'H', 'Hedy', 'I', 'Ivan', 'J', 'Joan', 'K', 'Ken'];
-              const type = pos => (DATA[pos].length === 1 ? 'header' : 'person');
-              const SHOW = 5;
-              let top = 0, busy = false;
-              const made = { header: 0, person: 0 }, pools = { header: [], person: [] };
-              const rv = h('div', { class: 'vw-rv', 'aria-label': 'RecyclerView viewport' });
-              const poolEls = { header: h('div', { class: 'vw-pool' }), person: h('div', { class: 'vw-pool' }) };
-              const sH = stat('header holders', 0), sP = stat('person holders', 0);
-              const o = out();
-              const rows = [];
-              const chip = vh => h('span', { class: 'vw-vh ' + (vh[0] === 'H' ? 'c1' : 'c0') }, vh);
-              const rowEl = (vh, pos) => type(pos) === 'header'
-                ? h('div', { class: 'vw-row vw-hdr' }, chip(vh), h('span', {}, DATA[pos]))
-                : h('div', { class: 'vw-row' }, chip(vh), h('span', {}, DATA[pos]), h('span', { class: 'vw-pos' }, `pos ${pos}`));
-              const paintPools = () => Object.entries(poolEls).forEach(([k, p]) => p.replaceChildren(h('span', { class: 'vw-label' }, k), ...(pools[k].length ? pools[k].map(chip) : [h('span', { class: 'vw-note' }, 'empty')])));
-              function holder(pos) {
-                const k = type(pos);
-                if (pools[k].length) { const vh = pools[k].shift(); paintPools(); return { vh, msg: `<span class="good">reused</span> ${vh} from the ${k} pool` }; }
-                const vh = (k === 'header' ? 'H' : 'P') + (++made[k]);
-                (k === 'header' ? sH : sP).set(made[k]);
-                const other = k === 'header' ? 'person' : 'header';
-                return { vh, msg: `<span class="bad">created</span> ${vh}: the ${k} pool was empty` + (pools[other].length ? ` <span class="muted">// ${pools[other].length} ${other} holder${pools[other].length > 1 ? 's' : ''} can’t help</span>` : '') };
-              }
-              for (let p = 0; p < SHOW; p++) { const { vh } = holder(p); const r = { pos: p, vh, el: rowEl(vh, p) }; rows.push(r); rv.append(r.el); }
-              paintPools();
-              say(o, 'Headers and people use different layouts. Scroll down.');
-              async function scroll() {
-                if (busy) return false;
-                const pos = top + SHOW;
-                if (pos >= DATA.length) { replay(rv, 'shake'); say(o, '<span class="muted">// end of list</span>'); return false; }
-                busy = true;
-                const { vh, msg } = holder(pos);
-                const r = { pos, vh, el: rowEl(vh, pos) };
-                r.el.classList.add('drop-in'); rows.push(r); rv.append(r.el);
-                say(o, `${msg}, bind ${type(pos)} "${DATA[pos]}"`);
-                await sleep(320);
-                const gone = rows.shift(); gone.el.classList.add('leave');
-                await sleep(400);
-                gone.el.remove();
-                pools[type(gone.pos)].push(gone.vh); paintPools();
-                top++;
-                busy = false;
-                return el.isConnected;
-              }
-              let multi = false;
-              async function three() {
-                if (multi || busy) return; multi = true;
-                for (let i = 0; i < 3; i++) { if (!(await scroll())) break; await sleep(60); }
-                multi = false;
-              }
-              el.append(
-                h('div', { class: 'vw-split' },
-                  h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'On screen'), rv),
-                  h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'RecycledViewPool, one bin per type'), h('div', { class: 'vw-pools' }, poolEls.header, poolEls.person))),
-                h('div', { class: 'controls' }, act('Scroll down 1 row', scroll), act('Scroll down 3 rows', three)),
-                h('div', { class: 'vw-stats' }, sH, sP),
-                o);
-            },
-          },
-          {
             title: 'A small cache sits in front of the pool',
             body: `<p>A row that just scrolled off does not go straight to the pool. It first waits in a small cache, two holders by default, still bound to its position. Scroll back and that row returns as it was, with no <code>onBindViewHolder</code> at all.</p>
 <p>When the cache is full, its oldest holder moves to the pool and forgets its data. Anything from the pool must be bound again. That is why small back-and-forth scrolls are cheap.</p>`,
@@ -1705,6 +1646,186 @@ override fun onBindViewHolder(holder: RowHolder, position: Int) {
               act('Scroll up 1 row', () => scroll(-1)),
               act('Fling 8 rows', fling)),
             h('div', { class: 'vw-stats' }, sCreate, sBind, sItems),
+            o);
+        },
+      },
+
+      // 3b ────────────────────────────────────────────
+      {
+        id: 'view-types',
+        title: 'Multiple view types in one list',
+        tagline: 'Headers, rows and ads in one RecyclerView, each with its own layout and pool.',
+        level: 'intermediate',
+        body: `
+<p>Real lists mix rows that look different: a letter header above a group of contacts, a banner every twenty items, a footer. Each layout is a <em>view type</em>. Override <code>getItemViewType(position)</code> to return an Int for each position. RecyclerView passes that Int to <code>onCreateViewHolder</code>, so you inflate the right layout.</p>
+<p>The pool keeps a separate bin per view type. A header holder is never handed to a contact row, so <code>onBindViewHolder</code> can trust the holder’s class. If the contact bin is empty, a new contact holder is created, even when header holders are waiting.</p>
+<p>A sealed class for the rows keeps this tidy. Each subclass maps to one view type, and <code>when</code> makes the compiler check that every kind is handled.</p>`,
+        code: `sealed interface Row {
+    data class Header(val letter: Char) : Row
+    data class Person(val contact: Contact) : Row
+}
+
+class ContactsAdapter(private val rows: List<Row>) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    class HeaderHolder(val b: ItemHeaderBinding) : RecyclerView.ViewHolder(b.root)
+    class PersonHolder(val b: ItemContactBinding) : RecyclerView.ViewHolder(b.root)
+
+    override fun getItemViewType(position: Int) = when (rows[position]) {
+        is Row.Header -> R.layout.item_header      // a layout id is a unique Int
+        is Row.Person -> R.layout.item_contact
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            R.layout.item_header -> HeaderHolder(ItemHeaderBinding.inflate(inflater, parent, false))
+            else -> PersonHolder(ItemContactBinding.inflate(inflater, parent, false))
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val row = rows[position]) {
+            is Row.Header -> (holder as HeaderHolder).b.letter.text = row.letter.toString()
+            is Row.Person -> (holder as PersonHolder).b.name.text = row.contact.name
+        }
+    }
+
+    override fun getItemCount() = rows.size
+}`,
+        remember: 'One layout, one view type. The pool keeps a bin per type, so the holder always matches the row.',
+        terms: [
+          { term: 'View type', def: 'The Int that getItemViewType returns for a position. RecyclerView creates, pools and reuses holders separately for each one.' },
+          { term: 'getItemViewType', def: 'The adapter method that tells RecyclerView which kind of row sits at a position. The default returns 0 for every row.' },
+          { term: 'ConcatAdapter', def: 'An adapter that shows several adapters one after another in a single RecyclerView, such as a header adapter, a list adapter and a footer adapter.' },
+          { term: 'SpanSizeLookup', def: 'A GridLayoutManager callback that says how many columns a position takes, used to make headers span the full width.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Report the row kind, then inflate by it.', code: 'override fun [[getItemViewType]](position: Int) = when (rows[position]) {\n    is Row.Header -> R.layout.item_header\n    is Row.Person -> R.layout.item_contact\n}\n\noverride fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = when ([[viewType]]) {\n    R.layout.item_header -> HeaderHolder.create(parent)\n    else -> PersonHolder.create(parent)\n}', why: 'RecyclerView asks for the type of each position, then hands that same Int to <code>onCreateViewHolder</code> when it has no holder of that type to reuse.' },
+          { type: 'bug', prompt: 'Scrolling is slow and onCreateViewHolder runs for every single row. Tap the line.', code: 'override fun getItemViewType(position: Int): Int =\n    position\n\noverride fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =\n    if (viewType == TYPE_HEADER) HeaderHolder.create(parent) else PersonHolder.create(parent)', bug: 1, fix: '    if (rows[position] is Row.Header) TYPE_HEADER else TYPE_PERSON', why: 'Returning the position makes every row its own type with its own empty bin, so nothing is ever reused. Return one value per kind of layout.' },
+        ],
+        quiz: [
+          { q: 'A contact row scrolls in. The pool has 3 header holders and 0 contact holders. What happens?', options: ['A new contact holder is created', 'A header holder is rebound as a contact', 'The row waits for a contact holder'], a: 0, why: 'Holders are pooled per view type. A header holder never fits a contact row.' },
+          { q: 'What does the default <code>getItemViewType</code> return?', options: ['0 for every position', 'The position', 'The layout id of the row'], a: 0, why: 'By default the adapter assumes one view type. Override it once rows differ.' },
+          { q: 'Why model rows as a sealed interface?', options: ['<code>when</code> must handle every kind, so a new row type can’t be forgotten', 'RecyclerView requires it', 'It makes DiffUtil faster'], a: 0, why: 'An exhaustive <code>when</code> turns a missing branch into a compile error.' },
+        ],
+        deeper: [
+          {
+            title: 'One adapter per section: ConcatAdapter',
+            body: `<p>A header and a footer don’t have to live inside your list adapter. <code>ConcatAdapter</code> shows several adapters one after another in one RecyclerView. Each adapter keeps its own simple code, and by default each one gets its own view types and pools, so they can’t clash.</p>`,
+            code: `val header = ProfileHeaderAdapter(user)
+val posts = PostsAdapter()                 // any adapter, e.g. a ListAdapter
+val footer = LoadingFooterAdapter()
+
+binding.list.adapter = ConcatAdapter(header, posts, footer)
+
+posts.submitList(newPosts)                 // each part updates on its own`,
+          },
+          {
+            title: 'Full-width headers in a grid',
+            body: `<p>In a <code>GridLayoutManager</code>, every row takes one column by default, so a header squeezes into a single cell. A <code>SpanSizeLookup</code> returns how many columns a position takes. Give headers the full span count.</p>`,
+            code: `val grid = GridLayoutManager(requireContext(), 3)
+grid.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+    override fun getSpanSize(position: Int) =
+        if (adapter.getItemViewType(position) == R.layout.item_header) grid.spanCount else 1
+}
+binding.photos.layoutManager = grid`,
+          },
+          {
+            title: 'With ListAdapter, diff each kind on its own terms',
+            body: `<p><code>ListAdapter</code>, from the next lesson, works the same way with several types. The <code>DiffUtil.ItemCallback</code> just has to compare rows of the same kind: two headers by their letter, two people by their id. A header and a person are never the same item.</p>`,
+            code: `object RowDiff : DiffUtil.ItemCallback<Row>() {
+    override fun areItemsTheSame(old: Row, new: Row) = when {
+        old is Row.Header && new is Row.Header -> old.letter == new.letter
+        old is Row.Person && new is Row.Person -> old.contact.id == new.contact.id
+        else -> false
+    }
+    override fun areContentsTheSame(old: Row, new: Row) = old == new
+}`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'Casting every holder to one class',
+            bad: `override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+    val h = holder as PersonHolder              // crashes on the first header
+    h.b.name.text = (rows[position] as Row.Person).contact.name
+}`,
+            good: `override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+    when (holder) {
+        is HeaderHolder -> holder.bind(rows[position] as Row.Header)
+        is PersonHolder -> holder.bind(rows[position] as Row.Person)
+    }
+}`,
+            why: 'Holders come in several classes now. Branch on the holder, or on the row kind, so each one binds its own layout.',
+          },
+          {
+            title: 'Hand-picked numbers that collide',
+            bad: `const val TYPE_HEADER = 1
+const val TYPE_PERSON = 1   // copy-paste: same number`,
+            good: `override fun getItemViewType(position: Int) = when (rows[position]) {
+    is Row.Header -> R.layout.item_header
+    is Row.Person -> R.layout.item_contact
+}`,
+            why: 'Two kinds with the same number share one pool, and a header holder gets bound as a person. Layout ids are unique by construction.',
+          },
+        ],
+        visual(el) {
+          const DATA = ['A', 'Ada', 'Alan', 'B', 'Barbara', 'D', 'Dennis', 'E', 'Edsger', 'F', 'Frances', 'G', 'Grace', 'H', 'Hedy', 'I', 'Ivan', 'J', 'Joan', 'K', 'Ken'];
+          const type = pos => (DATA[pos].length === 1 ? 'header' : 'person');
+          const SHOW = 5;
+          let top = 0, busy = false;
+          const made = { header: 0, person: 0 }, pools = { header: [], person: [] };
+          const rv = h('div', { class: 'vw-rv', 'aria-label': 'RecyclerView viewport' });
+          const poolEls = { header: h('div', { class: 'vw-pool' }), person: h('div', { class: 'vw-pool' }) };
+          const sH = stat('header holders', 0), sP = stat('person holders', 0);
+          const o = out();
+          const rows = [];
+          const chip = vh => h('span', { class: 'vw-vh ' + (vh[0] === 'H' ? 'c1' : 'c0') }, vh);
+          const rowEl = (vh, pos) => type(pos) === 'header'
+            ? h('div', { class: 'vw-row vw-hdr' }, chip(vh), h('span', {}, DATA[pos]))
+            : h('div', { class: 'vw-row' }, chip(vh), h('span', {}, DATA[pos]), h('span', { class: 'vw-pos' }, `pos ${pos}`));
+          const paintPools = () => Object.entries(poolEls).forEach(([k, p]) => p.replaceChildren(h('span', { class: 'vw-label' }, k), ...(pools[k].length ? pools[k].map(chip) : [h('span', { class: 'vw-note' }, 'empty')])));
+          function holder(pos) {
+            const k = type(pos);
+            if (pools[k].length) { const vh = pools[k].shift(); paintPools(); return { vh, msg: `<span class="good">reused</span> ${vh} from the ${k} pool` }; }
+            const vh = (k === 'header' ? 'H' : 'P') + (++made[k]);
+            (k === 'header' ? sH : sP).set(made[k]);
+            const other = k === 'header' ? 'person' : 'header';
+            return { vh, msg: `<span class="bad">created</span> ${vh}: the ${k} pool was empty` + (pools[other].length ? ` <span class="muted">// ${pools[other].length} ${other} holder${pools[other].length > 1 ? 's' : ''} can’t help</span>` : '') };
+          }
+          for (let p = 0; p < SHOW; p++) { const { vh } = holder(p); const r = { pos: p, vh, el: rowEl(vh, p) }; rows.push(r); rv.append(r.el); }
+          paintPools();
+          say(o, 'Headers and people use different layouts. Scroll down.');
+          async function scroll() {
+            if (busy) return false;
+            const pos = top + SHOW;
+            if (pos >= DATA.length) { replay(rv, 'shake'); say(o, '<span class="muted">// end of list</span>'); return false; }
+            busy = true;
+            const { vh, msg } = holder(pos);
+            const r = { pos, vh, el: rowEl(vh, pos) };
+            r.el.classList.add('drop-in'); rows.push(r); rv.append(r.el);
+            say(o, `${msg}, bind ${type(pos)} "${DATA[pos]}"`);
+            await sleep(320);
+            const gone = rows.shift(); gone.el.classList.add('leave');
+            await sleep(400);
+            gone.el.remove();
+            pools[type(gone.pos)].push(gone.vh); paintPools();
+            top++;
+            busy = false;
+            return el.isConnected;
+          }
+          let multi = false;
+          async function three() {
+            if (multi || busy) return; multi = true;
+            for (let i = 0; i < 3; i++) { if (!(await scroll())) break; await sleep(60); }
+            multi = false;
+          }
+          el.append(
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'On screen'), rv),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'RecycledViewPool, one bin per type'), h('div', { class: 'vw-pools' }, poolEls.header, poolEls.person))),
+            h('div', { class: 'controls' }, act('Scroll down 1 row', scroll), act('Scroll down 3 rows', three)),
+            h('div', { class: 'vw-stats' }, sH, sP),
             o);
         },
       },
@@ -2002,23 +2123,6 @@ class DetailFragment : Fragment() {
                 o);
             },
           },
-          {
-            title: 'Pages in a ViewPager2 stop at STARTED',
-            body: `<p><code>FragmentStateAdapter</code> keeps neighbour pages alive, but it caps every page except the current one at STARTED with <code>setMaxLifecycle</code>. Only the visible page reaches RESUMED.</p>
-<p>So <code>onResume</code> means “this page is the one on screen”. Log a page view or start a video there, not in <code>onViewCreated</code>, which runs for pages the user hasn’t seen yet.</p>`,
-            code: `class ArticlePageFragment : Fragment(R.layout.page_article) {
-    override fun onResume() {
-        super.onResume()
-        analytics.pageView(requireArguments().getLong("id"))   // only the visible page
-    }
-}
-
-binding.pager.adapter = object : FragmentStateAdapter(this) {
-    override fun getItemCount() = ids.size
-    override fun createFragment(position: Int) =
-        ArticlePageFragment().apply { arguments = bundleOf("id" to ids[position]) }
-}`,
-          },
         ],
         underHood: {
           body: `<p>When the Activity saves state, the FragmentManager writes a record for each Fragment: its class name, its <code>arguments</code>, its saved state and its place in the back stack. After a rotation or process death, it rebuilds each one from that record through a <code>FragmentFactory</code>. The default factory calls the no-argument constructor by reflection, which is why a Fragment must have one unless you install your own factory.</p>
@@ -2142,6 +2246,180 @@ replace<DetailFragment>(R.id.container, args = bundleOf("userId" to 42L))`,
               cmd('popBackStack()', pop)),
             h('div', { class: 'vw-stats' }, sObs, sGen),
             h('p', { class: 'tip' }, 'Turn the switch off, then go to B and back a few times.'));
+        },
+      },
+
+      // 5b ────────────────────────────────────────────
+      {
+        id: 'viewpager',
+        title: 'ViewPager2 and FragmentStateAdapter',
+        tagline: 'Swipe between Fragment pages, and know which one the user is looking at.',
+        level: 'intermediate',
+        body: `
+<p><code>ViewPager2</code> shows pages the user swipes between, like onboarding screens or tabs of a news app. It is built on RecyclerView, so it takes an adapter. For Fragment pages, extend <code>FragmentStateAdapter</code>: <code>getItemCount()</code> returns the number of pages and <code>createFragment(position)</code> builds a new Fragment for a page.</p>
+<p>The adapter keeps pages near the current one alive, so a swipe shows them at once. It caps every page except the current one at STARTED with <code>setMaxLifecycle</code>. Only the page on screen reaches RESUMED. Pages that scroll far away are removed, and their state is saved for when they come back.</p>
+<p>So <code>onResume</code> means “this page is the one on screen”. Log a page view or start a video there, not in <code>onViewCreated</code>, which also runs for neighbour pages nobody has seen yet. For new Compose screens, <code>HorizontalPager</code> does the same job.</p>`,
+        code: `class ArticlePagerFragment : Fragment(R.layout.fragment_pager) {
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        val pager = view.findViewById<ViewPager2>(R.id.pager)
+        pager.adapter = ArticlePagerAdapter(this, ids = listOf(101L, 102L, 103L))
+    }
+}
+
+class ArticlePagerAdapter(fragment: Fragment, private val ids: List<Long>) : FragmentStateAdapter(fragment) {
+    override fun getItemCount() = ids.size
+    override fun createFragment(position: Int): Fragment =
+        ArticlePageFragment().apply { arguments = bundleOf("id" to ids[position]) }
+}
+
+class ArticlePageFragment : Fragment(R.layout.page_article) {
+    override fun onResume() {
+        super.onResume()
+        analytics.pageView(requireArguments().getLong("id"))   // only the visible page
+    }
+}`,
+        remember: 'Neighbour pages stop at STARTED. Only the page on screen is RESUMED, so react to “visible” in onResume.',
+        terms: [
+          { term: 'ViewPager2', def: 'A RecyclerView-based widget that shows pages the user swipes between, horizontally or vertically.' },
+          { term: 'FragmentStateAdapter', def: 'The ViewPager2 adapter for Fragment pages. It creates them with createFragment, saves the state of removed pages and caps off-screen pages at STARTED.' },
+          { term: 'setMaxLifecycle', def: 'A FragmentTransaction call that keeps a Fragment from moving past a given state, such as STARTED.' },
+          { term: 'TabLayoutMediator', def: 'A Material class that links a TabLayout to a ViewPager2, so tabs and pages stay in sync.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Complete the adapter and link the tabs.', code: 'class PagesAdapter(f: Fragment) : FragmentStateAdapter(f) {\n    override fun getItemCount() = 3\n    override fun [[createFragment]](position: Int): Fragment = PageFragment.newInstance(position)\n}\n\nTabLayoutMediator(tabs, pager) { tab, position ->\n    tab.text = titles[position]\n}.[[attach]]()', why: '<code>createFragment</code> must build a new Fragment for the page. The mediator does nothing until you call <code>attach()</code>.' },
+          { type: 'bug', prompt: 'This pager lives inside a Fragment. After a few trips through the back stack, pages show stale or duplicate content. Tap the line.', code: 'class HomeFragment : Fragment(R.layout.fragment_home) {\n    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n        val pager = view.findViewById<ViewPager2>(R.id.pager)\n        pager.adapter = object : FragmentStateAdapter(requireActivity()) {\n            override fun getItemCount() = 3\n            override fun createFragment(position: Int) = PageFragment.newInstance(position)\n        }\n    }\n}', bug: 3, fix: '        pager.adapter = object : FragmentStateAdapter(this) {', why: 'With the Activity, the pages go into the Activity’s FragmentManager and outlive this Fragment’s view. Pass the Fragment, so pages are child Fragments tied to it.' },
+        ],
+        quiz: [
+          { q: 'Page 2 of 5 is on screen. Pages 1 and 3 are alive next to it. Which page is RESUMED?', options: ['Only page 2', 'Pages 1, 2 and 3', 'None, ViewPager2 pages stay at STARTED'], a: 0, why: 'FragmentStateAdapter keeps the current page RESUMED and caps the others at STARTED.' },
+          { q: 'Where should a page record a “page viewed” event?', options: ['<code>onResume</code>', '<code>onViewCreated</code>', '<code>createFragment</code>'], a: 0, why: '<code>onViewCreated</code> also runs for neighbours the user has not seen. <code>onResume</code> runs when the page becomes the current one.' },
+          { q: 'Your pages can be added and removed while the pager is shown. What do you override?', options: ['<code>getItemId</code> and <code>containsItem</code>', 'Only <code>getItemCount</code>', '<code>onBindViewHolder</code>'], a: 0, why: 'The defaults only work for collections that never add, move or remove items. Stable ids let the adapter keep the right Fragment for each page.' },
+        ],
+        deeper: [
+          {
+            title: 'Tabs: TabLayoutMediator',
+            body: `<p>A <code>TabLayout</code> above the pager is the usual way to show where you are. <code>TabLayoutMediator</code> links the two: a tap on a tab scrolls the pager, and a swipe selects the tab. You only set each tab’s text or icon. For many tabs, set <code>app:tabMode="scrollable"</code>.</p>`,
+            code: `val titles = listOf("Gündem", "Spor", "Ekonomi")
+TabLayoutMediator(binding.tabs, binding.pager) { tab, position ->
+    tab.text = titles[position]
+}.attach()`,
+          },
+          {
+            title: 'Pages that change need stable ids',
+            body: `<p>By default the adapter uses the position as the page’s id. That only works for collections that never add, move or remove items. Remove page 2 and the Fragment that was page 3 can be shown with the wrong content, because the adapter matches Fragments by id.</p>
+<p>Override <code>getItemId</code> to return a stable id for each page, and <code>containsItem</code> to say whether that id still exists. Always override both together.</p>`,
+            code: `class TopicsAdapter(f: Fragment) : FragmentStateAdapter(f) {
+    var topics: List<Topic> = emptyList()
+        set(value) { field = value; notifyDataSetChanged() }
+
+    override fun getItemCount() = topics.size
+    override fun getItemId(position: Int) = topics[position].id
+    override fun containsItem(itemId: Long) = topics.any { it.id == itemId }
+    override fun createFragment(position: Int) = TopicFragment.newInstance(topics[position].id)
+}`,
+          },
+          {
+            title: 'React to the page from the host',
+            body: `<p>Sometimes the host needs to know the page, not the page itself: to change the toolbar title or show a “Next” button on the last onboarding step. Register an <code>OnPageChangeCallback</code> and use <code>onPageSelected</code>. Unregister it when the view goes away.</p>`,
+            code: `private val pageCallback = object : ViewPager2.OnPageChangeCallback() {
+    override fun onPageSelected(position: Int) {
+        binding.next.text = if (position == lastIndex) "Başla" else "İleri"
+    }
+}
+
+override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    binding.pager.registerOnPageChangeCallback(pageCallback)
+}
+
+override fun onDestroyView() {
+    binding.pager.unregisterOnPageChangeCallback(pageCallback)
+    super.onDestroyView()
+}`,
+          },
+        ],
+        mistakes: [
+          {
+            title: 'Logging the page in onViewCreated',
+            bad: `override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    analytics.pageView(articleId)   // also runs for the neighbour pages
+}`,
+            good: `override fun onResume() {
+    super.onResume()
+    analytics.pageView(articleId)   // only when this page is on screen
+}`,
+            why: 'The adapter creates neighbour pages before the user swipes to them. Their views exist, but they stay at STARTED. RESUMED is the signal for “visible”.',
+          },
+          {
+            title: 'Keeping Fragment instances in a list',
+            bad: `private val pages = listOf(NewsFragment(), SportsFragment())
+override fun createFragment(position: Int) = pages[position]`,
+            good: `override fun createFragment(position: Int): Fragment = when (position) {
+    0 -> NewsFragment()
+    else -> SportsFragment()
+}`,
+            why: 'After a rotation the adapter restores its own Fragments from saved state. Instances you built yourself are not the ones on screen, so calls on them do nothing. Create a new Fragment each time it is asked.',
+          },
+        ],
+        visual(el) {
+          const PAGES = ['Gündem', 'Spor', 'Ekonomi', 'Teknoloji', 'Kültür', 'Hava'];
+          let cur = 0, mode = 'resume', busy = false;
+          const state = PAGES.map(() => 'none');
+          const logged = [];
+          const strip = h('div', { class: 'vw-vp-strip' }, PAGES.map((p, i) => h('div', { class: 'vw-vp-page' }, h('b', {}, p), h('span', {}, `page ${i}`))));
+          const view = h('div', { class: 'vw-vp-view', role: 'img', 'aria-label': 'ViewPager2 viewport' }, strip);
+          const chips = PAGES.map(p => { const st = h('span', { class: 'vw-vp-st' }); return { st, el: h('div', { class: 'vw-vp-chip' }, h('span', { class: 'vw-vp-name' }, p), st) }; });
+          const log = h('div', { class: 'vw-vp-log' });
+          const o = out();
+          const sLog = stat('pageView events', 0);
+          const LABEL = { none: 'not created', STARTED: 'STARTED', RESUMED: 'RESUMED', saved: 'removed, state saved' };
+          function paintChips() {
+            chips.forEach((c, i) => { c.st.textContent = LABEL[state[i]]; c.el.className = 'vw-vp-chip vw-vp-' + state[i].toLowerCase(); });
+          }
+          function event(i, why) {
+            logged.push(PAGES[i]); sLog.set(logged.length);
+            log.append(h('div', { class: 'vw-vp-ev drop-in' + (i === cur ? '' : ' vw-vp-wrong') }, `pageView("${PAGES[i]}")`, h('span', { class: 'muted' }, ` // ${why}`)));
+            while (log.children.length > 4) log.firstChild.remove();
+          }
+          function settle(first) {
+            const prev = state.slice();
+            PAGES.forEach((_, i) => {
+              const d = Math.abs(i - cur);
+              state[i] = d === 0 ? 'RESUMED' : d === 1 ? 'STARTED' : (prev[i] === 'none' ? 'none' : 'saved');
+            });
+            PAGES.forEach((_, i) => {
+              const born = (prev[i] === 'none' || prev[i] === 'saved') && (state[i] === 'STARTED' || state[i] === 'RESUMED');
+              if (mode === 'view' && born) event(i, i === cur ? 'onViewCreated, on screen' : 'onViewCreated, not on screen');
+              if (mode === 'resume' && state[i] === 'RESUMED' && prev[i] !== 'RESUMED') event(i, 'onResume');
+            });
+            strip.style.transform = `translateX(${-cur * 100}%)`;
+            paintChips();
+            if (!first) chips.forEach((c, i) => { if (prev[i] !== state[i]) replay(c.el, 'pop-soft'); });
+          }
+          async function swipe(d) {
+            if (busy) return;
+            const n = cur + d;
+            if (n < 0 || n >= PAGES.length) { replay(view, 'shake'); return; }
+            busy = true; cur = n; settle(false);
+            const wrong = log.querySelectorAll('.vw-vp-wrong').length;
+            say(o, `Now on <b>${PAGES[cur]}</b>. ${mode === 'view' && wrong ? `<span class="bad">${wrong} event${wrong > 1 ? 's' : ''} for pages nobody saw</span>` : '<span class="good">one event per page actually shown</span>'}`);
+            await sleep(380); busy = false;
+          }
+          const btns = [cmd('analytics in onViewCreated()', () => setMode('view')), cmd('analytics in onResume()', () => setMode('resume'))];
+          function setMode(m) {
+            if (busy) return;
+            mode = m; cur = 0; state.fill('none'); logged.length = 0; sLog.set(0); log.replaceChildren();
+            btns.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 0) === (m === 'view'))));
+            settle(true);
+            say(o, m === 'view' ? 'The pager opened. Page 0 and its neighbour were created. Swipe right.' : 'Logging in onResume. Swipe and compare the event list.');
+          }
+          setMode('view');
+          el.append(
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'ViewPager2'), view, h('div', { class: 'controls' }, act('‹ Swipe back', () => swipe(-1)), act('Swipe next ›', () => swipe(1)))),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'Fragment state per page'), h('div', { class: 'vw-vp-chips' }, chips.map(c => c.el)))),
+            h('div', { class: 'controls' }, btns),
+            h('div', { class: 'vw-stats' }, sLog),
+            log,
+            o);
         },
       },
 

@@ -139,6 +139,34 @@
 .plt-ps2-url { font: 600 0.7rem var(--mono); padding: 5px 8px; border-radius: 8px; background: var(--sunk); overflow-wrap: anywhere; }
 .plt-ps2-url.plt-ps2-evil { background: var(--err-soft); color: var(--err); }
 .plt-ps2-crash { border: 2px solid var(--err); }
+
+/* promoted: styles and actions */
+.plt-sty-note { gap: 3px; }
+.plt-sty-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; min-width: 0; }
+.plt-sty-chev { all: unset; cursor: pointer; font: 700 0.8rem var(--mono); color: var(--accent); padding: 0 4px; border-radius: 6px; }
+.plt-sty-chev:focus-visible { outline: 2px solid var(--accent); }
+.plt-sty-one { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.plt-sty-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.plt-sty-row > span:first-child { flex: 1; min-width: 0; }
+.plt-sty-thumb { flex: none; width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--warm)); }
+.plt-sty-pic { height: 64px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--warm)); }
+.plt-sty-msg { display: block; font-size: 0.78rem; }
+.plt-sty-acts { display: flex; flex-wrap: wrap; gap: 4px 10px; padding-top: 4px; margin-top: 3px; border-top: 1px solid var(--line); }
+.plt-sty-act { all: unset; cursor: pointer; font: 700 0.72rem var(--body); color: var(--accent); }
+.plt-sty-act:focus-visible { outline: 2px solid var(--accent); }
+.plt-sty-input { display: flex; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 8px; background: var(--sunk); min-width: 0; font-size: 0.76rem; }
+.plt-sty-input span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.plt-sty-spin { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+.plt-sty-bar { height: 6px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
+.plt-sty-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
+
+/* promoted: App Links */
+.plt-al-hosts { display: grid; gap: 8px; min-width: 0; }
+.plt-al-host { display: grid; gap: 6px; padding: 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.2s; }
+.plt-al-host.plt-al-ok { border-color: var(--ok); }
+.plt-al-host.plt-al-bad { border-color: var(--err); }
+.plt-al-name { font: 700 0.8rem var(--mono); overflow-wrap: anywhere; }
+.plt-al-wrap .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
 `;
 
   // ─── Depth pass 2: channels, deep links ────────────────────────────────
@@ -504,10 +532,525 @@ fun parse(uri: Uri?): Route {
     ],
   };
 
+  // ─── Promoted: notification styles and actions ─────────────────────────
+  const stylesLesson = {
+    id: 'styles',
+    title: 'Notification styles and actions',
+    tagline: 'A style decides what the expanded notification shows. Actions let the user answer without opening the app.',
+    level: 'intermediate',
+    body: `
+<p>A plain notification shows one line of text and cuts the rest. <code>setStyle()</code> gives it an expanded view that fits the content: <code>BigTextStyle</code> for a long paragraph, <code>BigPictureStyle</code> for an image, <code>InboxStyle</code> for a list of short lines (only the first six show), and <code>MessagingStyle</code> for a chat.</p>
+<p><code>MessagingStyle</code> takes a <code>Person</code> for "me" and one per message, and it ignores <code>setContentTitle()</code> and <code>setContentText()</code>. Set a conversation title only for group chats: the system reads it as a hint that the chat is a group.</p>
+<p><code>addAction()</code> adds a button with its own <code>PendingIntent</code>. A notification shows up to three of them. Don't repeat what a tap on the notification already does. An action can also carry a <code>RemoteInput</code>, which turns it into an inline reply box.</p>`,
+    code: `fun reportNotification(context: Context, id: Int, report: Report): Notification =
+    NotificationCompat.Builder(context, NEWS_CHANNEL)
+        .setSmallIcon(R.drawable.ic_stat_news)
+        .setContentTitle(report.title)
+        .setContentText(report.summary)                       // the collapsed line
+        .setStyle(NotificationCompat.BigTextStyle().bigText(report.fullText))
+        .setContentIntent(openArticle(context, report.id))     // the tap opens the article
+        .addAction(R.drawable.ic_bookmark, context.getString(R.string.read_later),
+            PendingIntent.getBroadcast(context, id,
+                Intent(context, ReadLaterReceiver::class.java).putExtra("id", report.id),
+                PendingIntent.FLAG_IMMUTABLE))
+        .setAutoCancel(true)
+        .build()
+
+// A chat: MessagingStyle ignores setContentTitle and setContentText.
+val me = Person.Builder().setName("Sen").build()
+val ayse = Person.Builder().setName("Ayşe").build()
+val chat = NotificationCompat.MessagingStyle(me)
+    .addMessage("Maç kaçta?", t1, ayse)
+    .addMessage("21:00, geliyor musun?", t2, me)
+    // no setConversationTitle(): this is a one-on-one chat`,
+    remember: 'A style for the content, up to three actions, none that repeat the tap.',
+    deeper: [
+      {
+        title: 'Inline reply with RemoteInput',
+        body: `<p>A reply action carries a <code>RemoteInput</code> with a result key. When the user sends text, the system writes it into the action's Intent. That is why the reply <code>PendingIntent</code> must be <code>FLAG_MUTABLE</code> and explicit: an immutable one can't be filled in, and your receiver gets no text. Give each conversation its own request code, or replies can land in the wrong chat.</p>
+<p>In the receiver, read the text with <code>RemoteInput.getResultsFromIntent()</code>. Then post the notification again with the same id. Until you do, the reply box keeps spinning, and the user can't tell whether the message went out.</p>`,
+        code: `const val KEY_TEXT_REPLY = "key_text_reply"
+
+val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Yanıtla").build()
+val replyIntent = PendingIntent.getBroadcast(context, conversationId,   // one per conversation
+    Intent(context, ReplyReceiver::class.java).putExtra("chat", conversationId),
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)    // the system adds the text
+val reply = NotificationCompat.Action.Builder(R.drawable.ic_reply, "Yanıtla", replyIntent)
+    .addRemoteInput(remoteInput)
+    .build()
+
+class ReplyReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT_REPLY) ?: return
+        val chat = intent.getIntExtra("chat", 0)
+        ChatWork.send(context, chat, text.toString())
+        // Same id: replaces the spinning reply box with the updated conversation.
+        NotificationManagerCompat.from(context).notify(chat, chatNotification(context, chat))
+    }
+}`,
+        visual(el) {
+          let mutable = true, update = true, phase = 'idle';
+          const msgs = [['Ayşe', 'Maç kaçta?'], ['Sen', '21:00, geliyor musun?'], ['Ayşe', 'Bilet sende mi?']];
+          const ph = phone();
+          const o = out();
+          function paint() {
+            const kids = [h('div', { class: 'plt-sty-head' }, h('span', { class: 'plt-note-ch' }, 'chat · Ayşe'))];
+            msgs.forEach(([who, t]) => kids.push(h('span', { class: 'plt-sty-msg' }, h('b', {}, who + ': '), t)));
+            if (phase === 'idle') kids.push(h('div', { class: 'plt-sty-acts' }, h('button', { class: 'plt-sty-act', onclick: openBox }, 'Yanıtla'), h('button', { class: 'plt-sty-act', onclick: () => say(o, 'Mark as read: a second action. Try Yanıtla.') }, 'Okundu')));
+            if (phase === 'typing') kids.push(h('div', { class: 'plt-sty-input drop-in' }, h('span', {}, 'Evet, bende!'), h('button', { class: 'plt-sty-act', onclick: send }, 'Gönder')));
+            if (phase === 'sending') kids.push(h('div', { class: 'plt-sty-input' }, h('span', {}, 'Evet, bende!'), h('span', { class: 'plt-sty-spin', 'aria-label': 'sending' })));
+            ph.screen.replaceChildren(h('p', { class: 'plt-shade-title' }, 'Notification shade'), h('div', { class: 'plt-note plt-sty-note' }, kids));
+          }
+          function openBox() { if (phase !== 'idle') return; phase = 'typing'; paint(); say(o, 'The reply box is open. Tap Gönder on the phone.'); }
+          async function send() {
+            if (phase !== 'typing') return;
+            phase = 'sending'; paint();
+            say(o, 'The system puts the typed text into the reply Intent and sends the PendingIntent.');
+            await sleep(700); if (!el.isConnected) return;
+            if (!mutable) {
+              o.append(h('div', { class: 'line drop-in', html: `<span class="bad">getResultsFromIntent() = null.</span> An immutable PendingIntent can’t be filled in, so the text never arrived. The receiver returns and the box keeps spinning.` }));
+              replay(ph.dev, 'shake'); return;
+            }
+            o.append(h('div', { class: 'line drop-in', html: `<span class="good">ReplyReceiver:</span> text = "Evet, bende!" → ChatWork.send()` }));
+            await sleep(700); if (!el.isConnected) return;
+            if (!update) {
+              o.append(h('div', { class: 'line drop-in', html: '<span class="bad">no notify() after the reply.</span> The message went out, but the box spins on. The user may send it twice.' }));
+              replay(ph.dev, 'shake'); return;
+            }
+            msgs.push(['Sen', 'Evet, bende!']); while (msgs.length > 4) msgs.shift();
+            phase = 'idle'; paint();
+            o.append(h('div', { class: 'line drop-in', html: '<span class="good">notify(chat, updated)</span> with the same id. The reply shows in the conversation.' }));
+          }
+          function reset() { phase = 'idle'; paint(); say(o, 'Ayşe wrote. Reply from the notification.'); }
+          const tm = toggle('plt-sty-mut', 'reply PendingIntent is FLAG_MUTABLE', true, v => { mutable = v; reset(); });
+          const tu = toggle('plt-sty-upd', 'notify() again after the reply', true, v => { update = v; reset(); });
+          reset();
+          el.append(h('div', { class: 'plt-split' },
+            h('div', { class: 'plt-col' }, tm.el, tu.el, h('div', { class: 'controls plt-row' }, act('Reset', reset)), o),
+            ph.dev));
+        },
+      },
+      {
+        title: 'Progress that doesn’t buzz every time',
+        body: `<p>For a download or an upload, call <code>setProgress(max, progress, false)</code> and post the same id again as the work moves. Use <code>setProgress(0, 0, true)</code> while you don't know the size yet. When it finishes, <code>setProgress(0, 0, false)</code> removes the bar.</p>
+<p>Every post on a channel that makes sound would alert again. <code>setOnlyAlertOnce(true)</code> makes only the first post alert. Don't post too often either: the system rate-limits updates, and many posts within one second can be dropped. A few steps per second is plenty.</p>`,
+        code: `val builder = NotificationCompat.Builder(context, DOWNLOADS_CHANNEL)
+    .setSmallIcon(R.drawable.ic_stat_download)
+    .setContentTitle("Bölüm 12 indiriliyor")
+    .setOngoing(true)
+    .setOnlyAlertOnce(true)          // sound and vibration on the first post only
+
+downloads.collect { p ->
+    builder.setProgress(100, p.percent, false)
+    manager.notify(DOWNLOAD_ID, builder.build())   // same id: an update, not a new card
+}
+builder.setContentTitle("İndirme tamamlandı")
+    .setProgress(0, 0, false)                      // removes the bar
+    .setOngoing(false)
+manager.notify(DOWNLOAD_ID, builder.build())`,
+        visual(el) {
+          let once = true, busy = false, alerts = 0;
+          const ph = phone();
+          const bar = h('span');
+          const title = h('b', {}, 'Bölüm 12');
+          const pct = h('span', {}, 'Not started');
+          const card = h('div', { class: 'plt-note plt-sty-note' }, h('span', { class: 'plt-note-ch' }, 'downloads · DEFAULT'), title, pct, h('div', { class: 'plt-sty-bar' }, bar));
+          ph.screen.append(h('p', { class: 'plt-shade-title' }, 'Notification shade'), card);
+          const count = tag('alerts: 0');
+          const o = out();
+          async function run() {
+            if (busy) return; busy = true; alerts = 0;
+            try {
+              title.textContent = 'Bölüm 12 indiriliyor'; bar.parentElement.hidden = false;
+              say(o, 'Posting an update every 20%.');
+              for (let p = 0; p <= 100; p += 20) {
+                bar.style.width = p + '%'; pct.textContent = p + '%';
+                if (p === 0 || !once) { alerts++; replay(ph.dev, 'shake'); }
+                count.textContent = `alerts: ${alerts}`; count.className = 'plt-tag ' + (alerts > 1 ? 'plt-no' : 'plt-ok');
+                await sleep(550); if (!el.isConnected) return;
+              }
+              title.textContent = 'İndirme tamamlandı'; pct.textContent = 'Tap to watch'; bar.parentElement.hidden = true; replay(card, 'pop');
+              o.append(h('div', { class: 'line drop-in', html: once ? '<span class="good">One alert</span> for the whole download. setProgress(0, 0, false) removed the bar.' : `<span class="bad">${alerts} alerts</span> for one download. Each update buzzed the phone.` }));
+            } finally { busy = false; }
+          }
+          const t = toggle('plt-sty-once', 'setOnlyAlertOnce(true)', true, v => { once = v; });
+          o.innerHTML = 'Start a download. The channel makes sound.';
+          el.append(h('div', { class: 'plt-split' },
+            h('div', { class: 'plt-col' }, t.el, h('div', { class: 'controls plt-row' }, cmd('notify(DOWNLOAD_ID, builder.build())', run)), h('div', { class: 'plt-group' }, count), o),
+            ph.dev));
+        },
+      },
+      {
+        title: 'Live Updates on Android 16',
+        body: `<p>Android 16 added <code>ProgressStyle</code> for start-to-end journeys like a delivery or a ride, with segments and milestone points on the bar. It also added Live Updates: a promoted notification that sits at the top of the shade and the lock screen and shows as a chip in the status bar.</p>
+<p>To be promoted, the notification must be ongoing, have a title, request promotion, and use the standard style, <code>BigTextStyle</code>, <code>CallStyle</code>, <code>ProgressStyle</code> or <code>MetricStyle</code>. No custom views, no colorized notifications, no group summaries, and the channel can't be <code>IMPORTANCE_MIN</code>. The app also declares <code>POST_PROMOTED_NOTIFICATIONS</code>. Use it only for things the user started, that are happening now and need watching: a ride, a delivery, navigation. Not for ads, chat messages or reminders. The user can turn Live Updates off per app.</p>`,
+        code: `// <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+
+val delivery = NotificationCompat.Builder(context, DELIVERY_CHANNEL)   // not IMPORTANCE_MIN
+    .setSmallIcon(R.drawable.ic_stat_delivery)
+    .setContentTitle("Siparişin yolda")       // a title is required
+    .setContentText("Kurye 5 dakika uzakta")
+    .setOngoing(true)
+    .setRequestPromotedOngoing(true)
+    .build()
+manager.notify(DELIVERY_ID, delivery)
+
+// The user can switch Live Updates off for your app. Then it shows as a normal notification.
+if (Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
+    // offer Settings.ACTION_MANAGE_APP_PROMOTED_NOTIFICATIONS where it makes sense
+}`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Setting a title on a chat notification',
+        bad: `NotificationCompat.Builder(context, CHAT_CHANNEL)
+    .setContentTitle("Ayşe")
+    .setContentText("Maç kaçta?")
+    .setStyle(NotificationCompat.MessagingStyle(me)
+        .setConversationTitle("Ayşe")              // one-on-one chat
+        .addMessage("Maç kaçta?", t, ayse))`,
+        good: `NotificationCompat.Builder(context, CHAT_CHANNEL)
+    .setStyle(NotificationCompat.MessagingStyle(me)
+        .addMessage("Maç kaçta?", t, ayse))       // the sender Person names the chat`,
+        why: 'MessagingStyle ignores the content title and text. A conversation title tells the system the chat is a group, so a one-on-one chat is shown as one.',
+      },
+      {
+        title: 'An action that repeats the tap',
+        bad: `.setContentIntent(openArticle)
+.addAction(R.drawable.ic_open, "Open", openArticle)`,
+        good: `.setContentIntent(openArticle)
+.addAction(R.drawable.ic_bookmark, "Read later", readLater)`,
+        why: 'Tapping the notification already opens the article. Use the few action slots for things the user can do without opening the app.',
+      },
+      {
+        title: 'One reply PendingIntent for every chat',
+        bad: `PendingIntent.getBroadcast(context, 0, replyIntent, FLAG_UPDATE_CURRENT or FLAG_MUTABLE)`,
+        good: `PendingIntent.getBroadcast(context, conversationId, replyIntent, FLAG_UPDATE_CURRENT or FLAG_MUTABLE)`,
+        why: 'Extras don’t make PendingIntents different. With request code 0, every chat shares one, and a reply can go to the wrong conversation.',
+      },
+    ],
+    terms: [
+      { term: 'NotificationCompat.Style', def: 'The expanded layout of a notification, such as BigTextStyle, BigPictureStyle, InboxStyle or MessagingStyle, set with setStyle().' },
+      { term: 'Notification action', def: 'A button added with addAction() that fires its own PendingIntent; a notification shows up to three.' },
+      { term: 'RemoteInput', def: 'An input attached to an action that lets the user type a reply in the notification; the text arrives in the action’s Intent.' },
+      { term: 'Live Update', def: 'An Android 16 promoted ongoing notification shown at the top of the shade, on the lock screen and as a status bar chip.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Show the full match report when the user expands the notification.', code: 'NotificationCompat.Builder(context, NEWS_CHANNEL)\n    .setSmallIcon(R.drawable.ic_stat_news)\n    .setContentTitle("Derby report")\n    .setContentText(report.summary)\n    .[[setStyle]](NotificationCompat.[[BigTextStyle]]().bigText(report.fullText))\n    .build()', why: '<code>BigTextStyle</code> fills the expanded view with the long text. The content text stays as the collapsed line.' },
+      { type: 'bug', prompt: 'Users type a reply in the notification and tap send. The receiver runs, but the text is always null. Tap the line.', code: 'val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Yanıtla").build()\nval intent = Intent(context, ReplyReceiver::class.java).putExtra("chat", chatId)\nval pending = PendingIntent.getBroadcast(context, chatId, intent,\n    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)\nval action = NotificationCompat.Action.Builder(R.drawable.ic_reply, "Yanıtla", pending)\n    .addRemoteInput(remoteInput)\n    .build()', bug: 3, fix: '    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)', why: 'The system adds the typed text to the Intent when it sends the PendingIntent. An immutable one can’t be filled in, so <code>getResultsFromIntent()</code> finds nothing.' },
+    ],
+    quiz: [
+      { q: 'You add five lines with <code>InboxStyle.addLine()</code>, then two more. How many show when expanded?', options: ['All seven', 'Six', 'Five'], a: 1, why: 'InboxStyle shows up to six lines. Put a "+1 more" in the summary text if it matters.' },
+      { q: 'You set <code>setContentTitle("Ayşe")</code> on a <code>MessagingStyle</code> notification. What does the user see?', options: ['"Ayşe" as the title', 'The title is ignored; the style decides what shows', 'Both the title and the conversation'], a: 1, why: 'MessagingStyle ignores setContentTitle and setContentText. Senders come from the Person on each message.' },
+      { q: 'A download notification on a sound-making channel is updated ten times. How do you make it alert only once?', options: ['Post each update with a new id', '<code>setOnlyAlertOnce(true)</code>', 'Use <code>IMPORTANCE_HIGH</code>'], a: 1, why: 'setOnlyAlertOnce lets only the first post make sound or vibrate. New ids would stack ten cards.' },
+    ],
+    visual(el) {
+      const STY = {
+        plain: { label: 'none', src: '// no setStyle(): one line, the rest is cut' },
+        big: { label: 'BigTextStyle', src: '.setStyle(NotificationCompat.BigTextStyle().bigText(report.fullText))' },
+        pic: { label: 'BigPictureStyle', src: '.setLargeIcon(photo)\n.setStyle(NotificationCompat.BigPictureStyle().bigPicture(photo).bigLargeIcon(null as Bitmap?))' },
+        inbox: { label: 'InboxStyle', src: '.setStyle(NotificationCompat.InboxStyle()\n    .addLine("Derby ends 2-1")\n    // ... 7 lines added: only the first six show\n    .setSummaryText("7 new"))' },
+        msg: { label: 'MessagingStyle', src: '.setStyle(NotificationCompat.MessagingStyle(me)\n    .addMessage("Maç kaçta?", t1, ayse)\n    .addMessage("21:00, geliyor musun?", t2, me)\n    .addMessage("Bilet sende mi?", t3, ayse))' },
+      };
+      const STORY = 'Galatasaray beat Fenerbahçe 2-1. The winner came in the 88th minute after a long VAR check, and the visitors finished with ten men.';
+      const LINES = ['Derby ends 2-1', 'Coach: “Best night of the season”', 'Transfer: keeper talks go on', 'Women’s league: 3-0 away win', 'EuroLeague preview', 'Volleyball cup final', 'U19: late equalizer'];
+      const ACTIONS = ['Read later', 'Share', 'Mute team', 'Report'];
+      let style = 'big', open = false, acts = 1;
+      const ph = phone();
+      const src = h('div', { class: 'kt' });
+      const o = out();
+      function content() {
+        if (style === 'msg') {
+          const m = [['Ayşe', 'Maç kaçta?'], ['Sen', '21:00, geliyor musun?'], ['Ayşe', 'Bilet sende mi?']];
+          return open ? [h('b', {}, 'Ayşe'), ...m.map(([w, t]) => h('span', { class: 'plt-sty-msg' }, h('b', {}, w + ': '), t))]
+            : [h('b', {}, 'Ayşe'), h('span', { class: 'plt-sty-one' }, m[2][1])];
+        }
+        if (style === 'inbox') return open ? [h('b', {}, 'Spor haberleri'), ...LINES.slice(0, 6).map(l => h('span', { class: 'plt-sty-one' }, l))]
+          : [h('b', {}, 'Spor haberleri'), h('span', { class: 'plt-sty-one' }, '7 new')];
+        if (style === 'pic') return open ? [h('b', {}, 'Derby report'), h('span', { class: 'plt-sty-one' }, 'The winner in the 88th minute'), h('div', { class: 'plt-sty-pic', role: 'img', 'aria-label': 'match photo' })]
+          : [h('div', { class: 'plt-sty-row' }, h('span', {}, h('b', {}, 'Derby report'), h('span', { class: 'plt-sty-one' }, 'The winner in the 88th minute')), h('span', { class: 'plt-sty-thumb', role: 'img', 'aria-label': 'thumbnail' }))];
+        if (style === 'big' && open) return [h('b', {}, 'Derby report'), h('span', {}, STORY)];
+        return [h('b', {}, 'Derby report'), h('span', { class: 'plt-sty-one' }, STORY)];
+      }
+      function paint() {
+        src.innerHTML = hl(STY[style].src + (acts ? '\n' + ACTIONS.slice(0, acts).map(a => `.addAction(icon, "${a}", pendingIntent)`).join('\n') : ''));
+        const head = h('div', { class: 'plt-sty-head' }, h('span', { class: 'plt-note-ch' }, style === 'msg' ? 'chat' : 'news'),
+          h('button', { class: 'plt-sty-chev', 'aria-label': open ? 'collapse' : 'expand', onclick: flip }, open ? '▴' : '▾'));
+        const shown = Math.min(acts, 3);
+        const actRow = open && shown ? h('div', { class: 'plt-sty-acts' }, ACTIONS.slice(0, shown).map(a => h('span', { class: 'plt-sty-act' }, a))) : null;
+        ph.screen.replaceChildren(h('p', { class: 'plt-shade-title' }, 'Notification shade'), h('div', { class: 'plt-note plt-sty-note drop-in' }, head, ...content(), actRow));
+      }
+      function flip() {
+        open = !open; paint();
+        const notes = {
+          plain: open ? 'Nothing more to show. Without a style, the cut text stays cut.' : 'Collapsed: one line.',
+          big: open ? 'BigTextStyle: the whole paragraph in the expanded view.' : 'Collapsed: the content text, cut to one line.',
+          pic: open ? 'BigPictureStyle: the image fills the card. bigLargeIcon(null) hides the thumbnail.' : 'Collapsed: the large icon works as a thumbnail.',
+          inbox: open ? '<span class="bad">7 lines added, 6 shown.</span> InboxStyle cuts each line and stops at six.' : 'Collapsed: the summary.',
+          msg: open ? 'MessagingStyle: each message with its sender. setContentTitle is ignored.' : 'Collapsed: the latest message.',
+        };
+        say(o, notes[style] + (open && acts ? ' Actions show under the content.' : ''));
+      }
+      function addAct() {
+        if (acts >= 3) { acts = 4; open = true; paint(); replay(ph.dev, 'shake'); say(o, '<span class="bad">A fourth addAction().</span> A notification shows up to three action buttons. Pick the three that matter.'); return; }
+        acts++; open = true; paint(); say(o, `addAction(): ${acts} action${acts > 1 ? 's' : ''}. Each has its own PendingIntent.`);
+      }
+      const styles = choice('setStyle', Object.keys(STY), style, v => { style = v; open = false; paint(); say(o, `${STY[v].label}. Tap ▾ on the phone to expand.`); }, v => STY[v].label);
+      paint();
+      o.innerHTML = 'Pick a style, then tap ▾ on the notification to expand it.';
+      el.append(styles.el, src,
+        h('div', { class: 'plt-split' },
+          h('div', { class: 'plt-col' }, h('div', { class: 'controls plt-row' }, act('Expand / collapse', flip), cmd('addAction(...)', addAct), act('Clear actions', () => { acts = 0; paint(); say(o, 'No actions.'); })), o),
+          ph.dev));
+    },
+  };
+
+  // ─── Promoted: verified App Links ──────────────────────────────────────
+  const appLinksLesson = {
+    id: 'app-links',
+    title: 'Verified App Links',
+    tagline: 'Your website vouches for your app, so https links open it without a chooser.',
+    level: 'intermediate',
+    body: `
+<p>Any app can declare an intent filter for <code>https://news.example.com</code>. Android App Links prove the site belongs to you. Add <code>android:autoVerify="true"</code> to the filter, and publish a Digital Asset Links file at <code>https://news.example.com/.well-known/assetlinks.json</code> that names your package and signing certificate fingerprint.</p>
+<p>When the app is installed, the system fetches that file for every host in your filters. Since Android 12, a web link opens your app only if it is approved for that exact domain. Otherwise it opens in the default browser. So a broken file doesn't crash anything. Your links quietly go to the web.</p>
+<p>The file must be served over HTTPS as <code>application/json</code>, with no redirects, on every host you list. On Android 14 and lower the result is checked at install or update. Android 15 and later also re-check in the background, and a change can take up to a week to reach devices.</p>`,
+    code: `// AndroidManifest.xml
+// <intent-filter android:autoVerify="true">
+//     <action android:name="android.intent.action.VIEW" />
+//     <category android:name="android.intent.category.DEFAULT" />
+//     <category android:name="android.intent.category.BROWSABLE" />
+//     <data android:scheme="https" />
+//     <data android:host="news.example.com" />
+//     <data android:pathPrefix="/article/" />
+// </intent-filter>
+
+// https://news.example.com/.well-known/assetlinks.json
+// [{
+//   "relation": ["delegate_permission/common.handle_all_urls"],
+//   "target": {
+//     "namespace": "android_app",
+//     "package_name": "com.example.news",
+//     "sha256_cert_fingerprints": ["14:6D:E9:83:...:44:E5"]
+//   }
+// }]
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val route = parse(intent?.data)      // still validate: anyone can send this Intent
+        setContent { NewsApp(start = route) }
+    }
+}`,
+    remember: 'autoVerify in the manifest, assetlinks.json on every host, no redirects, the Play signing fingerprint.',
+    deeper: [
+      {
+        title: 'Test it with adb',
+        body: `<p>Don't wait for a release to learn the file is wrong. On Android 12 and later you can run verification by hand. Reset the app's state, ask for a re-verify, wait a little, then read the result per domain. Only <code>verified</code> means it worked. <code>none</code> usually means the check hasn't finished yet. Codes of 1024 and up are the verifier's own error codes.</p>
+<p>Then fire a link the way a browser would, with the <code>BROWSABLE</code> category, and see what opens.</p>`,
+        code: `adb shell pm set-app-links --package com.example.news 0 all     # reset
+adb shell pm verify-app-links --re-verify com.example.news       # needs internet
+adb shell pm get-app-links com.example.news                       # read the result
+
+#   Domain verification state:
+#     news.example.com: verified
+
+adb shell am start -a android.intent.action.VIEW \\
+    -c android.intent.category.BROWSABLE \\
+    -d "https://news.example.com/article/42"`,
+        visual(el) {
+          let server = false, state = 'legacy', busy = false;
+          const PKG = 'com.example.news';
+          const o = out();
+          const term = h('div', { class: 'plt-steps', 'aria-live': 'polite' });
+          const ph = phone();
+          const show = (kind) => ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' + (kind === 'app' ? '' : ' plt-ext') }, kind === 'app' ? 'Haberler · Article 42' : kind === 'web' ? 'Browser · news.example.com' : 'Home screen'), h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }));
+          const line = (k, who, text) => { term.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', { html: text }))); while (term.children.length > 5) term.firstElementChild.remove(); };
+          const stateHtml = () => state === 'verified' ? '<span class="good">verified</span>' : state === 'none' ? 'none' : `<span class="bad">${state === 'legacy' ? '1024' : state}</span>`;
+          async function run(which) {
+            if (busy) return; busy = true;
+            try {
+              if (which === 'get') { line('', 'get', `news.example.com: ${stateHtml()}`); say(o, state === 'verified' ? 'Verified. Links to this host open the app.' : state === 'none' ? 'Nothing recorded yet. Run verify-app-links.' : 'Failed. Fix the file on the server, reset, and verify again.'); }
+              if (which === 'reset') { state = 'none'; line('', 'set', 'state reset for all domains'); say(o, 'State cleared. Now verify.'); }
+              if (which === 'verify') {
+                line('wait', 'verify', 'fetching https://news.example.com/.well-known/assetlinks.json …');
+                await sleep(1100); if (!el.isConnected) return;
+                state = server ? 'verified' : 'legacy';
+                line(server ? 'good' : 'bad', 'verify', server ? '200, application/json, fingerprint matches' : '301 redirect to www: the file must be served without redirects');
+                say(o, 'Done. Read the result with get-app-links.');
+              }
+              if (which === 'open') {
+                const app = state === 'verified';
+                show(app ? 'app' : 'web'); replay(ph.dev, app ? 'pop' : 'shake');
+                line(app ? 'good' : 'bad', 'am start', app ? 'opened MainActivity in your app' : 'opened the browser: the domain isn’t verified');
+                say(o, app ? '<span class="good">The link opens your app.</span>' : '<span class="bad">Browser.</span> On Android 12+ an unapproved domain goes to the default browser.');
+              }
+            } finally { busy = false; }
+          }
+          const fix = toggle('plt-al-fix', 'server fixed: no redirect for assetlinks.json', false, v => { server = v; say(o, v ? 'The file is fixed on the server. The device still has the old result until you verify again.' : 'The server redirects assetlinks.json to www again.'); });
+          show('home');
+          o.innerHTML = 'Links keep opening the browser. Read the current state first.';
+          el.append(fix.el,
+            h('div', { class: 'plt-split' },
+              h('div', { class: 'plt-col' },
+                h('div', { class: 'plt-events plt-al-wrap' },
+                  cmd(`pm get-app-links ${PKG}`, () => run('get')),
+                  cmd(`pm set-app-links --package ${PKG} 0 all`, () => run('reset')),
+                  cmd(`pm verify-app-links --re-verify ${PKG}`, () => run('verify')),
+                  cmd('am start -a VIEW -c BROWSABLE -d "https://news.example.com/article/42"', () => run('open'))),
+                term, o),
+              ph.dev));
+        },
+      },
+      {
+        title: 'Which fingerprint goes in the file',
+        body: `<p>The fingerprint must match the certificate that signed the APK on the user's phone. With Play App Signing, Google re-signs your app, so the SHA-256 that <code>keytool</code> prints for your upload key usually doesn't match. Play Console shows the right fingerprint, and a ready-made assetlinks.json snippet, under <b>Release › Setup › App signing</b>.</p>
+<p><code>sha256_cert_fingerprints</code> takes a list. Add your debug or internal build certificates next to the release one, so links also work on test builds.</p>`,
+        code: `// https://news.example.com/.well-known/assetlinks.json
+// [{
+//   "relation": ["delegate_permission/common.handle_all_urls"],
+//   "target": {
+//     "namespace": "android_app",
+//     "package_name": "com.example.news",
+//     "sha256_cert_fingerprints": [
+//       "AB:12:...:9F",      // Play app signing key (from Play Console)
+//       "3C:77:...:01"       // debug key, for local builds
+//     ]
+//   }
+// }]`,
+      },
+      {
+        title: 'Dynamic rules on Android 15',
+        body: `<p>Paths in the manifest only change with a new release. On Android 15 and later, with Google services, assetlinks.json can also carry <code>dynamic_app_link_components</code>: an ordered list of path, query and fragment rules. The first match wins, <code>"exclude": true</code> sends a match to the browser, and a URL that matches nothing doesn't open the app.</p>
+<p>Dynamic rules can only narrow what the manifest declares, never widen it. Older Android versions ignore them, and a malformed block falls back to the manifest rules.</p>`,
+        code: `// "relation_extensions": {
+//   "delegate_permission/common.handle_all_urls": {
+//     "dynamic_app_link_components": [
+//       { "/": "/article/*/comments", "exclude": true },   // checked first: stays on the web
+//       { "/": "/article/*" },
+//       { "/": "*", "exclude": true }
+//     ]
+//   }
+// }`,
+      },
+    ],
+    mistakes: [
+      {
+        title: 'Redirecting the file',
+        bad: `# news.example.com/.well-known/assetlinks.json
+# 301 → https://www.news.example.com/.well-known/assetlinks.json`,
+        good: `# news.example.com/.well-known/assetlinks.json
+# 200, Content-Type: application/json, served from this host`,
+        why: 'The file must be reachable without any 301 or 302. A site-wide redirect rule often catches it by accident, and verification fails for that host.',
+      },
+      {
+        title: 'The upload key fingerprint',
+        bad: `// keytool -list -v -keystore upload.jks  → copied into assetlinks.json`,
+        good: `// Play Console › Release › Setup › App signing → copy the app signing key's SHA-256`,
+        why: 'With Play App Signing, users get an APK signed by Google’s key. Your upload key’s fingerprint doesn’t match it, so verification fails only in the store build.',
+      },
+      {
+        title: 'One file for several hosts',
+        bad: `<data android:host="news.example.com" />
+<data android:host="m.news.example.com" />
+<!-- assetlinks.json only on news.example.com -->`,
+        good: `<data android:host="news.example.com" />
+<data android:host="m.news.example.com" />
+<!-- assetlinks.json on both hosts -->`,
+        why: 'Each host is checked on its own. Links to a host without the file open in the browser.',
+      },
+    ],
+    terms: [
+      { term: 'Android App Link', def: 'An https deep link whose domain is verified for your app, so it opens the app without a chooser.' },
+      { term: 'autoVerify', def: 'An intent-filter attribute that asks the system to verify the hosts in your web intent filters when the app is installed.' },
+      { term: 'assetlinks.json', def: 'The Digital Asset Links file at /.well-known/ on your domain that names the package and certificate fingerprints allowed to handle its links.' },
+      { term: 'Domain verification state', def: 'The per-host result shown by pm get-app-links; only "verified" means the app is approved for that domain.' },
+    ],
+    challenges: [
+      { type: 'blank', prompt: 'Complete the filter so the system verifies the domain and browsers can open it.', code: '<intent-filter android:[[autoVerify]]="true">\n    <action android:name="android.intent.action.VIEW" />\n    <category android:name="android.intent.category.DEFAULT" />\n    <category android:name="android.intent.category.[[BROWSABLE]]" />\n    <data android:scheme="https" android:host="news.example.com" />\n</intent-filter>', why: '<code>autoVerify</code> starts verification. <code>BROWSABLE</code> lets links from a browser or another app reach the filter.' },
+      { type: 'bug', prompt: 'The file is served over HTTPS with no redirect, and the fingerprint is right. Verification still fails. Tap the line.', code: '[{\n  "relation": ["delegate_permission/common.handle_all_urls"],\n  "target": {\n    "namespace": "android",\n    "package_name": "com.example.news",\n    "sha256_cert_fingerprints": ["14:6D:E9:83:...:44:E5"]\n  }\n}]', bug: 3, fix: '    "namespace": "android_app",', why: 'An Android app target uses the namespace <code>android_app</code>. Any other value doesn’t describe your app, so the statement doesn’t match.' },
+    ],
+    quiz: [
+      { q: 'On Android 13, your filter has <code>autoVerify</code> but assetlinks.json returns 404. A user taps your link in a chat app. What opens?', options: ['Your app', 'A chooser dialog', 'The default browser'], a: 2, why: 'Since Android 12, a web link opens an app only if it is approved for that domain.' },
+      { q: 'Your app uses Play App Signing. Which fingerprint belongs in assetlinks.json?', options: ['The upload key from keytool', 'The app signing key shown in Play Console', 'Any key, the package name is enough'], a: 1, why: 'Users install an APK signed with Play’s app signing key. Its SHA-256 must be in the file.' },
+      { q: '<code>pm get-app-links</code> shows <code>news.example.com: none</code> right after install. What does it most likely mean?', options: ['Verification failed for good', 'The verifier hasn’t finished yet', 'The user turned links off'], a: 1, why: '<code>none</code> means nothing is recorded yet. Wait, re-run verification, and check again.' },
+    ],
+    visual(el) {
+      const HOSTS = ['news.example.com', 'm.news.example.com'];
+      const PROB = { ok: 'file OK', missing: '404', redirect: '301 redirect', upload: 'upload key' };
+      const WHY = {
+        ok: ['good', '200, application/json, package and fingerprint match'],
+        missing: ['bad', '404: no assetlinks.json on this host'],
+        redirect: ['bad', '301: the file must be served without redirects'],
+        upload: ['bad', 'fingerprint is the upload key, not Play’s app signing key'],
+      };
+      const prob = { [HOSTS[0]]: 'ok', [HOSTS[1]]: 'missing' };
+      const state = {};
+      let installed = false, busy = false;
+      const ph = phone();
+      const log = h('div', { class: 'plt-steps' });
+      const o = out();
+      const cards = {};
+      const show = (kind, host) => ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' + (kind === 'app' ? '' : ' plt-ext') }, kind === 'app' ? 'Haberler · Article 42' : kind === 'web' ? 'Browser · ' + host : 'Chat · link from a friend'), h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }), h('span', { class: 'plt-ln', style: 'width:80%' }));
+      const step = (k, who, text) => { log.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', {}, text))); while (log.children.length > 4) log.firstElementChild.remove(); };
+      function paintHost(host) {
+        const c = cards[host];
+        const s = state[host];
+        c.box.className = 'plt-al-host' + (s === 'verified' ? ' plt-al-ok' : s && s !== 'verified' ? ' plt-al-bad' : '');
+        c.st.textContent = !installed ? 'app not installed' : s === 'verified' ? 'verified' : s ? 'not verified' : '…';
+        c.st.className = 'plt-tag ' + (!installed ? '' : s === 'verified' ? 'plt-ok' : s ? 'plt-no' : 'plt-wait');
+      }
+      HOSTS.forEach(host => {
+        const st = tag('');
+        const pick = choice('server', Object.keys(PROB), prob[host], v => {
+          if (busy) return false;
+          prob[host] = v;
+          say(o, installed ? 'The server changed. This device keeps its old result until the app is reinstalled or updated (Android 14 and lower), or re-checks in the background (Android 15+).' : 'Server set. Install the app to run verification.');
+        }, v => PROB[v]);
+        const box = h('div', { class: 'plt-al-host' }, h('div', { class: 'plt-group' }, h('span', { class: 'plt-al-name' }, host), st), pick.el,
+          h('div', { class: 'controls plt-al-wrap' }, act(`Tap https://${host}/article/42`, () => tap(host))));
+        cards[host] = { box, st };
+      });
+      async function install() {
+        if (busy) return; busy = true;
+        try {
+          installed = true; HOSTS.forEach(hh => { delete state[hh]; paintHost(hh); });
+          log.replaceChildren();
+          say(o, 'Installed. autoVerify="true", so the system checks every host in the filters.');
+          for (const host of HOSTS) {
+            await sleep(500); if (!el.isConnected) return;
+            step('wait', 'GET', `https://${host}/.well-known/assetlinks.json`);
+            await sleep(600); if (!el.isConnected) return;
+            const [k, text] = WHY[prob[host]];
+            state[host] = k === 'good' ? 'verified' : 'failed';
+            step(k, host.split('.')[0], text);
+            paintHost(host); replay(cards[host].box, k === 'good' ? 'pop' : 'shake');
+          }
+          o.append(h('div', { class: 'line drop-in' }, 'Each host has its own result. Now tap the links.'));
+        } finally { busy = false; }
+      }
+      function tap(host) {
+        if (busy) return;
+        if (!installed) { show('web', host); say(o, 'The app isn’t installed, so the link opens the website. That is the upside of https links.'); return; }
+        const ok = state[host] === 'verified';
+        show(ok ? 'app' : 'web', host); replay(ph.dev, ok ? 'pop' : 'shake');
+        say(o, ok ? `<span class="good">${host} is verified:</span> the app opens straight away.` : `<span class="bad">${host} isn’t verified:</span> Android 12+ opens it in the browser. No error, no crash.`);
+      }
+      HOSTS.forEach(paintHost);
+      show('chat');
+      o.innerHTML = 'Set up each host’s server, then install the app.';
+      el.append(
+        h('div', { class: 'plt-split' },
+          h('div', { class: 'plt-col' }, h('div', { class: 'plt-al-hosts' }, HOSTS.map(hh => cards[hh].box)), h('div', { class: 'controls plt-row' }, act('Install the app', install)), log, o),
+          ph.dev));
+    },
+  };
+
   Lab.addTrack({
     id: 'push',
     title: 'Notifications and push',
-    description: 'Notification channels, FCM tokens and messages, and deep links that land the user on the right screen.',
+    description: 'Notification channels, styles and actions, FCM tokens and messages, and deep links and App Links that land the user on the right screen.',
     group: 'Shipping', requires: ['android'],
     css,
     lessons: [
@@ -659,6 +1202,9 @@ fun showScore(context: Context, id: Int, text: String) {
             o);
         },
       },
+
+      // 1b: promoted from the gap audit
+      stylesLesson,
 
       // 2 ─────────────────────────────────────────────
       {
@@ -1343,7 +1889,7 @@ override fun onNewIntent(intent: Intent) {
         body: `
 <p>A notification can’t start your Activity by itself. You hand it a <code>PendingIntent</code>, a token that lets the system launch an Intent later on your app’s behalf. On Android 12+ you must pass <code>FLAG_IMMUTABLE</code> or <code>FLAG_MUTABLE</code>. Choose immutable unless something like an inline reply has to fill in the Intent.</p>
 <p>A plain <code>getActivity()</code> opens one screen in a new task, so Back drops the user on the home screen. <code>TaskStackBuilder</code> with <code>addNextIntentWithParentStack()</code> adds the parent Activities first, so Back walks up through your app. With Navigation, give the route a deep link and point the Intent at its URI. Navigation puts the start destination under it.</p>
-<p>Give each notification its own request code. The system matches PendingIntents by action, data, type, component and categories, not by extras, so two that differ only in extras become one. For web links, Android App Links use <code>autoVerify</code> and an <code>assetlinks.json</code> file to open your app directly. On Android 12+, an unverified link opens in the browser.</p>`,
+<p>Give each notification its own request code. The system matches PendingIntents by action, data, type, component and categories, not by extras, so two that differ only in extras become one. For https links shared outside the app, verify your domain so they open the app directly. On Android 12+, an unverified link opens in the browser. <a href="#push.app-links">Verified App Links</a> shows how.</p>`,
         code: `// Compose Navigation: the route accepts a deep link.
 composable(
     route = "article/{id}",
@@ -1498,6 +2044,9 @@ fun articleNotification(context: Context, id: String, title: String): Notificati
             o);
         },
       },
+
+      // 4b: promoted from the gap audit
+      appLinksLesson,
     ],
   });
 })();

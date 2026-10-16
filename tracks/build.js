@@ -167,6 +167,23 @@
 .bd-d2-band { position: absolute; top: 6px; bottom: 6px; left: 0; width: 0; box-sizing: border-box; border-radius: 6px; background: var(--warm-soft); border: 2px solid var(--warm); opacity: 0; transition: left 0.4s, width 0.4s, opacity 0.3s; }
 .bd-d2-pt { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--warm); opacity: 0; transition: left 0.4s; }
 .bd-d2-ticks { display: flex; justify-content: space-between; gap: 6px; font: 500 0.72rem var(--mono); color: var(--muted); }
+/* api levels */
+.bd-al-gates { display: grid; gap: 6px; min-width: 0; }
+.bd-al-gate { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.25s, background 0.25s, opacity 0.25s; }
+.bd-al-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-width: 0; }
+.bd-al-head b { font: 700 0.88rem var(--display); }
+.bd-al-by { font: 600 0.7rem var(--mono); color: var(--muted); }
+.bd-al-st { margin-left: auto; font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bd-al-gate small { font: 500 0.78rem/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.bd-al-gate small:empty { display: none; }
+.bd-al-ok { border-color: var(--ok); background: var(--ok-soft); }
+.bd-al-ok .bd-al-st { color: var(--ok); }
+.bd-al-warn { border-color: var(--warm); background: var(--warm-soft); }
+.bd-al-warn .bd-al-st { color: var(--warm); }
+.bd-al-bad { border-color: var(--err); background: var(--err-soft); }
+.bd-al-bad .bd-al-st { color: var(--err); }
+.bd-al-skip { border-style: dashed; opacity: 0.55; }
+.bd-al-gate.bd-al-ok small, .bd-al-gate.bd-al-warn small, .bd-al-gate.bd-al-bad small { color: var(--ink); }
 `;
 
   Lab.addTrack({
@@ -709,6 +726,243 @@ plugins {
                 h('div', { class: 'controls' }, act('Sync', syncCat), act('Bump room', bump)))),
             h('div', { class: 'controls' }, fix),
             h('p', { class: 'tip' }, 'Dashes become dots: androidx-room-runtime is libs.androidx.room.runtime.'));
+        },
+      },
+
+      // 2b ────────────────────────────────────────────
+      {
+        id: 'api-levels',
+        title: 'API levels and compatibility',
+        tagline: 'compileSdk, minSdk and targetSdk answer three different questions.',
+        level: 'intermediate',
+        body: `
+<p>Every Android release has one API level, a plain integer: Android 15 is 35, Android 16 is 36. Your module sets three of them, and each one answers a different question. <code>compileSdk</code>: which Android APIs can my code see when it compiles? <code>minSdk</code>: which is the oldest Android that may install the app? <code>targetSdk</code>: which Android behavior have I tested against?</p>
+<p><code>minSdk</code> is a promise you have to keep in code. With <code>minSdk = 24</code>, a call to an API added in 26 compiles fine and then crashes on an Android 7 phone. Lint’s <code>NewApi</code> check catches it. Guard the call with <code>Build.VERSION.SDK_INT</code>, or use an AndroidX <code>*Compat</code> class that does the check for you.</p>
+<p><code>targetSdk</code> is how new platform behavior reaches your app. On a phone newer than your target, Android runs the app in a compatibility mode that acts like the older version. Raise the target and you opt in to every behavior change up to that level. Google Play forces the bump every year: since August 31, 2026, new apps and updates must target API 36.</p>`,
+        code: `// app/build.gradle.kts
+android {
+    compileSdk = 36              // the APIs your code can see
+    defaultConfig {
+        minSdk = 24              // oldest Android that can install the app
+        targetSdk = 36           // the behavior you tested against
+    }
+}
+
+// Call a newer API only where it exists
+fun createChannels(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {          // API 26
+        val channel = NotificationChannel("son-dakika", "Son dakika", NotificationManager.IMPORTANCE_HIGH)
+        context.getSystemService<NotificationManager>()?.createNotificationChannel(channel)
+    }
+}
+
+// Or mark the whole function and let callers do the check
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)                         // API 33
+fun askForNotifications(launcher: ActivityResultLauncher<String>) {
+    launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+}`,
+        remember: 'compileSdk lets you see APIs, minSdk decides who can install, targetSdk decides how Android treats you. Guard every call above minSdk.',
+        terms: [
+          { term: 'compileSdk', def: 'The Android SDK your code compiles against. It decides which platform classes and constants exist at compile time. It is not stored in the APK.' },
+          { term: 'minSdk', def: 'The lowest API level that may install the app. Devices below it get INSTALL_FAILED_OLDER_SDK and Play does not offer the app to them.' },
+          { term: 'targetSdk', def: 'The API level you tested against. Behavior changes gated on a target level apply only when targetSdk is that level or higher.' },
+          { term: 'Core library desugaring', def: 'A build step where D8/R8 rewrites calls to newer Java library APIs, such as java.time, to a copy bundled in your app, so they work below the API level that added them.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'NotificationChannel arrived in API 26 (Android 8.0). Guard the call.', code: 'if (Build.VERSION.[[SDK_INT]] >= Build.VERSION_CODES.[[O]]) {\n    notificationManager.createNotificationChannel(channel)\n}', why: '<code>SDK_INT</code> is the API level of the phone the code is running on. <code>VERSION_CODES.O</code> is 26, Android 8.0.' },
+          { type: 'bug', prompt: 'On Android 13 phones the permission prompt never appears. Tap the wrong line.', code: 'fun askIfNeeded() {\n    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.TIRAMISU) {\n        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)\n    }\n}', bug: 1, fix: '    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {', why: '<code>TIRAMISU</code> is 33, the level that added the permission. <code>&gt;</code> skips exactly Android 13. Version checks almost always use <code>&gt;=</code>.' },
+        ],
+        quiz: [
+          { q: 'You raise <code>compileSdk</code> from 35 to 36 and change nothing else. What changes for users?', options: ['Android 16 behavior changes now apply to the app', 'Nothing at runtime: you can now call Android 16 APIs and see new lint warnings', 'Android 15 phones can no longer install the app'], a: 1, why: '<code>compileSdk</code> only decides what your code can see while compiling. Runtime behavior follows <code>targetSdk</code>, and who can install follows <code>minSdk</code>.' },
+          { q: 'Your app targets API 35 and runs on an Android 16 phone. Which Android 16 changes apply?', options: ['All of them', 'Only the changes for all apps. The target-gated ones stay off until you target 36', 'None, the app runs as Android 15'], a: 1, why: 'Some changes apply to every app on the new version. Changes gated on targetSdk stay off while your target is lower, so the app runs in a compatibility mode for those.' },
+          { q: 'Since August 31, 2026, what must a new app update on Google Play target (phone app)?', options: ['API 34 or higher', 'API 35 or higher', 'API 36 or higher'], a: 2, why: 'New apps and updates must target Android 16 (API 36). Wear OS and Automotive need 35, TV and XR need 34. An extension until November 1, 2026 could be requested.' },
+        ],
+        deeper: [
+          {
+            title: 'Version checks, @RequiresApi and Compat classes',
+            body: `<p>Lint knows the API level of every platform method. When a call needs more than your <code>minSdk</code>, it reports <code>NewApi</code> unless the call sits inside an <code>SDK_INT</code> check or inside a function marked <code>@RequiresApi</code>. The annotation does not check anything at runtime. It moves the duty to the caller, so lint now asks every caller for a check.</p>
+<p>Before writing the check yourself, look for a Compat class. <code>ContextCompat</code>, <code>NotificationManagerCompat</code> and <code>WindowCompat</code> contain the version checks already. Never parse <code>Build.VERSION.RELEASE</code>: it is a display string like <code>"8.1.0"</code>, not a number.</p>`,
+            code: `// Lint: Call requires API level 26 (current min is 24)
+nm.createNotificationChannel(channel)
+
+// Fixed by the library: no check needed in your code
+NotificationManagerCompat.from(context).createNotificationChannel(
+    NotificationChannelCompat.Builder("son-dakika", NotificationManagerCompat.IMPORTANCE_HIGH)
+        .setName("Son dakika")
+        .build()
+)  // does nothing below API 26, where channels do not exist`,
+          },
+          {
+            title: 'Core library desugaring',
+            body: `<p><code>java.time.LocalDate</code> arrived in Android in API 26. With <code>minSdk = 24</code>, you can still use it by turning on core library desugaring. D8 (or R8) rewrites your calls to point at a copy of the library that ships inside your app. The rewrite depends on <code>minSdk</code>, not on the phone, so every device runs the bundled copy.</p>
+<p>It covers a subset of <code>java.time</code>, <code>java.util.stream</code>, <code>java.util.function</code> and <code>Optional</code>. It adds a little to the app size. It does nothing for Android APIs such as <code>NotificationChannel</code>: those still need a version check.</p>`,
+            code: `android {
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+    }
+}
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")  // needs AGP 7.4+
+}`,
+            visual(el) {
+              let sugar = false, busy = false;
+              const o = out('minSdk is 24. Pick a phone and run the code.');
+              const dex = h('div', { class: 'bd-line', html: hl('val due = LocalDate.now().plusDays(3)') });
+              const sw = toggle('bd-al-sugar', 'isCoreLibraryDesugaringEnabled', function () {
+                if (busy) { this.checked = !this.checked; return; }
+                sugar = this.checked;
+                dex.innerHTML = hl(sugar ? 'invoke-static j$.time.LocalDate.now()   // bundled copy' : 'invoke-static java.time.LocalDate.now()   // platform class');
+                replay(dex, 'bd-flash');
+                say(o, sugar ? 'D8 rewrote the call. The dex now points at j$.time, which ships inside the app.' : 'No desugaring. The dex calls the platform class directly.');
+              });
+              const run = api => async () => {
+                if (busy) return; busy = true;
+                say(o, `<span class="muted">Running on API ${api}...</span>`);
+                await sleep(450); if (!el.isConnected) return;
+                if (sugar) say(o, `<span class="good">API ${api}: due date computed.</span> The bundled copy runs on ${api < 26 ? 'this old phone' : 'this phone too, even though it has java.time'}.`);
+                else if (api < 26) say(o, '<span class="bad">API 24: crash.</span> java.time.LocalDate does not exist before API 26. Lint warned: NewApi.');
+                else say(o, `<span class="good">API ${api}: works.</span> The platform has java.time. Older phones would still crash.`);
+                busy = false;
+              };
+              el.append(
+                h('div', { class: 'controls' }, sw.el),
+                h('div', { class: 'bd-card' }, lbl('What the dex calls'), dex),
+                h('div', { class: 'controls' }, act('Run on Android 7.0 (API 24)', run(24)), act('Run on Android 16 (API 36)', run(36))),
+                o);
+            },
+          },
+          {
+            title: 'Raising targetSdk: behavior changes',
+            body: `<p>Each Android release publishes two lists: changes for all apps, and changes for apps that target the new level. The second list is what you sign up for when you raise <code>targetSdk</code>. For API 36 it includes: the edge-to-edge opt-out stops working, predictive back animations are on by default and <code>onBackPressed</code> is no longer called, and on screens at least 600dp wide the app ignores orientation and resizability limits.</p>
+<p>Treat the bump as a small project. Read the list, run the Android SDK Upgrade Assistant in Android Studio, and test on a phone with the new version. In a debuggable build you can switch single target-gated changes on and off with <code>adb shell am compat</code> or under Developer options, App Compatibility Changes, and fix them one at a time.</p>`,
+            code: `# See every compat change and its state for your app
+adb shell dumpsys platform_compat
+
+# Try one target-gated change before raising targetSdk (debuggable builds only)
+adb shell am compat enable CHANGE_ID com.example.news
+adb shell am compat reset  CHANGE_ID com.example.news`,
+          },
+          {
+            title: 'Play’s yearly target API deadline',
+            body: `<p>Google Play raises the required <code>targetSdk</code> once a year, about a year after each Android release. Since August 31, 2026, new phone apps and updates must target API 36. Wear OS and Android Automotive OS apps need 35, Android TV and Android XR apps need 34. Developers who needed more time could ask for an extension until November 1, 2026.</p>
+<p>Apps you don’t update are also affected. An existing app must target at least API 35 to stay visible to new users on phones running a newer Android than its target. With a lower target, new users on newer phones no longer find it. Plan the bump every year, before the deadline.</p>`,
+          },
+        ],
+        underHood: {
+          body: `<p>The build copies <code>minSdk</code> and <code>targetSdk</code> into the merged <code>AndroidManifest.xml</code> as <code>&lt;uses-sdk&gt;</code>. <code>compileSdk</code> is not written there; it only picks which <code>android.jar</code> the compiler reads. The package installer compares <code>minSdkVersion</code> with the phone’s API level and refuses the install if the phone is older.</p>
+<p>At runtime, the platform reads your <code>targetSdkVersion</code> from <code>ApplicationInfo</code>. Behavior changes are registered in the compatibility framework with the level that enables them. When your app calls into the system, the framework asks whether that change is enabled for your package. That is why a debuggable build can switch single changes on and off without a rebuild.</p>`,
+          code: `$ aapt2 dump badging app-release.apk | grep sdk
+sdkVersion:'24'
+targetSdkVersion:'36'
+
+$ adb install app-release.apk     # on an API 23 phone
+Failure [INSTALL_FAILED_OLDER_SDK: Requires newer sdk version #24 (current version is #23)]`,
+        },
+        mistakes: [
+          {
+            title: 'Bumping targetSdk as a one-line change',
+            bad: `// "Play says we must target 36"
+targetSdk = 36   // changed, built, shipped`,
+            good: `targetSdk = 36
+// 1. Read the Android 16 behavior changes for apps targeting 36
+// 2. Run the Android SDK Upgrade Assistant
+// 3. Test edge-to-edge, back navigation and large screens on Android 16`,
+            why: 'The target opts the app in to every target-gated change at once. Untested, that means content under the status bar, back handling that no longer runs, or broken tablet layouts.',
+          },
+          {
+            title: 'Parsing the version name',
+            bad: `if (Build.VERSION.RELEASE.toInt() >= 13) {
+    askForNotifications()
+}`,
+            good: `if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    askForNotifications()
+}`,
+            why: '<code>RELEASE</code> is a display string such as <code>"8.1.0"</code>, so <code>toInt()</code> throws. <code>SDK_INT</code> is the integer API level, and lint understands checks against it.',
+          },
+        ],
+        visual(el) {
+          const DEV = { 24: 'Android 7.0', 31: 'Android 12', 35: 'Android 15', 36: 'Android 16' };
+          const s = { compile: 36, min: 24, target: 36, dev: 36, guard: true };
+          let busy = false;
+          const pick = (label, key, vals, fmt) => {
+            const btns = vals.map(v => h('button', { class: 'bd-opt', 'aria-pressed': String(s[key] === v), onclick() {
+              if (busy) return;
+              s[key] = v; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(vals[i] === v))); reset();
+            } }, fmt ? fmt(v) : String(v)));
+            return h('div', { class: 'bd-pick' }, lbl(label), btns);
+          };
+          const src = h('div', { class: 'bd-line' });
+          const paintSrc = () => { src.innerHTML = hl(s.guard
+            ? '// SDK_INT = Build.VERSION.SDK_INT\nval is16 = SDK_INT >= BAKLAVA   // 36\nif (SDK_INT >= O) {             // 26\n    nm.createNotificationChannel(ch)\n}'
+            : '// SDK_INT = Build.VERSION.SDK_INT\nval is16 = SDK_INT >= BAKLAVA   // 36\nnm.createNotificationChannel(ch) // 26'); };
+          const GATES = [['compile', 'Compile', 'compileSdk'], ['lint', 'Lint', 'minSdk'], ['install', 'Install', 'minSdk'], ['run', 'Run', 'device'], ['behave', 'Behavior', 'targetSdk'], ['play', 'Play upload', 'targetSdk']];
+          const rows = {};
+          const gateEls = GATES.map(([k, name, by]) => {
+            const st = h('span', { class: 'bd-al-st' }, 'waiting');
+            const msg = h('small', {}, '');
+            const row = h('div', { class: 'bd-al-gate' }, h('div', { class: 'bd-al-head' }, h('b', {}, name), h('span', { class: 'bd-al-by' }, by), st), msg);
+            rows[k] = { row, st, msg };
+            return row;
+          });
+          const o = out('Pick the three numbers and a phone, then build and install.');
+          const guard = toggle('bd-al-guard', 'SDK_INT check around the call', function () {
+            if (busy) { this.checked = !this.checked; return; }
+            s.guard = this.checked; paintSrc(); replay(src, 'bd-flash'); reset();
+          });
+          guard.input.checked = true;
+          function set(k, cls, label, text) {
+            const r = rows[k];
+            r.row.className = 'bd-al-gate bd-al-' + cls; r.st.textContent = label; r.msg.innerHTML = text;
+            replay(r.row, 'bd-flash');
+          }
+          function reset() {
+            for (const k in rows) { rows[k].row.className = 'bd-al-gate'; rows[k].st.textContent = 'waiting'; rows[k].msg.textContent = ''; }
+            say(o, 'Settings changed. Build and install again.');
+          }
+          async function run() {
+            if (busy) return; busy = true;
+            for (const k in rows) { rows[k].row.className = 'bd-al-gate'; rows[k].st.textContent = 'waiting'; rows[k].msg.textContent = ''; }
+            say(o, `<span class="muted">$ ./gradlew installDebug  ·  phone: ${DEV[s.dev]}, API ${s.dev}</span>`);
+            const step = async () => { await sleep(380); return el.isConnected; };
+            const stop = (msg) => { for (const k in rows) if (rows[k].st.textContent === 'waiting') { rows[k].row.className = 'bd-al-gate bd-al-skip'; rows[k].st.textContent = 'skipped'; } say(o, msg); busy = false; };
+            if (!await step()) return;
+            if (s.compile < 36) { set('compile', 'bad', 'error', `e: Unresolved reference 'BAKLAVA'. The API ${s.compile} SDK has no Android 16 constants.`); return stop('<span class="bad">BUILD FAILED</span> · raise compileSdk to see newer APIs.'); }
+            set('compile', 'ok', 'ok', 'compileSdk 36 knows every API up to Android 16.');
+            if (!await step()) return;
+            const risky = !s.guard && s.min < 26;
+            if (risky) set('lint', 'warn', 'NewApi', `Call requires API level 26 (current min is ${s.min}).`);
+            else set('lint', 'ok', 'ok', s.guard ? 'The call sits inside an SDK_INT check.' : `minSdk ${s.min} is already 26 or higher.`);
+            if (!await step()) return;
+            if (s.dev < s.min) { set('install', 'bad', 'refused', `INSTALL_FAILED_OLDER_SDK: the phone is API ${s.dev}, minSdk is ${s.min}.`); return stop('<span class="bad">Not installed.</span> minSdk decides who can install.'); }
+            set('install', 'ok', 'ok', `API ${s.dev} is at least minSdk ${s.min}.`);
+            if (!await step()) return;
+            if (!s.guard && s.dev < 26) { set('run', 'bad', 'crash', `NotificationChannel does not exist on API ${s.dev}. The app crashes on launch.`); return stop('<span class="bad">Crash on ' + DEV[s.dev] + '.</span> Lint warned you. A version check fixes it.'); }
+            set('run', 'ok', 'ok', s.dev < 26 ? 'The check skips the channel code on this old phone.' : 'NotificationChannel exists here.');
+            if (!await step()) return;
+            const eff = Math.min(s.dev, s.target), notes = [];
+            if (s.dev > s.target) notes.push(`compatibility mode: target-gated changes after API ${s.target} stay off`);
+            if (eff >= 35) notes.push('edge-to-edge enforced');
+            if (eff >= 36) notes.push('opt-out ignored, predictive back animations on');
+            if (eff < 35) notes.push('no edge-to-edge enforcement');
+            set('behave', s.dev > s.target ? 'warn' : 'ok', 'API ' + eff + ' rules', notes.join('; ') + '.');
+            if (!await step()) return;
+            if (s.target >= 36) set('play', 'ok', 'accepted', 'Meets the API 36 requirement for new apps and updates.');
+            else set('play', 'bad', 'rejected', `Since Aug 31, 2026 updates must target 36.${s.target < 35 ? ' The existing listing is also hidden from new users on newer phones.' : ''}`);
+            say(o, s.target >= 36 && !risky ? '<span class="good">Installed, running and shippable.</span>' : '<span class="good">Installed and running.</span> Check the warnings above.');
+            busy = false;
+          }
+          paintSrc();
+          el.append(
+            h('div', { class: 'bd-picks' },
+              pick('compile', 'compile', [35, 36]),
+              pick('min', 'min', [24, 26]),
+              pick('target', 'target', [34, 35, 36]),
+              pick('phone', 'dev', [24, 31, 35, 36], v => 'API ' + v)),
+            h('div', { class: 'controls' }, guard.el),
+            src,
+            h('div', { class: 'bd-al-gates' }, gateEls),
+            h('div', { class: 'controls' }, cmd('./gradlew installDebug', run)),
+            o);
         },
       },
 
