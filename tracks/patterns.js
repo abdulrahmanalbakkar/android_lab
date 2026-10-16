@@ -70,7 +70,34 @@
 .phone.pt-mini-phone { height: 220px; justify-content: flex-start; align-items: stretch; }
 @media (max-width: 640px) {
   .pt-split, .pt-split.pt-auto { grid-template-columns: minmax(0, 1fr); }
-}`;
+}
+/* depth pass 2 */
+.pt-d2-cell { min-width: 2.2em; text-align: center; }
+.pt-li.pt-d2-wrong { background: var(--err-soft); color: var(--err); }
+.pt-d2-field { font: 500 0.8rem var(--mono); overflow-wrap: anywhere; }
+.pt-step.pt-d2-skip { opacity: 0.45; text-decoration: line-through; }
+.pt-d2-box { min-height: 52px; padding: 8px; border-radius: 10px; border: 2px dashed var(--accent); transition: border-color 0.25s, background 0.25s; }
+.pt-d2-box.pt-d2-locked { border-style: solid; border-color: var(--ok); background: var(--ok-soft); }
+.pt-li.pt-d2-tie { outline: 2px dashed var(--warm); outline-offset: -2px; }
+.pt-d2-rows { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.pt-d2-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 10px; background: var(--sunk); transition: opacity 0.25s; min-width: 0; }
+.pt-d2-row.pt-d2-fade { opacity: 0.2; }
+.pt-d2-img { width: 40px; height: 40px; border-radius: 8px; background: var(--accent-soft); }
+.pt-d2-img.pt-d2-loading { background: repeating-linear-gradient(45deg, var(--line) 0 6px, var(--surface) 6px 12px); animation: pulse 0.6s infinite; }
+.pt-d2-t { font-weight: 700; font-size: 0.85rem; line-height: 1.25; overflow-wrap: anywhere; min-width: 0; }
+.pt-d2-likes { font: 700 0.85rem var(--mono); }
+.pt-d2-crow { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; font: inherit; color: var(--ink); text-align: left; cursor: pointer; min-width: 0; }
+.pt-d2-crow small { font: 500 0.7rem var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.pt-d2-crow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pt-d2-gpos { font: 700 0.85rem var(--mono); color: var(--muted); }
+.pt-d2-a1 { background: var(--accent-soft); }
+.pt-d2-a2 { background: var(--sunk); }
+.pt-d2-a3 { background: var(--warm-soft); }
+.pt-tag.pt-d2-a1, .pt-tag.pt-d2-a2, .pt-tag.pt-d2-a3 { color: var(--ink); }
+.pt-card.pt-d2-ic { border-style: dashed; }
+.pt-d2-val { font: 600 0.82rem var(--mono); overflow-wrap: anywhere; }
+@media (max-width: 480px) { .pt-d2-crow { grid-template-columns: 1.6em minmax(0, 1fr); } .pt-d2-crow small { grid-column: 2; } }
+`;
 
   Lab.addTrack({
     id: 'patterns',
@@ -382,6 +409,203 @@ fun DetailRoute(vm: DetailViewModel = viewModel(factory = detailFactory)) { /* .
           { q: 'You rotate the phone. Does your <code>viewModelFactory</code> initializer run again?', options: ['Yes, the Activity is new', 'No, the existing ViewModel comes back from the ViewModelStore', 'Only on API 34+'], a: 1, why: 'The store survives configuration changes. The factory only runs when no instance exists yet.' },
           { q: 'What does a companion <code>operator fun invoke</code> let you write?', options: ['<code>Logger.invoke.create()</code>', '<code>Logger(debug = true)</code> on an interface', '<code>new Logger()</code>'], a: 1, why: 'The call looks like a constructor but runs your factory and returns any implementation.' },
         ],
+        deeper: [
+          {
+            title: 'A factory can reuse, refuse, or pick a subtype',
+            body: `<p>A constructor has one job: make a new object of exactly that class, every time. A factory function has more freedom. It can hand back a shared instance, return <code>null</code> for bad input, or return any subtype it likes.</p>
+<p>The standard library does all three. <code>emptyList()</code> returns one shared empty list. <code>"12a".toIntOrNull()</code> returns <code>null</code> instead of throwing. Make the constructor <code>private</code> so every caller has to go through the factory and its checks.</p>`,
+            code: `class Quantity private constructor(val value: Int) {
+    companion object {
+        private val small = Array(10) { Quantity(it) }    // built once
+
+        fun of(value: Int): Quantity {
+            require(value >= 0) { "negative: \$value" }
+            return if (value < 10) small[value] else Quantity(value)
+        }
+
+        fun parse(text: String): Quantity? =
+            text.toIntOrNull()?.takeIf { it >= 0 }?.let(::of)
+    }
+}`,
+            visual(el) {
+              const cache = Array.from({ length: 10 }, (_, i) => h('span', { class: 'pt-tag pt-d2-cell' }, String(i)));
+              const fresh = h('div', { class: 'pt-row' }, h('span', { class: 'tip' }, 'none yet'));
+              const resSlot = h('div', { class: 'pt-row' }, tag('-'));
+              const same = tag('same as last result: -');
+              const o = out('');
+              let prev = null, n = 0x7a0, made = 0, busy = false;
+              const addrOf = i => '@' + (0x3c0 + i * 0x10).toString(16);
+              const show = (text, kind, anim = 'pop') => { resSlot.replaceChildren(tag(text, kind)); replay(resSlot.firstElementChild, anim); };
+              function compare(a) {
+                if (prev == null || a == null) { same.textContent = 'same as last result: -'; same.className = 'pt-tag'; }
+                else { const s = prev === a; same.textContent = `same as last result: ${s ? 'yes' : 'no'}`; same.className = `pt-tag ${s ? 'pt-good' : 'pt-acc'}`; replay(same, 'pop'); }
+                prev = a;
+              }
+              async function of(v) {
+                if (busy) return; busy = true;
+                cache.forEach(c => c.classList.remove('pt-acc'));
+                if (v < 10) {
+                  const c = cache[v]; c.classList.add('pt-acc'); replay(c, 'pop');
+                  const a = addrOf(v);
+                  show(`Quantity(${v}) ${a}`, 'pt-good'); compare(a);
+                  say(o, `${hl(`Quantity.of(${v})`)} <span class="good">reused</span> ${a} <span class="muted">// from the cache, nothing allocated</span>`);
+                } else {
+                  n += 0x28; made++;
+                  const a = '@' + n.toString(16);
+                  if (made === 1) fresh.replaceChildren();
+                  fresh.append(tag(`Quantity(${v}) ${a}`, 'pt-acc drop-in'));
+                  while (fresh.children.length > 3) fresh.firstElementChild.remove();
+                  show(`Quantity(${v}) ${a}`, 'pt-acc', 'drop-in'); compare(a);
+                  say(o, `${hl(`Quantity.of(${v})`)} <span class="muted">// outside the cache: a new object on every call</span>`);
+                }
+                await sleep(300); busy = false;
+              }
+              function parse() {
+                if (busy) return;
+                cache.forEach(c => c.classList.remove('pt-acc'));
+                show('null', ''); compare(null);
+                say(o, `${hl('Quantity.parse("12a")')} = null <span class="muted">// bad input is an answer, not a crash. The caller decides.</span>`);
+              }
+              function neg() {
+                if (busy) return;
+                show('IllegalArgumentException', 'pt-warn', 'shake'); compare(null);
+                say(o, `${hl('Quantity.of(-1)')} <span class="bad">IllegalArgumentException:</span> negative: -1 <span class="muted">// the check runs for every caller</span>`);
+              }
+              function ctor() {
+                if (busy) return;
+                show('compile error', 'pt-warn', 'shake');
+                say(o, `${hl('Quantity(3)')} <span class="bad">compile error:</span> the constructor is private <span class="muted">// nobody can skip of()</span>`);
+              }
+              say(o, 'Call the factory. Watch where each result comes from.');
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'cache, built once'), h('div', { class: 'pt-row' }, cache), h('span', { class: 'pt-label' }, 'built on demand'), fresh),
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'last result'), resSlot, same)),
+                h('div', { class: 'controls' }, cmd('Quantity.of(3)', () => of(3)), cmd('Quantity.of(250)', () => of(250)), cmd('Quantity.parse("12a")', parse), cmd('Quantity.of(-1)', neg), cmd('Quantity(3)', ctor)),
+                o);
+            },
+          },
+          {
+            title: 'Same class, two ids: give the ViewModel a key',
+            body: `<p>A <code>ViewModelStore</code> files each ViewModel under a key, and the default key is the class name. Ask the same owner twice for <code>DetailViewModel</code> and you get the first one back, even if your initializer would pass a different id. The factory does not run the second time.</p>
+<p>That bites when one screen shows several items of the same type, such as pages in a <code>HorizontalPager</code>. Pass a <code>key</code> so each id gets its own entry. With Navigation you rarely need it, because every back stack entry has its own store.</p>`,
+            code: `HorizontalPager(state = pagerState) { page ->
+    val id = ids[page]
+    val vm: DetailViewModel = viewModel(key = "detail-\$id") {
+        DetailViewModel(repo, id)
+    }
+    DetailPage(vm)
+}`,
+            visual(el) {
+              let keyed = false, busy = false, n = 0x4b0, made = 0;
+              const store = new Map();
+              const storeBox = h('div', { class: 'pt-col' });
+              const madeTag = tag('');
+              const factory = h('div', { class: 'pt-card' }, h('div', { class: 'pt-row' }, h('div', { class: 'pt-spin' }), h('span', { class: 'pt-title' }, 'initializer')), h('span', { class: 'pt-label' }, 'DetailViewModel(repo, id)'), madeTag);
+              const pages = [7, 9].map((id, i) => {
+                const shows = h('div', { class: 'pt-li' }, 'not opened');
+                return { id, shows, card: h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, `page ${i + 1}: article ${id}`), shows) };
+              });
+              const o = out('');
+              const keyOf = id => (keyed ? `detail-${id}` : 'DefaultKey:…DetailViewModel');
+              function paint() {
+                storeBox.replaceChildren(...(store.size ? [...store].map(([k, v]) => h('div', { class: 'pt-li' + (v.fresh ? ' pt-new drop-in' : '') }, `DetailViewModel(id = ${v.id})`, h('small', {}, `key "${k}" · ${v.addr}`))) : [h('span', { class: 'tip' }, 'empty')]));
+                madeTag.textContent = `ran ${made} time${made === 1 ? '' : 's'}`;
+              }
+              function reset() {
+                store.clear(); made = 0;
+                pages.forEach(p => { p.shows.textContent = 'not opened'; p.shows.className = 'pt-li'; p.card.className = 'pt-card'; });
+                paint();
+              }
+              async function open(p) {
+                if (busy) return; busy = true;
+                const k = keyOf(p.id);
+                replay(p.card, 'pt-flash');
+                await sleep(300); if (!el.isConnected) return;
+                store.forEach(v => { v.fresh = false; });
+                let vm = store.get(k), msg;
+                if (vm) {
+                  paint();
+                  msg = `key "${k}" is already in the store, so the initializer is skipped.`;
+                } else {
+                  factory.classList.add('pt-on'); replay(factory, 'pt-flash');
+                  await sleep(600); if (!el.isConnected) return;
+                  factory.classList.remove('pt-on');
+                  n += 0x1c4; made++;
+                  vm = { id: p.id, addr: '@' + n.toString(16), fresh: true };
+                  store.set(k, vm); paint(); replay(madeTag, 'pop');
+                  msg = `no entry for "${k}": <span class="good">created DetailViewModel(id = ${p.id})</span>`;
+                }
+                const ok = vm.id === p.id;
+                p.shows.textContent = `shows article ${vm.id}`;
+                p.shows.className = 'pt-li ' + (ok ? 'pt-new' : 'pt-d2-wrong');
+                p.card.className = 'pt-card ' + (ok ? 'pt-ok' : 'pt-bad'); replay(p.card, ok ? 'pop-soft' : 'shake');
+                say(o, msg + (ok ? '' : `<div class="line"><span class="bad">wrong article:</span> page for ${p.id} got the ViewModel for ${vm.id}</div>`));
+                busy = false;
+              }
+              const t = toggle('pt-d2-fac-key', 'pass key = "detail-$id"', false, () => {
+                if (busy) { t.input.checked = keyed; return; }
+                keyed = t.input.checked; reset();
+                say(o, keyed ? 'Each id now has its own key. Open both pages.' : 'No key: both pages share the class-name key.');
+              });
+              reset();
+              say(o, 'One screen, two pages, one ViewModelStore. Open both pages.');
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, pages.map(p => p.card)),
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'ViewModelStore'), storeBox, factory)),
+                h('div', { class: 'controls' }, t),
+                h('div', { class: 'controls' }, pages.map(p => cmd(`viewModel { DetailViewModel(repo, ${p.id}) }`, () => open(p)))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>by viewModels()</code> and Compose's <code>viewModel()</code> both end in <code>ViewModelProvider.get()</code>. It builds a key from the class name, looks it up in the owner's <code>ViewModelStore</code>, which is a plain map, and returns a hit as is. Only on a miss does it call <code>factory.create(modelClass, extras)</code> and store the result.</p>
+<p>The <code>extras</code> are <code>CreationExtras</code>, a small typed map that the owner fills with the Application, the saved-state owner and the screen's arguments. <code>createSavedStateHandle()</code> reads from it. <code>viewModelFactory { initializer { } }</code> builds a factory that runs the initializer registered for the requested class. A companion <code>operator fun invoke</code> is plain sugar: <code>Logger(debug = true)</code> compiles to a call on the <code>Logger.Companion</code> object.</p>`,
+          code: `// Roughly what ViewModelProvider.get does
+fun <T : ViewModel> get(modelClass: KClass<T>): T {
+    val key = "androidx.lifecycle.ViewModelProvider.DefaultKey:\${modelClass.qualifiedName}"
+    store[key]?.let { return it as T }                 // after rotation: found
+    val vm = factory.create(modelClass, extras)        // first time only
+    store.put(key, vm)
+    return vm
+}`,
+        },
+        mistakes: [
+          {
+            title: 'A public constructor next to the factory',
+            bad: `data class Temperature(val celsius: Double) {
+    companion object {
+        fun of(text: String): Temperature = TODO("parse and check")
+    }
+}
+val t = Temperature(-500.0)   // skips every check in of()`,
+            good: `@ConsistentCopyVisibility
+data class Temperature private constructor(val celsius: Double) {
+    companion object {
+        fun of(text: String): Temperature = TODO("parse and check")
+    }
+}`,
+            why: 'A public constructor lets callers skip your checks. Make it private. On a <code>data class</code>, <code>copy()</code> is a second way in: since Kotlin 2.0.20 the compiler warns about it, and <code>@ConsistentCopyVisibility</code> makes <code>copy()</code> private too.',
+          },
+          {
+            title: 'Building heavy parts inside the initializer',
+            bad: `val detailFactory = viewModelFactory {
+    initializer {
+        val api = Retrofit.Builder().baseUrl(BASE_URL).build().create<NewsApi>()
+        DetailViewModel(ArticleRepository(api), createSavedStateHandle()["id"]!!)
+    }
+}`,
+            good: `val detailFactory = viewModelFactory {
+    initializer {
+        val app = this[APPLICATION_KEY] as NewsApp
+        DetailViewModel(app.container.articles, createSavedStateHandle()["id"]!!)
+    }
+}`,
+            why: 'Every new screen now builds its own Retrofit and OkHttp client, each with its own connection pool. A factory should assemble shared parts, not create them. Keep one container, or let Hilt do it.',
+          },
+        ],
         visual(el) {
           let vm = '@7c21', made = 1, gen = 1, busy = false, n = 0x7c21;
           const actTitle = h('span', { class: 'pt-title' });
@@ -498,6 +722,190 @@ val retrofit = Retrofit.Builder()
           { q: 'What replaces most builders in Kotlin?', options: ['Interfaces', 'Default and named arguments', 'Extension functions'], a: 1, why: 'Optional parameters get defaults, and callers name only what they change.' },
           { q: 'You forget a required parameter in <code>Request(...)</code>. When do you find out?', options: ['At compile time', 'When <code>build()</code> runs', 'When the request is sent'], a: 0, why: 'A parameter without a default must be passed, and the compiler enforces it. A builder can only check at runtime.' },
           { q: 'What does <code>Paint().apply { color = Color.RED }</code> return?', options: ['Unit', 'The Paint', 'Color.RED'], a: 1, why: '<code>apply</code> runs the block on the object and returns that same object.' },
+        ],
+        deeper: [
+          {
+            title: 'Checks live in init, and copy() runs them too',
+            body: `<p>A Java builder checks its values in <code>build()</code>. Kotlin has a better place: an <code>init</code> block with <code>require</code>. It runs on every construction, so an object with a bad value can never exist.</p>
+<p><code>copy()</code> calls the primary constructor, so it runs the same checks. A variant made with <code>copy(timeoutMs = 0)</code> fails exactly like a fresh <code>Request</code> with that value would.</p>`,
+            code: `data class Request(
+    val url: String,
+    val method: String = "GET",
+    val timeoutMs: Long = 10_000,
+) {
+    init {
+        require(url.startsWith("https://")) { "https only: \$url" }
+        require(timeoutMs in 1..60_000) { "timeoutMs out of range: \$timeoutMs" }
+    }
+}
+
+val feed = Request("https://api.example.com/feed")
+val broken = feed.copy(timeoutMs = 0)   // IllegalArgumentException`,
+            visual(el) {
+              const URL = 'https://api.example.com/feed';
+              let n = 0x2f0, busy = false;
+              let cur = { url: URL, method: 'GET', timeoutMs: 10000, addr: '@2f0' };
+              const checks = [
+                { src: 'require(url.startsWith("https://"))', ok: r => r.url.startsWith('https://'), msg: r => `https only: ${r.url}` },
+                { src: 'require(timeoutMs in 1..60_000)', ok: r => r.timeoutMs >= 1 && r.timeoutMs <= 60000, msg: r => `timeoutMs out of range: ${r.timeoutMs}` },
+              ];
+              const rows = checks.map(c => h('div', { class: 'pt-step', html: hl(c.src) }));
+              const objBox = h('div', { class: 'pt-card pt-on' });
+              const o = out('');
+              function paintObj(anim) {
+                objBox.replaceChildren(h('span', { class: 'pt-title' }, `val r: Request ${cur.addr}`),
+                  ...['url', 'method', 'timeoutMs'].map(k => h('span', { class: 'pt-d2-field' }, `${k} = ${typeof cur[k] === 'string' ? `"${cur[k]}"` : cur[k]}`)));
+                if (anim) replay(objBox, 'drop-in');
+              }
+              async function make(src, next) {
+                if (busy) return; busy = true;
+                rows.forEach(x => { x.className = 'pt-step'; });
+                say(o, `${hl(src)} <span class="muted">// runs the primary constructor, so init runs</span>`);
+                for (let i = 0; i < checks.length; i++) {
+                  rows[i].classList.add('pt-now');
+                  await sleep(420); if (!el.isConnected) return;
+                  rows[i].classList.remove('pt-now');
+                  if (!checks[i].ok(next)) {
+                    rows[i].classList.add('pt-fail'); replay(rows[i], 'shake');
+                    say(o, `${hl(src)}<div class="line"><span class="bad">IllegalArgumentException:</span> ${checks[i].msg(next)}</div><div class="line muted">// no object was created, r is unchanged</div>`);
+                    busy = false; return;
+                  }
+                  rows[i].classList.add('pt-done');
+                }
+                n += 0x30; cur = { ...next, addr: '@' + n.toString(16) }; paintObj(true);
+                say(o, `${hl(src)} <span class="good">ok</span> <span class="muted">// new Request ${cur.addr}, both checks passed</span>`);
+                busy = false;
+              }
+              const calls = [
+                ['Request(url = "https://api.example.com/feed")', () => ({ url: URL, method: 'GET', timeoutMs: 10000 })],
+                ['Request(url = "http://api.example.com/feed")', () => ({ url: 'http://api.example.com/feed', method: 'GET', timeoutMs: 10000 })],
+                ['r.copy(timeoutMs = 3_000)', () => ({ ...cur, timeoutMs: 3000 })],
+                ['r.copy(timeoutMs = 0)', () => ({ ...cur, timeoutMs: 0 })],
+                ['r.copy(method = "POST")', () => ({ ...cur, method: 'POST' })],
+              ];
+              paintObj(false);
+              say(o, 'Build a Request, then make variants with copy().');
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'init { }: runs on every construction'), h('div', { class: 'pt-steps' }, rows)),
+                  objBox),
+                h('div', { class: 'controls' }, calls.map(([src, next]) => cmd(src, () => make(src, next())))),
+                o);
+            },
+          },
+          {
+            title: 'Builders in the standard library: buildList and buildString',
+            body: `<p>The standard library ships builders too. Inside <code>buildList { }</code> you get a <code>MutableList</code> to fill with loops and <code>if</code>s. What comes out is a read-only <code>List</code>, so no caller can change it later. <code>buildString</code>, <code>buildMap</code> and <code>buildSet</code> work the same way.</p>
+<p>They replace a common leak: a <code>mutableListOf()</code> filled in a function and returned as mutable. Inside the braces, <code>this</code> is the builder, the same lambda-with-receiver trick that type-safe DSLs use.</p>`,
+            code: `fun menuItems(user: User?, isTablet: Boolean): List<MenuItem> = buildList {
+    add(MenuItem.Home)
+    if (user != null) add(MenuItem.Profile(user.name))
+    else add(MenuItem.SignIn)
+    if (isTablet) addAll(MenuItem.tabletExtras)
+    add(MenuItem.Settings)
+}
+
+val title = buildString {
+    append(article.title)
+    if (article.isLive) append(" · LIVE")
+}`,
+            visual(el) {
+              let user = true, tablet = false, busy = false, built = null;
+              const lines = [
+                { src: 'add(MenuItem.Home)', run: () => ['Home'] },
+                { src: 'if (user != null) add(MenuItem.Profile(user.name))', run: () => (user ? ['Profile(Ada)'] : []) },
+                { src: 'else add(MenuItem.SignIn)', run: () => (user ? [] : ['SignIn']) },
+                { src: 'if (isTablet) addAll(MenuItem.tabletExtras)', run: () => (tablet ? ['SplitView', 'Shortcuts'] : []) },
+                { src: 'add(MenuItem.Settings)', run: () => ['Settings'] },
+              ];
+              const rows = lines.map(l => h('div', { class: 'pt-step', html: hl(l.src) }));
+              const boxLabel = h('span', { class: 'pt-label' });
+              const box = h('div', { class: 'pt-row pt-d2-box' });
+              const o = out('');
+              function fill(items, locked) {
+                box.replaceChildren(...(items.length ? items.map(x => tag(x, 'pt-acc')) : [h('span', { class: 'tip' }, 'empty')]));
+                box.classList.toggle('pt-d2-locked', locked);
+                boxLabel.textContent = locked ? 'List<MenuItem>: read-only, returned' : 'MutableList: only inside the block';
+              }
+              async function run() {
+                if (busy) return; busy = true;
+                built = []; fill([], false);
+                rows.forEach(r => { r.className = 'pt-step'; });
+                say(o, hl(`val menu = menuItems(${user ? 'ada' : 'null'}, isTablet = ${tablet})`));
+                for (let i = 0; i < lines.length; i++) {
+                  rows[i].classList.add('pt-now');
+                  await sleep(380); if (!el.isConnected) return;
+                  const add = lines[i].run();
+                  rows[i].classList.remove('pt-now'); rows[i].classList.add(add.length ? 'pt-done' : 'pt-d2-skip');
+                  if (add.length && !built.length) box.replaceChildren();
+                  add.forEach(x => { built.push(x); box.append(tag(x, 'pt-acc drop-in')); });
+                }
+                await sleep(250); if (!el.isConnected) return;
+                fill(built, true); replay(box, 'pop-soft');
+                say(o, `${hl('buildList')} returned ${built.length} items <span class="muted">// a List, so callers can read it but not change it</span>`);
+                busy = false;
+              }
+              function mutate() {
+                if (busy) return;
+                replay(box, 'shake');
+                say(o, `${hl('menu.add(MenuItem.Debug)')} <span class="bad">compile error:</span> List has no add() <span class="muted">// the mutable view never left buildList</span>`);
+              }
+              const tu = toggle('pt-d2-bl-user', 'signed in', true, () => { if (busy) { tu.input.checked = user; return; } user = tu.input.checked; say(o, `user = ${user ? 'ada' : 'null'}. Build the menu again.`); });
+              const tt = toggle('pt-d2-bl-tab', 'tablet', false, () => { if (busy) { tt.input.checked = tablet; return; } tablet = tt.input.checked; say(o, `isTablet = ${tablet}. Build the menu again.`); });
+              built = ['Home', 'Profile(Ada)', 'Settings']; fill(built, true);
+              say(o, 'The menu for a signed-in phone user is built. Change the inputs and build it again.');
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'buildList { }'), h('div', { class: 'pt-steps' }, rows)),
+                  h('div', { class: 'pt-col' }, boxLabel, box)),
+                h('div', { class: 'controls' }, tu, tt, cmd('menuItems(user, isTablet)', run), cmd('menu.add(MenuItem.Debug)', mutate)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Named arguments cost nothing at runtime. The compiler puts them back into parameter order at the call site, and uses temporary variables when it needs to keep your left-to-right evaluation order.</p>
+<p>Default values compile to an extra synthetic constructor or method. It takes the normal parameters plus an <code>int</code> bitmask, one bit per parameter, and a marker argument. A set bit means "use the default". Java callers see only the full signature, unless you add <code>@JvmOverloads</code>, which generates the shorter overloads for them. <code>apply</code> is an <code>inline</code> function, so its block is pasted in place with no lambda object.</p>`,
+          code: `// Kotlin
+Request(url = feedUrl, timeoutMs = 3_000)
+
+// Roughly the bytecode, written as Java
+new Request(feedUrl, null, 3000L, null, 0b1010, null);
+// bit 1 (method) and bit 3 (headers) are set: use their defaults`,
+        },
+        mistakes: [
+          {
+            title: 'let where you meant apply',
+            bad: `val paint = Paint().let {
+    it.color = Color.RED
+    it.strokeWidth = 4f
+}   // paint is Unit`,
+            good: `val paint = Paint().apply {
+    color = Color.RED
+    strokeWidth = 4f
+}`,
+            why: '<code>let</code> returns the lambda’s result, and a block that ends in an assignment returns <code>Unit</code>. <code>apply</code> returns the object itself, which is what a configure block needs.',
+          },
+          {
+            title: 'A Java-style builder written in Kotlin',
+            bad: `class RequestBuilder {
+    private var url: String? = null
+    private var timeoutMs = 10_000L
+    fun url(u: String) = apply { url = u }
+    fun timeout(ms: Long) = apply { timeoutMs = ms }
+    fun build() = Request(url!!, timeoutMs = timeoutMs)
+}`,
+            good: `val request = Request(url = feedUrl, timeoutMs = 3_000)`,
+            why: 'The builder turns a compile-time check into a <code>!!</code> that fails at runtime, and it is one more class to keep in sync. Defaults and named arguments give the same call for free.',
+          },
+          {
+            title: 'Positional arguments of the same type',
+            bad: `data class Notice(val title: String, val text: String)
+
+val n = Notice(article.summary, article.title)   // swapped, still compiles`,
+            good: `val n = Notice(title = article.title, text = article.summary)`,
+            why: 'Two <code>String</code> parameters in the wrong order compile fine. Naming them makes each value say where it goes, and a swap becomes obvious in review.',
+          },
         ],
         visual(el) {
           const opts = [
@@ -887,6 +1295,168 @@ val rows = cart.sortedWith(byPriceDesc)`,
           { q: 'A new “Black Friday” discount arrives. With the strategy pattern, what changes in <code>Checkout</code>?', options: ['A new branch in its when', 'Nothing, you pass it a new Pricing', 'Its constructor signature'], a: 1, why: 'The discount is a new function. Checkout just calls whatever pricing it holds.' },
           { q: 'When is an interface a better fit than a function type for a strategy?', options: ['Always', 'When it needs a name, state, or several methods', 'Never in Kotlin'], a: 1, why: 'A lambda covers one operation. An interface groups related operations and can hold data.' },
         ],
+        deeper: [
+          {
+            title: 'Strategies compose: thenBy breaks ties',
+            body: `<p>A <code>Comparator</code> is a strategy you can combine. <code>compareBy { it.category }.thenByDescending { it.priceCents }</code> sorts by category and breaks ties by price. Each piece is tiny, and the sort itself never changes.</p>
+<p>Ties matter more than they look. Kotlin's <code>sortedWith</code> is stable: items that compare as equal keep the order they arrived in. Without a tie-breaker, that order comes from the server, and it can change between two loads of the same data.</p>`,
+            code: `val order = compareBy<Product> { it.category }
+    .thenByDescending { it.priceCents }
+    .thenBy { it.name }
+
+val rows = products.sortedWith(order)`,
+            visual(el) {
+              const items = [
+                { name: 'Mug', cat: 'Home', p: 1200 }, { name: 'Tea', cat: 'Food', p: 900 },
+                { name: 'Vase', cat: 'Home', p: 1200 }, { name: 'Lamp', cat: 'Home', p: 2400 },
+                { name: 'Honey', cat: 'Food', p: 900 }, { name: 'Beans', cat: 'Food', p: 1800 },
+              ];
+              const KEYS = [
+                { k: 'price', label: 'thenByDescending price', src: '.thenByDescending { it.priceCents }', f: (a, b) => b.p - a.p },
+                { k: 'name', label: 'thenBy name', src: '.thenBy { it.name }', f: (a, b) => a.name.localeCompare(b.name) },
+              ];
+              const on = { price: false, name: false };
+              let input = items.slice();
+              const chain = h('div', { class: 'kt' });
+              const list = h('div', { class: 'pt-col' });
+              const inputRow = h('div', { class: 'pt-row' });
+              const o = out('');
+              const cmpOf = () => {
+                const ks = [(a, b) => a.cat.localeCompare(b.cat), ...KEYS.filter(x => on[x.k]).map(x => x.f)];
+                return (a, b) => { for (const f of ks) { const r = f(a, b); if (r) return r; } return 0; };
+              };
+              function paintChain() {
+                chain.innerHTML = hl(['val order = compareBy<Product> { it.category }', ...KEYS.filter(x => on[x.k]).map(x => '    ' + x.src)].join('\n'));
+                inputRow.replaceChildren(h('span', { class: 'pt-label' }, 'API order'), ...input.map(x => tag(x.name)));
+              }
+              function sortNow(anim) {
+                const cmp = cmpOf();
+                const sorted = input.slice().sort(cmp);
+                let ties = 0;
+                list.replaceChildren(...sorted.map((x, i) => {
+                  const tie = (i > 0 && cmp(sorted[i - 1], x) === 0) || (i < sorted.length - 1 && cmp(x, sorted[i + 1]) === 0);
+                  if (tie) ties++;
+                  return h('div', { class: 'pt-li' + (tie ? ' pt-d2-tie' : '') + (anim ? ' drop-in' : ''), style: anim ? `animation-delay:${i * 50}ms` : null },
+                    x.name, h('small', {}, `${x.cat} · ${money(x.p)}${tie ? ' · tie' : ''}`));
+                }));
+                return ties;
+              }
+              const report = ties => (ties
+                ? `<span class="bad">${ties} rows tie</span> <span class="muted">// their order comes from the API, not from you</span>`
+                : '<span class="good">no ties</span> <span class="muted">// every row has one place, whatever order the API used</span>');
+              const chips = KEYS.map(x => h('button', { class: 'fn', 'aria-pressed': 'false', onclick() {
+                on[x.k] = !on[x.k]; this.classList.toggle('on', on[x.k]); this.setAttribute('aria-pressed', String(on[x.k]));
+                paintChain(); replay(chain, 'pop-soft');
+                say(o, `${on[x.k] ? 'Added' : 'Removed'} ${hl(x.src)}. ${report(sortNow(true))}`);
+              } }, x.label));
+              function sortCmd() { say(o, `${hl('products.sortedWith(order)')} ${report(sortNow(true))}`); }
+              function shuffle() {
+                input = input.slice().reverse(); paintChain(); replay(inputRow, 'pt-flash');
+                const ties = sortNow(true);
+                say(o, ties
+                  ? `Same items, new API order. <span class="bad">The tied rows swapped places.</span> <span class="muted">// stable sort keeps arrival order for ties</span>`
+                  : `Same items, new API order. <span class="good">Same result.</span> <span class="muted">// the comparator decides every position</span>`);
+              }
+              paintChain();
+              say(o, `Sorted by category only. ${report(sortNow(false))}`);
+              el.append(
+                h('div', { class: 'pt-chips' }, chips),
+                h('div', { class: 'pt-split' }, h('div', { class: 'pt-col' }, chain, inputRow), list),
+                h('div', { class: 'controls' }, cmd('products.sortedWith(order)', sortCmd), act('API sends the same items in a new order', shuffle)),
+                o);
+            },
+          },
+          {
+            title: 'Pick the strategy at the edge, with a default',
+            body: `<p>Something still has to choose the strategy. Keep that choice in one place at the edge of the app: a map from a config value to a strategy, with a safe default. <code>Checkout</code> never learns where the choice came from.</p>
+<p>Remote config, A/B tests and user settings then become plain data. An unknown promo name from the server falls back to <code>regular</code> instead of crashing the cart. With Hilt you can build the same map from <code>@IntoMap</code> bindings.</p>`,
+            code: `val pricings: Map<String, Pricing> = mapOf(
+    "regular" to regular,
+    "sale20" to sale20,
+    "member" to memberDeal,
+)
+
+fun pricingFor(promo: String?): Pricing = pricings[promo] ?: regular
+
+checkout.pricing = pricingFor(remoteConfig.getString("promo"))`,
+            visual(el) {
+              const sub = 5320;
+              const MAP = [
+                { key: 'regular', fn: 'regular', f: () => sub, note: 'full price' },
+                { key: 'sale20', fn: 'sale20', f: () => Math.floor(sub * 80 / 100), note: '20% off everything' },
+                { key: 'member', fn: 'memberDeal', f: () => (sub >= 4000 ? sub - 500 : sub), note: '$5 off at $40 or more' },
+              ];
+              let busy = false;
+              const rows = MAP.map(m => h('div', { class: 'pt-step', html: hl(`"${m.key}" to ${m.fn}`) }));
+              const fallback = h('div', { class: 'pt-step', html: hl('?: regular   // unknown or missing') });
+              const cfg = tag('promo = -');
+              const total = h('span', { class: 'pt-num' }, money(sub));
+              const used = tag('regular');
+              const cart = h('div', { class: 'pt-card pt-on' }, h('span', { class: 'pt-title' }, 'Checkout'), h('span', { class: 'pt-label' }, 'pricing'), used, h('span', { class: 'pt-label' }, 'total'), total);
+              const o = out('');
+              async function send(v) {
+                if (busy) return; busy = true;
+                const key = v == null ? null : v;
+                cfg.textContent = `promo = ${v == null ? 'null' : `"${v}"`}`; cfg.className = 'pt-tag pt-acc'; replay(cfg, 'pop');
+                [...rows, fallback].forEach(r => { r.className = 'pt-step'; });
+                say(o, hl(`pricingFor(${v == null ? 'null' : `"${v}"`})`));
+                let hit = null;
+                for (let i = 0; i < MAP.length; i++) {
+                  rows[i].classList.add('pt-now'); await sleep(260); if (!el.isConnected) return;
+                  rows[i].classList.remove('pt-now');
+                  if (MAP[i].key === key) { rows[i].classList.add('pt-done'); hit = MAP[i]; break; }
+                }
+                if (!hit) { fallback.classList.add('pt-now'); await sleep(260); if (!el.isConnected) return; fallback.classList.remove('pt-now'); fallback.classList.add('pt-done'); hit = MAP[0]; }
+                used.textContent = hit.fn; replay(used, 'pop');
+                total.textContent = money(hit.f()); replay(total, 'pop'); replay(cart, 'pt-flash');
+                say(o, `${hl(`pricingFor(${v == null ? 'null' : `"${v}"`})`)} = ${hit.fn} <span class="muted">// ${v === hit.key ? hit.note : 'no match, so the safe default'}. Checkout did not change.</span>`);
+                busy = false;
+              }
+              say(o, 'Remote config decides the promo. Send a few values.');
+              el.append(
+                h('div', { class: 'pt-split' },
+                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'from the server'), cfg, h('span', { class: 'pt-label' }, 'pricings[promo]'), h('div', { class: 'pt-steps' }, rows, fallback)),
+                  cart),
+                h('div', { class: 'controls' }, ['sale20', 'member', 'blackfriday', null].map(v => cmd(`pricingFor(${v == null ? 'null' : `"${v}"`})`, () => send(v)))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Since Kotlin 2.0, a lambda stored in a function type compiles through <code>invokedynamic</code>, the same mechanism Java uses for its lambdas, and D8 turns that into small classes for Android. A lambda that captures nothing, like <code>sale20</code>, ends up as one shared instance. A lambda that captures a local variable gets a new object each time the expression runs.</p>
+<p><code>compareBy</code> returns a <code>Comparator</code> that runs your selector on both items and compares the results. <code>thenBy</code> wraps it: it asks the first comparator and only on a tie calls the next one. <code>sortedWith</code> copies the list into an array and calls <code>java.util.Arrays.sort</code> with your comparator. For objects that is TimSort, which is stable.</p>`,
+          code: `// thenBy, roughly
+fun <T> Comparator<T>.thenBy(selector: (T) -> Comparable<*>?): Comparator<T> =
+    Comparator { a, b ->
+        val first = this.compare(a, b)
+        if (first != 0) first else compareValuesBy(a, b, selector)
+    }`,
+        },
+        mistakes: [
+          {
+            title: 'Comparing by subtraction',
+            bad: `val newestFirst = Comparator<Article> { a, b ->
+    (b.publishedAtMillis - a.publishedAtMillis).toInt()
+}`,
+            good: `val newestFirst = compareByDescending<Article> { it.publishedAtMillis }`,
+            why: 'Two timestamps about 25 days apart differ by more than <code>Int.MAX_VALUE</code> milliseconds. <code>toInt()</code> wraps around, the sign flips, and older articles jump to the top. <code>compareBy</code> and <code>compareTo</code> never overflow.',
+          },
+          {
+            title: 'Chaining two sorts the wrong way round',
+            bad: `// wants: by section, then by title
+articles.sortedBy { it.section }.sortedBy { it.title }`,
+            good: `articles.sortedWith(compareBy({ it.section }, { it.title }))`,
+            why: 'The last sort becomes the main key, so this list is ordered by title and section only breaks ties. One comparator with the keys in order says what you mean and sorts once.',
+          },
+          {
+            title: 'A sorted set that drops items',
+            bad: `val cart = sortedSetOf(compareBy<CartItem> { it.priceCents })
+cart += CartItem("Tea", 450, 1)
+cart += CartItem("Coffee", 450, 2)   // ignored: compares as equal`,
+            good: `val cart = sortedSetOf(compareBy<CartItem>({ it.priceCents }, { it.name }))`,
+            why: 'A sorted set treats <code>compare(a, b) == 0</code> as "same item" and keeps only the first. Give the comparator enough keys to tell different items apart.',
+          },
+        ],
         visual(el) {
           const items = [
             { name: 'Coffee', p: 450, q: 2 }, { name: 'Croissant', p: 320, q: 1 },
@@ -1013,6 +1583,246 @@ class ArticleAdapter : ListAdapter<Article, ArticleAdapter.Holder>(Diff) {
           { q: 'The API renames <code>headline</code> to <code>title</code>. What should change?', options: ['Every screen that shows a title', 'The DTO and its mapper', 'The RecyclerView adapter'], a: 1, why: 'The domain model and the UI depend on your Article, not on the JSON.' },
           { q: 'What does <code>ListAdapter</code> add over a plain <code>RecyclerView.Adapter</code>?', options: ['Click handling', 'Diffing on submitList so only changed rows update', 'Paging'], a: 1, why: 'It runs DiffUtil for you and dispatches minimal updates.' },
         ],
+        deeper: [
+          {
+            title: 'Payloads: update one view, not the whole row',
+            body: `<p>When <code>areContentsTheSame</code> returns false, <code>ListAdapter</code> rebinds the whole row, and the default item animator cross-fades it. For a like counter that ticks often, the row blinks and its image may reload.</p>
+<p>Override <code>getChangePayload</code> to say <em>what</em> changed. The adapter then calls the three-argument <code>onBindViewHolder</code> on the same ViewHolder with that payload, and you update just one view. No cross-fade, no image reload.</p>`,
+            code: `object LikesChanged
+
+object Diff : DiffUtil.ItemCallback<Article>() {
+    override fun areItemsTheSame(old: Article, new: Article) = old.id == new.id
+    override fun areContentsTheSame(old: Article, new: Article) = old == new
+    override fun getChangePayload(old: Article, new: Article): Any? =
+        if (old.copy(likes = new.likes) == new) LikesChanged else null
+}
+
+override fun onBindViewHolder(holder: Holder, position: Int, payloads: List<Any>) {
+    if (LikesChanged in payloads) holder.binding.likes.text = getItem(position).likes.toString()
+    else super.onBindViewHolder(holder, position, payloads)   // full bind
+}`,
+            visual(el) {
+              const data = [
+                { id: 101, title: 'Rain expected all weekend', likes: 12 },
+                { id: 102, title: 'Ferry times change on Monday', likes: 40 },
+                { id: 103, title: 'New park opens downtown', likes: 7 },
+              ];
+              let payloads = false, busy = false, full = 0, partial = 0;
+              data.forEach(a => {
+                a.likesEl = h('b', { class: 'pt-d2-likes' }, String(a.likes));
+                a.img = h('span', { class: 'pt-d2-img' });
+                a.titleEl = h('span', { class: 'pt-d2-t' }, a.title);
+                a.row = h('div', { class: 'pt-d2-row' }, a.img, h('div', { class: 'pt-col' }, a.titleEl, h('span', { class: 'pt-row' }, h('span', { class: 'pt-label' }, 'likes'), a.likesEl)));
+              });
+              const counts = tag('');
+              const o = out('');
+              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
+              const paintCounts = () => { counts.textContent = `full binds ${full} · payload binds ${partial}`; replay(counts, 'pop-soft'); };
+              async function fullBind(a) {
+                full++;
+                a.row.classList.add('pt-d2-fade'); a.img.classList.add('pt-d2-loading');
+                await sleep(420); if (!el.isConnected) return false;
+                a.titleEl.textContent = a.title; a.likesEl.textContent = String(a.likes);
+                a.row.classList.remove('pt-d2-fade');
+                await sleep(380); if (!el.isConnected) return false;
+                a.img.classList.remove('pt-d2-loading');
+                return true;
+              }
+              async function like(a) {
+                if (busy) return; busy = true;
+                a.likes++;
+                const pos = data.indexOf(a);
+                say(o, `${hl(`submitList(list with ${a.id}.likes = ${a.likes})`)} <span class="muted">// only likes changed</span>`);
+                if (payloads) {
+                  partial++;
+                  a.likesEl.textContent = String(a.likes); replay(a.likesEl, 'pop');
+                  ln(`${hl(`onBindViewHolder(holder, ${pos}, [LikesChanged])`)} <span class="muted">// one TextView set, same ViewHolder</span>`);
+                } else {
+                  ln(`<span class="bad">getChangePayload = null</span> <span class="muted">// full rebind: cross-fade, image loads again</span>`);
+                  if (!await fullBind(a)) return;
+                }
+                paintCounts(); busy = false;
+              }
+              async function retitle(a) {
+                if (busy) return; busy = true;
+                a.title = a.title.endsWith(' (updated)') ? a.title.replace(' (updated)', '') : a.title + ' (updated)';
+                const pos = data.indexOf(a);
+                say(o, `${hl(`submitList(list with ${a.id}.title changed)`)}`);
+                ln(`${payloads ? 'title changed too, so getChangePayload returns null.' : 'no payload support.'} <span class="muted">// full bind of row ${pos} is correct here</span>`);
+                if (!await fullBind(a)) return;
+                paintCounts(); busy = false;
+              }
+              const t = toggle('pt-d2-ad-pay', 'override getChangePayload', false, () => {
+                if (busy) { t.input.checked = payloads; return; }
+                payloads = t.input.checked;
+                say(o, payloads ? 'Payloads on. Like an article again.' : 'Payloads off. Every content change is a full bind.');
+              });
+              paintCounts();
+              say(o, 'Tap like a few times and watch the row.');
+              el.append(
+                h('div', { class: 'pt-split' }, h('div', { class: 'pt-d2-rows' }, data.map(a => a.row)), h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'RecyclerView'), counts, t)),
+                h('div', { class: 'controls' }, cmd('like(102)', () => like(data[1])), cmd('like(101)', () => like(data[0])), cmd('retitle(103)', () => retitle(data[2]))),
+                o);
+            },
+          },
+          {
+            title: 'ConcatAdapter: several adapters in one list',
+            body: `<p>A feed often has a header, the articles and a "loading more" footer. Instead of one adapter juggling view types and position offsets, give each part its own adapter and join them with <code>ConcatAdapter</code>. It adapts several adapters into the one adapter a RecyclerView expects.</p>
+<p>Each child keeps its own positions, starting at 0. In a ViewHolder, <code>bindingAdapterPosition</code> is the position inside its own adapter, and <code>absoluteAdapterPosition</code> is the position in the whole list. Show the footer by giving its adapter one item, and hide it by giving it none.</p>`,
+            code: `val header = HeaderAdapter()
+val articles = ArticleAdapter()
+val footer = LoadingFooterAdapter()    // itemCount is 0 or 1
+
+recyclerView.adapter = ConcatAdapter(header, articles, footer)
+
+class LoadingFooterAdapter : RecyclerView.Adapter<FooterHolder>() {
+    var loading = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) notifyItemInserted(0) else notifyItemRemoved(0)
+        }
+    override fun getItemCount() = if (loading) 1 else 0
+    // onCreateViewHolder, onBindViewHolder ...
+}`,
+            visual(el) {
+              let header = true, loading = false, busy = false, next = 0;
+              let items = ['Rain expected all weekend', 'Ferry times change', 'New park opens'];
+              const extra = ['Library extends hours', 'Tram line extended', 'Market moves to Saturday', 'Marathon route set'];
+              const list = h('div', { class: 'pt-d2-rows' });
+              const legend = h('div', { class: 'pt-row' });
+              const o = out('');
+              const children = () => [
+                { name: 'HeaderAdapter', cls: 'pt-d2-a1', rows: header ? ['Top stories'] : [] },
+                { name: 'ArticleAdapter', cls: 'pt-d2-a2', rows: items },
+                { name: 'FooterAdapter', cls: 'pt-d2-a3', rows: loading ? ['Loading more…'] : [] },
+              ];
+              let flat = [];
+              function paint(mark) {
+                flat = []; let g = 0;
+                for (const c of children()) c.rows.forEach((r, local) => flat.push({ c, r, local, g: g++ }));
+                list.replaceChildren(...flat.map(x => h('button', { type: 'button', class: `pt-d2-crow ${x.c.cls}` + (mark && mark(x) ? ' drop-in' : ''), onclick: () => tap(x) },
+                  h('span', { class: 'pt-d2-gpos' }, String(x.g)), h('span', { class: 'pt-d2-t' }, x.r), h('small', {}, `${x.c.name} · ${x.local}`))));
+                legend.replaceChildren(...children().map(c => h('span', { class: `pt-tag ${c.cls}` }, `${c.name}: ${c.rows.length}`)));
+              }
+              function tap(x) {
+                if (busy) return;
+                say(o, `tapped "${x.r}" <div class="line">${hl(`absoluteAdapterPosition = ${x.g}`)}</div><div class="line">${hl(`bindingAdapterPosition = ${x.local}`)} <span class="muted">// inside ${x.c.name}</span></div>`);
+              }
+              function toggleFooter() {
+                if (busy) return;
+                loading = !loading;
+                const g = flat.length - (loading ? 0 : 1);
+                paint(x => x.c.name === 'FooterAdapter');
+                say(o, `${hl(`footer.loading = ${loading}`)} <span class="muted">// footer ${loading ? 'notifyItemInserted(0)' : 'notifyItemRemoved(0)'}: ConcatAdapter reports global position ${g}</span>`);
+              }
+              function add() {
+                if (busy) return;
+                if (next >= extra.length) { replay(list, 'shake'); say(o, 'No more articles on the server. Press Reset.'); return; }
+                const title = extra[next++]; items = [...items, title];
+                paint(x => x.r === title);
+                const x = flat.find(f => f.r === title);
+                say(o, `${hl('articles.submitList(list + article)')} <span class="muted">// local ${x.local} in ArticleAdapter, global ${x.g}${loading ? ', above the footer' : ''}</span>`);
+              }
+              function toggleHeader() {
+                if (busy) return;
+                header = !header;
+                paint(x => header && x.c.name === 'HeaderAdapter');
+                say(o, `${hl(`header.visible = ${header}`)} <span class="muted">// every global position below moved by one. Local positions did not.</span>`);
+              }
+              function tapLast() {
+                const x = [...flat].reverse().find(f => f.c.name === 'ArticleAdapter');
+                if (x) tap(x);
+              }
+              paint();
+              say(o, 'Three adapters, one RecyclerView. Tap a row to see both positions.');
+              el.append(
+                legend, list,
+                h('div', { class: 'controls' }, cmd('articles.submitList(list + article)', add), cmd('footer.loading = !footer.loading', toggleFooter), cmd('header.visible = !header.visible', toggleHeader), act('Tap the last article', tapLast)),
+                o);
+            },
+          },
+          {
+            title: 'One bad item should not sink the feed',
+            body: `<p>A mapper that throws on one malformed item fails the whole response, and the user sees an empty screen. At the edge, decide per item: map what is valid and drop the rest with <code>mapNotNull</code>, logging what you dropped.</p>
+<p>Required fields stay non-null in your own model, so the rest of the app never checks them again. That is the adapter's real value: all the doubt about the server's data lives in one function.</p>`,
+            code: `@Serializable
+data class ArticleDto(
+    val id: Long? = null,
+    val headline: String? = null,
+    @SerialName("published_at") val publishedAtEpoch: Long? = null,
+)
+
+fun ArticleDto.toDomainOrNull(): Article? {
+    val id = id ?: return null
+    val title = headline?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val published = publishedAtEpoch?.let(Instant::ofEpochSecond) ?: return null
+    return Article(id, title, published, image = null)
+}
+
+val articles = dtos.mapNotNull { dto ->
+    dto.toDomainOrNull().also { if (it == null) Log.w("Feed", "dropped \$dto") }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>ListAdapter</code> hands the work to an <code>AsyncListDiffer</code>. On <code>submitList</code> it first checks whether you passed the very same list object. If so, it does nothing. Otherwise it runs <code>DiffUtil.calculateDiff</code> on a background thread, comparing the new list with the one on screen, and posts the result to the main thread.</p>
+<p>There the result becomes calls like <code>notifyItemRangeInserted</code> and <code>notifyItemChanged(position, payload)</code>. DiffUtil uses Eugene Myers's difference algorithm, roughly O(N + D²) where D is the number of edits, plus a pass to find moved items. If you submit again before a diff finishes, the older result is thrown away.</p>`,
+          code: `// Inside AsyncListDiffer.submitList, roughly
+if (newList === current) return                 // same object: nothing to do
+val generation = ++maxScheduledGeneration
+backgroundExecutor.execute {
+    val result = DiffUtil.calculateDiff(callbackFor(current, newList))
+    mainThread.execute {
+        if (generation == maxScheduledGeneration) {    // a newer submit wins
+            current = newList
+            result.dispatchUpdatesTo(adapter)          // notifyItemInserted, ...Changed
+        }
+    }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Mutating the list and submitting it again',
+            bad: `val items = mutableListOf<Article>()
+fun onNew(article: Article) {
+    items.add(article)
+    adapter.submitList(items)   // same object: ignored
+}`,
+            good: `var items: List<Article> = emptyList()
+fun onNew(article: Article) {
+    items = items + article
+    adapter.submitList(items)   // new list: diffed
+}`,
+            why: 'ListAdapter skips a list it already holds. Even with a copy, the adapter has been reading the same list you mutated, so the diff has no old state to compare. Always submit a new list.',
+          },
+          {
+            title: 'Formatting server data in onBindViewHolder',
+            bad: `override fun onBindViewHolder(holder: Holder, position: Int) {
+    val dto = getItem(position)
+    holder.binding.date.text = SimpleDateFormat("d MMM", Locale.getDefault())
+        .format(Date(dto.publishedAtEpoch * 1000))
+}`,
+            good: `// map once, at the edge
+data class ArticleRow(val id: Long, val title: String, val dateLabel: String)
+
+override fun onBindViewHolder(holder: Holder, position: Int) {
+    holder.binding.date.text = getItem(position).dateLabel
+}`,
+            why: 'Bind runs every time a row scrolls into view. Building formatters there costs frame time and ties the adapter to the server shape. Map to a ready-to-show model once.',
+          },
+          {
+            title: 'notifyDataSetChanged after every change',
+            bad: `fun update(newItems: List<Article>) {
+    items = newItems
+    notifyDataSetChanged()
+}`,
+            good: `class ArticleAdapter : ListAdapter<Article, ArticleAdapter.Holder>(Diff) { /* ... */ }
+
+adapter.submitList(newItems)`,
+            why: '<code>notifyDataSetChanged</code> says "anything may have changed", so RecyclerView rebinds every visible row and drops all item animations. A diff sends only the real inserts, removes and changes.',
+          },
+        ],
         visual(el) {
           const pool = [
             { id: 101, headline: ' Rain expected all weekend ', t: 1792310400 },
@@ -1136,6 +1946,245 @@ val client = OkHttpClient.Builder()
           { q: 'In <code>Logging(Caching(Network(api)))</code>, a second call for the same id is a cache hit. Does the log line still print?', options: ['Yes, Logging wraps Caching', 'No, the cache short-circuits everything'], a: 0, why: 'The outer layer sees every call. Only the layers inside the cache are skipped.' },
           { q: 'What does <code>: UserRepository by inner</code> do?', options: ['Inherits from inner’s class', 'Forwards every interface member you don’t override to inner', 'Makes inner lazy'], a: 1, why: 'Class delegation generates the forwarding methods, so you write only the decorated one.' },
         ],
+        deeper: [
+          {
+            title: 'Application and network interceptors sit at different depths',
+            body: `<p>OkHttp gives you two places to add a decorator. An <em>application</em> interceptor, added with <code>addInterceptor</code>, wraps the outside of the chain. It runs once per call, even when the response comes from the cache, and it never sees redirects.</p>
+<p>A <em>network</em> interceptor, added with <code>addNetworkInterceptor</code>, sits next to the socket. It runs once for every request that really goes out, so twice for a redirect, and not at all for a cache hit. Put auth and app-level logging outside. Put anything that must see the real wire traffic inside.</p>`,
+            code: `val client = OkHttpClient.Builder()
+    .cache(Cache(context.cacheDir.resolve("http"), 10L * 1024 * 1024))
+    .addInterceptor(AuthInterceptor(tokens))            // once per call
+    .addNetworkInterceptor(WireLoggingInterceptor())    // once per network request
+    .build()`,
+            visual(el) {
+              const L = [
+                { k: 'call', name: 'newCall(request).execute()', sub: 'your code' },
+                { k: 'app', name: 'addInterceptor', sub: 'application interceptor' },
+                { k: 'retry', name: 'RetryAndFollowUp', sub: 'built in: redirects' },
+                { k: 'cache', name: 'CacheInterceptor', sub: 'built in' },
+                { k: 'net', name: 'addNetworkInterceptor', sub: 'network interceptor' },
+                { k: 'server', name: 'server', sub: 'api.example.com' },
+              ];
+              const C = {};
+              let ran = { app: 0, net: 0 }, cached = false, busy = false;
+              L.forEach(x => {
+                const note = tag(x.k === 'app' || x.k === 'net' ? 'ran 0×' : 'idle');
+                C[x.k] = h('div', { class: 'pt-card' + (x.k === 'app' || x.k === 'net' ? ' pt-d2-ic' : '') }, h('div', { class: 'pt-row' }, h('span', { class: 'pt-title' }, x.name), h('span', { class: 'pt-label' }, x.sub)), note);
+                C[x.k].note = note;
+              });
+              const o = out('');
+              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
+              async function hit(k, text, kind = 'pt-acc') {
+                const c = C[k];
+                if (k === 'app' || k === 'net') { ran[k]++; text = `ran ${ran[k]}× · ${text}`; }
+                c.classList.add('pt-on'); c.note.textContent = text; c.note.className = `pt-tag ${kind}`; replay(c, 'pt-flash');
+                await sleep(300); c.classList.remove('pt-on');
+                return el.isConnected;
+              }
+              function idle() { L.forEach(x => { const c = C[x.k]; c.note.className = 'pt-tag'; c.note.textContent = x.k === 'app' || x.k === 'net' ? `ran ${ran[x.k]}×` : x.k === 'cache' ? (cached ? '1 response stored' : 'empty') : 'idle'; }); }
+              async function feed() {
+                if (busy) return; busy = true; idle();
+                const before = { ...ran };
+                say(o, hl('GET /feed'));
+                if (!await hit('call', 'waiting')) return;
+                if (!await hit('app', 'request out')) return;
+                if (!await hit('retry', 'passing on')) return;
+                if (cached) {
+                  if (!await hit('cache', 'HIT', 'pt-good')) return;
+                  ln('<span class="good">served from cache</span> <span class="muted">// nothing below the cache runs</span>');
+                } else {
+                  if (!await hit('cache', 'miss', 'pt-warn')) return;
+                  if (!await hit('net', 'on the wire')) return;
+                  if (!await hit('server', '200 OK', 'pt-good')) return;
+                  cached = true; C.cache.note.textContent = 'stored'; C.cache.note.className = 'pt-tag pt-good';
+                  ln('<span class="good">200 OK</span> from the network, now cached');
+                }
+                ln(`application interceptor <b>+${ran.app - before.app}</b>, network interceptor <b>+${ran.net - before.net}</b>`);
+                busy = false;
+              }
+              async function moved() {
+                if (busy) return; busy = true; idle();
+                const before = { ...ran };
+                say(o, hl('GET /old-feed  // the server moved it'));
+                if (!await hit('call', 'waiting')) return;
+                if (!await hit('app', 'request out')) return;
+                if (!await hit('retry', 'passing on')) return;
+                if (!await hit('cache', 'miss', 'pt-warn')) return;
+                if (!await hit('net', '/old-feed')) return;
+                if (!await hit('server', '301 → /v2/feed', 'pt-warn')) return;
+                if (!await hit('retry', 'follow redirect', 'pt-warn')) return;
+                ln('<span class="muted">// RetryAndFollowUp sends a second request</span>');
+                if (!await hit('cache', 'miss', 'pt-warn')) return;
+                if (!await hit('net', '/v2/feed')) return;
+                if (!await hit('server', '200 OK', 'pt-good')) return;
+                ln(`application interceptor <b>+${ran.app - before.app}</b>, network interceptor <b>+${ran.net - before.net}</b> <span class="muted">// one call, two requests on the wire</span>`);
+                busy = false;
+              }
+              function clear() {
+                if (busy) return;
+                cached = false; idle(); replay(C.cache, 'pop');
+                say(o, `${hl('client.cache?.evictAll()')} <span class="muted">// the next GET /feed goes to the network</span>`);
+              }
+              idle();
+              say(o, 'Send a few requests. Watch how often each interceptor runs.');
+              el.append(
+                h('div', { class: 'pt-col' }, L.map(x => C[x.k])),
+                h('div', { class: 'controls' }, cmd('GET /feed', feed), cmd('GET /old-feed', moved), cmd('client.cache?.evictAll()', clear)),
+                o);
+            },
+          },
+          {
+            title: 'A retry decorator for suspend calls',
+            body: `<p>Retrying is a classic decorator: same interface, one extra behaviour. Wrap the repository, catch failures that may pass, wait a little longer each time, and give up after a few tries.</p>
+<p>Two rules keep it safe. Retry only errors that can go away, like <code>IOException</code>, never a 404 or a bug. And let cancellation through: <code>delay</code> is cancellable, so when the user leaves and the scope is cancelled, the wait ends at once and no further try starts.</p>`,
+            code: `class RetryingUserRepository(
+    private val inner: UserRepository,
+    private val maxAttempts: Int = 3,
+) : UserRepository by inner {
+    override suspend fun user(id: Long): User {
+        var wait = 500L
+        repeat(maxAttempts - 1) {
+            try {
+                return inner.user(id)
+            } catch (e: IOException) {      // CancellationException is not an IOException
+                delay(wait)
+                wait *= 2
+            }
+        }
+        return inner.user(id)               // last try: let the error out
+    }
+}`,
+            visual(el) {
+              const SPAN = 2800, K = 0.9;
+              let busy = false, t = 0;
+              const track = h('div', { class: 'lane-track' });
+              const o = out('');
+              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
+              const bar = (dur, cls) => {
+                const b = h('span', { class: `bar ${cls} pt-grow`, style: `left:${(t / SPAN) * 100}%;width:0` });
+                track.append(b);
+                requestAnimationFrame(() => requestAnimationFrame(() => { b.style.width = `${(dur / SPAN) * 100}%`; }));
+                t += dur; return b;
+              };
+              async function attempt(n, fails) {
+                const b = bar(300, 'run');
+                await sleep(300 * K + 250); if (!el.isConnected) return null;
+                if (fails) { b.className = 'bar block'; ln(`try ${n}: <span class="bad">IOException</span> <span class="muted">// timeout</span>`); }
+                else ln(`try ${n}: <span class="good">User(42, "Ada")</span>`);
+                return !fails;
+              }
+              async function wait(ms, cut) {
+                const d = cut ? ms * 0.4 : ms;
+                const b = bar(d, 'wait');
+                ln(`${hl(`delay(${ms})`)}`);
+                await sleep(d * K + 200); if (!el.isConnected) return false;
+                if (cut) { b.className = 'bar block'; return false; }
+                return true;
+              }
+              async function run(kind) {
+                if (busy) return; busy = true;
+                track.replaceChildren(); t = 0;
+                say(o, hl(`repo.user(42)  // ${kind === 'flaky' ? 'network flaky' : kind === 'down' ? 'offline' : 'user leaves'}`));
+                const plan = kind === 'flaky' ? [true, true, false] : [true, true, true];
+                let waitMs = 500;
+                for (let i = 0; i < 3; i++) {
+                  const ok = await attempt(i + 1, plan[i]);
+                  if (ok == null) return;
+                  if (ok) { ln('<span class="good">returned</span> <span class="muted">// the caller never saw the two failures</span>'); busy = false; return; }
+                  if (i === 2) { ln('<span class="bad">IOException</span> thrown to the caller <span class="muted">// out of tries: show an error</span>'); busy = false; return; }
+                  if (kind === 'leave' && i === 0) {
+                    const goOn = await wait(waitMs, true);
+                    if (!el.isConnected) return;
+                    if (!goOn) { ln('<span class="bad">user pressed Back:</span> viewModelScope cancelled <div class="line muted">// delay threw CancellationException. Not an IOException, so no retry.</div>'); busy = false; return; }
+                  }
+                  if (!await wait(waitMs, false)) return;
+                  waitMs *= 2;
+                }
+                busy = false;
+              }
+              say(o, 'Pick a network. Bars show tries, dashed bars show waits.');
+              el.append(
+                h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'repo.user(42)'), track)),
+                h('div', { class: 'controls' }, cmd('repo.user(42)  // network flaky', () => run('flaky')), cmd('repo.user(42)  // offline', () => run('down')), cmd('repo.user(42)  // user leaves', () => run('leave'))),
+                o);
+            },
+          },
+          {
+            title: 'Delegation is not inheritance',
+            body: `<p>With <code>by inner</code>, calls are forwarded <em>to</em> the inner object, and inside it <code>this</code> is the inner object. If <code>NetworkUserRepository.team()</code> calls its own <code>user()</code>, it calls the plain network version. The caching layer never sees those calls.</p>
+<p>That keeps layers independent, which is usually what you want. Just don't expect a decorator to change how the inner object talks to itself. If those inner calls need the extra behaviour too, decorate one level lower, for example the <code>UserApi</code>.</p>`,
+            code: `class NetworkUserRepository(private val api: UserApi) : UserRepository {
+    override suspend fun user(id: Long) = api.user(id).toDomain()
+    override suspend fun team(ids: List<Long>) = ids.map { user(it) }   // this.user: no cache
+}
+
+class CachingUserRepository(private val inner: UserRepository) : UserRepository by inner {
+    private val cache = ConcurrentHashMap<Long, User>()
+    override suspend fun user(id: Long) = cache[id] ?: inner.user(id).also { cache[id] = it }
+}
+
+val repo = CachingUserRepository(NetworkUserRepository(api))
+repo.team(listOf(42, 42))   // two network calls: team() was forwarded, user() inside it was not cached`,
+          },
+        ],
+        underHood: {
+          body: `<p>Class delegation is plain generated code. For <code>class LoggingUserRepository(inner: UserRepository) : UserRepository by inner</code>, the compiler keeps <code>inner</code> in a private final field and writes a forwarding method for every interface member you did not override. No reflection and no runtime proxy are involved.</p>
+<p>OkHttp's chain is a list of interceptors and an index. <code>chain.proceed(request)</code> makes the next chain with the index plus one and calls that interceptor. After your application interceptors come the built-in ones: retry and follow-ups, the bridge that adds headers like <code>Accept-Encoding</code>, the cache, the connection setup, then your network interceptors, and finally the one that writes to the socket. The response travels back up the same stack.</p>`,
+          code: `// What ": UserRepository by inner" generates, roughly
+class LoggingUserRepository(inner: UserRepository) : UserRepository {
+    private val delegate: UserRepository = inner       // named $$delegate_0 in bytecode
+    override suspend fun team(ids: List<Long>) = delegate.team(ids)   // generated
+    override suspend fun user(id: Long): User { /* your override */ TODO() }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Calling proceed() twice without closing',
+            bad: `override fun intercept(chain: Interceptor.Chain): Response {
+    val first = chain.proceed(chain.request())
+    if (first.code == 401) {
+        tokens.refresh()
+        return chain.proceed(chain.request().withToken(tokens.current()))
+    }
+    return first
+}`,
+            good: `override fun intercept(chain: Interceptor.Chain): Response {
+    val first = chain.proceed(chain.request())
+    if (first.code == 401) {
+        first.close()                      // free the connection first
+        tokens.refresh()
+        return chain.proceed(chain.request().withToken(tokens.current()))
+    }
+    return first
+}`,
+            why: 'OkHttp requires the previous response body to be closed before an interceptor proceeds again. Otherwise the second call fails with an <code>IllegalStateException</code>. For 401s, OkHttp’s <code>Authenticator</code> is the hook built for exactly this.',
+          },
+          {
+            title: 'Extending the class instead of wrapping it',
+            bad: `class CachingUserRepository(api: UserApi) : NetworkUserRepository(api) {
+    private val cache = ConcurrentHashMap<Long, User>()
+    override suspend fun user(id: Long) = cache[id] ?: super.user(id).also { cache[id] = it }
+}`,
+            good: `class CachingUserRepository(private val inner: UserRepository) : UserRepository by inner {
+    private val cache = ConcurrentHashMap<Long, User>()
+    override suspend fun user(id: Long) = cache[id] ?: inner.user(id).also { cache[id] = it }
+}`,
+            why: 'The subclass can only cache the network repository, needs it to be <code>open</code>, and can’t be stacked with other layers in a different order. A wrapper takes any <code>UserRepository</code>, including a fake in tests.',
+          },
+          {
+            title: 'Retrying errors that will never pass',
+            bad: `} catch (e: HttpException) {
+    delay(wait)        // retries 404 and 401 too
+    wait *= 2
+}`,
+            good: `} catch (e: HttpException) {
+    if (e.code() !in 500..599) throw e
+    delay(wait)
+    wait *= 2
+}`,
+            why: 'A 404 or 401 fails the same way every time, so retrying only adds delay and server load. Retry server errors and I/O failures, and pass client errors straight up.',
+          },
+        ],
         visual(el) {
           const users = { 42: 'Ada', 7: 'Linus' };
           const cache = new Map();
@@ -1247,6 +2296,213 @@ class FeedViewModel(private val repo: ArticleRepository) : ViewModel() {
         quiz: [
           { q: 'Which classes should <code>FeedViewModel</code> know about?', options: ['ArticleDao and NewsApi', 'ArticleRepository only', 'All three'], a: 1, why: 'The repository is the facade. Everything behind it can change without touching the ViewModel.' },
           { q: 'The network is down and the user pulls to refresh. With Room as the source of truth, what does the screen show?', options: ['An empty list', 'The last cached articles plus an offline message', 'A crash'], a: 1, why: 'The UI stream comes from Room, which still has data. Only the refresh call fails.' },
+        ],
+        deeper: [
+          {
+            title: 'The facade decides when to call the network',
+            body: `<p>Callers should not decide when data is stale. Put that rule behind the facade. <code>articles()</code> still reads Room, and when someone starts collecting, it also checks how old the cache is. Fresh enough: no network call. Too old: refresh in the background while the old list stays on screen.</p>
+<p>This is often called stale-while-revalidate. The ViewModel's code does not change at all. Only the repository knows the 15-minute rule, so you can tune it in one place.</p>`,
+            code: `fun articles(): Flow<List<Article>> = channelFlow {
+    launch {
+        if (isStale()) {
+            try { refresh() } catch (e: IOException) { /* keep showing the cache */ }
+        }
+    }
+    dao.observeAll()
+        .map { rows -> rows.map { it.toDomain() } }
+        .collect { send(it) }          // cached rows go out at once
+}
+
+private suspend fun isStale() =
+    clock.millis() - syncPrefs.lastSyncMillis() > 15.minutes.inWholeMilliseconds`,
+            visual(el) {
+              const fresh = ['Bridge reopens after repairs', 'Tram line extended north', 'Market moves to Saturdays', 'City marathon route set'];
+              let room = ['Rain expected all weekend', 'New park opens downtown'], age = 3, n = 0, busy = false;
+              const phone = h('div', { class: 'phone pt-phone' });
+              const ageTag = tag('');
+              const steps = h('div', { class: 'pt-steps' });
+              const o = out('');
+              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
+              const paintAge = () => { ageTag.textContent = `last sync ${age} min ago`; ageTag.className = 'pt-tag ' + (age > 15 ? 'pt-warn' : 'pt-good'); };
+              const paintPhone = added => phone.replaceChildren(...room.map(t => h('div', { class: 'pt-li' + (added && added.includes(t) ? ' pt-new drop-in' : '') }, t)));
+              async function step(label, ms = 420, cls = 'pt-done') {
+                const s = h('div', { class: 'pt-step pt-now drop-in' }, label);
+                steps.append(s);
+                await sleep(ms);
+                s.classList.remove('pt-now'); s.classList.add(cls);
+                return el.isConnected;
+              }
+              async function collect() {
+                if (busy) return; busy = true;
+                steps.replaceChildren(); phone.replaceChildren(h('p', { class: 'pt-empty' }, 'loading…'));
+                say(o, hl('repo.articles().collect { show(it) }'));
+                if (!await step('dao.observeAll(): emit cached rows')) return;
+                paintPhone(room.slice()); ln(`<span class="good">on screen at once:</span> ${room.length} cached articles`);
+                const stale = age > 15;
+                if (!await step(`isStale()? last sync ${age} min ago`, 420, stale ? 'pt-fail' : 'pt-done')) return;
+                if (!stale) { ln('<span class="muted">// fresh enough: no network call at all</span>'); busy = false; return; }
+                if (!await step('launch { refresh() }: in parallel', 300)) return;
+                if (!await step('api.latest() → dao.upsertAll()', 750)) return;
+                const added = [fresh[n++ % fresh.length]];
+                room = [...added, ...room].slice(0, 5); age = 0; paintAge(); replay(ageTag, 'pop');
+                if (!await step('Room emits again')) return;
+                paintPhone(added);
+                ln('<span class="good">updated:</span> Room emitted the new row. The ViewModel did nothing new.');
+                busy = false;
+              }
+              function pass() {
+                if (busy) return;
+                age += 20; paintAge(); replay(ageTag, 'pop');
+                say(o, `<span class="muted">// time passes. The cache is now ${age} minutes old.</span>`);
+              }
+              paintAge(); paintPhone();
+              say(o, 'The cache was synced 3 minutes ago. Start collecting, then let time pass and collect again.');
+              el.append(
+                h('div', { class: 'pt-split' }, phone, h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'inside ArticleRepository'), ageTag, steps)),
+                h('div', { class: 'controls' }, cmd('repo.articles()  // screen starts collecting', collect), act('20 minutes pass', pass)),
+                o);
+            },
+          },
+          {
+            title: 'Errors leave the facade as your own types',
+            body: `<p>If <code>refresh()</code> lets <code>HttpException</code> or <code>SerializationException</code> escape, the ViewModel must import Retrofit and kotlinx.serialization to handle them. The facade leaks, and any exception the ViewModel forgot crashes the app.</p>
+<p>Translate at the boundary instead. The repository catches what its parts throw and returns a small sealed type the app owns. The ViewModel turns that into a message, and you could swap Retrofit for Ktor without touching it.</p>`,
+            code: `sealed interface RefreshResult {
+    data object Ok : RefreshResult
+    data object Offline : RefreshResult
+    data object SignedOut : RefreshResult
+    data object BadData : RefreshResult
+    data class ServerError(val code: Int) : RefreshResult
+}
+
+suspend fun refresh(): RefreshResult = try {
+    dao.upsertAll(api.latest().map { it.toEntity() })
+    RefreshResult.Ok
+} catch (e: IOException) {
+    RefreshResult.Offline
+} catch (e: HttpException) {
+    if (e.code() == 401) RefreshResult.SignedOut else RefreshResult.ServerError(e.code())
+} catch (e: SerializationException) {
+    RefreshResult.BadData
+}`,
+            visual(el) {
+              const CASES = [
+                { label: 'server answers 200', thrown: null, result: 'RefreshResult.Ok', ui: 'Updated just now', io: true },
+                { label: 'no network', thrown: 'UnknownHostException', result: 'RefreshResult.Offline', ui: 'You are offline. Showing saved stories.', io: true },
+                { label: 'token expired: 401', thrown: 'HttpException: HTTP 401', result: 'RefreshResult.SignedOut', ui: 'Please sign in again.' },
+                { label: 'server down: 503', thrown: 'HttpException: HTTP 503', result: 'RefreshResult.ServerError(503)', ui: 'Server trouble. Try again soon.' },
+                { label: 'broken JSON', thrown: 'SerializationException', result: 'RefreshResult.BadData', ui: 'Something went wrong on our side.' },
+              ];
+              let mapped = true, busy = false;
+              const mk = title => { const v = h('div', { class: 'pt-d2-val' }, '-'); return { v, c: card(title, v) }; };
+              const inside = mk('inside the repository'), across = mk('crosses the facade'), ui = mk('FeedViewModel shows');
+              const o = out('');
+              const set = (x, text, cls) => { x.v.textContent = text; x.c.className = 'pt-card ' + (cls || ''); replay(x.c, 'pt-flash'); };
+              async function run(cs) {
+                if (busy) return; busy = true;
+                [inside, across, ui].forEach(x => set(x, '…', ''));
+                say(o, `${hl('repo.refresh()')} <span class="muted">// ${cs.label}</span>`);
+                await sleep(350); if (!el.isConnected) return;
+                set(inside, cs.thrown ? `throws ${cs.thrown}` : 'rows saved', cs.thrown ? 'pt-bad' : 'pt-ok');
+                await sleep(450); if (!el.isConnected) return;
+                if (mapped) {
+                  set(across, cs.result, cs.thrown ? 'pt-on' : 'pt-ok');
+                  await sleep(450); if (!el.isConnected) return;
+                  set(ui, cs.ui, cs.thrown ? 'pt-on' : 'pt-ok');
+                  o.append(h('div', { class: 'line drop-in', html: `<span class="good">handled</span> <span class="muted">// the ViewModel only knows RefreshResult</span>` }));
+                } else if (!cs.thrown || cs.io) {
+                  set(across, cs.thrown ? `${cs.thrown} (an IOException)` : 'Unit', cs.thrown ? 'pt-on' : 'pt-ok');
+                  await sleep(450); if (!el.isConnected) return;
+                  set(ui, cs.ui, cs.thrown ? 'pt-on' : 'pt-ok');
+                  o.append(h('div', { class: 'line drop-in', html: `<span class="muted">// caught by the ViewModel's catch (e: IOException)</span>` }));
+                } else {
+                  set(across, cs.thrown, 'pt-bad');
+                  await sleep(450); if (!el.isConnected) return;
+                  set(ui, 'app crashed', 'pt-bad'); replay(ui.c, 'shake');
+                  o.append(h('div', { class: 'line drop-in', html: `<span class="bad">uncaught ${cs.thrown.split(':')[0]}</span> in viewModelScope <span class="muted">// the ViewModel only caught IOException</span>` }));
+                }
+                busy = false;
+              }
+              const t = toggle('pt-d2-fac-map', 'repository returns RefreshResult', true, () => {
+                if (busy) { t.input.checked = mapped; return; }
+                mapped = t.input.checked;
+                [inside, across, ui].forEach(x => set(x, '-', ''));
+                say(o, mapped ? 'The facade translates every failure.' : 'Raw exceptions now cross the facade. The ViewModel catches only IOException.');
+              });
+              say(o, 'Pick what happens on the server.');
+              el.append(
+                h('div', { class: 'pt-chain' }, inside.c, across.c, ui.c),
+                h('div', { class: 'controls' }, t),
+                h('div', { class: 'controls' }, CASES.map(cs => act(cs.label, () => run(cs)))),
+                o);
+            },
+          },
+          {
+            title: 'When one facade is not enough',
+            body: `<p>A repository per kind of data keeps each facade small. When a screen needs several of them combined, don't grow one repository into a class that knows everything. Add a use case: a small class in the domain layer that combines repositories for one job, often with a single <code>operator fun invoke</code>.</p>
+<p>The domain layer is optional. Add use cases when the same logic is needed by several ViewModels, or when a ViewModel gets crowded. Don't add them by default.</p>`,
+            code: `class GetFeedWithAuthorsUseCase(
+    private val articles: ArticleRepository,
+    private val authors: AuthorRepository,
+) {
+    operator fun invoke(): Flow<List<ArticleWithAuthor>> =
+        combine(articles.articles(), authors.authors()) { list, people ->
+            val byId = people.associateBy { it.id }
+            list.map { ArticleWithAuthor(it, byId[it.authorId]) }
+        }
+}
+
+// FeedViewModel
+val feed = getFeedWithAuthors()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())`,
+          },
+        ],
+        underHood: {
+          body: `<p>Calling <code>repo.articles()</code> does no work. It returns a cold <code>Flow</code>: a recipe. Each <code>collect</code> runs the recipe again from the start, so two collectors mean two Room observers, two queries after every write and two rounds of mapping.</p>
+<p>That is why the ViewModel ends the chain with <code>stateIn</code>. It collects the upstream once in <code>viewModelScope</code> and shares the latest value with every UI collector. The facade stays cheap to call, and the decision to share sits in the class that knows how the screen uses the data.</p>`,
+          code: `val a = repo.articles()   // nothing runs yet
+val b = repo.articles()   // still nothing
+
+launch { a.collect { } }  // Room observer #1: query, map
+launch { b.collect { } }  // Room observer #2: query, map again
+
+// One upstream, any number of collectors
+val feed = repo.articles()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())`,
+        },
+        mistakes: [
+          {
+            title: 'Exposing the parts behind the facade',
+            bad: `class ArticleRepository(val dao: ArticleDao, val api: NewsApi) { /* ... */ }
+
+// FeedViewModel
+val rows = repo.dao.observeAll()`,
+            good: `class ArticleRepository(
+    private val dao: ArticleDao,
+    private val api: NewsApi,
+) { /* ... */ }`,
+            why: 'Public constructor properties hand the DAO and the API to every caller. Once a ViewModel uses them, you can’t change storage without changing the UI.',
+          },
+          {
+            title: 'A one-shot read for data that changes',
+            bad: `suspend fun articles(): List<Article> =
+    dao.getAll().map { it.toDomain() }`,
+            good: `fun articles(): Flow<List<Article>> =
+    dao.observeAll().map { rows -> rows.map { it.toDomain() } }`,
+            why: 'The screen reads once and never hears about rows that <code>refresh()</code> writes later. A Flow from Room delivers every write to the UI.',
+          },
+          {
+            title: 'Launching work on a scope made up on the spot',
+            bad: `fun refresh() {
+    CoroutineScope(Dispatchers.IO).launch {
+        dao.upsertAll(api.latest().map { it.toEntity() })
+    }
+}`,
+            good: `suspend fun refresh() {
+    dao.upsertAll(api.latest().map { it.toEntity() })
+}`,
+            why: 'Nobody cancels that scope, and the caller can’t wait for the result or see the error. Make it <code>suspend</code> and let the caller’s scope own the work. Use an injected application scope only for work that must outlive the screen.',
+          },
         ],
         visual(el) {
           const fresh = ['Bridge reopens after repairs', 'Tram line extended north', 'Market moves to Saturdays', 'City marathon route announced'];

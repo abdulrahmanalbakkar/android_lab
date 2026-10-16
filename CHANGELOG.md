@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-16: depth pass 2 (no gaps)
+
+- **Every lesson deepened:** all 159 lessons now have Go deeper steps and Common mistakes, and almost all have an Under the hood panel. The site has 312 step demos in total.
+- **Facts checked:** version-sensitive facts in the new steps were checked against developer.android.com, kotlinlang.org and AndroidX/kotlinx source.
+- **Fixes to existing lessons:**
+  - kmp.swift: `@Throws` on a suspend function now lists `CancellationException`.
+  - perf.r8: obfuscated stack frames now show `r8-map-id-…`, as they do since AGP 8.12.
+  - push.fcm: the "Fresh timestamps" demo no longer crashes.
+- **Service worker cache:** version bumped to v3.
+- **Testing:** all 26 lines and 192 lessons, at 1280px light and 400px dark. No script errors and no page wider than the screen.
+- **Topic audit:** a coverage check against developer.android.com, Android Basics with Compose and the Kotlin docs found topics with no lesson yet. The full report is in `docs/gap-audit.md`.
+
 ## 2026-10-16: track restructure (26 lines)
 
 - **OOP and SOLID** became **OOP basics** (encapsulation, composition, polymorphism, abstraction) and **SOLID principles** (5 lessons). Design patterns is now recommended after SOLID.

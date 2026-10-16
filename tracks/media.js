@@ -168,6 +168,33 @@
 .md-fence-name { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 600 0.66rem var(--mono); color: var(--warm); white-space: nowrap; }
 .md-you { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 3px var(--bg); z-index: 2; transition: left 0.25s linear, top 0.25s linear; }
 .md-scale { position: absolute; right: 8px; bottom: 6px; font: 600 0.62rem var(--mono); color: var(--muted); }
+/* depth pass 2 */
+.md-d2-list { display: grid; gap: 6px; min-width: 0; }
+.md-d2-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.2s, background 0.2s; }
+.md-d2-item > .md-prog { grid-column: 1 / -1; }
+.md-d2-item b { font: 600 0.84rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
+.md-d2-item.md-d2-cur { border-color: var(--accent); background: var(--accent-soft); }
+.md-d2-vf { cursor: crosshair; }
+.md-d2-vf:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.md-d2-vf .md-scene { transition: transform 0.35s ease, opacity 0.35s; }
+.md-d2-vf .md-vf-label { position: absolute; left: 10px; top: 10px; }
+.md-d2-ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.85); opacity: 0; pointer-events: none; z-index: 2; transition: opacity 0.3s, border-color 0.3s; }
+.md-d2-ring.md-d2-seek { opacity: 1; animation: md-d2-seek 0.35s ease-in-out infinite alternate; }
+.md-d2-ring.md-d2-lock { opacity: 1; border-color: var(--hi); transform: scale(0.8); }
+@keyframes md-d2-seek { from { transform: scale(1.2); } to { transform: scale(0.85); } }
+input#md-d2-zoom { flex: 1 1 140px; min-width: 0; accent-color: var(--accent); }
+.md-d2-rot { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; justify-content: center; padding: 14px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); min-width: 0; }
+.md-d2-rot > .md-col { justify-items: center; min-height: 150px; align-content: start; }
+.md-d2-hand { width: 64px; height: 108px; margin: 20px; border-radius: 12px; border: 5px solid var(--code-bg); background: var(--code-bg); display: grid; place-items: center; transition: transform 0.45s ease; }
+.md-d2-sky { display: inline-block; font: 700 0.74rem var(--mono); color: var(--t-s); white-space: nowrap; transition: transform 0.45s ease; }
+.md-d2-thumb { width: 40px; height: 40px; border-radius: 8px; background: var(--code-bg); display: grid; place-items: center; }
+.md-d2-thumb .md-d2-sky { font-size: 1rem; transition: none; }
+.md-d2-spark { position: absolute; inset: 0; width: 100%; height: 100%; }
+.md-d2-spark polyline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.md-d2-spark polyline.md-d2-grav { stroke: var(--ok); }
+.md-d2-spark polyline.md-d2-lin { stroke: var(--warm); }
+.md-d2-dense { position: absolute; left: 0; top: 6px; bottom: 6px; background: repeating-linear-gradient(90deg, var(--accent) 0 1px, transparent 1px 4px); }
+.md-d2-dense.md-d2-hot { background: repeating-linear-gradient(90deg, var(--err) 0 1px, transparent 1px 4px); }
 `;
 
   Lab.addTrack({
@@ -235,6 +262,215 @@ val listener = object : Player.Listener {
           { q: 'The state is <code>STATE_BUFFERING</code> and <code>playWhenReady</code> is true. What is <code>isPlaying</code>?', options: ['true', 'false', 'It depends on the network'], a: 1, why: '<code>isPlaying</code> needs STATE_READY too. Playback resumes on its own once enough data has loaded.' },
           { q: 'Where should a screen’s player be released?', options: ['In <code>onPause</code>', 'When the screen stops, such as <code>onStop</code> or <code>onStopOrDispose</code>', 'Never, the garbage collector handles it'], a: 1, why: 'Since Android 7 apps can be visible in multi-window while paused, so stop is the right moment. The garbage collector does not free codecs.' },
           { q: 'Playback reached <code>STATE_ENDED</code>. Your button calls <code>player.play()</code>. What happens?', options: ['It restarts from the beginning', 'playWhenReady becomes true but the state stays ENDED', 'It throws'], a: 1, why: 'Seek first, for example <code>seekTo(0)</code>. Media3’s <code>Util.handlePlayButtonAction()</code> does that for you.' },
+        ],
+        deeper: [
+          {
+            title: 'Playlists and transitions',
+            body: `<p>A player holds a playlist, not just one item. <code>setMediaItems()</code> fills it, and the player moves on to the next item by itself. It starts loading the next item before the current one ends, so playback continues without a pause. <code>onMediaItemTransition()</code> tells you the item changed and why: it played to the end (<code>AUTO</code>), the user skipped (<code>SEEK</code>), it looped (<code>REPEAT</code>), or the playlist changed.</p>
+<p><code>repeatMode</code> decides what happens at the end. <code>REPEAT_MODE_OFF</code> stops in STATE_ENDED after the last item, <code>REPEAT_MODE_ONE</code> loops the current item, and <code>REPEAT_MODE_ALL</code> wraps to the first. <code>seekToPrevious()</code> goes back an item only near the start; more than 3 seconds in, it restarts the current one.</p>`,
+            code: `player.setMediaItems(
+    listOf(MediaItem.fromUri(intro), MediaItem.fromUri(episode), MediaItem.fromUri(outro))
+)
+player.repeatMode = Player.REPEAT_MODE_ALL
+player.prepare()
+player.play()
+
+player.addListener(object : Player.Listener {
+    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) analytics.finishedPrevious()
+        showTitle(mediaItem?.mediaMetadata?.title)
+    }
+})`,
+            visual(el) {
+              const ITEMS = [['Intro', 6], ['Episode 12', 10], ['Outro', 5]];
+              const S = { i: 0, pos: 0, pwr: true, ended: false, repeat: 'OFF' };
+              const rows = ITEMS.map(([t, d]) => {
+                const played = h('span', { class: 'md-played' }), pre = h('span', { class: 'md-buf' });
+                return { played, pre, row: h('div', { class: 'md-d2-item' }, h('b', {}, t), h('span', { class: 'md-time' }, `0:${String(d).padStart(2, '0')}`), h('div', { class: 'md-prog', 'aria-hidden': 'true' }, pre, played)) };
+              });
+              const stTag = tag(''), rmTag = tag('');
+              const { el: logEl, log } = logger(4);
+              const last = ITEMS.length - 1;
+              const nextAuto = () => S.repeat === 'ONE' ? S.i : S.i < last ? S.i + 1 : S.repeat === 'ALL' ? 0 : -1;
+              function paint() {
+                const d = ITEMS[S.i][1], n = nextAuto();
+                rows.forEach((r, j) => {
+                  r.row.classList.toggle('md-d2-cur', j === S.i);
+                  r.played.style.width = j === S.i ? `${(S.pos / d) * 100}%` : '0%';
+                  r.pre.style.width = j === S.i ? `${Math.min(100, ((S.pos + 3) / d) * 100)}%` : j === n && j !== S.i && d - S.pos < 3 && !S.ended ? '35%' : '0%';
+                });
+                setTag(stTag, S.ended ? 'STATE_ENDED' : S.pwr ? 'playing' : 'paused', S.ended ? 'no' : S.pwr ? 'ok' : 'wait');
+                setTag(rmTag, `REPEAT_MODE_${S.repeat}`, 'acc');
+              }
+              function go(i, reason) {
+                S.i = i; S.pos = 0; S.ended = false;
+                log(`onMediaItemTransition(${ITEMS[i][0]}, <span class="good">${reason}</span>)`);
+                replay(rows[i].row, 'pop-soft'); paint();
+              }
+              function tick() {
+                if (!S.pwr || S.ended) return;
+                S.pos += 0.2;
+                if (S.pos >= ITEMS[S.i][1]) {
+                  const n = nextAuto();
+                  if (n < 0) { S.pos = ITEMS[S.i][1]; S.ended = true; log('onPlaybackStateChanged(<span class="good">STATE_ENDED</span>)'); }
+                  else go(n, S.repeat === 'ONE' ? 'REPEAT' : 'AUTO');
+                }
+                paint();
+              }
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, stTag, rmTag),
+                h('div', { class: 'md-d2-list' }, rows.map(r => r.row)),
+                h('div', { class: 'controls' },
+                  cmd('seekToNextMediaItem()', () => {
+                    const n = S.i < last ? S.i + 1 : S.repeat === 'ALL' ? 0 : -1;
+                    if (n < 0) { log('<span class="muted">no next item: nothing happens</span>'); return; }
+                    go(n, 'SEEK');
+                  }),
+                  cmd('seekToPrevious()', () => {
+                    if (S.pos > 3 || S.ended) { S.pos = 0; S.ended = false; log('more than 3 s in: <span class="good">restart this item</span>'); paint(); return; }
+                    const p = S.i > 0 ? S.i - 1 : S.repeat === 'ALL' ? last : -1;
+                    if (p < 0) { S.pos = 0; log('first item: back to its start'); paint(); return; }
+                    go(p, 'SEEK');
+                  }),
+                  cmd('play() / pause()', () => {
+                    if (S.ended) { log('<span class="muted">STATE_ENDED: seek first, for example seekToPrevious()</span>'); return; }
+                    S.pwr = !S.pwr; log(`playWhenReady = <span class="t-n">${S.pwr}</span>`); paint();
+                  })),
+                choice('repeatMode', ['OFF', 'ONE', 'ALL'], S.repeat, v => { S.repeat = v; log(`repeatMode = REPEAT_MODE_${v}`); paint(); }, v => `REPEAT_MODE_${v}`).el,
+                logEl);
+              el.append(root);
+              log('setMediaItems(3 items), prepare(), play()');
+              paint();
+              every(root, 100, tick);
+            },
+          },
+          {
+            title: 'When playback fails',
+            body: `<p>A dead network or a missing file ends in <code>onPlayerError()</code>. The loader can retry some failed loads by itself first. When the player gives up, it reports a <code>PlaybackException</code>, sets <code>playerError</code> and drops to STATE_IDLE. Nothing plays until you act.</p>
+<p>Read <code>error.errorCode</code> to decide what to show. A network error such as <code>ERROR_CODE_IO_NETWORK_CONNECTION_FAILED</code> deserves a retry button: call <code>prepare()</code> again and playback continues from the same position. <code>ERROR_CODE_IO_BAD_HTTP_STATUS</code>, such as a 404, will fail again, so show a message instead.</p>`,
+            code: `player.addListener(object : Player.Listener {
+    override fun onPlayerError(error: PlaybackException) {
+        when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                showRetry { player.prepare() }          // resumes where it stopped
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                showMessage("This episode is not available")
+            else -> showMessage("Playback failed")
+        }
+    }
+})`,
+            visual(el) {
+              const DUR = 60;
+              const S = { state: 'READY', pos: 12, buf: 20, net: true, bad: false, err: '', fails: 0, pwr: true };
+              const buf = h('span', { class: 'md-buf' }), played = h('span', { class: 'md-played' });
+              const time = h('span', { class: 'md-time' });
+              const stTag = tag(''), netTag = tag(''), errTag = tag('');
+              const { el: logEl, log } = logger(5);
+              const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+              function setState(s) { if (S.state === s) return; S.state = s; log(`onPlaybackStateChanged(<span class="good">STATE_${s}</span>)`); }
+              function fail(code) {
+                S.err = code; S.fails = 0; setState('IDLE');
+                log(`onPlayerError(<span class="bad">${code}</span>)`);
+                replay(errTag, 'shake');
+              }
+              function paint() {
+                buf.style.width = `${(S.buf / DUR) * 100}%`;
+                played.style.width = `${(S.pos / DUR) * 100}%`;
+                time.textContent = `${fmt(S.pos)} / ${fmt(DUR)}`;
+                setTag(stTag, `STATE_${S.state}`, { READY: 'ok', BUFFERING: 'wait', IDLE: 'no', ENDED: '' }[S.state]);
+                setTag(netTag, S.net ? 'network: up' : 'network: down', S.net ? '' : 'no');
+                setTag(errTag, S.err ? `playerError: ${S.err}` : 'playerError: null', S.err ? 'no' : '');
+              }
+              function tick() {
+                if (S.state === 'IDLE' || S.state === 'ENDED') { paint(); return; }
+                if (S.bad) { if (++S.fails > 6) fail('ERROR_CODE_IO_BAD_HTTP_STATUS'); paint(); return; }
+                if (S.net) { S.fails = 0; S.buf = Math.min(DUR, Math.max(S.buf, S.pos) + 0.5, S.pos + 12); }
+                if (S.state === 'READY' && S.pwr) S.pos = Math.min(DUR, S.pos + 0.2);
+                if (S.pos >= DUR) setState('ENDED');
+                else if (S.state === 'READY' && S.buf < DUR && S.pos >= S.buf - 0.05) setState('BUFFERING');
+                else if (S.state === 'BUFFERING' && S.buf - S.pos >= 2.5) setState('READY');
+                if (S.state === 'BUFFERING' && !S.net) {
+                  S.fails++;
+                  if (S.fails % 7 === 0 && S.fails < 28) log(`<span class="muted">segment load failed, loader retry ${S.fails / 7}</span>`);
+                  if (S.fails >= 28) fail('ERROR_CODE_IO_NETWORK_CONNECTION_FAILED');
+                }
+                paint();
+              }
+              let netBtn;
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, stTag, netTag),
+                h('div', { class: 'md-tags' }, errTag),
+                h('div', { class: 'md-prog', 'aria-hidden': 'true' }, buf, played),
+                h('div', { class: 'md-meta' }, h('span', { class: 'md-label' }, 'Episode 12'), time),
+                h('div', { class: 'controls' },
+                  netBtn = act('Drop the network', () => {
+                    S.net = !S.net; netBtn.textContent = S.net ? 'Drop the network' : 'Bring the network back';
+                    log(S.net ? 'network is back' : '<span class="bad">network lost</span>: the buffer keeps playing until it runs out');
+                    paint();
+                  }),
+                  cmd('player.prepare()', () => {
+                    if (S.state !== 'IDLE') { log('<span class="muted">not in STATE_IDLE: prepare() does nothing</span>'); return; }
+                    S.err = ''; S.fails = 0; S.buf = S.pos; setState('BUFFERING');
+                    log(`prepare(): retry from <span class="good">${fmt(S.pos)}</span>`); paint();
+                  }),
+                  act('Open a missing episode (404)', () => {
+                    Object.assign(S, { bad: true, err: '', pos: 0, buf: 0, fails: 0 }); S.state = 'IDLE';
+                    log('setMediaItem(missing.mp3), prepare()'); setState('BUFFERING'); paint();
+                  }),
+                  act('Open a working episode', () => {
+                    Object.assign(S, { bad: false, err: '', pos: 0, buf: 0, fails: 0 }); S.state = 'IDLE';
+                    log('setMediaItem(episode12.mp3), prepare()'); setState('BUFFERING'); paint();
+                  })),
+                logEl);
+              el.append(root);
+              paint();
+              log('Playing at 0:12. Drop the network and wait for the buffer to run dry.');
+              every(root, 100, tick);
+            },
+          },
+          {
+            title: 'Adaptive streams and quality limits',
+            body: `<p>For HLS or DASH, add the <code>media3-exoplayer-hls</code> or <code>media3-exoplayer-dash</code> module and pass the manifest URL as a normal <code>MediaItem</code>. The stream comes in several qualities, and ExoPlayer switches between them as the measured bandwidth changes.</p>
+<p>Set limits with <code>trackSelectionParameters</code>: cap the video size on a metered network, or prefer an audio language. The player keeps adapting, inside your limits.</p>`,
+            code: `// build.gradle.kts: implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
+player.setMediaItem(MediaItem.fromUri("https://example.com/show/master.m3u8"))
+
+player.trackSelectionParameters = player.trackSelectionParameters
+    .buildUpon()
+    .setMaxVideoSizeSd()                 // below 720p, for example on mobile data
+    .setPreferredAudioLanguage("tr")
+    .build()`,
+          },
+        ],
+        underHood: {
+          body: `<p>ExoPlayer works on several threads. Your calls run on the application thread, the one whose <code>Looper</code> the player was built with. Each call updates the player’s state there and posts a message to an internal playback thread. That thread runs the playback loop: it drives the renderers and asks the <code>LoadControl</code> whether to keep loading. The loading itself happens on separate loader threads.</p>
+<p>The audio and video renderers feed Android’s <code>MediaCodec</code> decoders, usually hardware ones, and the audio output goes to an <code>AudioTrack</code>. State changes travel back to the application thread, where your listeners run. This is why a player must be used from one thread only, and why <code>release()</code> matters: it stops the playback thread and frees the decoders, which are a limited hardware resource.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Touching the player from a background thread',
+            bad: `viewModelScope.launch(Dispatchers.IO) {
+    val url = repository.streamUrl(id)
+    player.setMediaItem(MediaItem.fromUri(url))   // wrong thread
+    player.prepare()
+}`,
+            good: `viewModelScope.launch {                          // main thread
+    val url = withContext(Dispatchers.IO) { repository.streamUrl(id) }
+    player.setMediaItem(MediaItem.fromUri(url))
+    player.prepare()
+}`,
+            why: 'A player belongs to the thread it was built on, usually main. Calls from another thread throw <code>IllegalStateException: Player is accessed on the wrong thread</code>. Do the slow work elsewhere, then call the player from its own thread.',
+          },
+          {
+            title: 'Deriving the play button from the state alone',
+            bad: `val showPauseButton = player.playbackState == Player.STATE_READY`,
+            good: `// Util is @UnstableApi: add @OptIn(UnstableApi::class)
+val showPlayButton = Util.shouldShowPlayButton(player)
+// on click:
+Util.handlePlayPauseButtonAction(player)`,
+            why: 'READY says nothing about whether the user paused, and BUFFERING hides the pause button while playback is about to continue. The helpers look at <code>playWhenReady</code>, IDLE and ENDED for you, and the action also seeks back to the start after ENDED.',
+          },
         ],
         visual(el) {
           const DUR = 30;
@@ -755,6 +991,171 @@ player.addListener(object : Player.Listener {
           { q: 'Another music app starts playing. What does ExoPlayer do?', options: ['Ducks to 20%', 'Pauses and waits for the user to press play', 'Keeps playing'], a: 1, why: 'A permanent loss sets playWhenReady to false. Resuming later would surprise the user.' },
           { q: 'A podcast player uses <code>AUDIO_CONTENT_TYPE_SPEECH</code>. A navigation prompt asks other apps to duck. What does ExoPlayer do?', options: ['Ducks the volume', 'Pauses briefly instead of ducking', 'Ignores it'], a: 1, why: 'Lowered speech under another voice is hard to follow, so ExoPlayer pauses speech instead of ducking it.' },
         ],
+        deeper: [
+          {
+            title: 'Without ExoPlayer: request focus yourself',
+            body: `<p>MediaPlayer, SoundPool, text to speech and your own audio code don’t manage focus. Build an <code>AudioFocusRequest</code> with the gain you need and pass it to <code>AudioManager.requestAudioFocus()</code>. <code>AUDIOFOCUS_GAIN</code> is for long playback, and the other app loses focus for good. <code>AUDIOFOCUS_GAIN_TRANSIENT</code> is for a short clip the other app should pause for. <code>AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK</code> lets it keep playing quietly.</p>
+<p>When your sound ends, call <code>abandonAudioFocusRequest()</code>. That is the other app’s signal to resume or restore its volume. Forget it and the music stays paused or quiet long after your prompt is over.</p>`,
+            code: `val audioManager = context.getSystemService<AudioManager>()!!
+val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+    .setAudioAttributes(
+        android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+    )
+    .build()
+
+if (audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+    tts.speak("In 200 meters, turn left", TextToSpeech.QUEUE_FLUSH, null, "turn")
+}
+
+// UtteranceProgressListener.onDone(): give focus back
+audioManager.abandonAudioFocusRequest(request)`,
+            visual(el) {
+              const GAINS = { GAIN: 'AUDIOFOCUS_GAIN', TRANSIENT: 'AUDIOFOCUS_GAIN_TRANSIENT', MAY_DUCK: 'AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK' };
+              const LOSS = { GAIN: 'AUDIOFOCUS_LOSS', TRANSIENT: 'AUDIOFOCUS_LOSS_TRANSIENT', MAY_DUCK: 'AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK' };
+              const S = { gain: 'MAY_DUCK', abandon: true, music: 'playing', you: false, held: false, busy: false };
+              const mus = h('span', { class: 'md-fill md-other' }), musL = h('span', { class: 'md-fill-label' });
+              const you = h('span', { class: 'md-fill' }), youL = h('span', { class: 'md-fill-label' });
+              const focusTag = tag('');
+              const { el: logEl, log } = logger(5);
+              function paint() {
+                const v = { playing: 1, ducked: 0.2, paused: 0, stopped: 0 }[S.music];
+                mus.style.width = `${v * 100}%`;
+                musL.textContent = { playing: 'music 100%', ducked: 'music 20%', paused: 'music paused, waiting', stopped: 'music stopped' }[S.music];
+                you.style.width = S.you ? '100%' : '0%';
+                youL.textContent = S.you ? '“turn left”' : 'silent';
+                setTag(focusTag, S.held ? 'your app holds focus' : 'music app holds focus', S.held ? (S.you ? 'ok' : 'no') : '');
+              }
+              async function speak() {
+                if (S.busy) return; S.busy = true;
+                log(`requestAudioFocus(${GAINS[S.gain]}): <span class="good">GRANTED</span>`);
+                if (S.music === 'playing' || S.music === 'ducked') {
+                  S.music = S.gain === 'MAY_DUCK' ? 'ducked' : S.gain === 'TRANSIENT' ? 'paused' : 'stopped';
+                  log(`music app gets ${LOSS[S.gain]}: <span class="good">${{ ducked: 'ducks', paused: 'pauses', stopped: 'stops for good' }[S.music]}</span>`);
+                }
+                S.held = true; S.you = true; paint();
+                await sleep(1600); if (!el.isConnected) return;
+                S.you = false;
+                if (S.abandon) giveBack();
+                else log('<span class="bad">clip done, focus never abandoned:</span> the music app keeps waiting');
+                paint(); S.busy = false;
+              }
+              function giveBack() {
+                if (!S.held) { log('<span class="muted">you hold no focus</span>'); return; }
+                S.held = false; log('abandonAudioFocusRequest(request)');
+                if (S.music === 'stopped') log('music app lost focus for good: <span class="muted">it stays stopped until the user presses play</span>');
+                else { S.music = 'playing'; log('music app gets AUDIOFOCUS_GAIN: <span class="good">back to full volume</span>'); }
+              }
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, focusTag),
+                h('div', { class: 'timeline' }, lane('Music app', musL, mus), lane('Your app', youL, you)),
+                choice('request', Object.keys(GAINS), S.gain, v => { if (S.busy) return false; S.gain = v; log(`AudioFocusRequest.Builder(${GAINS[v]})`); }, v => GAINS[v]).el,
+                h('div', { class: 'controls' },
+                  cmd('speak the prompt', speak),
+                  cmd('abandonAudioFocusRequest(request)', () => { if (S.busy) return; giveBack(); paint(); }),
+                  act('Music app: play', () => {
+                    if (S.busy) return;
+                    if (S.music === 'playing') { log('<span class="muted">music is already playing</span>'); return; }
+                    S.music = 'playing'; S.held = false; log('the user presses play: the music app requests AUDIOFOCUS_GAIN'); paint();
+                  })),
+                toggle('md-d2-abandon', 'abandon focus when the clip ends', true, v => { S.abandon = v; log(v ? 'onDone() will abandon focus' : 'onDone() will forget to abandon focus'); }),
+                logEl);
+              el.append(root);
+              paint();
+              log('Music is playing. Speak a prompt with each gain type.');
+            },
+          },
+          {
+            title: 'The usage picks the volume slider',
+            body: `<p>The usage in <code>AudioAttributes</code> does more than focus. It decides which volume the sound follows. <code>USAGE_MEDIA</code> follows the media volume. <code>USAGE_NOTIFICATION</code> follows the notification volume and goes quiet when the phone is on silent or vibrate. <code>USAGE_ALARM</code> follows the alarm volume and still sounds on silent.</p>
+<p>Pick the usage the user expects. An alarm clock that plays as media stays silent when media volume was turned down for the night. A chat sound that plays as media ignores silent mode and plays during a meeting.</p>`,
+            code: `val alarmSound = AudioAttributes.Builder()          // androidx.media3.common
+    .setUsage(C.USAGE_ALARM)
+    .setContentType(C.AUDIO_CONTENT_TYPE_SONIFICATION)
+    .build()
+
+ExoPlayer.Builder(context)
+    .setAudioAttributes(alarmSound, /* handleAudioFocus = */ true)
+    .build()`,
+            visual(el) {
+              const U = { MEDIA: 'media', NOTIFICATION: 'notification', ALARM: 'alarm' };
+              const S = { usage: 'MEDIA', media: true, silent: false };
+              const spk = h('span', { class: 'md-fill' }), spkL = h('span', { class: 'md-fill-label' });
+              const mTag = tag(''), rTag = tag(''), aTag = tag('');
+              const { el: logEl, log } = logger(3);
+              function level() {
+                if (S.usage === 'MEDIA') return S.media ? 0.7 : 0;
+                if (S.usage === 'NOTIFICATION') return S.silent ? 0 : 0.6;
+                return 0.8;
+              }
+              function paint() {
+                setTag(mTag, S.media ? 'media volume 70%' : 'media volume 0', S.media ? '' : 'no');
+                setTag(rTag, S.silent ? 'ringer: silent' : 'ringer: normal', S.silent ? 'no' : '');
+                setTag(aTag, 'alarm volume 80%');
+              }
+              function play() {
+                const v = level();
+                spk.style.width = '0%'; spkL.textContent = '';
+                requestAnimationFrame(() => {
+                  spk.style.width = `${v * 100}%`;
+                  spkL.textContent = v ? `heard at ${Math.round(v * 100)}%` : 'silent';
+                });
+                if (!v) replay(spk.parentNode, 'shake');
+                log(`USAGE_${S.usage} follows the <b>${U[S.usage]}</b> volume: ${v ? '<span class="good">heard</span>' : '<span class="bad">silent</span>'}`);
+              }
+              let mBtn, sBtn;
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, mTag, rTag, aTag),
+                choice('usage', Object.keys(U), S.usage, v => { S.usage = v; play(); }, v => `USAGE_${v}`).el,
+                h('div', { class: 'controls' },
+                  mBtn = act('Night: media volume to 0', () => {
+                    S.media = !S.media; mBtn.textContent = S.media ? 'Night: media volume to 0' : 'Morning: media volume back';
+                    paint(); play();
+                  }),
+                  sBtn = act('Meeting: phone on silent', () => {
+                    S.silent = !S.silent; sBtn.textContent = S.silent ? 'After the meeting: ringer on' : 'Meeting: phone on silent';
+                    paint(); play();
+                  }),
+                  cmd('player.play()', play)),
+                h('div', { class: 'timeline' }, lane('Speaker', spkL, spk)),
+                logEl);
+              el.append(root);
+              paint(); play();
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Focus lives in the system, not in your app. <code>AudioService</code> in the system process keeps a stack of focus requests. A new request goes on top, and the app that was on top gets a loss callback. When the top app abandons its request, the next one down gets <code>AUDIOFOCUS_GAIN</code>. Focus is a convention, not a lock: nothing stops an app from playing without it, which is why turning off focus handling in the main demo lets two apps play at once. Since Android 12 the system does step in a little: when an app takes focus, it fades out the app that lost it.</p>
+<p>Since Android 8, the system also ducks apps for you when another app asks for <code>MAY_DUCK</code>, unless they set <code>setWillPauseWhenDucked(true)</code> and handle the loss themselves. ExoPlayer’s focus handling is a small class inside the player. It requests focus when <code>playWhenReady</code> becomes true, turns each focus change into play, wait or pause, and multiplies its volume by 0.2 to duck. For speech content it asks to pause instead of being ducked.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Ignoring the request result',
+            bad: `audioManager.requestAudioFocus(request)
+mediaPlayer.start()`,
+            good: `when (audioManager.requestAudioFocus(request)) {
+    AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> mediaPlayer.start()
+    AudioManager.AUDIOFOCUS_REQUEST_DELAYED -> startOnGain = true   // needs setAcceptsDelayedFocusGain(true)
+    else -> showMessage("Can't play right now")
+}`,
+            why: 'The request can fail, for example during a phone call, or since Android 15 when your app is in the background. Playing anyway talks over the call.',
+          },
+          {
+            title: 'Resuming on every focus gain',
+            bad: `when (focusChange) {
+    AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> player.pause()
+    AudioManager.AUDIOFOCUS_GAIN -> player.start()
+}`,
+            good: `when (focusChange) {
+    AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; player.pause() }
+    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { resumeOnGain = player.isPlaying; player.pause() }
+    AudioManager.AUDIOFOCUS_GAIN -> if (resumeOnGain) { resumeOnGain = false; player.start() }
+}`,
+            why: 'Only resume what a transient loss paused. If the user had paused before the call, starting again when the call ends surprises them.',
+          },
+        ],
         visual(el) {
           const S = { focus: true, noisy: true, type: 'MUSIC', playing: true, vol: 1, other: 0, otherName: '', out: 'headphones', permanent: false };
           let busy = false;
@@ -886,6 +1287,195 @@ viewModel.imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(
           { q: 'The viewfinder is open and the user presses Home. Use cases were bound to the Activity’s lifecycle. What happens to the camera?', options: ['It stays open until you close it', 'CameraX closes it on stop and reopens it on start', 'The app crashes'], a: 1, why: 'Binding to a lifecycle means CameraX follows ON_START and ON_STOP for you.' },
           { q: 'How do the frames from <code>Preview</code> reach <code>CameraXViewfinder</code>?', options: ['Through a Bitmap you post to state', 'Preview’s SurfaceProvider receives a SurfaceRequest, which the viewfinder draws into', 'The viewfinder opens the camera itself'], a: 1, why: 'The SurfaceRequest is the handoff. Keep it in state and pass it to the composable.' },
           { q: 'Which is the right way to switch from the back to the front camera?', options: ['Call bindToLifecycle again with the front selector', '<code>unbindAll()</code>, then bindToLifecycle with the front selector', 'Create a second ProcessCameraProvider'], a: 1, why: 'A use case can only be bound to one camera at a time. Unbind first, then bind to the new lens.' },
+        ],
+        deeper: [
+          {
+            title: 'Tap to focus and zoom',
+            body: `<p><code>bindToLifecycle()</code> returns a <code>Camera</code>. Its <code>cameraControl</code> changes the running camera, and its <code>cameraInfo</code> says what the camera can do. <code>startFocusAndMetering()</code> focuses and meters on the point you pass, and cancels itself after 5 seconds by default, so the camera goes back to continuous focus. A new tap cancels the previous action.</p>
+<p>Zoom has a range per camera. Read it from <code>cameraInfo.zoomState</code>. <code>setZoomRatio()</code> outside <code>minZoomRatio</code> to <code>maxZoomRatio</code> returns a failed future. A ratio below 1 means the device can switch to an ultra-wide lens. <code>setLinearZoom()</code> takes 0 to 1 across the whole range, which suits a slider.</p>`,
+            code: `val camera = provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
+
+fun focusAt(point: MeteringPoint) {
+    val action = FocusMeteringAction.Builder(point)          // AF, AE and AWB
+        .setAutoCancelDuration(5, TimeUnit.SECONDS)          // the default
+        .build()
+    camera.cameraControl.startFocusAndMetering(action)
+}
+
+fun onPinch(scale: Float) {
+    val zoom = camera.cameraInfo.zoomState.value ?: return
+    val ratio = (zoom.zoomRatio * scale).coerceIn(zoom.minZoomRatio, zoom.maxZoomRatio)
+    camera.cameraControl.setZoomRatio(ratio)
+}
+
+// In Compose, pass a MutableCoordinateTransformer to CameraXViewfinder to turn a tap
+// into surface coordinates for a SurfaceOrientedMeteringPointFactory.`,
+            visual(el) {
+              const CAMS = { 'phone with ultra-wide': [0.6, 10], 'single-lens phone': [1, 4] };
+              const S = { cam: 'phone with ultra-wide', zoom: 1, tok: 0, pending: false };
+              const scene = h('div', { class: 'md-scene' });
+              const ring = h('span', { class: 'md-d2-ring' });
+              const zl = h('span', { class: 'md-vf-label' });
+              const vf = h('div', { class: 'md-vf md-open md-d2-vf', role: 'button', tabindex: '0', 'aria-label': 'Viewfinder: tap to focus' }, scene, ring, zl);
+              const afTag = tag(''), zTag = tag('');
+              const slider = h('input', { type: 'range', id: 'md-d2-zoom', min: '0', max: '1', step: '0.05', value: '0', 'aria-label': 'Linear zoom' });
+              const { el: logEl, log } = logger(4);
+              const linToRatio = (v, mn, mx) => 1 / (1 / mn + (1 / mx - 1 / mn) * v);
+              const ratioToLin = (r, mn, mx) => (1 / r - 1 / mn) / (1 / mx - 1 / mn);
+              function paintZoom() {
+                const [mn, mx] = CAMS[S.cam];
+                scene.style.transform = `scale(${Math.sqrt(S.zoom).toFixed(3)})`;
+                zl.textContent = `${S.zoom.toFixed(1)}x`;
+                setTag(zTag, `zoomRatio ${S.zoom.toFixed(1)} (range ${mn} to ${mx})`, 'acc');
+                slider.value = String(Math.max(0, Math.min(1, ratioToLin(S.zoom, mn, mx))).toFixed(2));
+              }
+              async function focus(x, y) {
+                const my = ++S.tok;
+                if (S.pending) log('previous action: <span class="muted">OperationCanceledException</span>');
+                S.pending = true;
+                ring.style.left = `${(x * 100).toFixed(1)}%`; ring.style.top = `${(y * 100).toFixed(1)}%`;
+                ring.className = 'md-d2-ring md-d2-seek';
+                setTag(afTag, 'AF: scanning', 'wait');
+                log(`startFocusAndMetering(point ${x.toFixed(2)}, ${y.toFixed(2)})`);
+                await sleep(700); if (my !== S.tok || !vf.isConnected) return;
+                S.pending = false;
+                ring.className = 'md-d2-ring md-d2-lock';
+                setTag(afTag, 'AF: locked', 'ok'); log('isFocusSuccessful: <span class="good">true</span>');
+                await sleep(5000); if (my !== S.tok || !vf.isConnected) return;
+                ring.className = 'md-d2-ring';
+                setTag(afTag, 'AF: continuous', ''); log('5 s auto-cancel: <span class="muted">back to continuous autofocus</span>');
+              }
+              function zoomTo(r, src) {
+                const [mn, mx] = CAMS[S.cam];
+                if (r < mn - 1e-6 || r > mx + 1e-6) { replay(vf, 'shake'); log(`${src}: <span class="bad">future failed</span>, ${r} is outside ${mn} to ${mx}`); return; }
+                S.zoom = r; paintZoom(); log(`${src}: <span class="good">zoomRatio ${r.toFixed(1)}</span>`);
+              }
+              vf.addEventListener('click', e => { const r = vf.getBoundingClientRect(); focus((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); });
+              vf.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focus(0.5, 0.5); } });
+              slider.addEventListener('input', () => { const [mn, mx] = CAMS[S.cam]; const v = +slider.value; S.zoom = linToRatio(v, mn, mx); paintZoom(); log(`setLinearZoom(${v.toFixed(2)}f): ratio ${S.zoom.toFixed(1)}`); });
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-split' },
+                  h('div', { class: 'md-col' },
+                    h('div', { class: 'md-tags' }, afTag, zTag),
+                    choice('device', Object.keys(CAMS), S.cam, v => { S.cam = v; S.zoom = 1; paintZoom(); const [mn, mx] = CAMS[v]; log(`zoomState: min ${mn}, max ${mx}`); }).el,
+                    h('div', { class: 'controls' },
+                      cmd('startFocusAndMetering(center)', () => focus(0.5, 0.5)),
+                      cmd('setZoomRatio(0.6f)', () => zoomTo(0.6, 'setZoomRatio(0.6f)')),
+                      cmd('setZoomRatio(2f)', () => zoomTo(2, 'setZoomRatio(2f)')),
+                      cmd('setZoomRatio(20f)', () => zoomTo(20, 'setZoomRatio(20f)'))),
+                    h('div', { class: 'controls' }, h('label', { class: 'md-label', for: 'md-d2-zoom' }, 'setLinearZoom'), slider)),
+                  vf),
+                logEl);
+              el.append(root);
+              setTag(afTag, 'AF: continuous', ''); paintZoom();
+              log('Tap the viewfinder to focus there. Then try the zoom calls.');
+            },
+          },
+          {
+            title: 'Upright photos when the UI is locked',
+            body: `<p>CameraX records each photo’s orientation, as EXIF data or rotated pixels, from the use case’s <code>targetRotation</code>. By default that is the display rotation. If your activity is locked to portrait, the display never rotates, so a photo taken with the phone held sideways is saved as if it were portrait and shows up sideways in the gallery.</p>
+<p>Follow the physical orientation with an <code>OrientationEventListener</code> and update <code>imageCapture.targetRotation</code> as the user turns the phone. The preview stays the same, but every saved photo comes out the right way up.</p>`,
+            code: `val orientationListener = object : OrientationEventListener(context) {
+    override fun onOrientationChanged(degrees: Int) {
+        if (degrees == ORIENTATION_UNKNOWN) return
+        imageCapture.targetRotation = when (degrees) {
+            in 45 until 135 -> Surface.ROTATION_270
+            in 135 until 225 -> Surface.ROTATION_180
+            in 225 until 315 -> Surface.ROTATION_90
+            else -> Surface.ROTATION_0
+        }
+    }
+}
+// enable() when the camera screen starts, disable() when it stops`,
+            visual(el) {
+              const POSES = { portrait: [0, 0, 'ROTATION_0'], 'turned left': [90, 270, 'ROTATION_90'], 'upside down': [180, 180, 'ROTATION_180'] };
+              const S = { pose: 'turned left', track: false, shots: 0 };
+              const sky = h('span', { class: 'md-d2-sky' }, '↑ sky');
+              const hand = h('div', { class: 'md-d2-hand', role: 'img', 'aria-label': 'Phone held by the user' }, sky);
+              const thumbs = h('div', { class: 'md-thumbs', 'aria-label': 'Photos as the gallery shows them' });
+              const rTag = tag(''), oTag = tag('');
+              const { el: logEl, log } = logger(3);
+              function paint() {
+                const [turn, deg, rot] = POSES[S.pose];
+                hand.style.transform = `rotate(${-turn}deg)`;
+                sky.style.transform = `rotate(${turn}deg)`;
+                setTag(oTag, `onOrientationChanged(${deg})`, '');
+                setTag(rTag, `targetRotation: ${S.track ? rot : 'ROTATION_0'}`, S.track || !turn ? 'ok' : 'no');
+              }
+              function shoot() {
+                const [turn] = POSES[S.pose];
+                const off = S.track ? 0 : turn;
+                S.shots++;
+                thumbs.prepend(h('span', { class: 'md-d2-thumb drop-in' }, h('span', { class: 'md-d2-sky', style: `transform: rotate(${off}deg)` }, '↑')));
+                while (thumbs.children.length > 6) thumbs.lastElementChild.remove();
+                log(off ? `saved as portrait: <span class="bad">the sky points ${off === 90 ? 'right' : 'down'} in the gallery</span>` : '<span class="good">saved upright</span>');
+              }
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, h('span', { class: 'md-tag' }, 'activity locked to portrait'), oTag, rTag),
+                h('div', { class: 'md-d2-rot' },
+                  h('div', { class: 'md-col' }, h('span', { class: 'md-label' }, 'how the user holds it'), hand),
+                  h('div', { class: 'md-col' }, h('span', { class: 'md-label' }, 'gallery'), thumbs)),
+                choice('phone', Object.keys(POSES), S.pose, v => { S.pose = v; paint(); }).el,
+                h('div', { class: 'controls' },
+                  toggle('md-d2-orient', 'update <code>targetRotation</code> from OrientationEventListener', false, v => { S.track = v; paint(); log(v ? 'listener enabled' : 'listener off: targetRotation stays at the display rotation'); }),
+                  cmd('imageCapture.takePicture(...)', shoot)),
+                logEl);
+              el.append(root);
+              paint();
+              log('The phone is turned sideways, the UI is locked. Take a picture.');
+            },
+          },
+          {
+            title: 'Recording video',
+            body: `<p>Video is the fourth use case. <code>VideoCapture</code> wraps a <code>Recorder</code>, which encodes and writes the file. Ask for a quality with a <code>QualitySelector</code> and a fallback, because devices differ in what they can record. Prepare a recording into MediaStore and <code>start()</code> it. Events arrive as <code>VideoRecordEvent</code>s, and <code>Finalize</code> tells you the file is done, or why it failed.</p>
+<p>Sound needs the <code>RECORD_AUDIO</code> permission before you call <code>withAudioEnabled()</code>. Saving to MediaStore needs no storage permission on Android 10 and higher.</p>`,
+            code: `val recorder = Recorder.Builder()
+    .setQualitySelector(
+        QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD))
+    )
+    .build()
+val videoCapture = VideoCapture.withOutput(recorder)
+provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, videoCapture)
+
+val output = MediaStoreOutputOptions.Builder(context.contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+    .setContentValues(contentValuesOf(MediaStore.Video.Media.DISPLAY_NAME to "clip-\${System.currentTimeMillis()}"))
+    .build()
+
+val recording = videoCapture.output.prepareRecording(context, output)
+    .withAudioEnabled()                                   // after RECORD_AUDIO is granted
+    .start(ContextCompat.getMainExecutor(context)) { event ->
+        if (event is VideoRecordEvent.Finalize) {
+            if (event.hasError()) showError(event.error) else show(event.outputResults.outputUri)
+        }
+    }
+// later: recording.stop()`,
+          },
+        ],
+        underHood: {
+          body: `<p>CameraX is a layer over Camera2. When you bind, it collects one output surface per use case: the preview surface from your <code>SurfaceRequest</code>, an <code>ImageReader</code> for <code>ImageCapture</code>, another for <code>ImageAnalysis</code>, an encoder surface for video. It picks a size for each from the stream combinations the device reports as supported, opens the <code>CameraDevice</code>, and creates one capture session with all of those surfaces.</p>
+<p>Preview and analysis run as a repeating request. <code>takePicture()</code> sends extra capture requests, and focus, zoom and torch change the parameters of the repeating request. A lifecycle observer opens the device on ON_START and closes it on ON_STOP. Closing also resets zoom, focus, torch and exposure to their defaults.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Binding to the process lifecycle',
+            bad: `provider.bindToLifecycle(ProcessLifecycleOwner.get(), CameraSelector.DEFAULT_BACK_CAMERA, preview)`,
+            good: `val owner = LocalLifecycleOwner.current      // the camera screen's lifecycle
+provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview)`,
+            why: 'The process lifecycle only stops when the whole app goes to the background. The camera stays open while the user is on other screens of your app, and keeps draining the battery.',
+          },
+          {
+            title: 'Flipping to a camera that isn’t there',
+            bad: `fun flip() {
+    provider.unbindAll()
+    provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, imageCapture)
+}`,
+            good: `fun flip() {
+    if (!provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) return
+    provider.unbindAll()
+    provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, imageCapture)
+}`,
+            why: '<code>bindToLifecycle()</code> throws <code>IllegalArgumentException</code> when no camera matches the selector, which happens on some tablets, TVs and Chromebooks. Check with <code>hasCamera()</code> and hide the flip button when there is only one camera.',
+          },
         ],
         visual(el) {
           const S = { fg: true, bound: true, lens: 'BACK', cam: 'OPEN', shots: 0 };
@@ -1294,6 +1884,186 @@ fun TiltBall() {
           { q: 'You navigate from the tilt screen to another screen. The listener was registered with no unregister. What happens?', options: ['Events stop on their own', 'Events keep coming and the sensor keeps drawing power', 'The app crashes'], a: 1, why: 'A registered listener keeps the sensor running. Unregister when the UI leaves.' },
           { q: 'Your app targets Android 12 and asks for <code>SENSOR_DELAY_FASTEST</code> without <code>HIGH_SAMPLING_RATE_SENSORS</code>.', options: ['It throws SecurityException', 'The rate is capped at 200 Hz', 'It falls back to NORMAL'], a: 1, why: 'Without the permission, listeners registered with SensorManager are limited to 200 Hz.' },
         ],
+        deeper: [
+          {
+            title: 'Gravity and motion are separate sensors',
+            body: `<p>The accelerometer mixes two things: gravity, which says how the phone is tilted, and the push of the user’s hand. Android splits them for you. <code>TYPE_GRAVITY</code> reports only gravity, and <code>TYPE_LINEAR_ACCELERATION</code> only the movement. The two add up to what the accelerometer reports. On devices with a gyroscope both are fused from several sensors, which is faster and cleaner than a low-pass filter you write yourself.</p>
+<p>For angles, such as a compass heading, use <code>TYPE_ROTATION_VECTOR</code> with <code>getRotationMatrixFromVector()</code> and <code>getOrientation()</code>. Shake, tilt and lift the phone below, and watch the z axis of each sensor.</p>`,
+            code: `val gravity = sensors.getDefaultSensor(Sensor.TYPE_GRAVITY)
+val linear = sensors.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+val rotation = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+
+override fun onSensorChanged(event: SensorEvent) {
+    if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+        val matrix = FloatArray(9)
+        val angles = FloatArray(3)
+        SensorManager.getRotationMatrixFromVector(matrix, event.values)
+        SensorManager.getOrientation(matrix, angles)        // azimuth, pitch, roll in radians
+        showHeading(Math.toDegrees(angles[0].toDouble()))
+    }
+}`,
+            visual(el) {
+              const N = 60, G = 9.81, LO = -8, HI = 16;
+              const S = { target: 0, cur: 0, shake: 0, lift: 0, t: 0 };
+              const KEYS = [['acc', 'accelerometer', ''], ['grav', 'gravity', 'md-d2-grav'], ['lin', 'linear accel.', 'md-d2-lin']];
+              const data = { acc: [], grav: [], lin: [] };
+              const NS = 'http://www.w3.org/2000/svg';
+              const lines = {}, vals = {};
+              const laneEls = KEYS.map(([k, name, cls]) => {
+                const svg = document.createElementNS(NS, 'svg');
+                svg.setAttribute('class', 'md-d2-spark'); svg.setAttribute('viewBox', `0 0 ${N - 1} ${HI - LO}`); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+                const pl = document.createElementNS(NS, 'polyline'); if (cls) pl.setAttribute('class', cls); svg.append(pl);
+                lines[k] = pl; vals[k] = h('span', { class: 'md-kv' });
+                return lane(name, svg);
+              });
+              const { el: logEl, log } = logger(3);
+              function sample() {
+                S.t++;
+                const prev = S.cur;
+                S.cur += (S.target - S.cur) * 0.18;
+                const gz = G * Math.cos(S.cur);
+                let lz = (S.cur - prev) * -14;
+                if (S.shake > 0) { lz += 6 * Math.sin(S.t * 1.9); S.shake--; }
+                if (S.lift > 0) { lz += S.lift > 6 ? 5 : -3.5; S.lift--; }
+                const v = { acc: gz + lz, grav: gz, lin: lz };
+                for (const [k] of KEYS) { data[k].push(v[k]); if (data[k].length > N) data[k].shift(); }
+                for (const [k, name] of KEYS) {
+                  lines[k].setAttribute('points', data[k].map((y, i) => `${i + N - data[k].length},${(HI - Math.max(LO, Math.min(HI, y))).toFixed(2)}`).join(' '));
+                  vals[k].innerHTML = `${name} z <b>${v[k].toFixed(2)}</b>`;
+                }
+              }
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-kvs' }, KEYS.map(([k]) => vals[k])),
+                h('div', { class: 'timeline' }, laneEls),
+                h('div', { class: 'controls' },
+                  act('Shake', () => { S.shake = 18; log('shake: the accelerometer and linear acceleration swing, <span class="good">gravity holds still</span>'); }),
+                  act('Tilt 60°', () => { S.target = Math.PI / 3; log('tilt: gravity z drops to about 4.9, <span class="muted">linear only blips while it moves</span>'); }),
+                  act('Lay flat', () => { S.target = 0; log('flat: gravity z back to 9.81'); }),
+                  act('Lift quickly', () => { S.lift = 12; log('lift: linear z goes up, then down as you stop'); })),
+                logEl);
+              el.append(root);
+              log('The phone lies flat. Try each motion.');
+              every(root, 80, sample);
+            },
+          },
+          {
+            title: 'Batching: every sample, fewer wake-ups',
+            body: `<p>Pass a <code>maxReportLatencyUs</code> to <code>registerListener()</code> and the sensor hardware stores events in its FIFO, then delivers them in bursts. You still get every sample with its original timestamp, but your app runs once per batch instead of once per event, and the main processor can sleep in between. Step counters and fitness tracking rely on this.</p>
+<p>It only works if the device has a FIFO for that sensor. <code>sensor.fifoMaxEventCount</code> is 0 when it doesn’t, and events then arrive one by one as usual. Call <code>flush()</code> when you need the stored events right away, for example when the user opens the screen.</p>`,
+            code: `val sensor = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+sensors.registerListener(
+    listener,
+    sensor,
+    20_000,         // sample every 20 ms
+    5_000_000,      // but deliver at most every 5 s
+)
+val canBatch = sensor.fifoMaxEventCount > 0
+
+// the user opened the screen: deliver what is stored now
+sensors.flush(listener)`,
+            visual(el) {
+              const LAT = ['0', '1 s', '5 s'];
+              const S = { lat: '5 s', fifo: true, t: 0, last: 0, wakes: 0, maxWait: 0, flushes: 0 };
+              const evFill = h('span', { class: 'md-d2-dense' });
+              const wakeTrack = h('div', { class: 'lane-track' });
+              const evTrack = h('div', { class: 'lane-track' }, evFill);
+              const cursor = h('div', { class: 'cursor', style: 'left:0' });
+              evTrack.append(cursor);
+              const stat = label => { const b = h('b', {}, '0'); return { b, box: h('div', { class: 'md-stat' }, b, h('small', {}, label)) }; };
+              const sEv = stat('events delivered'), sWake = stat('app wake-ups'), sWait = stat('longest wait for an event');
+              const { el: logEl, log } = logger(3);
+              const latency = () => (S.fifo ? { '0': 0, '1 s': 1, '5 s': 5 }[S.lat] : 0);
+              function reset() { S.t = 0; S.last = 0; S.wakes = 0; S.maxWait = 0; wakeTrack.replaceChildren(); }
+              function deliver(note) {
+                S.wakes++; S.maxWait = Math.max(S.maxWait, S.t - S.last); S.last = S.t;
+                wakeTrack.append(h('span', { class: 'md-tick drop-in', style: `left:${(S.t * 10).toFixed(1)}%` }));
+                if (note) log(note);
+              }
+              function tick() {
+                S.t = Math.round((S.t + 0.1) * 10) / 10;
+                if (S.t > 10) reset();
+                const lat = latency();
+                const dense = lat === 0;
+                evFill.style.width = `${S.t * 10}%`;
+                cursor.style.left = `${S.t * 10}%`;
+                if (dense) {
+                  S.wakes = Math.round(S.t * 50); S.last = S.t; S.maxWait = 0.02;
+                  wakeTrack.replaceChildren(h('span', { class: 'md-d2-dense md-d2-hot', style: `width:${S.t * 10}%` }));
+                } else if (S.t - S.last >= lat) deliver();
+                const delivered = dense ? Math.round(S.t * 50) : Math.round(S.last * 50);
+                sEv.b.textContent = String(delivered);
+                sWake.b.textContent = String(S.wakes);
+                sWait.b.textContent = S.maxWait < 0.1 ? '20 ms' : `${S.maxWait.toFixed(1)} s`;
+                sWake.box.classList.toggle('md-bad', S.wakes > 50);
+              }
+              const root = h('div', { class: 'md-root' },
+                choice('maxReportLatency', LAT, S.lat, v => { S.lat = v; reset(); log(v === '0' ? 'latency 0: <span class="bad">one wake-up per event</span>, 50 a second' : `latency ${v}: events wait in the FIFO, then arrive together`); }).el,
+                h('div', { class: 'controls' },
+                  toggle('md-d2-fifo', 'device has a sensor FIFO', true, v => { S.fifo = v; reset(); log(v ? 'fifoMaxEventCount > 0: batching works' : '<span class="bad">fifoMaxEventCount == 0:</span> the latency is ignored'); }),
+                  cmd('sensors.flush(listener)', () => {
+                    if (latency() === 0) { log('<span class="muted">nothing is waiting: events already arrive one by one</span>'); return; }
+                    deliver('flush(): <span class="good">stored events delivered now</span>, then batching continues');
+                  })),
+                h('div', { class: 'timeline' },
+                  h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'sensor 50 Hz'), evTrack),
+                  h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'app runs'), wakeTrack)),
+                h('div', { class: 'md-stats' }, sEv.box, sWake.box, sWait.box),
+                logEl);
+              el.append(root);
+              log('Ten seconds of accelerometer data, batched every 5 s. Try a latency of 0.');
+              every(root, 100, tick);
+            },
+          },
+          {
+            title: 'The axes don’t turn with the screen',
+            body: `<p>Sensor axes are fixed to the device’s natural orientation. Turn a phone to landscape and the screen rotates, but x still runs along the phone’s short edge. A tilt game that reads x as left and right breaks in landscape. On a tablet whose natural orientation is landscape, it breaks in portrait.</p>
+<p>Read the display rotation and remap the values before you use them. For rotation-vector math, <code>SensorManager.remapCoordinateSystem()</code> does the same for a rotation matrix.</p>`,
+            code: `override fun onSensorChanged(event: SensorEvent) {
+    val x = event.values[0]
+    val y = event.values[1]
+    val (screenX, screenY) = when (display.rotation) {   // context.display, API 30+
+        Surface.ROTATION_90 -> -y to x
+        Surface.ROTATION_180 -> -x to -y
+        Surface.ROTATION_270 -> y to -x
+        else -> x to y
+    }
+    moveBall(-screenX, screenY)
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Your app never talks to the hardware. <code>SensorService</code> in the system process owns the sensors, often running on a low-power sensor hub. It sets each sensor to the fastest rate and the shortest report latency that any app asked for, then sends every app its events over a channel that the app reads on its <code>Looper</code>. That is why the rate you ask for is a hint, and events can arrive faster than requested.</p>
+<p>Without a <code>Handler</code>, <code>onSensorChanged()</code> runs on the main thread. The <code>SensorEvent</code> objects are recycled by the framework, so the values array can be overwritten after your callback returns. That is why the lesson’s flow sends a copy.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Heavy work in onSensorChanged on the main thread',
+            bad: `sensors.registerListener(object : SensorEventListener {
+    override fun onSensorChanged(event: SensorEvent) {
+        _steps.value = model.classify(event.values)   // 8 ms, 50 times a second
+    }
+    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
+}, sensor, SensorManager.SENSOR_DELAY_GAME)`,
+            good: `val thread = HandlerThread("sensors").apply { start() }
+sensors.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME, Handler(thread.looper))
+// onSensorChanged now runs on "sensors". Quit the thread when you unregister.`,
+            why: 'Without a Handler, events arrive on the main thread. At GAME rate that is 50 calls a second competing with drawing frames. Give heavy listeners their own thread and post only results to the UI.',
+          },
+          {
+            title: 'Assuming the sensor exists',
+            bad: `val gyro = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE)!!`,
+            good: `val gyro = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+if (gyro == null) showTiltButtons() else register(gyro)
+// manifest: <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />`,
+            why: 'Some phones, tablets and Chromebooks have no gyroscope, and the app crashes there. Plan a fallback, and mark the feature as optional so Google Play still offers the app on those devices.',
+          },
+          {
+            title: 'Comparing sensor timestamps with wall time',
+            bad: `val ageMs = System.currentTimeMillis() - event.timestamp`,
+            good: `val ageMs = (SystemClock.elapsedRealtimeNanos() - event.timestamp) / 1_000_000`,
+            why: '<code>event.timestamp</code> is in nanoseconds, on the same clock as <code>elapsedRealtimeNanos()</code>. It is not wall time, so mixing the two gives nonsense ages.',
+          },
+        ],
         visual(el) {
           const RATES = { NORMAL: 200, UI: 60, GAME: 20, FASTEST: 5 };
           const POWER = { NORMAL: 0.12, UI: 0.3, GAME: 0.6, FASTEST: 1 };
@@ -1441,6 +2211,223 @@ LocationServices.getGeofencingClient(context).addGeofences(
           { q: 'You request FINE and COARSE together on Android 12. The user picks “Approximate”. What do you get?', options: ['Precise location anyway', 'Only ACCESS_COARSE_LOCATION, so fixes are approximate', 'Nothing, the request fails'], a: 1, why: 'The user decides the accuracy. Build features that still work with approximate location.' },
           { q: 'Your app has while-in-use permission only, no foreground service, and the user presses Home. What happens to <code>requestLocationUpdates</code>?', options: ['Updates continue as before', 'The app stops receiving updates while in the background', 'Updates switch to PASSIVE'], a: 1, why: 'While-in-use access ends when the app is no longer visible, unless a foreground service of type location is running.' },
           { q: '<code>addGeofences()</code> fails with <code>GEOFENCE_<wbr>INSUFFICIENT_<wbr>LOCATION_<wbr>PERMISSION</code>. Fine location is granted. What is missing?', options: ['ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION', 'POST_NOTIFICATIONS'], a: 1, why: 'Geofences fire while the app is not running, so they need background location access.' },
+        ],
+        deeper: [
+          {
+            title: 'One fix: cached or fresh',
+            body: `<p>For a single position there are two calls. <code>lastLocation</code> returns the most recent fix the device already has. It is instant and costs nothing, but it can be minutes old, and it is null after a restart or when nothing has asked for location yet. <code>getCurrentLocation()</code> computes a fresh fix, which can take seconds and turns the radios on.</p>
+<p>A <code>CurrentLocationRequest</code> sits in between. <code>setMaxUpdateAgeMillis()</code> accepts a cached fix younger than that and only computes a new one when needed. Pass a <code>CancellationToken</code> and cancel it when the screen goes away, so a slow fix doesn’t keep the GPS on for nobody.</p>`,
+            code: `// await() comes from kotlinx-coroutines-play-services
+val cached: Location? = client.lastLocation.await()      // may be null, may be old
+
+val request = CurrentLocationRequest.Builder()
+    .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+    .setMaxUpdateAgeMillis(5 * 60_000L)                   // a fix up to 5 min old is fine
+    .build()
+val tokenSource = CancellationTokenSource()
+val fix: Location? = client.getCurrentLocation(request, tokenSource.token).await()
+
+// the screen closed before the fix arrived:
+tokenSource.cancel()`,
+            visual(el) {
+              const S = { t: 0, x: 22, cache: { x: 22, y: 52, at: -4 }, tok: 0, pending: false };
+              const Y = 52;
+              const map = h('div', { class: 'md-map', 'aria-label': 'Map with your position and the returned fix' });
+              const you = h('span', { class: 'md-you' });
+              map.append(you, h('span', { class: 'md-scale' }, 'not to scale'));
+              const circ = (cls, x, y, d) => h('div', { class: 'md-circ ' + cls, style: `left:${x}%;top:${y}%;width:${d}%;margin-left:${-d / 2}%;margin-top:${-d / 2}%` }, h('span', { class: 'md-c' }));
+              let shown = null;
+              const cTag = tag(''), rTag = tag('');
+              const { el: logEl, log } = logger(4);
+              const age = () => S.cache ? S.t - S.cache.at : null;
+              function paint() {
+                you.style.left = `${S.x}%`; you.style.top = `${Y}%`;
+                setTag(cTag, S.cache ? `cached fix: ${age()} min old` : 'cached fix: none', S.cache ? (age() > 5 ? 'wait' : 'ok') : 'no');
+                setTag(rTag, S.pending ? 'radios on: computing a fix' : 'radios idle', S.pending ? 'wait' : '');
+              }
+              function showFix(x, y, old) {
+                if (shown) shown.remove();
+                shown = circ('md-fix' + (old ? ' md-old' : ''), x, y, 10);
+                map.insertBefore(shown, you);
+              }
+              async function fresh() {
+                const my = ++S.tok; S.pending = true; paint();
+                log('no usable cached fix: <span class="muted">turning radios on…</span>');
+                await sleep(1800); if (my !== S.tok || !map.isConnected) return;
+                S.pending = false; S.cache = { x: S.x, y: Y, at: S.t };
+                showFix(S.x, Y, false); replay(shown, 'pop');
+                log('<span class="good">fresh fix</span>, right where you are'); paint();
+              }
+              function current(maxAge) {
+                if (S.pending) { log('<span class="muted">a request is already running</span>'); return; }
+                if (maxAge > 0 && S.cache && age() <= maxAge) {
+                  showFix(S.cache.x, S.cache.y, age() > 0);
+                  log(`returned the cached fix, <span class="good">${age()} min old</span>, instantly`); return;
+                }
+                fresh();
+              }
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-tags' }, cTag, rTag),
+                map,
+                h('div', { class: 'controls' },
+                  cmd('lastLocation.await()', () => {
+                    if (!S.cache) { replay(map, 'shake'); log('<span class="bad">null</span>: nothing cached since the restart'); return; }
+                    showFix(S.cache.x, S.cache.y, age() > 0);
+                    log(`instant, but ${age()} min old: ${Math.abs(S.cache.x - S.x) > 4 ? '<span class="bad">you are no longer there</span>' : 'still close to you'}`);
+                  }),
+                  cmd('getCurrentLocation(maxUpdateAge = 5 min)', () => current(5)),
+                  cmd('getCurrentLocation(maxUpdateAge = 0)', () => current(0)),
+                  cmd('tokenSource.cancel()', () => {
+                    if (!S.pending) { log('<span class="muted">nothing to cancel</span>'); return; }
+                    S.tok++; S.pending = false; paint();
+                    log('request cancelled: <span class="good">radios off</span>, the task gets no result');
+                  })),
+                h('div', { class: 'controls' },
+                  act('Walk for 3 minutes', () => {
+                    S.t += 3; S.x = S.x >= 76 ? 22 : S.x + 18; paint();
+                    log(`3 minutes later, ${S.cache ? `the cached fix is ${age()} min old` : 'still nothing cached'}`);
+                  }),
+                  act('Restart the phone', () => {
+                    S.cache = null; S.tok++; S.pending = false; if (shown) { shown.remove(); shown = null; }
+                    paint(); log('restarted: <span class="muted">no cached location</span>');
+                  })),
+                logEl);
+              el.append(root);
+              paint();
+              log('A fix from 4 minutes ago is cached. Ask for a location.');
+            },
+          },
+          {
+            title: 'When device location is off',
+            body: `<p>Permission is not enough. The user can switch off Location for the whole device. Your request still succeeds, but no fixes arrive, and <code>lastLocation</code> stays null.</p>
+<p>Check first with <code>SettingsClient.checkLocationSettings()</code>. If a setting your request needs is off, the task fails with a <code>ResolvableApiException</code>. Launch its resolution, and the user gets a system dialog to turn Location on without leaving your app.</p>`,
+            code: `val settingsLauncher = registerForActivityResult(
+    ActivityResultContracts.StartIntentSenderForResult()
+) { result -> if (result.resultCode == Activity.RESULT_OK) startUpdates() else showCityPicker() }
+
+fun checkThenStart(request: LocationRequest) {
+    val settings = LocationSettingsRequest.Builder().addLocationRequest(request).build()
+    LocationServices.getSettingsClient(this).checkLocationSettings(settings)
+        .addOnSuccessListener { startUpdates() }
+        .addOnFailureListener { e ->
+            if (e is ResolvableApiException) {
+                settingsLauncher.launch(IntentSenderRequest.Builder(e.resolution).build())
+            }
+        }
+}`,
+            visual(el) {
+              const S = { loc: false, updates: false, dialog: false, n: 0, quiet: 0 };
+              const track = h('div', { class: 'lane-track' });
+              const tile = tag('');
+              const shade = h('div', { class: 'md-col' });
+              const ph = h('div', { class: 'md-phone' }, h('div', { class: 'md-sb' }, h('span', {}, '9:41'), h('span', {}, '')), h('div', { class: 'md-pscreen' }, shade));
+              const { el: logEl, log } = logger(4);
+              function paint() {
+                setTag(tile, S.loc ? 'device Location: on' : 'device Location: off', S.loc ? 'ok' : 'no');
+                ph.querySelector('.md-sb').lastChild.textContent = S.loc && S.updates ? 'location' : '';
+                shade.replaceChildren(...(S.dialog
+                  ? [h('div', { class: 'md-noti drop-in' }, h('b', {}, 'Turn on device location?'), h('small', { class: 'muted-text' }, 'Asked by the system for this app.'),
+                    h('div', { class: 'md-nbtns' },
+                      h('button', { type: 'button', class: 'md-nbtn', onclick: () => answer(false) }, 'No thanks'),
+                      h('button', { type: 'button', class: 'md-nbtn md-main', onclick: () => answer(true) }, 'Turn on')))]
+                  : [h('div', { class: 'md-appui' }, h('b', {}, 'Run tracker'), h('span', { class: 'muted-text' }, S.updates ? (S.loc ? `${S.n} fixes so far` : 'waiting for a fix…') : 'Tap start'))]));
+              }
+              function answer(ok) {
+                S.dialog = false;
+                if (ok) { S.loc = true; S.updates = true; log('RESULT_OK: Location is on, <span class="good">startUpdates()</span>'); }
+                else log('RESULT_CANCELED: <span class="muted">offer a fallback, such as picking a city</span>');
+                paint();
+              }
+              function tick() {
+                if (!S.updates) return;
+                if (!S.loc) { if (++S.quiet === 8) log('<span class="bad">no fixes:</span> the request succeeded, but device location is off'); return; }
+                S.quiet = 0; S.n++;
+                track.append(h('span', { class: 'md-tick drop-in', style: `left:${((S.n % 24) * 4 + 2)}%` }));
+                if (S.n % 24 === 0) track.replaceChildren();
+                paint();
+              }
+              let qs;
+              const root = h('div', { class: 'md-root' },
+                h('div', { class: 'md-split' },
+                  h('div', { class: 'md-col' },
+                    h('div', { class: 'md-tags' }, tile),
+                    h('div', { class: 'controls' },
+                      cmd('requestLocationUpdates(request, callback, looper)', () => {
+                        S.updates = true; S.quiet = 0; S.dialog = false;
+                        log(S.loc ? 'updates requested: <span class="good">fixes flow</span>' : 'updates requested: <span class="muted">the call returns fine…</span>');
+                        paint();
+                      }),
+                      cmd('checkLocationSettings(settings)', () => {
+                        if (S.loc) { S.updates = true; log('onSuccess: settings are fine, <span class="good">startUpdates()</span>'); paint(); return; }
+                        S.updates = false; S.dialog = true; replay(ph, 'pop');
+                        log('onFailure: <span class="bad">ResolvableApiException</span>, launch its resolution'); paint();
+                      }),
+                      qs = act('Quick Settings: Location off', () => {
+                        S.loc = !S.loc; qs.textContent = S.loc ? 'Quick Settings: Location off' : 'Quick Settings: Location on';
+                        S.quiet = 0; log(S.loc ? 'the user turned Location on' : 'the user turned Location off'); paint();
+                      }),
+                      act('Stop', () => { S.updates = false; S.dialog = false; track.replaceChildren(); log('removeLocationUpdates(callback)'); paint(); })),
+                    h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'fixes'), track))),
+                  ph),
+                logEl);
+              qs.textContent = 'Quick Settings: Location on';
+              el.append(root);
+              paint();
+              log('Permission is granted, but device Location is off. Start updates both ways.');
+              every(root, 400, tick);
+            },
+          },
+          {
+            title: 'Batch fixes you don’t need right away',
+            body: `<p>A run tracker needs every point, but not the moment it is measured. <code>setMaxUpdateDelayMillis()</code> lets the provider collect fixes and deliver them together. With a 10 second interval and a 2 minute maximum delay, your callback runs about every 2 minutes with about 12 locations in <code>result.locations</code>, oldest first. The track is the same, and the app wakes up far less often.</p>`,
+            code: `val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
+    .setMaxUpdateDelayMillis(120_000L)
+    .build()
+
+val callback = object : LocationCallback() {
+    override fun onLocationResult(result: LocationResult) {
+        track.addAll(result.locations)      // oldest first
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>The fused provider runs inside Google Play services, not in your app. It merges the requests of every app on the device and runs the hardware for the most demanding one. If a navigation app already runs GPS every second, your balanced request adds little: you get fixes from the same work, limited by your own interval settings. <code>PRIORITY_PASSIVE</code> is the extreme case, which only ever listens.</p>
+<p>Approximate location is blurred before your app sees it. The fix is shifted by a random offset that changes only slowly and snapped to a coarse grid, so repeated requests can’t be averaged back into a precise position. Geofences are also checked by the system with low-power signals, which is why an enter event can arrive minutes late and why the docs recommend a radius of at least 100 to 150 meters.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Requesting precise location alone',
+            bad: `launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))`,
+            good: `launcher.launch(
+    arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+)`,
+            why: 'Apps targeting Android 12 or higher must ask for both. Alone, the system logs “ACCESS_FINE_LOCATION must be requested with ACCESS_COARSE_LOCATION”, and some Android 12 releases ignore the request entirely.',
+          },
+          {
+            title: 'GPS every second for a city name',
+            bad: `// weather screen
+val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L).build()
+client.requestLocationUpdates(request, callback, Looper.getMainLooper())`,
+            good: `// weather screen: one city-level fix is enough
+val fix = client.getCurrentLocation(Priority.PRIORITY_LOW_POWER, tokenSource.token).await()`,
+            why: 'A weather forecast needs the city, once. High accuracy at one second keeps GPS running and drains the battery. Match the priority and frequency to what the feature shows.',
+          },
+          {
+            title: 'Starting the location service from the background',
+            bad: `// BroadcastReceiver, while the app is in the background
+override fun onReceive(context: Context, intent: Intent) {
+    context.startForegroundService(Intent(context, TrackingService::class.java))
+}`,
+            good: `// Activity: the user tapped "Start run" while the app is visible
+startRunButton.setOnClickListener {
+    ContextCompat.startForegroundService(this, Intent(this, TrackingService::class.java))
+}`,
+            why: 'While-in-use location only carries over to a foreground service that starts while the app is visible. Started from the background, the service gets no location without <code>ACCESS_BACKGROUND_LOCATION</code>, and since Android 12 most background starts of foreground services are blocked anyway.',
+          },
         ],
         visual(el) {
           const PRI = {

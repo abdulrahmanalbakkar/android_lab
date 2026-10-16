@@ -158,6 +158,11 @@
 }
 /* depth steps */
 .flw-wrap { flex-wrap: wrap; overflow: visible; }
+/* depth 2: operators */
+.flw-d2op-tight .flw-m { min-width: 18px; height: 18px; padding: 0 3px; font-size: 0.62rem; }
+/* depth 2: flatMap */
+.flw-d2fm-pulse { display: block; height: 8px; border-radius: 99px; background: var(--sunk); min-width: 0; }
+.flw-req.flw-d2fm-live .flw-d2fm-pulse { background: var(--accent); animation: pulse 0.8s ease-in-out infinite; }
 `;
 
   // Plays a timeline of T ms, stretched by slow, calling frame(t) every animation frame.
@@ -207,6 +212,981 @@
     return { node, paint };
   }
   const pressed = (buttons, keys, k) => buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(keys[i] === k)));
+
+  // ─── Depth pass 2: cold, operators, flatmap, backpressure, errors-retry, callbackflow ─────────────────
+  const d2btn = (label, onclick) => h('button', { class: 'cmd', onclick }, label);
+
+  const coldDepth = {
+    deeper: [
+      {
+        title: 'collect suspends, so give each flow its own coroutine',
+        body: `<p><code>collect</code> returns only when the flow completes. A flow that watches a database or a ticker never completes, so code after its <code>collect</code> never runs. Two collects in one <code>launch</code> run one after the other, and the second waits forever.</p>
+<p>Start each long-lived collection in its own <code>launch</code>. Then they run side by side.</p>`,
+        code: `// The news never loads: prices.collect never returns
+viewModelScope.launch {
+    prices.collect { _price.value = it }
+    news.collect { _news.value = it }
+}
+
+// Each collection runs in its own coroutine
+viewModelScope.launch { prices.collect { _price.value = it } }
+viewModelScope.launch { news.collect { _news.value = it } }`,
+        visual(el) {
+          let gen = 0;
+          const lane = name => {
+            const strip = h('div', { class: 'flw-strip flw-wrap' }), st = h('span', { class: 'flw-stat' }, 'not started');
+            return { strip, st, row: h('div', { class: 'flw-col' }, h('span', { class: 'lane-name' }, name), strip, st) };
+          };
+          const L = { prices: lane('prices'), news: lane('news') };
+          const code = h('div', { class: 'kt' });
+          const o = out();
+          const add = (l, text) => { l.strip.append(h('span', { class: 'flw-v acc drop-in' }, text)); while (l.strip.children.length > 4) l.strip.firstElementChild.remove(); };
+          const stat = (l, text, cls) => { l.st.textContent = text; l.st.className = 'flw-stat' + (cls ? ' ' + cls : ''); };
+          async function run(split) {
+            const my = ++gen;
+            Object.values(L).forEach(l => { l.strip.replaceChildren(); stat(l, 'not started'); });
+            code.innerHTML = hl(split ? 'launch { prices.collect { … } }\nlaunch { news.collect { … } }' : 'launch {\n    prices.collect { … }   // never completes\n    news.collect { … }\n}');
+            say(o, split ? 'Two coroutines. Both collect at once.' : 'One coroutine. prices first, then news.');
+            stat(L.prices, 'collecting', 'on');
+            if (split) stat(L.news, 'collecting', 'on'); else stat(L.news, 'waiting for prices to finish', '');
+            let p = 101, k = 0;
+            for (let i = 0; i < 8; i++) {
+              await sleep(550); if (!el.isConnected || my !== gen) return;
+              add(L.prices, `$${p += (i % 3) - 1}`);
+              if (split && i % 2 === 0) add(L.news, `story ${++k}`);
+            }
+            say(o, split
+              ? '<span class="good">both live:</span> each collect suspends in its own coroutine.'
+              : '<span class="bad">news never started:</span> prices is a ticker that never completes, so its collect never returns.');
+          }
+          el.append(
+            h('div', { class: 'controls' }, cmd('launch { prices.collect {}; news.collect {} }', () => run(false)), cmd('launch { prices.collect {} }; launch { news.collect {} }', () => run(true))),
+            code,
+            h('div', { class: 'flw-cols' }, L.prices.row, L.news.row),
+            o);
+          run(false);
+        },
+      },
+      {
+        title: 'The collector can stop the producer early',
+        body: `<p>A cold flow runs only as long as someone wants values. <code>first()</code> takes one value and then cancels the flow. <code>take(3)</code> cancels it after three. The producer stops at its current <code>emit</code>, the code after that never runs, and its <code>finally</code> block does.</p>
+<p>So a flow that opens a connection can close it in <code>finally</code>, or in <code>onCompletion</code>, and it will close no matter how the collector stopped.</p>`,
+        code: `val numbers = flow {
+    try {
+        for (i in 1..5) { delay(400); emit(i) }
+    } finally {
+        println("producer stopped")   // runs after first() too
+    }
+}
+val one = numbers.first()            // 1, then the flow is cancelled
+val three = numbers.take(3).toList() // [1, 2, 3]`,
+        visual(el) {
+          let busy = false;
+          const lines = ['flow {', '  try {', '    for (i in 1..5) { delay(400); emit(i) }', '  } finally { println("producer stopped") }', '}'].map(t => h('div', { class: 'branch' }, t));
+          const got = h('div', { class: 'flw-strip flw-wrap' });
+          const log = h('div', { class: 'out flw-log', 'aria-live': 'polite' });
+          const line = html => { log.append(h('div', { html })); while (log.children.length > 7) log.firstElementChild.remove(); };
+          async function run(label, limit) {
+            if (busy) return; busy = true;
+            got.replaceChildren(); log.replaceChildren();
+            line(`<span class="muted">${label}</span>`);
+            lines[2].classList.add('scan');
+            let i = 1;
+            for (; i <= 5; i++) {
+              await sleep(400); if (!el.isConnected) return;
+              line(`emit(${i})`);
+              got.append(h('span', { class: 'flw-v ok drop-in' }, String(i)));
+              if (i === limit) break;
+            }
+            lines[2].classList.remove('scan');
+            if (i < 5 && limit) {
+              await sleep(250); if (!el.isConnected) return;
+              lines[2].classList.add('cut'); line(`<span class="bad">cancelled</span> inside emit(${i}). emit(${i + 1}) never runs.`);
+            }
+            lines[3].classList.add('hit');
+            line('<span class="good">finally:</span> producer stopped');
+            await sleep(900); if (!el.isConnected) return;
+            lines[2].classList.remove('cut'); lines[3].classList.remove('hit');
+            line(limit ? `<span class="muted">collector got</span> ${limit === 1 ? '1' : '[1, 2, 3]'}` : '<span class="muted">collect returned:</span> the flow completed');
+            busy = false;
+          }
+          line('Run the flow three ways. Watch where the producer stops.');
+          el.append(
+            h('div', { class: 'when' }, lines),
+            h('div', { class: 'controls' },
+              cmd('numbers.collect { show(it) }', () => run('numbers.collect { show(it) }', 0)),
+              cmd('numbers.first()', () => run('numbers.first()', 1)),
+              cmd('numbers.take(3).toList()', () => run('numbers.take(3).toList()', 3))),
+            h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'got'), got),
+            log);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p><code>Flow</code> is an interface with one function, <code>collect</code>, that takes a <code>FlowCollector</code>. When you write <code>collect { println(it) }</code>, your lambda is that collector. <code>flow { }</code> builds an object whose <code>collect</code> runs your block with the collector as receiver. So <code>emit(1)</code> is a plain suspend call into your lambda. There is no queue and no extra thread.</p>
+<p>The collector is wrapped in a safety check. Emitting from a different coroutine context than the one collecting fails with “Flow invariant is violated”. <code>first()</code> and <code>take()</code> stop the producer by throwing an internal exception out of <code>emit</code>, which is why the producer’s <code>finally</code> runs.</p>`,
+      code: `public interface Flow<out T> {
+    public suspend fun collect(collector: FlowCollector<T>)
+}
+
+public fun interface FlowCollector<in T> {
+    public suspend fun emit(value: T)
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Collecting the same cold flow twice and paying twice',
+        bad: `val feed: Flow<Feed> = repo.feed()   // one request per collect
+launch { feed.collect { header.show(it) } }
+launch { feed.collect { list.show(it) } }`,
+        good: `val feed: StateFlow<Feed?> = repo.feed()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+// both parts of the screen read the one shared result`,
+        why: 'Each <code>collect</code> runs the block again. Two collectors make two network requests. Share it with <code>stateIn</code> or <code>shareIn</code>.',
+      },
+      {
+        title: 'Switching threads with withContext around emit',
+        bad: `fun load(): Flow<Data> = flow {
+    withContext(Dispatchers.IO) { emit(api.load()) }
+}`,
+        good: `fun load(): Flow<Data> = flow {
+    emit(api.load())
+}.flowOn(Dispatchers.IO)`,
+        why: 'A flow must emit in the collector’s context. Emitting from inside <code>withContext</code> throws IllegalStateException: Flow invariant is violated. <code>flowOn</code> moves the upstream safely.',
+      },
+    ],
+  };
+
+  const operatorsDepth = {
+    deeper: [
+      {
+        title: 'debounce waits for quiet, sample ticks on a clock',
+        body: `<p><code>debounce</code> only lets a value through after a pause. On a source that never pauses, like scroll positions while a finger drags, it emits nothing until the source stops or completes.</p>
+<p><code>sample(500)</code> emits the latest value once per period, as long as a new value arrived in that period. Use it for steady streams like progress or sensor data, where you want regular updates rather than a final one.</p>`,
+        code: `@OptIn(FlowPreview::class)
+val searchQuery = typed.debounce(300)         // one value after typing stops
+
+@OptIn(FlowPreview::class)
+val scrollForAnalytics = scrollY.sample(500)  // at most one value per 500 ms`,
+        visual(el) {
+          const T = 3200, END = 3000;
+          const SOURCES = {
+            steady: { label: 'steady: every 250 ms', times: Array.from({ length: 12 }, (_, i) => 100 + i * 250) },
+            bursts: { label: 'bursts with pauses', times: [100, 200, 300, 400, 1100, 1200, 1300, 2000, 2100, 2200, 2300] },
+          };
+          const keys = Object.keys(SOURCES);
+          const slot = h('div', { class: 'flw-d2op-tight' });
+          const o = out();
+          let gen = 0, cur;
+          function build(k) {
+            const ts = SOURCES[k].times, src = ts.map((t, i) => ({ t, v: i + 1, c: (i + 1) % 5 }));
+            const deb = [];
+            ts.forEach((t, i) => { const nxt = i + 1 < ts.length ? ts[i + 1] : Infinity; if (nxt - t >= 300) deb.push({ t: Math.min(t + 300, END), v: i + 1, c: (i + 1) % 5 }); });
+            if (ts[ts.length - 1] + 300 > END && !deb.find(d => d.v === ts.length)) deb.push({ t: END, v: ts.length, c: ts.length % 5 });
+            const smp = [];
+            for (let tick = 500; tick < END; tick += 500) {
+              const inWin = ts.map((t, i) => [t, i]).filter(([t]) => t > tick - 500 && t <= tick);
+              if (inWin.length) { const i = inWin[inWin.length - 1][1]; smp.push({ t: tick, v: i + 1, c: (i + 1) % 5 }); }
+            }
+            cur = board([
+              { name: 'source', marbles: src, end: END },
+              { name: 'debounce', marbles: deb, end: END },
+              { name: 'sample', marbles: smp, end: END },
+            ], T);
+            slot.replaceChildren(cur.node);
+            pressed(btns, keys, k);
+            return { deb, smp };
+          }
+          const btns = keys.map(k => cmd(SOURCES[k].label, async () => {
+            const my = ++gen;
+            const r = build(k);
+            say(o, `<span class="muted">playing</span> ${SOURCES[k].label}`);
+            if (!(await playT(cur.node, T, cur.paint, 1, () => gen === my))) return;
+            say(o, k === 'steady'
+              ? `<span class="bad">debounce:</span> no 300 ms pause ever came, so only the last value got out, at completion. <span class="good">sample:</span> ${r.smp.length} values, one per tick.`
+              : `<span class="good">debounce:</span> one value per burst, ${r.deb.length} in all. <span class="good">sample:</span> a value on each tick that saw new data, ${r.smp.length} in all, none during the pauses.`);
+          }));
+          build('steady'); cur.paint(T);
+          o.innerHTML = 'A source that never pauses. Play it, then play bursts.';
+          el.append(h('div', { class: 'controls' }, btns), slot, o);
+        },
+      },
+      {
+        title: 'scan keeps a running result, reduce waits for the end',
+        body: `<p><code>scan(initial) { acc, value -> }</code> carries a value from one emission to the next and emits every step, starting with the initial value. It is how you build a running total, or fold events into a state.</p>
+<p><code>reduce</code> and <code>fold</code> do the same math, but they are terminal. They return one result when the flow completes, so on a flow that never completes they never return.</p>`,
+        code: `val total: Flow<Int> = cartChanges.scan(0) { sum, change -> sum + change }
+// emits 0, then a new sum for every change
+
+val final: Int = cartChanges.fold(0) { sum, change -> sum + change }
+// suspends until cartChanges completes, then returns once`,
+        visual(el) {
+          let acc = 0, done = false;
+          const up = h('div', { class: 'flw-strip flw-wrap' });
+          const sc = h('div', { class: 'flw-strip flw-wrap' }, h('span', { class: 'flw-v ok' }, '0'));
+          const red = h('div', { class: 'flw-shown wait' }, 'fold: suspended until the flow completes');
+          const o = out();
+          const trim = s => { while (s.children.length > 7) s.firstElementChild.remove(); };
+          function emit(x) {
+            if (done) { replay(up, 'shake'); say(o, '<span class="muted">completed:</span> a finished flow emits nothing more. Press Reset.'); return; }
+            acc += x;
+            up.append(h('span', { class: 'flw-v acc drop-in' }, (x > 0 ? '+' : '') + x)); trim(up);
+            sc.append(h('span', { class: 'flw-v ok drop-in' }, String(acc))); trim(sc);
+            say(o, `scan emitted ${acc}. <span class="muted">fold still waits.</span>`);
+          }
+          el.append(
+            h('div', { class: 'controls' }, cmd('emit(5)', () => emit(5)), cmd('emit(10)', () => emit(10)), cmd('emit(-3)', () => emit(-3)),
+              cmd('// the flow completes', () => {
+                if (done) { replay(red, 'shake'); return; }
+                done = true; red.className = 'flw-shown'; red.textContent = `fold returned ${acc}`; replay(red, 'pop');
+                say(o, `<span class="good">completed:</span> fold returned its one result, ${acc}. scan had already emitted every step.`);
+              })),
+            h('div', { class: 'flw-search' },
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'changes'), up),
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'scan(0)'), sc),
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'fold(0)'), red)),
+            o);
+          o.innerHTML = 'scan already emitted its initial 0. Emit a few changes, then complete the flow.';
+        },
+      },
+      {
+        title: 'Write your own operator with transform',
+        body: `<p><code>transform { }</code> lets you emit zero, one or many values for each input. <code>map</code> and <code>filter</code> are special cases of it. For anything with its own state, write an extension that returns <code>flow { }</code> and collects the upstream inside.</p>`,
+        code: `// zero or many values per input
+val words: Flow<String> = lines.transform { line ->
+    if (line.isNotBlank()) line.split(" ").forEach { emit(it) }
+}
+
+// a reusable operator with its own state
+fun <T> Flow<T>.everyNth(n: Int): Flow<T> = flow {
+    var i = 0
+    collect { value -> if (i++ % n == 0) emit(value) }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>Most operators are small wrappers. <code>map</code> returns a new flow whose <code>collect</code> collects the upstream and calls <code>emit(transform(value))</code> downstream. Collecting the last flow in a chain walks up the chain, and every value then travels down through plain function calls in the collector’s coroutine. That is why a slow <code>map</code> slows the whole chain.</p>
+<p>Operators that deal with time or several inputs are different. <code>debounce</code>, <code>sample</code> and <code>combine</code> start coroutines and channels inside, so they can wait on a timer and on values at once.</p>`,
+      code: `// The shape of map (the real one uses internal helpers, same idea)
+inline fun <T, R> Flow<T>.map(crossinline transform: suspend (T) -> R): Flow<R> =
+    flow {
+        collect { value -> emit(transform(value)) }
+    }`,
+    },
+    mistakes: [
+      {
+        title: 'combine with an input that never emits',
+        bad: `private val favorites = MutableSharedFlow<Set<Int>>()   // no value yet
+
+val screen = combine(results, favorites) { list, favs -> mark(list, favs) }`,
+        good: `private val favorites = MutableStateFlow<Set<Int>>(emptySet())
+
+val screen = combine(results, favorites) { list, favs -> mark(list, favs) }`,
+        why: '<code>combine</code> waits until every input has a value. A SharedFlow with no replay has none, so the screen stays empty until the user stars something.',
+      },
+      {
+        title: 'Building a chain and never collecting it',
+        bad: `fun observe() {
+    viewModel.state.onEach { render(it) }
+}`,
+        good: `fun observe() {
+    viewModel.state.onEach { render(it) }.launchIn(viewLifecycleOwner.lifecycleScope)
+}`,
+        why: '<code>onEach</code> returns a new cold flow. Without a terminal operator like <code>collect</code> or <code>launchIn</code>, nothing runs.',
+      },
+      {
+        title: 'debounce delaying the first value too',
+        bad: `@OptIn(FlowPreview::class)
+val results = query.debounce(300).flatMapLatest { search(it) }
+// the screen shows nothing for 300 ms after it opens`,
+        good: `@OptIn(FlowPreview::class)
+val results = query
+    .debounce { q -> if (q.isEmpty()) 0L else 300L }
+    .flatMapLatest { search(it) }`,
+        why: 'debounce waits after every value, including the initial empty query. The overload with a lambda lets you skip the wait where it doesn’t help.',
+      },
+    ],
+  };
+
+  const flatmapDepth = {
+    deeper: [
+      {
+        title: 'concurrency limits how many inner flows run',
+        body: `<p><code>flatMapMerge(concurrency = n)</code> collects at most <code>n</code> inner flows at once. The rest wait their turn, in order. A free slot goes to the next one as soon as any inner flow completes, so results come out in finishing order.</p>
+<p>With <code>concurrency = 1</code> it behaves exactly like <code>flatMapConcat</code>. Pick a limit that matches what the server or the disk can handle, not as many as possible.</p>`,
+        code: `@OptIn(ExperimentalCoroutinesApi::class)
+val thumbs: Flow<Thumb> = photoIds.asFlow()
+    .flatMapMerge(concurrency = 2) { id -> flow { emit(api.thumb(id)) } }`,
+        visual(el) {
+          const DUR = [900, 400, 700, 300, 800, 500];
+          let busy = false, gen = 0;
+          const reqs = h('div', { class: 'flw-reqs' });
+          const order = h('div', { class: 'flw-strip flw-wrap' });
+          const stats = h('p', { class: 'tip' });
+          const o = out();
+          const rows = DUR.map((ms, i) => {
+            const bar = h('i'), st = h('span', { class: 'flw-stat' }, 'queued');
+            const row = h('div', { class: 'flw-req' }, h('span', { class: 'flw-src' }, `thumb(${i + 1}) · ${ms} ms`), h('span', { class: 'flw-prog' }, bar), st);
+            return { ms, bar, st, row };
+          });
+          reqs.append(...rows.map(r => r.row));
+          const paintIdle = () => rows.forEach(r => { r.bar.style.transition = 'none'; r.bar.style.width = '0%'; r.st.textContent = 'queued'; r.st.className = 'flw-stat'; r.row.className = 'flw-req'; });
+          async function run(c) {
+            if (busy) return; busy = true;
+            const my = ++gen;
+            pressed(btns, [1, 2, 4], c);
+            paintIdle(); order.replaceChildren(); stats.textContent = 'running…';
+            say(o, hl(`photoIds.asFlow().flatMapMerge(concurrency = ${c}) { thumb(it) }`));
+            const t0 = performance.now();
+            let next = 0;
+            const worker = async () => {
+              while (next < rows.length) {
+                const r = rows[next++];
+                r.st.textContent = 'loading'; r.st.className = 'flw-stat on';
+                void r.bar.offsetWidth; r.bar.style.transition = `width ${r.ms}ms linear`; r.bar.style.width = '100%';
+                await sleep(r.ms); if (!el.isConnected || my !== gen) return false;
+                r.st.textContent = 'done'; r.st.className = 'flw-stat fin'; r.row.classList.add('ok');
+                order.append(h('span', { class: 'flw-v ok drop-in' }, String(rows.indexOf(r) + 1)));
+              }
+              return true;
+            };
+            const res = await Promise.all(Array.from({ length: c }, worker));
+            if (!res.every(Boolean)) return;
+            const secs = ((performance.now() - t0) / 1000).toFixed(1);
+            stats.textContent = `concurrency ${c}: done in about ${secs} s`;
+            say(o, c === 1
+              ? `<span class="muted">concurrency 1:</span> one at a time, in order, like flatMapConcat. Slowest, but the order is kept.`
+              : `<span class="good">concurrency ${c}:</span> at most ${c} loading at once. Results came out in finishing order, not 1 to 6.`);
+            busy = false;
+          }
+          const btns = [1, 2, 4].map(c => cmd(`flatMapMerge(concurrency = ${c})`, () => run(c)));
+          stats.textContent = 'Six thumbnails with different load times.';
+          o.innerHTML = 'Pick a concurrency and watch the slots fill.';
+          el.append(h('div', { class: 'controls' }, btns), reqs,
+            h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'emitted'), order), stats, o);
+        },
+      },
+      {
+        title: 'flatMapConcat gets stuck on flows that never end',
+        body: `<p>Room queries, DataStore and StateFlows never complete. They keep emitting updates. <code>flatMapConcat</code> waits for each inner flow to complete before it starts the next, so with one of those inside, the first inner flow runs forever and the next one never starts.</p>
+<p>When the outer value says which stream to watch, like the selected user, use <code>flatMapLatest</code>. It cancels the old stream and switches to the new one.</p>`,
+        code: `@OptIn(ExperimentalCoroutinesApi::class)
+val profile: Flow<User> = selectedUserId
+    .flatMapLatest { id -> userDao.observe(id) }   // never completes, so not Concat`,
+        visual(el) {
+          let mode = 'concat', ids, active, tick, busy = false, gen = 0;
+          const USERS = ['Ada', 'Grace', 'Linus'];
+          const up = h('div', { class: 'flw-strip flw-wrap' });
+          const inner = h('div', { class: 'flw-reqs' });
+          const screen = h('div', { class: 'flw-shown' });
+          const o = out();
+          let rowsBy = {};
+          const modeBtns = [cmd('selectedId.flatMapConcat { dao.observe(it) }', () => setMode('concat')), cmd('selectedId.flatMapLatest { dao.observe(it) }', () => setMode('latest'))];
+          function mkRow(name) {
+            const st = h('span', { class: 'flw-stat' });
+            const row = h('div', { class: 'flw-req drop-in' }, h('span', { class: 'flw-src' }, `observe(${name})`), h('span', { class: 'flw-d2fm-pulse' }), st);
+            rowsBy[name] = { row, st };
+            inner.append(row);
+          }
+          const setSt = (name, text, cls) => { const r = rowsBy[name]; r.st.textContent = text; r.st.className = 'flw-stat' + (cls ? ' ' + cls : ''); r.row.classList.toggle('cut', cls === 'cut'); r.row.classList.toggle('flw-d2fm-live', cls === 'on'); };
+          function setMode(m) {
+            mode = m; pressed(modeBtns, ['concat', 'latest'], m);
+            ids = [USERS[0]]; active = USERS[0]; tick = 0; rowsBy = {};
+            up.replaceChildren(h('span', { class: 'flw-v acc' }, USERS[0])); inner.replaceChildren(); mkRow(USERS[0]); setSt(USERS[0], 'collecting', 'on');
+            screen.textContent = `${USERS[0]} · update 0`;
+            say(o, `${m === 'concat' ? 'flatMapConcat' : 'flatMapLatest'}. The screen follows ${USERS[0]}. Select another user.`);
+            ticker(++gen);
+          }
+          async function ticker(my) {
+            for (;;) {
+              await sleep(800); if (!el.isConnected || my !== gen) return;
+              tick++; screen.textContent = `${active} · update ${tick}`; replay(screen, 'pop-soft');
+            }
+          }
+          function select() {
+            if (busy) return;
+            const next = USERS[ids.length % USERS.length];
+            if (ids.length >= 3) { replay(up, 'shake'); say(o, '<span class="muted">enough users:</span> pick a mode to start over.'); return; }
+            ids.push(next); up.append(h('span', { class: 'flw-v acc drop-in' }, next)); mkRow(next);
+            if (mode === 'latest') {
+              setSt(active, 'cancelled', 'cut'); active = next; tick = 0; setSt(next, 'collecting', 'on');
+              screen.textContent = `${next} · update 0`; replay(screen, 'pop');
+              say(o, `<span class="good">switched:</span> flatMapLatest cancelled the old stream and now follows ${next}.`);
+            } else {
+              setSt(next, 'waiting', '');
+              say(o, `<span class="bad">stuck:</span> ${next} waits for observe(${ids[0]}) to complete. It never will, so the screen keeps showing ${ids[0]}.`);
+            }
+          }
+          setMode('concat');
+          el.append(h('div', { class: 'controls' }, modeBtns),
+            h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'id'), up),
+            inner, screen,
+            h('div', { class: 'controls' }, d2btn('Select the next user', select)), o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>The three operators are built differently. <code>flatMapConcat</code> is <code>map</code> followed by <code>flattenConcat</code>, which is just <code>collect { inner -> emitAll(inner) }</code>: one inner flow at a time, in the collector’s coroutine.</p>
+<p><code>flatMapMerge</code> runs inside a <code>channelFlow</code>. For each inner flow it acquires a permit from a <code>Semaphore(concurrency)</code>, launches a coroutine that collects it and sends into the shared channel, and releases the permit when that inner flow completes. With a concurrency of 1 it uses <code>flattenConcat</code> instead. <code>flatMapLatest</code> is <code>transformLatest { emitAll(transform(it)) }</code>. For each new value it cancels the previous child coroutine, waits for it to finish, and launches a new one.</p>`,
+      code: `// The idea behind transformLatest, simplified
+coroutineScope {
+    var previous: Job? = null
+    upstream.collect { value ->
+        previous?.cancelAndJoin()                 // stop the old inner flow
+        previous = launch { collector.transform(value) }
+    }
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Using map when each value returns a Flow',
+        bad: `val results: Flow<Flow<List<Article>>> = query.map { q -> repo.search(q) }
+// collect gets flows, not lists`,
+        good: `@OptIn(ExperimentalCoroutinesApi::class)
+val results: Flow<List<Article>> = query.flatMapLatest { q -> repo.search(q) }`,
+        why: '<code>map</code> wraps each inner flow without running it. A flatMap operator collects the inner flows and flattens their values into one stream.',
+      },
+      {
+        title: 'Blocking calls inside flatMapLatest',
+        bad: `query.flatMapLatest { q ->
+    flow { emit(client.newCall(request(q)).execute()) }   // blocks a thread
+}`,
+        good: `query.flatMapLatest { q ->
+    flow { emit(api.search(q)) }   // a suspend call, cancelled with the flow
+}`,
+        why: 'Cancellation can’t interrupt a blocking call. Every old request still runs to the end on some thread. A suspending client like Retrofit’s cancels the HTTP call too.',
+      },
+      {
+        title: 'flatMapLatest for writes',
+        bad: `@OptIn(ExperimentalCoroutinesApi::class)
+edits.flatMapLatest { draft -> flow { emit(repo.save(draft)) } }.launchIn(scope)`,
+        good: `@OptIn(ExperimentalCoroutinesApi::class)
+edits.flatMapConcat { draft -> flow { emit(repo.save(draft)) } }.launchIn(scope)`,
+        why: 'A new edit cancels the save still running, so a save can stop halfway. Writes need to finish, so run them in order.',
+      },
+    ],
+  };
+
+  const backpressureDepth = {
+    deeper: [
+      {
+        title: 'Pick what a full buffer does',
+        body: `<p><code>buffer(capacity, onBufferOverflow)</code> decides what happens when the queue is full. <code>SUSPEND</code>, the default, makes <code>emit</code> wait, so nothing is lost. <code>DROP_OLDEST</code> throws away the value that waited longest. <code>DROP_LATEST</code> throws away the value being emitted.</p>
+<p><code>conflate()</code> is the special case that keeps only the newest value. The two drop modes never slow the producer down, so pick them only when losing values is fine.</p>`,
+        code: `readings
+    .buffer(capacity = 2, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    .collect { show(it) }   // the producer never waits, old readings go first`,
+        visual(el) {
+          const P = 250, C = 700, N = 7, CAP = 2;
+          const MODES = { SUSPEND: 'SUSPEND', DROP_OLDEST: 'DROP_OLDEST', DROP_LATEST: 'DROP_LATEST' };
+          const keys = Object.keys(MODES);
+          function sim(mode) {
+            let tp = P, v = 1, cf = 0, pend = null, guard = 0;
+            const q = [], coll = [], emits = [], prod = [], drops = [], qbars = [], marks = [];
+            while ((v <= N || q.length || pend) && guard++ < 200) {
+              const tTake = q.length ? Math.max(cf, q[0].at) : Infinity;
+              const tEmit = v <= N && !pend ? tp : Infinity;
+              if (tEmit === Infinity && tTake === Infinity) break;
+              if (tEmit <= tTake) {
+                prod.push({ s: tEmit - P, e: tEmit, k: 'run' }); emits.push({ t: tEmit, v, c: v % 5 });
+                if (cf <= tEmit && !q.length) { coll.push({ s: tEmit, e: tEmit + C, k: 'done', label: v }); cf = tEmit + C; }
+                else if (q.length < CAP) q.push({ v, at: tEmit });
+                else if (mode === 'SUSPEND') pend = { v, at: tEmit };
+                else if (mode === 'DROP_OLDEST') { const d = q.shift(); drops.push(d.v); qbars.push({ s: d.at, e: tEmit, k: 'cut', label: d.v, half: true, lo: d.v % 2 === 1 }); marks.push(tEmit); q.push({ v, at: tEmit }); }
+                else { drops.push(v); marks.push(tEmit); }
+                if (!pend) { v++; tp = tEmit + P; }
+              } else {
+                const it = q.shift();
+                if (tTake > it.at) qbars.push({ s: it.at, e: tTake, k: 'wait', label: it.v, half: true, lo: it.v % 2 === 1 });
+                coll.push({ s: tTake, e: tTake + C, k: 'done', label: it.v }); cf = tTake + C;
+                if (pend) { prod.push({ s: pend.at, e: tTake, k: 'wait' }); q.push({ v: pend.v, at: tTake }); pend = null; v++; tp = tTake + P; }
+              }
+            }
+            const end = Math.max(...coll.map(c => c.e));
+            const prodEnd = emits[emits.length - 1].t;
+            return { coll, emits, prod, qbars, marks, drops, end, prodEnd, done: coll.map(c => c.label) };
+          }
+          const T = Math.max(...keys.map(k => sim(k).end)) + 100;
+          const slot = h('div', { class: 'flw-d2op-tight' }), snippet = h('div', { class: 'kt' }), stats = h('p', { class: 'tip' });
+          const o = out();
+          let gen = 0, cur;
+          function build(k) {
+            const r = sim(k);
+            cur = board([
+              { name: 'emit', bars: r.prod, marbles: r.emits },
+              { name: 'queue', bars: r.qbars, marks: r.marks },
+              { name: 'handle', bars: r.coll },
+            ], T);
+            slot.replaceChildren(cur.node);
+            snippet.innerHTML = hl(`readings.buffer(2, BufferOverflow.${k}).collect { handle(it) }`);
+            pressed(btns, keys, k);
+            return r;
+          }
+          const report = (k, r) => `producer done at ${(r.prodEnd / 1000).toFixed(1)} s · handled: ${r.done.join(', ')} · dropped: ${r.drops.length ? r.drops.join(', ') : 'none'}`;
+          const btns = keys.map(k => cmd(`BufferOverflow.${k}`, async () => {
+            const my = ++gen;
+            const r = build(k);
+            stats.textContent = 'running…';
+            if (!(await playT(cur.node, T, cur.paint, 1, () => gen === my))) return;
+            stats.textContent = report(k, r);
+            say(o, k === 'SUSPEND'
+              ? '<span class="good">SUSPEND:</span> every value was handled. The dashed bars on the emit row are emit waiting for room.'
+              : k === 'DROP_OLDEST'
+                ? `<span class="good">DROP_OLDEST:</span> the producer never waited. When the queue was full, the oldest waiting value made room. The newest values survive.`
+                : `<span class="good">DROP_LATEST:</span> the producer never waited. When the queue was full, the new value was thrown away. The early values survive.`);
+          }));
+          const r0 = build('SUSPEND'); cur.paint(T); stats.textContent = report('SUSPEND', r0);
+          o.innerHTML = 'The producer emits every 250 ms, handle() takes 700 ms, and the queue holds 2. Play each mode.';
+          el.append(h('div', { class: 'controls' }, btns), snippet, slot, stats, o);
+        },
+      },
+      {
+        title: 'A buffer between two slow stages makes a pipeline',
+        body: `<p><code>buffer()</code> splits the chain into two coroutines at the point where you put it. Everything above runs in one, everything below in the other. If both sides do slow work, like decoding and then saving, they now overlap: the next value decodes while the last one saves.</p>
+<p>Where you put it matters. A buffer above both slow stages leaves them in the same coroutine, taking turns, and gains nothing.</p>`,
+        code: `frames
+    .map { decode(it) }    // 400 ms each, in the upstream coroutine
+    .buffer()
+    .collect { save(it) }  // 400 ms each, overlaps with the next decode`,
+        visual(el) {
+          const D = 400, S = 400, N = 5;
+          const MODES = {
+            none: ['.map { decode }.collect { save }', 'no buffer'],
+            above: ['.buffer().map { decode }.collect { save }', 'buffer above both'],
+            between: ['.map { decode }.buffer().collect { save }', 'buffer between'],
+          };
+          const keys = Object.keys(MODES);
+          function sim(k) {
+            const dec = [], sav = [];
+            let tD = 0, tS = 0;
+            for (let i = 1; i <= N; i++) {
+              if (k === 'between') { dec.push({ s: tD, e: tD + D, k: 'run', label: i }); tD += D; const s = Math.max(tD, tS); sav.push({ s, e: s + S, k: 'done', label: i }); tS = s + S; }
+              else { dec.push({ s: tD, e: tD + D, k: 'run', label: i }); sav.push({ s: tD + D, e: tD + D + S, k: 'done', label: i }); tD += D + S; tS = tD; }
+            }
+            return { dec, sav, end: Math.max(tD, tS) };
+          }
+          const T = 4200;
+          const slot = h('div'), stats = h('p', { class: 'tip' }), snippet = h('div', { class: 'kt' });
+          const o = out();
+          let gen = 0, cur;
+          function build(k) {
+            const r = sim(k);
+            cur = board([{ name: 'decode', bars: r.dec }, { name: 'save', bars: r.sav }], T);
+            slot.replaceChildren(cur.node); snippet.innerHTML = hl('frames' + MODES[k][0]); pressed(btns, keys, k);
+            return r;
+          }
+          const btns = keys.map(k => cmd(MODES[k][1], async () => {
+            const my = ++gen; const r = build(k);
+            stats.textContent = 'running…';
+            if (!(await playT(cur.node, T, cur.paint, 1, () => gen === my))) return;
+            stats.textContent = `${N} frames in ${(r.end / 1000).toFixed(1)} s`;
+            say(o, k === 'between'
+              ? '<span class="good">pipeline:</span> decode and save overlapped. The total is close to the slower stage times 5, plus one decode.'
+              : k === 'above' ? '<span class="bad">no gain:</span> decode and save are both below the buffer, in the same coroutine, so they still take turns.' : '<span class="muted">no buffer:</span> one coroutine. Each frame decodes, then saves, then the next starts.');
+          }));
+          const r0 = build('none'); cur.paint(T); stats.textContent = `${N} frames in ${(r0.end / 1000).toFixed(1)} s`;
+          o.innerHTML = 'decode and save each take 400 ms. Move the buffer and compare the total.';
+          el.append(h('div', { class: 'controls' }, btns), snippet, slot, stats, o);
+        },
+      },
+      {
+        title: 'Hot flows have buffers too',
+        body: `<p>A <code>MutableSharedFlow()</code> with default settings has no buffer. Its <code>emit</code> waits for slow collectors, and <code>tryEmit</code>, the only option from a non-suspending callback, fails while anyone is collecting. Give it room with <code>extraBufferCapacity</code> and say what to drop when that fills. A StateFlow needs none of this, because it always keeps just the latest value.</p>`,
+        code: `private val _clicks = MutableSharedFlow<Click>(
+    extraBufferCapacity = 64,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST,
+)
+fun onClick(c: Click) { _clicks.tryEmit(c) }   // never suspends, never fails`,
+      },
+    ],
+    underHood: {
+      body: `<p>Without these operators, <code>emit</code> is a direct call into the collector, so there is nothing to overflow. <code>buffer</code>, <code>conflate</code>, <code>flowOn</code> and <code>channelFlow</code> are all built on one internal class, <code>ChannelFlow</code>. When you apply one of them, the upstream is launched in its own coroutine with <code>produceIn</code> and sends into a channel, and the downstream receives from it.</p>
+<p>Applied next to each other, these operators fuse into a single channel instead of stacking several. Explicit capacities add up, and a buffer with a drop strategy overrides the ones before it. <code>collectLatest</code> is also built from them: it is <code>mapLatest(action).buffer(0).collect()</code>.</p>`,
+      code: `// Fused into one channel, not two
+flow.flowOn(Dispatchers.Default).buffer(16)
+
+// conflate() is buffer(Channel.CONFLATED): keep only the newest value
+flow.conflate()`,
+    },
+    mistakes: [
+      {
+        title: 'Blocking work inside collectLatest',
+        bad: `bitmaps.collectLatest { b ->
+    val small = scaleBlocking(b)   // CPU loop, never checks cancellation
+    show(small)
+}`,
+        good: `bitmaps.collectLatest { b ->
+    val small = withContext(Dispatchers.Default) { scale(b) }   // scale() calls ensureActive()
+    show(small)
+}`,
+        why: 'Cancellation only lands at a suspension point. A blocking block can’t be cancelled, so collectLatest saves nothing and every stale image still gets scaled.',
+      },
+      {
+        title: 'An unlimited buffer on a fast source',
+        bad: `sensor.readings()              // 200 values a second
+    .buffer(Channel.UNLIMITED)
+    .collect { upload(it) }       // 5 a second`,
+        good: `sensor.readings()
+    .buffer(64, BufferOverflow.DROP_OLDEST)
+    .collect { upload(it) }`,
+        why: 'The queue grows by about 195 readings every second and never drains. Memory runs out slowly, in production. Bound the buffer and choose what to drop.',
+      },
+    ],
+  };
+
+  const errorsDepth = {
+    deeper: [
+      {
+        title: 'Catch inside flatMapLatest to keep the stream alive',
+        body: `<p>An exception that reaches the end of a chain completes it. If <code>catch</code> sits at the end of a search chain, one failed request ends the whole stream. It shows the error, and after that typing does nothing, because nobody collects the query anymore.</p>
+<p>Put <code>catch</code> on the inner flow instead. Each search can fail on its own and turn into an error state, while the outer flow keeps listening for the next query.</p>`,
+        code: `@OptIn(ExperimentalCoroutinesApi::class)
+val state: Flow<SearchState> = query.flatMapLatest { q ->
+    flow<SearchState> { emit(SearchState.Done(repo.search(q))) }
+        .onStart { emit(SearchState.Loading) }
+        .catch { emit(SearchState.Error) }          // per search
+}`,
+        visual(el) {
+          let inner = false, alive, busy = false;
+          const up = h('div', { class: 'flw-strip flw-wrap' });
+          const status = h('span', { class: 'flw-gps' });
+          const screen = h('div', { class: 'flw-shown' });
+          const code = h('div', { class: 'kt' });
+          const o = out();
+          function reset() {
+            alive = true; up.replaceChildren(); paint();
+            screen.className = 'flw-shown wait'; screen.textContent = 'Type a query';
+          }
+          const paint = () => {
+            status.className = 'flw-gps' + (alive ? '' : ' bad'); status.textContent = alive ? 'collecting query' : 'completed: nobody listens';
+            code.innerHTML = hl(inner ? 'query.flatMapLatest { q ->\n    search(q).catch { emit(Error) }\n}' : 'query.flatMapLatest { q -> search(q) }\n    .catch { emit(Error) }');
+          };
+          async function type(q) {
+            if (busy) return;
+            up.append(h('span', { class: 'flw-v drop-in' + (alive ? ' acc' : ' gone') }, q));
+            while (up.children.length > 6) up.firstElementChild.remove();
+            if (!alive) { replay(screen, 'shake'); say(o, `<span class="bad">ignored:</span> the flow completed after the error. "${q}" goes nowhere.`); return; }
+            busy = true;
+            screen.className = 'flw-shown wait'; screen.textContent = `Loading "${q}"…`;
+            await sleep(700); if (!el.isConnected) return;
+            if (q !== 'crash') {
+              screen.className = 'flw-shown'; screen.textContent = `Results for "${q}"`; replay(screen, 'pop');
+              say(o, `<span class="good">ok:</span> "${q}" loaded.`);
+            } else if (inner) {
+              screen.className = 'flw-shown stale'; screen.textContent = 'Search failed. Try again.'; replay(screen, 'pop');
+              say(o, '<span class="good">caught inside:</span> only this search failed. The outer flow still collects the query.');
+            } else {
+              alive = false; paint(); replay(status, 'shake');
+              screen.className = 'flw-shown stale'; screen.textContent = 'Search failed.';
+              say(o, '<span class="bad">caught at the end:</span> the error completed the whole chain. Now type something else.');
+            }
+            busy = false;
+          }
+          const sw = h('input', { type: 'checkbox', id: 'flw-d2er-inner', onchange() { inner = this.checked; reset(); say(o, inner ? 'catch moved into the inner flow.' : 'catch is at the end of the chain.'); } });
+          reset();
+          o.innerHTML = 'Search "kotlin", then "crash", then "flow".';
+          el.append(
+            code,
+            h('label', { class: 'switch', for: 'flw-d2er-inner' }, sw, 'put catch on the inner flow'),
+            h('div', { class: 'controls' }, cmd('type "kotlin"', () => type('kotlin')), cmd('type "crash"', () => type('crash')), cmd('type "flow"', () => type('flow'))),
+            h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'query'), up),
+            h('div', { class: 'flw-ph' }, status), screen, o);
+        },
+      },
+      {
+        title: 'Don’t wrap emit in try/catch',
+        body: `<p><code>emit</code> runs the downstream code. A <code>try</code> around it in the producer also catches exceptions thrown by the collector. Flows have a rule called exception transparency: once downstream has failed, the producer must not emit again. If it does, the flow throws an IllegalStateException that says exception transparency is violated.</p>
+<p>Use the <code>catch</code> operator for upstream errors. To catch errors from your own handling code, move that code into <code>onEach</code> above <code>catch</code>.</p>`,
+        code: `numbers
+    .onEach { render(it) }               // may throw
+    .catch { e -> showError(e) }         // sees render's exception: it is upstream now
+    .launchIn(scope)`,
+        visual(el) {
+          let busy = false;
+          const V = {
+            tryemit: { code: 'flow { for (i in 1..3) {\n    try { emit(i) } catch (e: Exception) { emit(-1) }\n} }.collect { render(it) }', label: 'try { emit(i) } catch { emit(-1) }' },
+            op: { code: 'flow { for (i in 1..3) emit(i) }\n    .catch { emit(-1) }\n    .collect { render(it) }', label: '.catch { }.collect { render }' },
+            onEach: { code: 'flow { for (i in 1..3) emit(i) }\n    .onEach { render(it) }\n    .catch { showError(it) }\n    .launchIn(scope)', label: '.onEach { render }.catch { }' },
+          };
+          const keys = Object.keys(V);
+          const code = h('div', { class: 'kt' });
+          const got = h('div', { class: 'flw-strip flw-wrap' });
+          const result = h('div', { class: 'flw-shown wait' }, 'render(2) throws');
+          const o = out();
+          async function run(k) {
+            if (busy) return; busy = true;
+            pressed(btns, keys, k); code.innerHTML = hl(V[k].code); got.replaceChildren();
+            result.className = 'flw-shown wait'; result.textContent = 'running…';
+            for (let i = 1; i <= 2; i++) {
+              await sleep(450); if (!el.isConnected) return;
+              got.append(h('span', { class: 'flw-v drop-in ' + (i === 2 ? 'bad' : 'ok') }, String(i)));
+            }
+            await sleep(450); if (!el.isConnected) return;
+            if (k === 'tryemit') {
+              got.append(h('span', { class: 'flw-v warn drop-in' }, 'emit(-1)'));
+              await sleep(350); if (!el.isConnected) return;
+              result.className = 'flw-shown stale'; result.textContent = 'IllegalStateException: Flow exception transparency is violated';
+              say(o, '<span class="bad">broken:</span> the producer caught render’s exception and emitted again into a collector that had already failed.');
+            } else if (k === 'op') {
+              result.className = 'flw-shown stale'; result.textContent = 'render’s exception reaches the caller of collect';
+              say(o, '<span class="muted">transparent:</span> catch let the downstream exception pass. It is not for errors below it. Handle it where you call collect, or use onEach.');
+            } else {
+              result.className = 'flw-shown'; result.textContent = 'catch handled it: showError(IllegalStateException)';
+              say(o, '<span class="good">caught:</span> render runs in onEach, above catch, so its exception is upstream and catch sees it.');
+            }
+            replay(result, 'pop');
+            busy = false;
+          }
+          const btns = keys.map(k => cmd(V[k].label, () => run(k)));
+          code.innerHTML = hl(V.tryemit.code); pressed(btns, keys, 'tryemit');
+          o.innerHTML = 'render(2) throws. Run each version.';
+          el.append(h('div', { class: 'controls' }, btns), code,
+            h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'render'), got), result, o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p><code>catch</code> collects the upstream inside a try block, but it wraps the downstream emit so it can tell where an exception came from. An exception thrown by downstream code is rethrown untouched, and so is cancellation. Only exceptions from upstream reach your block.</p>
+<p><code>retry</code> and <code>retryWhen</code> are a loop around that same machinery. When the upstream fails and your predicate returns true, they collect the upstream again from the very start. Values it emitted before failing are emitted again.</p>`,
+      code: `// retryWhen, close to the real implementation
+fun <T> Flow<T>.retryWhen(predicate: suspend FlowCollector<T>.(Throwable, Long) -> Boolean): Flow<T> = flow {
+    var attempt = 0L
+    do {
+        var again = false
+        val cause = catchImpl(this)                   // collect upstream, return its exception
+        if (cause != null) {
+            if (predicate(cause, attempt)) { again = true; attempt++ } else throw cause
+        }
+    } while (again)
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Retrying a flow that already emitted',
+        bad: `flow {
+    emit(UiState.Loading)
+    emit(UiState.Success(api.load()))
+}.retry(3)
+// every attempt shows Loading again, and partial results repeat`,
+        good: `flow { emit(api.load()) }
+    .retry(3) { it is IOException }
+    .map<Data, UiState> { UiState.Success(it) }
+    .onStart { emit(UiState.Loading) }`,
+        why: 'retry collects the upstream again from the start, so anything it emitted before the failure is emitted again. Keep retry tight around the request.',
+      },
+      {
+        title: 'catch above the operator that throws',
+        bad: `api.stream()
+    .catch { emit(Event.Error) }
+    .map { parse(it) }          // parse errors are not caught`,
+        good: `api.stream()
+    .map { parse(it) }
+    .catch { emit(Event.Error) }`,
+        why: 'catch only sees exceptions from above it. Put it after every operator whose errors it should handle.',
+      },
+      {
+        title: 'An empty catch',
+        bad: `repo.articles()
+    .catch { }                  // swallowed
+    .collect { _state.value = UiState.Success(it) }`,
+        good: `repo.articles()
+    .map<List<Article>, UiState> { UiState.Success(it) }
+    .catch { e -> emit(UiState.Error(e.message)) }
+    .collect { _state.value = it }`,
+        why: 'The flow completes quietly and the screen stays on its spinner forever. Turn the error into state the user can see and act on.',
+      },
+    ],
+  };
+
+  const callbackDepth = {
+    deeper: [
+      {
+        title: 'Choose the buffer for bursts',
+        body: `<p>Between the listener and the collector sits a channel. By default it is <code>BUFFERED</code>, 64 values, and <code>trySend</code> fails once it is full. You can change it from outside with <code>buffer()</code> or <code>conflate()</code>, which fuse into that channel.</p>
+<p>Pick by meaning. For state, like connectivity or a sensor reading, only the latest value matters, so <code>conflate()</code>. For events that must all arrive, keep a buffer large enough, or use <code>buffer(Channel.UNLIMITED)</code> if the source is bounded.</p>`,
+        code: `fun SensorManager.light(): Flow<Float> = callbackFlow {
+    val listener = lightListener { trySend(it) }
+    registerListener(listener, lightSensor, SensorManager.SENSOR_DELAY_UI)
+    awaitClose { unregisterListener(listener) }
+}.conflate()   // the collector only ever needs the newest reading`,
+        visual(el) {
+          const E = 8, GAP = 100, C = 500;
+          const MODES = { def: 'callbackFlow { … }', b2: 'callbackFlow { … }.buffer(2)', con: 'callbackFlow { … }.conflate()' };
+          const keys = Object.keys(MODES);
+          let busy = false;
+          const ev = h('div', { class: 'flw-strip flw-wrap' });
+          const q = h('div', { class: 'flw-strip flw-wrap' });
+          const cur = h('div', { class: 'flw-strip' });
+          const done = h('div', { class: 'flw-strip flw-wrap' });
+          const stats = h('p', { class: 'tip' });
+          const o = out();
+          const empty = s => { if (!s.children.length) s.append(h('span', { class: 'flw-note' }, 'empty')); };
+          const clearNote = s => s.querySelectorAll('.flw-note').forEach(x => x.remove());
+          async function run(k) {
+            if (busy) return; busy = true;
+            pressed(btns, keys, k);
+            [ev, q, cur, done].forEach(s => s.replaceChildren()); [q, cur, done].forEach(empty);
+            const cap = k === 'def' ? 64 : k === 'b2' ? 2 : 1;
+            const queue = []; let busyUntil = 0, inHand = null, sent = 0, failed = 0, lost = 0;
+            say(o, `${hl(MODES[k])} <span class="muted">// 8 events, 100 ms apart. The collector needs 500 ms each.</span>`);
+            for (let t = 0; t <= E * GAP + 9 * C; t += 50) {
+              if (t % GAP === 0 && t > 0 && t / GAP <= E) {
+                const v = t / GAP;
+                const chip = h('span', { class: 'flw-v drop-in' }, String(v));
+                if (k === 'con') {
+                  clearNote(q);
+                  if (queue.length) { const old = queue.pop(); old.classList.add('fly-out'); setTimeout(() => old.remove(), 380); lost++; }
+                  chip.classList.add('acc'); queue.push(chip); q.append(chip); sent++;
+                  ev.append(h('span', { class: 'flw-v ok drop-in' }, `${v}: ok`));
+                } else if (queue.length < cap) {
+                  clearNote(q); chip.classList.add('acc'); queue.push(chip); q.append(chip); sent++;
+                  ev.append(h('span', { class: 'flw-v ok drop-in' }, `${v}: ok`));
+                } else {
+                  failed++;
+                  ev.append(h('span', { class: 'flw-v bad drop-in' }, `${v}: failed`));
+                }
+              }
+              if (inHand && t >= busyUntil) { inHand.className = 'flw-v ok'; clearNote(done); moveTo(inHand, done); inHand = null; empty(cur); }
+              if (!inHand && queue.length) { inHand = queue.shift(); clearNote(cur); moveTo(inHand, cur); busyUntil = t + C; empty(q); }
+              await sleep(50); if (!el.isConnected) return;
+              if (t > E * GAP && !inHand && !queue.length) break;
+            }
+            const handled = done.querySelectorAll('.flw-v').length;
+            stats.textContent = `trySend ok: ${sent} · trySend failed: ${failed} · replaced by newer: ${lost} · handled: ${handled}`;
+            say(o, k === 'def'
+              ? '<span class="good">default buffer:</span> all 8 fit in 64 slots. Every event was handled, the last one long after it happened.'
+              : k === 'b2'
+                ? `<span class="bad">buffer(2):</span> while the collector was busy, only 2 could wait. ${failed} trySend calls failed and those events were lost.`
+                : `<span class="good">conflate():</span> each new event replaced the waiting one. Only the newest was handled next, which is right for state.`);
+            busy = false;
+          }
+          const btns = keys.map(k => cmd(MODES[k], () => run(k)));
+          [q, cur, done].forEach(empty);
+          stats.textContent = 'A burst of 8 listener calls meets a slow collector.';
+          o.innerHTML = 'Pick a buffer and fire the burst.';
+          el.append(h('div', { class: 'controls' }, btns),
+            h('div', { class: 'flw-search' },
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'trySend'), ev),
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'channel'), q),
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'now'), cur),
+              h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'done'), done)),
+            stats, o);
+        },
+      },
+      {
+        title: 'One answer? Use suspendCancellableCoroutine',
+        body: `<p>Some callbacks fire once: a single location fix, a dialog result, a one-shot request. A Flow is the wrong shape for that. <code>suspendCancellableCoroutine</code> suspends until you call <code>resume</code>, and returns the value like a normal function.</p>
+<p>Register <code>invokeOnCancellation</code> to cancel the underlying request. Without it, cancelling the coroutine only stops the waiting. The request keeps running, and its late answer is ignored.</p>`,
+        code: `suspend fun FusedLocationProviderClient.currentFix(): Location? =
+    suspendCancellableCoroutine { cont ->
+        val cts = CancellationTokenSource()
+        getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
+            .addOnSuccessListener { cont.resume(it) }
+            .addOnFailureListener { cont.resumeWithException(it) }
+        cont.invokeOnCancellation { cts.cancel() }   // stop the GPS request too
+    }`,
+        visual(el) {
+          let hook = true, busy = false, gen = 0, req = null;
+          const caller = h('span', { class: 'flw-gps off' }, 'idle');
+          const gps = h('span', { class: 'flw-gps off' }, 'GPS off');
+          const bar = h('i');
+          const shown = h('div', { class: 'flw-shown wait' }, 'No location yet');
+          const o = out();
+          const set = (e, cls, text) => { e.className = 'flw-gps' + (cls ? ' ' + cls : ''); e.textContent = text; };
+          async function start() {
+            if (req) { replay(caller, 'shake'); say(o, '<span class="muted">already waiting:</span> cancel it or let it finish.'); return; }
+            const my = ++gen; req = { my, cancelled: false };
+            set(caller, '', 'suspended in currentFix()'); set(gps, 'bad', 'GPS on');
+            shown.className = 'flw-shown wait'; shown.textContent = 'Waiting for a fix…';
+            bar.style.transition = 'none'; bar.style.width = '0%'; void bar.offsetWidth; bar.style.transition = 'width 2000ms linear'; bar.style.width = '100%';
+            say(o, 'The coroutine is suspended. The GPS request is running.');
+            await sleep(2000); if (!el.isConnected || my !== gen) return;
+            set(gps, 'off', 'GPS off');
+            if (req.cancelled) {
+              say(o, '<span class="bad">late answer ignored:</span> the request ran to the end with nobody waiting. resume() on a cancelled continuation does nothing.');
+            } else {
+              set(caller, '', 'resumed'); shown.className = 'flw-shown'; shown.textContent = 'Location: 41.01, 28.97'; replay(shown, 'pop');
+              say(o, '<span class="good">resumed once:</span> the callback called cont.resume(location) and currentFix() returned.');
+            }
+            req = null;
+          }
+          async function cancel() {
+            if (busy) return;
+            if (!req || req.cancelled) { replay(caller, 'shake'); say(o, '<span class="muted">nothing to cancel.</span>'); return; }
+            busy = true; req.cancelled = true;
+            set(caller, 'off', 'cancelled'); shown.className = 'flw-shown stale'; shown.textContent = 'Screen closed before the fix';
+            if (hook) {
+              const w = getComputedStyle(bar).width; bar.style.transition = 'none'; bar.style.width = w;
+              set(gps, 'off', 'GPS off'); gen++; req = null;
+              say(o, '<span class="good">invokeOnCancellation ran:</span> cts.cancel() stopped the GPS request right away.');
+            } else {
+              replay(gps, 'shake');
+              say(o, '<span class="bad">no cancellation hook:</span> the coroutine stopped waiting, but the GPS keeps running until the request ends.');
+            }
+            busy = false;
+          }
+          const sw = h('input', { type: 'checkbox', id: 'flw-d2cb-hook', checked: true, onchange() { hook = this.checked; say(o, hook ? 'invokeOnCancellation { cts.cancel() } is back.' : '<span class="bad">removed</span> invokeOnCancellation. Start, then cancel.'); } });
+          o.innerHTML = 'Ask for one location fix, then try cancelling halfway.';
+          el.append(
+            h('label', { class: 'switch', for: 'flw-d2cb-hook' }, sw, h('span', { html: 'register <code>invokeOnCancellation</code>' })),
+            h('div', { class: 'flw-duo' },
+              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl('currentFix()') }), caller), h('span', { class: 'flw-prog' }, bar)),
+              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src' }, 'location request'), gps), shown)),
+            h('div', { class: 'controls' }, cmd('val fix = currentFix()', start), cmd('job.cancel()', cancel)),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p><code>callbackFlow</code> is a <code>channelFlow</code> with one extra check. When collection starts, your block runs in a <code>ProducerScope</code>, a coroutine launched in the collector’s scope that owns the channel. <code>trySend</code> and <code>send</code> write to that channel and the collector reads from it.</p>
+<p><code>awaitClose</code> suspends until the channel is closed or the collector is cancelled, then runs your block in a <code>finally</code>, so the cleanup runs on every exit path. When your block returns, callbackFlow checks that the channel was closed. If it is still open, which happens when you forget <code>awaitClose</code>, it throws an IllegalStateException that tells you to call awaitClose.</p>`,
+      code: `// awaitClose, close to the real implementation
+suspend fun ProducerScope<*>.awaitClose(block: () -> Unit = {}) {
+    try {
+        suspendCancellableCoroutine<Unit> { cont -> invokeOnClose { cont.resume(Unit) } }
+    } finally {
+        block()   // unregister here
+    }
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Blocking a callback thread to send',
+        bad: `override fun onEvent(e: Event) {
+    runBlocking { send(e) }    // blocks the main thread when the buffer is full
+}`,
+        good: `override fun onEvent(e: Event) {
+    trySend(e)                 // never blocks; pick a buffer that fits the source
+}`,
+        why: '<code>runBlocking</code> on the main thread freezes the UI while the collector catches up, and can lead to an ANR. <code>trySend</code> returns at once.',
+      },
+      {
+        title: 'Ignoring the listener’s error callback',
+        bad: `override fun onError(error: Exception) {
+    Log.e("Feed", "listener failed", error)
+}`,
+        good: `override fun onError(error: Exception) {
+    close(error)    // the collector's catch sees it, then awaitClose cleans up
+}`,
+        why: 'Logging alone keeps the flow open with nothing coming, so the screen waits forever. <code>close(error)</code> ends the flow with that exception.',
+      },
+      {
+        title: 'Not sending the current state first',
+        bad: `fun SharedPreferences.theme(): Flow<String?> = callbackFlow {
+    val l = OnSharedPreferenceChangeListener { p, key -> if (key == "theme") trySend(p.getString(key, null)) }
+    registerOnSharedPreferenceChangeListener(l)
+    awaitClose { unregisterOnSharedPreferenceChangeListener(l) }
+}`,
+        good: `fun SharedPreferences.theme(): Flow<String?> = callbackFlow {
+    trySend(getString("theme", null))          // what is true right now
+    val l = OnSharedPreferenceChangeListener { p, key -> if (key == "theme") trySend(p.getString(key, null)) }
+    registerOnSharedPreferenceChangeListener(l)
+    awaitClose { unregisterOnSharedPreferenceChangeListener(l) }
+}`,
+        why: 'A listener that only reports changes leaves a new collector with nothing until the next change, which may never come.',
+      },
+    ],
+  };
 
   // ─── flatMapConcat / Merge / Latest ─────────────────
   const flatmap = {
@@ -265,6 +1245,9 @@ val results: Flow<List<Article>> = query
       { q: 'File chunks must upload one at a time, in order. Which operator fits?', options: ['<code>flatMapConcat</code>', '<code>flatMapMerge</code>', '<code>flatMapLatest</code>'], a: 0, why: 'Concat starts the next inner flow only after the previous one completes, so order is kept.' },
       { q: 'How many inner flows does <code>flatMapMerge { }</code> collect at once by default?', options: ['1', '16', 'No limit'], a: 1, why: 'The default concurrency is 16. Pass <code>concurrency</code> to change it.' },
     ],
+    deeper: flatmapDepth.deeper,
+    underHood: flatmapDepth.underHood,
+    mistakes: flatmapDepth.mistakes,
     visual(el) {
       const T = 3700, STEP = 400;
       const UP = [['A', 0, 0], ['B', 500, 1], ['C', 1000, 2]];
@@ -423,6 +1406,9 @@ logLines.[[buffer]]().collect { file.appendLine(it) }`, why: '<code>collectLates
       { q: 'With <code>conflate()</code>, values 2, 3 and 4 arrive while the collector is busy with 1. What does it get next?', options: ['2', '4', '2, 3 and 4 in order'], a: 1, why: 'A conflated buffer holds only the latest value. 2 and 3 were overwritten.' },
       { q: 'With <code>collectLatest</code>, value 2 arrives while the block is still handling 1. What happens?', options: ['The block for 1 finishes first', 'The block for 1 is cancelled', 'Value 2 is dropped'], a: 1, why: 'collectLatest cancels the running block and starts again with the new value.' },
     ],
+    deeper: backpressureDepth.deeper,
+    underHood: backpressureDepth.underHood,
+    mistakes: backpressureDepth.mistakes,
     visual(el) {
       const P = 400, C = 600, N = 5, T = 5000;
       const at = v => v * P;
@@ -576,6 +1562,9 @@ articles()
       { q: 'Why wait 1 s, then 2 s, then 4 s between retries?', options: ['To give a flaky network or busy server time to recover without hammering it', 'Because <code>retryWhen</code> requires it', 'To make tests slower'], a: 0, why: 'Exponential backoff spaces attempts out more each time, which helps the server and the battery.' },
       { q: 'The flow completes normally. What is <code>cause</code> in <code>onCompletion { cause -> }</code>?', options: ['<code>null</code>', 'A <code>CancellationException</code>', 'The last value'], a: 0, why: 'cause is null on success, and holds the exception on failure or cancellation.' },
     ],
+    deeper: errorsDepth.deeper,
+    underHood: errorsDepth.underHood,
+    mistakes: errorsDepth.mistakes,
     visual(el) {
       const A = 500, T = 6000;
       const SERVERS = { ok: ['server: works', 0], flaky: ['server: fails twice', 2], down: ['server: down', 99] };
@@ -731,6 +1720,9 @@ fun posts(): Flow<List<Post>> = channelFlow {
       { q: 'When does the block passed to <code>awaitClose { }</code> run?', options: ['Right after registering', 'When the collector is cancelled or the flow is closed', 'Only when an exception is thrown'], a: 1, why: 'awaitClose suspends while the flow is collected and runs its block when that ends, for any reason.' },
       { q: 'You need two coroutines inside one builder sending into the same flow, with no listener. Which builder?', options: ['<code>flow { }</code>', '<code>channelFlow { }</code>', '<code>flowOf()</code>'], a: 1, why: 'A plain flow { } may not emit from other coroutines. channelFlow gives you a channel that several coroutines can send to.' },
     ],
+    deeper: callbackDepth.deeper,
+    underHood: callbackDepth.underHood,
+    mistakes: callbackDepth.mistakes,
     visual(el) {
       let collecting = true, leak = false, online = true, net = true, nextId = 2, busy = false;
       const cbs = [];
@@ -1312,6 +2304,9 @@ launch { ticks.collect { println("B got $it") } }
           { q: 'A cold flow makes one network request when it runs. Two screens collect it. How many requests?', options: ['One, shared', 'Two'], a: 1, why: 'Each <code>collect</code> runs the whole block again for that collector.' },
           { q: 'When does <code>ticks.collect { … }</code> return?', options: ['Right away', 'After the first value', 'When the flow completes'], a: 2, why: '<code>collect</code> suspends until the flow finishes emitting, or until it is cancelled.' },
         ],
+        deeper: coldDepth.deeper,
+        underHood: coldDepth.underHood,
+        mistakes: coldDepth.mistakes,
         visual(el) {
           let runs = 1;
           const running = {};
@@ -1402,6 +2397,9 @@ val screen: Flow<List<Article>> = combine(results, favorites) { list, favs ->
           { q: '<code>flowOf(1, 1, 2, 2, 1).distinctUntilChanged().toList()</code>', options: ['<code>[1, 2]</code>', '<code>[1, 2, 1]</code>', '<code>[1, 1, 2, 2, 1]</code>'], a: 1, why: 'It only compares with the previous value, so the final 1 differs from the 2 before it and passes.' },
           { q: 'When does <code>combine(a, b) { … }</code> emit its first value?', options: ['When a emits', 'When both a and b have emitted at least once', 'When both complete'], a: 1, why: 'It needs a latest value from every input before it can call your lambda.' },
         ],
+        deeper: operatorsDepth.deeper,
+        underHood: operatorsDepth.underHood,
+        mistakes: operatorsDepth.mistakes,
         visual(el) {
           const T = 2200, END = 2000, SLOW = 1.6;
           const col = v => (typeof v === 'number' ? v % 5 : 3 + 'AB'.indexOf(v));

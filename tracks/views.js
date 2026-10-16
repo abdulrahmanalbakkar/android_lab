@@ -131,7 +131,1012 @@
 .vw-stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 8px; min-width: 0; }
 .vw-store { display: grid; gap: 6px; align-content: start; min-height: 96px; padding: 10px; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg); min-width: 0; }
 .vw-store .obj { min-width: 0; padding: 8px 10px; font-size: 0.78rem; overflow-wrap: anywhere; }
+/* depth 2: XML layouts */
+.vw-node.vw-d2x-kid2 { margin-left: 36px; }
+.vw-d2x-scr { transition: width 0.4s ease; }
+.vw-d2x-scr.vw-d2x-tab { width: 300px; }
+.vw-d2x-panes { position: absolute; inset: 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.vw-d2x-panes.vw-d2x-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+.vw-d2x-pane { display: grid; align-content: start; gap: 6px; padding: 8px; border: 2px dashed var(--line); border-radius: 10px; min-width: 0; overflow: hidden; }
+.vw-d2x-detail { align-content: center; justify-items: center; border-color: var(--accent); text-align: center; }
+.vw-d2x-item { font: 600 0.8rem var(--body); padding: 6px 8px; border-radius: 8px; background: var(--sunk); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* depth 2: measure, layout, draw */
+.vw-d2p-track { position: relative; display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); min-width: 0; overflow: hidden; }
+.vw-d2p-parent { height: 26px; display: flex; align-items: center; padding: 0 8px; border: 2px solid var(--ink); border-radius: 8px; transition: width 0.4s ease; min-width: 0; overflow: hidden; white-space: nowrap; }
+.vw-d2p-parent.vw-d2p-open { border-style: dashed; border-right-color: transparent; }
+.vw-d2p-child { height: 30px; display: flex; align-items: center; padding: 0 8px; border-radius: 8px; background: var(--accent-soft); border: 2px solid var(--accent); transition: width 0.45s cubic-bezier(0.2, 1.2, 0.4, 1); min-width: 36px; }
+.vw-d2p-child.vw-d2p-over { background: var(--warm-soft); border-color: var(--warm); }
+.vw-d2p-txt { font: 700 0.8rem var(--mono); }
+.vw-d2p-nest { display: grid; min-width: 0; }
+.vw-d2p-lvl { display: grid; gap: 6px; padding: 8px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
+.vw-d2p-lvl .vw-d2p-lvl { background: var(--bg); }
+.vw-d2p-leaf { justify-self: start; font: 600 0.8rem var(--mono); padding: 6px 12px; border-radius: 8px; border: 2px solid var(--ink); background: var(--sunk); transition: background 0.15s, border-color 0.15s; }
+.vw-d2p-leaf.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* depth 2: DiffUtil */
+.vw-d2d-rv { height: 206px; }
+.vw-d2d-above { font: 500 0.74rem var(--mono); color: var(--muted); padding: 4px 8px; border-radius: 8px; background: var(--sunk); overflow-wrap: anywhere; }
+.vw-d2d-above.vw-d2d-hid { color: var(--err); background: var(--err-soft); }
+.vw-d2d-lanes { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+.vw-d2d-lane { position: relative; height: 16px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
+.vw-d2d-lane i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 99px; background: var(--accent); transition: width 0.35s ease, left 0.35s ease; }
+.vw-d2d-lane i.vw-d2d-run { background: var(--warm); animation: pulse 0.8s ease-in-out infinite; }
+.vw-row.vw-d2d-stale { border-color: var(--err); }
+
+/* depth 2: ComposeView */
+.vw-pos.vw-d2c-dead { color: var(--err); }
+.vw-d2c-scr { height: 236px; }
+.vw-d2c-stack { position: absolute; inset: 8px; display: grid; grid-template-rows: 1fr 1fr; gap: 8px; }
+.vw-d2c-cv { display: grid; place-items: center; align-content: center; gap: 2px; border: 2px dashed var(--accent); border-radius: 12px; min-width: 0; text-align: center; }
+.vw-count.vw-d2c-num { font-size: 1.6rem; }
+
+/* depth 2: AndroidView */
+.vw-d2a-spark { margin-left: auto; flex: none; display: flex; align-items: flex-end; gap: 3px; height: 24px; }
+.vw-d2a-spark i { display: block; width: 6px; border-radius: 2px; background: var(--accent); }
 `;
+
+  // ─── Depth pass 2: xml, passes, diff, compose-in-views, android-view ─────────────────
+  const xmlDepth = {
+    deeper: [
+      {
+        title: 'include and ViewStub',
+        body: `<p><code>&lt;include&gt;</code> reuses a layout file inside another one. Give the include an id and the binding gets a nested binding for it, so <code>binding.header.title</code> is typed all the way down.</p>
+<p>A <code>ViewStub</code> is an invisible, zero-size placeholder. Its layout is inflated only when you call <code>inflate()</code>, so a rarely shown error panel costs nothing until it is needed. After that the stub is gone from the tree, and calling <code>inflate()</code> again throws.</p>`,
+        code: `// activity_inbox.xml:
+//   <include android:id="@+id/header" layout="@layout/toolbar_header" />
+//   <ViewStub android:id="@+id/errorStub" android:layout="@layout/panel_error" ... />
+
+binding.header.title.text = "Inbox"            // nested binding: ToolbarHeaderBinding
+
+fun showError(message: String) {
+    val panel = PanelErrorBinding.bind(binding.errorStub.inflate())   // inflate once
+    panel.message.text = message
+}`,
+        visual(el) {
+          const XML = ['<LinearLayout ...>', '  <include android:id="@+id/header"', '      layout="@layout/toolbar_header" />', '  <RecyclerView android:id="@+id/list" />', '  <ViewStub android:id="@+id/errorStub"', '      android:layout="@layout/panel_error" />', '</LinearLayout>'];
+          const lines = XML.map(t => h('div', { class: 'branch' }, t));
+          const mk = (name, kid, note) => {
+            const n = h('span', { class: 'vw-note' }, note || '');
+            const e = h('div', { class: 'vw-node' + (kid ? ' vw-kid' : '') + (kid === 2 ? ' vw-d2x-kid2' : '') }, h('span', {}, name), n);
+            return { e, n };
+          };
+          const tree = h('div', { class: 'vw-tree' });
+          const sViews = stat('View objects', 0);
+          const o = out();
+          let views = 0, stub = 'stub', busy = false, nodes = {};
+          function build() {
+            nodes = {
+              root: mk('LinearLayout', 0, 'binding.root'),
+              header: mk('ConstraintLayout', 1, 'binding.header.root'),
+              title: mk('TextView title', 2, 'binding.header.title'),
+              list: mk('RecyclerView', 1, 'binding.list'),
+              stub: mk('ViewStub', 1, 'binding.errorStub, 0 × 0'),
+            };
+            tree.replaceChildren(...['root', 'header', 'title', 'list', 'stub'].map(k => nodes[k].e));
+            views = 5; stub = 'stub'; sViews.set(views);
+          }
+          build();
+          say(o, 'Inflated. The error panel is still a stub. Try the nested binding, then inflate the stub.');
+          async function inflate() {
+            if (busy) return; busy = true;
+            tree.replaceChildren();
+            const order = ['root', 'header', 'title', 'list', 'stub'];
+            build(); tree.replaceChildren();
+            const at = [0, 1, 1, 3, 4];
+            for (let i = 0; i < order.length; i++) {
+              lines[at[i]].classList.add('scan');
+              const n = nodes[order[i]].e; n.classList.add('drop-in'); tree.append(n);
+              await sleep(300);
+              lines[at[i]].classList.remove('scan');
+              if (!el.isConnected) return;
+            }
+            say(o, '<span class="good">inflated:</span> 5 Views. The include brought its own ConstraintLayout and TextView. The stub is one empty View.');
+            busy = false;
+          }
+          function nested() {
+            if (busy) return;
+            const t = nodes.title; t.n.textContent = 'text = "Inbox"'; t.e.classList.add('on'); replay(t.e, 'pop');
+            setTimeout(() => t.e.classList.remove('on'), 700);
+            say(o, '<span class="good">ok:</span> binding.header is a ToolbarHeaderBinding, so binding.header.title is a TextView. No lookup, no cast.');
+          }
+          async function inflateStub() {
+            if (busy) return;
+            if (stub === 'gone') {
+              replay(tree, 'shake');
+              say(o, '<span class="bad">crash:</span> IllegalStateException: ViewStub must have a non-null ViewGroup viewParent <span class="muted">// the stub already replaced itself</span>');
+              return;
+            }
+            busy = true;
+            const s = nodes.stub; s.e.classList.add('leave');
+            await sleep(380); if (!el.isConnected) return;
+            const panel = [mk('LinearLayout panel', 1, 'replaced the stub'), mk('TextView message', 2), mk('Button retry', 2)];
+            s.e.replaceWith(...panel.map(p => { p.e.classList.add('drop-in'); return p.e; }));
+            views += 2; sViews.set(views); stub = 'gone';
+            say(o, '<span class="good">stub inflated:</span> panel_error.xml added 3 Views in the stub’s place. The stub itself left the tree.');
+            busy = false;
+          }
+          el.append(
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'activity_inbox.xml'), h('div', { class: 'when' }, lines)),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'View tree'), tree)),
+            h('div', { class: 'controls' },
+              cmd('ActivityInboxBinding.inflate(layoutInflater)', inflate),
+              cmd('binding.header.title.text = "Inbox"', nested),
+              cmd('binding.errorStub.inflate()', inflateStub)),
+            h('div', { class: 'vw-stats' }, sViews),
+            o);
+        },
+      },
+      {
+        title: 'Alternative layouts make binding fields nullable',
+        body: `<p>You can ship more than one version of a layout. On a device whose smallest width is at least 600dp, Android picks <code>layout-sw600dp/activity_main.xml</code> over <code>layout/activity_main.xml</code>. View binding still generates one class for both files.</p>
+<p>A view that exists in only some versions becomes nullable in that class. On a tablet <code>binding.detail</code> is a pane. On a phone it is null. The compiler makes you handle both.</p>`,
+        code: `// layout/activity_main.xml          : list only
+// layout-sw600dp/activity_main.xml   : list + @+id/detail
+val twoPane = binding.detail != null      // FrameLayout?
+
+fun open(id: Long) {
+    if (twoPane) showInPane(id) else startActivity(DetailActivity.intent(this, id))
+}`,
+        visual(el) {
+          let tablet = false, opened = 0;
+          const items = ['Ada', 'Grace', 'Linus'];
+          const file = h('div', { class: 'kt' });
+          const typeLine = h('div', { class: 'kt' });
+          const listPane = h('div', { class: 'vw-d2x-pane' });
+          const detailPane = h('div', { class: 'vw-d2x-pane vw-d2x-detail' }, h('span', { class: 'vw-note' }, 'detail pane'));
+          const panes = h('div', { class: 'vw-d2x-panes' }, listPane, detailPane);
+          const screen = h('div', { class: 'vw-screen vw-d2x-scr' }, panes);
+          const o = out();
+          listPane.append(...items.map((n, i) => h('span', { class: 'vw-d2x-item' }, n)));
+          const paint = () => {
+            screen.classList.toggle('vw-d2x-tab', tablet);
+            detailPane.hidden = !tablet;
+            panes.classList.toggle('vw-d2x-two', tablet);
+            file.innerHTML = hl(tablet ? '// picked: res/layout-sw600dp/activity_main.xml' : '// picked: res/layout/activity_main.xml');
+            typeLine.innerHTML = hl(`binding.detail: FrameLayout?  // ${tablet ? 'a pane' : 'null'}`);
+          };
+          const sw = toggle('vw-d2x-sw600', 'Smallest width ≥ 600dp (tablet)', false, () => {
+            tablet = sw.input.checked; paint(); replay(screen, 'flip');
+            say(o, tablet ? 'Tablet: the sw600dp file wins, so detail exists.' : 'Phone: the default file has no detail view, so the field is null.');
+          });
+          paint();
+          say(o, 'A phone. Open a contact both ways, then switch to a tablet.');
+          el.append(
+            h('div', { class: 'vw-split' }, screen, h('div', { class: 'vw-col' }, file, typeLine, sw.el)),
+            h('div', { class: 'controls' },
+              cmd('binding.detail?.let { show(it) }', () => {
+                const name = items[opened++ % items.length];
+                if (tablet) { detailPane.replaceChildren(h('b', {}, name), h('span', { class: 'vw-note' }, 'shown in the pane')); replay(detailPane, 'pop-soft'); say(o, `<span class="good">two panes:</span> ${name} opened next to the list.`); }
+                else { replay(listPane, 'pop-soft'); say(o, `<span class="good">safe:</span> detail is null on a phone, so the block is skipped. Start a DetailActivity instead.`); }
+              }),
+              cmd('binding.detail!!.show()', () => {
+                if (tablet) { replay(detailPane, 'pop'); say(o, '<span class="muted">works here:</span> but the same code ships to phones.'); return; }
+                replay(screen, 'shake'); say(o, '<span class="bad">crash on phones:</span> NullPointerException. The field was nullable for a reason.');
+              })),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>For each layout the build generates a Java class under <code>build/generated</code>. Its <code>inflate</code> calls <code>LayoutInflater.inflate</code> with the layout id, then <code>bind(root)</code>. <code>bind</code> looks each id up once, with a findViewById-style search, and stores the result in a final field. If a view it needs is missing, for example because you passed the wrong layout, it throws a <code>NullPointerException</code> that says “Missing required view with ID”.</p>
+<p>Inflation itself reads the compiled binary XML from the APK and, for each tag, calls the View’s <code>(Context, AttributeSet)</code> constructor. <code>AppCompatActivity</code> installs a factory that swaps some tags for their AppCompat versions, so a <code>&lt;TextView&gt;</code> becomes an <code>AppCompatTextView</code>.</p>`,
+      code: `// Roughly what the generated bind() does (the real class is Java)
+fun bind(root: View): ActivityProfileBinding {
+    val title = root.findViewById<TextView>(R.id.title)
+        ?: throw NullPointerException("Missing required view with ID: ...")
+    val follow = root.findViewById<Button>(R.id.follow)
+        ?: throw NullPointerException("Missing required view with ID: ...")
+    return ActivityProfileBinding(root as ConstraintLayout, title, follow)
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Using Kotlin synthetics from an old tutorial',
+        bad: `import kotlinx.android.synthetic.main.activity_profile.*
+
+title.text = "Hi, Ada"`,
+        good: `binding = ActivityProfileBinding.inflate(layoutInflater)
+setContentView(binding.root)
+binding.title.text = "Hi, Ada"`,
+        why: 'The <code>kotlin-android-extensions</code> plugin that made synthetics was removed in Kotlin 1.8. View binding is the replacement.',
+      },
+      {
+        title: 'Looking up a view in a property initializer',
+        bad: `class ProfileActivity : AppCompatActivity() {
+    private val title: TextView = findViewById(R.id.title)
+}`,
+        good: `class ProfileActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityProfileBinding
+    // set in onCreate, after setContentView
+}`,
+        why: 'Property initializers run when the Activity object is created, before <code>onCreate</code>. There is no window or layout yet, so the lookup crashes.',
+      },
+      {
+        title: 'Attaching the Fragment’s view to the container yourself',
+        bad: `override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, s: Bundle?): View {
+    _binding = FragmentProfileBinding.inflate(inflater, container, true)
+    return binding.root
+}`,
+        good: `override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, s: Bundle?): View {
+    _binding = FragmentProfileBinding.inflate(inflater, container, false)
+    return binding.root
+}`,
+        why: 'The FragmentManager adds the returned view to the container. Attaching it first makes that add fail with “The specified child already has a parent”.',
+      },
+    ],
+  };
+
+  const passesDepth = {
+    deeper: [
+      {
+        title: 'How layout params become a MeasureSpec',
+        body: `<p>A parent turns each child’s <code>layout_width</code> into a MeasureSpec. A fixed size like <code>120dp</code> is always <code>EXACTLY</code>. <code>match_parent</code> takes the parent’s mode and size. <code>wrap_content</code> becomes <code>AT_MOST</code> the parent’s size, so the child can be smaller but not bigger.</p>
+<p>Inside a horizontal <code>ScrollView</code> the parent has no width limit, so it passes <code>UNSPECIFIED</code>. Then <code>resolveSize</code> gives the child whatever it wants, which is how content can grow wider than the screen and scroll.</p>`,
+        code: `// The child side: resolveSize() applies the spec to the size the view wants
+val wanted = textWidth + paddingLeft + paddingRight
+val width = when (MeasureSpec.getMode(widthMeasureSpec)) {
+    MeasureSpec.EXACTLY -> MeasureSpec.getSize(widthMeasureSpec)
+    MeasureSpec.AT_MOST -> minOf(wanted, MeasureSpec.getSize(widthMeasureSpec))
+    else -> wanted                                   // UNSPECIFIED
+}`,
+        visual(el) {
+          const P = 300;
+          let parent = 'exactly', param = 'wrap', content = 180, busy = false;
+          const PARENTS = { exactly: ['parent: EXACTLY 300', 'EXACTLY'], atmost: ['parent: AT_MOST 300', 'AT_MOST'], none: ['parent: ScrollView', 'UNSPECIFIED'] };
+          const PARAMS = { match: 'match_parent', wrap: 'wrap_content', fixed: '120dp' };
+          const lineSpec = h('div', { class: 'vw-node' }, h('span', {}, 'getChildMeasureSpec()'), h('span', { class: 'vw-note' }));
+          const lineRes = h('div', { class: 'vw-node' }, h('span', {}, 'child onMeasure: resolveSize()'), h('span', { class: 'vw-note' }));
+          const pBox = h('div', { class: 'vw-d2p-parent' }, h('span', { class: 'vw-note' }, 'parent'));
+          const cBox = h('div', { class: 'vw-d2p-child' }, h('span', { class: 'vw-d2p-txt' }));
+          const track = h('div', { class: 'vw-d2p-track' }, pBox, cBox);
+          const o = out();
+          const pct = v => (v / 400) * 100 + '%';
+          function spec() {
+            const pm = PARENTS[parent][1];
+            if (param === 'fixed') return ['EXACTLY', 120];
+            if (pm === 'UNSPECIFIED') return ['UNSPECIFIED', 0];
+            if (param === 'match') return [pm, P];
+            return ['AT_MOST', P];
+          }
+          const resolve = ([m, s]) => (m === 'EXACTLY' ? s : m === 'AT_MOST' ? Math.min(content, s) : content);
+          function paintStatic() {
+            pBox.style.width = pct(P);
+            pBox.classList.toggle('vw-d2p-open', parent === 'none');
+            pBox.firstChild.textContent = parent === 'none' ? 'parent: no width limit' : `parent: ${PARENTS[parent][1]} 300`;
+          }
+          function paintResult(animate) {
+            const sp = spec(), w = resolve(sp);
+            lineSpec.lastChild.textContent = `${PARAMS[param]} → ${sp[0]}${sp[0] === 'UNSPECIFIED' ? '' : ' ' + sp[1]}`;
+            lineRes.lastChild.textContent = `wants ${content} → measured ${w}`;
+            cBox.style.width = pct(Math.min(w, 400));
+            cBox.classList.toggle('vw-d2p-over', w > P);
+            cBox.firstChild.textContent = `${w}`;
+            if (animate) replay(cBox, 'pop-soft');
+            return { sp, w };
+          }
+          const pBtns = Object.keys(PARENTS).map(k => cmd(PARENTS[k][0], () => run(() => { parent = k; }, pBtns, Object.keys(PARENTS), k)));
+          const cBtns = Object.keys(PARAMS).map(k => cmd(`layout_width="${PARAMS[k]}"`, () => run(() => { param = k; }, cBtns, Object.keys(PARAMS), k)));
+          const press = (bs, ks, k) => bs.forEach((b, i) => b.setAttribute('aria-pressed', String(ks[i] === k)));
+          async function run(setter, bs, ks, k) {
+            if (busy) return; busy = true;
+            setter(); press(bs, ks, k); paintStatic();
+            lineSpec.classList.add('on'); lineSpec.lastChild.textContent = '…';
+            await sleep(350); if (!el.isConnected) return;
+            const { sp, w } = paintResult(false);
+            lineSpec.classList.remove('on'); lineRes.classList.add('on');
+            await sleep(350); if (!el.isConnected) return;
+            paintResult(true); lineRes.classList.remove('on');
+            const why = sp[0] === 'EXACTLY' ? 'EXACTLY: the view gets that size, whatever it wants.' : sp[0] === 'AT_MOST' ? `AT_MOST: the view takes what it wants, up to ${sp[1]}.` : 'UNSPECIFIED: no limit, so the view takes all it wants.';
+            say(o, `${why}${w > P ? ' <span class="bad">wider than the parent:</span> it only fits because a ScrollView scrolls.' : ''}`);
+            busy = false;
+          }
+          const textSw = toggle('vw-d2p-long', 'Long text: the view wants 360, not 180', false, () => {
+            content = textSw.input.checked ? 360 : 180; paintResult(true);
+            say(o, `The view now wants ${content}. ${spec()[0] === 'EXACTLY' ? 'EXACTLY ignores that.' : 'Watch the measured width.'}`);
+          });
+          press(pBtns, Object.keys(PARENTS), parent); press(cBtns, Object.keys(PARAMS), param);
+          paintStatic(); paintResult(false);
+          say(o, 'wrap_content under an EXACTLY parent becomes AT_MOST 300. Change either side.');
+          el.append(
+            h('div', { class: 'controls' }, pBtns),
+            h('div', { class: 'controls' }, cBtns),
+            h('div', { class: 'vw-tree' }, lineSpec, lineRes),
+            track, textSw.el, o);
+        },
+      },
+      {
+        title: 'Nested weights measure twice per level',
+        body: `<p>A <code>LinearLayout</code> with <code>layout_weight</code> measures its children once, then again to share out the space that is left. Put another weighted LinearLayout inside, and each of its children is measured twice for every time the outer one measures it. The cost doubles with each level.</p>
+<p>Android’s performance docs call this double taxation. RelativeLayout does it too. A flat hierarchy, usually one <code>ConstraintLayout</code>, stops the multiplying.</p>`,
+        visual(el) {
+          let depth = 2, flat = false, busy = false;
+          const sCalls = stat('leaf onMeasure calls', 0);
+          const box = h('div', { class: 'vw-d2p-nest' });
+          const o = out();
+          let leaf;
+          function build() {
+            if (flat) {
+              leaf = h('div', { class: 'vw-d2p-leaf' }, 'TextView');
+              box.replaceChildren(h('div', { class: 'vw-d2p-lvl' }, h('span', { class: 'vw-note' }, 'ConstraintLayout'), leaf));
+              return;
+            }
+            leaf = h('div', { class: 'vw-d2p-leaf' }, 'TextView');
+            let inner = leaf;
+            for (let d = depth; d >= 1; d--) inner = h('div', { class: 'vw-d2p-lvl' }, h('span', { class: 'vw-note' }, `LinearLayout, weight · level ${d}`), inner);
+            box.replaceChildren(inner);
+          }
+          const depthBtns = [1, 2, 3, 4].map(d => cmd(`${d} level${d > 1 ? 's' : ''} deep`, () => { if (busy) return; depth = d; flat = false; build(); press(); sCalls.set(0); say(o, `${d} nested weighted LinearLayouts. Measure the frame.`); }));
+          const press = () => depthBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(!flat && i + 1 === depth)));
+          async function measure() {
+            if (busy) return; busy = true;
+            const n = flat ? 1 : 2 ** depth;
+            sCalls.set(0);
+            for (let i = 1; i <= n; i++) {
+              leaf.classList.add('on'); sCalls.set(i);
+              await sleep(n > 8 ? 110 : 220); if (!el.isConnected) return;
+              leaf.classList.remove('on');
+              await sleep(40);
+            }
+            say(o, flat
+              ? '<span class="good">flat:</span> one parent, so nothing multiplies. The count no longer depends on how deep the old tree was.'
+              : `<span class="${depth > 2 ? 'bad' : 'muted'}">${n} calls</span> for one TextView: 2 per level, ${depth} level${depth > 1 ? 's' : ''}. ${depth < 4 ? 'Add a level and it doubles.' : 'In a list row this runs for every row.'}`);
+            busy = false;
+          }
+          build(); press();
+          say(o, 'Two nested weighted LinearLayouts. Measure one frame and count.');
+          el.append(
+            h('div', { class: 'controls' }, depthBtns, cmd('flatten into ConstraintLayout', () => { if (busy) return; flat = true; build(); press(); sCalls.set(0); say(o, 'One flat ConstraintLayout. Measure again.'); })),
+            box,
+            h('div', { class: 'controls' }, act('Measure one frame', measure)),
+            h('div', { class: 'vw-stats' }, sCalls),
+            o);
+        },
+      },
+      {
+        title: 'Sizes are 0 until the first layout pass',
+        body: `<p>In <code>onCreate</code> or <code>onViewCreated</code> nothing has been measured yet, so <code>view.width</code> is 0. Don’t read sizes there. <code>doOnLayout</code> from core-ktx runs your block right away if the view is already laid out, or after its next layout pass.</p>`,
+        code: `override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    super.onViewCreated(view, savedInstanceState)
+    Log.d("Chart", "width now: \${binding.chart.width}")    // 0
+    binding.chart.doOnLayout { chart ->
+        drawBars(chart.width, chart.height)                // real sizes
+    }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p><code>requestLayout()</code> sets a flag on the view and walks up through its parents to <code>ViewRootImpl</code>, which asks the <code>Choreographer</code> for a callback on the next vsync. That callback runs <code>performTraversals</code>: measure from the root down, then layout, then draw. <code>View.measure</code> skips your <code>onMeasure</code> when the specs match last time and no layout was requested, so untouched branches stay cheap.</p>
+<p><code>invalidate()</code> only marks the view dirty. With hardware acceleration, which is the default, the draw pass re-records just that view’s display list, and the separate RenderThread turns the display lists into GPU commands.</p>`,
+      code: `// One frame, simplified from ViewRootImpl.performTraversals()
+if (layoutRequested) {
+    performMeasure(rootWidthSpec, rootHeightSpec)   // root.measure() → onMeasure down the tree
+    performLayout()                                 // root.layout() → onLayout down the tree
+}
+performDraw()   // re-record dirty display lists, then the RenderThread draws`,
+    },
+    mistakes: [
+      {
+        title: 'Fixing the size after layout instead of in onMeasure',
+        bad: `override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    layoutParams = layoutParams.apply { height = w }   // make it square
+}`,
+        good: `override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    setMeasuredDimension(measuredWidth, measuredWidth)  // square, in one pass
+}`,
+        why: 'Setting layout params requests another layout, so every frame that resizes runs two passes and the view can flicker. Decide the size in <code>onMeasure</code>.',
+      },
+      {
+        title: 'Ignoring padding when measuring and drawing',
+        bad: `val w = paint.measureText(text).toInt()
+setMeasuredDimension(resolveSize(w, widthMeasureSpec), heightFor(heightMeasureSpec))
+// onDraw: canvas.drawText(text, 0f, baseline, paint)`,
+        good: `val w = paint.measureText(text).toInt() + paddingLeft + paddingRight
+setMeasuredDimension(resolveSize(w, widthMeasureSpec), heightFor(heightMeasureSpec))
+// onDraw: canvas.drawText(text, paddingLeft.toFloat(), baseline, paint)`,
+        why: 'A custom view must handle <code>android:padding</code> itself. If not, padding set in XML does nothing and the text touches the edges.',
+      },
+      {
+        title: 'Setting the measured size without the spec',
+        bad: `override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    setMeasuredDimension(desiredWidth, desiredHeight)
+}`,
+        good: `override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    setMeasuredDimension(
+        resolveSize(desiredWidth, widthMeasureSpec),
+        resolveSize(desiredHeight, heightMeasureSpec),
+    )
+}`,
+        why: 'Ignoring the spec breaks <code>match_parent</code> and fixed dp sizes, and the view can grow past the space its parent has.',
+      },
+    ],
+  };
+
+  const diffDepth = {
+    deeper: [
+      {
+        title: 'submitList returns before the list changes',
+        body: `<p><code>submitList</code> starts the diff on a background thread and returns at once. The rows change later, back on the main thread. Code on the next line still sees the old list.</p>
+<p>Scrolling to the top right after inserting at position 0 is the classic case. RecyclerView keeps the row you were looking at in place, so the new item lands just above the screen. Pass a commit callback. It runs after the new list is applied.</p>`,
+        code: `adapter.submitList(newList) {
+    binding.list.scrollToPosition(0)   // runs after the diff is applied
+}`,
+        visual(el) {
+          const base = ['Ada', 'Grace', 'Linus', 'Alan', 'Ken'];
+          let list = base.slice(), busy = false;
+          const rv = h('div', { class: 'vw-rv vw-d2d-rv' });
+          const above = h('div', { class: 'vw-d2d-above' });
+          const mainBar = h('i'), bgBar = h('i');
+          const lanes = h('div', { class: 'vw-d2d-lanes' },
+            h('span', { class: 'vw-label' }, 'main'), h('div', { class: 'vw-d2d-lane' }, mainBar),
+            h('span', { class: 'vw-label' }, 'diff'), h('div', { class: 'vw-d2d-lane' }, bgBar));
+          const log = h('div', { class: 'vw-log' });
+          const o = out();
+          const rowEl = (n, cls) => h('div', { class: 'vw-row' + (cls ? ' ' + cls : '') }, h('span', {}, n));
+          const paint = (topIndex, newCls) => {
+            rv.replaceChildren(...list.slice(topIndex, topIndex + 4).map(n => rowEl(n, n === 'Zoe' ? newCls : '')));
+            above.textContent = topIndex > 0 ? `${topIndex} row above the screen: ${list.slice(0, topIndex).join(', ')}` : 'nothing above the screen';
+            above.classList.toggle('vw-d2d-hid', topIndex > 0);
+          };
+          const line = t => { log.append(h('div', {}, t)); while (log.children.length > 5) log.firstElementChild.remove(); };
+          const bar = (b, s, e) => { b.style.left = s + '%'; b.style.width = (e - s) + '%'; };
+          function reset() { list = base.slice(); paint(0); log.replaceChildren(); bar(mainBar, 0, 0); bar(bgBar, 0, 0); }
+          async function run(withCallback) {
+            if (busy) return; busy = true;
+            reset();
+            line('submitList(listOf(Zoe) + old)'); bar(mainBar, 0, 8);
+            await sleep(300); if (!el.isConnected) return;
+            if (!withCallback) { line('scrollToPosition(0)   // still the old list'); bar(mainBar, 0, 20); replay(rv, 'pop-soft'); await sleep(400); if (!el.isConnected) return; }
+            line('... diff on a background thread'); bgBar.classList.add('vw-d2d-run'); bar(bgBar, 20, 70);
+            await sleep(700); if (!el.isConnected) return;
+            bgBar.classList.remove('vw-d2d-run');
+            list = ['Zoe', ...base];
+            line('dispatch: notifyItemInserted(0)'); bar(mainBar, 0, 80);
+            if (!withCallback) {
+              paint(1, 'vw-ins');
+              say(o, '<span class="bad">hidden:</span> the scroll ran before the insert. RecyclerView kept Ada in place, so Zoe went in above the screen.');
+              busy = false; return;
+            }
+            paint(1, 'vw-ins');
+            await sleep(450); if (!el.isConnected) return;
+            line('commit callback: scrollToPosition(0)'); bar(mainBar, 0, 100);
+            paint(0, 'vw-ins drop-in');
+            say(o, '<span class="good">visible:</span> the callback ran after the insert, so the scroll brought Zoe on screen.');
+            busy = false;
+          }
+          reset();
+          line('// waiting for submitList()');
+          say(o, 'The user is at the top. Insert Zoe at position 0 and scroll to it, two ways.');
+          el.append(
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'RecyclerView'), above, rv),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'Threads'), lanes, log)),
+            h('div', { class: 'controls' },
+              cmd('submitList(new); list.scrollToPosition(0)', () => run(false)),
+              cmd('submitList(new) { list.scrollToPosition(0) }', () => run(true))),
+            o);
+        },
+      },
+      {
+        title: 'Mutating an item hides the change from DiffUtil',
+        body: `<p>DiffUtil compares the old list with the new one. If you change a property on an object that both lists share, old and new are the same object. <code>areContentsTheSame</code> returns true, and the row is not rebound.</p>
+<p>The screen then shows the old state until that row is rebound for some other reason, like scrolling it off and back. Keep list items immutable and replace the one that changed with <code>copy</code>.</p>`,
+        code: `// Before: class Contact(val id: Long, var starred: Boolean)
+data class Contact(val id: Long, val name: String, val starred: Boolean)
+
+fun star(id: Long) {
+    adapter.submitList(adapter.currentList.map { if (it.id == id) it.copy(starred = true) else it })
+}`,
+        visual(el) {
+          let data, shown, busy = false;
+          const box = h('div', { class: 'vw-list' });
+          const memo = h('div', { class: 'kt' });
+          const o = out();
+          function reset() {
+            data = [{ id: 1, name: 'Ada', star: false }, { id: 2, name: 'Grace', star: false }, { id: 3, name: 'Linus', star: false }];
+            shown = data.map(x => x.star);
+            paint();
+          }
+          const row = (x, i, cls) => h('div', { class: 'vw-row' + (cls ? ' ' + cls : '') }, h('span', { class: 'vw-tag' }, `id ${x.id}`), h('span', {}, x.name),
+            shown[i] ? h('span', { class: 'vw-tag vw-star' }, 'starred') : null);
+          const paint = (cls = {}) => {
+            box.replaceChildren(...data.map((x, i) => row(x, i, cls[i])));
+            memo.innerHTML = hl(`// in memory: Grace.starred = ${data[1].star}`);
+            box.children[1].classList.toggle('vw-d2d-stale', data[1].star !== shown[1]);
+          };
+          async function mutate() {
+            if (busy) return; busy = true;
+            data[1].star = !data[1].star;
+            paint(); replay(memo, 'pop-soft');
+            await sleep(350); if (!el.isConnected) return;
+            say(o, `<span class="bad">no rebind:</span> both lists hold the same Grace object, so old == new. The row still shows ${shown[1] ? 'a star' : 'no star'}.`);
+            replay(box.children[1], 'shake');
+            busy = false;
+          }
+          async function copy() {
+            if (busy) return; busy = true;
+            const nw = { ...data[1], star: !data[1].star };
+            data = data.map((x, i) => (i === 1 ? nw : x));
+            await sleep(250); if (!el.isConnected) return;
+            shown[1] = nw.star;
+            paint({ 1: 'vw-chg pop' });
+            say(o, `<span class="good">rebound:</span> a new Grace object (starred = ${nw.star}) differs from the old one, so DiffUtil sent a change for row 1.`);
+            busy = false;
+          }
+          async function scrollAway() {
+            if (busy) return; busy = true;
+            const r = box.children[1]; r.classList.add('leave');
+            await sleep(420); if (!el.isConnected) return;
+            const stale = shown[1] !== data[1].star;
+            shown[1] = data[1].star;
+            paint({ 1: 'drop-in' });
+            say(o, stale ? '<span class="muted">rebound by the scroll:</span> now the star shows. The bug looks random because it depends on scrolling.' : 'Rebound by the scroll. It already matched.');
+            busy = false;
+          }
+          reset();
+          say(o, 'Star Grace by mutating her, then by copying.');
+          el.append(
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'RecyclerView'), box),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'The object'), memo, h('p', { class: 'tip' }, 'A red border means the row is out of date.'))),
+            h('div', { class: 'controls' },
+              cmd('items[1].starred = !starred; submitList(items.toList())', mutate),
+              cmd('submitList(items.map { copy(starred = …) })', copy),
+              act('Scroll row 1 off and back', scrollAway)),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p><code>ListAdapter</code> hands everything to an <code>AsyncListDiffer</code>. <code>submitList</code> returns at once if you pass the same list instance. If there is no current list yet, or the new one is null, it skips the diff and dispatches a plain insert or remove. Otherwise it bumps a generation counter and runs <code>DiffUtil.calculateDiff</code> on a background executor, a small fixed thread pool by default.</p>
+<p>When the result comes back on the main thread, the differ checks that no newer list arrived in the meantime. A stale result is dropped. Then it swaps in the new list and calls <code>dispatchUpdatesTo</code>, which turns the result into <code>notifyItemRangeInserted</code>, <code>notifyItemRangeRemoved</code>, <code>notifyItemMoved</code> and <code>notifyItemRangeChanged</code> calls. DiffUtil uses Eugene Myers’ difference algorithm, plus an extra pass to detect moves.</p>`,
+      code: `// The core of AsyncListDiffer.submitList, simplified
+val runGeneration = ++maxScheduledGeneration
+backgroundExecutor.execute {
+    val result = DiffUtil.calculateDiff(callbackFor(oldList, newList))
+    mainThreadExecutor.execute {
+        if (maxScheduledGeneration == runGeneration) {   // no newer list since
+            latchList(newList, result, commitCallback)     // swap + dispatchUpdatesTo
+        }
+    }
+}`,
+    },
+    mistakes: [
+      {
+        title: 'Comparing a class without equals',
+        bad: `class Contact(val id: Long, val name: String)
+
+override fun areContentsTheSame(oldItem: Contact, newItem: Contact) = oldItem == newItem`,
+        good: `data class Contact(val id: Long, val name: String)
+
+override fun areContentsTheSame(oldItem: Contact, newItem: Contact) = oldItem == newItem`,
+        why: 'A plain class compares by reference. Items mapped fresh from the database are always new objects, so every row rebinds and flashes on every update.',
+      },
+      {
+        title: 'Calling notify methods on a ListAdapter',
+        bad: `items[2] = updated              // the list you passed to submitList
+adapter.notifyItemChanged(2)`,
+        good: `adapter.submitList(adapter.currentList.toMutableList().apply { set(2, updated) })`,
+        why: 'ListAdapter keeps the list you submitted as its old list. Change it in place and the next diff compares against data that already changed, so updates go missing. Size changes can even crash with “Inconsistency detected”.',
+      },
+      {
+        title: 'Reading your own list field in onBindViewHolder',
+        bad: `var contacts: List<Contact> = emptyList()
+
+override fun onBindViewHolder(holder: Holder, position: Int) {
+    holder.bind(contacts[position])
+}`,
+        good: `override fun onBindViewHolder(holder: Holder, position: Int) {
+    holder.bind(getItem(position))
+}`,
+        why: 'Your field changes when you set it. The adapter’s list changes when the diff lands. Between the two, positions point at the wrong items. <code>getItem</code> always matches what RecyclerView shows.',
+      },
+    ],
+  };
+
+  const civDepth = {
+    deeper: [
+      {
+        title: 'ComposeView rows in a RecyclerView',
+        body: `<p>A ComposeView works as a RecyclerView row. Create it in <code>onCreateViewHolder</code> and call <code>setContent</code> in <code>onBindViewHolder</code>. With the default strategy, a row that scrolls off keeps its composition while it waits in the pool. When it is reused, the existing composition just recomposes with the new item.</p>
+<p>The composition is disposed only when the holder is thrown away, for example when the pool is already full, or when the RecyclerView leaves the window. With <code>DisposeOnDetachedFromWindow</code> instead, every scroll throws compositions away and builds new ones.</p>`,
+        code: `class RowHolder(val composeView: ComposeView) : RecyclerView.ViewHolder(composeView)
+
+override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = RowHolder(ComposeView(parent.context))
+
+override fun onBindViewHolder(holder: RowHolder, position: Int) {
+    val item = getItem(position)
+    holder.composeView.setContent { AppTheme { ContactRow(item) } }   // recomposes a kept composition
+}`,
+        visual(el) {
+          const NAMES = ['Ada', 'Alan', 'Barbara', 'Dennis', 'Edsger', 'Frances', 'Grace', 'Hedy', 'Ivan', 'Joan', 'Ken', 'Linus', 'Margaret', 'Niklaus', 'Radia', 'Shafi'];
+          const SHOW = 4, POOL = 2;
+          let pooled, top, rows, pool, comps, disposed, recomps, busy = false, vhN = SHOW, data = NAMES.slice();
+          const rv = h('div', { class: 'vw-rv', style: 'height:220px' });
+          const poolEl = h('div', { class: 'vw-pool' });
+          const sC = stat('compositions created', 0), sD = stat('disposed', 0), sR = stat('recomposed', 0);
+          const o = out();
+          const strat = [cmd('DisposeOnDetachedFromWindowOrReleasedFromPool', () => setStrat(true)), cmd('DisposeOnDetachedFromWindow', () => setStrat(false))];
+          const chip = r => h('span', { class: `vw-vh c${(r.vh - 1) % 6}` }, `VH${r.vh}`);
+          const rowEl = r => h('div', { class: 'vw-row' }, chip(r), h('span', {}, data[r.pos]), h('span', { class: 'vw-pos' + (r.comp ? '' : ' vw-d2c-dead') }, r.comp ? `comp #${r.comp}` : 'no comp'));
+          const paintPool = () => poolEl.replaceChildren(...(pool.length ? pool.map(r => h('span', { class: 'vw-ent' }, chip(r), r.comp ? `comp #${r.comp} kept` : 'disposed')) : [h('span', { class: 'vw-note' }, 'empty')]));
+          const set = () => { sC.set(comps); sD.set(disposed); sR.set(recomps); };
+          function setStrat(p) {
+            if (busy) return;
+            pooled = p; top = 0; rows = []; vhN = SHOW; data = NAMES.slice(); pool = []; comps = 0; disposed = 0; recomps = 0;
+            strat.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 0) === p)));
+            for (let i = 0; i < SHOW; i++) { const r = { pos: i, vh: i + 1, comp: ++comps }; rows.push(r); }
+            rv.replaceChildren(...rows.map(r => (r.el = rowEl(r))));
+            paintPool(); set();
+            say(o, `${p ? 'Default strategy' : 'DisposeOnDetachedFromWindow'}. 4 rows, 4 compositions. Scroll down.`);
+          }
+          async function scroll() {
+            if (busy) return false;
+            const pos = top + rows.length;
+            if (pos >= data.length) { replay(rv, 'shake'); say(o, '<span class="muted">// end of list</span>'); return false; }
+            busy = true;
+            let r, msg;
+            if (pool.length) {
+              r = pool.shift(); r.pos = pos;
+              if (r.comp) { recomps++; msg = `<span class="good">reused VH${r.vh}:</span> its composition #${r.comp} recomposed with ${data[pos]}`; }
+              else { r.comp = ++comps; msg = `<span class="bad">reused VH${r.vh}:</span> its composition was disposed, so a new one (#${r.comp}) was built`; }
+            } else { r = { pos, vh: ++vhN, comp: ++comps }; msg = `<span class="bad">created VH${r.vh}</span> and composition #${r.comp}`; }
+            r.el = rowEl(r); r.el.classList.add('drop-in'); rows.push(r); rv.append(r.el);
+            paintPool(); set(); say(o, msg);
+            await sleep(320);
+            const gone = rows.shift(); gone.el.classList.add('leave');
+            await sleep(400);
+            if (!el.isConnected) return false;
+            gone.el.remove();
+            if (!pooled) { gone.comp = 0; disposed++; o.append(h('span', {}, ` · VH${gone.vh} detached: composition disposed`)); }
+            pool.push(gone); paintPool(); set();
+            top++; busy = false;
+            return true;
+          }
+          async function remove3() {
+            if (busy) return; busy = true;
+            const out3 = rows.splice(1, 3);
+            data.splice(top + 1, 3);
+            out3.forEach(r => r.el.classList.add('leave'));
+            await sleep(420); if (!el.isConnected) return;
+            out3.forEach(r => r.el.remove());
+            let dropped = 0, killed = 0;
+            for (const r of out3) {
+              if (!pooled && r.comp) { r.comp = 0; disposed++; killed++; }
+              if (pool.length < POOL) pool.push(r);
+              else { dropped++; if (r.comp) { r.comp = 0; disposed++; } }
+            }
+            paintPool(); set();
+            say(o, pooled
+              ? `3 rows removed. This pool holds ${POOL}, so ${dropped ? `<span class="bad">${dropped} holder${dropped > 1 ? 's were' : ' was'} discarded and ${dropped > 1 ? 'their compositions' : 'its composition'} disposed</span>` : 'nothing was discarded'}. Pooled holders keep their compositions.`
+              : `3 rows removed. <span class="bad">${killed} compositions disposed</span> the moment the rows detached.`);
+            await sleep(500); if (!el.isConnected) return;
+            busy = false;
+            for (let i = 0; i < 3; i++) { if (!(await fill())) break; }
+          }
+          async function fill() {
+            if (busy) return false;
+            const pos = top + rows.length;
+            if (pos >= data.length || rows.length >= SHOW) return false;
+            busy = true;
+            let r, msg;
+            if (pool.length) {
+              r = pool.shift(); r.pos = pos;
+              if (r.comp) { recomps++; msg = `<span class="good">refill: VH${r.vh}</span> recomposed its kept composition #${r.comp}`; }
+              else { r.comp = ++comps; msg = `<span class="bad">refill: VH${r.vh}</span> needed a new composition #${r.comp}`; }
+            } else { r = { pos, vh: ++vhN, comp: ++comps }; msg = `<span class="bad">refill: created VH${r.vh}</span> and composition #${r.comp}`; }
+            r.el = rowEl(r); r.el.classList.add('drop-in'); rows.push(r); rv.append(r.el);
+            paintPool(); set(); o.append(h('span', { html: ' · ' + msg }));
+            await sleep(380);
+            busy = false;
+            return el.isConnected;
+          }
+          setStrat(true);
+          el.append(
+            h('div', { class: 'vw-strats' }, strat),
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'RecyclerView of ComposeViews'), rv),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, `Pool (max ${POOL} for the demo)`), poolEl,
+                h('p', { class: 'tip' }, 'Real pools hold 5 per view type unless you change it.'))),
+            h('div', { class: 'controls' }, act('Scroll down 1 row', scroll), act('Remove 3 rows', remove3)),
+            h('div', { class: 'vw-stats' }, sC, sR, sD),
+            o);
+        },
+      },
+      {
+        title: 'Two ComposeViews need two ids',
+        body: `<p><code>rememberSaveable</code> inside a ComposeView saves into the Activity or Fragment’s saved state. The key comes from the ComposeView’s id. If two ComposeViews on one screen have the same id, or no id at all, they share a key. Only the first one restores its state. The second starts over.</p>
+<p>A ComposeView in XML usually has an id already. One you create in code does not, so give it one from <code>res/values/ids.xml</code>.</p>`,
+        code: `// res/values/ids.xml: <item name="compose_header" type="id" />
+//                      <item name="compose_footer" type="id" />
+val header = ComposeView(context).apply {
+    id = R.id.compose_header
+    setContent { AppTheme { Header() } }
+}
+val footer = ComposeView(context).apply {
+    id = R.id.compose_footer
+    setContent { AppTheme { Footer() } }
+}`,
+        visual(el) {
+          let ids = false, busy = false;
+          const counts = [2, 5];
+          const mk = (name) => {
+            const num = h('span', { class: 'vw-count vw-d2c-num' }, '0');
+            const idTag = h('span', { class: 'vw-cv-name' });
+            const box = h('div', { class: 'vw-d2c-cv' }, idTag, num);
+            return { name, num, idTag, box };
+          };
+          const cvs = [mk('header'), mk('footer')];
+          const screen = h('div', { class: 'vw-screen vw-d2c-scr' }, h('div', { class: 'vw-d2c-stack' }, cvs.map(c => c.box)));
+          const o = out();
+          const paint = () => cvs.forEach((c, i) => { c.num.textContent = String(counts[i]); c.idTag.textContent = ids ? `id = compose_${c.name}` : 'id = NO_ID'; });
+          const sw = toggle('vw-d2c-ids', 'Give each ComposeView its own <code>id</code>', false, () => { ids = sw.input.checked; paint(); say(o, ids ? 'Unique ids: two different keys in the saved state.' : 'No ids: both ComposeViews use the same key.'); });
+          async function rotate() {
+            if (busy) return; busy = true;
+            replay(screen, 'flip');
+            await sleep(450); if (!el.isConnected) return;
+            if (!ids) counts[1] = 0;
+            paint(); cvs.forEach(c => replay(c.num, 'pop'));
+            say(o, ids
+              ? `<span class="good">both restored:</span> header ${counts[0]}, footer ${counts[1]}.`
+              : `<span class="bad">footer lost its state:</span> the header claimed the shared key first, so the footer started over at 0.`);
+            busy = false;
+          }
+          paint();
+          say(o, 'Both ComposeViews hold a rememberSaveable count. Bump them, then rotate.');
+          el.append(
+            h('div', { class: 'vw-split' }, screen, h('div', { class: 'vw-col' }, sw.el,
+              h('div', { class: 'controls' },
+                cmd('header: count++', () => { if (busy) return; counts[0]++; paint(); replay(cvs[0].num, 'pop'); }),
+                cmd('footer: count++', () => { if (busy) return; counts[1]++; paint(); replay(cvs[1].num, 'pop'); }),
+                act('Rotate the screen', rotate)))),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p><code>ComposeView</code> extends <code>AbstractComposeView</code>, a ViewGroup. <code>setContent</code> only stores your lambda. The composition is created when the view is attached to a window. At that point it looks up the view tree for a parent composition, or uses a Recomposer kept per window, and adds an <code>AndroidComposeView</code> child, which is the View that actually measures and draws the composable UI.</p>
+<p>It also reads <code>ViewTreeLifecycleOwner</code> and <code>ViewTreeSavedStateRegistryOwner</code> from the view tree. <code>ComponentActivity</code> and <code>Fragment</code> set those on their views for you. If they are missing, attaching fails with an IllegalStateException that says the ViewTreeLifecycleOwner was not found.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'A ComposeView in an Activity that is not a ComponentActivity',
+        bad: `class LegacyActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(ComposeView(this).apply { setContent { Banner() } })
+    }
+}`,
+        good: `class LegacyActivity : ComponentActivity() {   // or AppCompatActivity
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(ComposeView(this).apply { setContent { Banner() } })
+    }
+}`,
+        why: 'A plain <code>Activity</code> sets no lifecycle owner on its views, so the ComposeView can’t find one and crashes when it attaches.',
+      },
+      {
+        title: 'Forgetting the theme inside setContent',
+        bad: `binding.rating.setContent {
+    RatingBar(stars = 4)
+}`,
+        good: `binding.rating.setContent {
+    AppTheme { RatingBar(stars = 4) }
+}`,
+        why: 'Each ComposeView is its own composition. Without your theme it falls back to MaterialTheme defaults, so colors and type don’t match the rest of the screen.',
+      },
+      {
+        title: 'Adding a new ComposeView on every bind',
+        bad: `override fun onBindViewHolder(holder: Holder, position: Int) {
+    holder.container.removeAllViews()
+    holder.container.addView(ComposeView(holder.itemView.context).apply {
+        setContent { ContactRow(getItem(position)) }
+    })
+}`,
+        good: `// one ComposeView per holder, created in onCreateViewHolder
+override fun onBindViewHolder(holder: Holder, position: Int) {
+    val item = getItem(position)
+    holder.composeView.setContent { AppTheme { ContactRow(item) } }
+}`,
+        why: 'A new ComposeView means a new composition per bind, and the old one is thrown away. Keep one per holder so binding only recomposes.',
+      },
+    ],
+  };
+
+  const avDepth = {
+    deeper: [
+      {
+        title: 'Reuse Views in lazy lists with onReset',
+        body: `<p>In a <code>LazyColumn</code>, items that scroll off can be reused for items that scroll in. An AndroidView takes part only if you pass <code>onReset</code>. Then its View is kept, <code>onReset</code> clears it, and <code>update</code> fills it with the new item. No new View is built.</p>
+<p>Without <code>onReset</code>, a View that scrolls off is released for good. <code>onRelease</code> runs and the next item pays for <code>factory</code> again. For heavy Views, like a chart or a map, that cost shows up as dropped frames while scrolling.</p>`,
+        code: `LazyColumn {
+    items(stocks, key = { it.id }) { stock ->
+        AndroidView(
+            factory = { ctx -> SparklineView(ctx) },
+            update = { it.points = stock.prices },
+            onReset = { it.points = emptyList() },   // makes the View reusable
+            onRelease = { it.stopAnimations() },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+        )
+    }
+}`,
+        visual(el) {
+          const NAMES = ['AAPL', 'GOOG', 'MSFT', 'AMZN', 'NFLX', 'META', 'TSLA', 'NVDA', 'ADBE', 'ORCL', 'SAP', 'IBM', 'INTC', 'AMD'];
+          const SHOW = 4;
+          let reset = true, top, rows, kept, nF, nU, nR, nRel, made, busy = false;
+          const rv = h('div', { class: 'vw-rv', style: 'height:220px' });
+          const keptEl = h('div', { class: 'vw-pool' });
+          const sF = stat('factory', 0), sU = stat('update', 0), sR = stat('onReset', 0), sRel = stat('onRelease', 0);
+          const o = out();
+          const chip = v => h('span', { class: `vw-vh c${(v - 1) % 6}` }, `View #${v}`);
+          const rowEl = r => h('div', { class: 'vw-row' }, chip(r.v), h('span', {}, NAMES[r.pos % NAMES.length]), h('span', { class: 'vw-d2a-spark', 'aria-hidden': 'true' }, h('i', { style: `height:${30 + (r.pos * 37) % 60}%` }), h('i', { style: `height:${50 + (r.pos * 23) % 50}%` }), h('i', { style: `height:${20 + (r.pos * 53) % 70}%` })));
+          const paintKept = () => keptEl.replaceChildren(...(kept.length ? kept.map(chip) : [h('span', { class: 'vw-note' }, reset ? 'empty' : 'nothing kept without onReset')]));
+          const set = () => { sF.set(nF); sU.set(nU); sR.set(nR); sRel.set(nRel); };
+          const sw = toggle('vw-d2a-reset', 'Pass <code>onReset</code>', true, () => { reset = sw.input.checked; start(); });
+          function start() {
+            top = 0; rows = []; kept = []; nF = 0; nU = 0; nR = 0; nRel = 0; made = 0;
+            for (let i = 0; i < SHOW; i++) { const r = { pos: i, v: ++made }; nF++; nU++; rows.push(r); }
+            rv.replaceChildren(...rows.map(r => (r.el = rowEl(r))));
+            paintKept(); set();
+            say(o, `${reset ? 'onReset is set.' : 'No onReset.'} 4 items, 4 Views. Scroll down.`);
+          }
+          async function scroll() {
+            if (busy) return false;
+            const pos = top + SHOW;
+            if (pos >= NAMES.length) { replay(rv, 'shake'); say(o, '<span class="muted">// end of list</span>'); return false; }
+            busy = true;
+            let r, msg;
+            if (reset && kept.length) { const v = kept.shift(); nR++; nU++; r = { pos, v }; msg = `<span class="good">reused View #${v}:</span> onReset, then update(${NAMES[pos]})`; }
+            else { r = { pos, v: ++made }; nF++; nU++; msg = `<span class="bad">factory</span> built View #${r.v} for ${NAMES[pos]}`; }
+            r.el = rowEl(r); r.el.classList.add('drop-in'); rows.push(r); rv.append(r.el);
+            set(); paintKept(); say(o, msg);
+            await sleep(320);
+            const gone = rows.shift(); gone.el.classList.add('leave');
+            await sleep(400); if (!el.isConnected) return false;
+            gone.el.remove();
+            if (reset) { kept.push(gone.v); o.append(h('span', {}, ` · View #${gone.v} kept for reuse`)); }
+            else { nRel++; o.append(h('span', {}, ` · onRelease(View #${gone.v})`)); }
+            paintKept(); set(); top++; busy = false;
+            return true;
+          }
+          let multi = false;
+          async function four() { if (multi || busy) return; multi = true; for (let i = 0; i < 4; i++) { if (!(await scroll())) break; await sleep(60); } multi = false; }
+          start();
+          el.append(
+            sw.el,
+            h('div', { class: 'vw-split' },
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'LazyColumn'), rv),
+              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'Views kept for reuse'), keptEl)),
+            h('div', { class: 'controls' }, act('Scroll down 1 item', scroll), act('Scroll down 4 items', four)),
+            h('div', { class: 'vw-stats' }, sF, sU, sR, sRel),
+            o);
+        },
+      },
+      {
+        title: 'How Compose constraints become a MeasureSpec',
+        body: `<p>Compose measures with min and max constraints. Views measure with a MeasureSpec. AndroidView translates. Fixed constraints, where min equals max, become <code>EXACTLY</code>. Otherwise the View’s own layout params decide: <code>wrap_content</code> becomes <code>AT_MOST</code> the max, and <code>match_parent</code> becomes <code>EXACTLY</code> the max.</p>
+<p>Inside a scrolling container the max is infinite, so either one becomes <code>UNSPECIFIED</code>. The View gets as big as it wants in that direction. This is the same table the View system uses, seen from the Compose side.</p>`,
+        visual(el) {
+          const AVAIL = 320;
+          let mod = 'none', lp = 'wrap', busy = false;
+          const wants = 180;
+          const MODS = {
+            none: ['Modifier', [0, AVAIL]],
+            size: ['Modifier.width(160.dp)', [160, 160]],
+            fill: ['Modifier.fillMaxWidth()', [AVAIL, AVAIL]],
+            scroll: ['inside Row(Modifier.horizontalScroll(…))', [0, Infinity]],
+          };
+          const LPS = { wrap: 'WRAP_CONTENT', match: 'MATCH_PARENT' };
+          const cons = h('div', { class: 'vw-node' }, h('span', {}, 'Constraints'), h('span', { class: 'vw-note' }));
+          const spec = h('div', { class: 'vw-node' }, h('span', {}, 'MeasureSpec'), h('span', { class: 'vw-note' }));
+          const res = h('div', { class: 'vw-node' }, h('span', {}, 'View measures'), h('span', { class: 'vw-note' }));
+          const pBox = h('div', { class: 'vw-d2p-parent' }, h('span', { class: 'vw-note' }, `available: ${AVAIL}`));
+          const cBox = h('div', { class: 'vw-d2p-child' }, h('span', { class: 'vw-d2p-txt' }));
+          const track = h('div', { class: 'vw-d2p-track' }, pBox, cBox);
+          const o = out();
+          const pct = v => (v / 400) * 100 + '%';
+          function compute() {
+            const [min, max] = MODS[mod][1];
+            if (min === max) return ['EXACTLY', max, 'fixed constraints'];
+            if (max === Infinity) return ['UNSPECIFIED', 0, 'infinite max'];
+            return lp === 'wrap' ? ['AT_MOST', max, 'WRAP_CONTENT, finite max'] : ['EXACTLY', max, 'MATCH_PARENT, finite max'];
+          }
+          function paint(anim) {
+            const [min, max] = MODS[mod][1];
+            const [m, s, why] = compute();
+            const w = m === 'EXACTLY' ? s : m === 'AT_MOST' ? Math.min(wants, s) : wants;
+            cons.lastChild.textContent = `minWidth ${min}, maxWidth ${max === Infinity ? '∞' : max}`;
+            spec.lastChild.textContent = `${m}${m === 'UNSPECIFIED' ? '' : ' ' + s}  // ${why}`;
+            res.lastChild.textContent = `wants ${wants} → ${w}`;
+            cBox.style.width = pct(w); cBox.firstChild.textContent = String(w);
+            pBox.classList.toggle('vw-d2p-open', max === Infinity);
+            pBox.firstChild.textContent = max === Infinity ? 'available: no limit (scrolls)' : `available: ${AVAIL}`;
+            if (anim) [cons, spec, res].forEach(n => replay(n, 'pop-soft'));
+            return [m, w];
+          }
+          const press = (bs, ks, k) => bs.forEach((b, i) => b.setAttribute('aria-pressed', String(ks[i] === k)));
+          async function pick(fn) {
+            if (busy) return; busy = true;
+            fn(); press(mBtns, Object.keys(MODS), mod); press(lBtns, Object.keys(LPS), lp);
+            for (const n of [cons, spec, res]) { n.classList.add('on'); await sleep(220); if (!el.isConnected) return; n.classList.remove('on'); }
+            const [m, w] = paint(true);
+            say(o, m === 'EXACTLY' ? `EXACTLY ${w}: the View gets that width, whatever it wants.` : m === 'AT_MOST' ? `AT_MOST: the View takes the ${w} it wants.` : 'UNSPECIFIED: no limit, so the View takes all it wants.');
+            busy = false;
+          }
+          const mBtns = Object.keys(MODS).map(k => cmd(MODS[k][0], () => pick(() => { mod = k; })));
+          const lBtns = Object.keys(LPS).map(k => cmd(`layoutParams width = ${LPS[k]}`, () => pick(() => { lp = k; })));
+          press(mBtns, Object.keys(MODS), mod); press(lBtns, Object.keys(LPS), lp); paint(false);
+          say(o, 'No size modifier, a wrap_content View: AT_MOST 320. Try the others.');
+          el.append(
+            h('div', { class: 'controls' }, mBtns),
+            h('div', { class: 'controls' }, lBtns),
+            h('div', { class: 'vw-tree' }, cons, spec, res),
+            track, o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>AndroidView creates a holder, a ViewGroup that wraps your View, and a <code>LayoutNode</code> that stands for it in the Compose layout tree. The holder is attached under the <code>AndroidComposeView</code> that hosts the whole composition. When Compose measures the node, the holder converts the constraints into MeasureSpecs, as in the table above, and measures your View. When Compose draws, the node’s draw modifier asks the host to draw the holder into the Compose canvas through <code>nativeCanvas</code>.</p>
+<p><code>update</code> runs inside a snapshot read observer. When state it read changes, Compose posts a rerun of <code>update</code> to the main thread. That is how the gauge follows <code>speed</code> without the View knowing anything about Compose.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Capturing a callback in factory',
+        bad: `@Composable
+fun Volume(onChange: (Int) -> Unit) {
+    AndroidView(factory = { ctx ->
+        SeekBar(ctx).apply { setOnSeekBarChangeListener(listener { onChange(it) }) }
+    })
+}`,
+        good: `@Composable
+fun Volume(onChange: (Int) -> Unit) {
+    val latest by rememberUpdatedState(onChange)
+    AndroidView(factory = { ctx ->
+        SeekBar(ctx).apply { setOnSeekBarChangeListener(listener { latest(it) }) }
+    })
+}`,
+        why: '<code>factory</code> runs once, so the listener keeps the first <code>onChange</code> forever. If the caller passes a new lambda later, the View still calls the old one.',
+      },
+      {
+        title: 'Doing expensive work in update every time',
+        bad: `AndroidView(
+    factory = { ctx -> WebView(ctx) },
+    update = { web -> web.loadUrl(url) },
+)`,
+        good: `AndroidView(
+    factory = { ctx -> WebView(ctx) },
+    update = { web -> if (web.url != url) web.loadUrl(url) },
+)`,
+        why: '<code>update</code> can run many times, not only when <code>url</code> changes. An unguarded <code>loadUrl</code> reloads the page and loses the scroll position.',
+      },
+      {
+        title: 'Not forwarding lifecycle events to a MapView',
+        bad: `AndroidView(factory = { ctx -> MapView(ctx).apply { onCreate(null) } })`,
+        good: `val context = LocalContext.current
+val lifecycle = LocalLifecycleOwner.current.lifecycle
+val map = remember { MapView(context).apply { onCreate(null) } }
+DisposableEffect(lifecycle) {
+    val obs = LifecycleEventObserver { _, e ->
+        when (e) {
+            Lifecycle.Event.ON_START -> map.onStart()
+            Lifecycle.Event.ON_RESUME -> map.onResume()
+            Lifecycle.Event.ON_PAUSE -> map.onPause()
+            Lifecycle.Event.ON_STOP -> map.onStop()
+            Lifecycle.Event.ON_DESTROY -> map.onDestroy()
+            else -> Unit
+        }
+    }
+    lifecycle.addObserver(obs)
+    onDispose { lifecycle.removeObserver(obs) }
+}
+AndroidView(factory = { map })`,
+        why: 'Some Views need the host’s lifecycle calls. A MapView that never gets <code>onStart</code> and <code>onResume</code> stays blank, and one that never gets <code>onDestroy</code> leaks.',
+      },
+    ],
+  };
 
   Lab.addTrack({
     id: 'views',
@@ -187,6 +1192,9 @@ val title = findViewById<TextView>(R.id.title)`,
           { q: '<code>findViewById&lt;Button&gt;(R.id.title)</code> where title is a TextView. What happens?', options: ['A compile error', 'A ClassCastException at runtime', 'It returns null'], a: 1, why: '<code>findViewById</code> trusts the type you ask for. The wrong type only fails when the code runs.' },
           { q: 'A Button in a ConstraintLayout has no vertical constraint. Where does it show at runtime?', options: ['Centered', 'At the top', 'Below the previous view'], a: 1, why: 'Unconstrained views go to the top left. The editor warns about it, but the build still succeeds.' },
         ],
+        deeper: xmlDepth.deeper,
+        underHood: xmlDepth.underHood,
+        mistakes: xmlDepth.mistakes,
         visual(el) {
           const xml = [
             '<ConstraintLayout ...>',
@@ -302,6 +1310,9 @@ val title = findViewById<TextView>(R.id.title)`,
           { q: 'In which order do the passes run?', options: ['Draw, measure, layout', 'Measure, layout, draw', 'Layout, measure, draw'], a: 1, why: 'Sizes come first, positions use those sizes, and drawing uses the final bounds.' },
           { q: 'Inside <code>onMeasure</code>, what must a view always do?', options: ['Call <code>invalidate()</code>', 'Call <code>setMeasuredDimension()</code>', 'Call <code>requestLayout()</code>'], a: 1, why: 'Without it the framework throws an IllegalStateException. Calling requestLayout from a pass would also loop.' },
         ],
+        deeper: passesDepth.deeper,
+        underHood: passesDepth.underHood,
+        mistakes: passesDepth.mistakes,
         visual(el) {
           let count = 8, color = 0, busy = false;
           const colors = ['RED', 'GREEN', 'ORANGE'];
@@ -750,6 +1761,9 @@ viewLifecycleOwner.lifecycleScope.launch {
           { q: 'Where does ListAdapter compute the diff by default?', options: ['On the main thread', 'On a background thread', 'During onDraw'], a: 1, why: 'AsyncListDiffer runs the diff on a background executor and applies the result on the main thread.' },
           { q: 'Why avoid <code>notifyDataSetChanged()</code> for a single edit?', options: ['It crashes on large lists', 'It rebinds every row and skips the animations', 'It is not allowed with ListAdapter'], a: 1, why: 'RecyclerView can’t tell what changed, so it treats everything as changed.' },
         ],
+        deeper: diffDepth.deeper,
+        underHood: diffDepth.underHood,
+        mistakes: diffDepth.mistakes,
         visual(el) {
           let nextId = 5, byId = true, busy = false, binds = 4;
           const extras = ['Margaret', 'Barbara', 'Ken', 'Hedy', 'Radia', 'Dennis'];
@@ -1179,6 +2193,9 @@ binding.rating.apply {
           { q: 'Which strategy fits a ComposeView that is a Fragment’s view?', options: ['<code>DisposeOnDetachedFromWindow</code>', '<code>DisposeOnViewTreeLifecycleDestroyed</code>', 'None, it never disposes'], a: 1, why: 'The composition then ends with the Fragment’s view lifecycle, in onDestroyView.' },
           { q: 'What is a good first step in a migration?', options: ['Rewrite every screen at once', 'Convert one small component or a new screen', 'Replace Fragments with Navigation Compose first'], a: 1, why: 'Small steps keep the app shippable. Navigation Compose comes last, once the screens are Compose.' },
         ],
+        deeper: civDepth.deeper,
+        underHood: civDepth.underHood,
+        mistakes: civDepth.mistakes,
         visual(el) {
           const strategies = [
             { id: 'default', label: 'DisposeOnDetachedFromWindowOrReleasedFromPool', onDetach: true },
@@ -1313,6 +2330,9 @@ fun LegacyBanner(title: String) {
           { q: 'Where should you stop a View’s animations or listeners?', options: ['In <code>factory</code>', 'In <code>onRelease</code>', 'In <code>update</code>'], a: 1, why: '<code>onRelease</code> runs when the View leaves the composition for good.' },
           { q: 'Why not keep the View instance in a ViewModel?', options: ['Views are not Parcelable', 'It holds an Activity context and leaks it across rotation', 'Compose forbids it at compile time'], a: 1, why: 'A ViewModel outlives the Activity, and every View points at the context it was created with.' },
         ],
+        deeper: avDepth.deeper,
+        underHood: avDepth.underHood,
+        mistakes: avDepth.mistakes,
         visual(el) {
           let speed = 40, viewVal = 40, inComp = true, inFactory = false, inst = 1, nF = 1, nU = 1, nR = 0, busy = false;
           const sF = stat('factory', nF), sU = stat('update', nU), sR = stat('onRelease', nR);

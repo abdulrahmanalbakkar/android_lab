@@ -70,6 +70,25 @@
 .field.kt-stale { background: var(--err-soft); color: var(--err); font-weight: 600; }
 .field.kt-ptr { color: var(--ok); font-weight: 600; }
 .kt-body-prop { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.kt-card.kt-d2-on .kt { border-color: var(--t-k); }
+.kt-zone.kt-d2-on { border-color: var(--accent); background: var(--accent-soft); }
+.obj.kt-d2-ty-card { justify-items: start; min-width: 0; max-width: 100%; }
+.kt-d2-ty-card .chip { max-width: 100%; overflow-wrap: anywhere; height: auto; min-height: 46px; }
+.kt-d2-cf-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 44px)); gap: 6px; justify-content: center; padding: 14px 10px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
+.kt-cell.kt-d2-cf-hit { background: var(--ok); color: var(--surface); border-color: var(--ok); }
+.obj.kt-d2-ob-ghost { border-style: dashed; border-color: var(--muted); opacity: 0.7; }
+.kt-d2-sc-pre { white-space: pre; }
+.kt-type.kt-d2-sc-drop { justify-self: center; text-decoration: line-through; background: var(--sunk); color: var(--muted); }
+.kt-d2-se-boxes { display: grid; gap: 2px; min-width: 0; }
+.kt-d2-se-boxes .switch { font-weight: 500; overflow-wrap: anywhere; }
+.kt-d2-se-leaf { font: 600 0.8rem var(--mono); padding: 4px 10px; border-radius: 999px; background: var(--sunk); color: var(--muted); transition: background 0.2s, color 0.2s; max-width: 100%; overflow-wrap: anywhere; }
+.kt-d2-se-leaf.ok { background: var(--ok-soft); color: var(--ok); }
+.kt-d2-se-leaf.bad { background: var(--err-soft); color: var(--err); }
+.kt-d2-se-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; min-width: 0; }
+.kt-d2-se-col { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.kt-pile.kt-d2-se-head { justify-content: space-between; align-items: center; min-height: 0; }
+.kt-d2-ex-tag { font: 600 0.7rem var(--mono); padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: var(--t-c); }
+.kt-d2-ex-tag.ok { background: rgba(126, 226, 168, 0.18); color: var(--t-k); }
 `;
 
   Lab.addTrack({
@@ -109,6 +128,142 @@ items.add(2)          // fine: the list changes, the name doesn't`,
         quiz: [
           { q: 'Which of these compiles?', options: ['<code>val a = 1; a = 2</code>', '<code>var b = 1; b = 2</code>', 'Both'], a: 1, why: 'Only a <code>var</code> can take a new value after it is set.' },
           { q: '<code>val list = mutableListOf(1)</code>. Does <code>list.add(2)</code> compile?', options: ['Yes', 'No, val makes the list read-only'], a: 0, why: '<code>val</code> stops you from pointing <code>list</code> at a different list. The list object itself can still change.' },
+        ],
+        deeper: [
+          {
+            title: 'A val can still give different answers',
+            body: `<p>A <code>val</code> property can have a custom getter. Then nothing is stored at all: the getter runs on every read, so the answer changes when the values it reads change.</p>
+<p><code>val</code> only promises there is no setter. For a value fixed at compile time, use <code>const val</code>. It works for numbers, <code>Boolean</code>, <code>Char</code> and <code>String</code>, at the top level or inside an <code>object</code>.</p>`,
+            code: `class Rect(var w: Int, var h: Int) {
+    val area: Int get() = w * h    // runs on every read
+    val startArea = w * h          // stored once, at creation
+}
+
+const val MAX_ITEMS = 50           // compile-time constant`,
+            visual(el) {
+              let w = 3, ht = 2, busy = false;
+              const start = w * ht;
+              const fw = h('span', { class: 'field' }, `var w = ${w}`);
+              const fh = h('span', { class: 'field' }, `var h = ${ht}`);
+              const fs = h('span', { class: 'field' }, `val startArea = ${start}`);
+              const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'rect: Rect'), fw, fh, fs,
+                h('span', { class: 'obj-addr' }, 'area: no field, only a getter'));
+              const calc = h('div', { class: 'kt', html: hl('get() = w * h') });
+              const getter = h('div', { class: 'machine' }, h('div', { class: 'gear' }), calc);
+              const result = h('div', { class: 'slot' });
+              const o = out();
+              const bump = (which) => {
+                if (busy) return;
+                const f = which === 'w' ? fw : fh;
+                if (which === 'w') w += 1; else ht += 1;
+                f.textContent = which === 'w' ? `var w = ${w}` : `var h = ${ht}`;
+                f.className = 'field changed'; replay(f, 'pop');
+                say(o, `${hl(`rect.${which} += 1`)} <span class="muted">// startArea is still ${start}</span>`);
+              };
+              async function readArea() {
+                if (busy) return; busy = true;
+                calc.innerHTML = hl(`get() = ${w} * ${ht}`);
+                getter.classList.add('busy');
+                await sleep(650);
+                getter.classList.remove('busy');
+                if (!getter.isConnected) return;
+                swap(result, String(w * ht));
+                say(o, `${hl('rect.area')} = ${hl(String(w * ht))} <span class="muted">// computed on this read</span>`);
+                busy = false;
+              }
+              function readStart() {
+                if (busy) return;
+                replay(fs, 'pop'); swap(result, String(start));
+                say(o, `${hl('rect.startArea')} = ${hl(String(start))} <span class="muted">// stored at creation, never recomputed</span>`);
+              }
+              el.append(
+                h('div', { class: 'stage' }, obj, getter, result),
+                h('div', { class: 'controls' },
+                  cmd('rect.w += 1', () => bump('w')),
+                  cmd('rect.h += 1', () => bump('h')),
+                  cmd('rect.area', readArea),
+                  cmd('rect.startArea', readStart)),
+                o);
+              swap(result, String(w * ht));
+              say(o, `${hl('rect.area')} = ${hl('6')} <span class="muted">// change w or h, then read both vals again</span>`);
+            },
+          },
+          {
+            title: 'lateinit: set it later, before you read it',
+            body: `<p>Some non-null properties can’t get a value in the constructor. A test builds its subject in <code>@Before</code>, and a Fragment creates its adapter in <code>onViewCreated</code>. <code>lateinit var</code> lets you declare those without making them nullable.</p>
+<p>The price: read it before anything assigned it and you get <code>UninitializedPropertyAccessException</code>. Inside the class you can ask <code>::adapter.isInitialized</code>. It only works on a non-null <code>var</code> of a non-primitive type. For a value computed once on first read, use <code>val x by lazy { }</code>, covered in the Delegation lesson of the Kotlin deep dive track.</p>`,
+            code: `class FeedFragment : Fragment(R.layout.feed) {
+    private lateinit var adapter: FeedAdapter
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        adapter = FeedAdapter()
+    }
+
+    fun show(items: List<Item>) {
+        if (::adapter.isInitialized) adapter.submitList(items)
+    }
+}`,
+            visual(el) {
+              let set = false;
+              const field = h('span', { class: 'field kt-unset' }, 'adapter = (not set)');
+              const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'FeedFragment'),
+                h('span', { class: 'field', html: hl('lateinit var adapter: FeedAdapter') }), field);
+              const o = out();
+              const paint = () => {
+                field.textContent = set ? 'adapter = FeedAdapter@3b9a' : 'adapter = (not set)';
+                field.className = 'field ' + (set ? 'kt-ptr' : 'kt-unset');
+              };
+              el.append(
+                h('div', { class: 'stage' }, obj),
+                h('div', { class: 'controls' },
+                  cmd('adapter.submitList(items)', () => {
+                    if (!set) {
+                      field.className = 'field kt-stale'; replay(obj, 'shake');
+                      say(o, '<span class="bad">crash:</span> UninitializedPropertyAccessException: lateinit property adapter has not been initialized');
+                      return;
+                    }
+                    replay(field, 'pop');
+                    say(o, `<span class="good">ok:</span> ${hl('adapter.submitList(items)')} <span class="muted">// the adapter exists now</span>`);
+                  }),
+                  cmd('::adapter.isInitialized', () => {
+                    paint(); replay(field, 'pop');
+                    say(o, `${hl('::adapter.isInitialized')} = ${hl(String(set))}`);
+                  }),
+                  cmd('adapter = FeedAdapter()', () => {
+                    set = true; paint(); replay(field, 'pop');
+                    say(o, `${hl('adapter = FeedAdapter()')} <span class="muted">// onViewCreated ran</span>`);
+                  }),
+                  cmd('FeedFragment()', () => {
+                    set = false; paint(); replay(obj, 'pop-soft');
+                    say(o, '<span class="muted">A new FeedFragment instance starts with the property unset again.</span>');
+                  })),
+                o);
+              say(o, 'Read the adapter before and after it is set.');
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>val</code> property compiles to a private field plus a getter, <code>getName()</code>. A <code>var</code> also gets a setter, <code>setName()</code>. A <code>val</code> with a custom getter that never mentions <code>field</code> has no field at all, only the getter method.</p>
+<p>For a local variable there is no runtime difference between <code>val</code> and <code>var</code>: the compiler enforces the rule and the bytecode is the same. A <code>const val</code> is copied into every place that reads it. A <code>lateinit</code> property is a normal nullable field whose getter checks for null and throws <code>UninitializedPropertyAccessException</code>.</p>`,
+          code: `// Kotlin
+class Rect(var w: Int, var h: Int) {
+    val area: Int get() = w * h
+}
+
+// Roughly what the JVM sees (decompiled to Java)
+public final class Rect {
+    private int w;
+    private int h;
+    public final int getW() { return w; }
+    public final void setW(int value) { w = value; }
+    // the same pair for h
+    public final int getArea() { return w * h; }   // no field
+}`,
+        },
+        mistakes: [
+          { title: 'A var just to fill it from branches', bad: 'var label = ""\nif (count == 0) {\n    label = "Empty"\n} else {\n    label = "$count items"\n}', good: 'val label = if (count == 0) "Empty" else "$count items"', why: '<code>if</code> is an expression, so the value can be built in one step. The <code>val</code> also proves nothing changes it later.' },
+          { title: 'Mutating a var inside screen state', bad: 'data class CartState(var count: Int)\n\n_state.value.count += 1   // screen never updates', good: 'data class CartState(val count: Int)\n\n_state.update { it.copy(count = it.count + 1) }', why: 'Changing a field inside the current object never sets a new value, so <code>StateFlow</code> has nothing to emit. With <code>val</code> fields the only way to change state is a new object, which observers see.' },
+          { title: 'lateinit on a primitive', bad: 'private lateinit var retries: Int', good: 'private var retries = 0\n// or: private var retries: Int by Delegates.notNull()', why: '<code>lateinit</code> needs a field that can hold null while unset, so it isn’t allowed on <code>Int</code>, <code>Boolean</code> and the other primitive types. Give it a start value, or use <code>Delegates.notNull()</code>.' },
         ],
         visual(el) {
           const box = (kw, name, value, note) => {
@@ -169,6 +324,116 @@ val json = """
           { q: 'What type does <code>val x = 3_000_000_000</code> get?', options: ['<code>Int</code>', '<code>Long</code>', '<code>Double</code>'], a: 1, why: 'The number is bigger than Int’s maximum of about 2.1 billion, so Kotlin picks Long.' },
           { q: '<code>val a = 1; val b = 2</code>. What does <code>"$a + $b"</code> contain?', options: ['<code>"1 + 2"</code>', '<code>"3"</code>', '<code>"$a + $b"</code>'], a: 0, why: 'Each <code>$name</code> is replaced on its own. To compute the sum, write <code>"${a + b}"</code>.' },
           { q: 'What does <code>"abc".toInt()</code> do?', options: ['Returns 0', 'Returns null', 'Throws NumberFormatException'], a: 2, why: '<code>toInt()</code> throws on text that is not a number. Use <code>toIntOrNull()</code> to get null instead.' },
+        ],
+        deeper: [
+          {
+            title: 'Int overflow wraps around without a warning',
+            body: `<p>An <code>Int</code> holds values up to 2,147,483,647. One more and it wraps to the most negative value, -2,147,483,648. There is no exception and no warning, just a wrong number.</p>
+<p>Time math hits this often: 30 days in milliseconds is about 2.6 billion. Make the first number in the chain a <code>Long</code> with an <code>L</code> suffix so every step runs in Long, or use <code>kotlin.time.Duration</code>.</p>`,
+            code: `val days = 30
+val bad = days * 24 * 60 * 60 * 1000    // -1702967296
+val good = days * 24L * 60 * 60 * 1000  // 2592000000
+
+// import kotlin.time.Duration.Companion.days
+val ms = 30.days.inWholeMilliseconds    // 2592000000`,
+            visual(el) {
+              const chains = [
+                { src: 'days * 24 * 60 * 60 * 1000', long: false, steps: [['days', 30], ['* 24', 24], ['* 60', 60], ['* 60', 60], ['* 1000', 1000]] },
+                { src: 'days * 24L * 60 * 60 * 1000', long: true, steps: [['days', 30], ['* 24L', 24], ['* 60', 60], ['* 60', 60], ['* 1000', 1000]] },
+                { src: 'Int.MAX_VALUE + 1', long: false, add: true, steps: [['Int.MAX_VALUE', 2147483647], ['+ 1', 1]] },
+              ];
+              let busy = false;
+              const track = h('div', { class: 'track' });
+              const o = out();
+              const buttons = chains.map(c => cmd(c.src, () => run(c)));
+              async function run(c) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', chains[i] === c));
+                const st = c.steps.map(s => h('div', { class: 'station' }, h('span', { class: 'st-label' }, s[0])));
+                track.replaceChildren(...st);
+                let v = 0, wrapped = false;
+                for (let i = 0; i < c.steps.length; i++) {
+                  const n = c.steps[i][1];
+                  if (i === 0) v = n;
+                  else if (c.long) v = v * n;
+                  else {
+                    const exact = c.add ? v + n : v * n;
+                    v = c.add ? (v + n) | 0 : Math.imul(v, n);
+                    wrapped = exact !== v;
+                  }
+                  const isLong = c.long && i > 0;
+                  st[i].classList.add('on');
+                  st[i].append(h('span', { class: 'token pop' + (wrapped ? ' boom' : '') }, String(v)), h('span', { class: 'kt-type' }, isLong ? 'Long' : 'Int'));
+                  if (wrapped) replay(st[i], 'shake');
+                  await sleep(520); if (!track.isConnected) return;
+                }
+                say(o, wrapped
+                  ? `<span class="bad">wrapped:</span> ${hl(c.src)} = ${hl(String(v))} <span class="muted">// the real answer doesn’t fit in an Int</span>`
+                  : `<span class="good">ok:</span> ${hl(c.src)} = ${hl(String(v))} <span class="muted">// ${c.long ? 'Long from 24L on' : 'fits in an Int'}</span>`);
+                busy = false;
+              }
+              el.append(h('div', { class: 'kt', html: hl('val days = 30') }), h('div', { class: 'controls' }, buttons), track, o);
+              run(chains[0]);
+            },
+          },
+          {
+            title: 'Doubles are close, not exact',
+            body: `<p>A <code>Double</code> stores a binary fraction. Most decimals, like 0.1, have no exact binary form, so tiny errors creep in: <code>0.1 + 0.2</code> is <code>0.30000000000000004</code>, and comparing it to 0.3 with <code>==</code> fails.</p>
+<p>Compare Doubles with a small tolerance. Where exact values matter, avoid fractions: store money as a <code>Long</code> count of cents, or use <code>BigDecimal</code>. Also note that dividing two Ints drops the fraction, and dividing an Int by zero throws while a Double gives <code>Infinity</code>.</p>`,
+            visual(el) {
+              const exprs = [
+                { src: '7 / 2', type: 'Int', v: '3', note: 'both Ints: the fraction is dropped' },
+                { src: '7 / 2.0', type: 'Double', v: '3.5', note: 'one Double makes it Double division' },
+                { src: '0.1 + 0.2', type: 'Double', v: '0.30000000000000004', note: 'the nearest binary values, added' },
+                { src: '0.1 + 0.2 == 0.3', type: 'Boolean', v: 'false', note: 'never compare Doubles with ==' },
+                { src: 'abs(0.1 + 0.2 - 0.3) < 1e-9', type: 'Boolean', v: 'true', note: 'compare with a tolerance (kotlin.math.abs)' },
+                { src: '10 + 20', type: 'Int', v: '30', note: 'money as cents: exact' },
+                { src: '1.0 / 0', type: 'Double', v: 'Infinity', note: 'Doubles have Infinity and NaN' },
+                { src: '1 / 0', error: 'ArithmeticException: / by zero' },
+              ];
+              const expr = h('div', { class: 'kt' });
+              const type = h('span', { class: 'kt-type' });
+              const val = h('span', { class: 'chip' });
+              const card = h('div', { class: 'obj kt-d2-ty-card' }, expr, type, val);
+              const o = out();
+              const buttons = exprs.map(x => cmd(x.src, () => show(x)));
+              function show(x) {
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', exprs[i] === x));
+                expr.innerHTML = hl(x.src);
+                if (x.error) {
+                  type.textContent = 'throws'; val.textContent = 'crash';
+                  replay(card, 'shake');
+                  say(o, `<span class="bad">crash:</span> ${x.error} <span class="muted">// Int division by zero throws</span>`);
+                  return;
+                }
+                type.textContent = x.type; val.textContent = x.v;
+                replay(val, 'flip');
+                say(o, `${hl(x.src)} = ${hl(x.v)} <span class="muted">// ${x.note}</span>`);
+              }
+              el.append(h('div', { class: 'stage' }, card), h('div', { class: 'controls' }, buttons), o);
+              show(exprs[2]);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>A non-null <code>Int</code> compiles to the JVM primitive <code>int</code>: 4 bytes, no object around it. An <code>Int?</code>, or an Int inside a generic type like <code>List&lt;Int&gt;</code>, has to be an object, so it is <em>boxed</em> into a <code>java.lang.Integer</code>. Long, Double and the others work the same way.</p>
+<p>Boxing is why numbers are compared with <code>==</code>, never <code>===</code>. The JVM caches the boxes for values from -128 to 127, so two boxed 100s are the same object while two boxed 10000s are not. String templates do no work at runtime beyond building the string: the compiler turns them into ordinary concatenation.</p>`,
+          code: `val a: Int = 100
+val boxedA: Int? = a
+val anotherBoxedA: Int? = a
+
+val b: Int = 10000
+val boxedB: Int? = b
+val anotherBoxedB: Int? = b
+
+boxedA === anotherBoxedA   // true: cached box
+boxedB === anotherBoxedB   // false: two boxes
+boxedB == anotherBoxedB    // true: same value`,
+        },
+        mistakes: [
+          { title: 'A dot right after $name', bad: 'println("Hi $user.name")\n// Hi User(name=Ada, age=36).name', good: 'println("Hi \${user.name}")\n// Hi Ada', why: 'A short template ends at the first character that can’t be part of a name, so <code>$user</code> stops at the dot. Use braces for anything longer than one name.' },
+          { title: 'Reading a digit as its character code', bad: 'val digit = pin[0].code   // 55 for \'7\'', good: 'val digit = pin[0].digitToInt()   // 7', why: '<code>code</code> is the character’s Unicode number. <code>digitToInt()</code> gives the digit’s value and throws if the character is not a digit.' },
+          { title: 'Converting after an Int division', bad: 'val average: Double =\n    (total / count).toDouble()', good: 'val average: Double =\n    total.toDouble() / count', why: 'With two Ints the fraction is already gone before <code>toDouble()</code> runs. Convert one side first so the division itself is done in Double.' },
         ],
         visual(el) {
           const decls = [
@@ -283,6 +548,96 @@ repeat(3) { println("Hi") }`,
           { q: 'How many times does <code>for (i in 1..3)</code> run?', options: ['2', '3', '4'], a: 1, why: '<code>1..3</code> includes both ends: 1, 2, 3.' },
           { q: '<code>(1 until 4).toList()</code> is', options: ['<code>[1, 2, 3]</code>', '<code>[1, 2, 3, 4]</code>', '<code>[2, 3]</code>'], a: 0, why: '<code>until</code> stops before the end value.' },
           { q: 'Does <code>val label = if (ok) "yes" else "no"</code> compile?', options: ['Yes, if is an expression', 'No, use a ternary <code>?:</code>'], a: 0, why: 'Kotlin has no ternary operator. <code>if</code> with an <code>else</code> returns a value.' },
+        ],
+        deeper: [
+          {
+            title: 'Leave nested loops with a label',
+            body: `<p>A plain <code>break</code> or <code>continue</code> only affects the innermost loop. To stop an outer loop from inside an inner one, give the outer loop a label, like <code>rows@</code>, and write <code>break@rows</code>.</p>
+<p>Searching a grid is the classic case. With a plain <code>break</code>, the search leaves the current row and carries on with the next one, so it can find a second match and overwrite the first.</p>`,
+            code: `var found: Pair<Int, Int>? = null
+rows@ for (r in grid.indices) {
+    for (c in grid[r].indices) {
+        if (grid[r][c] == target) {
+            found = r to c
+            break@rows          // leaves both loops
+        }
+    }
+}`,
+            visual(el) {
+              const grid = [[4, 2, 9, 1, 5], [3, 8, 7, 6, 2], [1, 5, 4, 9, 3], [6, 7, 2, 8, 4]];
+              const target = 7;
+              let busy = false;
+              const cells = grid.map(row => row.map(v => h('span', { class: 'kt-cell' }, String(v))));
+              const board = h('div', { class: 'kt-d2-cf-grid', role: 'img', 'aria-label': 'A 4 by 5 grid of numbers' }, cells.flat());
+              const o = out();
+              const kinds = [
+                { src: 'break', label: false },
+                { src: 'break@rows', label: true },
+              ];
+              const code = h('div', { class: 'kt' });
+              const buttons = kinds.map(k => cmd(`use ${k.src}`, () => run(k)));
+              const paint = k => { code.innerHTML = hl(`rows@ for (r in grid.indices) {\n    for (c in grid[r].indices) {\n        if (grid[r][c] == 7) {\n            found = r to c\n            ${k.src}\n        }\n    }\n}`); };
+              async function run(k) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', kinds[i] === k));
+                paint(k);
+                cells.flat().forEach(c => { c.className = 'kt-cell'; });
+                let checked = 0, found = null, hits = 0;
+                outer: for (let r = 0; r < grid.length; r++) {
+                  for (let c = 0; c < grid[r].length; c++) {
+                    const cell = cells[r][c];
+                    cell.classList.add('at', 'seen'); checked++;
+                    await sleep(170);
+                    if (!board.isConnected) return;
+                    cell.classList.remove('at');
+                    if (grid[r][c] === target) {
+                      found = [r, c]; hits++;
+                      cell.classList.add('kt-d2-cf-hit'); replay(cell, 'pop');
+                      say(o, `found 7 at (${r}, ${c}) <span class="muted">// ${k.label ? 'break@rows leaves both loops' : 'break leaves only the inner loop'}</span>`);
+                      await sleep(500);
+                      if (!board.isConnected) return;
+                      if (k.label) break outer;
+                      break;
+                    }
+                  }
+                }
+                cells.flat().forEach(c => { if (!c.classList.contains('seen')) c.classList.add('skip'); });
+                say(o, `${hl(`found = (${found[0]}, ${found[1]})`)} <span class="muted">// checked ${checked} of 20 cells${hits > 1 ? ', the later match overwrote the first' : ''}</span>`);
+                busy = false;
+              }
+              el.append(code, board, h('div', { class: 'controls' }, buttons), o);
+              run(kinds[0]);
+            },
+          },
+          {
+            title: 'Ranges are values too',
+            body: `<p>A range is an object. Store it in a <code>val</code>, test membership with <code>in</code> and <code>!in</code>, or walk it backwards with <code>reversed()</code>. Char ranges work too: <code>'a'..'z'</code>.</p>
+<p>For keeping a number inside bounds, skip the if chain: <code>coerceIn(0, 100)</code> returns the value, or the nearest bound when it is outside.</p>`,
+            code: `val workHours = 9..17
+if (hour in workHours) showOpen()
+if (status !in 200..299) showError(status)
+
+val isLower = ch in 'a'..'z'
+for (i in (1..3).reversed()) print(i)   // 321
+
+val volume = requested.coerceIn(0, 100)  // 140 -> 100, -5 -> 0`,
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>for</code> loop over a range written in place, like <code>0 until n</code>, <code>1..n</code> or <code>list.indices</code>, compiles to a plain counting loop. No range object is created and nothing is boxed, so it costs the same as a Java <code>for (int i = 0; ...)</code>.</p>
+<p>A loop over a <code>List</code> uses its iterator, like Java’s for-each loop. An <code>if</code> used as an expression compiles to the same branch Java’s <code>? :</code> produces.</p>`,
+          code: `// Kotlin
+for (i in 0 until n) total += i
+
+// Roughly what the JVM sees (decompiled to Java)
+for (int i = 0; i < n; i++) {
+    total += i;
+}`,
+        },
+        mistakes: [
+          { title: 'Counting down with ..', bad: 'for (i in 10..1) println(i)   // prints nothing', good: 'for (i in 10 downTo 1) println(i)', why: 'A range whose start is above its end is empty, so the loop runs zero times without any error. <code>downTo</code> builds a range that counts down.' },
+          { title: 'if as a value without else', bad: 'val label = if (count > 0) "$count new"', good: 'val label = if (count > 0) "$count new" else "No news"', why: 'An <code>if</code> used as a value must have an <code>else</code>. Otherwise there would be no value when the condition is false, so it doesn’t compile.' },
+          { title: 'Stepping through Doubles', bad: 'for (x in 0.0..1.0 step 0.1) plot(x)', good: 'for (i in 0..10) plot(i / 10.0)', why: 'A Double range can test <code>in</code>, but you can’t loop over it or use <code>step</code>. Loop over Ints and divide, which also avoids adding up rounding errors.' },
         ],
         visual(el) {
           const ranges = [
@@ -1034,6 +1389,144 @@ public inline fun <T, R, C : MutableCollection<in R>>
           { q: 'With the code above, what does <code>describe(0)</code> return?', options: ['<code>"zero"</code>', '<code>"negative"</code>', 'Both branches run'], a: 0, why: 'The <code>0</code> branch comes first and only the first match runs.' },
           { q: 'Inside <code>is String -> ...</code>, why can you write <code>x.length</code>?', options: ['x is smart-cast to String in that branch', 'Any has a length property', 'You can’t, it needs a cast'], a: 0, why: 'After an <code>is</code> check, Kotlin treats the value as that type inside the branch.' },
         ],
+        deeper: [
+          {
+            title: 'when with no subject',
+            body: `<p>Leave out the parentheses and every branch becomes its own Boolean condition. That makes <code>when</code> a tidy replacement for an <code>if / else if</code> chain, and the conditions can test different values.</p>
+<p>The rules stay the same: top to bottom, the first true condition wins, and <code>else</code> takes the rest. Flip the inputs below and see which branch wins when several are true.</p>`,
+            code: `fun shipping(weightKg: Double, express: Boolean, member: Boolean) = when {
+    weightKg > 20 -> 25.0
+    express       -> 12.0
+    member        -> 0.0
+    else          -> 4.5
+}`,
+            visual(el) {
+              const s = { heavy: false, express: true, member: true };
+              const branches = [
+                { line: 'weightKg > 20 -> 25.0', test: () => s.heavy, res: '25.0' },
+                { line: 'express       -> 12.0', test: () => s.express, res: '12.0' },
+                { line: 'member        -> 0.0', test: () => s.member, res: '0.0' },
+                { line: 'else          -> 4.5', test: () => true, res: '4.5' },
+              ];
+              let busy = false;
+              const rows = branches.map(b => h('div', { class: 'branch', html: '    ' + hl(b.line) }));
+              const call = h('div', { class: 'kt' });
+              const o = out();
+              const box = (key, text) => {
+                const input = h('input', { type: 'checkbox', id: `kt-d2-wh-${key}` });
+                input.checked = s[key];
+                input.addEventListener('change', () => { if (busy) { input.checked = s[key]; return; } s[key] = input.checked; paint(); });
+                return h('label', { class: 'switch', for: `kt-d2-wh-${key}` }, input, text);
+              };
+              const args = () => `shipping(\n    weightKg = ${s.heavy ? '24.0' : '2.0'},\n    express = ${s.express},\n    member = ${s.member},\n)`;
+              function paint() {
+                call.innerHTML = hl(args());
+                rows.forEach(r => { r.className = 'branch'; });
+                say(o, 'Press Run to scan the branches.');
+              }
+              async function run() {
+                if (busy) return; busy = true;
+                rows.forEach(r => { r.className = 'branch'; });
+                for (let i = 0; i < branches.length; i++) {
+                  rows[i].classList.add('scan'); await sleep(380);
+                  if (!call.isConnected) return;
+                  rows[i].classList.remove('scan');
+                  if (branches[i].test()) {
+                    rows[i].classList.add('hit');
+                    rows.slice(i + 1).forEach(r => r.classList.add('skip'));
+                    const later = branches.slice(i + 1, 3).filter(b => b.test()).length;
+                    say(o, `= ${hl(branches[i].res)}${later ? ' <span class="muted">// later true conditions never get checked</span>' : ''}`);
+                    break;
+                  }
+                  rows[i].classList.add('miss');
+                }
+                busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, box('heavy', 'weightKg = 24.0'), box('express', 'express'), box('member', 'member')),
+                call,
+                h('div', { class: 'when' }, h('div', { class: 'branch head', html: hl('when {') }), rows, h('div', { class: 'branch head' }, '}')),
+                h('div', { class: 'controls' }, cmd('Run shipping(...)', run)),
+                o);
+            },
+          },
+          {
+            title: 'Name the subject, add a guard',
+            body: `<p><code>when (val result = repo.load())</code> calls <code>load()</code> once and names the result. The name only exists inside the <code>when</code>, so it can’t leak into the rest of the function.</p>
+<p>Since Kotlin 2.2 a branch can add a guard after its check: <code>is LoadResult.Ok if result.items.isEmpty() -></code>. The branch matches only when the type check and the guard both hold. Before guards you had to nest an <code>if</code> inside the branch. The compiler can’t know whether a guard holds, so you still need an unguarded branch for that type, or an <code>else</code>.</p>`,
+            code: `when (val result = repo.load()) {
+    is LoadResult.Ok if result.items.isEmpty() -> showEmpty()
+    is LoadResult.Ok    -> showList(result.items)
+    is LoadResult.Error -> showError(result.message)
+}`,
+            visual(el) {
+              const values = [
+                { label: 'Ok(emptyList())', ok: true, empty: true },
+                { label: 'Ok(listOf("a", "b"))', ok: true, empty: false },
+                { label: 'Error("Timeout")', ok: false },
+              ];
+              const branches = [
+                { line: 'is LoadResult.Ok if result.items.isEmpty() -> showEmpty()', test: v => v.ok && v.empty, why: v => (v.ok ? 'type matches, but the guard is false' : 'not an Ok') },
+                { line: 'is LoadResult.Ok    -> showList(result.items)', test: v => v.ok, why: () => 'not an Ok' },
+                { line: 'is LoadResult.Error -> showError(result.message)', test: v => !v.ok, why: () => 'not an Error' },
+              ];
+              let busy = false;
+              const head = h('div', { class: 'branch head' });
+              const rows = branches.map(b => h('div', { class: 'branch', html: '    ' + hl(b.line) }));
+              const o = out();
+              const buttons = values.map(v => cmd(`load() returns ${v.label}`, () => run(v)));
+              async function run(v) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', values[i] === v));
+                head.innerHTML = hl(`when (val result = LoadResult.${v.label}) {`);
+                rows.forEach(r => { r.className = 'branch'; });
+                for (let i = 0; i < branches.length; i++) {
+                  rows[i].classList.add('scan'); await sleep(420);
+                  if (!head.isConnected) return;
+                  rows[i].classList.remove('scan');
+                  if (branches[i].test(v)) {
+                    rows[i].classList.add('hit');
+                    rows.slice(i + 1).forEach(r => r.classList.add('skip'));
+                    say(o, `${hl(branches[i].line.split('-> ')[1])} <span class="muted">// branch ${i + 1} won</span>`);
+                    break;
+                  }
+                  rows[i].classList.add('miss');
+                  say(o, `<span class="muted">branch ${i + 1}: ${branches[i].why(v)}</span>`);
+                  await sleep(300);
+                  if (!head.isConnected) return;
+                }
+                busy = false;
+              }
+              head.innerHTML = hl('when (val result = repo.load()) {');
+              el.append(h('div', { class: 'controls' }, buttons),
+                h('div', { class: 'when' }, head, rows, h('div', { class: 'branch head' }, '}')),
+                o);
+              run(values[0]);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>The compiler picks the cheapest bytecode it can. A <code>when</code> on Int constants can become a JVM <code>tableswitch</code> or <code>lookupswitch</code>: a jump straight to the right branch instead of a chain of comparisons. On String constants it can switch on <code>hashCode()</code> first and confirm with <code>equals</code>. On an enum it switches on the entry’s position through a small generated mapping class.</p>
+<p>Branches with <code>is</code>, <code>in</code> ranges or free conditions become ordinary <code>instanceof</code> checks and comparisons, tried in order. That is why the order you write is the order they run.</p>`,
+          code: `// Kotlin
+fun label(code: Int) = when (code) {
+    200 -> "OK"
+    404 -> "Not found"
+    else -> "Other"
+}
+
+// Roughly what the JVM sees (decompiled to Java)
+switch (code) {
+    case 200: return "OK";
+    case 404: return "Not found";
+    default:  return "Other";
+}`,
+        },
+        mistakes: [
+          { title: 'Conditions under a subject', bad: 'val feel = when (temp) {\n    temp < 0  -> "freezing"\n    temp < 20 -> "mild"\n    else      -> "hot"\n}', good: 'val feel = when {\n    temp < 0  -> "freezing"\n    temp < 20 -> "mild"\n    else      -> "hot"\n}', why: 'With a subject, each branch value is compared to <code>temp</code>, so <code>temp < 0</code> would mean “is temp equal to false”. That doesn’t compile. Drop the subject when branches are conditions.' },
+          { title: 'A range without in', bad: 'when (age) {\n    0..12  -> "child"\n    13..17 -> "teen"\n    else   -> "adult"\n}', good: 'when (age) {\n    in 0..12  -> "child"\n    in 13..17 -> "teen"\n    else      -> "adult"\n}', why: 'Without <code>in</code>, the branch asks whether the Int equals a range object, which can never be true, and the compiler rejects it. <code>in</code> asks whether the value is inside the range.' },
+        ],
         visual(el) {
           const values = [
             { label: '0', type: 'Int', v: 0 }, { label: '42', type: 'Int', v: 42 }, { label: '-7', type: 'Int', v: -7 },
@@ -1369,6 +1862,101 @@ b.move()       // "flies"`,
           { q: 'Can you write <code>Shape()</code> when <code>Shape</code> is abstract?', options: ['Yes', 'No'], a: 1, why: 'An abstract class can only be created through a concrete subclass.' },
           { q: 'How many classes can a Kotlin class extend, and how many interfaces can it implement?', options: ['One class, many interfaces', 'Many of both', 'One of each'], a: 0, why: 'Kotlin has single class inheritance, but a class can implement any number of interfaces.' },
         ],
+        deeper: [
+          {
+            title: 'super, and two parents with the same function',
+            body: `<p>An override can still call the version it replaces with <code>super.move()</code>. That is how a subclass adds to its parent’s behaviour instead of throwing it away.</p>
+<p>When a class implements two interfaces that both give <code>move()</code> a default body, Kotlin refuses to guess. The class must override <code>move()</code>, and inside it picks a parent by name: <code>super&lt;Swimmer&gt;.move()</code>.</p>`,
+            code: `interface Swimmer { fun move() = "swims" }
+interface Flyer { fun move() = "flies" }
+
+class Duck : Swimmer, Flyer {
+    override fun move() =
+        super<Swimmer>.move() + " and " + super<Flyer>.move()
+}
+
+Duck().move()   // "swims and flies"`,
+            visual(el) {
+              const parent = (name, body) => {
+                const code = h('div', { class: 'kt', html: hl(`interface ${name} {\n    fun move() = "${body}"\n}`) });
+                return { el: h('div', { class: 'kt-card' }, h('span', { class: 'kt-tag interface' }, 'interface'), code), name, body };
+              };
+              const sw = parent('Swimmer', 'swims'), fl = parent('Flyer', 'flies');
+              const bodies = [
+                { label: 'no override', src: 'class Duck : Swimmer, Flyer', err: 'Duck must override move(), because it inherits two implementations of it.' },
+                { label: 'super.move()', src: 'class Duck : Swimmer, Flyer {\n    override fun move() = super.move()\n}', err: 'Many supertypes available. Say which one you mean in angle brackets, like super<Foo>.' },
+                { label: 'super<Swimmer>', src: 'class Duck : Swimmer, Flyer {\n    override fun move() = super<Swimmer>.move()\n}', uses: [sw] },
+                { label: 'super<Flyer>', src: 'class Duck : Swimmer, Flyer {\n    override fun move() = super<Flyer>.move()\n}', uses: [fl] },
+                { label: 'both', src: 'class Duck : Swimmer, Flyer {\n    override fun move() =\n        super<Swimmer>.move() + " and " + super<Flyer>.move()\n}', uses: [sw, fl], join: true },
+              ];
+              let busy = false;
+              const duckCode = h('div', { class: 'kt' });
+              const duck = h('div', { class: 'kt-card' }, h('span', { class: 'kt-tag' }, 'class'), duckCode);
+              const o = out();
+              const buttons = bodies.map(b => cmd(b.label, () => pick(b)));
+              async function pick(b) {
+                if (busy) return; busy = true;
+                buttons.forEach((x, i) => x.setAttribute('aria-pressed', bodies[i] === b));
+                [sw, fl].forEach(p => p.el.classList.remove('kt-d2-on'));
+                duckCode.innerHTML = hl(b.src);
+                if (b.err) {
+                  duck.className = 'kt-card broken'; replay(duck, 'shake');
+                  say(o, `<span class="bad">compile error:</span> ${b.err}`);
+                  busy = false; return;
+                }
+                duck.className = 'kt-card';
+                say(o, `${hl('Duck().move()')} <span class="muted">calls...</span>`);
+                for (const p of b.uses) {
+                  p.el.classList.add('kt-d2-on'); replay(p.el, 'pop');
+                  await sleep(480); if (!duck.isConnected) return;
+                }
+                const r = b.join ? 'swims and flies' : b.uses[0].body;
+                replay(duck, 'pop');
+                say(o, `${hl('Duck().move()')} = ${hl(`"${r}"`)}`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'stage kt-tree' }, h('div', { class: 'kt-pile' }, sw.el, fl.el), h('span', { class: 'kt-up' }, '▲ implements both'), duck),
+                h('div', { class: 'controls' }, buttons),
+                o);
+              pick(bodies[4]);
+            },
+          },
+          {
+            title: 'An override stays open until you say final',
+            body: `<p>An <code>override</code> member is open itself, so a subclass of your subclass can override it again. Write <code>final override</code> to stop the chain at your class.</p>
+<p>Properties follow the same rules: <code>open val</code> in the parent, <code>override val</code> in the child. A child may turn a <code>val</code> into a <code>var</code>, since that only adds a setter. It can’t turn a <code>var</code> into a <code>val</code>, because callers of the parent type expect to be able to set it.</p>`,
+            code: `open class Animal {
+    open val legs: Int = 4
+    open fun move() = "walks"
+}
+
+open class Bird : Animal() {
+    override var legs = 2                 // val -> var is allowed
+    final override fun move() = "flies"   // no further overrides
+}
+
+class Penguin : Bird() {
+    override fun move() = "waddles"       // error: move is final in Bird
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>A Kotlin class without <code>open</code> compiles to a <code>final</code> JVM class, and its functions to <code>final</code> methods. That is why mocking a Kotlin class needs Mockito’s inline mock maker (the default since Mockito 5) or MockK, and why frameworks like Spring use the all-open compiler plugin.</p>
+<p>Since Kotlin 2.2, an interface function with a body compiles to a Java <code>default</code> method. By default the compiler also keeps the older <code>DefaultImpls</code> helper class for binary compatibility with code built by older Kotlin versions. A call like <code>super&lt;Swimmer&gt;.move()</code> becomes a direct, non-virtual call to that interface’s version.</p>`,
+          code: `// Kotlin
+class Plain
+open class Base
+
+// Roughly what the JVM sees (decompiled to Java)
+public final class Plain { }
+public class Base { }`,
+        },
+        mistakes: [
+          { title: 'Skipping super in a lifecycle override', bad: 'class MainActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        setContent { App() }\n    }\n}', good: 'class MainActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContent { App() }\n    }\n}', why: 'Framework lifecycle methods do real work in the parent. Lint flags the missing call, and at runtime Android throws <code>SuperNotCalledException</code>.' },
+          { title: 'An abstract class with no state', bad: 'abstract class Clickable {\n    abstract fun onClick()\n}\nclass SaveButton : BaseButton(), Clickable()   // error: two classes', good: 'interface Clickable {\n    fun onClick()\n}\nclass SaveButton : BaseButton(), Clickable', why: 'A class can extend only one class. If the parent has no constructor state, make it an interface so any class can implement it alongside its real parent.' },
+          { title: 'Giving an interface property a value', bad: 'interface Screen {\n    val title: String = "Home"\n}', good: 'interface Screen {\n    val title: String get() = "Home"\n}', why: 'Interfaces can’t store state, so property initializers are not allowed. A getter computes the default value on each read instead.' },
+        ],
         visual(el) {
           const dogOpen = 'class Dog : Animal() {\n    override fun sound() = "Woof"\n}';
           const modes = {
@@ -1473,6 +2061,120 @@ val byLength = object : Comparator<String> {
           { q: 'How many instances of <code>object Analytics</code> exist in a running app?', options: ['One', 'One per call', 'One per thread'], a: 0, why: 'An object declaration is a singleton: every reference points at the same instance.' },
           { q: '<code>fun guest()</code> sits in <code>User</code>’s companion object. How do you call it?', options: ['<code>User.guest()</code>', '<code>User().guest()</code>', '<code>guest(User)</code>'], a: 0, why: 'Companion members are called on the class name, with no instance needed.' },
         ],
+        deeper: [
+          {
+            title: 'Created on first use, exactly once',
+            body: `<p>An <code>object</code> is not built when the app starts. Its <code>init</code> block runs the first time any code touches it, and never again in that process. A companion object starts the same way, when its class is first used.</p>
+<p>A <code>const val</code> is the exception. The compiler copies its value into the code that reads it, so reading <code>Config.VERSION</code> doesn’t create the object at all.</p>`,
+            code: `object Config {
+    const val VERSION = "2.4"
+    val flags: Map<String, Boolean>
+
+    init {
+        println("Config init")
+        flags = loadFlags()
+    }
+
+    fun isOn(name: String) = flags[name] == true
+}
+
+println(Config.VERSION)   // 2.4, no init
+Config.isOn("search")     // Config init, then true
+Config.isOn("chat")       // no init this time`,
+            visual(el) {
+              let created = false, busy = false;
+              const state = h('span', { class: 'field kt-unset' }, 'not created yet');
+              const flags = h('span', { class: 'field kt-unset' }, 'flags = (none)');
+              const obj = h('div', { class: 'obj kt-d2-ob-ghost' }, h('span', { class: 'obj-name' }, 'object Config'), state, flags);
+              const init = h('div', { class: 'machine' }, h('div', { class: 'gear' }), h('div', { class: 'kt', html: hl('init { }') }));
+              const log = h('div', { class: 'out', 'aria-live': 'polite' });
+              const o = out();
+              const print = text => {
+                log.append(h('div', { class: 'line drop-in' }, text));
+                while (log.children.length > 5) log.firstElementChild.remove();
+              };
+              const paint = () => {
+                obj.className = 'obj' + (created ? '' : ' kt-d2-ob-ghost');
+                state.textContent = created ? 'INSTANCE ready' : 'not created yet';
+                state.className = 'field ' + (created ? 'kt-ptr' : 'kt-unset');
+                flags.textContent = created ? 'flags = {search=true, chat=false}' : 'flags = (none)';
+                flags.className = 'field' + (created ? '' : ' kt-unset');
+              };
+              async function use(name, value) {
+                if (busy) return; busy = true;
+                if (!created) {
+                  init.classList.add('busy');
+                  say(o, '<span class="muted">first use: running init...</span>');
+                  await sleep(800);
+                  init.classList.remove('busy');
+                  if (!obj.isConnected) return;
+                  created = true; paint(); replay(obj, 'pop');
+                  print('Config init');
+                } else replay(obj, 'cmp');
+                print(String(value));
+                say(o, `${hl(`Config.isOn("${name}")`)} = ${hl(String(value))}`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'stage' }, obj, init),
+                h('div', { class: 'controls' },
+                  cmd('println(Config.VERSION)', () => {
+                    if (busy) return;
+                    print('2.4');
+                    say(o, `${hl('Config.VERSION')} = ${hl('"2.4"')} <span class="muted">// const: copied in at compile time, ${created ? 'no init needed' : 'object still not created'}</span>`);
+                  }),
+                  cmd('Config.isOn("search")', () => use('search', true)),
+                  cmd('Config.isOn("chat")', () => use('chat', false)),
+                  cmd('restart the process', () => {
+                    if (busy) return;
+                    created = false; paint(); log.replaceChildren();
+                    say(o, '<span class="muted">A new process starts with no Config instance.</span>');
+                  })),
+                h('p', { class: 'tip' }, 'Logcat'), log, o);
+              paint();
+              say(o, 'Read the constant first, then call a function.');
+            },
+          },
+          {
+            title: 'A lambda beats an object expression for one method',
+            body: `<p>An object expression creates a new instance every time that line runs, and it can read the local variables around it, just like a lambda. When the interface has a single abstract method, you rarely need the object syntax.</p>
+<p>Java interfaces like <code>View.OnClickListener</code>, and Kotlin interfaces declared with <code>fun interface</code>, accept a lambda directly. This is called SAM conversion. Keep <code>object :</code> for abstract classes, for interfaces with several methods, or when the instance needs its own state.</p>`,
+            code: `fun interface PriceFormatter {
+    fun format(cents: Long): String
+}
+
+val euro = PriceFormatter { "EUR " + it / 100.0 }   // SAM conversion
+button.setOnClickListener { save() }                // Java interface
+
+// An abstract class still needs an object expression
+recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+    override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+        if (dy > 0) hideFab()
+    }
+})`,
+          },
+        ],
+        underHood: {
+          body: `<p>An <code>object</code> compiles to a class with a private constructor and a static field named <code>INSTANCE</code>, set in the class’s static initializer. The JVM runs that initializer once, on first use, and makes other threads wait until it is done. That is where the free laziness and thread safety come from.</p>
+<p>A companion object becomes a nested class named <code>Companion</code>, plus a static field <code>Companion</code> on the outer class. Kotlin code writes <code>User.guest()</code>, but Java code has to write <code>User.Companion.guest()</code> unless the function is marked <code>@JvmStatic</code>. A <code>const val</code> becomes a <code>static final</code> field.</p>`,
+          code: `// Kotlin
+object Analytics {
+    fun log(name: String) { /* ... */ }
+}
+
+// Roughly what the JVM sees (decompiled to Java)
+public final class Analytics {
+    public static final Analytics INSTANCE;
+    private Analytics() { }
+    static { INSTANCE = new Analytics(); }
+    public final void log(String name) { /* ... */ }
+}`,
+        },
+        mistakes: [
+          { title: 'Constants without const', bad: 'class HomeScreen {\n    companion object {\n        val TAG = "HomeScreen"\n    }\n}', good: 'private const val TAG = "HomeScreen"\n\nclass HomeScreen { /* ... */ }', why: 'Without <code>const</code>, each read goes through a getter on the companion instance. A <code>const val</code> is copied into the code that reads it, and a private top-level one stays out of the class’s API.' },
+          { title: 'Assuming the object’s contents are thread-safe', bad: 'object Cart {\n    val items = mutableListOf<Item>()\n}\n// called from several coroutines\nCart.items.add(item)', good: 'object Cart {\n    private val _items = MutableStateFlow<List<Item>>(emptyList())\n    val items: StateFlow<List<Item>> = _items\n    fun add(item: Item) = _items.update { it + item }\n}', why: 'Only the object’s creation is thread-safe. A plain <code>MutableList</code> inside it can be corrupted when two threads add at once. <code>update</code> on a <code>MutableStateFlow</code> retries until its change applies cleanly.' },
+          { title: 'Companion functions Java can’t see nicely', bad: 'class DetailFragment : Fragment() {\n    companion object {\n        fun newInstance(id: String) = DetailFragment().apply {\n            arguments = bundleOf("id" to id)\n        }\n    }\n}\n// Java: DetailFragment.Companion.newInstance(id)', good: 'class DetailFragment : Fragment() {\n    companion object {\n        @JvmStatic\n        fun newInstance(id: String) = DetailFragment().apply {\n            arguments = bundleOf("id" to id)\n        }\n    }\n}\n// Java: DetailFragment.newInstance(id)', why: 'Companion members are instance methods of the hidden <code>Companion</code> object. <code>@JvmStatic</code> also generates a real static method, so Java callers use the same short form as Kotlin.' },
+        ],
         visual(el) {
           let events = 0;
           const trackers = [];
@@ -1558,6 +2260,134 @@ Light.RED.next()        // GREEN`,
           { q: 'What is <code>Light.entries.size</code> for the code above?', options: ['2', '3', '0'], a: 1, why: 'There are three entries: RED, YELLOW and GREEN.' },
           { q: 'A <code>when (light)</code> covers RED, YELLOW and GREEN. Does it need <code>else</code>?', options: ['Yes, always', 'No, it is exhaustive'], a: 1, why: 'The compiler knows every entry, so covering them all is enough.' },
           { q: 'Each error case needs its own message and code. Enum or sealed?', options: ['Enum', 'Sealed'], a: 1, why: 'Sealed subtypes can carry different data per case. Enum entries all share one shape.' },
+        ],
+        deeper: [
+          {
+            title: 'Entries with their own behaviour',
+            body: `<p>An enum can declare an <code>abstract</code> function, and then each entry must give it a body. The entries are still one fixed list, but each behaves differently. An enum can also implement an interface the same way.</p>
+<p>This keeps the logic next to the value it belongs to. Add an entry and the compiler makes you write its body, just like an exhaustive <code>when</code> makes you add a branch.</p>`,
+            code: `enum class Op(val symbol: String) {
+    PLUS("+")  { override fun apply(a: Int, b: Int) = a + b },
+    MINUS("-") { override fun apply(a: Int, b: Int) = a - b },
+    TIMES("*") { override fun apply(a: Int, b: Int) = a * b };
+
+    abstract fun apply(a: Int, b: Int): Int
+}
+
+Op.entries.map { "8 \${it.symbol} 2 = \${it.apply(8, 2)}" }
+// [8 + 2 = 10, 8 - 2 = 6, 8 * 2 = 16]`,
+            visual(el) {
+              const ops = [
+                { name: 'PLUS', sym: '+', f: (a, b) => a + b, body: 'a + b' },
+                { name: 'MINUS', sym: '-', f: (a, b) => a - b, body: 'a - b' },
+                { name: 'TIMES', sym: '*', f: (a, b) => a * b, body: 'a * b' },
+              ];
+              let busy = false;
+              const cards = ops.map(op => h('div', { class: 'kt-card' },
+                h('span', { class: 'kt-tag' }, `${op.name}("${op.sym}") · ${ops.indexOf(op)}`),
+                h('div', { class: 'kt', html: hl(`override fun apply(...) =\n    ${op.body}`) })));
+              const extra = h('div', {});
+              const o = out();
+              async function call(list) {
+                if (busy) return; busy = true;
+                const lines = [];
+                for (const op of list) {
+                  const c = cards[ops.indexOf(op)];
+                  cards.forEach(x => x.classList.remove('kt-d2-on'));
+                  c.classList.add('kt-d2-on'); replay(c, 'pop');
+                  lines.push(`8 ${op.sym} 2 = ${op.f(8, 2)}`);
+                  say(o, `${hl(`Op.${op.name}.apply(8, 2)`)} = ${hl(String(op.f(8, 2)))}`);
+                  await sleep(list.length > 1 ? 520 : 200); if (!o.isConnected) return;
+                }
+                if (list.length > 1) say(o, `[${lines.join(', ')}] <span class="muted">// one call, three different bodies</span>`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'kt', html: hl('abstract fun apply(a: Int, b: Int): Int') }),
+                h('div', { class: 'stage' }, cards, extra),
+                h('div', { class: 'controls' },
+                  ops.map(op => cmd(`Op.${op.name}.apply(8, 2)`, () => call([op]))),
+                  cmd('Op.entries.map { ... }', () => call(ops)),
+                  cmd('DIV("/"),  // no body', () => {
+                    if (busy) return;
+                    extra.replaceChildren(h('div', { class: 'kt-card broken drop-in' }, h('span', { class: 'kt-tag' }, 'DIV("/") · 3'), h('div', { class: 'kt', html: hl('// no apply body') })));
+                    replay(extra, 'shake');
+                    say(o, '<span class="bad">compile error:</span> entry DIV doesn’t implement the abstract member apply');
+                  })),
+                o);
+              say(o, 'Call each entry. The same function name runs a different body.');
+            },
+          },
+          {
+            title: 'Save the name, never the ordinal',
+            body: `<p><code>ordinal</code> is only a position. Insert an entry in the middle, or reorder the list, and every later ordinal shifts. Ordinals saved in preferences, a database or on a server then point at the wrong entry, with no error at all.</p>
+<p>Save <code>name</code> and look it up safely when you read it back. If you might rename entries later, give each one its own stable key, like <code>enum class Priority(val key: String)</code>, and save that.</p>`,
+            visual(el) {
+              const v1 = ['LOW', 'NORMAL', 'HIGH'], v2 = ['LOW', 'NORMAL', 'URGENT', 'HIGH'];
+              let list = v1, saved = null;
+              const row = h('div', { class: 'kt-pile' });
+              const ver = h('span', { class: 'kt-type' }, 'app v1');
+              const sOrd = h('span', { class: 'field kt-unset' }, 'priority_ord = (empty)');
+              const sName = h('span', { class: 'field kt-unset' }, 'priority_name = (empty)');
+              const store = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'saved prefs'), sOrd, sName);
+              const result = h('div', { class: 'slot' });
+              const o = out();
+              const paint = anim => {
+                ver.textContent = list === v1 ? 'app v1' : 'app v2: URGENT added';
+                row.replaceChildren(...list.map((n, i) => h('span', { class: 'chip kt-sm' + (anim && (n === 'URGENT' || i >= 3) ? ' drop-in' : '') }, `${n} · ${i}`)));
+              };
+              const need = () => { if (saved) return true; replay(store, 'shake'); say(o, '<span class="bad">nothing saved yet:</span> press save(Priority.HIGH) first'); return false; };
+              el.append(
+                h('div', { class: 'stage kt-col' }, h('div', { class: 'controls' }, h('span', { class: 'kt-zone-title' }, 'Priority.entries'), ver), row, h('div', { class: 'kt-pile' }, store, result)),
+                h('div', { class: 'controls' },
+                  cmd('save(Priority.HIGH)', () => {
+                    const ord = list.indexOf('HIGH');
+                    saved = { ord, name: 'HIGH' };
+                    sOrd.textContent = `priority_ord = ${ord}`; sName.textContent = 'priority_name = "HIGH"';
+                    sOrd.className = sName.className = 'field changed'; replay(store, 'pop');
+                    say(o, `saved ordinal ${ord} and name "HIGH"`);
+                  }),
+                  cmd('ship the update', () => {
+                    if (list === v2) { say(o, '<span class="muted">Already on v2. Press Reset to go back to v1.</span>'); return; }
+                    list = v2; paint(true);
+                    say(o, 'v2 inserts URGENT before HIGH. <span class="muted">HIGH moved from 2 to 3.</span>');
+                  }),
+                  cmd('entries[saved ordinal]', () => {
+                    if (!need()) return;
+                    const got = list[saved.ord];
+                    swap(result, got);
+                    if (got !== 'HIGH') { replay(result, 'shake'); say(o, `<span class="bad">wrong entry:</span> ${hl(`Priority.entries[${saved.ord}]`)} = ${got}, but the user picked HIGH`); }
+                    else say(o, `${hl(`Priority.entries[${saved.ord}]`)} = HIGH <span class="muted">// right only until the order changes</span>`);
+                  }),
+                  cmd('find by saved name', () => {
+                    if (!need()) return;
+                    swap(result, 'HIGH');
+                    say(o, `${hl('Priority.entries.firstOrNull { it.name == saved }')} = HIGH <span class="muted">// survives inserts and reorders</span>`);
+                  })),
+                o);
+              paint(false);
+              say(o, 'Save, ship the update, then read the value back both ways.');
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>An enum class compiles to a Java enum: a final class that extends <code>java.lang.Enum</code>, with one <code>static final</code> field per entry. All entries are created together in the static initializer, the first time the enum is used. An entry with its own body becomes an anonymous subclass.</p>
+<p><code>values()</code> returns a fresh copy of the array on every call, because a caller could change an array. <code>entries</code>, added in Kotlin 1.9, returns a read-only list that is created once, so prefer it in new code.</p>`,
+          code: `// Kotlin
+enum class Light { RED, YELLOW, GREEN }
+
+// Roughly what the JVM sees (decompiled to Java)
+public final class Light extends Enum<Light> {
+    public static final Light RED = new Light("RED", 0);
+    public static final Light YELLOW = new Light("YELLOW", 1);
+    public static final Light GREEN = new Light("GREEN", 2);
+    // plus a static list that backs Light.entries
+}`,
+        },
+        mistakes: [
+          { title: 'Reaching for values()', bad: 'for (size in Size.values()) addChip(size)', good: 'for (size in Size.entries) addChip(size)', why: '<code>values()</code> copies the whole array on each call. <code>entries</code> is a ready-made read-only list, and it is the form the IDE now suggests.' },
+          { title: 'Comparing names as text', bad: 'if (light.name == "RED") stop()', good: 'if (light == Light.RED) stop()', why: 'A typo in the string compiles and is always false, and renaming the entry silently breaks it. Comparing entries is checked by the compiler.' },
+          { title: 'An else that hides new entries', bad: 'fun color(l: Light) = when (l) {\n    Light.RED -> Color.Red\n    else -> Color.Green\n}', good: 'fun color(l: Light) = when (l) {\n    Light.RED -> Color.Red\n    Light.YELLOW -> Color.Yellow\n    Light.GREEN -> Color.Green\n}', why: 'With <code>else</code>, an entry added later quietly gets the fallback. Listing every entry lets the compiler point at each <code>when</code> that needs the new case.' },
         ],
         visual(el) {
           const L = [{ name: 'RED', s: 30, c: 'r' }, { name: 'YELLOW', s: 5, c: 'y' }, { name: 'GREEN', s: 25, c: 'g' }];
@@ -1851,6 +2681,123 @@ fun String.initials(): String =
           { q: 'Inside <code>fun Int.isOdd() = this % 2 == 1</code>, what is <code>this</code>?', options: ['The Int it was called on', 'The file it lives in', 'Nothing, extensions have no this'], a: 0, why: '<code>this</code> is the receiver: in <code>5.isOdd()</code> it is 5.' },
           { q: 'Can an extension function read a class’s <code>private</code> members?', options: ['Yes, it becomes part of the class', 'No, it is an ordinary function called with dot syntax'], a: 1, why: 'Extensions are compiled to regular functions that take the receiver as a parameter, so they can’t see private members.' },
         ],
+        deeper: [
+          {
+            title: 'The declared type picks the extension',
+            body: `<p>Members are picked at runtime, from the object that is really there. Extensions are picked by the compiler, from the type the variable is <em>declared</em> as. So an extension never overrides another extension, even when the names match.</p>
+<p>And when a member and an extension have the same signature, the member always wins. The IDE warns that the extension is shadowed.</p>`,
+            code: `open class Shape { open fun name() = "Shape" }
+class Circle : Shape() { override fun name() = "Circle" }
+
+fun Shape.label() = "a shape"
+fun Circle.label() = "a circle"
+
+val s: Shape = Circle()
+s.name()    // "Circle": member, runtime object
+s.label()   // "a shape": extension, declared type`,
+            visual(el) {
+              const decls = [
+                { src: 'val s: Shape = Circle()', declared: 'Shape', real: 'Circle' },
+                { src: 'val s: Circle = Circle()', declared: 'Circle', real: 'Circle' },
+                { src: 'val s: Shape = Shape()', declared: 'Shape', real: 'Shape' },
+              ];
+              let cur = decls[0], busy = false;
+              const dType = h('span', { class: 'chip' });
+              const rType = h('span', { class: 'chip' });
+              const compile = h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'compiler sees'), dType, h('span', { class: 'tip' }, 'decides extensions'));
+              const runtime = h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'runtime holds'), rType, h('span', { class: 'tip' }, 'decides members'));
+              const o = out();
+              const declButtons = decls.map(d => cmd(d.src, () => { if (busy) return; cur = d; paint(); }));
+              function paint() {
+                declButtons.forEach((b, i) => b.setAttribute('aria-pressed', decls[i] === cur));
+                dType.textContent = cur.declared; rType.textContent = `${cur.real}()`;
+                [compile, runtime].forEach(z => z.classList.remove('kt-d2-on'));
+                say(o, `${hl(cur.src)} <span class="muted">// now call both</span>`);
+              }
+              async function callIt(member) {
+                if (busy) return; busy = true;
+                [compile, runtime].forEach(z => z.classList.remove('kt-d2-on'));
+                const zone = member ? runtime : compile;
+                zone.classList.add('kt-d2-on'); replay(zone, 'pop-soft');
+                await sleep(450); if (!zone.isConnected) return;
+                const r = member ? `"${cur.real}"` : (cur.declared === 'Circle' ? '"a circle"' : '"a shape"');
+                say(o, `${hl(member ? 's.name()' : 's.label()')} = ${hl(r)} <span class="muted">// ${member ? 'member: chosen from the real object' : 'extension: chosen from the declared type'}</span>`);
+                busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, declButtons),
+                h('div', { class: 'stage' }, compile, runtime),
+                h('div', { class: 'controls' }, cmd('s.name()', () => callIt(true)), cmd('s.label()', () => callIt(false))),
+                o);
+            },
+          },
+          {
+            title: 'Nullable receivers and extension properties',
+            body: `<p>An extension can be declared on a nullable type. Then you can call it on null without <code>?.</code>, and <code>this</code> may be null inside. <code>isNullOrBlank()</code> from the standard library works this way.</p>
+<p>You can also declare extension properties. They have no backing field, so they can’t store anything: each one is a getter, and maybe a setter, in disguise.</p>`,
+            code: `fun String?.orPlaceholder(): String =
+    if (this.isNullOrBlank()) "Untitled" else this
+
+val title: String? = null
+title.orPlaceholder()           // "Untitled", no ?. needed
+
+val String.wordCount: Int
+    get() = split(" ").count { it.isNotBlank() }
+
+"Hello Kotlin world".wordCount  // 3`,
+            visual(el) {
+              const inputs = [
+                { label: 'null', v: null },
+                { label: '""', v: '' },
+                { label: '"   "', v: '   ' },
+                { label: '"Notes"', v: 'Notes' },
+              ];
+              let busy = false;
+              const track = h('div', { class: 'track' });
+              const o = out();
+              const buttons = inputs.map(x => cmd(`${x.label}.orPlaceholder()`, () => run(x)));
+              async function run(x) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', inputs[i] === x));
+                const st = ['this', 'isNullOrBlank()', 'result'].map(l => h('div', { class: 'station' }, h('span', { class: 'st-label' }, l)));
+                track.replaceChildren(...st);
+                const blank = x.v == null || x.v.trim() === '';
+                const steps = [
+                  [x.v == null ? 'null' : JSON.stringify(x.v), x.v == null],
+                  [String(blank), false],
+                  [blank ? '"Untitled"' : JSON.stringify(x.v), false],
+                ];
+                for (let i = 0; i < 3; i++) {
+                  st[i].classList.add('on');
+                  st[i].append(h('span', { class: 'token pop' + (steps[i][1] ? ' is-null' : '') }, steps[i][0]));
+                  await sleep(480); if (!track.isConnected) return;
+                }
+                say(o, `${hl(`${x.label}.orPlaceholder()`)} = ${hl(steps[2][0])}${x.v == null ? ' <span class="muted">// called on null, no crash</span>' : ''}`);
+                busy = false;
+              }
+              el.append(h('div', { class: 'controls' }, buttons), track, o);
+              run(inputs[0]);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>An extension compiles to a static function in a class named after its file. The receiver becomes the first parameter. <code>"hi".shout()</code> is really <code>StringExtKt.shout("hi")</code>, which is also how Java code calls it.</p>
+<p>That explains every rule in this lesson. A static function can’t see private members, so neither can the extension. The compiler picks a static function from the types it knows, so the declared type decides. And the class itself never changes, so a member with the same signature is always found first.</p>`,
+          code: `// StringExt.kt
+fun String.shout(): String = uppercase() + "!"
+
+// Roughly what the JVM sees (decompiled to Java)
+public final class StringExtKt {
+    public static final String shout(String $this$shout) {
+        return $this$shout.toUpperCase(Locale.ROOT) + "!";
+    }
+}`,
+        },
+        mistakes: [
+          { title: 'Naming an extension like a member', bad: 'class Price(val cents: Long) {\n    fun format() = "$cents ct"\n}\nfun Price.format() = "EUR " + cents / 100.0\n\nPrice(250).format()   // "250 ct": the member ran', good: 'fun Price.formatEuro() = "EUR " + cents / 100.0\n\nPrice(250).formatEuro()   // "EUR 2.5"', why: 'A member always beats an extension with the same signature, so this extension is never called. Give it a name the type doesn’t already use.' },
+          { title: 'Public extensions on everyday types', bad: '// Utils.kt\nfun String.toUserId() = UserId(lowercase())', good: '// UserRepository.kt\nprivate fun String.toUserId() = UserId(lowercase())', why: 'A public extension on <code>String</code> shows up in autocomplete on every string in the module. Keep narrow helpers <code>private</code> or <code>internal</code>, next to the code that uses them.' },
+        ],
         visual(el) {
           const exts = [
             { name: 'shout()', sig: 'fun String.shout() = uppercase() + "!"', f: s => JSON.stringify(s.toUpperCase() + '!') },
@@ -1914,6 +2861,144 @@ val q = p.also { println(it.age) }        // the same Person`,
           { q: 'Configure an object and keep it: <code>val tv = TextView(ctx).___ { text = "Hi" }</code>', options: ['<code>let</code>', '<code>apply</code>', '<code>run</code>'], a: 1, why: '<code>apply</code> gives you <code>this</code> (so <code>text = …</code> works) and returns the TextView.' },
           { q: 'Which returns the block’s result and calls the object <code>it</code>?', options: ['<code>also</code>', '<code>let</code>', '<code>with</code>'], a: 1, why: '<code>let</code>: <code>it</code> inside, last expression out.' },
           { q: '<code>val x = "abc".also { it.length }</code>. What is <code>x</code>?', options: ['<code>3</code>', '<code>"abc"</code>'], a: 1, why: '<code>also</code> always returns the object it was called on.' },
+        ],
+        deeper: [
+          {
+            title: 'Inside apply, this changes',
+            body: `<p>A block that gets the object as <code>this</code> puts that object first when Kotlin looks up a bare name. Inside <code>toolbar.apply { }</code>, <code>title</code> means the Toolbar’s title, even when your Activity has one too. Local variables and parameters are still checked before any <code>this</code>.</p>
+<p>So <code>title = title</code> inside the block reads the Toolbar’s title and writes it straight back. Nothing changes on screen. Use a local with a different name, or reach the outer object with a label: <code>this@MainActivity.title</code>.</p>`,
+            code: `class MainActivity : AppCompatActivity() {
+    fun setUp(toolbar: Toolbar, screenName: String) {
+        toolbar.apply {
+            title = title                     // toolbar.title = toolbar.title
+            title = this@MainActivity.title   // what was meant
+            subtitle = screenName             // parameter: found first
+        }
+    }
+}`,
+            visual(el) {
+              const layers = [
+                { name: 'locals', line: 'locals     screenName', has: ['screenName'] },
+                { name: 'Toolbar', line: 'Toolbar    title, subtitle', has: ['title', 'subtitle', 'menu'] },
+                { name: 'MainActivity', line: 'Activity   title, finish()', has: ['title', 'finish', 'viewModel'] },
+                { name: 'top level', line: 'top level  println()', has: ['println'] },
+              ];
+              const exprs = [
+                { src: 'title', key: 'title', note: 'the Toolbar’s own title, not the Activity’s' },
+                { src: 'screenName', key: 'screenName', note: 'a parameter: locals are checked first' },
+                { src: 'finish()', key: 'finish', note: 'Toolbar has no finish(), so the search goes outward' },
+                { src: 'this@MainActivity.title', key: 'title', jump: 2, note: 'the label skips straight to the Activity' },
+                { src: 'println("ok")', key: 'println', note: 'no receiver has it, so the top level does' },
+              ];
+              let busy = false;
+              const rows = layers.map(l => h('div', { class: 'branch', html: hl(l.line) }));
+              const head = h('div', { class: 'branch head' });
+              const o = out();
+              const buttons = exprs.map(x => cmd(x.src, () => find(x)));
+              async function find(x) {
+                if (busy) return; busy = true;
+                buttons.forEach((b, i) => b.setAttribute('aria-pressed', exprs[i] === x));
+                head.innerHTML = hl(`toolbar.apply { ${x.src} }`);
+                rows.forEach(r => { r.className = 'branch'; });
+                for (let i = 0; i < layers.length; i++) {
+                  if (x.jump != null && i < x.jump) { rows[i].classList.add('skip'); continue; }
+                  rows[i].classList.add('scan'); await sleep(420);
+                  if (!head.isConnected) return;
+                  rows[i].classList.remove('scan');
+                  if (layers[i].has.includes(x.key)) {
+                    rows[i].classList.add('hit');
+                    rows.slice(i + 1).forEach(r => r.classList.add('skip'));
+                    say(o, `${hl(x.src)} <span class="muted">→ ${layers[i].name}: ${x.note}</span>`);
+                    break;
+                  }
+                  rows[i].classList.add('miss');
+                }
+                busy = false;
+              }
+              el.append(h('div', { class: 'controls' }, buttons), h('div', { class: 'when' }, head, rows), o);
+              find(exprs[0]);
+            },
+          },
+          {
+            title: 'Watch what flows down a chain',
+            body: `<p>Scope functions chain, and the return column of the grid decides what the next call receives. <code>let</code> and <code>run</code> pass on the block’s result. <code>also</code> and <code>apply</code> pass on the object they were called on, and whatever the block computed is dropped.</p>
+<p>Swap one function in the chain below and watch which value reaches the end.</p>`,
+            visual(el) {
+              const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
+              const steps = [
+                { opts: ['let', 'also'], body: '{ it.trim() }', f: v => v.trim() },
+                { opts: ['run', 'apply'], body: '{ replaceFirstChar { it.uppercase() } }', f: v => cap(v) },
+                { opts: ['let', 'also'], body: '{ "Hi, $it" }', f: v => `Hi, ${v}` },
+              ];
+              const pick = [0, 0, 0];
+              let busy = false;
+              const code = h('div', { class: 'kt' });
+              const track = h('div', { class: 'track' });
+              const o = out();
+              const fnOf = i => steps[i].opts[pick[i]];
+              const toggles = steps.map((s, i) => cmd('', () => { if (busy) return; pick[i] = 1 - pick[i]; paint(); }));
+              function paint() {
+                toggles.forEach((b, i) => { b.innerHTML = hl(`.${fnOf(i)}`) + ' <span class="muted">⇄</span>'; b.setAttribute('aria-label', `Step ${i + 1}: ${fnOf(i)}, tap to swap`); });
+                code.innerHTML = hl(`val greeting = "  ada  "\n${steps.map((s, i) => `    .${fnOf(i)} ${s.body}`).join('\n')}`);
+                track.replaceChildren();
+                say(o, 'Press Run chain.');
+              }
+              async function run() {
+                if (busy) return; busy = true;
+                const st = ['start', ...steps.map((s, i) => `.${fnOf(i)}`)].map(l => h('div', { class: 'station' }, h('span', { class: 'st-label' }, l)));
+                track.replaceChildren(...st);
+                let v = '  ada  ';
+                st[0].classList.add('on');
+                st[0].append(h('span', { class: 'token pop kt-d2-sc-pre' }, JSON.stringify(v)));
+                await sleep(450); if (!track.isConnected) return;
+                for (let i = 0; i < steps.length; i++) {
+                  const res = steps[i].f(v);
+                  const passes = pick[i] === 0;
+                  st[i + 1].classList.add('on');
+                  if (!passes) st[i + 1].append(h('span', { class: 'kt-type kt-d2-sc-drop kt-d2-sc-pre' }, `block: ${JSON.stringify(res)}`));
+                  v = passes ? res : v;
+                  st[i + 1].append(h('span', { class: 'token pop kt-d2-sc-pre' }, JSON.stringify(v)));
+                  await sleep(600); if (!track.isConnected) return;
+                }
+                const right = v === 'Hi, Ada';
+                say(o, `greeting = ${hl(JSON.stringify(v))} <span class="muted">// ${right ? 'every step passed its result on' : 'a dropped block result changed the outcome'}</span>`);
+                busy = false;
+              }
+              paint();
+              el.append(code, h('div', { class: 'controls' }, toggles, h('button', { class: 'btn primary small', onclick: run }, 'Run chain')), track, o);
+              run();
+            },
+          },
+          {
+            title: 'takeIf: keep a value only if it passes',
+            body: `<p><code>takeIf { }</code> returns the object when the condition holds and null when it doesn’t. <code>takeUnless</code> is the reverse. Followed by <code>?:</code>, it replaces a small if/else that only exists to pick a fallback.</p>`,
+            code: `val port = input.toIntOrNull()?.takeIf { it in 1..65535 } ?: 8080
+
+fun search(field: EditText) {
+    val query = field.text.toString().trim().takeUnless { it.isEmpty() }
+        ?: return                      // nothing to search
+    viewModel.search(query)
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>All five are tiny <code>inline</code> functions in the standard library. Their blocks are copied into your code, so no lambda object is created and a scope function costs nothing at runtime.</p>
+<p>The difference between <code>this</code> and <code>it</code> is just the parameter type. <code>apply</code> takes <code>T.() -> Unit</code>, a lambda with receiver, so the object becomes <code>this</code>. <code>let</code> takes <code>(T) -> R</code>, a plain lambda, so the object arrives as <code>it</code>. Each one also declares a contract that its block runs exactly once, which is why you can assign a <code>val</code> inside one.</p>`,
+          code: `// From the standard library
+public inline fun <T> T.apply(block: T.() -> Unit): T {
+    contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
+    block()
+    return this
+}
+
+public inline fun <T, R> T.let(block: (T) -> R): R {
+    contract { callsInPlace(block, InvocationKind.EXACTLY_ONCE) }
+    return block(this)
+}`,
+        },
+        mistakes: [
+          { title: 'Nesting let inside let', bad: 'user?.let { u ->\n    u.address?.let { a ->\n        a.city?.let { c -> showCity(c) }\n    }\n}', good: 'user?.address?.city?.let { showCity(it) }', why: 'A safe-call chain already stops at the first null. One <code>let</code> at the end is enough, and the code reads top to bottom again.' },
+          { title: 'with on a nullable value', bad: 'val user: User? = repo.current()\nwith(user) {\n    println(name)   // error: user may be null\n}', good: 'val user: User? = repo.current()\nuser?.run {\n    println(name)\n}', why: '<code>with</code> is not an extension, so you can’t put <code>?.</code> in front of it, and inside the block <code>this</code> is still <code>User?</code>. <code>?.run</code> does the same job and skips the block on null.' },
         ],
         visual(el) {
           const fns = {
@@ -1979,6 +3064,201 @@ fun render(state: UiState) = when (state) {
         quiz: [
           { q: 'You add <code>data object Empty : UiState</code>. What happens to a <code>when</code> with no <code>else</code> that doesn’t handle it?', options: ['It compiles and skips Empty', 'It stops compiling until you add the branch', 'It crashes at runtime'], a: 1, why: 'The compiler knows every subtype, so it reports the missing case.' },
           { q: 'Inside <code>is UiState.Error -> …</code>, can you read <code>state.message</code>?', options: ['Yes, state is smart-cast to Error', 'No, you must cast it yourself'], a: 0, why: 'The <code>is</code> check smart-casts <code>state</code> inside that branch.' },
+        ],
+        deeper: [
+          {
+            title: 'Group cases with a nested sealed type',
+            body: `<p>A subtype of a sealed type can be sealed itself. <code>Error</code> below has two cases of its own. A <code>when</code> can handle the whole group with one <code>is UiState.Error</code> branch, handle each case on its own, or mix both.</p>
+<p>The compiler checks down to every leaf. Tick branches below and see which leaf each one covers, and what is still missing.</p>`,
+            code: `sealed interface UiState {
+    data object Loading : UiState
+    data class Success(val items: List<String>) : UiState
+    sealed interface Error : UiState {
+        data object Offline : Error
+        data class Server(val code: Int) : Error
+    }
+}
+
+fun render(s: UiState) = when (s) {
+    UiState.Loading       -> showSpinner()
+    is UiState.Success    -> showList(s.items)
+    UiState.Error.Offline -> showOffline()
+    is UiState.Error      -> showError(s)   // here: only Server is left
+}`,
+            visual(el) {
+              const leaves = ['Loading', 'Success', 'Offline', 'Server'];
+              const branches = [
+                { src: 'UiState.Loading ->', covers: ['Loading'], on: true },
+                { src: 'is UiState.Success ->', covers: ['Success'], on: true },
+                { src: 'UiState.Error.Offline ->', covers: ['Offline'], on: false },
+                { src: 'is UiState.Error.Server ->', covers: ['Server'], on: false },
+                { src: 'is UiState.Error ->', covers: ['Offline', 'Server'], on: true },
+                { src: 'else ->', covers: leaves, on: false },
+              ];
+              let busy = false;
+              const pills = leaves.map(l => h('span', { class: 'kt-d2-se-leaf' }, l));
+              const o = out();
+              const boxes = branches.map((b, i) => {
+                const input = h('input', { type: 'checkbox', id: `kt-d2-se-b${i}` });
+                input.checked = b.on;
+                input.addEventListener('change', () => { if (busy) { input.checked = b.on; return; } b.on = input.checked; check(false); });
+                return h('label', { class: 'switch', for: `kt-d2-se-b${i}` }, input, h('span', {}, b.src));
+              });
+              const missingSrc = { Loading: 'UiState.Loading', Success: 'is UiState.Success', Offline: 'UiState.Error.Offline', Server: 'is UiState.Error.Server' };
+              async function check(anim) {
+                if (busy) return; busy = true;
+                const used = new Set(), missing = [];
+                for (let i = 0; i < leaves.length; i++) {
+                  const k = branches.findIndex(b => b.on && b.covers.includes(leaves[i]));
+                  pills[i].className = 'kt-d2-se-leaf ' + (k < 0 ? 'bad' : 'ok');
+                  pills[i].textContent = k < 0 ? `${leaves[i]}: missing` : `${leaves[i]}: ${branches[k].src.replace(' ->', '')}`;
+                  if (k < 0) missing.push(leaves[i]); else used.add(k);
+                  if (anim) { replay(pills[i], 'pop'); await sleep(320); if (!o.isConnected) return; }
+                }
+                const idle = branches.map((b, i) => (b.on && !used.has(i) ? b.src.replace(' ->', '') : null)).filter(Boolean);
+                if (missing.length) {
+                  say(o, `<span class="bad">compile error:</span> 'when' expression must be exhaustive. Add the ${missing.map(m => `'${missingSrc[m]}'`).join(', ')} branch${missing.length > 1 ? 'es' : ''} or an 'else' branch.`);
+                } else if (branches[5].on && idle.includes('else')) {
+                  say(o, `<span class="good">compiles</span> <span class="muted">with a warning:</span> 'when' is exhaustive so 'else' is redundant here`);
+                } else {
+                  say(o, `<span class="good">compiles:</span> every leaf is covered${idle.length ? `. <span class="muted">${idle.join(', ')} can never match: earlier branches took its cases.</span>` : ''}`);
+                }
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'kt-d2-se-boxes' }, boxes),
+                h('div', { class: 'stage' }, h('div', { class: 'kt-pile' }, pills)),
+                h('div', { class: 'controls' }, cmd('compile render()', () => check(true))),
+                o);
+              check(false);
+            },
+          },
+          {
+            title: 'else hides the case you add next',
+            body: `<p>An <code>else</code> branch makes a <code>when</code> compile today and after every future change. That is exactly the problem. Add <code>Empty</code> to the sealed type, and the <code>when</code> with <code>else</code> still builds and quietly sends Empty down the wrong path. The exhaustive one stops the build and points at the gap.</p>
+<p>Leave <code>else</code> out of a <code>when</code> over sealed and enum types, so the compiler can do this check for you.</p>`,
+            visual(el) {
+              let hasEmpty = false, bFixed = false, busy = false;
+              const col = (name, lines) => {
+                const rows = lines.map(l => h('div', { class: 'branch', html: '  ' + hl(l.src) }));
+                const tag = h('span', { class: 'kt-tag open' }, 'builds');
+                const res = h('div', { class: 'out', html: '<span class="muted">not rendered yet</span>' });
+                const whenEl = h('div', { class: 'when' }, h('div', { class: 'branch head', html: hl('when (state) {') }), rows, h('div', { class: 'branch head' }, '}'));
+                const wrap = h('div', { class: 'kt-d2-se-col' }, h('div', { class: 'kt-pile kt-d2-se-head' }, h('span', { class: 'kt-zone-title' }, name), tag), whenEl, res);
+                return { wrap, rows, tag, res, lines, whenEl };
+              };
+              const A = col('with else', [
+                { src: 'Loading    -> showSpinner()', m: 'Loading', screen: 'spinner' },
+                { src: 'is Success -> showList()', m: 'Success', screen: 'the list' },
+                { src: 'else       -> showError()', m: '*', screen: 'an error screen' },
+              ]);
+              const B = col('exhaustive', [
+                { src: 'Loading    -> showSpinner()', m: 'Loading', screen: 'spinner' },
+                { src: 'is Success -> showList()', m: 'Success', screen: 'the list' },
+                { src: 'is Error   -> showError()', m: 'Error', screen: 'an error screen' },
+              ]);
+              const fixRow = h('div', { class: 'branch drop-in', html: '  ' + hl('Empty      -> showEmpty()') });
+              const o = out();
+              const builds = c => c === A || !hasEmpty || bFixed;
+              function paint() {
+                for (const c of [A, B]) {
+                  const ok = builds(c);
+                  c.tag.textContent = ok ? 'builds' : 'build failed';
+                  c.tag.className = 'kt-tag ' + (ok ? 'open' : 'final');
+                  c.rows.forEach(r => { r.className = 'branch'; });
+                  fixRow.className = 'branch';
+                }
+              }
+              async function scan(c, s) {
+                c.res.replaceChildren();
+                if (!builds(c)) {
+                  replay(c.whenEl, 'shake');
+                  c.res.innerHTML = '<span class="bad">compile error:</span> add the \'UiState.Empty\' branch';
+                  return;
+                }
+                const rows = c === B && bFixed ? [...c.rows, fixRow] : c.rows;
+                const lines = c === B && bFixed ? [...c.lines, { m: 'Empty', screen: 'the empty state' }] : c.lines;
+                for (let i = 0; i < rows.length; i++) {
+                  rows[i].classList.add('scan'); await sleep(330);
+                  if (!o.isConnected) return;
+                  rows[i].classList.remove('scan');
+                  if (lines[i].m === s || lines[i].m === '*') {
+                    rows[i].classList.add('hit');
+                    const wrong = s === 'Empty' && lines[i].m === '*';
+                    c.res.innerHTML = wrong ? `<span class="bad">shows ${lines[i].screen}</span> for an empty list` : `<span class="good">shows ${lines[i].screen}</span>`;
+                    return;
+                  }
+                  rows[i].classList.add('miss');
+                }
+              }
+              async function render(s) {
+                if (busy) return;
+                if (s === 'Empty' && !hasEmpty) { say(o, '<span class="bad">error:</span> Unresolved reference \'Empty\'. Add the subtype first.'); replay(o, 'shake'); return; }
+                busy = true; paint();
+                say(o, hl(`render(UiState.${s})`));
+                await Promise.all([scan(A, s), scan(B, s)]);
+                if (!o.isConnected) return;
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'controls' },
+                  cmd('data object Empty : UiState', () => {
+                    if (busy) return;
+                    if (hasEmpty) { say(o, '<span class="muted">Empty is already there. Press Reset to start over.</span>'); return; }
+                    hasEmpty = true; paint(); A.res.replaceChildren(); B.res.replaceChildren();
+                    replay(B.whenEl, 'shake');
+                    say(o, 'Added Empty. <span class="muted">The else version still builds. The exhaustive one stops.</span>');
+                  }),
+                  cmd('render(UiState.Empty)', () => render('Empty')),
+                  cmd('render(UiState.Success)', () => render('Success')),
+                  cmd('fix B: add the Empty branch', () => {
+                    if (busy) return;
+                    if (!hasEmpty) { say(o, '<span class="muted">Nothing to fix yet: add Empty first.</span>'); return; }
+                    if (!bFixed) { bFixed = true; B.rows[2].after(fixRow); }
+                    paint(); B.res.replaceChildren();
+                    say(o, '<span class="good">B builds again</span> <span class="muted">and now has a real screen for Empty.</span>');
+                  })),
+                h('div', { class: 'kt-d2-se-pair' }, A.wrap, B.wrap),
+                o);
+              paint();
+              say(o, 'Add the new subtype, then render it in both versions.');
+            },
+          },
+          {
+            title: 'Where subtypes can live',
+            body: `<p>Subtypes don’t have to be nested inside the sealed type. They can sit in any file, as long as it is in the same module and the same package. Code in other modules, including libraries, can’t add one, which is what keeps the list closed.</p>
+<p>Pick a <code>sealed class</code> when every case shares constructor state, like an id. Otherwise prefer a <code>sealed interface</code>: a class can implement several sealed interfaces, and an enum class or an object can join one too.</p>`,
+            code: `// Event.kt
+sealed class Event(val id: String)
+
+// Clicks.kt: same package, same module
+class Click(id: String, val x: Int, val y: Int) : Event(id)
+class Scroll(id: String, val dy: Int) : Event(id)
+
+sealed interface Failure
+enum class NetworkFailure : Failure { TIMEOUT, OFFLINE }
+data class HttpFailure(val code: Int) : Failure`,
+          },
+        ],
+        underHood: {
+          body: `<p>On the JVM a sealed class compiles to an abstract class, and a sealed interface to a plain interface. The closed list of subtypes is stored in Kotlin metadata. The compiler reads it to check every <code>when</code>, and with kotlin-reflect you can read it too, as <code>KClass.sealedSubclasses</code>.</p>
+<p>An exhaustive <code>when</code> on a sealed type becomes a chain of <code>instanceof</code> and equality checks. The compiler still adds a hidden last branch that throws <code>NoWhenBranchMatchedException</code>. It can only fire if class files change after your code was compiled.</p>`,
+          code: `// Kotlin
+fun title(s: UiState) = when (s) {
+    UiState.Loading    -> "Loading"
+    is UiState.Success -> "Done"
+    is UiState.Error   -> "Failed"
+}
+
+// Roughly what the JVM sees (decompiled to Java)
+if (Intrinsics.areEqual(s, UiState.Loading.INSTANCE)) return "Loading";
+if (s instanceof UiState.Success) return "Done";
+if (s instanceof UiState.Error) return "Failed";
+throw new NoWhenBranchMatchedException();`,
+        },
+        mistakes: [
+          { title: 'A plain object as a state', bad: 'sealed interface UiState {\n    object Loading : UiState\n}\nLog.d(TAG, "state=$state")\n// state=UiState$Loading@6d06d69c', good: 'sealed interface UiState {\n    data object Loading : UiState\n}\nLog.d(TAG, "state=$state")\n// state=Loading', why: 'A plain <code>object</code> prints its class name and a hash. <code>data object</code> generates a readable <code>toString</code>, which makes logs and test failures clear.' },
+          { title: 'Casting instead of matching', bad: 'val items = (state as UiState.Success).items', good: 'val items = (state as? UiState.Success)?.items.orEmpty()\n// or handle every case in a when', why: '<code>as</code> throws <code>ClassCastException</code> the moment the state is Loading or Error. <code>as?</code> gives null instead, and a <code>when</code> makes you decide what each case shows.' },
         ],
         visual(el) {
           const states = [
@@ -2070,6 +3350,132 @@ fun fail(): Nothing = error("unreachable")   // IllegalStateException`,
           { q: '<code>val x = try { "7".toInt() } catch (e: Exception) { 0 } finally { println("end") }</code>. What is <code>x</code>?', options: ['<code>7</code>', '<code>0</code>', '<code>Unit</code>'], a: 0, why: 'Nothing was thrown, so the value comes from the try block. finally runs but doesn’t change the value.' },
           { q: 'Does Kotlin force you to catch <code>IOException</code>?', options: ['Yes, like Java', 'No, Kotlin has no checked exceptions'], a: 1, why: 'Every exception is unchecked in Kotlin. You decide where to handle it.' },
           { q: 'What does <code>require(false)</code> throw?', options: ['<code>IllegalStateException</code>', '<code>IllegalArgumentException</code>', 'Nothing'], a: 1, why: '<code>require</code> is for arguments. <code>check</code> and <code>error</code> throw IllegalStateException.' },
+        ],
+        deeper: [
+          {
+            title: 'An exception climbs the call stack',
+            body: `<p>When code throws, the current function stops on that line. If it has no matching <code>catch</code>, its caller stops too, and so on up the stack, until some frame catches it. Every <code>finally</code> on the way still runs.</p>
+<p>If no frame catches it, the thread dies. On Android an uncaught exception on the main thread crashes the whole app. Catch where you can do something useful, like showing a message, not as deep as possible. Move the <code>catch</code> below and throw again.</p>`,
+            code: `fun onSaveClicked() {
+    try {
+        val profile = loadProfile()
+        show(profile)
+    } catch (e: NumberFormatException) {
+        showMessage("Age must be a number")
+    }
+}
+
+fun loadProfile() = Profile(age = parseAge(field.text))
+
+fun parseAge(text: String): Int {
+    try {
+        return text.toInt()             // throws on "abc"
+    } finally {
+        log("parse done")
+    }
+}`,
+            visual(el) {
+              const frames = [
+                { src: '"abc".toInt()', name: 'toInt' },
+                { src: 'parseAge(text)', name: 'parseAge', fin: true },
+                { src: 'loadProfile()', name: 'loadProfile' },
+                { src: 'onSaveClicked()', name: 'onSaveClicked' },
+              ];
+              const places = [
+                { label: 'catch in parseAge', at: 1 },
+                { label: 'catch in onSaveClicked', at: 3 },
+                { label: 'no catch', at: -1 },
+              ];
+              let place = places[1], busy = false;
+              const rows = frames.map(() => h('div', { class: 'branch' }));
+              const stack = h('div', { class: 'when' }, h('div', { class: 'branch head', html: hl('// call stack, newest on top') }), rows);
+              const log = h('div', { class: 'out', 'aria-live': 'polite' });
+              const o = out();
+              const placeBtns = places.map(p => cmd(p.label, () => { if (busy) return; place = p; paint(); say(o, 'Press Throw.'); }));
+              const tag = (t, cls = '') => `<span class="kt-d2-ex-tag ${cls}">${t}</span>`;
+              function paint() {
+                placeBtns.forEach((b, i) => b.setAttribute('aria-pressed', places[i] === place));
+                frames.forEach((f, i) => {
+                  rows[i].className = 'branch';
+                  rows[i].innerHTML = hl(f.src) + (place.at === i ? ' ' + tag('try/catch', 'ok') : '') + (f.fin ? ' ' + tag('finally') : '');
+                });
+                log.replaceChildren();
+              }
+              const print = t => log.append(h('div', { class: 'line drop-in' }, t));
+              async function run() {
+                if (busy) return; busy = true;
+                paint();
+                for (let i = frames.length - 1; i >= 0; i--) {
+                  rows[i].classList.add('kt-on');
+                  say(o, `<span class="muted">calling ${frames[i].name}...</span>`);
+                  await sleep(330); if (!log.isConnected) return;
+                }
+                rows[0].classList.replace('kt-on', 'kt-err'); replay(rows[0], 'shake');
+                say(o, '<span class="bad">throws</span> NumberFormatException: For input string: "abc"');
+                await sleep(650); if (!log.isConnected) return;
+                for (let i = 1; i < frames.length; i++) {
+                  if (place.at === i) {
+                    rows[i].classList.replace('kt-on', 'hit');
+                    print(`${frames[i].name}: catch runs`);
+                    if (frames[i].fin) print(`${frames[i].name}: finally runs, "parse done"`);
+                    say(o, i === 1
+                      ? '<span class="good">handled in parseAge.</span> <span class="muted">It returns a fallback and the frames below carry on normally.</span>'
+                      : '<span class="good">handled in onSaveClicked:</span> “Age must be a number”. <span class="muted">parseAge and loadProfile stopped mid-way.</span>');
+                    busy = false; return;
+                  }
+                  rows[i].classList.replace('kt-on', 'kt-err');
+                  if (frames[i].fin) print(`${frames[i].name}: finally runs, "parse done"`);
+                  else print(`${frames[i].name}: stops, the rest of it is skipped`);
+                  replay(rows[i], 'shake');
+                  await sleep(550); if (!log.isConnected) return;
+                }
+                print('FATAL EXCEPTION: main');
+                say(o, '<span class="bad">crash:</span> nothing caught it, so the main thread dies and the app closes.');
+                busy = false;
+              }
+              paint();
+              say(o, 'Pick where the catch lives, then throw.');
+              el.append(
+                h('div', { class: 'controls' }, placeBtns),
+                stack,
+                h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: run }, 'Throw from toInt()')),
+                o, log);
+            },
+          },
+          {
+            title: 'throw is an expression of type Nothing',
+            body: `<p><code>throw</code> can go anywhere a value is expected, most often after <code>?:</code>. Its type is <code>Nothing</code>, a type with no values, which tells the compiler that the code after it never runs. That is why <code>name</code> below is a plain <code>String</code>.</p>
+<p>A function that declares <code>Nothing</code> as its return type, like <code>error()</code> or your own <code>fail()</code>, works the same way. <code>requireNotNull</code> and <code>checkNotNull</code> go one step further: after the call, the compiler treats the checked value as non-null.</p>`,
+            code: `fun greet(raw: String?) {
+    val name = raw ?: throw IllegalArgumentException("name missing")
+    println(name.length)              // name is a String here
+}
+
+fun fail(message: String): Nothing = throw IllegalStateException(message)
+
+val token: String? = prefs.getString("token", null)
+requireNotNull(token) { "not logged in" }
+api.call(token)                       // smart cast to String`,
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>try</code> block costs nothing while nothing is thrown. The compiler records which range of bytecode each <code>catch</code> covers in the method’s exception table, and the JVM only reads that table when something is actually thrown. Throwing is the expensive part, mostly because an exception records the whole stack trace when it is created.</p>
+<p>The code in <code>finally</code> is copied onto every way out of the block: the normal end, each <code>catch</code>, and a hidden catch-all that runs it and rethrows. Kotlin has no checked exceptions, so Java callers can only catch a checked exception from your function if you declare it with <code>@Throws</code>.</p>`,
+          code: `// Kotlin, Config.kt
+@Throws(IOException::class)
+fun readConfig(file: File): String = file.readText()
+
+// Java can now catch it
+try {
+    String text = ConfigKt.readConfig(file);
+} catch (IOException e) {
+    // without @Throws, javac rejects this catch
+}`,
+        },
+        mistakes: [
+          { title: 'Returning from finally', bad: 'fun save(): Boolean {\n    try {\n        db.write(data)\n        return true\n    } finally {\n        return false\n    }\n}', good: 'fun save(): Boolean {\n    try {\n        db.write(data)\n        return true\n    } finally {\n        db.close()   // clean up only\n    }\n}', why: 'A <code>return</code> in <code>finally</code> replaces the result of the <code>try</code>, and it also throws away any exception in flight. This function always returns false and hides every failure.' },
+          { title: 'Catching the broad type first', bad: 'try {\n    upload(file)\n} catch (e: Exception) {\n    showError("Something went wrong")\n} catch (e: IOException) {\n    showError("Check your connection")\n}', good: 'try {\n    upload(file)\n} catch (e: IOException) {\n    showError("Check your connection")\n} catch (e: Exception) {\n    showError("Something went wrong")\n}', why: 'Catch blocks are tried top to bottom and the first matching type wins. <code>Exception</code> matches an <code>IOException</code> too, so the specific block can never run.' },
+          { title: 'printStackTrace on Android', bad: 'catch (e: IOException) {\n    e.printStackTrace()\n}', good: 'catch (e: IOException) {\n    Log.w(TAG, "Upload failed", e)\n    _state.update { it.copy(error = R.string.upload_failed) }\n}', why: '<code>printStackTrace</code> writes to <code>System.err</code>, which lands in logcat with no tag of yours, and the user sees nothing. Log with a tag and the exception, and put the failure into the screen state.' },
         ],
         visual(el) {
           const src = [

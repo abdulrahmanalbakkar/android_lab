@@ -136,6 +136,27 @@
 .kmp-tpill.kmp-twarn { background: var(--warm-soft); color: var(--warm); }
 .kmp-vms { display: grid; gap: 8px; align-content: start; flex: 1 1 220px; min-width: 0; }
 .kmp-vms .kmp-vm { padding: 8px 10px; gap: 4px; }
+/* depth pass 2 */
+.kmp-d2-node { font: inherit; color: var(--ink); text-align: left; cursor: pointer; box-sizing: border-box; justify-self: stretch; }
+.kmp-d2-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kmp-d2-node[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--accent-soft); }
+.kmp-dev.kmp-d2-dark { background: var(--code-bg); color: var(--code-ink); --kmp-c: var(--t-t); }
+.kmp-dev.kmp-d2-dark .kmp-plat { color: var(--t-c); }
+.kmp-d2-stage { display: grid; justify-items: center; gap: 10px; padding: 12px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
+.kmp-d2-win { box-sizing: border-box; min-width: 150px; max-width: 100%; height: 190px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-content: start; padding: 8px; border: 2px solid var(--ink); border-radius: 12px; background: var(--surface); overflow: hidden; transition: width 0.25s; }
+.kmp-d2-win.kmp-d2-two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+.kmp-d2-list, .kmp-d2-detail { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.kmp-d2-detail { padding: 6px 8px; border-radius: 8px; background: var(--sunk); font-size: 0.78rem; line-height: 1.35; }
+.kmp-d2-detail b { font: 700 0.84rem var(--display); overflow-wrap: anywhere; }
+.kmp-d2-item { all: unset; box-sizing: border-box; display: block; font: 500 0.76rem var(--body); color: var(--ink); padding: 5px 8px; border-radius: 8px; background: var(--sunk); cursor: pointer; overflow-wrap: anywhere; }
+.kmp-d2-item:focus-visible { outline: 2px solid var(--accent); }
+.kmp-d2-item.kmp-on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.kmp-d2-detail .kmp-d2-item { justify-self: start; background: var(--surface); }
+.kmp-d2-ann { display: grid; gap: 6px; padding: 8px; border-radius: 12px; border: 2px solid var(--line); min-width: 0; transition: border-color 0.2s; }
+.kmp-d2-ann.kmp-on { border-color: var(--accent); }
+.kmp-d2-arow { display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; }
+@media (max-width: 560px) { .kmp-d2-arow { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+input#kmp-d2-width { flex: 1 1 180px; min-width: 0; accent-color: var(--accent); }
 `;
 
   Lab.addTrack({
@@ -200,6 +221,166 @@ kotlin {
           { q: 'Where can you call <code>android.content.Context</code>?', options: ['<code>commonMain</code>', '<code>androidMain</code>', 'Any source set'], a: 1, why: 'Only <code>androidMain</code> compiles against the Android SDK. <code>commonMain</code> must compile for iOS too.' },
           { q: 'What does the iOS build of a KMP module produce?', options: ['A JAR that runs on a JVM inside the app', 'A native framework compiled by Kotlin/Native', 'JavaScript run by a WebView'], a: 1, why: 'Kotlin/Native compiles to machine code through LLVM. Xcode links the framework like any other.' },
           { q: 'You target <code>iosArm64</code> and <code>iosSimulatorArm64</code>. Where does code for both go?', options: ['Copy it into both target source sets', '<code>iosMain</code>', '<code>androidMain</code>'], a: 1, why: 'The default hierarchy template creates <code>iosMain</code> as the shared parent of both iOS targets.' },
+        ],
+        deeper: [
+          {
+            title: 'Your targets decide which source sets exist',
+            body: `
+<p>You never create <code>iosMain</code> or <code>appleMain</code> by hand. The default hierarchy template looks at the targets you declare and creates only the shared source sets they need. Add <code>macosArm64()</code> and <code>macosMain</code> appears next to <code>iosMain</code>, both under <code>appleMain</code> and <code>nativeMain</code>.</p>
+<p>Android and a desktop <code>jvm()</code> target never share a source set of their own. Each hangs directly under <code>commonMain</code>, so code for both goes in common, or behind an interface. Toggle targets below, then tap a source set to see which binaries get its code.</p>`,
+            visual(el) {
+              const TG = [
+                { id: 'android', fn: 'android { ... }', on: true },
+                { id: 'jvm', fn: 'jvm()', on: false },
+                { id: 'iosArm64', fn: 'iosArm64()', on: true },
+                { id: 'iosSimulatorArm64', fn: 'iosSimulatorArm64()', on: true },
+                { id: 'macosArm64', fn: 'macosArm64()', on: false },
+              ];
+              const isOn = id => TG.find(t => t.id === id).on;
+              const IOS = ['iosArm64', 'iosSimulatorArm64'], NAT = [...IOS, 'macosArm64'];
+              const SETS = [
+                { n: 'commonMain', d: 0, cov: TG.map(t => t.id) },
+                { n: 'androidMain', d: 1, cov: ['android'], leaf: true },
+                { n: 'jvmMain', d: 1, cov: ['jvm'], leaf: true },
+                { n: 'nativeMain', d: 1, cov: NAT },
+                { n: 'appleMain', d: 2, cov: NAT },
+                { n: 'iosMain', d: 3, cov: IOS },
+                { n: 'iosArm64Main', d: 4, cov: ['iosArm64'], leaf: true },
+                { n: 'iosSimulatorArm64Main', d: 4, cov: ['iosSimulatorArm64'], leaf: true },
+                { n: 'macosMain', d: 3, cov: ['macosArm64'] },
+                { n: 'macosArm64Main', d: 4, cov: ['macosArm64'], leaf: true },
+              ];
+              const live = s => s.cov.some(isOn);
+              const tree = h('div', { class: 'kmp-tree' });
+              const script = h('div', { class: 'kt' });
+              const o = out();
+              let sel = null, prev = new Set();
+              function render(fresh) {
+                const now = new Set();
+                tree.replaceChildren(...SETS.filter(live).map(s => {
+                  now.add(s.n);
+                  const n = s.cov.filter(isOn).length;
+                  s.el = h('button', { type: 'button', class: 'kmp-ss kmp-d2-node' + (s.leaf ? ' kmp-leaf' : '') + (fresh && !prev.has(s.n) ? ' drop-in' : ''), style: `--d:${s.d}`, 'aria-pressed': String(sel === s.n), onclick: () => show(s) },
+                    h('span', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, s.n), h('span', { class: 'kmp-ss-note' }, `${n} target${n > 1 ? 's' : ''}`)));
+                  return s.el;
+                }));
+                prev = now;
+                script.innerHTML = hl(['kotlin {', ...TG.filter(t => t.on).map(t => '    ' + t.fn), '}'].join('\n'));
+              }
+              function show(s) {
+                sel = s.n;
+                const ts = s.cov.filter(isOn);
+                SETS.filter(live).forEach(x => {
+                  const hit = x === s || Boolean(x.leaf && ts.includes(x.cov[0]));
+                  x.el.classList.toggle('kmp-on', hit);
+                  x.el.setAttribute('aria-pressed', String(x === s));
+                });
+                replay(s.el, 'kmp-flash');
+                say(o, ts.length === 1
+                  ? `<b>${s.n}</b> goes into one binary only: ${ts[0]}.`
+                  : `<b>${s.n}</b> is compiled into ${ts.length} binaries: ${ts.join(', ')}.`);
+              }
+              const btns = TG.map(t => {
+                const b = act(t.fn, () => {
+                  if (t.on && TG.filter(x => x.on).length === 1) { replay(b, 'shake'); say(o, 'Keep at least one target.'); return; }
+                  const before = new Set(SETS.filter(live).map(s => s.n));
+                  t.on = !t.on; b.setAttribute('aria-pressed', String(t.on));
+                  sel = null; render(true);
+                  const after = SETS.filter(live).map(s => s.n);
+                  say(o, t.on
+                    ? `Added ${t.fn}. The template created <span class="good">${after.filter(n => !before.has(n)).join(', ')}</span>.`
+                    : `Removed ${t.fn}. Gone: <span class="bad">${[...before].filter(n => !after.includes(n)).join(', ')}</span>.`);
+                });
+                b.setAttribute('aria-pressed', String(t.on));
+                return b;
+              });
+              render(false);
+              say(o, 'Toggle a target. Then tap a source set to see where its code ends up.');
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'targets'), btns),
+                h('div', { class: 'kmp-grid2' },
+                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'shared/build.gradle.kts'), script),
+                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'source sets the template made'), tree)),
+                o);
+            },
+          },
+          {
+            title: 'Tests live in the same tree',
+            body: `
+<p>Main source sets have test twins, such as <code>commonTest</code>, <code>jvmTest</code> and <code>iosTest</code>. A test in <code>commonTest</code> runs once per target, against that target’s actuals and dependencies. Write it with <code>kotlin.test</code>, which runs on JUnit on the JVM and on the Kotlin/Native test runner on iOS.</p>
+<p>Gradle runs iOS tests on a simulator target, such as <code>iosSimulatorArm64Test</code>. <code>./gradlew allTests</code> runs every target this machine can run and merges the reports. Run both platforms: a test that passes on the JVM can still fail on iOS, for example when it depends on the default locale or time zone.</p>`,
+            code: `// shared/src/commonTest/kotlin/GreetingTest.kt
+import kotlin.test.Test
+import kotlin.test.assertTrue
+
+class GreetingTest {
+    @Test
+    fun greetingNamesThePlatform() {
+        assertTrue(greet().startsWith("Hello from "))
+    }
+}
+
+// shared/build.gradle.kts
+sourceSets {
+    commonTest.dependencies {
+        implementation(libs.kotlin.test)
+    }
+}
+
+// ./gradlew allTests                 every target this machine can run
+// ./gradlew iosSimulatorArm64Test    only the iOS simulator`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Each target is its own compilation. For Android, the Kotlin/JVM compiler gets the files of <code>commonMain</code> and <code>androidMain</code> together, as if they were one module, and writes class files. Common code is not compiled once and shipped as a shared binary. It is compiled again for every target.</p>
+<p>Kotlin/Native works in two steps. It first compiles your sources into a <code>.klib</code>, a Kotlin library that stores the code as serialized compiler IR. The link task, such as <code>linkDebugFrameworkIosArm64</code>, then reads your klib and the klibs of all dependencies, runs LLVM and writes one binary that also contains the Kotlin/Native runtime and its garbage collector. Multiplatform libraries publish a variant per target, which is why every <code>commonMain</code> dependency must support every target you declare.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Using a JVM class in commonMain',
+            bad: `// commonMain
+import java.util.UUID
+
+fun newId(): String = UUID.randomUUID().toString()`,
+            good: `// commonMain
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+
+@OptIn(ExperimentalUuidApi::class)
+fun newId(): String = Uuid.random().toString()`,
+            why: '<code>java.util</code> only exists on the JVM, so the iOS compilation fails with an unresolved reference. The standard library has a multiplatform <code>Uuid</code> since Kotlin 2.0.20, still behind an opt-in.',
+          },
+          {
+            title: 'Wiring the hierarchy by hand with dependsOn',
+            bad: `sourceSets {
+    val iosMain by creating { dependsOn(commonMain.get()) }
+    iosArm64Main.get().dependsOn(iosMain)
+    iosSimulatorArm64Main.get().dependsOn(iosMain)
+}`,
+            good: `kotlin {
+    iosArm64()
+    iosSimulatorArm64()
+    sourceSets {
+        iosMain.dependencies { implementation(libs.ktor.client.darwin) }
+    }
+}`,
+            why: 'This is the setup from before Kotlin 1.9.20. Any explicit <code>dependsOn</code> turns the default hierarchy template off, so <code>appleMain</code> and <code>nativeMain</code> disappear and Gradle warns that the template was not applied. Declare the targets and use the source sets it creates.',
+          },
+          {
+            title: 'No simulator target for Apple silicon',
+            bad: `kotlin {
+    android { /* ... */ }
+    iosArm64()
+    iosX64()
+}`,
+            good: `kotlin {
+    android { /* ... */ }
+    iosArm64()            // iPhone and iPad
+    iosSimulatorArm64()   // Simulator on Apple silicon Macs
+}`,
+            why: '<code>iosX64</code> is the simulator on Intel Macs. On an Apple silicon Mac, Xcode’s simulator needs the <code>iosSimulatorArm64</code> binary, and without that target the app does not link for the simulator.',
+          },
         ],
         visual(el) {
           const SETS = [
@@ -600,6 +781,220 @@ fun createHttpClient(engine: HttpClientEngine) = HttpClient(engine) {
           { q: 'Which part of the Ktor setup has to differ between Android and iOS?', options: ['The JSON configuration', 'The engine, such as OkHttp or Darwin', 'The request URLs'], a: 1, why: 'The client config is shared. Only the engine that does the I/O is platform-specific.' },
           { q: 'Why does kotlinx.serialization work on iOS where reflection-based JSON libraries do not?', options: ['It uses Objective-C runtime reflection', 'A compiler plugin generates the serializers at build time', 'iOS apps only use XML'], a: 1, why: 'The code is generated during compilation, so Kotlin/Native needs no runtime reflection.' },
           { q: 'Where does a Room KMP database file path usually get decided?', options: ['In <code>commonMain</code>, hard-coded', 'In each platform source set, which creates the builder', 'Room picks it on its own'], a: 1, why: 'Android uses <code>context.getDatabasePath</code>, iOS uses its documents directory. Common code takes the builder and finishes the setup.' },
+        ],
+        deeper: [
+          {
+            title: 'When the JSON changes under you',
+            body: `
+<p>The server team adds a field, drops one, or sends <code>null</code>. By default kotlinx.serialization is strict. An unknown key, a missing field without a default, or <code>null</code> for a non-null type throws a <code>SerializationException</code>. The refresh fails on both platforms, and the apps keep showing old data.</p>
+<p>Three settings make the model tolerant. <code>ignoreUnknownKeys</code> skips fields you don’t know. A default value makes a field optional. <code>coerceInputValues</code> turns a <code>null</code>, or an unknown enum value, into the property’s default. Decide which changes you accept, and test each one on purpose.</p>`,
+            code: `@Serializable
+data class Article(
+    val id: Long,
+    val title: String,
+    val summary: String = "",      // optional: a missing key is fine
+)
+
+val json = Json {
+    ignoreUnknownKeys = true       // new server fields don't break old apps
+    coerceInputValues = true       // "summary": null becomes ""
+}`,
+            visual(el) {
+              const P = [
+                { label: 'today’s JSON', json: '{\n  "id": 7,\n  "title": "KMP 2.3",\n  "summary": "What changed"\n}' },
+                { label: 'server adds author', json: '{\n  "id": 7,\n  "title": "KMP 2.3",\n  "summary": "What changed",\n  "author": "Ada"\n}' },
+                { label: 'server drops summary', json: '{\n  "id": 7,\n  "title": "KMP 2.3"\n}' },
+                { label: 'summary is null', json: '{\n  "id": 7,\n  "title": "KMP 2.3",\n  "summary": null\n}' },
+              ];
+              const S = { p: 1, ignore: false, def: false, coerce: false };
+              let busy = false;
+              const model = h('div', { class: 'kt' }), conf = h('div', { class: 'kt' }), payload = h('div', { class: 'kt' });
+              const result = h('div', { class: 'kmp-result' }, h('span', { class: 'kmp-label' }, 'result'));
+              const o = out();
+              const paint = () => {
+                model.innerHTML = hl(`@Serializable\ndata class Article(\n    val id: Long,\n    val title: String,\n    val summary: String${S.def ? ' = ""' : ''},\n)`);
+                const lines = [S.ignore && '    ignoreUnknownKeys = true', S.coerce && '    coerceInputValues = true'].filter(Boolean);
+                conf.innerHTML = hl(lines.length ? `val json = Json {\n${lines.join('\n')}\n}` : 'val json = Json   // strict defaults');
+                payload.innerHTML = hl(P[S.p].json);
+                result.replaceChildren(h('span', { class: 'kmp-label' }, 'result'));
+              };
+              async function decode() {
+                if (busy) return; busy = true;
+                result.replaceChildren(h('div', { class: 'kmp-spin' }));
+                say(o, '<span class="muted">json.decodeFromString&lt;Article&gt;(body)</span>');
+                await sleep(500); if (!el.isConnected) return;
+                let err = null, summary = '"What changed"', why = 'every key matched a property.';
+                if (S.p === 1) { if (S.ignore) why = 'the unknown "author" key was skipped.'; else err = 'Encountered an unknown key \'author\''; }
+                if (S.p === 2) { if (S.def) { summary = '""'; why = 'summary fell back to its default.'; } else err = 'Field \'summary\' is required for type with serial name \'Article\', but it was missing'; }
+                if (S.p === 3) {
+                  if (S.def && S.coerce) { summary = '""'; why = 'null was coerced to the default.'; }
+                  else err = 'Expected string literal but \'null\' literal was found' + (S.coerce ? '. Coercing needs a default value.' : '');
+                }
+                result.replaceChildren(err
+                  ? h('span', { class: 'kmp-res kmp-err drop-in' }, 'SerializationException')
+                  : h('span', { class: 'kmp-res drop-in' }, `Article(id=7, title="KMP 2.3", summary=${summary})`));
+                if (err) replay(payload, 'shake');
+                say(o, err ? `<span class="bad">e:</span> ${err}` : `<span class="good">ok:</span> ${why}`);
+                busy = false;
+              }
+              const btns = P.map((p, i) => act(p.label, () => { if (busy) return; S.p = i; pick(btns, i); paint(); replay(payload, 'pop-soft'); say(o, 'New payload. Decode it.'); }));
+              const sw = (id, label, key) => {
+                const box = h('input', { type: 'checkbox', id, onchange() { if (busy) { this.checked = S[key]; return; } S[key] = this.checked; paint(); say(o, 'Model changed. Decode again.'); } });
+                return h('label', { class: 'switch', for: id }, box, label);
+              };
+              pick(btns, S.p); paint();
+              say(o, 'Strict defaults, and the server just added a field. Decode it.');
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'payload'), btns),
+                h('div', { class: 'kmp-grid2' },
+                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'response body'), payload),
+                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'commonMain'), model, conf)),
+                h('div', { class: 'controls' }, sw('kmp-d2-ignore', 'ignoreUnknownKeys', 'ignore'), sw('kmp-d2-default', 'summary = ""', 'def'), sw('kmp-d2-coerce', 'coerceInputValues', 'coerce')),
+                h('div', { class: 'controls' }, cmd('json.decodeFromString<Article>(body)', decode)),
+                result, o);
+            },
+          },
+          {
+            title: 'Retries belong in the shared client',
+            body: `
+<p>Mobile networks drop requests all the time. By default Ktor doesn’t retry, so the first <code>503</code> or reset connection goes straight to your repository. The <code>HttpRequestRetry</code> plugin retries for you, and <code>HttpTimeout</code> stops a call that hangs. Both go in the shared client config, so Android and iOS behave the same.</p>
+<p>Back off between attempts. <code>exponentialDelay()</code> waits longer after each failure, which gives a struggling server room to recover instead of hammering it. Install the retry plugin before <code>HttpTimeout</code>.</p>`,
+            code: `fun createHttpClient(engine: HttpClientEngine) = HttpClient(engine) {
+    install(HttpRequestRetry) {
+        retryOnExceptionOrServerErrors(maxRetries = 3)
+        exponentialDelay()
+    }
+    install(HttpTimeout) {
+        requestTimeoutMillis = 15_000
+    }
+    install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+}`,
+            visual(el) {
+              const NETS = [
+                { label: 'good network', plan: ['200'] },
+                { label: 'flaky network', plan: ['503', 'reset', '200'] },
+                { label: 'server down', plan: ['503', '503', '503', '503'] },
+              ];
+              const S = { net: 1, retry: true };
+              let busy = false;
+              const track = h('div', { class: 'lane-track' });
+              const chips = h('div', { class: 'kmp-jobs' });
+              const conf = h('div', { class: 'kt' });
+              const o = out();
+              const paintConf = () => { conf.innerHTML = hl(S.retry ? 'install(HttpRequestRetry) {\n    retryOnExceptionOrServerErrors(maxRetries = 3)\n    exponentialDelay()\n}' : '// no HttpRequestRetry: one attempt, then the error'); };
+              async function refresh() {
+                if (busy) return; busy = true;
+                track.replaceChildren(); chips.replaceChildren();
+                const plan = NETS[S.net].plan, max = S.retry ? 4 : 1;
+                let x = 1, wait = 5, i = 0, ok = false;
+                for (; i < Math.min(max, plan.length); i++) {
+                  if (i) {
+                    track.append(h('div', { class: 'bar queued drop-in', style: `left:${x}%;width:${wait}%` }));
+                    say(o, `<span class="muted">backoff before attempt ${i + 1}</span>`);
+                    await sleep(250 + wait * 30); if (!el.isConnected) return;
+                    x += wait + 1; wait *= 2;
+                  }
+                  const bar = h('div', { class: 'bar run drop-in', style: `left:${x}%;width:8%` });
+                  track.append(bar);
+                  say(o, `<span class="muted">attempt ${i + 1}: GET /articles</span>`);
+                  await sleep(450); if (!el.isConnected) return;
+                  x += 9;
+                  const res = plan[i]; ok = res === '200';
+                  if (!ok) bar.className = 'bar block';
+                  chips.append(h('span', { class: `kmp-job drop-in ${ok ? 'kmp-done' : 'kmp-cancel'}` }, `${i + 1}: ${res === 'reset' ? 'connection reset' : res === '200' ? '200 OK' : '503'}`));
+                  if (ok) break;
+                }
+                const n = Math.min(i + 1, Math.min(max, plan.length));
+                say(o, ok
+                  ? `<span class="good">ok:</span> 200 after ${n} attempt${n > 1 ? 's' : ''}. The repository never saw the failures.`
+                  : `<span class="bad">e:</span> ${n === 1 ? 'one failure and no retry' : `still failing after ${n} attempts`}. The exception reaches refresh(), and the app keeps its cached rows.`);
+                busy = false;
+              }
+              const btns = NETS.map((n, i) => act(n.label, () => { if (busy) return; S.net = i; pick(btns, i); track.replaceChildren(); chips.replaceChildren(); say(o, `${n.label}. Refresh.`); }));
+              const box = h('input', { type: 'checkbox', id: 'kmp-d2-retry', checked: true, onchange() { if (busy) { this.checked = S.retry; return; } S.retry = this.checked; paintConf(); replay(conf, 'pop-soft'); } });
+              pick(btns, S.net); paintConf();
+              say(o, 'Flaky network, retries on. Refresh, then turn retries off and compare.');
+              el.append(
+                h('div', { class: 'controls' }, btns, h('label', { class: 'switch', for: 'kmp-d2-retry' }, box, 'HttpRequestRetry')),
+                conf,
+                h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'attempts'), track)),
+                chips,
+                h('div', { class: 'controls' }, cmd('repository.refresh()', refresh)),
+                o);
+            },
+          },
+          {
+            title: 'Room KMP: each platform starts the builder',
+            body: `
+<p>On iOS, Room can’t find its generated classes by reflection. So the database names a constructor object with <code>@ConstructedBy</code>. You write the <code>expect</code>, and Room’s KSP processor generates the <code>actual</code> for every target.</p>
+<p>Each platform creates a builder with its own file path: the app’s database folder on Android, the documents directory on iOS. Common code takes that builder and adds what is the same everywhere, the bundled driver and the IO dispatcher.</p>`,
+            code: `// commonMain
+@Database(entities = [Article::class], version = 1)
+@ConstructedBy(AppDatabaseConstructor::class)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun articleDao(): ArticleDao
+}
+
+@Suppress("KotlinNoActualForExpect")   // Room's KSP processor writes the actuals
+expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
+    override fun initialize(): AppDatabase
+}
+
+fun buildDatabase(builder: RoomDatabase.Builder<AppDatabase>): AppDatabase =
+    builder.setDriver(BundledSQLiteDriver())
+        .setQueryCoroutineContext(Dispatchers.IO)
+        .build()
+
+// androidMain
+fun databaseBuilder(context: Context) = Room.databaseBuilder<AppDatabase>(
+    context = context,
+    name = context.getDatabasePath("news.db").absolutePath,
+)
+
+// iosMain
+@OptIn(ExperimentalForeignApi::class)
+fun databaseBuilder(): RoomDatabase.Builder<AppDatabase> {
+    val docs = NSFileManager.defaultManager.URLForDirectory(
+        directory = NSDocumentDirectory,
+        inDomain = NSUserDomainMask,
+        appropriateForURL = null,
+        create = false,
+        error = null,
+    )
+    return Room.databaseBuilder<AppDatabase>(name = requireNotNull(docs?.path) + "/news.db")
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>None of this uses reflection, which Kotlin/Native barely has. The kotlinx.serialization compiler plugin adds a generated serializer to every <code>@Serializable</code> class at build time. It is plain code that reads and writes each property in order and knows which ones have defaults.</p>
+<p>Room does the same with KSP. For each target it generates <code>AppDatabase_Impl</code> and an implementation of every DAO, with the SQL checked against your entities at build time, plus the <code>actual object AppDatabaseConstructor</code> whose <code>initialize()</code> returns the generated database. On Android, Room could find <code>_Impl</code> by its class name. On iOS there is nothing to look up, so the constructor object does the job.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A new HttpClient for every request',
+            bad: `suspend fun loadArticles(): List<Article> {
+    val client = HttpClient(engine) { install(ContentNegotiation) { json() } }
+    return client.get(ARTICLES_URL).body()
+}`,
+            good: `class ArticleApi(private val client: HttpClient) {   // one client, injected
+    suspend fun loadArticles(): List<Article> = client.get(ARTICLES_URL).body()
+}`,
+            why: 'Each client opens its own connection pool and threads, and this one is never closed. Create one client for the app, inject it, and call <code>close()</code> only when you shut it down.',
+          },
+          {
+            title: 'Forgetting @Serializable on a nested type',
+            bad: `@Serializable
+data class Article(val id: Long, val author: Author)
+
+data class Author(val name: String)`,
+            good: `@Serializable
+data class Article(val id: Long, val author: Author)
+
+@Serializable
+data class Author(val name: String)`,
+            why: 'Every type inside a serializable class needs its own serializer. The plugin stops the build with “Serializer has not been found for type \'Author\'”.',
+          },
         ],
         visual(el) {
           const SEED = ['Room 2.8 is out', 'Ktor 3.3 notes'];
@@ -1018,6 +1413,205 @@ fun main() = application {
           { q: 'How does an iOS app show a shared composable?', options: ['It wraps it with <code>ComposeUIViewController</code> and shows the UIViewController', 'It converts it to SwiftUI views at build time', 'It runs Android inside the iOS app'], a: 0, why: 'Compose draws into a UIViewController. SwiftUI hosts it with <code>UIViewControllerRepresentable</code>.' },
           { q: 'On iOS, what draws a Compose Multiplatform <code>Button</code>?', options: ['A UIKit <code>UIButton</code>', 'Compose itself, rendering with Skia', 'WebKit'], a: 1, why: 'Compose renders its own pixels with Skia. Use <code>UIKitView</code> when you need a real native view.' },
         ],
+        deeper: [
+          {
+            title: 'Qualifiers pick the right resource',
+            body: `
+<p>Resources can have variants. Put Turkish strings in <code>composeResources/values-tr/strings.xml</code> and a dark logo in <code>drawable-dark</code>. At runtime Compose picks the closest match for the device language and theme, and falls back to the folder without a qualifier when nothing matches. Your code keeps calling <code>Res.string.greeting</code>.</p>
+<p>Strings can take arguments and plurals. <code>stringResource(Res.string.greeting, name)</code> fills <code>%1$s</code>, and <code>pluralStringResource</code> picks the right form for the count, using the plural rules of the language.</p>`,
+            code: `// composeResources/values/strings.xml
+// <string name="greeting">Hello, %1$s!</string>
+// <plurals name="new_articles">
+//     <item quantity="one">%1$d new article</item>
+//     <item quantity="other">%1$d new articles</item>
+// </plurals>
+
+// composeResources/values-tr/strings.xml
+// <string name="greeting">Merhaba, %1$s!</string>
+// <plurals name="new_articles">
+//     <item quantity="one">%1$d yeni makale</item>
+//     <item quantity="other">%1$d yeni makale</item>
+// </plurals>
+
+Text(stringResource(Res.string.greeting, user.name))
+Text(pluralStringResource(Res.plurals.new_articles, count, count))
+Image(painterResource(Res.drawable.logo), contentDescription = null)   // drawable-dark/ in dark theme`,
+            visual(el) {
+              const STR = {
+                en: ['Hello, Ada!', n => `${n} new article${n === 1 ? '' : 's'}`],
+                tr: ['Merhaba, Ada!', n => `${n} yeni makale`],
+              };
+              const LANGS = [['en', 'English'], ['tr', 'Türkçe'], ['de', 'Deutsch']];
+              const S = { lang: 'en', dark: false, n: 1 };
+              const logo = h('div', { class: 'kmp-logo' });
+              const hello = h('div', { class: 'kmp-hello' });
+              const count = h('div', { class: 'kmp-plat' });
+              const dev = h('div', { class: 'kmp-dev kmp-and', role: 'img', 'aria-label': 'Phone running the shared App()' }, h('span', { class: 'kmp-scr-title' }, 'News'), logo, hello, count);
+              const files = h('div', { class: 'kmp-files' });
+              const o = out();
+              function paint() {
+                const lang = STR[S.lang] ? S.lang : 'en';
+                hello.textContent = STR[lang][0];
+                count.textContent = STR[lang][1](S.n);
+                dev.classList.toggle('kmp-d2-dark', S.dark);
+                files.replaceChildren(
+                  h('span', { class: 'kmp-file drop-in' }, `values${lang === 'en' ? '' : '-' + lang}/strings.xml`),
+                  h('span', { class: 'kmp-file drop-in' }, `drawable${S.dark ? '-dark' : ''}/logo.xml`));
+                replay(dev, 'pop-soft');
+              }
+              const langBtns = LANGS.map(([code, name], i) => act(name, () => {
+                S.lang = code; pick(langBtns, i); paint();
+                say(o, code === 'de'
+                  ? 'Device language is German. There is no <code>values-de</code>, so Compose falls back to <code>values/</code>.'
+                  : `Device language is ${name}. Compose reads <code>values${code === 'en' ? '' : '-' + code}/strings.xml</code>.`);
+              }));
+              const themeBtn = act('Dark theme', () => {
+                S.dark = !S.dark; themeBtn.setAttribute('aria-pressed', String(S.dark)); paint();
+                say(o, S.dark ? 'Dark theme: <code>Res.drawable.logo</code> now resolves to <code>drawable-dark/logo.xml</code>.' : 'Light theme: back to <code>drawable/logo.xml</code>.');
+              });
+              themeBtn.setAttribute('aria-pressed', 'false');
+              const more = cmd('count++', () => {
+                S.n = S.n >= 5 ? 1 : S.n + 1; paint();
+                say(o, `<span class="muted">pluralStringResource(Res.plurals.new_articles, ${S.n}, ${S.n})</span> picks “${STR[STR[S.lang] ? S.lang : 'en'][1](S.n)}”.`);
+              });
+              pick(langBtns, 0); paint();
+              say(o, 'Same code, three device settings. Switch the language, the theme and the count.');
+              el.append(
+                h('div', { class: 'kmp-grid2' },
+                  h('div', { class: 'kmp-devs' }, h('div', { class: 'kmp-dev-wrap' }, dev, h('span', { class: 'kmp-label' }, 'device'))),
+                  h('div', { class: 'kmp-panel' },
+                    h('span', { class: 'kmp-label' }, 'resolved files'), files,
+                    kt('Text(stringResource(Res.string.greeting, "Ada"))\nText(pluralStringResource(\n    Res.plurals.new_articles, count, count))'))),
+                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'language'), langBtns),
+                h('div', { class: 'controls' }, themeBtn, more),
+                o);
+            },
+          },
+          {
+            title: 'One layout for every window size',
+            body: `
+<p>Desktop windows resize, tablets rotate and phones fold, so shared UI can’t assume a phone screen. Read the space you have with <code>BoxWithConstraints</code>, or with the window size classes from the multiplatform <code>material3-adaptive</code> library, and switch layouts at a breakpoint such as 600 dp.</p>
+<p>The switch is plain Compose state, so it works the same in every host. Keep the selected item in state above the branch, and it survives the jump from one pane to two. Drag the width below, open an article, then cross 600 dp.</p>`,
+            code: `@Composable
+fun NewsLayout(articles: List<Article>) {
+    var selected by rememberSaveable { mutableStateOf<Long?>(null) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth < 600.dp) {
+            if (selected == null) ArticleList(articles, onOpen = { selected = it })
+            else ArticleDetail(id = selected, onBack = { selected = null })
+        } else {
+            Row {
+                ArticleList(articles, onOpen = { selected = it }, modifier = Modifier.width(320.dp))
+                ArticleDetail(id = selected, onBack = null)
+            }
+        }
+    }
+}`,
+            visual(el) {
+              const ITEMS = ['Compose 1.9 notes', 'Room on iOS', 'Ktor 3 tips', 'SKIE explained'];
+              const S = { w: 360, sel: null };
+              const win = h('div', { class: 'kmp-d2-win', role: 'group', 'aria-label': 'App window' });
+              const label = h('span', { class: 'kmp-state' });
+              const o = out();
+              const range = h('input', { type: 'range', id: 'kmp-d2-width', min: '320', max: '1200', step: '20', value: '360', 'aria-label': 'Window width in dp' });
+              range.addEventListener('input', () => set(+range.value));
+              function render() {
+                const two = S.w >= 600;
+                win.style.width = `${Math.round((S.w / 1200) * 100)}%`;
+                win.classList.toggle('kmp-d2-two', two);
+                const list = h('div', { class: 'kmp-d2-list' }, ITEMS.map((t, i) => h('button', { type: 'button', class: 'kmp-d2-item' + (S.sel === i ? ' kmp-on' : ''), onclick: () => openItem(i) }, t)));
+                const detail = h('div', { class: 'kmp-d2-detail' }, S.sel == null
+                  ? h('p', { class: 'kmp-empty' }, 'Pick an article')
+                  : [h('b', {}, ITEMS[S.sel]), h('span', {}, 'The full article text goes here.'), two ? null : h('button', { type: 'button', class: 'kmp-d2-item', onclick: back }, '← Back')]);
+                win.replaceChildren(...(two ? [list, detail] : [S.sel == null ? list : detail]));
+                label.textContent = `maxWidth = ${S.w}.dp → ${two ? 'list + detail' : S.sel == null ? 'list' : 'detail'}`;
+              }
+              function set(w) {
+                const before = S.w >= 600;
+                S.w = w; range.value = String(w); render();
+                if (before !== (w >= 600)) {
+                  replay(win, 'pop-soft');
+                  say(o, `Crossed 600 dp. Same state, other layout. selected = ${S.sel == null ? 'null' : `"${ITEMS[S.sel]}"`}.`);
+                }
+              }
+              function openItem(i) { S.sel = i; render(); say(o, `selected = "${ITEMS[i]}". ${S.w >= 600 ? 'The detail pane updates in place.' : 'The list is replaced by the detail.'}`); }
+              function back() { S.sel = null; render(); say(o, 'selected = null. Back to the list.'); }
+              const presets = [['Phone 360 dp', 360], ['Tablet 840 dp', 840], ['Desktop 1200 dp', 1200]].map(([t, w]) => act(t, () => set(w)));
+              render();
+              say(o, 'A phone-width window shows only the list. Open an article, then widen it.');
+              el.append(
+                h('div', { class: 'kmp-d2-stage' }, label, win),
+                h('div', { class: 'controls' }, h('label', { class: 'kmp-label', for: 'kmp-d2-width' }, 'width'), range),
+                h('div', { class: 'controls' }, presets),
+                o);
+            },
+          },
+          {
+            title: 'Native views inside shared UI',
+            body: `
+<p>Some things should stay native: maps, video, web content, platform pickers. Declare an <code>expect</code> composable in common and let each platform embed its own view. <code>AndroidView</code> hosts an Android <code>View</code>. On iOS, <code>UIKitView</code> hosts a <code>UIView</code> and <code>UIKitViewController</code> a whole view controller.</p>
+<p>Skia doesn’t draw these views. Compose measures and places them, and the platform draws them. Test scrolling, clipping and anything drawn on top of them on a real device.</p>`,
+            code: `// commonMain
+@Composable
+expect fun MapPane(modifier: Modifier = Modifier)
+
+// androidMain
+@Composable
+actual fun MapPane(modifier: Modifier) {
+    AndroidView(factory = { context -> MapView(context) }, modifier = modifier)
+}
+
+// iosMain
+@OptIn(ExperimentalForeignApi::class)
+@Composable
+actual fun MapPane(modifier: Modifier) {
+    UIKitView(factory = { MKMapView() }, modifier = modifier)
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>The Compose compiler plugin is the same on every target. It rewrites each <code>@Composable</code> function to take a hidden <code>Composer</code> and change flags, and the runtime that keeps state in the slot table and schedules recomposition is shared Kotlin code. Only the bottom layer differs per platform.</p>
+<p>On Android, Compose Multiplatform resolves to Google’s Jetpack Compose artifacts and draws through Android’s own rendering. On iOS and desktop, Compose draws everything with Skia through Skiko, JetBrains’ Kotlin bindings for Skia. On iOS it renders into a Metal-backed view inside the <code>UIViewController</code>, and on desktop into a Swing window. Text input, accessibility and gestures are connected to each platform’s own systems separately.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Android APIs inside a shared composable',
+            bad: `// commonMain
+@Composable
+fun SaveButton(onSave: () -> Unit) {
+    val context = LocalContext.current
+    Button(onClick = {
+        onSave()
+        Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+    }) { Text("Save") }
+}`,
+            good: `// commonMain
+@Composable
+fun SaveButton(snackbar: SnackbarHostState, onSave: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    Button(onClick = {
+        onSave()
+        scope.launch { snackbar.showSnackbar("Saved") }
+    }) { Text("Save") }
+}`,
+            why: '<code>LocalContext</code> and <code>Toast</code> come from Android libraries, so commonMain stops compiling for iOS. Use a common Material component, or an <code>expect</code> function when you truly need the platform.',
+          },
+          {
+            title: 'Calling stringResource outside composition',
+            bad: `class NewsViewModel : ViewModel() {
+    fun onLoadFailed() {
+        _message.value = stringResource(Res.string.load_failed)   // not a composable
+    }
+}`,
+            good: `class NewsViewModel : ViewModel() {
+    fun onLoadFailed() {
+        viewModelScope.launch { _message.value = getString(Res.string.load_failed) }
+    }
+}`,
+            why: '<code>stringResource</code> is a composable, so it can’t be called from a ViewModel. The suspend <code>getString</code> reads the same resource from any coroutine. Often better: keep the <code>StringResource</code> in state and resolve it in the UI, so a language change updates the text.',
+          },
+        ],
         visual(el) {
           const GREET = ['Hello, KMP!', 'Merhaba!', 'Welcome back', 'Hi from common'];
           const COLORS = [['', 'accent'], ['kmp-c-warm', 'warm'], ['kmp-c-ok', 'ok'], ['kmp-c-err', 'err']];
@@ -1087,7 +1681,7 @@ fun main() = application {
 class UserRepository(private val api: UserApi) {
     fun count(): Int = api.cachedCount()
 
-    @Throws(IOException::class)
+    @Throws(IOException::class, CancellationException::class)
     suspend fun load(id: String): User = api.fetch(id)
 }
 
@@ -1131,6 +1725,185 @@ sealed class UiState {
           { q: 'A Kotlin function throws an exception it did not declare with <code>@Throws</code>, and Swift called it. What happens?', options: ['Swift receives an <code>Error</code>', 'The app crashes', 'It returns nil'], a: 1, why: 'Only declared exceptions become Swift errors. Undeclared ones terminate the program.' },
           { q: 'Without SKIE, how does Swift check which <code>UiState</code> it has?', options: ['An exhaustive <code>switch</code> over enum cases', '<code>as?</code> casts or <code>is</code> checks, with a fallback case', 'It cannot see sealed classes'], a: 1, why: 'Swift sees a class hierarchy, so the compiler cannot prove every case is handled. SKIE adds <code>onEnum(of:)</code> for that.' },
         ],
+        deeper: [
+          {
+            title: 'Which exceptions reach Swift',
+            body: `
+<p>A regular function with <code>@Throws</code> becomes a Swift <code>throws</code> function. A suspend function always gets an error parameter in its completion handler, so Swift can <code>try await</code> it. Either way, only the exception classes you listed, and their subclasses, arrive as a Swift <code>Error</code>. Any other exception terminates the app.</p>
+<p>Without the annotation, a suspend function passes only <code>CancellationException</code>, and a regular function passes nothing. With it, a suspend function must list <code>CancellationException</code> or a superclass, or the compiler rejects it. Pick a function kind, an annotation and an exception, then call it from Swift.</p>`,
+            visual(el) {
+              const EX = ['IOException', 'IllegalStateException', 'CancellationException'];
+              const MSG = { IOException: 'offline', IllegalStateException: 'no user', CancellationException: 'screen closed' };
+              const S = { suspend: true, ann: false, ex: 'IOException' };
+              let busy = false;
+              const ktCode = h('div', { class: 'kt' }), swCode = h('div', { class: 'kt' });
+              const swPanel = h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'Swift'), swCode);
+              const result = h('div', { class: 'kmp-result' }, h('span', { class: 'kmp-label' }, 'result'));
+              const o = out();
+              function paint() {
+                const ann = S.ann ? (S.suspend ? '@Throws(IOException::class, CancellationException::class)\n' : '@Throws(IOException::class)\n') : '';
+                ktCode.innerHTML = hl(`${ann}${S.suspend ? 'suspend ' : ''}fun load(id: String): User {\n    throw ${S.ex}("${MSG[S.ex]}")\n}`);
+                swCode.innerHTML = hl(S.suspend || S.ann
+                  ? `do {\n    let user = try ${S.suspend ? 'await ' : ''}repo.load(id: "42")\n} catch {\n    showError(error)\n}`
+                  : 'let user = repo.load(id: "42")\n// not a throws function: no try, no catch');
+                result.replaceChildren(h('span', { class: 'kmp-label' }, 'result'));
+                swPanel.classList.remove('kmp-missing', 'kmp-on');
+              }
+              async function call() {
+                if (busy) return; busy = true;
+                paint();
+                swPanel.classList.add('kmp-on');
+                result.replaceChildren(h('div', { class: 'kmp-spin' }));
+                say(o, `<span class="muted">Swift calls ${S.suspend ? 'the suspend function' : 'load()'}. Kotlin throws ${S.ex}.</span>`);
+                await sleep(600); if (!el.isConnected) return;
+                swPanel.classList.remove('kmp-on');
+                const passes = S.ex === 'IOException' ? S.ann : S.ex === 'CancellationException' ? S.suspend : false;
+                if (passes) {
+                  result.replaceChildren(h('span', { class: 'kmp-res drop-in' }, 'catch: Error'));
+                  say(o, `<span class="good">caught:</span> ${S.ex} arrived as an NSError, and Swift’s catch block ran.`);
+                } else {
+                  swPanel.classList.add('kmp-missing'); replay(swPanel, 'shake');
+                  result.replaceChildren(h('span', { class: 'kmp-res kmp-err drop-in' }, 'app terminated'));
+                  say(o, `<span class="bad">crash:</span> ${S.ex} is not declared for this function, so it can’t become a Swift error. The app terminates.`);
+                }
+                busy = false;
+              }
+              const kinds = [['fun', false], ['suspend fun', true]];
+              const kindBtns = kinds.map(([t, v], i) => act(t, () => { if (busy) return; S.suspend = v; pick(kindBtns, i); paint(); }));
+              const exBtns = EX.map((e, i) => act(e, () => { if (busy) return; S.ex = e; pick(exBtns, i); paint(); }));
+              const box = h('input', { type: 'checkbox', id: 'kmp-d2-throws', onchange() { if (busy) { this.checked = S.ann; return; } S.ann = this.checked; paint(); replay(ktCode, 'pop-soft'); } });
+              pick(kindBtns, 1); pick(exBtns, 0); paint();
+              say(o, 'A suspend function without @Throws throws IOException. Call it.');
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'kind'), kindBtns, h('label', { class: 'switch', for: 'kmp-d2-throws' }, box, '@Throws')),
+                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'throws'), exBtns),
+                h('div', { class: 'kmp-grid2' }, h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'Kotlin'), ktCode), swPanel),
+                h('div', { class: 'controls' }, cmd('repo.load(id: "42")', call)),
+                result, o);
+            },
+          },
+          {
+            title: 'Shape the Swift API with annotations',
+            body: `
+<p>You can change how a declaration looks in Swift without touching Kotlin callers. <code>@ObjCName</code> gives it another name in Objective-C and Swift. <code>@HiddenFromObjC</code> leaves it out of the header, which suits Kotlin-only helpers. <code>@ShouldRefineInSwift</code> keeps it but marks it <code>swift_private</code>, so Swift sees it with a <code>__</code> prefix, ready to be wrapped in a nicer Swift extension.</p>
+<p>The annotations are experimental. Opt in with <code>@OptIn(ExperimentalObjCName::class)</code> for the first, and <code>ExperimentalObjCRefinement</code> for the other two. Toggle them, then rebuild the framework.</p>`,
+            code: `@OptIn(ExperimentalObjCName::class, ExperimentalObjCRefinement::class)
+@ObjCName(swiftName = "UserStore")
+class UserRepositoryImpl(private val api: UserApi) {
+    @HiddenFromObjC
+    fun cacheKey(id: String): String = "user:$id"
+
+    @ShouldRefineInSwift
+    fun observe(): Flow<User> = api.userUpdates()
+}`,
+            visual(el) {
+              const ROWS = [
+                { ann: '@ObjCName(swiftName = "UserStore")', k: 'class UserRepositoryImpl', off: 'class UserRepositoryImpl', on: 'class UserStore', note: 'Swift gets a cleaner name. Kotlin code still says UserRepositoryImpl.' },
+                { ann: '@ObjCName("user")', k: 'fun findById(id: String): User?', off: 'func findById(id: String) -> User?', on: 'func user(id: String) -> User?', note: 'Only the Objective-C and Swift name changes.' },
+                { ann: '@HiddenFromObjC', k: 'fun cacheKey(id: String): String', off: 'func cacheKey(id: String) -> String', on: '// not in the header', note: 'A Kotlin-only helper no longer clutters the Swift API.' },
+                { ann: '@ShouldRefineInSwift', k: 'fun observe(): Flow<User>', off: 'func observe() -> Kotlinx_coroutines_coreFlow', on: 'func __observe() -> Kotlinx_coroutines_coreFlow\n// wrap it in a Swift extension', note: 'Still exported, but behind __ so you can offer a Swift-friendly wrapper.' },
+              ];
+              let busy = false;
+              const o = out();
+              const rows = ROWS.map(r => {
+                const st = { on: false, built: false };
+                const k = h('div', { class: 'kmp-cell' }), s = h('div', { class: 'kmp-cell' });
+                const pass = h('div', { class: 'kmp-pass', 'aria-hidden': 'true' });
+                const btn = h('button', { type: 'button', class: 'kmp-tbtn', 'aria-pressed': 'false' }, r.ann);
+                const x = { r, st, k, s, pass, btn };
+                btn.addEventListener('click', () => {
+                  if (busy) return;
+                  st.on = !st.on; btn.setAttribute('aria-pressed', String(st.on));
+                  paintK(x); s.classList.toggle('kmp-stale', st.on !== st.built);
+                  say(o, `${st.on ? 'Added' : 'Removed'} ${r.ann}. The header is out of date until you rebuild.`);
+                });
+                x.el = h('div', { class: 'kmp-d2-ann' }, h('div', { class: 'controls' }, btn), h('div', { class: 'kmp-d2-arow' }, k, pass, s));
+                return x;
+              });
+              const paintK = x => { x.k.innerHTML = hl((x.st.on ? x.r.ann + '\n' : '') + x.r.k); };
+              const paintS = x => { x.s.textContent = x.st.built ? x.r.on : x.r.off; x.s.classList.remove('kmp-stale'); };
+              rows.forEach(x => { paintK(x); paintS(x); });
+              async function build() {
+                if (busy) return;
+                const todo = rows.filter(x => x.st.on !== x.st.built);
+                if (!todo.length) { say(o, 'Nothing changed since the last build. Toggle an annotation first.'); return; }
+                busy = true;
+                say(o, '<span class="muted">./gradlew linkDebugFrameworkIosSimulatorArm64</span>');
+                for (const x of todo) {
+                  x.el.classList.add('kmp-on'); x.pass.append(h('span', { class: 'kmp-dot' }));
+                  await sleep(560); if (!el.isConnected) return;
+                  x.pass.replaceChildren(); x.st.built = x.st.on; paintS(x); replay(x.s, 'drop-in'); x.el.classList.remove('kmp-on');
+                  say(o, `<span class="good">Swift:</span> ${x.st.on ? x.r.note : 'back to the default name.'}`);
+                }
+                busy = false;
+              }
+              say(o, 'Toggle an annotation, then rebuild the framework.');
+              el.append(
+                h('div', { class: 'kmp-map' }, h('div', { class: 'kmp-maphead' }, h('span', { class: 'kmp-label' }, 'Kotlin'), h('span'), h('span', { class: 'kmp-label' }, 'Swift sees')), rows.map(x => x.el)),
+                h('div', { class: 'controls' }, cmd('./gradlew linkDebugFrameworkIosSimulatorArm64', build)),
+                o);
+            },
+          },
+          {
+            title: 'One framework per app',
+            body: `
+<p>Every Kotlin framework carries its own copy of the Kotlin runtime and of every library it uses. Link two of them into one app and Swift sees two unrelated <code>Kotlinx_coroutines_coreFlow</code> types and two copies of your shared models. An object from one framework can’t be passed to the other.</p>
+<p>Make one umbrella module for iOS. It depends on your feature modules with <code>api</code> and lists them with <code>export()</code>, so their public API appears in the single framework header.</p>`,
+            code: `// iosUmbrella/build.gradle.kts
+kotlin {
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
+        target.binaries.framework {
+            baseName = "Shared"
+            export(project(":feature:news"))
+            export(project(":feature:profile"))
+        }
+    }
+    sourceSets {
+        commonMain.dependencies {
+            api(project(":feature:news"))
+            api(project(":feature:profile"))
+        }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>The link task writes two things: the machine code and an Objective-C header that describes it. Each exported Kotlin class becomes an Objective-C class wrapping the Kotlin object. Swift holds that wrapper with normal reference counting, and the Kotlin object stays alive as long as Swift holds a reference.</p>
+<p>Objective-C only has lightweight generics on classes. Generics on interfaces and functions are dropped, which is why a <code>Flow&lt;User&gt;</code>, an interface, reaches Swift without its type argument. Numbers inside generic types must be objects, so they are boxed: a <code>List&lt;Int&gt;</code> arrives as <code>[KotlinInt]</code>, where <code>KotlinInt</code> is a subclass of <code>NSNumber</code>. A suspend function becomes a method with a completion handler, and Swift’s own import rules let you call such a method with <code>await</code>.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A suspend @Throws without CancellationException',
+            bad: `@Throws(IOException::class)
+suspend fun load(id: String): User = api.fetch(id)`,
+            good: `@Throws(IOException::class, CancellationException::class)
+suspend fun load(id: String): User = api.fetch(id)`,
+            why: 'Kotlin/Native rejects it: “@Throws on suspend declaration must have kotlin.coroutines.cancellation.CancellationException (or any of its superclasses) listed”. Cancellation has to reach Swift as an error too.',
+          },
+          {
+            title: 'Expecting default arguments in Swift',
+            bad: `fun search(query: String, limit: Int = 20, newestFirst: Boolean = false): List<Hit>
+// Swift: repo.search(query: "kmp", limit: 20, newestFirst: false)`,
+            good: `fun search(query: String, limit: Int = 20, newestFirst: Boolean = false): List<Hit>
+
+// a short overload for Swift callers
+fun search(query: String): List<Hit> = search(query, limit = 20, newestFirst = false)`,
+            why: 'Objective-C has no default arguments, so Swift sees every parameter as required. Add overloads for the common calls, or use SKIE, which can generate them.',
+          },
+          {
+            title: 'Exposing a MutableList to Swift',
+            bad: `class Cart {
+    val items: MutableList<Item> = mutableListOf()
+}`,
+            good: `class Cart {
+    private val _items = mutableListOf<Item>()
+    val items: List<Item> get() = _items
+    fun add(item: Item) { _items += item }
+}`,
+            why: 'A <code>MutableList</code> arrives as an <code>NSMutableArray</code>. Swift loses the element type and can change your Kotlin state behind your back. A read-only <code>List</code> arrives as a typed Swift array.',
+          },
+        ],
         visual(el) {
           const ROWS = [
             { k: 'class User(val name: String)', s: 'let u = User(name: "Ada")\nu.name  // String', note: 'Classes map to Swift classes. Constructor parameters become labels.' },
@@ -1139,7 +1912,7 @@ sealed class UiState {
             { k: 'object Logger', s: 'Logger.shared.log(message: "hi")', note: 'An object is a class with one instance, reached through .shared.' },
             { k: 'enum class Theme { LIGHT, DARK }', s: 'Theme.light  // a class\nswitch needs default:', sk: 'enum Theme { case light, dark }\n// exhaustive switch', note: 'Plain export makes enums classes with static members. SKIE generates a real Swift enum.' },
             { k: 'sealed class UiState', s: 'if let s = state as? UiState.Success\n{ ... } else { ... }', sk: 'switch onEnum(of: state) {\ncase .loading: ...\ncase .success(let s): ... }', note: 'Sealed hierarchies need casts in plain export. SKIE wraps them in an exhaustive Swift enum.' },
-            { k: '@Throws(IOException::class)\nsuspend fun load(): User', s: 'repo.load { user, error in ... }\n// or: try await repo.load()', sk: 'try await repo.load()\n// Task cancel cancels the coroutine', note: 'Suspend becomes a completion handler, which Swift can await. SKIE adds two-way cancellation.' },
+            { k: '@Throws(IOException::class, CancellationException::class)\nsuspend fun load(): User', s: 'repo.load { user, error in ... }\n// or: try await repo.load()', sk: 'try await repo.load()\n// Task cancel cancels the coroutine', note: 'Suspend becomes a completion handler, which Swift can await. SKIE adds two-way cancellation.' },
             { k: 'val state: StateFlow<UiState>', s: 'vm.state.value  // read once\n// collect needs a FlowCollector', sk: 'for await s in vm.state { ... }', note: 'Flows lose their generic type and have no async API without help. SKIE makes them AsyncSequences.' },
           ];
           let skie = false, busy = false;

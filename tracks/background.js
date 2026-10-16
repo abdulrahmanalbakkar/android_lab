@@ -110,7 +110,378 @@
 @media (max-width: 640px) {
   .plt-split { grid-template-columns: minmax(0, 1fr); }
 }
+/* depth pass 2 */
+.plt-bg2-meter { height: 12px; border-radius: 99px; background: var(--sunk); overflow: hidden; min-width: 0; }
+.plt-bg2-meter span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width 0.1s linear, background 0.3s; }
+.plt-bg2-meter.plt-bg2-full span { background: var(--err); }
+.plt-bg2-mx { display: grid; grid-template-columns: minmax(70px, auto) repeat(2, minmax(0, 1fr)); gap: 6px; align-items: center; min-width: 0; }
+.plt-bg2-rh { font: 600 0.76rem var(--mono); overflow-wrap: anywhere; }
+.plt-bg2-cell { font: 700 0.78rem var(--mono); padding: 8px 6px; border-radius: 9px; border: 2px solid var(--line); background: var(--bg); color: var(--muted); cursor: pointer; min-width: 0; overflow-wrap: anywhere; transition: border-color 0.2s, background 0.2s; }
+.plt-bg2-cell:hover { border-color: var(--accent); }
+.plt-bg2-cell:focus-visible { outline: 2px solid var(--accent); }
+.plt-bg2-cell.plt-bg2-ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
+.plt-bg2-cell.plt-bg2-no { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.plt-bg2-cell.plt-bg2-wait { border-color: var(--warm); background: var(--warm-soft); color: var(--warm); }
 `;
+
+  // ─── Depth pass 2: foreground services, receivers ──────────────────────
+  const bgLine = (o, html) => o.append(h('div', { class: 'line drop-in', html }));
+  const bgStep = (box, k, who, text) => {
+    box.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', { html: text })));
+    while (box.children.length > 6) box.firstElementChild.remove();
+  };
+
+  const fgsDepth = {
+    deeper: [
+      {
+        title: 'Some types run on a clock',
+        body: `<p><code>shortService</code>, added in Android 14, is for short critical work such as finishing a save the user started. It runs about 3 minutes from <code>startForeground()</code>. Apps targeting Android 15 also get a budget for <code>dataSync</code> and <code>mediaProcessing</code>: 6 hours in any 24 hours, per type, shared by all your services of that type. The budget resets when the user brings your app to the foreground.</p>
+<p>When the time is up, the system calls <code>onTimeout()</code> and the service has a few seconds to stop. A <code>dataSync</code> service that keeps going crashes the app with <code>RemoteServiceException</code>. A <code>shortService</code> that keeps going gets an ANR. Once the budget is gone, starting another <code>dataSync</code> service from the background throws <code>ForegroundServiceStartNotAllowedException</code>.</p>`,
+        code: `class SyncService : Service() {
+    // Android 15+: called when the dataSync or mediaProcessing budget runs out
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        SyncCheckpoint.save()          // the next run picks up from here
+        stopSelf(startId)
+    }
+    // Android 14: the variant shortService uses
+    override fun onTimeout(startId: Int) = stopSelf(startId)
+}`,
+        visual(el) {
+          const LIMIT = 360, SHORT = 3;
+          let type = 'dataSync', used = 240, handle = true, busy = false;
+          const fill = h('span');
+          const meter = h('div', { class: 'plt-bg2-meter' }, fill);
+          const meterLabel = h('span', { class: 'plt-label' });
+          const steps = h('div', { class: 'plt-steps' });
+          const step = (k, who, text) => bgStep(steps, k, who, text);
+          const types = choice('type', ['dataSync', 'shortService'], type, v => { if (busy) return false; type = v; paint(); steps.replaceChildren(); step('', 'Ready', v === 'dataSync' ? 'Budget: 6 h of dataSync per 24 h.' : 'Limit: about 3 minutes from startForeground().'); });
+          const tt = toggle('plt-bg2-ontimeout', 'onTimeout() calls stopSelf()', true, (v, input) => { if (busy) { input.checked = handle; return; } handle = v; });
+          const hm = m => `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')} min`;
+          function paint(shortT = 0) {
+            if (type === 'dataSync') { fill.style.width = (Math.min(used, LIMIT) / LIMIT) * 100 + '%'; meterLabel.textContent = `dataSync used today: ${hm(used)} of 6 h`; meter.classList.toggle('plt-bg2-full', used >= LIMIT); }
+            else { fill.style.width = (Math.min(shortT, SHORT) / SHORT) * 100 + '%'; meterLabel.textContent = `shortService running: ${shortT.toFixed(1)} of about 3 min`; meter.classList.toggle('plt-bg2-full', shortT >= SHORT); }
+          }
+          async function animate(from, to, onT) {
+            const t0 = performance.now(), D = 1400;
+            for (;;) {
+              const p = Math.min(1, (performance.now() - t0) / D);
+              if (onT(from + (to - from) * p) === false) return true;
+              if (p >= 1) return true;
+              await sleep(30); if (!el.isConnected) return false;
+            }
+          }
+          async function start() {
+            if (busy) return; busy = true;
+            try {
+              steps.replaceChildren();
+              if (type === 'dataSync') {
+                if (used >= LIMIT) {
+                  replay(meter, 'shake');
+                  step('bad', 'System', 'ForegroundServiceStartNotAllowedException: Time limit already exhausted for foreground service type dataSync');
+                  step('', 'Fix', 'Wait until the user opens the app, or move the sync to WorkManager.');
+                  return;
+                }
+                step('', 'App', '<code>startForeground()</code> with type dataSync: a 2 hour sync');
+                let hit = false;
+                const ok = await animate(used, used + 120, m => { used = Math.min(m, LIMIT); paint(); if (m >= LIMIT) { hit = true; return false; } });
+                if (!ok) return;
+                if (!hit) { step('good', 'App', `Sync finished. ${hm(LIMIT - used)} of budget left today.`); return; }
+                step('wait', 'System', '<code>onTimeout(startId, FOREGROUND_SERVICE_TYPE_DATA_SYNC)</code>: the budget is used up');
+                await sleep(600); if (!el.isConnected) return;
+                if (handle) step('good', 'App', 'Saved a checkpoint and called <code>stopSelf()</code>. The rest can run when the budget is back.');
+                else { replay(meter, 'shake'); step('bad', 'System', 'RemoteServiceException: A foreground service of type dataSync did not stop within its timeout'); }
+              } else {
+                step('', 'App', '<code>startForeground()</code> with type shortService: a 4 minute upload');
+                let hit = false;
+                const ok = await animate(0, 4, m => { paint(Math.min(m, SHORT)); if (m >= SHORT) { hit = true; return false; } });
+                if (!ok || !hit) return;
+                step('wait', 'System', '<code>onTimeout(startId)</code> after about 3 minutes');
+                await sleep(600); if (!el.isConnected) return;
+                if (handle) step('good', 'App', 'Stopped in time. Hand the rest to WorkManager, which can resume it later.');
+                else { replay(meter, 'shake'); step('bad', 'System', 'The app goes to the cached state, then gets an ANR that names FOREGROUND_SERVICE_TYPE_SHORT_SERVICE.'); }
+              }
+            } finally { busy = false; }
+          }
+          function openApp() {
+            if (busy) return;
+            if (type === 'dataSync') { used = 0; paint(); replay(meter, 'pop'); steps.replaceChildren(); step('good', 'User', 'Opened the app. The dataSync budget is back to 6 h.'); }
+            else { steps.replaceChildren(); step('', 'User', 'Opened the app. Calling startForeground() again while visible would give another 3 minutes.'); }
+          }
+          paint();
+          step('', 'Ready', '4 h of dataSync already used today. Start a 2 hour sync.');
+          el.append(types.el,
+            h('div', { class: 'controls plt-row' }, tt.el),
+            h('div', { class: 'controls plt-row' }, cmd('startForeground(...)', start), cmd('// user opens the app', openApp)),
+            meterLabel, meter, steps);
+        },
+      },
+      {
+        title: 'While-in-use types need the app in front',
+        body: `<p><code>camera</code>, <code>microphone</code> and <code>location</code> services rely on while-in-use permissions, which your app only holds while it is in the foreground. On Android 14+, creating one of these services from the background throws <code>SecurityException</code>, even when the background start itself is allowed, such as after a high priority FCM message. Location is fine if the user granted background location.</p>
+<p>On Android 13 and lower the service starts, but it gets no access, and the first camera or location call fails later. Either way, start these services while the user is looking at your app.</p>`,
+        visual(el) {
+          const TYPES = ['mediaPlayback', 'location', 'camera'];
+          const SITS = { vis: 'App visible', bg: 'High priority FCM, app in background' };
+          let bgLoc = false, a13 = false, busy = false;
+          const cells = {};
+          const steps = h('div', { class: 'plt-steps' });
+          const step = (k, who, text) => bgStep(steps, k, who, text);
+          function result(t, s) {
+            if (s === 'vis') return ['ok', 'started', `<code>${t}</code> started. The app is visible, so it holds its permissions right now.`];
+            if (t === 'mediaPlayback') return ['ok', 'started', 'Started. The high priority message allows the start, and playback needs no while-in-use permission.'];
+            if (t === 'location' && bgLoc) return ['ok', 'started', 'Started. ACCESS_BACKGROUND_LOCATION is granted, so the app has location in the background.'];
+            if (a13) return ['wait', 'no access', `Android 13: the service starts, but ${t === 'camera' ? 'opening the camera' : 'requesting location'} fails because the app has no access from the background.`];
+            return ['no', 'SecurityException', `SecurityException at <code>startForeground()</code>: the app is in the background, so it doesn’t hold the ${t === 'camera' ? 'CAMERA' : 'location'} permission right now.`];
+          }
+          const grid = h('div', { class: 'plt-bg2-mx', role: 'group', 'aria-label': 'Service type by situation' },
+            h('span', { class: 'plt-label' }, ''), Object.values(SITS).map(s => h('span', { class: 'plt-label' }, s)),
+            TYPES.flatMap(t => [h('span', { class: 'plt-bg2-rh' }, t), ...Object.keys(SITS).map(s => (cells[t + s] = h('button', { class: 'plt-bg2-cell', onclick: () => run(t, s) }, '?')))]));
+          function paint() {
+            TYPES.forEach(t => Object.keys(SITS).forEach(s => { const c = cells[t + s]; if (c.dataset.done) { const [k, label] = result(t, s); c.textContent = label; c.className = `plt-bg2-cell plt-bg2-${k}`; } }));
+          }
+          async function run(t, s) {
+            if (busy) return; busy = true;
+            try {
+              const [k, label, text] = result(t, s), c = cells[t + s];
+              steps.replaceChildren();
+              step('', 'App', `${s === 'bg' ? 'In <code>onMessageReceived()</code>: ' : 'On a button tap: '}<code>startForegroundService()</code>, type <code>${t}</code>`);
+              await sleep(450); if (!el.isConnected) return;
+              c.dataset.done = '1'; c.textContent = label; c.className = `plt-bg2-cell plt-bg2-${k}`; replay(c, k === 'ok' ? 'pop' : 'shake');
+              step(k === 'ok' ? 'good' : k === 'no' ? 'bad' : 'wait', k === 'ok' ? 'System' : 'Result', text);
+            } finally { busy = false; }
+          }
+          const tl = toggle('plt-bg2-bgloc', 'ACCESS_BACKGROUND_LOCATION granted', false, (v, input) => { if (busy) { input.checked = bgLoc; return; } bgLoc = v; paint(); });
+          const ta = toggle('plt-bg2-a13', 'device runs Android 13', false, (v, input) => { if (busy) { input.checked = a13; return; } a13 = v; paint(); });
+          step('', 'Ready', 'Each cell starts one service type in one situation. Tap a cell.');
+          el.append(h('div', { class: 'controls plt-row' }, tl.el, ta.el), grid, steps);
+        },
+      },
+      {
+        title: 'Users can stop it, so save as you go',
+        body: `<p>Since Android 13, users can stop any app that runs a foreground service from the Task Manager in quick settings. That stops the whole app, not just the service, and your code gets no callback first. Write progress as you go, so the next run resumes instead of starting over.</p>
+<p>For a large transfer the user started, Android 14 adds user-initiated data transfer jobs. They run through <code>JobScheduler</code> with a notification, can run for a long time when the system allows it, and need no foreground service type. Schedule one while your app is visible.</p>`,
+        code: `// Needs <uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS" />
+val job = JobInfo.Builder(DOWNLOAD_JOB_ID, ComponentName(context, DownloadJobService::class.java))
+    .setUserInitiated(true)                                  // Android 14+
+    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+    .setEstimatedNetworkBytes(downloadBytes, 0)
+    .build()
+context.getSystemService(JobScheduler::class.java).schedule(job)
+
+// In DownloadJobService.onStartJob(), right away:
+// setNotification(params, NOTIFICATION_ID, progressNotification(), JobService.JOB_END_NOTIFICATION_POLICY_REMOVE)`,
+      },
+    ],
+    underHood: {
+      body: `<p><code>startForegroundService()</code> goes to the activity manager in <code>system_server</code>. It records that this service still owes a <code>startForeground()</code> call and starts a timer. When the call arrives, it checks the type against your manifest and your current permissions, attaches the notification, and raises your process to foreground service priority, so the low memory killer leaves it alone almost as long as the visible app.</p>
+<p>The type also turns on per-type bookkeeping in the system: the time budgets for <code>dataSync</code>, <code>mediaProcessing</code> and <code>shortService</code>, and the while-in-use permission checks for camera, microphone and location.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Starting a service from FCM without checking priority',
+        bad: `override fun onMessageReceived(message: RemoteMessage) {
+    ContextCompat.startForegroundService(this, playIntent)
+}`,
+        good: `override fun onMessageReceived(message: RemoteMessage) {
+    if (message.priority == RemoteMessage.PRIORITY_HIGH) {
+        ContextCompat.startForegroundService(this, playIntent)
+    } else {
+        Notifier.showTapToPlay(this, message)   // a tap is a user action, which allows the start
+    }
+}`,
+        why: 'FCM can deliver a message sent as high priority as normal when the app rarely shows something for them. A downgraded message gives no exemption, and the start throws <code>ForegroundServiceStartNotAllowedException</code>.',
+      },
+      {
+        title: 'A foreground service for work that can wait',
+        bad: `// Every hour, while the app is in use
+ContextCompat.startForegroundService(context, Intent(context, SyncService::class.java))`,
+        good: `val sync = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
+    .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
+    .build()
+WorkManager.getInstance(context)
+    .enqueueUniquePeriodicWork("sync", ExistingPeriodicWorkPolicy.KEEP, sync)`,
+        why: 'A sync the user doesn’t watch is not foreground work. It shows a notification for nothing, burns the dataSync budget, and Play asks you to justify each type. WorkManager runs it when conditions allow.',
+      },
+    ],
+  };
+
+  const receiversDepth = {
+    deeper: [
+      {
+        title: 'goAsync for a few seconds of async work',
+        body: `<p>When <code>onReceive()</code> returns, the system treats the receiver as finished. If nothing else in your process is active, the system can kill it at any moment to free memory, together with any thread or coroutine you started. <code>goAsync()</code> keeps the broadcast open until you call <code>finish()</code> on the result, so a short job can leave the main thread. The system still expects you to finish quickly, in under 10 seconds.</p>
+<p>For longer work, or work that must not be lost, enqueue it with WorkManager. Run the same upload three ways.</p>`,
+        code: `class ScoreReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val pending = goAsync()
+        appScope.launch(Dispatchers.IO) {
+            try {
+                scoreCache.update(intent.getStringExtra("score"))
+            } finally {
+                pending.finish()               // always, or the broadcast times out
+            }
+        }
+    }
+}`,
+        visual(el) {
+          const SEC = 320, TOTAL = 6;
+          const MODES = { launch: 'launch { } and return', async: 'goAsync() + finish()', work: 'WorkManager.enqueue()' };
+          let mode = 'launch', pressure = true, busy = false;
+          const mkLane = name => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) }; };
+          const main = mkLane('onReceive'), bg = mkLane('upload');
+          const proc = tag('process: idle');
+          const clock = h('span', { class: 'clock' }, '0.0 s');
+          const o = out('A manifest receiver woke the app. It has a 3 second upload to do. Pick a way and run.');
+          const modes = choice('style', Object.keys(MODES), mode, v => { if (busy) return false; mode = v; }, v => MODES[v]);
+          const pt = toggle('plt-bg2-pressure', 'memory pressure (cached processes get killed)', true, (v, input) => { if (busy) { input.checked = pressure; return; } pressure = v; });
+          const bar = (lane, cls, s) => { const b = h('span', { class: `bar ${cls}`, style: `left:${(s / TOTAL) * 100}%;width:0` }); lane.track.append(b); return b; };
+          const setProc = (t, k) => { if (proc.textContent !== 'process: ' + t) { proc.textContent = 'process: ' + t; proc.className = 'plt-tag ' + (k ? 'plt-' + k : ''); replay(proc, 'pop'); } };
+          async function run() {
+            if (busy) return; busy = true;
+            try {
+              [main, bg].forEach(l => l.track.replaceChildren());
+              say(o, hl(mode === 'work' ? 'WorkManager.getInstance(context).enqueue(upload)' : mode === 'async' ? 'val pending = goAsync(); appScope.launch { upload(); pending.finish() }' : 'appScope.launch { upload() }'));
+              const rx = bar(main, 'run', 0);
+              const killAt = pressure && mode !== 'async' ? 1.5 : null;
+              const ws = mode === 'work' ? (killAt ? 2.2 : 0.3) : 0.1, we = ws + 3;
+              const up = bar(bg, 'run', ws);
+              let killed = false, said = new Set();
+              const once = (k, f) => { if (!said.has(k)) { said.add(k); f(); } };
+              const t0 = performance.now();
+              for (;;) {
+                const t = Math.min((performance.now() - t0) / SEC, TOTAL);
+                clock.textContent = t.toFixed(1) + ' s';
+                rx.style.width = (Math.min(t, 0.1) / TOTAL) * 100 + '%';
+                const upEnd = killed && mode === 'launch' ? killAt : Math.min(t, we);
+                if (t >= ws) up.style.width = (Math.max(0, upEnd - ws) / TOTAL) * 100 + '%';
+                if (t < 0.1) setProc('running a receiver', 'acc');
+                else if (mode === 'async' && t < we) setProc('running a receiver (goAsync)', 'acc');
+                else if (killAt && t >= killAt && (mode === 'launch' || t < ws)) {
+                  once('kill', () => { killed = true; setProc('killed', 'no'); bgLine(o, `${killAt.toFixed(1)} s: <span class="bad">the system killed the cached process</span>`); if (mode === 'launch') { up.style.background = 'var(--err)'; bgLine(o, 'The upload stopped halfway and nothing will retry it.'); } });
+                } else if (mode === 'work' && t >= ws && t < we) { once('job', () => bgLine(o, killAt ? `${ws.toFixed(1)} s: JobScheduler started the process again for the work` : 'WorkManager started the work right away in the live process')); setProc('running a job', 'acc'); }
+                else if (t >= 0.1 && t < we) setProc('cached', 'wait');
+                else if (t >= we) setProc('cached', 'wait');
+                if (t >= we && (!killed || mode === 'work')) once('done', () => bgLine(o, mode === 'async' ? '<span class="good">finish() at 3.1 s.</span> The process stayed important until then.' : mode === 'work' ? '<span class="good">upload done.</span> WorkManager survives the process dying.' : '<span class="good">upload done, by luck:</span> nothing needed the memory.'));
+                if (t >= TOTAL) break;
+                await sleep(30); if (!el.isConnected) return;
+              }
+            } finally { busy = false; }
+          }
+          el.append(modes.el,
+            h('div', { class: 'controls plt-row' }, pt.el, cmd('sendBroadcast(scoreIntent)', run)),
+            h('div', { class: 'plt-group' }, proc, clock),
+            h('div', { class: 'timeline' }, main.el, bg.el),
+            o);
+        },
+      },
+      {
+        title: 'Restrict who sends and who receives',
+        body: `<p>An exported receiver accepts broadcasts from any app. To accept them only from your own apps, define a permission with <code>protectionLevel="signature"</code> and require it when you register. Only apps signed with your key can hold it, so only they can send to you.</p>
+<p>It works the other way too. <code>sendBroadcast(intent, permission)</code> delivers only to receivers in apps that hold the permission. Without it, any app that registers for your action reads your extras.</p>`,
+        code: `// Both apps' AndroidManifest.xml
+// <permission android:name="com.example.permission.SYNC" android:protectionLevel="signature" />
+// <uses-permission android:name="com.example.permission.SYNC" />
+
+// Receiver: only holders of the permission can send to it
+ContextCompat.registerReceiver(context, receiver, IntentFilter(ACTION_SYNC_DONE),
+    "com.example.permission.SYNC", null, ContextCompat.RECEIVER_EXPORTED)
+
+// Sender: only holders of the permission receive it
+context.sendBroadcast(Intent(ACTION_SYNC_DONE), "com.example.permission.SYNC")`,
+        visual(el) {
+          let req = false, send = false, busy = false;
+          const mkRx = (name, sub) => { const log = h('div', { class: 'plt-log' }); return { log, box: h('div', { class: 'plt-rx' }, h('span', { class: 'plt-rx-name' }, name), h('span', { class: 'plt-filter' }, sub), log) }; };
+          const mine = mkRx('Your app’s receiver', 'exported, action SYNC_DONE');
+          const comp = mkRx('Your companion app', 'signed with your key, registered for SYNC_DONE');
+          const spy = mkRx('Unknown app', 'different key, registered for SYNC_DONE');
+          const o = out('Nothing is restricted yet. Send from both sides.');
+          const put = (rx, ok, text) => {
+            rx.box.classList.remove('plt-hit', 'plt-miss'); rx.box.classList.add(ok ? 'plt-hit' : 'plt-miss'); replay(rx.box, ok ? 'pop' : 'shake');
+            rx.log.prepend(h('div', { class: 'drop-in' }, tag(ok ? 'delivered' : 'blocked', ok ? 'ok' : 'no'), h('span', {}, text)));
+            while (rx.log.children.length > 2) rx.log.lastElementChild.remove();
+          };
+          async function inbound(fromCompanion) {
+            if (busy) return; busy = true;
+            try {
+              say(o, `${fromCompanion ? 'companion app' : 'unknown app'}: ${hl('sendBroadcast(Intent(ACTION_SYNC_DONE))')}`);
+              await sleep(350); if (!el.isConnected) return;
+              const ok = !req || fromCompanion;
+              put(mine, ok, ok ? (req ? 'sender holds the permission' : `anyone can reach it${fromCompanion ? '' : ', including this app'}`) : 'sender lacks com.example.permission.SYNC');
+            } finally { busy = false; }
+          }
+          async function outbound() {
+            if (busy) return; busy = true;
+            try {
+              say(o, hl(send ? 'sendBroadcast(Intent(ACTION_SYNC_DONE), "com.example.permission.SYNC")' : 'sendBroadcast(Intent(ACTION_SYNC_DONE).putExtra("userId", id))'));
+              await sleep(350); if (!el.isConnected) return;
+              put(comp, true, send ? 'holds the permission' : 'registered for the action');
+              await sleep(250); if (!el.isConnected) return;
+              put(spy, !send, send ? 'can’t hold a signature permission' : 'read your extras too');
+            } finally { busy = false; }
+          }
+          const tr = toggle('plt-bg2-reqperm', 'receiver requires the SYNC permission', false, (v, input) => { if (busy) { input.checked = req; return; } req = v; });
+          const ts = toggle('plt-bg2-sendperm', 'send with the SYNC permission', false, (v, input) => { if (busy) { input.checked = send; return; } send = v; });
+          el.append(
+            h('span', { class: 'plt-label' }, 'Who can send to you'),
+            h('div', { class: 'controls plt-row' }, tr.el, h('button', { class: 'cmd', onclick: () => inbound(true) }, 'companion app sends'), h('button', { class: 'cmd', onclick: () => inbound(false) }, 'unknown app sends')),
+            mine.box,
+            h('span', { class: 'plt-label' }, 'Who receives what you send'),
+            h('div', { class: 'controls plt-row' }, ts.el, cmd('sendBroadcast(...)', outbound)),
+            h('div', { class: 'plt-pair' }, comp.box, spy.box),
+            o);
+        },
+      },
+      {
+        title: 'Cached apps get some broadcasts late',
+        body: `<p>On Android 14, when your app is cached in the background, the system can queue broadcasts for your context-registered receivers instead of delivering them right away. When the app leaves the cached state, for example by coming back to the foreground, it gets the queue, and several copies of some broadcasts may be merged into one. Manifest receivers are not queued.</p>
+<p>So don't count events by counting broadcasts. When one arrives, read the current state.</p>`,
+        code: `override fun onReceive(context: Context, intent: Intent) {
+    // Don't do level += 1 per broadcast; ask for the current value
+    val battery = context.getSystemService(BatteryManager::class.java)
+    updateBadge(battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY))
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>Broadcasts go through the activity manager in <code>system_server</code>. For each one it collects the matching receivers: registered ones from its own list, manifest ones from the package manager. A manifest receiver may need your process started first, and the system creates a new instance of the receiver class for every broadcast. Then it calls <code>onReceive()</code> on your main thread and starts the timeout clock.</p>
+<p>While <code>onReceive()</code> runs, or until a <code>goAsync()</code> result is finished, your process counts as running a receiver and gets high priority. After that its priority falls back to whatever else it is doing, which after a manifest wake-up is usually nothing.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Broadcasting private data implicitly',
+        bad: `sendBroadcast(Intent(ACTION_LOGIN_DONE).putExtra("token", session.token))`,
+        good: `sendBroadcast(Intent(ACTION_LOGIN_DONE).setPackage(packageName))
+// inside one process, a SharedFlow is simpler than any broadcast`,
+        why: 'An implicit broadcast reaches every app that registered for that action. Set the package, keep secrets out of extras, and skip broadcasts entirely for in-process events.',
+      },
+      {
+        title: 'Listening for connectivity in the manifest',
+        bad: `// <receiver android:name=".NetReceiver" android:exported="false">
+//     <intent-filter>
+//         <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+//     </intent-filter>
+// </receiver>`,
+        good: `connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+    override fun onAvailable(network: Network) = retryPending()
+})
+// for background work: a WorkManager network constraint`,
+        why: 'Apps targeting Android 7 or later don’t receive <code>CONNECTIVITY_ACTION</code> through manifest receivers, and the action is deprecated. Use a network callback while running, or a constraint for deferred work.',
+      },
+      {
+        title: 'Trusting what an exported receiver gets',
+        bad: `override fun onReceive(context: Context, intent: Intent) {
+    val id = intent.getStringExtra("article_id")!!
+    context.startActivity(articleIntent(context, id))
+}`,
+        good: `override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action != ACTION_OPEN_ARTICLE) return
+    val id = intent.getStringExtra("article_id")?.toLongOrNull() ?: return
+    ArticleWork.prefetch(context, id)
+}`,
+        why: 'Any app can send an exported receiver any Intent. Check the action, validate every extra, and don’t start Activities from a receiver: since Android 10 background Activity starts are blocked anyway.',
+      },
+    ],
+  };
 
   Lab.addTrack({
     id: 'background',
@@ -506,6 +877,9 @@ ContextCompat.startForegroundService(context, Intent(context, BriefingService::c
           { q: '<code>onStartCommand</code> launches a coroutine that downloads for a minute and only then calls <code>startForeground()</code>. What happens?', options: ['Nothing special', 'The app crashes with <code>ForegroundService<wbr>DidNotStartInTime<wbr>Exception</code>', 'It quietly becomes a background service'], a: 1, why: 'The service has only a few seconds after startForegroundService(). Go foreground first, then do the work.' },
           { q: 'Targeting Android 14, the <code>&lt;service&gt;</code> has no <code>foregroundServiceType</code>. <code>startForeground()</code> is called.', options: ['It works as before', 'It throws <code>MissingForeground<wbr>ServiceType<wbr>Exception</code>', 'The type defaults to dataSync'], a: 1, why: 'Android 14 requires a declared type for every foreground service.' },
         ],
+        deeper: fgsDepth.deeper,
+        underHood: fgsDepth.underHood,
+        mistakes: fgsDepth.mistakes,
         visual(el) {
           const FROM = {
             tap: { label: 'Button tap (app visible)', ok: 'The app is visible, so a foreground start is allowed.' },
@@ -635,6 +1009,9 @@ sendBroadcast(Intent(ACTION_REFRESH).setPackage(packageName))`,
           { q: 'Targeting Android 14, you call <code>registerReceiver</code> for a custom action without an exported flag. What happens?', options: ['It defaults to exported', 'It throws <code>SecurityException</code>', 'It defaults to not exported'], a: 1, why: 'For non-system broadcasts, apps targeting Android 14 must choose RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED.' },
           { q: 'Which thread does <code>onReceive()</code> run on by default?', options: ['A background thread', 'The main thread', 'A coroutine on Dispatchers.IO'], a: 1, why: 'That is why long work there causes ANRs. Use goAsync for a few seconds of work, or WorkManager.' },
         ],
+        deeper: receiversDepth.deeper,
+        underHood: receiversDepth.underHood,
+        mistakes: receiversDepth.mistakes,
         visual(el) {
           let registered = true, flag = 'NOT_EXPORTED', busy = false;
           const mkRx = (name, filter) => {

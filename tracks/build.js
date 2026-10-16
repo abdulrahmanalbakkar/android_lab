@@ -132,6 +132,41 @@
 .bd-dkey .bd-v1 { background: var(--warm); border-color: var(--warm); }
 .bd-dkey .bd-crash { background: var(--err); border-color: var(--err); box-shadow: inset 0 0 0 2px var(--surface); }
 .bd-dkey .bd-v2 { background: var(--accent); border-color: var(--accent); }
+/* depth pass 2 */
+.bd-d2-tree { display: grid; gap: 1px; align-content: start; font: 500 0.78rem/1.6 var(--mono); background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 14px; min-height: 5.4em; overflow-x: auto; min-width: 0; }
+.bd-d2-tree > div { white-space: pre; }
+.bd-d2-cmd { color: var(--t-c); }
+.bd-d2-up { color: var(--t-f); }
+.bd-d2-down { color: var(--t-e); }
+.bd-d2-pin { color: var(--t-s); }
+.bd-cell.bd-d2-off { background: var(--bg); color: var(--muted); border-style: dashed; text-decoration: line-through; }
+.bd-set.bd-d2-win { background: var(--ok-soft); color: var(--ok); }
+.bd-d2-apk { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 4px; min-width: 0; }
+.bd-d2-seg { display: grid; gap: 2px; align-content: start; padding: 8px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.25s, background 0.25s, opacity 0.25s; }
+.bd-d2-seg b { font: 600 0.78rem var(--mono); overflow-wrap: anywhere; }
+.bd-d2-seg small { font-size: 0.74rem; color: var(--muted); line-height: 1.3; }
+.bd-d2-seg.bd-d2-cov { border-color: var(--accent); background: var(--accent-soft); }
+.bd-d2-seg.bd-d2-gone { opacity: 0.45; border-style: dashed; }
+.bd-d2-seg.bd-d2-hit { outline: 3px solid var(--warm); outline-offset: -6px; }
+.bd-d2-seg.bd-d2-scan { background: var(--warm-soft); }
+@media (max-width: 560px) { .bd-d2-apk { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bd-key.bd-d2-signer { border-color: var(--accent); background: var(--accent-soft); }
+.bd-file.bd-d2-bad { border-color: var(--err); background: var(--err-soft); }
+.bd-d2-tag { justify-self: start; font: 600 0.66rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.bd-d2-mod { transition: border-color 0.25s; }
+.bd-d2-mod.bd-d2-here { border-color: var(--ok); }
+.bd-d2-mod.bd-d2-here .bd-d2-tag { background: var(--ok-soft); color: var(--ok); }
+.bd-d2-mono { font: 600 0.82rem var(--mono); overflow-wrap: anywhere; }
+.bd-d2-small { color: var(--muted); font-size: 0.8rem; line-height: 1.35; overflow-wrap: anywhere; }
+.bd-grid.bd-d2-users { grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); }
+.bd-d2-user b { font: 700 0.86rem var(--display); }
+.bd-d2-big { font: 800 1.5rem var(--mono); color: var(--accent); }
+.bd-d2-chart { display: grid; gap: 4px; min-width: 0; }
+.bd-d2-scale { position: relative; height: 30px; border-radius: 8px; background: var(--sunk); overflow: hidden; }
+.bd-d2-base { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ok); }
+.bd-d2-band { position: absolute; top: 6px; bottom: 6px; left: 0; width: 0; box-sizing: border-box; border-radius: 6px; background: var(--warm-soft); border: 2px solid var(--warm); opacity: 0; transition: left 0.4s, width 0.4s, opacity 0.3s; }
+.bd-d2-pt { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--warm); opacity: 0; transition: left 0.4s; }
+.bd-d2-ticks { display: flex; justify-content: space-between; gap: 6px; font: 500 0.72rem var(--mono); color: var(--muted); }
 `;
 
   Lab.addTrack({
@@ -496,6 +531,128 @@ dependencies {
           { q: 'You misspell an accessor: <code>libs.androidx.room.runtme</code>. When do you find out?', options: ['When the build script compiles, or earlier in the IDE', 'Only after Gradle searches every repository', 'At runtime on the device'], a: 0, why: 'Accessors are generated Kotlin code. A name that does not exist is an unresolved reference in the build script.' },
           { q: 'Why declare plugins in the root build file with <code>apply false</code>?', options: ['To disable them', 'To load each plugin version once, so every module uses the same one', 'It is required by the catalog format'], a: 1, why: 'The root build puts the plugin on the classpath with one version. Modules then apply it without repeating a version.' },
         ],
+        deeper: [
+          {
+            title: 'The catalog asks, conflict resolution decides',
+            body: `<p>A catalog version is a request, not a lock. When two parts of the dependency graph ask for different versions of one library, Gradle picks the highest. Add an SDK that was built against a newer coroutines release, and your app runs that newer release, whatever <code>libs.versions.toml</code> says.</p>
+<p>Run <code>./gradlew :app:dependencies</code> to see it. An arrow like <code>1.8.1 -> 1.10.2</code> means a version was raised. A <code>strictly</code> version turns your request into a rule and wins, even by downgrading. That can break the SDK that needed the newer one, so use it rarely.</p>`,
+            code: `# gradle/libs.versions.toml
+[versions]
+coroutines = "1.8.1"                     # a request: other requests can raise it
+# coroutines = { strictly = "1.8.1" }    # a rule: wins, even by downgrading
+
+# see what was actually picked
+$ ./gradlew :app:dependencies --configuration releaseRuntimeClasspath`,
+            visual(el) {
+              const C = 'org.jetbrains.kotlinx:kotlinx-coroutines-core';
+              let sdk = false, strict = false, busy = false;
+              const toml = h('div', { class: 'bd-line' });
+              const tree = h('div', { class: 'bd-d2-tree', 'aria-live': 'polite' }, h('div', { class: 'bd-d2-cmd' }, '# not run yet'));
+              const o = out('Run the task. Then add the SDK and run it again.');
+              const paint = () => { toml.innerHTML = hl(strict ? 'coroutines = { strictly = "1.8.1" }' : 'coroutines = "1.8.1"'); };
+              const sdkSw = toggle('bd-d2-cat-sdk', 'add com.acme:analytics:5.2.0', function () {
+                if (busy) { this.checked = !this.checked; return; }
+                sdk = this.checked; tree.replaceChildren(h('div', { class: 'bd-d2-cmd' }, '# graph changed, run again'));
+                say(o, sdk ? 'Added an SDK that was built against coroutines 1.10.2.' : 'SDK removed.');
+              });
+              const strictSw = toggle('bd-d2-cat-strict', 'make it strictly', function () {
+                if (busy) { this.checked = !this.checked; return; }
+                strict = this.checked; paint(); replay(toml, 'bd-flash');
+                tree.replaceChildren(h('div', { class: 'bd-d2-cmd' }, '# catalog changed, run again'));
+                say(o, strict ? 'The catalog version is now a rule.' : 'Back to a plain request.');
+              });
+              async function run() {
+                if (busy) return; busy = true;
+                tree.replaceChildren();
+                const ask = strict ? '{strictly 1.8.1}' : '1.8.1';
+                const won = sdk && !strict ? '1.10.2' : '1.8.1';
+                const lines = [['$ ./gradlew :app:dependencies', 'bd-d2-cmd'], ['releaseRuntimeClasspath', '']];
+                lines.push([`${sdk ? '+---' : '\\---'} ${C}:${ask}${strict || won !== '1.8.1' ? ' -> ' + won : ''}`, won !== '1.8.1' ? 'bd-d2-up' : strict ? 'bd-d2-pin' : '']);
+                if (sdk) {
+                  lines.push(['\\--- com.acme:analytics:5.2.0', '']);
+                  lines.push([`     \\--- ${C}:1.10.2${strict ? ' -> 1.8.1' : ' (*)'}`, strict ? 'bd-d2-down' : '']);
+                }
+                for (const [t, c] of lines) {
+                  tree.append(h('div', { class: `drop-in ${c}` }, t));
+                  await sleep(220); if (!el.isConnected) return;
+                }
+                if (sdk && strict) say(o, '<span class="bad">runs 1.8.1.</span> analytics was compiled against 1.10.2 and can fail with NoSuchMethodError when it calls a newer function.');
+                else if (sdk) say(o, '<span class="good">runs 1.10.2.</span> The catalog asked for 1.8.1. The highest request in the graph won.');
+                else say(o, '<span class="good">runs 1.8.1.</span> Nobody asked for anything else.');
+                busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'bd-card' }, lbl('libs.versions.toml'), toml),
+                h('div', { class: 'controls' }, sdkSw.el, strictSw.el),
+                tree,
+                h('div', { class: 'controls' }, cmd('./gradlew :app:dependencies', run)),
+                o);
+            },
+          },
+          {
+            title: 'Libraries with no version: BOMs',
+            body: `<p>Some libraries come as a family whose members must match, like Compose or Firebase. Their publishers ship a BOM, a bill of materials that lists one tested version for every member. Put the BOM in the catalog with a version, and list the members with no version at all.</p>
+<p>Add the BOM with <code>platform()</code>. It takes part in conflict resolution like any other dependency, so every member lines up on its versions. Upgrading the whole family is one line. Add the BOM to each configuration that uses members, such as <code>androidTestImplementation</code> too.</p>`,
+            code: `# gradle/libs.versions.toml
+[versions]
+composeBom = "2025.06.00"
+
+[libraries]
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }                  # no version
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+// app/build.gradle.kts
+dependencies {
+    val composeBom = platform(libs.androidx.compose.bom)
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
+    implementation(libs.androidx.compose.ui)            // version comes from the BOM
+    implementation(libs.androidx.compose.material3)
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>The catalog is read while Gradle sets up the build, before any build script runs. From it, Gradle generates a class named <code>LibrariesForLibs</code>, compiles it and puts it on the classpath of every build script. That is why <code>libs.androidx.room.runtime</code> autocompletes, and why a wrong name fails script compilation.</p>
+<p>An accessor does not hold a version string. It returns a <code>Provider</code> of a dependency that Gradle reads when it needs it. Plugin entries come back as <code>Provider&lt;PluginDependency&gt;</code>, which <code>alias()</code> turns into a plugin request with an id and a version.</p>`,
+          code: `// The types behind the accessors
+val room: Provider<MinimalExternalModuleDependency> = libs.androidx.room.runtime
+val roomBundle: Provider<ExternalModuleDependencyBundle> = libs.bundles.room
+val agp: Provider<PluginDependency> = libs.plugins.android.application
+
+println(room.get().module)                                // androidx.room:room-runtime
+println(room.get().versionConstraint.requiredVersion)     // 2.7.2`,
+        },
+        mistakes: [
+          {
+            title: 'Typing one version by hand next to the catalog',
+            bad: `dependencies {
+    implementation(libs.androidx.room.runtime)     // 2.7.2 from the catalog
+    ksp("androidx.room:room-compiler:2.6.1")       // typed by hand
+}`,
+            good: `# libs.versions.toml
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+dependencies {
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
+}`,
+            why: '<code>ksp</code> is a separate configuration, so conflict resolution never lines it up with the runtime. The code Room generates and the library it calls drift apart. Give every artifact of a family the same <code>version.ref</code>.',
+          },
+          {
+            title: 'Forgetting apply false in the root build',
+            bad: `// build.gradle.kts (root)
+plugins {
+    alias(libs.plugins.android.application)
+}`,
+            good: `// build.gradle.kts (root)
+plugins {
+    alias(libs.plugins.android.application) apply false
+}`,
+            why: 'Without <code>apply false</code> the root project applies the Android plugin itself. The root has no Android setup, so the build fails. The root should only load the plugin and pin its version.',
+          },
+        ],
         visual(el) {
           let typo = true, ver = '2.7.2', busy = false;
           const nm = () => (typo ? 'runtme' : 'runtime');
@@ -617,6 +774,193 @@ if (BuildConfig.SHOW_ADS) showBanner()`,
           { q: 'Flavor dimensions <code>tier</code> (free, paid) and <code>env</code> (staging, prod), plus debug and release. How many variants?', options: ['4', '6', '8'], a: 2, why: '2 tiers x 2 envs x 2 build types = 8, like <code>freeStagingDebug</code>.' },
           { q: 'Both <code>src/main/res/values/strings.xml</code> and <code>src/paid/res/values/strings.xml</code> define <code>title</code>. Which does <code>paidRelease</code> use?', options: ['The one in src/main', 'The one in src/paid', 'The build fails with a duplicate'], a: 1, why: 'Resources merge by priority. A flavor source set overrides <code>main</code>.' },
           { q: 'What is <code>applicationIdSuffix = ".debug"</code> on the debug build type for?', options: ['It makes the build faster', 'It lets the debug app install next to the release app on one phone', 'Play requires it'], a: 1, why: 'A different application ID is a different app to Android, so both can live on the same device.' },
+        ],
+        deeper: [
+          {
+            title: 'Switch off variants you never build',
+            body: `<p>Every variant adds tasks, configuration time and entries in the IDE. Two dimensions and two build types make eight, and some make no sense, like a release build that talks to the staging backend. Filter them in <code>androidComponents.beforeVariants</code>. A disabled variant gets no tasks at all.</p>
+<p>The filter runs before AGP creates the variant objects, so it only sees names: the build type and the flavors. You can’t read values such as <code>applicationId</code> there yet.</p>`,
+            code: `androidComponents {
+    beforeVariants { variant ->
+        val staging = ("env" to "staging") in variant.productFlavors
+        if (staging && variant.buildType == "release") {
+            variant.enable = false   // no freeStagingRelease or paidStagingRelease tasks
+        }
+    }
+}`,
+            visual(el) {
+              const TIERS = ['free', 'paid'], ENVS = ['staging', 'prod'], TYPES = ['debug', 'release'];
+              const cap = s => s[0].toUpperCase() + s.slice(1);
+              const name = (t, e, b) => t + cap(e) + cap(b);
+              const on = {};
+              TIERS.forEach(t => ENVS.forEach(e => TYPES.forEach(b => { on[name(t, e, b)] = true; })));
+              let busy = false;
+              const matrix = h('div', { class: 'bd-matrix' });
+              const count = h('span', { class: 'bd-count' });
+              const tree = h('div', { class: 'bd-d2-tree', 'aria-live': 'polite' }, h('div', { class: 'bd-d2-cmd' }, '# tap a variant to switch it off'));
+              const o = out('All 8 variants are on. Some of them make no sense.');
+              const paint = changed => {
+                matrix.replaceChildren(
+                  h('span', { class: 'bd-mh' }, 'tier + env'), ...TYPES.map(b => h('span', { class: 'bd-mh' }, b)),
+                  ...TIERS.flatMap(t => ENVS.flatMap(e => [h('span', { class: 'bd-mh' }, `${t} + ${e}`), ...TYPES.map(b => {
+                    const n = name(t, e, b);
+                    return h('button', { class: 'bd-cell' + (on[n] ? '' : ' bd-d2-off') + (changed && changed.includes(n) ? ' pop' : ''), 'aria-pressed': String(on[n]), onclick() {
+                      if (busy) return;
+                      on[n] = !on[n]; paint([n]);
+                      say(o, on[n] ? `${n} is back.` : `${n} switched off. No tasks for it.`);
+                    } }, n);
+                  })])));
+                const n = Object.values(on).filter(Boolean).length;
+                count.textContent = `${n} of 8 variants enabled`;
+              };
+              const filter = cmd('beforeVariants { stagingRelease off }', () => {
+                if (busy) return;
+                const hit = Object.keys(on).filter(n => n.endsWith('StagingRelease'));
+                hit.forEach(n => { on[n] = false; }); paint(hit);
+                say(o, 'The filter matched the env flavor staging with the release build type. Two variants gone.');
+              });
+              async function list() {
+                if (busy) return; busy = true;
+                tree.replaceChildren(h('div', { class: 'bd-d2-cmd' }, '$ ./gradlew tasks --group build'));
+                for (const n of Object.keys(on).filter(k => on[k])) {
+                  tree.append(h('div', { class: 'drop-in' }, `assemble${cap(n)}`));
+                  await sleep(110); if (!el.isConnected) return;
+                }
+                say(o, 'Only enabled variants have tasks. Android Studio’s Build Variants panel shows the same list.');
+                busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, count),
+                matrix,
+                h('div', { class: 'controls' }, filter, cmd('./gradlew tasks', list)),
+                tree, o);
+            },
+          },
+          {
+            title: 'Matching variants across modules',
+            body: `<p>Variants must also match between modules. When <code>:app</code> builds its release variant, Gradle asks <code>:core:billing</code> for its release variant too. If the library has no build type with that name, resolution fails. A custom build type like <code>benchmark</code> hits this first.</p>
+<p>Tell AGP what to fall back to. <code>matchingFallbacks</code> lists build types or flavors to try in order. <code>missingDimensionStrategy</code> picks a flavor for a dimension that the library has and the app does not.</p>`,
+            code: `android {
+    buildTypes {
+        create("benchmark") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")   // libraries have no "benchmark"
+        }
+    }
+    defaultConfig {
+        missingDimensionStrategy("store", "play")    // :core:billing has play and amazon
+    }
+}`,
+            visual(el) {
+              const LIB = ['playDebug', 'playRelease', 'amazonDebug', 'amazonRelease'];
+              let bt = 'debug', busy = false;
+              const chips = LIB.map(n => h('span', { class: 'bd-set' }, n));
+              const tree = h('div', { class: 'bd-d2-tree', 'aria-live': 'polite' }, h('div', { class: 'bd-d2-cmd' }, '# pick a build type and resolve'));
+              const o = out(':app has no store dimension. :core:billing has one.');
+              const fb = toggle('bd-d2-var-fb', 'matchingFallbacks += "release"', function () { if (busy) { this.checked = !this.checked; return; } reset(); });
+              const ms = toggle('bd-d2-var-ms', 'missingDimensionStrategy("store", "play")', function () { if (busy) { this.checked = !this.checked; return; } reset(); });
+              const reset = () => { chips.forEach(c => { c.className = 'bd-set'; }); tree.replaceChildren(h('div', { class: 'bd-d2-cmd' }, '# setup changed, resolve again')); };
+              const btBtns = ['debug', 'release', 'benchmark'].map(b => h('button', { class: 'bd-opt', 'aria-pressed': String(b === bt), onclick() {
+                if (busy) return;
+                bt = b; btBtns.forEach(x => x.setAttribute('aria-pressed', String(x.textContent === b))); reset();
+              } }, b));
+              const put = async (t, c = '') => { tree.append(h('div', { class: `drop-in ${c}` }, t)); await sleep(320); return el.isConnected; };
+              async function resolve() {
+                if (busy) return; busy = true;
+                chips.forEach(c => { c.className = 'bd-set'; });
+                tree.replaceChildren();
+                if (!await put(`$ ./gradlew :app:assemble${bt[0].toUpperCase() + bt.slice(1)}`, 'bd-d2-cmd')) return;
+                let type = bt;
+                if (bt === 'benchmark') {
+                  if (!fb.input.checked) {
+                    await put('build type benchmark: not in :core:billing', 'bd-d2-down');
+                    await put('> Could not resolve project :core:billing.', 'bd-d2-down');
+                    replay(tree, 'shake'); say(o, '<span class="bad">Failed.</span> The library has only debug and release. Add a fallback.');
+                    busy = false; return;
+                  }
+                  if (!await put('build type benchmark: not found, fallback release', 'bd-d2-up')) return;
+                  type = 'release';
+                } else if (!await put(`build type ${bt}: found`)) return;
+                const cands = LIB.filter(n => n.toLowerCase().endsWith(type));
+                if (!ms.input.checked) {
+                  cands.forEach(n => { chips[LIB.indexOf(n)].className = 'bd-set bd-top'; });
+                  await put('dimension store: :app has none', 'bd-d2-down');
+                  await put(`> Cannot choose between the following variants of project :core:billing: ${cands.join(', ')}`, 'bd-d2-down');
+                  replay(tree, 'shake'); say(o, '<span class="bad">Ambiguous.</span> Two library variants fit equally well. Pick one with missingDimensionStrategy.');
+                  busy = false; return;
+                }
+                if (!await put('dimension store: missingDimensionStrategy picks play', 'bd-d2-up')) return;
+                const pick = 'play' + type[0].toUpperCase() + type.slice(1);
+                chips[LIB.indexOf(pick)].className = 'bd-set bd-d2-win pop';
+                await put(`:core:billing -> ${pick}`, 'bd-d2-pin');
+                say(o, `<span class="good">Resolved.</span> :app ${bt} uses :core:billing ${pick}.`);
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'bd-pick', role: 'group', 'aria-label': 'App build type' }, lbl(':app'), btBtns),
+                h('div', { class: 'bd-card' }, lbl(':core:billing variants'), h('div', { class: 'bd-sets' }, chips)),
+                h('div', { class: 'controls' }, fb.el, ms.el),
+                h('div', { class: 'controls' }, act('Resolve :core:billing', resolve)),
+                tree, o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>AGP reads your <code>android { }</code> block, then computes the variant list: every flavor combination times every build type, minus what <code>beforeVariants</code> disabled. For each variant it merges the settings in a fixed order. A flavor value overrides <code>defaultConfig</code>, and suffixes stack, flavor first and build type last, as in <code>com.example.news.pro.debug</code>. Then it registers that variant’s own tasks, like <code>compilePaidDebugKotlin</code> and <code>assemblePaidDebug</code>.</p>
+<p>Each <code>buildConfigField</code> becomes a <code>static final</code> field in a generated <code>BuildConfig</code> class. Java and Kotlin treat those as compile-time constants and copy the value into the code that reads them. So in a paid release build, <code>if (BuildConfig.SHOW_ADS)</code> is <code>if (false)</code>, and R8 removes the dead branch. <code>resValue</code> entries go into a generated resource file that merges with the variant’s other resources.</p>`,
+          code: `// What the generated BuildConfig for paidRelease contains
+public final class BuildConfig {
+  public static final String APPLICATION_ID = "com.example.news.pro";
+  public static final String BUILD_TYPE = "release";
+  public static final String FLAVOR = "paid";
+  public static final int VERSION_CODE = 1;
+  public static final String VERSION_NAME = "1.0";
+  public static final boolean SHOW_ADS = false;
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Branching on BuildConfig.FLAVOR everywhere',
+            bad: `fun firstScreen(): Screen =
+    if (BuildConfig.FLAVOR == "free") UpsellScreen() else HomeScreen()
+
+fun adsEnabled() = BuildConfig.FLAVOR == "free"`,
+            good: `// src/free/kotlin/com/example/news/Tier.kt
+object Tier : TierConfig {
+    override fun firstScreen(): Screen = UpsellScreen()
+    override val ads = true
+}
+
+// src/paid/kotlin/com/example/news/Tier.kt
+object Tier : TierConfig {
+    override fun firstScreen(): Screen = HomeScreen()
+    override val ads = false
+}`,
+            why: 'String checks spread through the code, and a typo like <code>"Free"</code> compiles fine. With one class per flavor source set, each variant compiles only its own version, and the compiler checks both against the same interface.',
+          },
+          {
+            title: 'Using the application ID as the code package',
+            bad: `val cls = Class.forName("\${BuildConfig.APPLICATION_ID}.MainActivity")
+startActivity(Intent(this, cls))`,
+            good: `startActivity(Intent(this, MainActivity::class.java))`,
+            why: 'The application ID changes per variant, for example <code>com.example.news.pro.debug</code>. Classes live in the <code>namespace</code>, which stays <code>com.example.news</code>. The lookup throws <code>ClassNotFoundException</code> in every variant with a suffix.',
+          },
+          {
+            title: 'Declaring fields without turning BuildConfig on',
+            bad: `android {
+    defaultConfig {
+        buildConfigField("String", "API_URL", "\\"https://api.example.com\\"")
+    }
+}`,
+            good: `android {
+    buildFeatures { buildConfig = true }
+    defaultConfig {
+        buildConfigField("String", "API_URL", "\\"https://api.example.com\\"")
+    }
+}`,
+            why: 'Since AGP 8, modules don’t generate <code>BuildConfig</code> unless you ask. Custom fields with the feature off fail the build with a message that the feature is disabled. Turn it on only in the modules that need it.',
+          },
         ],
         visual(el) {
           const TYPES = ['debug', 'release'], TIERS = ['free', 'paid'], ENVS = ['staging', 'prod'];
@@ -1007,6 +1351,160 @@ android {
           { q: 'You upload a bundle signed with the debug keystore. What happens?', options: ['Play rejects it because it was signed in debug mode', 'Play re-signs it and publishes it', 'It installs only on test devices'], a: 0, why: 'Play refuses uploads signed in debug mode. Sign release builds with your upload key.' },
           { q: 'Which key do users\u2019 phones check when an update installs?', options: ['The upload key', 'The app signing key', 'The debug key'], a: 1, why: 'Play delivers APKs signed with the app signing key. The upload key only proves to Play that the upload came from you.' },
         ],
+        deeper: [
+          {
+            title: 'Signature schemes v1 to v4',
+            body: `<p>An APK can carry several signatures. v1 is the old JAR scheme. It signs each file inside the zip, but not the zip structure around them. v2, checked since Android 7.0, signs the whole file as one blob, so any changed byte breaks it, and it verifies faster. v3, since Android 9, adds key rotation: the APK can carry proof that a new key replaced an old one. v4, since Android 11, is a separate <code>.idsig</code> file for streaming installs with <code>adb install --incremental</code>.</p>
+<p>A phone checks the newest scheme it understands and ignores older ones. Signing tools pick schemes from your <code>minSdk</code>. With <code>minSdk = 24</code>, every phone checks v2 or later, so v1 adds nothing.</p>`,
+            visual(el) {
+              let full = true, old = false, tamper = 'none', busy = false;
+              const seg = (t, d) => Object.assign(h('div', { class: 'bd-d2-seg' }, h('b', {}, t), h('small', {}, d)), { badge: null });
+              const S = [seg('Entries', 'AndroidManifest.xml, classes.dex, res/'), seg('META-INF/', 'v1: a digest per entry'), seg('Signing Block', 'v2 and v3 signatures'), seg('Central dir + EOCD', 'zip index and metadata')];
+              const cov = h('div', { class: 'bd-legend' });
+              const o = out('Pick a scheme, a phone and a change, then install.');
+              const group = (label, items, get, set) => {
+                const btns = items.map(([k, t]) => h('button', { class: 'bd-opt', 'aria-pressed': String(get() === k), onclick() {
+                  if (busy) return;
+                  set(k); btns.forEach((b, i) => b.setAttribute('aria-pressed', String(get() === items[i][0]))); paint();
+                } }, t));
+                return h('div', { class: 'bd-pick', role: 'group', 'aria-label': label }, lbl(label), btns);
+              };
+              const checked = () => (old ? 'v1' : full ? 'v2' : 'v1');
+              function paint() {
+                const by = checked();
+                S.forEach((s, i) => {
+                  s.className = 'bd-d2-seg';
+                  if (i === 2 && !full) s.classList.add('bd-d2-gone');
+                  if (by === 'v1' && i === 0) s.classList.add('bd-d2-cov');
+                  if (by === 'v2' && i !== 2) s.classList.add('bd-d2-cov');
+                  if ((tamper === 'dex' && i === 0) || (tamper === 'meta' && i === 3)) s.classList.add('bd-d2-hit');
+                });
+                cov.textContent = `checked on this phone: ${by === 'v1' ? 'v1, which covers the entries only' : 'v2/v3, which cover every byte outside the signing block'}`;
+              }
+              async function install() {
+                if (busy) return; busy = true;
+                say(o, '<span class="muted">$ adb install app-release.apk</span>');
+                const by = checked();
+                const order = by === 'v1' ? [0] : [0, 1, 3];
+                for (const i of order) {
+                  S[i].classList.add('bd-d2-scan'); await sleep(380); if (!el.isConnected) return;
+                  S[i].classList.remove('bd-d2-scan');
+                }
+                if (tamper === 'dex') { replay(S[0], 'shake'); say(o, `<span class="bad">Install refused.</span> The ${by} digest of classes.dex does not match. Every scheme catches a changed file.`); }
+                else if (tamper === 'meta' && by === 'v2') { replay(S[3], 'shake'); say(o, '<span class="bad">Install refused.</span> v2 covers the zip index too, so a changed byte there breaks the signature.'); }
+                else if (tamper === 'meta') say(o, '<span class="bad">Installed anyway.</span> v1 never looks at zip metadata. The Janus attack (2017) used this gap to slip extra code into v1-only APKs on Android 5 to 8.');
+                else say(o, `<span class="good">Installed.</span> Verified with ${by === 'v1' ? 'v1 (JAR signing)' : 'APK Signature Scheme v2/v3'}.`);
+                busy = false;
+              }
+              paint();
+              el.append(
+                h('div', { class: 'bd-d2-apk' }, S),
+                cov,
+                h('div', { class: 'bd-picks' },
+                  group('Signed', [[true, 'v1 + v2 + v3'], [false, 'v1 only']], () => full, v => { full = v; }),
+                  group('Phone', [[false, 'Android 15'], [true, 'Android 6']], () => old, v => { old = v; }),
+                  group('Change', [['none', 'nothing'], ['dex', 'edit classes.dex'], ['meta', 'edit zip metadata']], () => tamper, v => { tamper = v; })),
+                h('div', { class: 'controls' }, cmd('adb install app-release.apk', install)),
+                o);
+            },
+          },
+          {
+            title: 'Which fingerprint do services see?',
+            body: `<p>Google sign-in, Maps key restrictions and Firebase recognize your app by its package name plus the SHA-1 or SHA-256 fingerprint of its signing certificate. Up to three certificates are in play: your debug key, your upload key and Play’s app signing key. Copies installed from Play carry the app signing key, so its fingerprint must be registered. Otherwise sign-in works for you and fails for every user.</p>
+<p>Print your local fingerprints with <code>./gradlew signingReport</code>. Copy the app signing key’s fingerprints from the App signing page in Play Console.</p>`,
+            code: `$ ./gradlew signingReport
+Variant: debug
+Store: /Users/you/.android/debug.keystore
+SHA1: A1:3F:…
+SHA-256: 5B:0C:…
+
+Variant: release
+Store: /Users/you/keys/upload.jks
+SHA1: 7C:22:…
+// The app signing key is not on your machine. Its fingerprints are in Play Console.`,
+            visual(el) {
+              const KEYS = [['debug', 'debug key', 'A1:3F:9E'], ['upload', 'upload key', '7C:22:B0'], ['app', 'app signing key', 'E9:04:5D']];
+              const reg = { debug: true, upload: true, app: false };
+              let src = 'debug';
+              const SRC = [['debug', 'Run from Android Studio'], ['upload', 'Local release build'], ['app', 'Installed from Play']];
+              const chips = {};
+              const keyRow = h('div', { class: 'bd-keys' }, KEYS.map(([k, t, fp]) => (chips[k] = h('span', { class: 'bd-key' }, `${t} · SHA-1 ${fp}…`))));
+              const o = out('Debug and upload fingerprints are registered. Try each install, then sign in.');
+              const boxes = KEYS.map(([k, t]) => {
+                const tg = toggle(`bd-d2-sig-${k}`, t, () => { reg[k] = tg.input.checked; say(o, `${t} fingerprint ${reg[k] ? 'added to' : 'removed from'} the console.`); });
+                tg.input.checked = reg[k];
+                return tg.el;
+              });
+              const paint = () => KEYS.forEach(([k]) => { chips[k].className = 'bd-key' + (k === src ? ' bd-d2-signer pop' : ''); });
+              const srcBtns = SRC.map(([k, t]) => h('button', { class: 'bd-opt', 'aria-pressed': String(k === src), onclick() {
+                src = k; srcBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(SRC[i][0] === k))); paint();
+                say(o, `This copy is signed with the ${KEYS.find(x => x[0] === k)[1]}.`);
+              } }, t));
+              paint();
+              el.append(
+                h('div', { class: 'bd-pick', role: 'group', 'aria-label': 'Install' }, lbl('Install'), srcBtns),
+                keyRow,
+                h('div', { class: 'bd-card' }, lbl('Registered in Cloud Console / Firebase'), h('div', { class: 'controls' }, boxes)),
+                h('div', { class: 'controls' }, act('Sign in with Google', () => {
+                  const name = KEYS.find(x => x[0] === src)[1];
+                  if (reg[src]) { replay(chips[src], 'pop'); say(o, `<span class="good">Signed in.</span> The ${name} fingerprint matches a registered one.`); }
+                  else { replay(chips[src], 'shake'); say(o, `<span class="bad">Sign-in failed:</span> developer error. This app’s ${name} fingerprint is not registered.${src === 'app' ? ' This is what every Play user sees.' : ''}`); }
+                })),
+                o);
+            },
+          },
+          {
+            title: 'Signing in CI without a file in the repo',
+            body: `<p>CI needs the upload key too. Store the keystore as a base64 secret, decode it to a temporary file at the start of the job, and pass the path in. The build script stays the same as on your machine, because it reads the same Gradle property and environment variables.</p>`,
+            code: `# CI job. Secrets come from the CI's encrypted store.
+echo "$UPLOAD_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+./gradlew :app:bundleRelease -Pnews.upload.storeFile="$RUNNER_TEMP/upload.jks"
+# UPLOAD_STORE_PASSWORD and UPLOAD_KEY_PASSWORD are secret environment variables`,
+          },
+        ],
+        underHood: {
+          body: `<p>v2 and v3 signatures live in an APK Signing Block, inserted just before the zip’s central directory. The signer splits the rest of the file into 1 MB chunks, hashes each chunk, and signs the combined digest together with the certificate. At install, the package manager recomputes the digests, checks the signature and records the signing certificate. On an update it compares the new certificate with the stored one, or follows a v3 rotation proof from the old key to the new one. A mismatch fails with <code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>.</p>
+<p>An <code>.aab</code> is never installed, so it carries a JAR signature, the kind jarsigner makes. Play checks it against your registered upload certificate, then signs the APKs it generates with the app signing key.</p>`,
+          code: `$ apksigner verify --print-certs --verbose app-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Number of signers: 1
+Signer #1 certificate SHA-256 digest: 3f9a…`,
+        },
+        mistakes: [
+          {
+            title: 'Breaking every build when a secret is missing',
+            bad: `signingConfigs {
+    create("upload") {
+        storeFile = file(System.getenv("UPLOAD_STORE_FILE")!!)
+        storePassword = System.getenv("UPLOAD_STORE_PASSWORD")!!
+    }
+}`,
+            good: `val storePath = providers.environmentVariable("UPLOAD_STORE_FILE").orNull
+if (storePath != null) {
+    signingConfigs.create("upload") {
+        storeFile = file(storePath)
+        storePassword = providers.environmentVariable("UPLOAD_STORE_PASSWORD").get()
+        keyAlias = "upload"
+        keyPassword = providers.environmentVariable("UPLOAD_KEY_PASSWORD").get()
+    }
+    buildTypes.getByName("release").signingConfig = signingConfigs.getByName("upload")
+}`,
+            why: 'This block runs during configuration, for every build. The <code>!!</code> throws on any machine without the secrets, so a new contributor can’t even build debug. Attach the signing config only when the secrets exist.',
+          },
+          {
+            title: 'Making a new key on a new machine',
+            bad: `# new CI runner, no keystore found, so make one
+keytool -genkeypair -keystore upload.jks -alias upload -keyalg RSA -validity 10000
+./gradlew :app:bundleRelease`,
+            good: `# restore the one registered upload key
+echo "$UPLOAD_KEYSTORE_B64" | base64 --decode > upload.jks
+./gradlew :app:bundleRelease`,
+            why: 'Play accepts uploads only when they are signed with your registered upload key. A bundle signed with a fresh key is rejected as signed with the wrong key. Keep one upload key, back it up, and restore it wherever you build.',
+          },
+        ],
         visual(el) {
           let busy = false, lost = false, leaked = false;
           const stn = (t, d) => { const slot = h('div', { class: 'bd-pslot' }); return Object.assign(h('div', { class: 'bd-stn' }, h('b', {}, t), h('small', {}, d), slot), { well: slot }); };
@@ -1120,6 +1618,223 @@ manager.startInstall(request)
           { q: 'What is a dynamic feature module good for?', options: ['Code most users don\u2019t need at install, like a rarely used scanner', 'Making every screen load faster', 'Replacing Gradle modules'], a: 0, why: 'Delivering it on demand keeps the first download small. Users who never open it never download it.' },
           { q: 'Your app has an in-app language picker. Why might you turn off the language split?', options: ['Language splits are not allowed with pickers', 'The phone only gets its system languages, so other languages would be missing until downloaded', 'It makes the app smaller'], a: 1, why: 'With language splits on, only device languages install. Turn the split off, or request extra languages with SplitInstallManager.' },
         ],
+        deeper: [
+          {
+            title: 'Install a bundle the way Play does',
+            body: `<p>A phone can’t install an <code>.aab</code>. To test what users get, let bundletool do Play’s job. <code>build-apks</code> cuts the bundle into an <code>.apks</code> archive, and <code>install-apks</code> picks the splits that match the connected phone and installs them together.</p>
+<p>Copying only the base APK breaks things. On recent Android versions the install is usually refused with <code>INSTALL_FAILED_MISSING_SPLIT</code>, because the base declares that it needs its splits. Where it does install, the app crashes the first time it needs a native library or a resource that lived in a missing split. For testers who sideload, build one universal APK with <code>--mode=universal</code>.</p>`,
+            code: `$ bundletool build-apks --bundle=app-release.aab --output=app.apks \\
+    --ks=upload.jks --ks-key-alias=upload
+$ bundletool install-apks --apks=app.apks      # picks splits for the connected phone
+
+# one APK with everything, for sideloading testers
+$ bundletool build-apks --bundle=app-release.aab --output=universal.apks --mode=universal`,
+            visual(el) {
+              let modern = true, inst = null, busy = false;
+              const files = h('div', { class: 'bd-files', 'aria-live': 'polite' }, h('div', { class: 'bd-file' }, h('span', {}, 'nothing installed'), h('span', {}, '')));
+              const o = out('Pick how to install on this arm64, xxhdpi, Turkish phone.');
+              const verBtns = [['Android 15', true], ['Android 9', false]].map(([t, v]) => h('button', { class: 'bd-opt', 'aria-pressed': String(v === modern), onclick() {
+                if (busy) return;
+                modern = v; verBtns.forEach(b => b.setAttribute('aria-pressed', String(b.textContent === t))); clear();
+                say(o, `Phone switched to ${t}. Nothing installed.`);
+              } }, t));
+              const clear = () => { inst = null; files.replaceChildren(h('div', { class: 'bd-file' }, h('span', {}, 'nothing installed'), h('span', {}, ''))); };
+              const SETS = {
+                base: [['base-master.apk', '8.2 MB']],
+                apks: [['base-master.apk', '8.2 MB'], ['base-arm64_v8a.apk', '5.6 MB'], ['base-xxhdpi.apk', '1.3 MB'], ['base-tr.apk', '0.1 MB']],
+                uni: [['universal.apk', '31.4 MB']],
+              };
+              async function install(kind) {
+                if (busy) return; busy = true;
+                files.replaceChildren(); inst = null;
+                say(o, '<span class="muted">installing…</span>');
+                await sleep(400); if (!el.isConnected) return;
+                if (kind === 'base' && modern) {
+                  files.append(h('div', { class: 'bd-file bd-d2-bad drop-in' }, h('span', {}, 'base-master.apk'), h('span', {}, 'refused')));
+                  say(o, '<span class="bad">Failure [INSTALL_FAILED_MISSING_SPLIT]</span> The base APK says it needs config splits that were not in the session.');
+                  busy = false; return;
+                }
+                for (const [n, s] of SETS[kind]) {
+                  files.append(h('div', { class: 'bd-file drop-in' }, h('span', {}, n), h('span', {}, s)));
+                  await sleep(240); if (!el.isConnected) return;
+                }
+                inst = kind;
+                say(o, kind === 'base' ? '<span class="bad">Installed, but incomplete.</span> Android 9 does not check for required splits. Open the app.' : `<span class="good">Installed.</span> ${kind === 'apks' ? 'Base plus the three splits this phone needs, 15.2 MB.' : 'One file with every ABI, density and language.'}`);
+                busy = false;
+              }
+              const open = (what) => () => {
+                if (busy) return;
+                if (!inst) { say(o, 'Nothing is installed yet.'); return; }
+                if (inst === 'base') {
+                  replay(files, 'shake');
+                  say(o, what === 'ui'
+                    ? '<span class="bad">Resources$NotFoundException:</span> Drawable com.example.news:drawable/header. Its PNGs live in the density split.'
+                    : '<span class="bad">UnsatisfiedLinkError:</span> dlopen failed: library "libfilters.so" not found. It lives in the ABI split.');
+                  return;
+                }
+                replay(files, 'pop');
+                say(o, what === 'ui' ? '<span class="good">Home screen drawn</span> with the xxhdpi header image.' : '<span class="good">Filters on.</span> libfilters.so loaded from the arm64-v8a split.');
+              };
+              el.append(
+                h('div', { class: 'bd-pick', role: 'group', 'aria-label': 'Phone' }, lbl('Phone'), verBtns),
+                h('div', { class: 'controls' },
+                  cmd('adb install base-master.apk', () => install('base')),
+                  cmd('bundletool install-apks --apks=app.apks', () => install('apks')),
+                  cmd('adb install universal.apk', () => install('uni'))),
+                files,
+                h('div', { class: 'controls' }, act('Open the home screen', open('ui')), act('Turn on photo filters (native code)', open('so'))),
+                o);
+            },
+          },
+          {
+            title: 'Choose how each feature module ships',
+            body: `<p>A dynamic feature module declares its delivery in its own manifest. Install-time delivery ships it with the app. On-demand delivery waits until the app calls <code>SplitInstallManager</code>. Conditional delivery installs it at install time only on phones that match conditions such as a minimum API level, a hardware feature or the user’s country.</p>
+<p>Pick by audience. A scanner that few users open fits on-demand. An AR mode that needs ARCore hardware fits conditional delivery, with on-demand as a fallback. A large module that everyone uses gains nothing from being dynamic.</p>`,
+            code: `<!-- feature/ar/src/main/AndroidManifest.xml -->
+<manifest xmlns:dist="http://schemas.android.com/apk/distribution">
+    <dist:module dist:title="@string/title_ar">
+        <dist:delivery>
+            <dist:install-time>
+                <dist:conditions>
+                    <dist:device-feature dist:name="android.hardware.camera.ar" />
+                    <dist:min-sdk dist:value="28" />
+                </dist:conditions>
+            </dist:install-time>
+            <dist:on-demand />
+        </dist:delivery>
+        <dist:fusing dist:include="true" />
+    </dist:module>
+</manifest>`,
+            visual(el) {
+              const DEV = [
+                { id: 'pixel', label: 'Android 16, ARCore', api: 36, ar: true },
+                { id: 'mid', label: 'Android 9, no ARCore', api: 28, ar: false },
+                { id: 'old', label: 'Android 8.1, ARCore', api: 27, ar: true },
+              ];
+              const MODS = [
+                { id: 'reader', name: ':feature:reader', mode: 'install-time', mb: 2.0 },
+                { id: 'scanner', name: ':feature:scanner', mode: 'on-demand', mb: 5.5 },
+                { id: 'ar', name: ':feature:ar', mode: 'camera.ar and API 28+, else on-demand', mb: 9.1 },
+              ];
+              let dev = DEV[0], have = new Set(), busy = false, mb = 0;
+              const cards = {};
+              const grid = h('div', { class: 'bd-grid' }, MODS.map(m => {
+                const st = h('span', { class: 'bd-d2-tag' }, 'not on phone');
+                const c = h('div', { class: 'bd-card bd-d2-mod' }, h('b', { class: 'bd-d2-mono' }, m.name), h('small', { class: 'bd-d2-small' }, m.mode), st);
+                cards[m.id] = { c, st };
+                return c;
+              }));
+              const size = h('span', { class: 'bd-count' });
+              const o = out('Pick a phone and install the app from Play.');
+              const paint = () => {
+                MODS.forEach(m => { const x = cards[m.id]; const on = have.has(m.id); x.c.classList.toggle('bd-d2-here', on); x.st.textContent = on ? 'installed' : 'not on phone'; });
+                size.textContent = `on phone: ${(8.2 + mb).toFixed(1)} MB`;
+              };
+              const devBtns = DEV.map(d => h('button', { class: 'bd-opt', 'aria-pressed': String(d === dev), onclick() {
+                if (busy) return;
+                dev = d; devBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(DEV[i] === d)));
+                have = new Set(); mb = 0; paint(); say(o, 'New phone. Install from Play.');
+              } }, d.label));
+              const add = async id => {
+                const m = MODS.find(x => x.id === id);
+                have.add(id); mb += m.mb; paint(); replay(cards[id].c, 'pop');
+                await sleep(380); return el.isConnected;
+              };
+              async function install() {
+                if (busy) return; busy = true;
+                have = new Set(); mb = 0; paint();
+                say(o, '<span class="muted">Play builds the splits for this phone…</span>');
+                await sleep(400); if (!el.isConnected) return;
+                if (!await add('reader')) return;
+                const arOk = dev.ar && dev.api >= 28;
+                if (arOk && !await add('ar')) return;
+                say(o, arOk ? '<span class="good">Installed</span> base, reader and AR. This phone meets both AR conditions.'
+                  : `<span class="good">Installed</span> base and reader. AR stayed out: ${!dev.ar ? 'no ARCore support' : 'API ' + dev.api + ' is below 28'}.`);
+                busy = false;
+              }
+              const open = id => async () => {
+                if (busy) return;
+                if (!have.has('reader')) { say(o, 'Install the app first.'); return; }
+                if (have.has(id)) { replay(cards[id].c, 'pop'); say(o, 'Already on the phone. It opens at once.'); return; }
+                if (id === 'ar' && !(dev.ar && dev.api >= 28)) { replay(cards.ar.c, 'shake'); say(o, 'This phone can’t run the AR mode. Check support first and hide the entry, even though on-demand could download it.'); return; }
+                busy = true;
+                say(o, `${hl('manager.startInstall(request)')} <span class="muted">· downloading ${MODS.find(x => x.id === id).name}</span>`);
+                await sleep(500); if (!el.isConnected) return;
+                if (!await add(id)) return;
+                say(o, `<span class="good">Downloaded on demand.</span> Users who never open it never pay for these ${MODS.find(x => x.id === id).mb} MB.`);
+                busy = false;
+              };
+              paint();
+              el.append(
+                h('div', { class: 'bd-pick', role: 'group', 'aria-label': 'Phone' }, lbl('Phone'), devBtns),
+                grid,
+                h('div', { class: 'controls' }, act('Install from Play', install), act('Open the scanner', open('scanner')), act('Open AR mode', open('ar')), size),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>An <code>.aab</code> is a zip with one folder per module, such as <code>base/</code> and <code>scanner/</code>. Each holds <code>dex/</code>, <code>lib/</code>, <code>assets/</code> and <code>res/</code>, plus a manifest and a resource table stored as protocol buffers instead of the binary XML phones read. That format lets bundletool rebuild a separate resource table for each split. <code>BundleConfig.pb</code> records build settings such as which splits to make.</p>
+<p>On the phone, all splits go in through one <code>PackageInstaller</code> session and sit side by side in the app’s folder. The class loader and the resource system treat them as one app.</p>`,
+          code: `$ unzip -l app-release.aab        # names only
+BundleConfig.pb
+base/manifest/AndroidManifest.xml
+base/dex/classes.dex
+base/lib/arm64-v8a/libfilters.so
+base/res/drawable-xxhdpi/header.png
+base/resources.pb
+scanner/manifest/AndroidManifest.xml
+scanner/dex/classes.dex
+
+$ adb shell pm path com.example.news
+package:/data/app/~~Xk2…/com.example.news-9fA…/base.apk
+package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.arm64_v8a.apk
+package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.tr.apk
+package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.xxhdpi.apk`,
+        },
+        mistakes: [
+          {
+            title: 'Sending testers the .aab',
+            bad: `$ adb install app/build/outputs/bundle/release/app-release.aab
+# fails: a phone can't install a bundle`,
+            good: `$ bundletool build-apks --bundle=app-release.aab --output=app.apks --connected-device
+$ bundletool install-apks --apks=app.apks
+# or upload it to Play internal app sharing and send the link`,
+            why: 'An <code>.aab</code> is a publishing format. Let bundletool or Play cut it into APKs, so testers get the same splits that users will.',
+          },
+          {
+            title: 'Opening a feature before its module arrives',
+            bad: `manager.startInstall(request)
+startActivity(Intent().setClassName(packageName, "com.example.scanner.ScanActivity"))`,
+            good: `manager.registerListener { state ->
+    if (state.status() == SplitInstallSessionStatus.INSTALLED && "scanner" in state.moduleNames()) {
+        startActivity(Intent().setClassName(packageName, "com.example.scanner.ScanActivity"))
+    }
+}
+manager.startInstall(request)
+
+// In ScanActivity
+override fun attachBaseContext(newBase: Context) {
+    super.attachBaseContext(newBase)
+    SplitCompat.installActivity(this)
+}`,
+            why: '<code>startInstall</code> only starts a download. Until it finishes, the class is not on the phone and the start crashes. Wait for <code>INSTALLED</code>, and call <code>SplitCompat.installActivity</code> so new code and resources are visible without a restart.',
+          },
+          {
+            title: 'Depending on a feature module from :app',
+            bad: `// app/build.gradle.kts
+dependencies {
+    implementation(project(":feature:scanner"))
+}`,
+            good: `// app/build.gradle.kts
+android { dynamicFeatures += setOf(":feature:scanner") }
+
+// :app reaches the feature through an interface it owns
+val scanner = Class.forName("com.example.scanner.ScannerEntry")
+    .getDeclaredConstructor().newInstance() as ScannerApi   // keep ScannerEntry in R8 rules`,
+            why: 'A dynamic feature already depends on <code>:app</code>, so the reverse dependency is a cycle and Gradle fails. :app can’t see feature classes at compile time. Reach them by name, through an interface :app defines.',
+          },
+        ],
         visual(el) {
           const ABI = { arm64_v8a: 5.6, x86_64: 6.0, armeabi_v7a: 4.1 };
           const DPI = { hdpi: 0.7, xxhdpi: 1.3 };
@@ -1223,6 +1938,158 @@ android {
           { q: 'Your rollout is at 20% and crashes spike. You halt it. What happens to the 20%?', options: ['Play rolls them back to the previous version', 'They keep the new version; only new users stop getting it', 'Their app is uninstalled'], a: 1, why: 'Play never downgrades installed apps. Halting only stops further distribution, so you fix forward.' },
           { q: 'You try to upload a fix with the same <code>versionCode</code> as the halted release. What does Play say?', options: ['It replaces the halted release', 'Version code has already been used', 'It accepts it on a test track only'], a: 1, why: 'Every upload needs a versionCode the app has never used. Bump it.' },
           { q: 'Which track gets a build to up to 100 testers fastest?', options: ['Internal testing', 'Open testing', 'Production at 1%'], a: 0, why: 'Internal testing is meant for quick team checks and is usually available within minutes.' },
+        ],
+        deeper: [
+          {
+            title: 'Who gets which release',
+            body: `<p>Tracks overlap. Everyone is eligible for production, and testers are also eligible for the test tracks they joined. Play gives each user the highest versionCode published across all tracks they are eligible for. A closed tester gets 260 from closed testing while production is still on 251.</p>
+<p>Two consequences follow. A test release with a lower versionCode than production reaches nobody, because its testers already get the higher production build. And users who opt into internal testing aren’t eligible for closed or open testing, so they only see internal and production.</p>`,
+            visual(el) {
+              const TR = ['internal', 'closed', 'open', 'production'];
+              const START = { internal: 262, closed: 260, open: null, production: 251 };
+              let tv = { ...START };
+              const USERS = [
+                { name: 'Everyone else', tracks: ['production'] },
+                { name: 'Open tester', tracks: ['open', 'production'] },
+                { name: 'Closed tester', tracks: ['closed', 'production'] },
+                { name: 'Internal tester', tracks: ['internal', 'production'] },
+              ];
+              const trk = {};
+              const trow = h('div', { class: 'bd-tracks' }, TR.map(t => (trk[t] = h('span', { class: 'bd-trk' }))));
+              const ucards = USERS.map(u => {
+                const v = h('span', { class: 'bd-d2-big' });
+                const from = h('small', { class: 'bd-d2-small' });
+                return { u, v, from, c: h('div', { class: 'bd-card bd-d2-user' }, h('b', {}, u.name), v, from) };
+              });
+              const o = out('Each user gets the highest versionCode among their tracks.');
+              const paint = changed => {
+                TR.forEach(t => { trk[t].textContent = `${t}: ${tv[t] ?? 'none'}`; trk[t].className = 'bd-trk' + (tv[t] ? ' bd-on' : ''); });
+                ucards.forEach(x => {
+                  const best = x.u.tracks.filter(t => tv[t]).sort((a, b) => tv[b] - tv[a])[0];
+                  const old = x.v.textContent;
+                  x.v.textContent = String(tv[best]);
+                  x.from.textContent = `from ${best}`;
+                  if (changed && old !== x.v.textContent) replay(x.c, 'pop');
+                });
+              };
+              const action = (label, fn) => act(label, () => { const msg = fn(); paint(true); say(o, msg); });
+              paint();
+              el.append(
+                trow,
+                h('div', { class: 'bd-grid bd-d2-users' }, ucards.map(x => x.c)),
+                h('div', { class: 'controls' },
+                  action('Publish 250 to open', () => { tv.open = 250; return `<span class="bad">Open testers still get ${tv.production}.</span> 250 is lower than production, so nobody receives it.`; }),
+                  action('Promote 260 to production', () => { tv.production = 260; return '<span class="good">Production is on 260.</span> Open testers jump to it too. Internal testers still get 262.'; }),
+                  action('Publish 263 to internal', () => { tv.internal = 263; return 'Only internal testers move to 263. Nobody else is eligible for that track.'; }),
+                  act('Start over', () => { tv = { ...START }; paint(true); say(o, 'Back to the start.'); })),
+                o);
+            },
+          },
+          {
+            title: 'A 1% rollout is a small sample',
+            body: `<p>Staged rollouts trade speed for safety. At 1%, a crash that hits one user in 200 shows up only a handful of times a day, and day-to-day noise can hide a real regression or invent one. At 20% the rate settles. So early stages catch the loud crashes, and you wait at each stage until there is enough data.</p>
+<p>Compare the new release with the previous one on the same kind of devices, not with zero. Android vitals reports user-perceived crash and ANR rates per release, and flags apps that pass its bad-behavior thresholds.</p>`,
+            visual(el) {
+              const DAU = 200000, BASE = 0.004, MAX = 0.012;
+              let pct = 1, bad = true, days = 0;
+              const z = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+              const pos = r => `${Math.max(0, Math.min(100, (r / MAX) * 100))}%`;
+              const band = h('span', { class: 'bd-d2-band' }), pt = h('span', { class: 'bd-d2-pt' });
+              const scale = h('div', { class: 'bd-d2-scale', 'aria-hidden': 'true' }, h('span', { class: 'bd-d2-base', style: `left:${pos(BASE)}` }), band, pt);
+              const ticks = h('div', { class: 'bd-d2-ticks', 'aria-hidden': 'true' }, ['0%', '0.4% (250)', '0.8%', '1.2%'].map(t => h('span', {}, t)));
+              const stat = h('span', { class: 'bd-count' });
+              const o = out('Pick a stage and simulate a day of data.');
+              const pick = (items, get, set) => items.map(([k, t]) => {
+                const b = h('button', { class: 'bd-opt', 'aria-pressed': String(get() === k), onclick() { set(k); b.parentNode.querySelectorAll('.bd-opt').forEach((x, i) => x.setAttribute('aria-pressed', String(items[i][0] === get()))); band.style.opacity = '0'; pt.style.opacity = '0'; days = 0; say(o, 'Changed. Simulate a day.'); } }, t);
+                return b;
+              });
+              function day() {
+                const n = Math.round(DAU * pct / 100), p = bad ? 0.006 : BASE;
+                const k = Math.max(0, Math.round(n * p + Math.sqrt(n * p * (1 - p)) * z()));
+                const r = k / n, half = 1.96 * Math.sqrt(Math.max(r, 1 / n) * (1 - r) / n);
+                days++;
+                band.style.left = pos(r - half); band.style.width = `calc(${pos(r + half)} - ${pos(r - half)})`;
+                pt.style.left = pos(r); pt.style.opacity = '1'; band.style.opacity = '1'; replay(pt, 'pop');
+                stat.textContent = `day ${days} · ${n.toLocaleString('en-US')} users · ${k} crashed · ${(r * 100).toFixed(2)}%`;
+                const lo = r - half;
+                say(o, lo > BASE
+                  ? `<span class="bad">Clearly worse than 250.</span> Even the low end, ${(lo * 100).toFixed(2)}%, is above 0.40%. Halt.`
+                  : r + half < BASE ? '<span class="good">Clearly not worse.</span>'
+                  : `<span class="muted">Can’t tell yet.</span> The range ${(Math.max(0, lo) * 100).toFixed(2)}% to ${((r + half) * 100).toFixed(2)}% includes 250’s 0.40%. ${pct < 20 ? 'Wait, or the next stage will tell.' : ''}`);
+              }
+              el.append(
+                h('div', { class: 'bd-pick', role: 'group', 'aria-label': 'Rollout' }, lbl('Rollout'), pick([[1, '1%'], [5, '5%'], [20, '20%'], [50, '50%']], () => pct, v => { pct = v; })),
+                h('div', { class: 'bd-pick', role: 'group', 'aria-label': 'Release 251' }, lbl('251 is'), pick([[true, 'regressed: 0.60%'], [false, 'healthy: 0.40%']], () => bad, v => { bad = v; })),
+                h('div', { class: 'bd-d2-chart' }, scale, ticks),
+                h('div', { class: 'controls' }, act('Simulate a day', day), stat),
+                o);
+            },
+          },
+          {
+            title: 'Tell users about the update in the app',
+            body: `<p>A rollout only offers the update. Users with auto-update off can stay on an old version for months. The Play In-App Updates library checks for a newer release and shows Google Play’s update flow inside your app. A flexible update downloads in the background while the user keeps working. An immediate update blocks the app until it is installed.</p>
+<p>Pick the flow per release with an update priority from 0 to 5. You set it when you create the release through the Google Play Developer API. Play Console has no field for it.</p>`,
+            code: `val updates = AppUpdateManagerFactory.create(context)
+
+updates.appUpdateInfo.addOnSuccessListener { info ->
+    if (info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE) return@addOnSuccessListener
+    val type = if (info.updatePriority() >= 4) AppUpdateType.IMMEDIATE else AppUpdateType.FLEXIBLE
+    if (info.isUpdateTypeAllowed(type)) {
+        updates.startUpdateFlowForResult(info, updateLauncher, AppUpdateOptions.newBuilder(type).build())
+    }
+}
+
+// val updateLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { … }`,
+          },
+        ],
+        underHood: {
+          body: `<p>Play’s rules sit on top of a rule in Android itself. The package manager refuses an update whose versionCode is lower than the installed one, with <code>INSTALL_FAILED_VERSION_DOWNGRADE</code>. <code>adb install -d</code> allows a downgrade only for debuggable apps on a normal phone, so not even you can roll a user back to an older release build.</p>
+<p>versionCode is a 32-bit int in the manifest, and Play caps it at 2100000000. Since API 28, <code>PackageInfo.longVersionCode</code> combines it with an optional <code>versionCodeMajor</code> in the upper 32 bits. Play compares versionCode.</p>`,
+          code: `$ adb install -r app-250.apk         # 251 is installed
+adb: failed to install app-250.apk: Failure [INSTALL_FAILED_VERSION_DOWNGRADE: …]
+
+val info = packageManager.getPackageInfo(packageName, 0)
+val code: Long = PackageInfoCompat.getLongVersionCode(info)`,
+        },
+        mistakes: [
+          {
+            title: 'Packing version parts into too few digits',
+            bad: `versionCode = major * 100 + minor * 10 + patch
+// 2.10.0 -> 300, 2.9.10 -> 300, 3.0.0 -> 300`,
+            good: `// one counter that only goes up, from CI
+versionCode = providers.environmentVariable("CI_BUILD_NUMBER").map(String::toInt).get()
+versionName = "$major.$minor.$patch"`,
+            why: 'A part above 9 spills into the next digit, so different versions get the same code. Play then refuses the second upload, or a hotfix sorts below the release it should replace.',
+          },
+          {
+            title: 'Not resuming an immediate update',
+            bad: `override fun onResume() {
+    super.onResume()
+    // nothing: the user left during an immediate update and came back
+}`,
+            good: `override fun onResume() {
+    super.onResume()
+    updates.appUpdateInfo.addOnSuccessListener { info ->
+        if (info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+            updates.startUpdateFlowForResult(info, updateLauncher,
+                AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build())
+        }
+    }
+}`,
+            why: 'An immediate update keeps running if the user leaves the app. When they come back, resume the flow. Otherwise they use the old version while the update sits half done.',
+          },
+          {
+            title: 'Never finishing a flexible update',
+            bad: `updates.startUpdateFlowForResult(info, updateLauncher,
+    AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build())
+// and nothing else`,
+            good: `updates.registerListener { state ->
+    if (state.installStatus() == InstallStatus.DOWNLOADED) {
+        showSnackbar("Update ready", action = "Restart") { updates.completeUpdate() }
+    }
+}`,
+            why: 'A flexible update downloads in the background, then waits. Play does not restart your app for it. Ask the user, then call <code>completeUpdate()</code> to install.',
+          },
         ],
         visual(el) {
           const TR = ['Internal', 'Closed', 'Open', 'Production'];

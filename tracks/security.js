@@ -143,6 +143,18 @@
   .sec-feat { grid-template-columns: minmax(0, 1fr); }
   .sec-feat .cmd { justify-self: start; }
 }
+/* depth pass 2 */
+.sec-chk.sec-d2-warn { border-color: var(--warm); background: var(--warm-soft); }
+.sec-chk.sec-d2-warn .sec-state { background: var(--warm); color: var(--surface); }
+.sec-d2-mono { font: 600 0.8rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
+.sec-state.sec-d2-ok { background: var(--ok-soft); color: var(--ok); }
+.sec-d2-ui { justify-items: start; }
+.sec-d2-sheet { justify-items: center; text-align: center; width: 100%; max-width: 340px; justify-self: center; }
+.sec-d2-sheet .sec-meter { width: 100%; }
+.sec-d2-map { position: relative; aspect-ratio: 2 / 1; min-height: 100px; border-radius: 10px; background-color: var(--surface); background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 25% 50%; overflow: hidden; }
+.sec-d2-area { position: absolute; left: 50%; top: 0; width: 25%; height: 50%; box-sizing: border-box; background: var(--accent-soft); border: 2px solid var(--accent); opacity: 0; transition: opacity 0.3s; }
+.sec-d2-dot { position: absolute; left: 61%; top: 33%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); opacity: 0; transition: opacity 0.3s; }
+.sec-d2-map.sec-d2-fine .sec-d2-dot, .sec-d2-map.sec-d2-coarse .sec-d2-area { opacity: 1; }
 `;
 
   Lab.addTrack({
@@ -197,6 +209,156 @@ class TracksRepository(private val api: TracksApi) {
           { q: 'Where should the check “is this user allowed to download this file?” live?', options: ['In the app, behind R8 obfuscation', 'On the server, for every request', 'In EncryptedSharedPreferences'], a: 1, why: 'Code on the device can be patched or hooked. Only the server sees a request it can trust its own answer about.' },
           { q: 'What can the owner of a rooted phone do to your app?', options: ['Only read public files', 'Read your private files and change what your functions return', 'Nothing, because of the app sandbox'], a: 1, why: 'Root removes the sandbox for that user. Tools like Frida can hook any method while the app runs.' },
           { q: 'Which of these stays protected even on a rooted phone?', options: ['A string constant in your APK', 'Private key material in a hardware-backed Keystore', 'A boolean in DataStore'], a: 1, why: 'Hardware-backed keys can’t be copied out. The attacker can still ask your app to use the key while it runs, which is why server checks still matter.' },
+        ],
+        deeper: [
+          {
+            title: 'Signed in is not the same as allowed',
+            body: `<p>Nobody needs root to send your server strange requests. A user can call your API with curl and their own valid session token, or replay a captured request with new values. So the server checks every field, not just the session: is this order theirs, does this price match the catalog, is this quantity positive.</p>
+<p>The classic bug is an ID swap. <code>GET /v1/orders/1043</code> returns someone else’s order because the server checked that the caller is signed in, but not that they own order 1043. OWASP ranks this, broken object level authorization, as the top API security risk.</p>`,
+            code: `// Ktor: authorize the object, and never take a price from the client
+get("/v1/orders/{id}") {
+    val user = call.principal<UserPrincipal>()!!
+    val order = orders.find(call.parameters["id"]!!.toLong())
+    if (order == null || order.ownerId != user.id) return@get call.respond(HttpStatusCode.NotFound)
+    call.respond(order)
+}
+
+post("/v1/checkout") {
+    val req = call.receive<CheckoutRequest>()            // { sku }, any price field is ignored
+    val price = catalog.priceOf(req.sku) ?: return@post call.respond(HttpStatusCode.BadRequest)
+    call.respond(payments.charge(call.principal<UserPrincipal>()!!.id, price))
+}`,
+            visual(el) {
+              let oid = 1042, price = '49.99', busy = false;
+              const term = h('div', { class: 'sec-term', 'aria-live': 'polite' });
+              const flag = h('span', { class: 'sec-flag' }, 'nothing leaked');
+              const srv = toggle('sec-d2-thr-srv', 'server checks owner and price', false, v => { term.replaceChildren(); tl(`<span class="muted"># server redeployed: ${v ? 'checks owner and price' : 'checks the session only'}</span>`); });
+              const tl = (html, cls) => { line(term, html, cls); trim(term, 6); };
+              const mark = (bad, msg) => { flag.textContent = msg; flag.classList.toggle('sec-bad', bad); replay(flag, 'pop'); };
+              const idBtns = [1042, 1043].map((n, i) => act(n === 1042 ? '1042 (yours)' : '1043 (Ada’s)', () => { oid = n; press(idBtns, idBtns[i]); }));
+              const prBtns = ['49.99', '0.01'].map((p, i) => act(`"price": ${p}`, () => { price = p; press(prBtns, prBtns[i]); }));
+              press(idBtns, idBtns[0]); press(prBtns, prBtns[0]);
+              const send = async (req, answer) => {
+                if (busy) return; busy = true;
+                tl(`$ curl -H "Authorization: Bearer eyJ…" ${req}`);
+                await sleep(450); if (!term.isConnected) return;
+                answer(); busy = false;
+              };
+              const getOrder = () => send(`https://api.shop.example/v1/orders/${oid}`, () => {
+                if (oid === 1042) { tl('<span class="good">200 OK</span> {"id":1042,"owner":"you","address":"…"}'); mark(false, 'your own data'); }
+                else if (srv.input.checked) { tl('<span class="good">404 Not Found</span> <span class="muted">// not yours, so it doesn’t exist for you</span>'); mark(false, 'nothing leaked'); }
+                else { tl('<span class="bad">200 OK</span> {"id":1043,"owner":"ada","address":"<span class="sec-hit">12 Elm St</span>"}'); mark(true, 'leaked Ada’s address'); }
+              });
+              const checkout = () => send(`-d '{"sku":"pro_year","price":${price}}' …/v1/checkout`, () => {
+                if (price === '49.99') { tl('<span class="good">200 OK</span> {"charged":49.99}'); mark(false, 'fair price'); }
+                else if (srv.input.checked) { tl('<span class="good">200 OK</span> {"charged":49.99} <span class="muted">// price read from the catalog</span>'); mark(false, 'price field ignored'); }
+                else { tl('<span class="bad">200 OK</span> {"charged":<span class="sec-hit">0.01</span>}'); mark(true, 'a year of Pro for 1 cent'); }
+              });
+              tl('<span class="muted"># a valid session token, copied from the app. No root needed.</span>');
+              el.append(
+                h('div', { class: 'controls' }, srv.el, flag),
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Order id'), idBtns, cmd('GET /v1/orders/{id}', getOrder)),
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Body'), prBtns, cmd('POST /v1/checkout', checkout)),
+                term);
+            },
+          },
+          {
+            title: 'The fourth attacker: another app on the phone',
+            body: `<p>Other apps can’t read your files, but they can talk to anything you export. An exported Activity, Service, BroadcastReceiver or ContentProvider accepts Intents from every app on the phone. Since Android 12, a component with an intent filter must declare <code>android:exported</code> explicitly, so make it a decision.</p>
+<p>A deep link Activity has to be exported, or links from the browser and email can’t reach it. So treat every extra and every URL as untrusted input. Check the scheme and host before you load anything, and keep components that only your app uses unexported.</p>`,
+            code: `class WebActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val uri = intent.data
+        if (uri == null || uri.scheme != "https" || uri.host != "news.example.com") {
+            finish()                     // not ours: refuse
+            return
+        }
+        setContent { ArticleWebView(uri.toString()) }
+    }
+}`,
+            visual(el) {
+              let busy = false;
+              const P = (t, d) => { const well = h('div', { class: 'sec-well' }); const s = h('small', {}, d); return Object.assign(h('div', { class: 'sec-node' }, h('b', {}, t), s, well), { well, s }); };
+              const from = P('Sender', 'pick one below'), sys = P('Android', 'routes the Intent'), act0 = P('WebActivity', 'shows a web page');
+              const o = out('Pick a sender.');
+              const exp = toggle('sec-d2-thr-exp', 'android:exported="true"', true, () => o.replaceChildren('Manifest changed. Send again.'));
+              const val = toggle('sec-d2-thr-val', 'check scheme and host', false, () => o.replaceChildren('Code changed. Send again.'));
+              const reset = () => [from, sys, act0].forEach(n => { n.classList.remove('on', 'sec-evil', 'sec-ok'); n.well.replaceChildren(); });
+              const pk = (t, c = '') => h('span', { class: `sec-packet pop ${c}` }, t);
+              async function send(evil) {
+                if (busy) return; busy = true; reset();
+                from.s.textContent = evil ? 'com.evil.flashlight' : 'Gmail';
+                from.classList.add('on', ...(evil ? ['sec-evil'] : [])); from.well.append(pk(evil ? 'evil.example/login' : 'news.example.com/a/42', evil ? 'sec-open' : ''));
+                await sleep(500); if (!el.isConnected) return;
+                sys.classList.add('on'); sys.well.append(pk('Intent'));
+                await sleep(500); if (!el.isConnected) return;
+                if (!exp.input.checked) {
+                  sys.classList.add('sec-ok'); act0.well.append(pk('blocked', 'sec-dead'));
+                  say(o, evil ? '<span class="good">SecurityException:</span> Permission Denial: WebActivity not exported. <span class="muted">But your real links are dead too. Try Gmail.</span>'
+                    : '<span class="bad">No app matches.</span> Unexported components can’t be reached from other apps, so the link opens in the browser instead.');
+                } else if (evil && !val.input.checked) {
+                  act0.classList.add('sec-evil'); act0.well.append(pk('loads evil.example', 'sec-open')); replay(act0, 'shake');
+                  say(o, '<span class="bad">Phishing inside your app.</span> A fake login page loads in your WebView, with your app’s name on top.');
+                } else if (evil) {
+                  act0.classList.add('sec-ok'); act0.well.append(pk('finish()', 'sec-dead'));
+                  say(o, '<span class="good">Refused.</span> The host is not news.example.com, so WebActivity closes.');
+                } else {
+                  act0.classList.add('sec-ok'); act0.well.append(pk('article 42'));
+                  say(o, '<span class="good">Opened.</span> A real link from an email reaches your article.');
+                }
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'controls' }, exp.el, val.el),
+                h('div', { class: 'sec-path' }, from, sys, act0),
+                h('div', { class: 'controls' }, act('Tap a link in an email', () => send(false)), act('Malicious app sends an Intent', () => send(true))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>On a rooted phone, <code>frida-server</code> runs as root and attaches to your app’s process. It loads an agent library into the process and runs JavaScript inside it. Through the ART runtime, that script can find any class and replace a method’s implementation, so <code>isPremium()</code> returns whatever the script says. Without root, an attacker can repackage your APK with the Frida gadget library, re-sign it, and get the same power inside their copy.</p>
+<p>Decompiling needs no tricks at all. An APK is a zip file. jadx reads <code>classes.dex</code> and rebuilds Java-like source. R8 shortens names but keeps the logic and the strings.</p>`,
+          code: `// hook.js, run with: frida -U -f com.shop -l hook.js
+Java.perform(() => {
+  const User = Java.use("com.shop.User");
+  User.isPremium.implementation = function () {
+    return true;
+  };
+});`,
+        },
+        mistakes: [
+          {
+            title: 'Root detection as the defense',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    if (isRooted()) { finish(); return }   // the only protection
+    showPremiumContent()
+}`,
+            good: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    lifecycleScope.launch {
+        // The server checks the session, the subscription and an integrity verdict.
+        api.premiumContent(integrityToken())
+            .onSuccess(::show)
+            .onFailure { showPaywall() }
+    }
+}`,
+            why: '<code>isRooted()</code> is a function in your APK, and one Frida line makes it return false. A root check can raise the cost a little. The server decides what the user gets.',
+          },
+          {
+            title: 'Shipping the dev menu in release builds',
+            bad: `if (BuildConfig.DEBUG || prefs.getBoolean("dev_menu", false)) {
+    showDevMenu()   // switch backend, skip paywall, fake purchases
+}`,
+            good: `// src/debug/kotlin/com/shop/DevMenu.kt holds the real menu.
+// src/release/kotlin/com/shop/DevMenu.kt is empty:
+object DevMenu {
+    fun install(activity: Activity) = Unit
+}`,
+            why: 'A rooted user can set <code>dev_menu</code> in the prefs file, and the menu code is in the APK for anyone to call. Keep debug tools in the debug source set, so release builds don’t contain them.',
+          },
         ],
         visual(el) {
           const assets = [
@@ -1247,6 +1409,145 @@ private fun String.sha256Hex(): String =
           { q: 'Which key is fine to ship in the app?', options: ['A payment provider’s secret key', 'A Maps SDK key restricted to your package name and signing certificate', 'Your database password'], a: 1, why: 'Some keys are designed to be public and are limited by restrictions on the provider’s side. Keys that grant power must stay on a server.' },
           { q: 'Who decodes a Play Integrity token?', options: ['The app, before sending it', 'Your server, through Google’s API', 'Nobody, it’s just a random value'], a: 1, why: 'The app treats the token as opaque. The server sends it to Google’s decode endpoint and checks the verdict and the request hash.' },
         ],
+        deeper: [
+          {
+            title: 'How far a key restriction goes',
+            body: `<p>An Android restriction on a Google API key lists package names and signing certificate fingerprints. The SDK in your app sends both with each request, and Google refuses calls whose values don’t match. That stops another app from simply reusing your key.</p>
+<p>The values travel as request headers, <code>X-Android-Package</code> and <code>X-Android-Cert</code>, and both are public: anyone can read them from your APK. A script that copies them passes the check. So also restrict the key to the APIs your app uses, and set quotas so abuse has a ceiling.</p>`,
+            visual(el) {
+              const CALLS = [
+                { who: 'Your app', what: 'Maps SDK for Android', pkg: true, api: 'maps', mine: true },
+                { who: 'Another app, copied key', what: 'Maps SDK for Android', pkg: false, api: 'maps' },
+                { who: 'Script, copied headers', what: 'Maps SDK for Android', pkg: true, api: 'maps' },
+                { who: 'Script, copied headers', what: 'Geocoding API', pkg: true, api: 'geo' },
+              ];
+              let busy = false;
+              const rows = CALLS.map(c => {
+                const st = h('span', { class: 'sec-state' }, 'not sent');
+                const r = h('div', { class: 'sec-chk' }, h('span', {}, h('b', {}, c.who), ` → ${c.what}`), st);
+                return { c, r, st };
+              });
+              const o = out('Turn on restrictions, then send all four requests.');
+              const app = toggle('sec-d2-sec-app', 'Android apps: com.shop + SHA-1', true, () => clear());
+              const api = toggle('sec-d2-sec-api', 'APIs: Maps SDK for Android only', false, () => clear());
+              const quota = toggle('sec-d2-sec-quota', 'Quota: 25,000 requests a day', false, () => clear());
+              const clear = () => rows.forEach(x => { x.r.className = 'sec-chk'; x.st.textContent = 'not sent'; });
+              async function sendAll() {
+                if (busy) return; busy = true; clear();
+                let abuse = 0;
+                for (const x of rows) {
+                  x.r.classList.add('sec-now'); await sleep(420); if (!el.isConnected) return;
+                  x.r.classList.remove('sec-now');
+                  const blocked = (app.input.checked && !x.c.pkg) ? 'blocked: package or cert mismatch' : (api.input.checked && x.c.api !== 'maps') ? 'blocked: API not allowed' : null;
+                  if (blocked) { x.st.textContent = blocked; x.r.classList.add(x.c.mine ? 'sec-fail' : 'sec-pass'); }
+                  else if (x.c.mine) { x.st.textContent = 'served'; x.r.classList.add('sec-pass'); }
+                  else if (quota.input.checked) { x.st.textContent = 'served, up to the quota'; x.r.classList.add('sec-d2-warn'); abuse++; }
+                  else { x.st.textContent = 'served, you pay'; x.r.classList.add('sec-fail'); abuse++; replay(x.r, 'shake'); }
+                }
+                say(o, abuse ? `<span class="bad">${abuse} abusive request${abuse > 1 ? 's' : ''} got through.</span> ${!api.input.checked ? 'Restrict the APIs. ' : ''}${!quota.input.checked ? 'Add a quota. ' : ''}${api.input.checked && quota.input.checked ? 'The copied headers still pass, but the damage now has a ceiling.' : ''}`
+                  : '<span class="good">Only your app got through.</span>');
+                busy = false;
+              }
+              el.append(
+                h('div', { class: 'controls' }, app.el, api.el, quota.el),
+                h('div', { class: 'sec-chks' }, rows.map(x => x.r)),
+                h('div', { class: 'controls' }, cmd('send all four requests', sendAll)),
+                o);
+            },
+          },
+          {
+            title: 'What the server checks in a verdict',
+            body: `<p>The integrity token is encrypted and signed. Your server sends it to Google’s <code>decodeIntegrityToken</code> endpoint and gets JSON back. Check it in order: <code>requestHash</code> matches the body you received, <code>timestampMillis</code> is recent, <code>appRecognitionVerdict</code> is <code>PLAY_RECOGNIZED</code>, and <code>deviceRecognitionVerdict</code> contains <code>MEETS_DEVICE_INTEGRITY</code>.</p>
+<p>Don’t turn every failure into a hard no. Real users on old or custom phones fail device integrity. Use tiers: allow, allow with an extra step such as a password, or refuse the riskiest action.</p>`,
+            visual(el) {
+              const SC = {
+                ok: { label: 'Genuine app, certified phone', hash: true, fresh: true, app: 'PLAY_RECOGNIZED', dev: '["MEETS_DEVICE_INTEGRITY"]' },
+                resign: { label: 'Re-signed APK', hash: true, fresh: true, app: 'UNRECOGNIZED_VERSION', dev: '["MEETS_DEVICE_INTEGRITY"]' },
+                root: { label: 'Rooted phone or emulator', hash: true, fresh: true, app: 'PLAY_RECOGNIZED', dev: '[]' },
+                replay: { label: 'Old token, new cart', hash: false, fresh: false, app: 'PLAY_RECOGNIZED', dev: '["MEETS_DEVICE_INTEGRITY"]' },
+              };
+              let busy = false;
+              const json = h('div', { class: 'sec-term', 'aria-label': 'Decoded verdict' });
+              const CHK = [
+                ['requestHash matches the body', s => s.hash, 'refuse'],
+                ['timestampMillis is recent', s => s.fresh, 'refuse'],
+                ['app is PLAY_RECOGNIZED', s => s.app === 'PLAY_RECOGNIZED', 'refuse'],
+                ['device has MEETS_DEVICE_INTEGRITY', s => s.dev !== '[]', 'step up'],
+              ];
+              const chks = CHK.map(([t]) => { const st = h('span', { class: 'sec-state' }, 'waiting'); return { r: h('div', { class: 'sec-chk' }, h('span', {}, t), st), st }; });
+              const o = out('Pick a request. The server decodes its token and checks it.');
+              const show = s => json.replaceChildren(...[
+                '{', '  "requestDetails": {', '    "requestPackageName": "com.shop",',
+                `    "requestHash": "${s.hash ? '9f2c41…' : '<span class="sec-hit">03be7a…</span>'}",`,
+                `    "timestampMillis": "${s.fresh ? '1792400000123' : '<span class="sec-hit">1792396123004</span>'}"`, '  },',
+                `  "appIntegrity": { "appRecognitionVerdict": "${s.app === 'PLAY_RECOGNIZED' ? s.app : `<span class="sec-hit">${s.app}</span>`}" },`,
+                `  "deviceIntegrity": { "deviceRecognitionVerdict": ${s.dev === '[]' ? '<span class="sec-hit">[]</span>' : s.dev} }`, '}',
+              ].map(t => h('div', { class: 'line', html: t })));
+              const btns = Object.entries(SC).map(([k, s]) => act(s.label, async () => {
+                if (busy) return; busy = true;
+                press(btns, btns[Object.keys(SC).indexOf(k)]);
+                show(s); replay(json, 'pop-soft');
+                chks.forEach(c => { c.r.className = 'sec-chk'; c.st.textContent = 'waiting'; });
+                let verdict = 'allow';
+                for (let i = 0; i < CHK.length; i++) {
+                  const c = chks[i]; c.r.classList.add('sec-now');
+                  await sleep(380); if (!el.isConnected) return;
+                  c.r.classList.remove('sec-now');
+                  const pass = CHK[i][1](s);
+                  c.r.classList.add(pass ? 'sec-pass' : 'sec-fail'); c.st.textContent = pass ? 'pass' : 'fail';
+                  if (!pass) { verdict = CHK[i][2]; if (verdict === 'refuse') break; }
+                }
+                say(o, verdict === 'allow' ? '<span class="good">Allow.</span> Every check passed.'
+                  : verdict === 'step up' ? '<span class="bad">Step up.</span> The app is genuine but the phone fails device integrity. Ask for the password, or cap the amount.'
+                  : `<span class="bad">Refuse.</span> ${s.hash ? 'This is not your app as Play distributes it.' : 'The token belongs to a different request. It was replayed.'}`);
+                busy = false;
+              }));
+              show(SC.ok);
+              el.append(
+                h('div', { class: 'controls' }, btns),
+                json,
+                h('div', { class: 'sec-chks' }, chks.map(c => c.r)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>BuildConfig</code> string is a compile-time constant. Kotlin copies its value into every place that reads it, and D8 or R8 writes it once into the dex string table. A <code>const-string</code> instruction loads it. That is why a grep finds it, and why renaming classes hides nothing. R8 can even delete the <code>BuildConfig</code> class and leave the copied value behind.</p>
+<p>Play Integrity works the other way round. <code>prepareIntegrityToken</code> lets Play services do the slow setup early. Each <code>request</code> then returns a token that Google encrypted and signed. By default only Google’s server can decrypt it for you, so the app can neither read nor forge the verdict.</p>`,
+          code: `$ baksmali d classes.dex -o smali && grep -rn "sk_live" smali/
+smali/p0/b.smali:41:    const-string v1, "sk_live_51Hq8zEXAMPLEk3y"`,
+        },
+        mistakes: [
+          {
+            title: 'Encoding the key and calling it hidden',
+            bad: `private val key = String(Base64.decode("c2tfbGl2ZV81MUhx…", Base64.DEFAULT))
+payments.charge(card, apiKey = key)`,
+            good: `// The app asks your backend. The backend holds the key.
+api.createCharge(cartId)   // Authorization: Bearer <user session token>`,
+            why: 'Base64 is an encoding, not encryption. A hook on <code>charge()</code> prints the key the moment your code decodes it.',
+          },
+          {
+            title: 'Judging the token in the app',
+            bad: `val token = provider.request(request).await().token()
+val deviceOk = token.isNotEmpty()        // "we got a token, so the phone is fine"
+api.redeem(code, deviceOk = deviceOk)`,
+            good: `val token = provider.request(request).await().token()
+api.redeem(code, integrityToken = token) // the server decodes it and decides`,
+            why: 'Anything the app computes, a hook can change. Send the raw token. Only the server, through Google, learns what the verdict says.',
+          },
+          {
+            title: 'Reusing one token for every request',
+            bad: `val token = provider.request(StandardIntegrityTokenRequest.builder().build()).await().token()
+cache.save(token)                  // sent with every later call
+api.redeem(code, cache.token())`,
+            good: `val body = Json.encodeToString(RedeemRequest(code))
+val token = provider.request(
+    StandardIntegrityTokenRequest.builder().setRequestHash(body.sha256Hex()).build()
+).await().token()
+api.redeem(body, token)`,
+            why: 'A token without a request hash proves nothing about this request, and a captured one can be replayed with a different body. Ask for a fresh token per sensitive action, bound to that body.',
+          },
+        ],
         visual(el) {
           const KEY = 'sk_live_51Hq8zEXAMPLEk3y';
           const places = [
@@ -1367,6 +1668,182 @@ private fun String.sha256Hex(): String =
           { q: 'You call <code>authenticate(info, CryptoObject(cipher))</code> with <code>BIOMETRIC_WEAK</code>. What happens?', options: ['It works with face unlock', 'It throws: crypto-based auth is not supported for Class 2', 'It silently upgrades to STRONG'], a: 1, why: 'Class 2 sensors are not trusted to unlock keys. Use <code>BIOMETRIC_STRONG</code>, or drop the CryptoObject for convenience-only checks.' },
           { q: 'The user touches the sensor with the wrong finger. Which callback runs?', options: ['<code>onAuthenticationError</code>', '<code>onAuthenticationFailed</code>, and the prompt stays open', 'None'], a: 1, why: 'A non-match is not an error. Errors are for cancel, lockout or a missing sensor, and they close the prompt.' },
         ],
+        deeper: [
+          {
+            title: 'Ask what this phone can do',
+            body: `<p><code>canAuthenticate(authenticators)</code> answers for one exact set of authenticators. The same phone can say yes to <code>BIOMETRIC_WEAK</code> and no to <code>BIOMETRIC_STRONG</code>, for example when face unlock is Class 2 and no fingerprint is enrolled. Ask with the same set you will pass to the prompt.</p>
+<p>Each answer needs its own UI. <code>BIOMETRIC_ERROR_NONE_ENROLLED</code> means the hardware is there, so offer setup: on Android 11 and later you can open <code>Settings.ACTION_BIOMETRIC_ENROLL</code>. <code>BIOMETRIC_ERROR_NO_HARDWARE</code> means hide the option. Either way, the password path stays.</p>`,
+            code: `when (BiometricManager.from(context).canAuthenticate(BIOMETRIC_STRONG)) {
+    BiometricManager.BIOMETRIC_SUCCESS -> showBiometricToggle()
+    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> showSetupButton {
+        startActivity(Intent(Settings.ACTION_BIOMETRIC_ENROLL).putExtra(
+            Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BIOMETRIC_STRONG))   // API 30+
+    }
+    else -> hideBiometricOption()   // no hardware, unavailable, update required…
+}`,
+            visual(el) {
+              const AUTH = ['BIOMETRIC_STRONG', 'BIOMETRIC_WEAK', 'BIOMETRIC_STRONG or DEVICE_CREDENTIAL'];
+              const DEV = [
+                { label: 'Fingerprint enrolled', r: ['SUCCESS', 'SUCCESS', 'SUCCESS'] },
+                { label: 'Face unlock (Class 2) only', r: ['ERROR_NONE_ENROLLED', 'SUCCESS', 'SUCCESS'] },
+                { label: 'Sensor, nothing enrolled', r: ['ERROR_NONE_ENROLLED', 'ERROR_NONE_ENROLLED', 'SUCCESS'] },
+                { label: 'No sensor', r: ['ERROR_NO_HARDWARE', 'ERROR_NO_HARDWARE', 'SUCCESS'] },
+              ];
+              const UI = { SUCCESS: ['Show “Unlock with fingerprint”', 'sec-safe'], ERROR_NONE_ENROLLED: ['Show “Set up fingerprint” → Settings', 'sec-warn'], ERROR_NO_HARDWARE: ['Hide the option, password only', ''] };
+              let d = 0, a = 0;
+              const grid = h('div', { class: 'sec-chks' });
+              const o = out('');
+              const paint = changed => {
+                grid.replaceChildren(...AUTH.map((t, i) => {
+                  const res = DEV[d].r[i];
+                  return h('div', { class: 'sec-chk' + (i === a ? ' sec-now' : '') + (changed && i === a ? ' pop' : '') },
+                    h('span', { class: 'sec-d2-mono' }, `canAuthenticate(${t})`),
+                    h('span', { class: 'sec-state' + (res === 'SUCCESS' ? ' sec-d2-ok' : '') }, res));
+                }));
+                const res = DEV[d].r[a];
+                say(o, `${hl('BiometricManager.BIOMETRIC_' + res)} <span class="muted">→ ${UI[res][0]}</span>`);
+                phoneTxt.textContent = UI[res][0];
+                phone.className = 'sec-card sec-d2-ui ' + UI[res][1];
+                replay(phone, 'pop');
+              };
+              const phoneTxt = h('b', {});
+              const phone = h('div', { class: 'sec-card sec-d2-ui' }, h('span', { class: 'sec-label' }, 'Settings screen in your app'), phoneTxt, h('small', {}, 'Password sign-in always stays available.'));
+              const dBtns = DEV.map((x, i) => act(x.label, () => { d = i; press(dBtns, dBtns[i]); paint(true); }));
+              const aBtns = AUTH.map((t, i) => act(t.replace('BIOMETRIC_', '').replace(' or DEVICE_CREDENTIAL', ' + PIN'), () => { a = i; press(aBtns, aBtns[i]); paint(true); }));
+              press(dBtns, dBtns[0]); press(aBtns, aBtns[0]);
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Phone'), dBtns),
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'You ask'), aBtns),
+                grid, phone, o,
+                h('p', { class: 'tip' }, 'Every phone here has a PIN set. The + PIN row needs Android 11 or later.'));
+              paint(false);
+            },
+          },
+          {
+            title: 'Failed tries and lockout',
+            body: `<p>A wrong finger calls <code>onAuthenticationFailed</code>, and the prompt stays open. After too many failures in a row, the sensor locks. <code>ERROR_LOCKOUT</code> (7) is temporary and lifts after a short wait. Repeated lockouts lead to <code>ERROR_LOCKOUT_PERMANENT</code> (9): biometrics stay off until the user unlocks with their PIN, pattern or password.</p>
+<p>Both are errors, so the prompt closes. Don’t reopen it in a loop. Say what happened and offer the password, or a prompt that allows <code>DEVICE_CREDENTIAL</code>.</p>`,
+            visual(el) {
+              const LOCK_AT = 5, PERM_AT = 10, WAIT = 8;
+              let fails = 0, total = 0, until = 0, perm = false, ticking = false;
+              const live = alive(el);
+              const fp = h('span', { class: 'sec-fp', 'aria-hidden': 'true' });
+              const meter = h('span', {});
+              const stat = h('span', { class: 'sec-stat' });
+              const clock = h('span', { class: 'clock' });
+              const sheet = h('div', { class: 'sec-card sec-d2-sheet' }, h('b', {}, 'Confirm payment'), fp, stat, h('div', { class: 'sec-meter', 'aria-hidden': 'true' }, meter));
+              const o = out('');
+              const log = (html, cls) => { line(o, html, cls); trim(o, 4); };
+              const locked = () => perm || Date.now() < until;
+              const paint = () => {
+                stat.innerHTML = `failed in a row: <b>${fails}</b> · total: <b>${total}</b>`;
+                meter.style.width = `${Math.min(100, (total / PERM_AT) * 100)}%`;
+                meter.classList.toggle('sec-low', !total);
+                fp.classList.toggle('sec-no', locked());
+                sheet.classList.toggle('sec-bad', perm);
+                sheet.classList.toggle('sec-warn', !perm && locked());
+              };
+              const tick = () => {
+                if (!live()) { ticking = false; return; }
+                const left = Math.ceil((until - Date.now()) / 1000);
+                clock.textContent = perm ? 'biometrics off until PIN' : left > 0 ? `locked for ${left} s` : '';
+                if (left > 0 && !perm) setTimeout(tick, 250); else { ticking = false; paint(); }
+              };
+              const startTick = () => { if (!ticking) { ticking = true; tick(); } };
+              const wrong = () => {
+                if (perm) { log('<span class="muted">the sensor is disabled. Use the PIN.</span>'); return; }
+                if (locked()) { log('<span class="muted">locked: the sensor ignores touches</span>'); replay(sheet, 'shake'); return; }
+                fails++; total++;
+                if (total >= PERM_AT) { perm = true; log('onAuthenticationError(<span class="bad">9</span>, "Too many attempts. Fingerprint sensor disabled.")'); replay(sheet, 'shake'); startTick(); }
+                else if (fails >= LOCK_AT) { fails = 0; until = Date.now() + WAIT * 1000; log('onAuthenticationError(<span class="bad">7</span>, "Too many attempts. Try again later.")'); replay(sheet, 'shake'); startTick(); }
+                else { log(`onAuthenticationFailed <span class="muted">// try ${fails} of ${LOCK_AT}, prompt stays open</span>`); replay(fp, 'shake'); }
+                paint();
+              };
+              const right = () => {
+                if (locked()) { log('<span class="muted">locked: even the right finger is ignored</span>'); replay(sheet, 'shake'); return; }
+                fails = 0; paint(); replay(sheet, 'pop');
+                log('<span class="good">onAuthenticationSucceeded</span> <span class="muted">// the failed-in-a-row count resets</span>');
+              };
+              const pin = () => {
+                if (!locked()) { log('<span class="muted">nothing to unlock</span>'); return; }
+                perm = false; until = 0; fails = 0; total = 0; paint(); clock.textContent = ''; replay(sheet, 'pop');
+                log('<span class="good">PIN accepted.</span> Biometrics are back on.');
+              };
+              paint();
+              el.append(
+                sheet,
+                h('div', { class: 'controls' }, act('Wrong finger', wrong), act('Right finger', right), act('Unlock with PIN', pin), clock),
+                o,
+                h('p', { class: 'tip' }, `This demo locks after ${LOCK_AT} failures in a row and turns biometrics off after ${PERM_AT} in total. Real limits and wait times depend on the device.`));
+              log('<span class="muted">prompt open. Try the wrong finger a few times.</span>');
+            },
+          },
+          {
+            title: 'Sign a server challenge instead of decrypting',
+            body: `<p>For actions a server must trust, like approving a payment, use a signature. At enrollment, create an EC key pair that needs a biometric for every use, and send the public key to the server. To approve, the server sends a random challenge. The prompt unlocks a <code>Signature</code> through a <code>CryptoObject</code>, the app signs the challenge, and the server verifies it with the stored public key.</p>`,
+            code: `val spec = KeyGenParameterSpec.Builder("approve_key", KeyProperties.PURPOSE_SIGN)
+    .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+    .setDigests(KeyProperties.DIGEST_SHA256)
+    .setUserAuthenticationRequired(true)
+    .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)   // every use
+    .build()
+
+val signature = Signature.getInstance("SHA256withECDSA").apply {
+    initSign(keyStore.getKey("approve_key", null) as PrivateKey)
+}
+prompt.authenticate(info, BiometricPrompt.CryptoObject(signature))
+
+// in onAuthenticationSucceeded(result)
+val signer = result.cryptoObject?.signature ?: return
+signer.update(challenge)
+api.approve(paymentId, signer.sign())`,
+          },
+        ],
+        underHood: {
+          body: `<p>When you pass a <code>CryptoObject</code>, Keystore has already started the operation and given it a 64-bit challenge. BiometricPrompt hands that challenge to the biometric service, which passes it to the sensor’s trusted app in the TEE. After a real match, the trusted app creates a HardwareAuthToken: the challenge, the user’s secure ID, the authenticator type and a timestamp, sealed with an HMAC key that only secure hardware holds. The token goes to Keystore, and KeyMint lets <code>doFinal</code> run only if the token is genuine and carries that operation’s challenge.</p>
+<p>Time-bound keys skip the challenge. KeyMint checks that the latest token is recent enough for the key’s timeout. Either way the proof never passes through your app’s code, so a hook on the callback can’t make one.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Checking with the deprecated no-argument call',
+            bad: `if (BiometricManager.from(ctx).canAuthenticate() == BIOMETRIC_SUCCESS) {
+    prompt.authenticate(strongInfo, BiometricPrompt.CryptoObject(cipher))
+}`,
+            good: `if (BiometricManager.from(ctx).canAuthenticate(BIOMETRIC_STRONG) == BIOMETRIC_SUCCESS) {
+    prompt.authenticate(strongInfo, BiometricPrompt.CryptoObject(cipher))
+}`,
+            why: 'The old call checks for <code>BIOMETRIC_WEAK</code>. A phone with only Class 2 face unlock says yes, and then the crypto prompt fails. Ask with the exact authenticators you will use.',
+          },
+          {
+            title: 'A CryptoObject with a time-bound key',
+            bad: `// key made with setUserAuthenticationParameters(30, AUTH_BIOMETRIC_STRONG)
+val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))   // throws
+prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
+            good: `// key made with setUserAuthenticationParameters(0, AUTH_BIOMETRIC_STRONG)
+val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))   // ok: unlocked per operation
+prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
+            why: 'A key with a timeout above 0 checks the user at <code>init</code> and throws <code>UserNotAuthenticatedException</code> when no recent unlock exists. CryptoObject is for per-use keys. For a time-bound key, prompt without a CryptoObject, then init the cipher.',
+          },
+          {
+            title: 'Device credential with crypto on old Android',
+            bad: `// minSdk 24
+val info = PromptInfo.Builder()
+    .setTitle("Confirm payment")
+    .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
+    .build()
+prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
+            good: `val withPin = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+val info = PromptInfo.Builder()
+    .setTitle("Confirm payment")
+    .setAllowedAuthenticators(if (withPin) BIOMETRIC_STRONG or DEVICE_CREDENTIAL else BIOMETRIC_STRONG)
+    .apply { if (!withPin) setNegativeButtonText("Use password") }
+    .build()
+prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
+            why: 'Crypto with <code>DEVICE_CREDENTIAL</code> needs Android 11 (API 30). Below that, this combination is not supported and the call fails. Fall back to <code>BIOMETRIC_STRONG</code> with a negative button.',
+          },
+        ],
         visual(el) {
           let auth = 'STRONG', open = false;
           const title = h('span', { class: 'sec-ph-title' }, 'Wallet');
@@ -1465,6 +1942,188 @@ Log.i("Auth", "login ok for user \${session.userId}")
           { q: 'Your app lets users set a profile photo. Which permission do you need?', options: ['<code>READ_MEDIA_IMAGES</code>', '<code>READ_EXTERNAL_STORAGE</code>', 'None, use the photo picker'], a: 2, why: 'The photo picker gives you just the chosen image, without access to the rest of the library.' },
           { q: 'You request <code>ACCESS_FINE_LOCATION</code> and <code>ACCESS_COARSE_LOCATION</code> on Android 12+. What can the user do?', options: ['Only allow or deny', 'Grant approximate location only', 'Nothing, fine is granted automatically'], a: 1, why: 'The dialog lets the user pick approximate. Your feature has to handle that answer gracefully.' },
           { q: 'An analytics SDK in your app collects the device location. Does it go in your Data safety section?', options: ['No, it’s the SDK’s data', 'Yes, you declare everything your app and its SDKs collect', 'Only if you read it yourself'], a: 1, why: 'Play holds the app responsible for the data its SDKs collect and share.' },
+        ],
+        deeper: [
+          {
+            title: 'Ask in context, and handle no',
+            body: `<p>Ask for a permission when the user taps the feature that needs it. If they deny once, <code>shouldShowRequestPermissionRationale()</code> returns true: explain why in your own UI, then ask again. On Android 11 and later, a second denial counts as “don’t ask again”. After that, launching the request returns false at once, and no dialog appears.</p>
+<p>From then on, only the app’s settings page can grant it. Keep the rest of the app usable without the permission, and offer a button to settings instead of asking again and again.</p>`,
+            code: `val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    when {
+        granted -> openScanner()
+        activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> showWhyCamera()
+        else -> showOpenSettings()   // denied twice: the dialog won't come back
+    }
+}
+
+fun openAppSettings(context: Context) = context.startActivity(
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+)`,
+            visual(el) {
+              let denials = 0, granted = false, explained = false;
+              const title = h('span', { class: 'sec-ph-title' }, 'Receipts');
+              const big = h('span', { class: 'sec-ph-sub' }, 'Tap Scan to read a receipt.');
+              const phone = h('div', { class: 'phone', 'aria-live': 'polite' }, title, big);
+              const stat = h('div', { class: 'sec-stat' });
+              const o = out('');
+              const log = html => { line(o, html); trim(o, 3); };
+              const rationale = () => denials === 1 && !granted;
+              const paint = () => { stat.innerHTML = `granted: <b>${granted}</b> · denials: <b>${denials}</b> · shouldShowRationale: <b>${rationale()}</b>`; };
+              const close = () => phone.querySelectorAll('.sec-sheet').forEach(s => s.remove());
+              const sheet = (...kids) => { close(); phone.append(h('div', { class: 'sec-sheet' }, ...kids)); };
+              const dialog = () => sheet(
+                h('b', {}, 'Allow Receipts to take pictures and record video?'),
+                act('While using the app', () => { granted = true; close(); big.textContent = 'Camera open. Point at a receipt.'; log('<span class="good">granted = true</span>'); paint(); replay(phone, 'pop'); }),
+                act('Only this time', () => { granted = true; close(); big.textContent = 'Camera open, this session only.'; log('<span class="good">granted = true</span> <span class="muted">// revoked soon after the app leaves the screen</span>'); paint(); replay(phone, 'pop'); }),
+                act('Don’t allow', () => {
+                  denials++; explained = false; close(); paint();
+                  big.textContent = denials >= 2 ? 'Scanning needs the camera.' : 'Tap Scan to read a receipt.';
+                  log(`granted = false <span class="muted">// denial ${denials}${denials >= 2 ? ': the dialog won’t show again' : ''}</span>`);
+                }));
+              const scan = () => {
+                if (granted) { big.textContent = 'Camera open. Point at a receipt.'; replay(phone, 'pop'); log('already granted: open the camera'); return; }
+                if (denials >= 2) {
+                  log('launch(CAMERA) → <span class="bad">false at once, no dialog</span>');
+                  sheet(h('b', {}, 'Camera is off for Receipts'), h('small', {}, 'Turn it on in Settings to scan.'),
+                    act('Open settings: allow camera', () => { granted = true; close(); big.textContent = 'Camera allowed from Settings.'; log('<span class="good">granted in Settings</span>'); paint(); replay(phone, 'pop'); }),
+                    act('Not now', () => { close(); log('<span class="muted">the rest of the app keeps working</span>'); }));
+                  replay(phone, 'shake'); return;
+                }
+                if (rationale() && !explained) {
+                  log('shouldShowRequestPermissionRationale → <b>true</b>: explain first');
+                  sheet(h('b', {}, 'Why the camera?'), h('small', {}, 'We read the total from a photo of the receipt. Nothing is uploaded.'),
+                    act('Continue', () => { explained = true; dialog(); log('launch(CAMERA)'); }));
+                  return;
+                }
+                log('launch(CAMERA)'); dialog();
+              };
+              paint();
+              el.append(
+                h('div', { class: 'sec-bio' },
+                  h('div', { class: 'viz' }, h('div', { class: 'controls' }, cmd('scanButton.onClick()', scan)), stat, o),
+                  phone));
+              log('<span class="muted">nothing asked yet</span>');
+            },
+          },
+          {
+            title: 'Precise or approximate: read what you got',
+            body: `<p>On Android 12 and later, request <code>ACCESS_FINE_LOCATION</code> and <code>ACCESS_COARSE_LOCATION</code> together. The dialog then lets the user pick Precise or Approximate, and While using the app or Only this time. Your callback gets a map. Precise means both entries are true. Approximate means only coarse is true.</p>
+<p>A one-time grant lasts while the app is in use and is revoked soon after it goes to the background. So check the current state each time a feature needs it, instead of storing “has location” in your own prefs.</p>`,
+            code: `val askLocation = rememberLauncherForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+) { result ->
+    when {
+        result[Manifest.permission.ACCESS_FINE_LOCATION] == true -> startTurnByTurn()
+        result[Manifest.permission.ACCESS_COARSE_LOCATION] == true -> showNearbyStores()
+        else -> showCityPicker()
+    }
+}
+
+askLocation.launch(arrayOf(
+    Manifest.permission.ACCESS_FINE_LOCATION,
+    Manifest.permission.ACCESS_COARSE_LOCATION,
+))`,
+            visual(el) {
+              let precise = true, grant = null, busy = false;
+              const map = h('div', { class: 'sec-d2-map', 'aria-hidden': 'true' });
+              const area = h('span', { class: 'sec-d2-area' }), dot = h('span', { class: 'sec-d2-dot' });
+              map.append(area, dot);
+              const res = h('div', { class: 'sec-manifest', 'aria-label': 'Permission result' });
+              const o = out('Pick precision, then answer the dialog.');
+              const precBtns = [[true, 'Precise'], [false, 'Approximate']].map(([v, t], i) => act(t, () => { if (busy) return; precise = v; press(precBtns, precBtns[i]); }));
+              press(precBtns, precBtns[0]);
+              const paint = () => {
+                const fine = !!grant && precise, coarse = !!grant;
+                res.replaceChildren(h('span', { class: 't-c' }, '// result map'),
+                  h('span', { class: 'drop-in' }, `ACCESS_FINE_LOCATION   = ${fine}`),
+                  h('span', { class: 'drop-in' }, `ACCESS_COARSE_LOCATION = ${coarse}`));
+                map.className = 'sec-d2-map' + (!grant ? '' : fine ? ' sec-d2-fine' : ' sec-d2-coarse');
+              };
+              const answer = kind => () => {
+                if (busy) return;
+                grant = kind; paint(); replay(map, 'pop');
+                say(o, !kind ? '<span class="bad">Denied.</span> Offer a city picker instead.'
+                  : precise ? `<span class="good">Precise${kind === 'once' ? ', this session only' : ''}.</span> A position within about 50 m, often better.`
+                  : `<span class="good">Approximate${kind === 'once' ? ', this session only' : ''}.</span> Only coarse is true: an area of about 3 km². Nearby stores still work. Turn-by-turn does not.`);
+              };
+              const bg = act('Send the app to the background', async () => {
+                if (busy) return;
+                if (grant !== 'once') { say(o, grant ? 'A “while using the app” grant stays after the app leaves the screen.' : 'Nothing granted yet.'); return; }
+                busy = true; say(o, '<span class="muted">app in the background…</span>');
+                await sleep(1200); if (!el.isConnected) return;
+                grant = null; paint(); replay(map, 'shake');
+                say(o, '<span class="bad">Revoked.</span> The one-time grant ended. The next request shows the dialog again.');
+                busy = false;
+              });
+              paint();
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'In the dialog'), precBtns),
+                h('div', { class: 'controls' }, act('While using the app', answer('while')), act('Only this time', answer('once')), act('Don’t allow', answer(null))),
+                h('div', { class: 'sec-zones' }, h('div', { class: 'sec-zone' }, h('span', { class: 'sec-label' }, 'What the app sees'), map), h('div', { class: 'sec-zone' }, res)),
+                h('div', { class: 'controls' }, bg),
+                o);
+            },
+          },
+          {
+            title: 'Audit what your SDKs access',
+            body: `<p>Your Data safety answers must cover what SDKs do, and an SDK can read location or contacts using your app’s permissions. On Android 11 and later, data access auditing shows you. Register an <code>OnOpNotedCallback</code> in debug builds and log each access of private data with a stack trace. Attribution tags, set with <code>createAttributionContext()</code>, name the part of your app that made the call.</p>`,
+            code: `class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getSystemService(AppOpsManager::class.java).setOnOpNotedCallback(mainExecutor,
+                object : AppOpsManager.OnOpNotedCallback() {
+                    override fun onNoted(op: SyncNotedAppOp) {
+                        Log.d("DataAccess", "\${op.op} tag=\${op.attributionTag}", Throwable())
+                    }
+                    override fun onSelfNoted(op: SyncNotedAppOp) { onNoted(op) }
+                    override fun onAsyncNoted(op: AsyncNotedAppOp) {
+                        Log.d("DataAccess", "\${op.op} async: \${op.message}")
+                    }
+                })
+        }
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>The photo picker runs in a system process, not in yours, so your app never sees the library. When the user picks an image, the system returns a <code>content://media/picker/…</code> Uri and grants your app read access to that one item. Where the system picker is missing, the AndroidX contract falls back to a backported picker or to <code>ACTION_OPEN_DOCUMENT</code>, still with no permission.</p>
+<p>Approximate location is made inside the system too. The location service snaps the real position to a coarse grid and adds a random offset that drifts slowly, updated about once an hour, so averaging many fixes can’t recover the real spot. It also strips speed, bearing and altitude before your app gets the fix.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Asking for everything at launch',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    askAll.launch(arrayOf(CAMERA, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, READ_CONTACTS))
+}`,
+            good: `scanButton.setOnClickListener {
+    if (ContextCompat.checkSelfPermission(this, CAMERA) == PERMISSION_GRANTED) openScanner()
+    else askCamera.launch(CAMERA)
+}`,
+            why: 'At launch the user can’t tell why you need each one, so many say no. Two denials and the dialog is gone for good. Ask when the user taps the feature.',
+          },
+          {
+            title: 'Treating any location grant as precise',
+            bad: `{ result ->
+    if (result.values.any { it }) startTurnByTurn()
+}`,
+            good: `{ result ->
+    when {
+        result[ACCESS_FINE_LOCATION] == true -> startTurnByTurn()
+        result[ACCESS_COARSE_LOCATION] == true -> showNearbyStores()
+        else -> showCityPicker()
+    }
+}`,
+            why: 'Approximate grants only coarse. Turn-by-turn on a fix that is off by a kilometer is worse than no feature. Branch on what was actually granted.',
+          },
+          {
+            title: 'Personal data in crash reports',
+            bad: `Firebase.crashlytics.setUserId(user.email)
+Firebase.crashlytics.setCustomKey("phone", user.phone)`,
+            good: `Firebase.crashlytics.setUserId(user.id)   // opaque, no personal data`,
+            why: 'Crash reports go to a third party and are kept for months. An email or phone number there is personal data you share, and it belongs in your Data safety form. An opaque id is enough to find a user’s reports.',
+          },
         ],
         visual(el) {
           const feats = [

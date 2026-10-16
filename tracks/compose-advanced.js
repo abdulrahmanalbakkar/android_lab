@@ -161,6 +161,70 @@ button.cx-tn:hover { border-color: var(--accent); }
 .cx-ph-cell { height: 18px; border-radius: 4px; background: var(--sunk); transition: background 0.15s; }
 .cx-ph-cell.cx-on { background: var(--accent); }
 .cx-ph-cell.cx-off { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+/* depth 2: locals */
+.cx-tn.cx-d2-crash { border-color: var(--err); background: var(--err-soft); }
+/* depth 2: animation */
+.cx-d2-lane { display: grid; gap: 4px; min-width: 0; }
+.cx-d2-rail { position: relative; height: 26px; border-radius: 999px; background: var(--sunk); min-width: 0; }
+.cx-d2-dot { position: absolute; top: 2px; left: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); }
+.cx-d2-dot-t { background: var(--warm); }
+.cx-d2-plot { padding: 6px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); min-width: 0; }
+.cx-d2-plot svg { display: block; width: 100%; height: auto; }
+.cx-d2-axis { stroke: var(--line); stroke-width: 1; }
+.cx-d2-flip { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.cx-d2-sp, .cx-d2-tw { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+.cx-d2-sp { stroke: var(--accent); }
+.cx-d2-tw { stroke: var(--warm); }
+.cx-d2-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.cx-d2-key { font: 600 0.76rem var(--mono); color: var(--ink); }
+.cx-d2-key::before { content: ""; display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; background: var(--accent); }
+.cx-d2-key-t::before { background: var(--warm); }
+.cx-d2-rail-big { height: 54px; border-radius: 12px; }
+.cx-d2-card { position: absolute; top: 5px; left: 0; width: 44px; height: 44px; border-radius: 10px; background: var(--accent); }
+.cx-d2-read { font: 600 0.78rem var(--mono); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.cx-d2-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.cx-d2-job { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 10px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font: 600 0.78rem var(--mono); min-width: 0; overflow-wrap: anywhere; }
+.cx-d2-running .cx-tag { background: var(--accent-soft); color: var(--accent); }
+.cx-d2-finished .cx-tag { background: var(--ok-soft); color: var(--ok); }
+.cx-d2-cancelled .cx-tag { background: var(--err-soft); color: var(--err); }
+.cx-d2-cancelled { opacity: 0.75; }
+/* depth 2: layout */
+.cx-d2-col { position: relative; height: 240px; box-sizing: border-box; padding: 28px 10px 10px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); min-width: 0; overflow: hidden; }
+.cx-d2-max { position: absolute; top: 6px; left: 10px; font: 600 0.72rem var(--mono); color: var(--muted); }
+.cx-d2-irow { display: grid; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); align-items: stretch; box-sizing: border-box; border: 2px solid var(--ink); border-radius: 10px; background: var(--surface); color: var(--ink); overflow: hidden; transition: height 0.4s ease, border-color 0.25s; }
+.cx-d2-irow.cx-d2-over { border-color: var(--err); }
+.cx-d2-icell { position: relative; display: grid; align-content: start; min-width: 0; }
+.cx-d2-icell-d { justify-items: center; }
+.cx-d2-it { padding: 8px 10px; font: 600 0.86rem/1.3 var(--body); overflow-wrap: anywhere; }
+.cx-d2-div { display: block; width: 2px; height: 0; background: var(--accent); transition: height 0.4s ease; }
+.cx-d2-q { position: absolute; right: 4px; bottom: 4px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 0.68rem var(--mono); opacity: 0; transition: opacity 0.2s; }
+.cx-d2-icell-d .cx-d2-q { right: auto; bottom: auto; top: 4px; left: 50%; transform: translateX(-50%); }
+.cx-d2-q.cx-d2-q-on { opacity: 1; }
+.cx-d2-blwrap { padding: 40px 12px 18px; border-radius: 12px; background: var(--bg); min-width: 0; overflow: hidden; }
+.cx-d2-bl { position: relative; box-sizing: content-box; width: min(260px, 100%); border: 2px dashed var(--muted); border-radius: 6px; transition: height 0.35s ease, border-color 0.25s; }
+.cx-d2-bl.cx-d2-neg { border-color: var(--err); }
+.cx-d2-blin { position: absolute; left: 8px; top: 0; transition: transform 0.35s ease; }
+.cx-d2-bltext { position: relative; display: inline-block; font: 700 22px/30px var(--display); color: var(--ink); white-space: nowrap; }
+.cx-d2-blmark { display: inline-block; width: 0; height: 0; vertical-align: baseline; }
+.cx-d2-bline { position: absolute; left: -6px; right: -6px; height: 0; border-top: 2px solid var(--ok); transition: top 0.35s ease; }
+.cx-d2-blabel { position: absolute; right: 4px; transform: translateY(4px); font: 600 0.66rem var(--mono); color: var(--ok); transition: top 0.35s ease; }
+/* depth 2: navigation */
+.cx-d2-nstack { min-height: 190px; }
+.cx-d2-shelf { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); min-width: 0; }
+.cx-d2-saved { display: flex; flex-wrap: wrap; gap: 2px 8px; font: 500 0.74rem var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.cx-d2-saved b { color: var(--ink); }
+.cx-d2-saved-on span { color: var(--accent); }
+.cx-d2-nphone { width: 190px; height: 250px; display: grid; grid-template-rows: minmax(0, 1fr) auto; border-radius: 26px; border: 8px solid var(--code-bg); background: var(--surface); color: var(--ink); overflow: hidden; justify-self: center; }
+.cx-d2-nscreen { display: grid; place-items: center; padding: 10px; min-width: 0; overflow-wrap: anywhere; }
+.cx-d2-tabs { display: flex; border-top: 1px solid var(--line); background: var(--bg); }
+.cx-d2-tab { flex: 1 1 0; min-width: 0; padding: 9px 2px; border: 0; background: none; color: var(--muted); font: 600 0.7rem var(--mono); cursor: pointer; }
+.cx-d2-tab.cx-d2-tab-on { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+.cx-d2-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cx-d2-pat { display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 10px; border-radius: 9px; background: var(--code-bg); color: var(--code-ink); font: 600 0.8rem var(--mono); min-width: 0; overflow-wrap: anywhere; }
+.cx-d2-pp { padding: 2px 4px; border-radius: 5px; min-width: 0; }
+.cx-d2-pp.cx-d2-ok { color: var(--t-k); box-shadow: inset 0 -2px 0 currentColor; }
+.cx-d2-pp.cx-d2-err { color: var(--t-e); box-shadow: inset 0 -2px 0 currentColor; }
+.cx-d2-dstack { min-height: 100px; }
 `;
 
   Lab.addTrack({
@@ -983,6 +1047,192 @@ fun SavedBanner() {
           { q: 'When does <code>staticCompositionLocalOf</code> fit better than <code>compositionLocalOf</code>?', options: ['For a value that almost never changes, like a spacing scale', 'For a value that changes every frame', 'Whenever the value is a data class'], a: 0, why: 'Static locals skip reader tracking, which is cheaper, but a change recomposes the whole subtree.' },
           { q: 'Where can you read <code>LocalContext.current</code>?', options: ['In a composable function body', 'In an <code>onClick</code> lambda', 'In a ViewModel'], a: 0, why: 'Locals are part of the composition. Only composable code can read them.' },
         ],
+        deeper: [
+          {
+            title: 'Dynamic or static: who recomposes',
+            body: `<p>The two factories differ in what happens when the provided value changes. A <code>compositionLocalOf</code> local remembers who read it. Only those readers recompose. A <code>staticCompositionLocalOf</code> local keeps no list, so Compose recomposes everything inside the provider, and nothing in there can skip.</p>
+<p>Static is cheaper to read and costs a lot to change. That fits a spacing scale or a <code>Context</code>, not a value that changes while the user looks at the screen.</p>`,
+            code: `val LocalCurrency = compositionLocalOf { Currency.EUR }        // tracks readers
+val LocalSpacing = staticCompositionLocalOf { Spacing() }         // no tracking
+
+@Composable
+fun Checkout(currency: Currency) {
+    CompositionLocalProvider(LocalCurrency provides currency) {
+        Header()          // does not read it
+        ItemList()        // does not read it
+        Total()           // LocalCurrency.current
+        PayButton()       // LocalCurrency.current
+    }
+}`,
+            visual(el) {
+              let isStatic = false, cur = 'EUR', busy = false;
+              const SYM = { EUR: '€', USD: '$' };
+              const nodes = [
+                { name: 'Header()', reads: false },
+                { name: 'ItemList()', reads: false },
+                { name: 'Total()', reads: true, show: () => `${SYM[cur]}42.00` },
+                { name: 'PayButton()', reads: true, show: () => `Pay ${SYM[cur]}42.00` },
+              ];
+              for (const n of nodes) {
+                n.runs = 1;
+                n.badge = h('span', { class: 'cx-badge' }, '1');
+                n.val = h('span', { class: 'cx-arg' }, n.reads ? n.show() : 'no read');
+                n.el = h('div', { class: 'cx-row' }, h('span', { class: 'cx-sig' }, n.name), n.badge, h('div', { class: 'cx-meta' }, n.reads ? h('span', { class: 'cx-tag cx-stable' }, 'reads .current') : null, n.val));
+              }
+              const provLine = h('span', {});
+              const prov = h('div', { class: 'cx-parent' }, provLine);
+              const decl = h('div', { class: 'kt' });
+              const o = out('Change the currency and count who runs again.');
+              const kinds = [['compositionLocalOf', false], ['staticCompositionLocalOf', true]].map(([k, s]) => cmd(`${k} { }`, () => {
+                if (busy) return; isStatic = s; paint(); say(o, s ? 'Static: reads are not tracked. A change recomposes the whole provider content.' : 'Dynamic: every .current read is tracked, like a State read.');
+              }));
+              function paint() {
+                kinds.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (isStatic ? 1 : 0))));
+                decl.innerHTML = hl(`val LocalCurrency = ${isStatic ? 'staticCompositionLocalOf' : 'compositionLocalOf'} { Currency.EUR }`);
+                provLine.textContent = `CompositionLocalProvider(LocalCurrency provides ${cur}) {`;
+              }
+              async function change() {
+                if (busy) return; busy = true;
+                cur = cur === 'EUR' ? 'USD' : 'EUR';
+                paint(); replay(prov, 'cx-flash');
+                nodes.forEach(n => n.el.classList.remove('cx-ran', 'cx-skipped'));
+                let ran = 0;
+                for (const n of nodes) {
+                  await sleep(380);
+                  if (!el.isConnected) return;
+                  if (isStatic || n.reads) {
+                    ran++; n.el.classList.add('cx-ran'); bump(n.badge, ++n.runs); replay(n.el, 'cx-flash');
+                    n.val.textContent = n.reads ? n.show() : 'ran, same output';
+                  } else { n.el.classList.add('cx-skipped'); n.val.textContent = 'untouched'; }
+                }
+                say(o, isStatic
+                  ? `<span class="bad">${ran} of 4 recomposed.</span> A static local invalidates the whole content, even Header and ItemList.`
+                  : `<span class="good">${ran} of 4 recomposed.</span> Only the two readers of LocalCurrency.current ran.`);
+                busy = false;
+              }
+              paint();
+              el.append(decl,
+                h('div', { class: 'controls cx-ctl' }, kinds),
+                h('div', { class: 'cx-tree' }, prov, h('div', { class: 'cx-kids' }, nodes.map(n => n.el))),
+                h('div', { class: 'controls cx-ctl' }, cmd('currency = if (currency == EUR) USD else EUR', change)),
+                o);
+            },
+          },
+          {
+            title: 'Missing provider: a default or a crash',
+            body: `<p>A local only reaches code inside the same composition. <code>Dialog</code>, <code>Popup</code> and lazy list items are composed as children of your tree, so they see your providers. A second Activity that calls <code>setContent</code> starts a new root. It sees only the factory default.</p>
+<p>A quiet default like a no-op logger hides that bug for months. When there is no sensible default, make the factory throw with a clear message, so the missing provider fails on the first run.</p>`,
+            code: `val LocalAnalytics = staticCompositionLocalOf<Analytics> {
+    error("No Analytics provided. Wrap the screen in AppTheme { }.")
+}
+
+class SettingsActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            AppTheme { SettingsScreen() }   // the provider lives in AppTheme
+        }
+    }
+}`,
+            visual(el) {
+              let provided = true, strict = false, busy = false;
+              const rows = [
+                { id: 'a', label: 'MainActivity.setContent {', depth: 0 },
+                { id: 'theme', label: 'AppTheme {  // provides RealAnalytics', depth: 1, prov: true },
+                { id: 'home', label: 'HomeScreen()', depth: 2, reader: true, path: ['theme'] },
+                { id: 'dlg', label: 'Dialog { ConfirmSheet() }', depth: 2, reader: true, path: ['theme'], note: 'child composition' },
+                { id: 'lazy', label: 'LazyColumn { items { Row() } }', depth: 2, reader: true, path: ['theme'], note: 'child composition' },
+                { id: 'b', label: 'SettingsActivity.setContent {  // no AppTheme', depth: 0, root2: true },
+                { id: 'set', label: 'SettingsScreen()', depth: 1, reader: true, path: ['b'] },
+              ];
+              const by = Object.fromEntries(rows.map(r => [r.id, r]));
+              for (const r of rows) {
+                const pad = `margin-left:${r.depth * 14}px;width:calc(100% - ${r.depth * 14}px)`;
+                const label = h('span', { class: 'cx-tn-label' }, r.label);
+                if (r.reader) {
+                  r.res = h('span', { class: 'cx-res' }, r.note || '');
+                  r.el = h('button', { class: 'cx-tn', style: pad, onclick: () => lookup(r) }, label, r.res);
+                } else r.el = h('div', { class: 'cx-tn' + (r.prov ? ' cx-prov' : '') + (r.root2 ? ' cx-def' : ''), style: pad }, label);
+              }
+              const fact = h('div', { class: 'kt' });
+              const o = out('Tap a screen to read LocalAnalytics.current from there.');
+              const provSw = h('input', { type: 'checkbox', id: 'cx-d2-ld-prov', checked: true });
+              const strictSw = h('input', { type: 'checkbox', id: 'cx-d2-ld-strict' });
+              function paint() {
+                fact.innerHTML = hl(strict ? 'staticCompositionLocalOf<Analytics> { error("No Analytics provided") }' : 'staticCompositionLocalOf<Analytics> { NoOpAnalytics }');
+                by.theme.el.classList.toggle('cx-off', !provided);
+                rows.forEach(r => r.el.classList.remove('cx-walk', 'cx-found', 'cx-d2-crash'));
+              }
+              provSw.addEventListener('change', () => { if (busy) { provSw.checked = provided; return; } provided = provSw.checked; paint(); say(o, provided ? 'AppTheme provides RealAnalytics again.' : 'AppTheme no longer provides it. Every reader falls back to the factory.'); });
+              strictSw.addEventListener('change', () => { if (busy) { strictSw.checked = strict; return; } strict = strictSw.checked; paint(); say(o, strict ? 'The factory now throws when nothing is provided.' : 'The factory now returns a silent no-op.'); });
+              async function lookup(r) {
+                if (busy) return; busy = true;
+                paint();
+                r.el.classList.add('cx-walk');
+                await sleep(300);
+                if (!el.isConnected) return;
+                const p = by[r.path[0]];
+                const hit = p.prov && provided;
+                if (hit) { p.el.classList.add('cx-found'); replay(p.el, 'pop-soft'); }
+                else { p.el.classList.add('cx-walk'); await sleep(300); if (!el.isConnected) return; }
+                if (hit) say(o, `${hl(r.label)} <span class="muted">→</span> <span class="good">RealAnalytics</span>${r.note ? ' <span class="muted">// a child composition still sees your providers</span>' : ''}`);
+                else if (strict) { r.el.classList.add('cx-d2-crash'); replay(r.el, 'shake'); say(o, `<span class="bad">IllegalStateException: No Analytics provided</span><br><span class="muted">// found on the first run, not in production</span>`); }
+                else { r.el.classList.add('cx-found'); say(o, `${hl(r.label)} <span class="muted">→</span> <span class="bad">NoOpAnalytics</span> <span class="muted">// events vanish and nothing tells you</span>`); }
+                busy = false;
+              }
+              paint();
+              el.append(fact,
+                h('div', { class: 'cx-tree' }, rows.map(r => r.el)),
+                h('div', { class: 'controls cx-ctl' }, h('label', { class: 'switch', for: 'cx-d2-ld-prov' }, provSw, 'AppTheme provides it'), h('label', { class: 'switch', for: 'cx-d2-ld-strict' }, strictSw, 'default = error(...)')),
+                o);
+            },
+          },
+          {
+            title: 'A local is a hidden parameter',
+            body: `<p>Nothing in a signature shows that a composable reads a local. Previews and tests must provide it too, or they get the default. Keep locals for values that almost every composable could need and that have one obvious owner: theme tokens, <code>LocalContext</code>, <code>LocalLifecycleOwner</code>, <code>LocalUriHandler</code>. Data the screen shows goes in parameters.</p>`,
+            code: `@Preview
+@Composable
+fun TotalPreview() {
+    CompositionLocalProvider(LocalCurrency provides Currency.USD) {
+        Total(amount = 42.0)
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>The tree walk in the demo is the mental model. The composer does not climb node by node. Each provider stores a persistent map from every local to its value, built from its parent’s map plus its own entries, in the slot table. <code>LocalX.current</code> looks the local up in the map for the current position, so a read costs the same at any depth.</p>
+<p>For <code>compositionLocalOf</code>, the map holds a <code>State</code> for each value. A read is a State read, so Compose records the reader and invalidates only it when the value changes. For <code>staticCompositionLocalOf</code>, the map holds the plain value. A new value means a new map, and Compose marks the provider’s content as needing a full recompose with skipping turned off.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A static local for a value that changes every frame',
+            bad: `val LocalScrollOffset = staticCompositionLocalOf { 0 }
+
+CompositionLocalProvider(
+    LocalScrollOffset provides listState.firstVisibleItemScrollOffset,
+) {
+    Feed()   // the whole feed recomposes on every scrolled pixel
+}`,
+            good: `// Pass a lambda: only the code that calls it reads the offset
+Feed(scrollOffset = { listState.firstVisibleItemScrollOffset })`,
+            why: 'Every change to a static local recomposes all of its content with skipping off. For fast-changing values, pass a lambda, or at least use <code>compositionLocalOf</code> so only readers update.',
+          },
+          {
+            title: 'Screen data in a local',
+            bad: `val LocalCurrentUser = compositionLocalOf<User> { error("No user") }
+
+@Composable
+fun AvatarBadge() {
+    val user = LocalCurrentUser.current
+    Text(user.initials)
+}`,
+            good: `@Composable
+fun AvatarBadge(initials: String) {
+    Text(initials)
+}`,
+            why: 'The badge now needs a provider in every preview, test and screen that uses it, and its signature does not say so. Data a screen shows belongs in parameters.',
+          },
+        ],
         visual(el) {
           const nodes = [
             { id: 'root', label: 'compositionLocalOf { Color.Black }  // default', kind: 'def', depth: 0, color: 'var(--ink)', name: 'the default' },
@@ -1099,6 +1349,216 @@ fun FavoriteChip(selected: Boolean, count: Int, onClick: () -> Unit) {
           { q: 'A spring animation is halfway when the target flips back. What happens?', options: ['It keeps its velocity and curves toward the new target', 'It jumps to the end, then starts over', 'It finishes the old animation first'], a: 0, why: 'Springs carry their velocity into the new target. That is why interrupted spring motion looks continuous.' },
           { q: 'Why use <code>updateTransition</code> for a chip’s color, corner and scale?', options: ['All values follow one state and stay in sync', 'It is the only API that can animate a color', 'It skips recomposition'], a: 0, why: 'One transition drives every child animation from the same target state.' },
         ],
+        deeper: [
+          {
+            title: 'Interrupted motion: spring vs tween',
+            body: `<p>When a target changes mid-flight, <code>animate*AsState</code> starts a new animation from the current value and passes the current velocity along. A spring uses that velocity, so the motion bends toward the new target. A tween ignores it. It starts again at zero speed and runs its full duration, which shows up as a hard corner in the motion.</p>
+<p>Run both, then flip the target while they are moving. Each line plots the value over time.</p>`,
+            code: `val x by animateFloatAsState(
+    targetValue = if (open) 1f else 0f,
+    // keeps velocity when interrupted
+    animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow),
+    // tween(500, easing = FastOutSlowInEasing) would restart from zero speed
+    label = "x",
+)`,
+            visual(el) {
+              const K = 200, C = 2 * 0.75 * Math.sqrt(200), DUR = 0.5, T = 1.6, PW = 300, PH = 120;
+              const bez = (x1, y1, x2, y2) => {
+                const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx, cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+                const X = t => ((ax * t + bx) * t + cx) * t, Y = t => ((ay * t + by) * t + cy) * t, dX = t => (3 * ax * t + 2 * bx) * t + cx;
+                return x => { let t = x; for (let i = 0; i < 8; i++) { const d = dX(t); if (Math.abs(d) < 1e-6) break; t = Math.min(1, Math.max(0, t - (X(t) - x) / d)); } return Y(t); };
+              };
+              const ease = bez(0.4, 0, 0.2, 1);
+              const box = h('div', { class: 'cx-d2-plot', html: `<svg viewBox="0 0 ${PW} ${PH + 20}" role="img" aria-label="Value over time for spring and tween"><line class="cx-d2-axis" x1="0" y1="${PH + 10}" x2="${PW}" y2="${PH + 10}"/><line class="cx-d2-axis" x1="0" y1="10" x2="${PW}" y2="10" stroke-dasharray="3 4"/><line class="cx-d2-flip" x1="-10" y1="0" x2="-10" y2="${PH + 20}"/><polyline class="cx-d2-tw" points=""/><polyline class="cx-d2-sp" points=""/></svg>` });
+              const svgFlip = box.querySelector('.cx-d2-flip'), plS = box.querySelector('.cx-d2-sp'), plT = box.querySelector('.cx-d2-tw');
+              const dotS = h('span', { class: 'cx-d2-dot' }), dotT = h('span', { class: 'cx-d2-dot cx-d2-dot-t' });
+              const lane = (name, dot) => h('div', { class: 'cx-d2-lane' }, h('span', { class: 'cx-label' }, name), h('div', { class: 'cx-d2-rail' }, dot));
+              const o = out('Press target = 1f, then flip it back before it settles.');
+              let run = null;
+              const px = t => (t / T) * PW, py = x => 10 + (1 - x) * PH;
+              const place = (dot, x) => { dot.style.left = `calc((100% - 22px) * ${Math.max(-0.1, Math.min(1.1, x)).toFixed(4)})`; };
+              function frame(now) {
+                if (!el.isConnected || !run) return;
+                const t = Math.min(T, (now - run.t0) / 1000);
+                const s = run.s, w = run.w;
+                if (run.flipReq) {
+                  run.flipReq = false;
+                  const before = w.x;
+                  const p0 = Math.min(1, (t - 0.01 - w.start) / w.dur), wPrev = w.from + (w.to - w.from) * ease(Math.max(0, p0));
+                  run.flipT = t; s.target = 1 - s.target; w.from = before; w.to = s.target; w.start = t;
+                  svgFlip.setAttribute('x1', px(t)); svgFlip.setAttribute('x2', px(t));
+                  say(o, `<span class="muted">flip at ${Math.round(t * 1000)} ms:</span> spring keeps v = ${s.v.toFixed(1)}/s <span class="muted">·</span> tween had v = ${((before - wPrev) / 0.01).toFixed(1)}/s and drops to 0`);
+                }
+                while (run.simT < t) { const dt = 1 / 240; s.v += (-K * (s.x - s.target) - C * s.v) * dt; s.x += s.v * dt; run.simT += dt; }
+                w.x = w.from + (w.to - w.from) * ease(Math.min(1, (t - w.start) / w.dur));
+                run.ps.push(`${px(t).toFixed(1)},${py(s.x).toFixed(1)}`); run.pt.push(`${px(t).toFixed(1)},${py(w.x).toFixed(1)}`);
+                plS.setAttribute('points', run.ps.join(' ')); plT.setAttribute('points', run.pt.join(' '));
+                place(dotS, s.x); place(dotT, w.x);
+                if (t < T) requestAnimationFrame(frame);
+                else {
+                  run.done = true;
+                  if (run.flipT == null) say(o, 'No flip this time. Run again and press the flip while both are moving.');
+                  else say(o, '<span class="good">Spring:</span> one smooth curve through the flip. <span class="bad">Tween:</span> a corner where it restarted from zero speed.');
+                }
+              }
+              function start() {
+                if (run && !run.done) { replay(box, 'shake'); return; }
+                run = { t0: performance.now(), simT: 0, s: { x: 0, v: 0, target: 1 }, w: { x: 0, from: 0, to: 1, start: 0, dur: DUR }, ps: [], pt: [], flipReq: false, flipT: null, done: false };
+                svgFlip.setAttribute('x1', -10); svgFlip.setAttribute('x2', -10);
+                say(o, 'Both animate toward 1f. Flip now.');
+                requestAnimationFrame(frame);
+              }
+              function flip() {
+                if (!run || run.done) { say(o, 'Nothing is moving. Press target = 1f first.'); replay(o, 'shake'); return; }
+                if (run.flipT != null) { say(o, 'One flip per run keeps the plot readable. Wait for it to finish, then run again.'); return; }
+                run.flipReq = true;
+              }
+              place(dotS, 0); place(dotT, 0);
+              el.append(
+                lane('spring(LowBouncy, StiffnessLow)', dotS), lane('tween(500, FastOutSlowIn)', dotT),
+                box,
+                h('div', { class: 'cx-d2-legend' }, h('span', { class: 'cx-d2-key' }, 'spring'), h('span', { class: 'cx-d2-key cx-d2-key-t' }, 'tween'), h('span', { class: 'cx-label' }, 'time →')),
+                h('div', { class: 'controls cx-ctl' }, cmd('target = 1f', start), cmd('target = 0f  // mid-flight', flip)),
+                o);
+            },
+          },
+          {
+            title: 'Animatable: animations you drive from a coroutine',
+            body: `<p>Under <code>animate*AsState</code> sits <code>Animatable</code>, which you can use directly for gestures. <code>animateTo</code> is a suspend function that returns when the animation ends. <code>snapTo</code> jumps without animating, which suits a drag that follows the finger.</p>
+<p>Only one animation runs per <code>Animatable</code>. Starting <code>animateTo</code> or <code>snapTo</code> cancels the running one, and its coroutine gets a <code>CancellationException</code>. A new <code>animateTo</code> keeps the current velocity, so a flick back mid-flight stays smooth.</p>`,
+            code: `val offset = remember { Animatable(0f) }
+val scope = rememberCoroutineScope()
+
+Box(
+    Modifier
+        .offset { IntOffset(offset.value.roundToInt(), 0) }
+        .draggable(
+            state = rememberDraggableState { delta ->
+                scope.launch { offset.snapTo(offset.value + delta) }
+            },
+            orientation = Orientation.Horizontal,
+            onDragStopped = { velocity ->
+                offset.animateTo(0f, spring(), initialVelocity = velocity)
+            },
+        )
+)`,
+            visual(el) {
+              const K = 260, C = 2 * 0.45 * Math.sqrt(260), MAX = 240;
+              let x = 0, v = 0, target = null, job = null, nextId = 1, last = 0, looping = false;
+              const card = h('span', { class: 'cx-d2-card' });
+              const rail = h('div', { class: 'cx-d2-rail cx-d2-rail-big' }, card);
+              const read = h('div', { class: 'cx-d2-read' });
+              const log = h('ol', { class: 'cx-d2-log', 'aria-label': 'Coroutines' });
+              const o = out('Launch an animation, then launch another before it ends.');
+              const jobs = [];
+              const paint = () => {
+                card.style.left = `calc((100% - 44px) * ${(Math.max(-20, Math.min(MAX + 20, x)) / MAX).toFixed(4)})`;
+                read.textContent = `offset.value = ${x.toFixed(0)}f   velocity = ${v.toFixed(0)}/s${job ? `   running: job #${job.id}` : ''}`;
+              };
+              const paintLog = () => log.replaceChildren(...jobs.slice(-5).map(j => h('li', { class: `cx-d2-job cx-d2-${j.state}` }, h('span', {}, `#${j.id} ${j.what}`), h('span', { class: 'cx-tag' }, j.state))));
+              function cancelRunning(by) {
+                if (!job) return null;
+                const j = job; j.state = 'cancelled'; job = null; target = null;
+                say(o, `job #${j.id} <span class="bad">cancelled</span> <span class="muted">(CancellationException)</span> by ${by}`);
+                return j;
+              }
+              function loop(now) {
+                if (!el.isConnected) { looping = false; return; }
+                const dt = Math.min(0.05, (now - last) / 1000); last = now;
+                if (job && target != null) {
+                  let left = dt;
+                  while (left > 0) { const s = Math.min(left, 1 / 240); v += (-K * (x - target) - C * v) * s; x += v * s; left -= s; }
+                  if (Math.abs(x - target) < 0.4 && Math.abs(v) < 4) {
+                    x = target; v = 0; job.state = 'finished';
+                    say(o, `job #${job.id} <span class="good">finished</span>: animateTo returned, the next line of the coroutine runs`);
+                    job = null; target = null; paintLog();
+                  }
+                }
+                paint();
+                if (job) requestAnimationFrame(loop); else looping = false;
+              }
+              function animateTo(t) {
+                const prev = cancelRunning(`job #${nextId}`);
+                job = { id: nextId++, what: `animateTo(${t}f)`, state: 'running' }; jobs.push(job); target = t;
+                if (!prev) say(o, `job #${job.id} launched: ${hl(`animateTo(${t}f)`)} <span class="muted">starts with v = ${v.toFixed(0)}/s</span>`);
+                else o.innerHTML += `<br><span class="muted">job #${job.id} starts from ${x.toFixed(0)}f, carrying v = ${v.toFixed(0)}/s</span>`;
+                paintLog();
+                if (!looping) { looping = true; last = performance.now(); requestAnimationFrame(loop); }
+              }
+              function snap() {
+                const prev = cancelRunning('snapTo');
+                x = Math.min(MAX, x + 40); v = 0;
+                replay(card, 'pop'); paint(); paintLog();
+                if (!prev) say(o, `${hl('snapTo')} <span class="muted">jumps to</span> ${x.toFixed(0)}f <span class="muted">with no animation and zero velocity, like a finger drag</span>`);
+              }
+              paint(); paintLog();
+              el.append(rail, read,
+                h('div', { class: 'controls cx-ctl' },
+                  cmd('launch { offset.animateTo(240f) }', () => animateTo(MAX)),
+                  cmd('launch { offset.animateTo(0f) }', () => animateTo(0)),
+                  cmd('launch { offset.snapTo(offset.value + 40f) }', snap)),
+                h('span', { class: 'cx-label' }, 'Coroutines, newest last'), log, o);
+            },
+          },
+          {
+            title: 'Lists: animateItem needs keys',
+            body: `<p>In a lazy list, <code>Modifier.animateItem()</code> fades items in and out and slides them to new positions when the list changes. It matches old and new items by key. Without <code>key</code>, items are matched by index, so a move looks like every row changing its text in place.</p>`,
+            code: `LazyColumn {
+    items(tasks, key = { it.id }) { task ->
+        TaskRow(task, Modifier.animateItem())
+    }
+}`,
+          },
+          {
+            title: 'The system animation scale applies to you',
+            body: `<p>Compose scales animation durations by the system animator duration scale. In Developer options you can slow every animation down 5 or 10 times to inspect it. The <em>Remove animations</em> accessibility setting sets the scale to 0, and animations jump to their end. So never put meaning only in motion, and test your screens with animations off.</p>
+<p>In UI tests, take control of the clock to check a frame in the middle of an animation.</p>`,
+            code: `composeTestRule.mainClock.autoAdvance = false
+composeTestRule.onNodeWithText("Favorite").performClick()
+composeTestRule.mainClock.advanceTimeBy(150)   // mid-animation
+composeTestRule.onNodeWithTag("chip").assertIsDisplayed()`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>animateFloatAsState</code> remembers an <code>Animatable</code> and a channel. Each new target goes into the channel, and a <code>LaunchedEffect</code> reads it and calls <code>animateTo</code>, which cancels the animation still running. That is how retargeting works.</p>
+<p>The animation itself is a coroutine loop. Each step suspends in <code>withFrameNanos</code> until the next frame from the <code>MonotonicFrameClock</code>, which Choreographer drives on Android. It computes the value for that frame time from the spec and writes it into a snapshot <code>State</code>. Whoever read that State is invalidated: a composable if you read it in composition, only layout or draw if you read it inside a lambda modifier like <code>offset { }</code> or <code>graphicsLayer { }</code>.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'An Animatable without remember',
+            bad: `@Composable
+fun Shake(trigger: Int) {
+    val offset = Animatable(0f)
+    LaunchedEffect(trigger) { offset.animateTo(12f); offset.animateTo(0f) }
+    Box(Modifier.offset { IntOffset(offset.value.roundToInt(), 0) })
+}`,
+            good: `@Composable
+fun Shake(trigger: Int) {
+    val offset = remember { Animatable(0f) }
+    LaunchedEffect(trigger) { offset.animateTo(12f); offset.animateTo(0f) }
+    Box(Modifier.offset { IntOffset(offset.value.roundToInt(), 0) })
+}`,
+            why: 'Each recomposition builds a fresh <code>Animatable</code> at 0. The effect keeps animating the old one, so the box snaps back and stops following.',
+          },
+          {
+            title: 'Force-unwrapping inside AnimatedVisibility',
+            bad: `AnimatedVisibility(visible = error != null) {
+    Text(error!!.message)
+}`,
+            good: `AnimatedContent(targetState = error, label = "error") { e ->
+    if (e != null) Text(e.message)
+}`,
+            why: 'The content keeps composing during the exit animation, after <code>error</code> is already null, so <code>!!</code> crashes. <code>AnimatedContent</code> gives the leaving content its own old value.',
+          },
+          {
+            title: 'Reading an animated value in composition',
+            bad: `val x by animateDpAsState(if (open) 200.dp else 0.dp, label = "x")
+Box(Modifier.offset(x = x))`,
+            good: `val x by animateDpAsState(if (open) 200.dp else 0.dp, label = "x")
+Box(Modifier.offset { IntOffset(x.roundToPx(), 0) })`,
+            why: '<code>offset(x = x)</code> reads the value during composition, so the box recomposes on every frame. The lambda version reads it during layout and skips composition entirely.',
+          },
+        ],
         visual(el) {
           const specs = [
             { key: 'tween(300)', src: 'tween(durationMillis = 300, easing = FastOutSlowInEasing)', ms: 300, ease: 'cubic-bezier(0.4, 0, 0.2, 1)' },
@@ -1208,6 +1668,175 @@ fun TagFlow(modifier: Modifier = Modifier, spacing: Dp = 8.dp, content: @Composa
           { q: 'How many times may you call <code>measure()</code> on one child in a layout pass?', options: ['Once', 'Twice: once for width, once for height', 'As often as you need'], a: 0, why: 'Single-pass measurement keeps deep trees fast. A second call throws.' },
           { q: 'In what order does a layout pass run?', options: ['Constraints down, sizes up, then placement', 'Placement first, then measurement', 'Sizes down, constraints up'], a: 0, why: 'A parent constrains its children, reads their sizes, picks its own, then places them.' },
           { q: 'Why call <code>placeRelative</code> rather than <code>place</code>?', options: ['It mirrors x in right-to-left layouts', 'It animates the move', 'It allows a second measure'], a: 0, why: '<code>placeRelative</code> flips the x position when the layout direction is RTL.' },
+        ],
+        deeper: [
+          {
+            title: 'Intrinsics: one question before the measure',
+            body: `<p>A classic case: two texts in a <code>Row</code> with a divider between them. The divider uses <code>fillMaxHeight()</code>, but the Row only knows its height after measuring its children. So the divider takes the whole max height it was offered, and the Row grows with it.</p>
+<p><code>Modifier.height(IntrinsicSize.Min)</code> fixes this. Before measuring, the Row asks each child for its <code>minIntrinsicHeight</code>: the smallest height it needs to show its content properly. The Row takes the largest answer as a fixed height, then measures each child once inside it. Asking is not measuring, so the one-measure rule still holds.</p>`,
+            code: `Row(Modifier.height(IntrinsicSize.Min)) {
+    Text("Kotlin", Modifier.weight(1f))
+    VerticalDivider()                 // fillMaxHeight() inside
+    Text("Coroutines\\nFlow\\nCompose", Modifier.weight(1f))
+}`,
+            visual(el) {
+              let intrinsic = false, busy = false;
+              const MAXH = 200;
+              const left = h('div', { class: 'cx-d2-it' }, 'Kotlin');
+              const div = h('span', { class: 'cx-d2-div' });
+              const right = h('div', { class: 'cx-d2-it' }, 'Coroutines', h('br'), 'Flow', h('br'), 'Compose');
+              const qs = [h('span', { class: 'cx-d2-q' }), h('span', { class: 'cx-d2-q' }), h('span', { class: 'cx-d2-q' })];
+              const row = h('div', { class: 'cx-d2-irow' }, h('div', { class: 'cx-d2-icell' }, left, qs[0]), h('div', { class: 'cx-d2-icell cx-d2-icell-d' }, div, qs[1]), h('div', { class: 'cx-d2-icell' }, right, qs[2]));
+              const col = h('div', { class: 'cx-d2-col' }, h('span', { class: 'cx-d2-max' }, `maxHeight = ${MAXH}`), row);
+              const src = h('div', { class: 'kt' });
+              const o = out('Measure the Row, then turn on IntrinsicSize.Min and measure again.');
+              const sw = h('input', { type: 'checkbox', id: 'cx-d2-li-on' });
+              const H = { l: 26, r: 74 };
+              const paintSrc = () => { src.innerHTML = hl(`Row(Modifier${intrinsic ? '.height(IntrinsicSize.Min)' : ''}) { Text; VerticalDivider(); Text }`); };
+              const setH = (rh, dh) => { row.style.height = rh + 'px'; div.style.height = dh + 'px'; };
+              const clearQ = () => qs.forEach(q => { q.textContent = ''; q.classList.remove('cx-d2-q-on'); });
+              sw.addEventListener('change', () => { if (busy) { sw.checked = intrinsic; return; } intrinsic = sw.checked; paintSrc(); clearQ(); setH(H.r, 0); say(o, intrinsic ? 'IntrinsicSize.Min is on. Measure again.' : 'Plain Row. Measure again.'); });
+              async function measure() {
+                if (busy) return; busy = true;
+                clearQ(); setH(H.r, 0); row.classList.remove('cx-d2-over');
+                const wait = async ms => { await sleep(ms); return el.isConnected; };
+                if (intrinsic) {
+                  say(o, 'Row asks each child: <span class="good">minIntrinsicHeight(width)?</span>');
+                  const ans = [H.l, 0, H.r];
+                  for (let i = 0; i < 3; i++) {
+                    if (!await wait(420)) return;
+                    qs[i].textContent = `${ans[i]}`; qs[i].classList.add('cx-d2-q-on'); replay(qs[i], 'pop');
+                  }
+                  if (!await wait(500)) return;
+                  setH(H.r, 0); replay(row, 'cx-flash');
+                  say(o, `Largest answer is ${H.r}. The Row measures every child once with <span class="good">minHeight = maxHeight = ${H.r}</span>.`);
+                  if (!await wait(600)) return;
+                  setH(H.r, H.r);
+                  say(o, `<span class="good">The divider fills ${H.r}</span>, exactly as tall as the tallest text. One measure per child.`);
+                } else {
+                  say(o, `Row measures each child with maxHeight = ${MAXH}.`);
+                  if (!await wait(500)) return;
+                  qs[0].textContent = `${H.l}`; qs[0].classList.add('cx-d2-q-on'); replay(qs[0], 'pop');
+                  if (!await wait(420)) return;
+                  setH(MAXH, MAXH); qs[1].textContent = `${MAXH}`; qs[1].classList.add('cx-d2-q-on'); replay(qs[1], 'pop');
+                  say(o, `${hl('fillMaxHeight()')} <span class="muted">takes the whole max:</span> ${MAXH}`);
+                  if (!await wait(500)) return;
+                  qs[2].textContent = `${H.r}`; qs[2].classList.add('cx-d2-q-on'); replay(qs[2], 'pop');
+                  if (!await wait(500)) return;
+                  row.classList.add('cx-d2-over');
+                  say(o, `<span class="bad">Row height = ${MAXH}.</span> The divider stretched the Row to everything it was offered.`);
+                }
+                busy = false;
+              }
+              paintSrc(); setH(H.r, 0);
+              el.append(src, col,
+                h('div', { class: 'controls cx-ctl' }, cmd('measure(constraints)', measure), h('label', { class: 'switch', for: 'cx-d2-li-on' }, sw, 'height(IntrinsicSize.Min)')),
+                o);
+            },
+          },
+          {
+            title: 'Modifier.layout: lay out one element',
+            body: `<p>When only one element needs custom measuring, a full <code>Layout</code> is overkill. <code>Modifier.layout { measurable, constraints -> }</code> gives you that single element. It follows the same rules: measure once, report a size, place.</p>
+<p>Designers often spec text by the distance from the top to the first baseline, not to the top of the text box. <code>padding(top = 24.dp)</code> puts the box 24 dp down, and the baseline lands lower. The modifier below reads the <code>FirstBaseline</code> alignment line and places the text so the baseline lands exactly where asked. If the target is smaller than the text’s own top-to-baseline distance, the offset goes negative and the text draws above its bounds.</p>`,
+            code: `fun Modifier.firstBaselineToTop(distance: Dp) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    check(placeable[FirstBaseline] != AlignmentLine.Unspecified)
+    val y = distance.roundToPx() - placeable[FirstBaseline]
+    layout(placeable.width, placeable.height + y) {
+        placeable.placeRelative(0, y)
+    }
+}`,
+            visual(el) {
+              let mode = 0, base = null, tries = 0;
+              const MODES = [
+                { src: 'Modifier.padding(top = 24.dp)', pad: true, d: 24 },
+                { src: 'Modifier.firstBaselineToTop(32.dp)', pad: false, d: 32 },
+                { src: 'Modifier.firstBaselineToTop(12.dp)', pad: false, d: 12 },
+              ];
+              const mark = h('span', { class: 'cx-d2-blmark' });
+              const txt = h('span', { class: 'cx-d2-bltext' }, 'Headline', mark);
+              const inner = h('div', { class: 'cx-d2-blin' }, txt);
+              const bline = h('span', { class: 'cx-d2-bline' });
+              const blabel = h('span', { class: 'cx-d2-blabel' });
+              const boxEl = h('div', { class: 'cx-d2-bl' }, inner, bline, blabel);
+              const o = out('Pick a modifier. The green line is the first baseline.');
+              const btns = MODES.map((m, i) => cmd(m.src, () => { mode = i; paint(true); }));
+              function paint(anim) {
+                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === mode)));
+                if (base == null) { if (!txt.isConnected) return; base = mark.offsetTop; }
+                const m = MODES[mode], th = txt.offsetHeight;
+                const y = m.pad ? m.d : m.d - base;
+                const hgt = m.pad ? th + m.d : th + y;
+                inner.style.transform = `translateY(${y}px)`;
+                boxEl.style.height = Math.max(0, hgt) + 'px';
+                bline.style.top = (y + base) + 'px'; blabel.style.top = (y + base) + 'px';
+                blabel.textContent = `baseline ${y + base}`;
+                boxEl.classList.toggle('cx-d2-neg', y < 0);
+                if (anim) replay(boxEl, 'cx-flash');
+                say(o, m.pad
+                  ? `${hl(m.src)} <span class="muted">moves the box ${m.d} down, and the text’s own ${base} to its baseline comes on top:</span> <span class="bad">baseline at ${m.d + base}</span>`
+                  : y < 0
+                    ? `${hl(`y = ${m.d} - ${base} = ${y}`)} <span class="bad">negative: the text draws above its own bounds</span>`
+                    : `${hl(`y = ${m.d} - ${base} = ${y}`)} <span class="good">baseline exactly ${m.d} from the top</span>, height ${hgt}`);
+              }
+              const settle = () => { if (base != null || tries++ > 120) return; if (txt.isConnected) paint(false); else requestAnimationFrame(settle); };
+              el.append(h('div', { class: 'cx-d2-blwrap' }, boxEl), h('div', { class: 'controls cx-ctl' }, btns), o);
+              settle();
+            },
+          },
+          {
+            title: 'SubcomposeLayout: compose after measuring',
+            body: `<p>A normal layout composes its children first and measures them after. Sometimes what to show depends on the space, like a different item when the width is small. <code>SubcomposeLayout</code> composes children inside the measure step, once the constraints are known. <code>BoxWithConstraints</code> is built on it, and so is <code>LazyColumn</code>, which composes only the items that fit.</p>
+<p>It costs more than a plain layout, and it does not support intrinsic measurements. So reach for it only when the content really depends on the size.</p>`,
+            code: `BoxWithConstraints {
+    if (maxWidth < 400.dp) CompactHeader() else WideHeader()
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Every composable that emits UI becomes a <code>LayoutNode</code> with a <code>MeasurePolicy</code>, the lambda you pass to <code>Layout</code>. Layout modifiers like <code>padding</code> or <code>layout { }</code> are wrapped around the node as a chain, so <code>measure()</code> on a child runs the outermost modifier first and ends in the node’s policy.</p>
+<p>Results are cached per node. A node measures again only when its incoming constraints change or when a <code>State</code> it read during measure changes. In that case Compose re-runs layout without recomposing. <code>Constraints</code> itself is a value class that packs all four bounds into one <code>Long</code>, so passing it around allocates nothing.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Passing the parent’s minimums down to children',
+            bad: `Layout(content, Modifier.fillMaxWidth()) { measurables, constraints ->
+    val placeables = measurables.map { it.measure(constraints) }
+    // ...
+}`,
+            good: `Layout(content, Modifier.fillMaxWidth()) { measurables, constraints ->
+    val loose = constraints.copy(minWidth = 0, minHeight = 0)
+    val placeables = measurables.map { it.measure(loose) }
+    // ...
+}`,
+            why: '<code>fillMaxWidth()</code> sets minWidth equal to maxWidth. Passed straight down, every chip must be full width, so each one lands on its own row.',
+          },
+          {
+            title: 'Reporting a size outside the constraints',
+            bad: `layout(rowWidth, totalHeight) {
+    placeables.forEach { it.placeRelative(x, y) }
+}`,
+            good: `layout(
+    constraints.constrainWidth(rowWidth),
+    constraints.constrainHeight(totalHeight),
+) {
+    placeables.forEach { it.placeRelative(x, y) }
+}`,
+            why: 'Compose clamps a size that breaks the constraints, and centers your content in the clamped space. Your edges end up cut or shifted. Constrain the size yourself.',
+          },
+          {
+            title: 'Sizing one child from another with onSizeChanged',
+            bad: `var labelWidth by remember { mutableIntStateOf(0) }
+Text(label, Modifier.onSizeChanged { labelWidth = it.width })
+HorizontalDivider(
+    Modifier.width(with(LocalDensity.current) { labelWidth.toDp() })
+)`,
+            good: `Column(Modifier.width(IntrinsicSize.Max)) {
+    Text(label)
+    HorizontalDivider(Modifier.fillMaxWidth())
+}`,
+            why: 'The width arrives after the first frame, so the divider starts at 0 and then jumps, and each change costs an extra recomposition. Let layout answer it with intrinsics or a custom <code>Layout</code>.',
+          },
         ],
         visual(el) {
           const tags = [['Kotlin', 70], ['UI', 44], ['Compose', 92], ['Flow', 56], ['KMP', 50], ['Room', 62]];
@@ -1346,6 +1975,211 @@ class ProductViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
           { q: 'Inside <code>composable&lt;Product&gt; { entry -&gt; }</code>, how do you get the typed argument?', options: ['<code>entry.toRoute&lt;Product&gt;()</code>', '<code>entry.arguments?.getInt("id")</code>', '<code>navController.currentDestination</code>'], a: 0, why: '<code>toRoute</code> deserializes the whole route object, with every argument typed.' },
           { q: 'Stack: Home, Product(7), Cart. You call <code>navigate(Cart) { launchSingleTop = true }</code>. Result?', options: ['Home, Product(7), Cart', 'Home, Product(7), Cart, Cart', 'Home, Cart'], a: 0, why: 'Cart is already on top, so single-top reuses it instead of pushing a copy.' },
           { q: 'What should a route class carry?', options: ['Ids and small values, like <code>Product(id = 42)</code>', 'The whole <code>Product</code> object with its image bytes', 'A reference to the ViewModel'], a: 0, why: 'Routes are saved in the back stack state. Keep them small and load the data with the id.' },
+        ],
+        deeper: [
+          {
+            title: 'Bottom tabs: one back stack per tab',
+            body: `<p>A bottom bar that calls <code>navigate(Search)</code> on each tap piles entries on one stack. After a few taps, back walks through every tab you ever visited. The standard fix uses three options together. <code>popUpTo</code> the start destination with <code>saveState = true</code> clears the current tab but saves its entries. <code>restoreState = true</code> brings back the saved entries of the tab you open. <code>launchSingleTop</code> avoids a second copy of a tab.</p>
+<p>Open a few screens in each tab, switch tabs, and press back. Then turn on the options and try again.</p>`,
+            code: `fun NavController.openTab(tab: Any) = navigate(tab) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}
+
+NavigationBarItem(
+    selected = currentTab == Search,
+    onClick = { navController.openTab(Search) },
+    icon = { Icon(Icons.Default.Search, contentDescription = null) },
+    label = { Text("Search") },
+)`,
+            visual(el) {
+              const TABS = ['Home', 'Search', 'Profile'];
+              const CHILD = { Home: n => `Article(${n})`, Search: n => `Results(page = ${n})`, Profile: n => `Settings(${n})` };
+              let on = false, busy = false, stack, cur, saved, count;
+              const stackEl = h('div', { class: 'cx-stack cx-d2-nstack', 'aria-label': 'Back stack, bottom first' });
+              const shelf = h('div', { class: 'cx-d2-shelf' });
+              const screen = h('p', { class: 'cx-scr-title' });
+              const bar = h('div', { class: 'cx-d2-tabs' });
+              const tabBtns = TABS.map(t => h('button', { class: 'cx-d2-tab', type: 'button', onclick: () => openTab(t) }, t));
+              bar.append(...tabBtns);
+              const phone = h('div', { class: 'cx-d2-nphone' }, h('div', { class: 'cx-d2-nscreen' }, screen), bar);
+              const o = out('');
+              const sw = h('input', { type: 'checkbox', id: 'cx-d2-nt-opts' });
+              const entry = (route, tab) => ({ route, tab });
+              function reset() { stack = [entry('Home', 'Home')]; cur = 'Home'; saved = { Home: [], Search: [], Profile: [] }; count = { Home: 0, Search: 0, Profile: 0 }; paint(); }
+              function paint(fresh) {
+                stackEl.replaceChildren(...stack.map((e, i) => h('div', { class: 'cx-entry' + (i === stack.length - 1 ? ' cx-top' : '') + (fresh && i === stack.length - 1 ? ' drop-in' : '') }, h('span', { class: 'cx-entry-route' }, e.route), h('span', { class: 'cx-entry-args' }, `${e.tab} tab`))));
+                shelf.replaceChildren(h('span', { class: 'cx-label' }, 'Saved state'), ...TABS.map(t => h('div', { class: 'cx-d2-saved' + (saved[t].length ? ' cx-d2-saved-on' : '') }, h('b', {}, t), h('span', {}, saved[t].length ? saved[t].map(e => e.route).join(', ') : '(none)'))));
+                shelf.hidden = !on;
+                screen.textContent = stack[stack.length - 1].route;
+                tabBtns.forEach((b, i) => { b.classList.toggle('cx-d2-tab-on', TABS[i] === cur); b.setAttribute('aria-pressed', String(TABS[i] === cur)); });
+              }
+              function openTab(t) {
+                if (busy) return;
+                if (!on) {
+                  stack.push(entry(t, t)); cur = t; paint(true);
+                  say(o, `${hl(`navigate(${t})`)} <span class="muted">pushed. Stack size:</span> ${stack.length}${stack.length > 5 ? ' <span class="bad">// back now walks through all of this</span>' : ''}`);
+                  return;
+                }
+                if (t === cur) {
+                  if (t === 'Home' && saved.Home.length) {
+                    const n = saved.Home.length; stack.push(...saved.Home); saved.Home = []; paint(true);
+                    say(o, `<span class="good">restored ${n} entr${n > 1 ? 'ies' : 'y'} of Home</span> <span class="muted">// restoreState</span>`); return;
+                  }
+                  replay(phone, 'pop-soft'); say(o, `Already on ${t}. launchSingleTop keeps one copy.`); return;
+                }
+                const leaving = stack.slice(1);
+                saved[cur] = leaving;
+                stack = [stack[0]];
+                if (t !== 'Home') stack.push(...(saved[t].length ? saved[t] : [entry(t, t)]));
+                else stack.push(...saved.Home);
+                const restored = t === 'Home' ? saved.Home.length : Math.max(0, saved[t].length - 1);
+                saved[t] = [];
+                const from = cur; cur = t; paint(true); replay(shelf, 'pop-soft');
+                say(o, `<span class="muted">saved ${from}:</span> ${leaving.length ? leaving.map(e => e.route).join(', ') : 'nothing above Home'} <span class="muted">·</span> ${restored ? `<span class="good">restored ${restored} entr${restored > 1 ? 'ies' : 'y'} of ${t}</span>` : `opened ${t}`}`);
+              }
+              function open() {
+                if (busy) return;
+                const n = ++count[cur];
+                stack.push(entry(CHILD[cur](n), cur)); paint(true);
+                say(o, `${hl(`navigate(${CHILD[cur](n)})`)} <span class="muted">inside the ${cur} tab</span>`);
+              }
+              async function back() {
+                if (busy) return;
+                if (stack.length === 1) { replay(stackEl.lastElementChild, 'shake'); say(o, 'Only Home is left. Back now leaves the app.'); return; }
+                busy = true;
+                const top = stackEl.lastElementChild; top.classList.add('leave');
+                await sleep(380);
+                if (!el.isConnected) return;
+                const gone = stack.pop(); cur = stack[stack.length - 1].tab; paint();
+                say(o, `${hl('popBackStack()')} <span class="muted">removed</span> ${gone.route}${!on && gone.tab !== cur ? ' <span class="bad">// back jumped to another tab</span>' : ''}`);
+                busy = false;
+              }
+              sw.addEventListener('change', () => { if (busy) { sw.checked = on; return; } on = sw.checked; reset(); say(o, on ? 'Each tab now keeps its own stack. Open screens, switch tabs, come back.' : 'Plain navigate(tab). Watch the stack grow.'); });
+              reset();
+              say(o, 'Open a screen in Home, switch to Search, open one there, then press back a few times.');
+              el.append(
+                h('div', { class: 'cx-nav' }, h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Back stack (top is current)'), stackEl, shelf), phone),
+                h('div', { class: 'controls cx-ctl' }, cmd('navigate(child)', open), cmd('popBackStack()', back), h('label', { class: 'switch', for: 'cx-d2-nt-opts' }, sw, 'popUpTo + saveState + restoreState')),
+                o);
+            },
+          },
+          {
+            title: 'Deep links from the route class',
+            body: `<p><code>navDeepLink&lt;Product&gt;(basePath)</code> builds the URI pattern from the route’s properties. A property without a default value becomes a path segment. A property with a default value becomes an optional query parameter. When a link arrives, Navigation matches the pattern, parses each argument into its Kotlin type and opens the screen with a typed <code>Product</code>.</p>
+<p>A value that can’t be parsed, like <code>abc</code> for an <code>Int</code>, does not match. You still need an <code>intent-filter</code> in the manifest for the scheme and host, since Navigation can’t add it from code.</p>`,
+            code: `@Serializable
+data class Product(val id: Int, val ref: String? = null)
+
+composable<Product>(
+    deepLinks = listOf(navDeepLink<Product>(basePath = "https://shop.example/product")),
+) { entry ->
+    val product: Product = entry.toRoute()
+    ProductScreen(product.id, source = product.ref)
+}
+// Pattern: https://shop.example/product/{id}?ref={ref}`,
+            visual(el) {
+              const BASE = 'https://shop.example/product';
+              const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+              const input = h('input', { class: 'cx-dv-in cx-d2-url', id: 'cx-d2-nd-url', type: 'text', spellcheck: 'false', autocomplete: 'off', value: `${BASE}/42` });
+              const parts = [h('span', { class: 'cx-d2-pp' }, BASE), h('span', { class: 'cx-d2-pp' }, '/{id}'), h('span', { class: 'cx-d2-pp' }, '?ref={ref}')];
+              const pat = h('div', { class: 'cx-d2-pat' }, ...parts);
+              const res = h('div', { class: 'cx-stack cx-d2-dstack' });
+              const o = out('Open a link to match it against the pattern.');
+              let busy = false;
+              const PRE = [`${BASE}/42`, `${BASE}/42?ref=mail`, `${BASE}/abc`, 'https://shop.example/products/42'];
+              const presets = PRE.map(u => h('button', { class: 'cmd', type: 'button', onclick() { if (busy) return; input.value = u; go(); } }, u.replace('https://shop.example', '…')));
+              const mark = (i, cls) => { parts[i].classList.remove('cx-d2-ok', 'cx-d2-err'); if (cls) { parts[i].classList.add(cls); replay(parts[i], 'pop'); } };
+              async function go() {
+                if (busy) return; busy = true;
+                parts.forEach((_, i) => mark(i, null)); res.replaceChildren();
+                const wait = async ms => { await sleep(ms); return el.isConnected; };
+                let u = null;
+                try { u = new URL(input.value.trim()); } catch (e) { u = null; }
+                const fail = (i, msg) => { if (i != null) mark(i, 'cx-d2-err'); say(o, `<span class="bad">no match:</span> ${msg}<br><span class="muted">// the app opens on its start destination, Home</span>`); res.replaceChildren(h('div', { class: 'cx-entry cx-top drop-in' }, h('span', { class: 'cx-entry-route' }, 'Home'), h('span', { class: 'cx-entry-args' }, 'start destination'))); busy = false; };
+                if (!u) return fail(null, 'not a valid URI');
+                const segs = u.pathname.split('/').filter(Boolean);
+                const baseOk = u.origin === 'https://shop.example' && segs.length === 2 && segs[0] === 'product';
+                if (!await wait(300)) return;
+                if (!baseOk) return fail(0, `${esc(u.origin + '/' + segs.slice(0, 1).join('/'))} is not the base path`);
+                mark(0, 'cx-d2-ok');
+                if (!await wait(380)) return;
+                const raw = decodeURIComponent(segs[1]);
+                if (!/^-?\d{1,10}$/.test(raw) || Math.abs(+raw) > 2147483647) return fail(1, `"${esc(raw)}" can’t be parsed as an Int`);
+                mark(1, 'cx-d2-ok');
+                if (!await wait(380)) return;
+                const ref = u.searchParams.get('ref');
+                mark(2, ref != null ? 'cx-d2-ok' : null);
+                const route = `Product(id = ${+raw}, ref = ${ref == null ? 'null' : `"${ref}"`})`;
+                res.replaceChildren(
+                  h('div', { class: 'cx-entry drop-in' }, h('span', { class: 'cx-entry-route' }, 'Home'), h('span', { class: 'cx-entry-args' }, 'start destination, added below')),
+                  h('div', { class: 'cx-entry cx-top drop-in' }, h('span', { class: 'cx-entry-route' }, route), h('span', { class: 'cx-entry-args' }, 'entry.toRoute<Product>()')));
+                say(o, `<span class="good">match</span> ${hl(route)}${ref == null ? ' <span class="muted">// ref has a default, so it may be left out</span>' : ''}`);
+                busy = false;
+              }
+              input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+              el.append(
+                h('span', { class: 'cx-label' }, 'Generated pattern'), pat,
+                h('label', { class: 'cx-label', for: 'cx-d2-nd-url' }, 'Incoming link'), input,
+                h('div', { class: 'controls cx-ctl' }, cmd('handleDeepLink(intent)', go), presets),
+                h('span', { class: 'cx-label' }, 'Back stack after the link'), res, o);
+            },
+          },
+          {
+            title: 'Send a result back',
+            body: `<p>A picker screen often returns a value to the screen below it. Each back stack entry has its own <code>SavedStateHandle</code>. Write the result into the previous entry’s handle, then pop. The screen below observes its own handle as a flow. The value survives configuration changes and process death, so keep it small, like an id.</p>`,
+            code: `// Picker
+navController.previousBackStackEntry?.savedStateHandle?.set("colorId", picked.id)
+navController.popBackStack()
+
+// Editor, inside composable<Editor> { entry -> }
+val colorId by entry.savedStateHandle
+    .getStateFlow<Long?>("colorId", null)
+    .collectAsStateWithLifecycle()`,
+          },
+        ],
+        underHood: {
+          body: `<p>The Kotlin serialization plugin generates a serializer for every <code>@Serializable</code> route. When you register <code>composable&lt;Product&gt;</code>, Navigation reads that serializer’s descriptor and builds an ordinary string route from the class’s serial name and its properties, picking a <code>NavType</code> for each property from its type. Under the typed API, destinations still have string routes.</p>
+<p><code>navigate(Product(42))</code> encodes the object into that route and an argument <code>Bundle</code>, which the <code>NavBackStackEntry</code> keeps and which is saved with the rest of the back stack. <code>toRoute()</code> runs the serializer the other way and decodes the Bundle into a new <code>Product</code>.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Holding the NavController in a ViewModel',
+            bad: `class LoginViewModel(private val nav: NavController) : ViewModel() {
+    fun onLoggedIn() = nav.navigate(Home)
+}`,
+            good: `class LoginViewModel : ViewModel() {
+    private val _loggedIn = MutableStateFlow(false)
+    val loggedIn = _loggedIn.asStateFlow()
+}
+
+// In the screen, which owns navigation
+LaunchedEffect(loggedIn) { if (loggedIn) onLoggedIn() }`,
+            why: 'The ViewModel outlives a rotation. The NavController does not, and it holds the Activity. The old one leaks and navigates a graph nobody sees. Expose state and let the UI navigate.',
+          },
+          {
+            title: 'popBackStack() from the start destination',
+            bad: `IconButton(onClick = { navController.popBackStack() }) {
+    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+}`,
+            good: `IconButton(onClick = { navController.navigateUp() }) {
+    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+}`,
+            why: '<code>popBackStack()</code> pops whatever is on top, even the start destination. The NavHost is left with nothing to show and the screen goes blank. <code>navigateUp()</code> stops at the start destination.',
+          },
+          {
+            title: 'A custom argument type without a NavType',
+            bad: `@Serializable data class Filter(val query: String, val inStock: Boolean)
+@Serializable data class Results(val filter: Filter)
+
+composable<Results> { /* ... */ }`,
+            good: `// Simplest: flatten the arguments
+@Serializable data class Results(val query: String, val inStock: Boolean)
+
+composable<Results> { /* ... */ }`,
+            why: 'Navigation knows primitives, strings, enums and lists of them. Any other type needs a <code>NavType</code> in <code>typeMap</code>, or it throws at runtime. Flat arguments avoid the work.',
+          },
         ],
         visual(el) {
           const ids = [42, 7, 108];

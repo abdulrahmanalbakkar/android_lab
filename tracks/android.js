@@ -158,6 +158,37 @@
 .and-bin .and-tile { font-size: 0.78rem; }
 .and-tasks { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .and-tasks .cmd { white-space: normal; text-align: left; }
+
+/* depth pass 2 */
+.and-d2-col { display: grid; gap: 6px; flex: 0 1 220px; min-width: 0; align-content: start; justify-items: stretch; }
+.and-d2-col .and-perm, .and-d2-col .and-user { overflow-wrap: anywhere; }
+.and-d2-obs { display: grid; gap: 6px; flex: 0 1 240px; min-width: 0; align-content: start; }
+.and-d2-obs .obj { min-width: 0; }
+.and-d2-evs { display: flex; flex-wrap: wrap; gap: 4px; min-height: 1.6em; }
+.and-d2-ev { font: 600 0.7rem var(--mono); padding: 2px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.and-perm.and-d2-mid { background: var(--warm-soft); color: var(--warm); }
+.and-d2-mw { position: relative; flex: none; width: 170px; height: 260px; max-width: 100%; border-radius: 22px; border: 7px solid var(--code-bg); box-shadow: 0 0 0 1px var(--line); background: var(--surface); overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
+.and-d2-vid { position: relative; flex: 1; min-height: 0; background: var(--code-bg); color: var(--code-ink); display: grid; place-items: center; align-content: center; gap: 2px; font: 600 0.72rem var(--mono); }
+.and-d2-time { font-size: 0.95rem; }
+.and-d2-vlbl { color: var(--t-k); }
+.and-d2-vid.and-d2-frozen .and-d2-vlbl { color: var(--t-e); }
+.and-d2-track { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.and-d2-prog { display: block; height: 100%; width: 0; background: var(--accent); }
+.and-d2-notes { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 7px; padding: 9px; font-size: 0.8rem; }
+.and-d2-pip .and-d2-vid { position: absolute; right: 8px; bottom: 8px; width: 48%; height: 28%; border-radius: 8px; box-shadow: 0 0 0 2px var(--accent); z-index: 1; }
+.and-d2-focus { outline: 3px solid var(--accent); outline-offset: -3px; }
+.and-d2-bar { display: block; height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; flex: none; }
+.and-d2-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.12s linear; }
+.and-card.and-d2-graph { border-style: dashed; }
+.and-card .and-d2-vmn { text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; text-align: right; min-width: 0; }
+.and-d2-photo { flex: 1; min-height: 60px; border-radius: 8px; display: grid; place-items: end start; padding: 6px; font: 600 0.66rem var(--mono); color: var(--accent-ink); background: linear-gradient(160deg, var(--accent) 0 45%, var(--warm) 45% 100%); }
+.and-d2-broken { flex: 1; min-height: 60px; border-radius: 8px; display: grid; place-items: center; text-align: center; padding: 6px; font: 600 0.68rem var(--mono); color: var(--err); border: 2px dashed var(--err); }
+.and-d2-map { flex: 1; min-height: 70px; border-radius: 8px; background: repeating-linear-gradient(90deg, var(--sunk) 0 18px, var(--surface) 18px 20px), var(--sunk); border: 2px solid var(--ok); }
+.and-d2-saved { display: grid; gap: 4px; margin-top: 6px; min-width: 0; }
+.and-d2-svd { display: grid; gap: 2px; padding: 6px 8px; border-radius: 8px; border: 1px dashed var(--accent); font: 500 0.72rem var(--mono); overflow-wrap: anywhere; }
+.and-d2-tabs { display: flex; flex: none; border-top: 1px solid var(--line); }
+.and-d2-tab { flex: 1; text-align: center; padding: 6px 2px; font: 600 0.62rem var(--mono); color: var(--muted); }
+.and-d2-tab.and-on { color: var(--accent); background: var(--accent-soft); }
 `;
 
   Lab.addTrack({
@@ -211,6 +242,375 @@ fun CameraPreview(camera: Camera) {
           { q: 'Your Activity is in front. The user presses Home. Which callbacks run?', options: ['<code>onPause</code> only', '<code>onPause</code>, <code>onStop</code>', '<code>onPause</code>, <code>onStop</code>, <code>onDestroy</code>'], a: 1, why: 'The screen is out of view, so the Activity stops. It is not destroyed, because the user can come back to it.' },
           { q: 'The user comes back to a stopped Activity from Recents. What runs?', options: ['<code>onCreate</code>, <code>onStart</code>, <code>onResume</code>', '<code>onRestart</code>, <code>onStart</code>, <code>onResume</code>', '<code>onResume</code> only'], a: 1, why: 'The instance still exists, so there is no <code>onCreate</code>. <code>onRestart</code> marks the way back up from stopped.' },
           { q: 'Where should you release the camera so other apps can use it while yours is out of view?', options: ['<code>onCreate</code>', '<code>onStop</code>', '<code>onDestroy</code>'], a: 1, why: '<code>onStop</code> runs every time the screen leaves view. <code>onDestroy</code> may come much later, or never if the process is killed.' },
+        ],
+        deeper: [
+          {
+            title: 'Lifecycle states and events, and observers that catch up',
+            body: `<p>Every Activity, Fragment and navigation entry has a <code>Lifecycle</code> object. It has five <em>states</em>: <code>INITIALIZED</code> (before <code>onCreate</code>), <code>CREATED</code>, <code>STARTED</code>, <code>RESUMED</code> and <code>DESTROYED</code>. The <em>events</em> are the moves between them, <code>ON_CREATE</code> through <code>ON_DESTROY</code>. There is no paused or stopped state: after <code>ON_PAUSE</code> you are back in <code>STARTED</code>, and after <code>ON_STOP</code> in <code>CREATED</code>. <code>onRestart</code> has no event at all.</p>
+<p>A class that implements <code>DefaultLifecycleObserver</code> gets the events without the Activity forwarding each one. An observer added late catches up: add it while the screen is <code>RESUMED</code> and it gets <code>onCreate</code>, <code>onStart</code> and <code>onResume</code> at once, in order. States are ordered, so <code>currentState.isAtLeast(STARTED)</code> means "visible".</p>`,
+            code: `class LocationTracker(private val updates: LocationUpdates) : DefaultLifecycleObserver {
+    override fun onStart(owner: LifecycleOwner) = updates.start()
+    override fun onStop(owner: LifecycleOwner) = updates.stop()
+}
+
+class MapActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        lifecycle.addObserver(LocationTracker(updates))   // the Activity forwards nothing
+    }
+}
+
+// Ask the current state directly
+if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) showTooltip()`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const ORDER = ['DESTROYED', 'INITIALIZED', 'CREATED', 'STARTED', 'RESUMED'];
+              const CB = { ON_CREATE: 'onCreate', ON_START: 'onStart', ON_RESUME: 'onResume', ON_PAUSE: 'onPause', ON_STOP: 'onStop', ON_DESTROY: 'onDestroy' };
+              const AFTER = { ON_CREATE: 'CREATED', ON_START: 'STARTED', ON_RESUME: 'RESUMED', ON_PAUSE: 'STARTED', ON_STOP: 'CREATED', ON_DESTROY: 'DESTROYED' };
+              const UP = ['ON_CREATE', 'ON_START', 'ON_RESUME'];
+              let st = 'RESUMED', obs = null, busy = false, inst = addr();
+              const chips = Object.fromEntries(ORDER.map(s => [s, h('span', { class: 'and-perm' }, s)]));
+              const atLeast = h('span', { class: 'and-perm' });
+              const instEl = h('span', { class: 'and-user' });
+              const obsBox = h('div', { class: 'and-d2-obs' });
+              const o = out();
+              function paint() {
+                ORDER.forEach(s => { chips[s].className = 'and-perm' + (s === st ? ' and-ok' : ''); });
+                const ok = ORDER.indexOf(st) >= ORDER.indexOf('STARTED');
+                atLeast.textContent = `isAtLeast(STARTED) = ${ok}`;
+                atLeast.className = 'and-perm ' + (ok ? 'and-ok' : 'and-no');
+                instEl.textContent = `MainActivity ${inst}`;
+              }
+              function paintObs() {
+                if (!obs) { obsBox.replaceChildren(h('span', { class: 'and-lbl' }, 'observers'), h('span', { class: 'and-user' }, 'none')); return; }
+                obs.card = h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, 'LocationTracker'), h('span', { class: 'obj-addr' }, 'DefaultLifecycleObserver'), obs.log);
+                obsBox.replaceChildren(h('span', { class: 'and-lbl' }, 'observers'), obs.card);
+              }
+              function got(ev) {
+                if (!obs) return;
+                obs.log.append(h('span', { class: 'and-d2-ev drop-in' }, CB[ev] + '(owner)'));
+                while (obs.log.children.length > 6) obs.log.firstElementChild.remove();
+                replay(obs.card, 'pop-soft');
+              }
+              async function events(list) {
+                for (const ev of list) {
+                  const up = UP.includes(ev);
+                  if (!up && obs) { got(ev); line(o, `${hl(`tracker.${CB[ev]}(owner)`)}  ${note(ev + ', before the Activity')}`); await sleep(280); }
+                  line(o, hl(`MainActivity.${CB[ev]}()`));
+                  st = AFTER[ev]; paint(); replay(chips[st], 'pop');
+                  if (up && obs) { await sleep(280); got(ev); line(o, `${hl(`tracker.${CB[ev]}(owner)`)}  ${note(ev + ', after the Activity')}`); }
+                  await sleep(420);
+                  if (!el.isConnected) return false;
+                }
+                return true;
+              }
+              function nope(msg) { if (busy) return; replay(atLeast, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+              async function add() {
+                if (busy) return;
+                if (obs) return nope('tracker is already observing.');
+                busy = true;
+                obs = { log: h('div', { class: 'and-d2-evs' }) }; paintObs();
+                say(o, `${hl('lifecycle.addObserver(tracker)')}  ${note('current state ' + st)}`);
+                const catchUp = UP.slice(0, Math.max(0, ORDER.indexOf(st) - 1));
+                if (!catchUp.length) line(o, note('the lifecycle is DESTROYED: no events, ever'));
+                for (const ev of catchUp) {
+                  await sleep(380); if (!el.isConnected) return;
+                  got(ev); line(o, `${hl(`tracker.${CB[ev]}(owner)`)}  ${note('catch-up')}`);
+                }
+                busy = false;
+              }
+              function remove() {
+                if (busy) return;
+                if (!obs) return nope('there is no observer to remove.');
+                obs = null; paintObs();
+                say(o, `${hl('lifecycle.removeObserver(tracker)')}  ${note('no more events')}`);
+              }
+              async function go(label, list) {
+                busy = true; say(o, note(label));
+                if (!await events(list)) return;
+                busy = false;
+              }
+              const home = () => (busy ? null : st === 'RESUMED' ? go('press Home', ['ON_PAUSE', 'ON_STOP']) : nope('the screen is not in front.'));
+              const back = () => (busy ? null : st === 'CREATED' ? go('come back: onRestart() runs, but it has no Lifecycle event', ['ON_START', 'ON_RESUME']) : nope(st === 'DESTROYED' ? 'this instance is gone. Open it again.' : 'the screen is already in front.'));
+              const fin = () => (busy ? null : st === 'RESUMED' ? go('finish()', ['ON_PAUSE', 'ON_STOP', 'ON_DESTROY']) : st === 'CREATED' ? go('finish() while stopped', ['ON_DESTROY']) : nope('already destroyed.'));
+              async function reopen() {
+                if (busy) return;
+                if (st !== 'DESTROYED') return nope('the Activity still exists. finish() it first.');
+                busy = true;
+                inst = addr(); st = 'INITIALIZED'; paint();
+                say(o, note('open again: a new MainActivity with a new Lifecycle'));
+                if (obs) { obs = null; paintObs(); line(o, note('the old observer was registered on the old Lifecycle. Code in onCreate would add it again.')); }
+                if (!await events(UP)) return;
+                busy = false;
+              }
+              paint(); paintObs();
+              say(o, note('MainActivity is RESUMED. Add an observer late and watch it catch up.'));
+              el.append(
+                h('div', { class: 'stage' },
+                  h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'lifecycle.currentState'), ...ORDER.map(s => chips[s]), atLeast, instEl),
+                  obsBox),
+                h('div', { class: 'controls' }, cmd('lifecycle.addObserver(tracker)', add), cmd('lifecycle.removeObserver(tracker)', remove)),
+                h('div', { class: 'controls' }, cmd('press Home', home), cmd('come back', back), cmd('finish()', fin), cmd('open again', reopen)),
+                o);
+            },
+          },
+          {
+            title: 'Covered by a dialog, a see-through screen, or a full screen',
+            body: `<p>What covers your Activity decides which callbacks run. A dialog you show, an <code>AlertDialog</code> or a Compose <code>Dialog</code>, is a window inside your own Activity. No lifecycle callback runs. The Activity stays <code>RESUMED</code> and only loses window focus.</p>
+<p>Another Activity is different. If it is translucent, like the system's permission prompt, yours is still partly visible, so it only gets <code>onPause</code>. If it fills the screen, yours also gets <code>onStop</code>, but only once the new one is in front: A.onPause, B.onCreate, B.onStart, B.onResume, then A.onStop. The new screen waits for your <code>onPause</code> to return, so keep it short.</p>`,
+            code: `// No lifecycle callback: a window inside this Activity
+AlertDialog.Builder(this).setMessage("Delete draft?").show()
+
+// onPause only: a translucent Activity on top
+permissionLauncher.launch(Manifest.permission.CAMERA)
+
+// onPause, then onStop after SettingsActivity is resumed
+startActivity(Intent(this, SettingsActivity::class.java))`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let cover = null, busy = false;
+              const { dev, view, dim } = device();
+              const mainSt = h('span', { class: 'and-perm and-ok' }, 'RESUMED');
+              const otherSt = h('span', { class: 'and-perm' }, '-');
+              const otherName = h('span', { class: 'and-lbl' }, 'other Activity');
+              const o = out();
+              const mainScreen = () => h('div', { class: 'and-scr drop-in' }, appbar('MainActivity'), bars(90, 70, 80, 55, 75));
+              const setSt = (elx, s) => { elx.textContent = s; elx.className = 'and-perm' + (s === 'RESUMED' ? ' and-ok' : s === '-' || s === 'DESTROYED' ? '' : ' and-d2-mid'); replay(elx, 'pop'); };
+              let overlay = null;
+              async function seq(steps) {
+                for (const [who, cbName, state] of steps) {
+                  line(o, hl(`${who}.${cbName}()`));
+                  if (state) setSt(who === 'MainActivity' ? mainSt : otherSt, state);
+                  await sleep(380);
+                  if (!el.isConnected) return false;
+                }
+                return true;
+              }
+              function nope(msg) { if (busy) return; replay(dev, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+              function dialog() {
+                if (busy) return;
+                if (cover) return nope('something is already on top. Press Back first.');
+                cover = 'dialog';
+                overlay = h('div', { class: 'and-dlg drop-in' }, h('b', {}, 'Delete draft?'), h('span', {}, 'This can’t be undone.'));
+                dev.append(overlay); dim.classList.add('and-on');
+                say(o, `${hl('AlertDialog.Builder(this).show()')}  ${note('a window in MainActivity')}`);
+                line(o, `${hl('MainActivity.onWindowFocusChanged(false)')}  ${note('no lifecycle callback. Still RESUMED.')}`);
+                replay(mainSt, 'pop');
+              }
+              async function perm() {
+                if (busy) return;
+                if (cover) return nope('something is already on top. Press Back first.');
+                busy = true; cover = 'translucent';
+                otherName.textContent = 'GrantPermissionsActivity';
+                say(o, `${hl('permissionLauncher.launch(CAMERA)')}  ${note('the system starts a translucent Activity')}`);
+                if (!await seq([['MainActivity', 'onPause', 'STARTED']])) return;
+                dim.classList.add('and-on');
+                overlay = h('div', { class: 'and-dlg drop-in' }, h('b', {}, 'Allow camera?'), h('span', { class: 'and-row' }, h('span', { class: 'and-ui' }, 'Allow'), h('span', { class: 'and-ui and-ghost' }, 'Don’t allow')));
+                dev.append(overlay);
+                if (!await seq([['GrantPermissionsActivity', 'onCreate', 'CREATED'], ['GrantPermissionsActivity', 'onStart', 'STARTED'], ['GrantPermissionsActivity', 'onResume', 'RESUMED']])) return;
+                line(o, note('MainActivity is still visible behind it: no onStop'));
+                busy = false;
+              }
+              async function settings() {
+                if (busy) return;
+                if (cover) return nope('something is already on top. Press Back first.');
+                busy = true; cover = 'opaque';
+                otherName.textContent = 'SettingsActivity';
+                say(o, hl('startActivity(Intent(this, SettingsActivity::class.java))'));
+                if (!await seq([['MainActivity', 'onPause', 'STARTED'], ['SettingsActivity', 'onCreate', 'CREATED'], ['SettingsActivity', 'onStart', 'STARTED']])) return;
+                view.replaceChildren(h('div', { class: 'and-scr drop-in' }, appbar('← Settings'), bars(70, 85, 60, 80)));
+                if (!await seq([['SettingsActivity', 'onResume', 'RESUMED'], ['MainActivity', 'onStop', 'CREATED']])) return;
+                line(o, note('MainActivity stopped only after Settings was in front'));
+                busy = false;
+              }
+              async function back() {
+                if (busy) return;
+                if (!cover) return nope('nothing is on top of MainActivity.');
+                busy = true;
+                say(o, note('press Back'));
+                if (cover === 'dialog') {
+                  overlay.classList.add('fly-out'); dim.classList.remove('and-on');
+                  line(o, `${hl('MainActivity.onWindowFocusChanged(true)')}  ${note('dialog dismissed. No lifecycle callback.')}`);
+                  await sleep(400);
+                } else if (cover === 'translucent') {
+                  if (!await seq([['GrantPermissionsActivity', 'onPause', 'STARTED']])) return;
+                  overlay.classList.add('fly-out'); dim.classList.remove('and-on');
+                  if (!await seq([['MainActivity', 'onResume', 'RESUMED'], ['GrantPermissionsActivity', 'onStop', 'CREATED'], ['GrantPermissionsActivity', 'onDestroy', 'DESTROYED']])) return;
+                } else {
+                  if (!await seq([['SettingsActivity', 'onPause', 'STARTED'], ['MainActivity', 'onRestart', null], ['MainActivity', 'onStart', 'STARTED']])) return;
+                  view.replaceChildren(mainScreen());
+                  if (!await seq([['MainActivity', 'onResume', 'RESUMED'], ['SettingsActivity', 'onStop', 'CREATED'], ['SettingsActivity', 'onDestroy', 'DESTROYED']])) return;
+                }
+                if (overlay) { overlay.remove(); overlay = null; }
+                cover = null;
+                busy = false;
+              }
+              view.replaceChildren(mainScreen());
+              say(o, note('MainActivity is RESUMED. Cover it three different ways.'));
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev),
+                  h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'MainActivity'), mainSt, otherName, otherSt)),
+                h('div', { class: 'controls' }, cmd('show AlertDialog', dialog), cmd('request CAMERA permission', perm), cmd('startActivity(Settings)', settings), cmd('press Back', back)),
+                o);
+            },
+          },
+          {
+            title: 'Split screen and picture-in-picture',
+            body: `<p>On Android 10 and later, every visible Activity in split screen is <code>RESUMED</code> at the same time, so tapping the other app does not pause yours. Only one of them is the <em>top resumed</em> Activity, and <code>onTopResumedActivityChanged()</code> tells you when that changes. It matters for things only one app can hold, like the camera. On Android 9 and lower, only the app last touched was resumed, and the other visible one sat in <code>STARTED</code>.</p>
+<p>In picture-in-picture your Activity is visible but can't take focus, so it is paused. A video player that pauses in <code>onPause</code> freezes in its little window. Start playback in <code>onStart</code> and pause it in <code>onStop</code>.</p>`,
+            code: `class PlayerActivity : ComponentActivity() {
+    override fun onStart() { super.onStart(); player.play() }   // visible, even in PiP
+    override fun onStop() { super.onStop(); player.pause() }    // really off screen
+
+    override fun onUserLeaveHint() {                             // user pressed Home
+        super.onUserLeaveHint()
+        if (player.isPlaying) enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+    }
+
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumedActivity)
+        // true: this app has focus. false: another resumed app took it.
+    }
+}`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let mode = 'full', focus = 'video', api10 = true, onStopPause = false, busy = false, secs = 0, last = 0;
+              const R = ['CREATED', 'STARTED', 'RESUMED'];
+              const scr = h('div', { class: 'and-d2-mw' });
+              const time = h('span', { class: 'and-d2-time' }, '0:00');
+              const prog = h('span', { class: 'and-d2-prog' });
+              const vidLbl = h('span', { class: 'and-d2-vlbl' }, 'playing');
+              const vid = h('div', { class: 'and-d2-vid' }, vidLbl, time, h('span', { class: 'and-d2-track' }, prog));
+              const notes = h('div', { class: 'and-d2-notes' }, appbar('Notes'), bars(80, 60, 75));
+              const stEl = h('span', { class: 'and-perm and-ok' }, 'RESUMED');
+              const topEl = h('span', { class: 'and-perm and-ok' }, 'top resumed');
+              const playEl = h('span', { class: 'and-perm and-ok' }, 'video playing');
+              const o = out();
+              const stateOf = () => (mode === 'full' ? 'RESUMED' : mode === 'pip' ? 'STARTED' : api10 || focus === 'video' ? 'RESUMED' : 'STARTED');
+              const isTop = () => stateOf() === 'RESUMED' && (mode === 'full' || focus === 'video');
+              const playing = () => (onStopPause ? R.indexOf(stateOf()) >= 1 : stateOf() === 'RESUMED');
+              function layout() {
+                scr.className = 'and-d2-mw and-d2-' + mode;
+                vid.classList.toggle('and-d2-focus', mode === 'split' && focus === 'video');
+                notes.classList.toggle('and-d2-focus', mode === 'split' && focus === 'notes');
+                scr.replaceChildren(...(mode === 'full' ? [vid] : mode === 'split' ? [vid, notes] : [notes, vid]));
+              }
+              function paint() {
+                const s = stateOf();
+                stEl.textContent = s; stEl.className = 'and-perm ' + (s === 'RESUMED' ? 'and-ok' : 'and-d2-mid');
+                topEl.textContent = isTop() ? 'top resumed' : 'not top resumed'; topEl.className = 'and-perm ' + (isTop() ? 'and-ok' : '');
+                const p = playing();
+                playEl.textContent = p ? 'video playing' : 'video paused'; playEl.className = 'and-perm ' + (p ? 'and-ok' : 'and-no');
+                vidLbl.textContent = p ? 'playing' : 'paused';
+                vid.classList.toggle('and-d2-frozen', !p);
+              }
+              function tick(now) {
+                if (!el.isConnected) return;
+                if (last && playing()) { secs += (now - last) / 1000; time.textContent = `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`; prog.style.width = `${(secs % 30) / 30 * 100}%`; }
+                last = now;
+                requestAnimationFrame(tick);
+              }
+              async function to(nextMode, nextFocus, label) {
+                if (busy) return; busy = true;
+                const s0 = stateOf(), top0 = isTop(), p0 = playing();
+                mode = nextMode; focus = nextFocus;
+                const s1 = stateOf(), top1 = isTop();
+                say(o, note(label));
+                const i0 = R.indexOf(s0), i1 = R.indexOf(s1);
+                const lines = [];
+                if (api10 && top0 && !top1) lines.push(`${hl('onTopResumedActivityChanged(false)')}`);
+                if (i1 < i0) { if (i0 === 2) lines.push(hl('onPause()')); if (i1 === 0) lines.push(hl('onStop()')); }
+                if (i1 > i0) { if (i0 === 1) lines.push(hl('onResume()')); }
+                if (api10 && !top0 && top1) lines.push(`${hl('onTopResumedActivityChanged(true)')}`);
+                layout();
+                if (!lines.length) line(o, note(`no callback: PlayerActivity stays ${s1}`));
+                for (const l of lines) { line(o, l); await sleep(320); if (!el.isConnected) return; }
+                paint(); replay(stEl, 'pop');
+                const p1 = playing();
+                if (p0 && !p1) line(o, `<span class="bad">video frozen</span> ${note('paused in onPause while still on screen')}`);
+                else if (p1 && mode === 'pip') line(o, `<span class="good">still playing in PiP</span> ${note(onStopPause ? 'it only pauses in onStop' : '')}`);
+                busy = false;
+              }
+              const full = () => (mode === 'full' ? null : to('full', 'video', 'back to full screen'));
+              const split = () => (mode === 'split' ? null : to('split', 'video', 'enter split screen with Notes'));
+              const tapNotes = () => (mode !== 'split' ? (busy ? null : (replay(scr, 'shake'), say(o, note('Notes is only on screen in split screen.')))) : to('split', 'notes', 'tap the Notes app'));
+              const tapVideo = () => (mode !== 'split' ? (busy ? null : (replay(scr, 'shake'), say(o, note('Enter split screen first.')))) : to('split', 'video', 'tap the video app'));
+              const pip = () => (mode === 'pip' ? null : to('pip', 'notes', 'enterPictureInPictureMode()'));
+              const tApi = h('label', { class: 'switch', for: 'and-d2-mw-api' }, h('input', { type: 'checkbox', id: 'and-d2-mw-api', checked: true, onchange(e) {
+                if (busy) { e.target.checked = api10; return; }
+                api10 = e.target.checked; mode = 'full'; focus = 'video'; layout(); paint();
+                say(o, note(api10 ? 'Android 10+: multi-resume' : 'Android 9: only the focused app is resumed'));
+              } }), 'Android 10+');
+              const tStop = h('label', { class: 'switch', for: 'and-d2-mw-stop' }, h('input', { type: 'checkbox', id: 'and-d2-mw-stop', onchange(e) {
+                if (busy) { e.target.checked = onStopPause; return; }
+                onStopPause = e.target.checked; paint();
+                say(o, note(onStopPause ? 'player.play() in onStart, player.pause() in onStop' : 'player.play() in onResume, player.pause() in onPause'));
+              } }), 'pause video in onStop');
+              layout(); paint(); requestAnimationFrame(tick);
+              say(o, note('The video plays full screen. Pause logic is in onPause for now.'));
+              el.append(
+                h('div', { class: 'stage' }, scr, h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'PlayerActivity'), stEl, topEl, playEl)),
+                h('div', { class: 'controls' }, tApi, tStop),
+                h('div', { class: 'controls' }, cmd('split screen', split), cmd('tap Notes', tapNotes), cmd('tap the video', tapVideo), cmd('enterPictureInPictureMode()', pip), cmd('full screen', full)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>The system process drives the lifecycle. <code>system_server</code> decides what is visible and sends your app a transaction such as "resume this Activity" or "stop that one". In your process, <code>ActivityThread</code> runs it on the main thread and calls the callbacks. When the target state is more than one step away, it walks every state in between: from stopped to resumed it calls <code>onRestart</code>, <code>onStart</code>, then <code>onResume</code>, so no step is ever skipped.</p>
+<p>The Lifecycle library listens to those callbacks. <code>ComponentActivity</code> owns a <code>LifecycleRegistry</code>. On API 29 and higher it hooks the Activity's pre- and post-callbacks, and on older versions an invisible <code>ReportFragment</code> does the job. That fixes the order: <code>ON_CREATE</code>, <code>ON_START</code> and <code>ON_RESUME</code> reach observers after your <code>onCreate</code>, <code>onStart</code> and <code>onResume</code> return, and <code>ON_PAUSE</code>, <code>ON_STOP</code> and <code>ON_DESTROY</code> reach them before your <code>onPause</code>, <code>onStop</code> and <code>onDestroy</code> run.</p>`,
+          code: `// The order you can rely on
+// MainActivity.onCreate()   then  observer.onCreate(owner)
+// MainActivity.onStart()    then  observer.onStart(owner)
+// MainActivity.onResume()   then  observer.onResume(owner)
+// observer.onPause(owner)   then  MainActivity.onPause()
+// observer.onStop(owner)    then  MainActivity.onStop()
+// observer.onDestroy(owner) then  MainActivity.onDestroy()`,
+        },
+        mistakes: [
+          {
+            title: 'Pausing video in onPause',
+            bad: `override fun onPause() {
+    super.onPause()
+    player.pause()   // freezes in PiP and in older split screen
+}`,
+            good: `override fun onStop() {
+    super.onStop()
+    player.pause()   // only when it really leaves the screen
+}`,
+            why: 'In picture-in-picture, and in split screen on Android 9 and lower, your Activity is paused while the user still watches it. Pause playback when it leaves view.',
+          },
+          {
+            title: 'Setup and teardown on different levels',
+            bad: `override fun onStart() {
+    super.onStart()
+    sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
+}
+override fun onDestroy() {
+    super.onDestroy()
+    sensorManager.unregisterListener(this)
+}`,
+            good: `override fun onStart() {
+    super.onStart()
+    sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
+}
+override fun onStop() {
+    super.onStop()
+    sensorManager.unregisterListener(this)
+}`,
+            why: 'Going Home and back runs <code>onStart</code> again but not <code>onDestroy</code>, so the sensor keeps running in the background. Pair each setup with the callback on the same level: start with stop, resume with pause.',
+          },
+          {
+            title: 'Using @OnLifecycleEvent',
+            bad: `class Tracker : LifecycleObserver {
+    @OnLifecycleEvent(Lifecycle.Event.ON_START)
+    fun start() { /* ... */ }
+}`,
+            good: `class Tracker : DefaultLifecycleObserver {
+    override fun onStart(owner: LifecycleOwner) { /* ... */ }
+}`,
+            why: '<code>@OnLifecycleEvent</code> is deprecated. It needed reflection or annotation processing. <code>DefaultLifecycleObserver</code> uses plain interface methods the compiler checks.',
+          },
         ],
         visual(el) {
           el.classList.add('and-viz');
@@ -333,6 +733,257 @@ class MainActivity : ComponentActivity() {
           { q: 'A counter is a plain <code>var</code> field in the Activity. The user rotates the phone. The counter', options: ['keeps its value', 'goes back to its initial value', 'crashes the app'], a: 1, why: 'Rotation creates a new Activity object, and its fields start fresh.' },
           { q: 'When does <code>onCleared()</code> run?', options: ['On every rotation', 'When the Activity finishes for good', 'In <code>onPause</code>'], a: 1, why: 'The ViewModel is kept across configuration changes and cleared only when its owner is finished.' },
           { q: 'Should a ViewModel keep a reference to the Activity?', options: ['Yes, it makes Toasts easier', 'No. It outlives the Activity and would leak the old one after rotation.'], a: 1, why: 'After rotation the ViewModel would still point at the destroyed Activity, keeping it and its whole view tree in memory.' },
+        ],
+        deeper: [
+          {
+            title: 'viewModelScope: work that survives rotation',
+            body: `<p>A ViewModel has its own coroutine scope, <code>viewModelScope</code>. Work launched there keeps running through a rotation, because the ViewModel does. When the ViewModel is cleared, the scope is cancelled, and every job in it stops.</p>
+<p>Compare <code>lifecycleScope</code> in the Activity. It is cancelled in <code>onDestroy</code>, which happens on every rotation. A load started there is thrown away, and the new Activity starts it again from zero.</p>`,
+            code: `class FeedViewModel(private val repo: FeedRepository) : ViewModel() {
+    private val _state = MutableStateFlow<FeedState>(FeedState.Loading)
+    val state: StateFlow<FeedState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {                       // survives rotation
+            _state.value = FeedState.Ready(repo.loadFeed())
+        }
+    }
+}
+
+// In the Activity: cancelled on every rotation
+lifecycleScope.launch { feed = repo.loadFeed() }`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let job = null, busy = false, actId = addr(), vmId = addr(), gen = 0;
+              const { dev, view } = device();
+              const fill = h('span', { class: 'and-d2-fill' });
+              const pct = h('span', { class: 'and-v' }, '-');
+              const jobTag = h('span', { class: 'and-perm' }, 'no job');
+              const vmTag = h('span', { class: 'and-user' });
+              const o = out();
+              function screen(anim) {
+                const done = job && job.state === 'done';
+                view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar(`FeedActivity ${actId}`),
+                  h('div', { class: 'and-kv' }, h('span', {}, 'loadFeed()'), pct), h('span', { class: 'and-d2-bar' }, fill),
+                  ...(done ? bars(85, 70, 80, 60) : [h('span', { class: 'and-user' }, job ? 'loading…' : 'idle')])));
+              }
+              function paint() {
+                const p = job ? job.p : 0;
+                fill.style.width = p + '%'; pct.textContent = job ? p + '%' : '-';
+                jobTag.textContent = job ? `${job.kind === 'vm' ? 'viewModelScope' : 'lifecycleScope'} · ${job.state}` : 'no job';
+                jobTag.className = 'and-perm ' + (!job ? '' : job.state === 'done' ? 'and-ok' : job.state === 'cancelled' ? 'and-no' : 'and-d2-mid');
+                vmTag.textContent = `FeedViewModel ${vmId}`;
+              }
+              async function loop(j) {
+                while (el.isConnected && job === j && j.state === 'running') {
+                  await sleep(130);
+                  if (job !== j || j.state !== 'running') return;
+                  j.p = Math.min(100, j.p + 4); paint();
+                  if (j.p >= 100) { j.state = 'done'; paint(); screen(true); line(o, `<span class="good">loadFeed() returned</span> ${note('feed on screen')}`); }
+                }
+              }
+              function start(kind) {
+                if (busy) return;
+                if (job && job.state === 'running') { replay(jobTag, 'shake'); say(o, `<span class="bad">already loading.</span> Rotate while it runs.`); return; }
+                job = { kind, p: 0, state: 'running', id: ++gen };
+                paint(); screen();
+                say(o, `${hl(`${kind === 'vm' ? 'viewModelScope' : 'lifecycleScope'}.launch { loadFeed() }`)}  ${note('now rotate before it finishes')}`);
+                loop(job);
+              }
+              async function rot() {
+                if (busy) return; busy = true;
+                say(o, note('rotate the phone'));
+                await rotate(dev); if (!el.isConnected) return;
+                line(o, `${hl('FeedActivity.onDestroy()')}  ${note('isChangingConfigurations = true')}`);
+                if (job && job.kind === 'lc') {
+                  const p = job.p, wasDone = job.state === 'done';
+                  job.state = 'cancelled'; paint(); replay(jobTag, 'shake');
+                  line(o, wasDone
+                    ? `<span class="bad">result lost</span> ${note('it lived in a field of the old Activity')}`
+                    : `<span class="bad">lifecycleScope cancelled</span> ${note(`load lost at ${p}%`)}`);
+                } else if (job && job.state === 'running') {
+                  line(o, `<span class="good">viewModelScope untouched</span> ${note(`load still running at ${job.p}%`)}`);
+                }
+                view.firstElementChild && view.firstElementChild.classList.add('leave');
+                await sleep(420); if (!el.isConnected) return;
+                actId = addr();
+                if (job && job.kind === 'lc' && job.state === 'cancelled') {
+                  job = { kind: 'lc', p: 0, state: 'running', id: ++gen };
+                  line(o, `${hl('FeedActivity.onCreate()')}  ${note(`new Activity ${actId} launches loadFeed() again from 0%`)}`);
+                  loop(job);
+                } else line(o, `${hl('FeedActivity.onCreate()')}  ${note(`new Activity ${actId}, same FeedViewModel ${vmId}`)}`);
+                paint(); screen(true);
+                busy = false;
+              }
+              async function fin() {
+                if (busy) return; busy = true;
+                say(o, note('finish(): the user leaves the screen for good'));
+                view.firstElementChild && view.firstElementChild.classList.add('leave');
+                await sleep(400); if (!el.isConnected) return;
+                view.replaceChildren(homeScreen());
+                if (job && job.state === 'running') {
+                  const p = job.p; job.state = 'cancelled'; paint(); replay(jobTag, 'shake');
+                  line(o, `${hl('onCleared()')}  ${note(`${job.kind === 'vm' ? 'viewModelScope' : 'lifecycleScope'} cancelled at ${p}%: nobody needs the result`)}`);
+                } else line(o, `${hl('onCleared()')}  ${note('nothing was running')}`);
+                await sleep(1000); if (!el.isConnected) return;
+                actId = addr(); vmId = addr(); job = null;
+                line(o, note('open the screen again: new Activity, new ViewModel'));
+                paint(); screen(true);
+                busy = false;
+              }
+              paint(); screen();
+              say(o, 'Start a load in one of the two scopes, then rotate before it finishes.');
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'job'), jobTag, vmTag)),
+                h('div', { class: 'controls' }, cmd('viewModelScope.launch { loadFeed() }', () => start('vm')), cmd('lifecycleScope.launch { loadFeed() }', () => start('lc'))),
+                h('div', { class: 'controls' }, cmd('rotate', rot), cmd('finish()', fin)),
+                o);
+            },
+          },
+          {
+            title: 'The owner decides how long a ViewModel lives',
+            body: `<p>A ViewModel lives exactly as long as its <code>ViewModelStoreOwner</code>. In a Compose app with Navigation, every back stack entry is an owner. <code>viewModel()</code> inside a destination gives that destination its own ViewModel, and popping the destination clears it, even though the Activity is still alive.</p>
+<p>To share one ViewModel between the screens of a flow, such as the steps of a checkout, ask a parent graph's entry for it. It then lives as long as that graph is on the back stack, and is cleared when the last screen of the flow is popped.</p>`,
+            code: `composable<Cart> {
+    val vm: CartViewModel = viewModel()                     // scoped to this entry
+}
+
+navigation<Checkout>(startDestination = Address) {
+    composable<Address> { entry ->
+        val parent = remember(entry) { navController.getBackStackEntry<Checkout>() }
+        val shared: CheckoutViewModel = viewModel(viewModelStoreOwner = parent)
+    }
+    composable<Payment> { entry ->
+        val parent = remember(entry) { navController.getBackStackEntry<Checkout>() }
+        val shared: CheckoutViewModel = viewModel(viewModelStoreOwner = parent)
+    }
+}`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let stack = [], busy = false;
+              const col = h('div', { class: 'and-stack' });
+              const o = out();
+              const mkVm = name => ({ name, addr: addr() });
+              const entry = (route, vm, opts = {}) => ({ route, vm, ...opts });
+              function cardOf(e, top) {
+                const vmText = e.vm ? `${e.vm.name} ${e.vm.addr}` : e.uses ? `uses ${e.uses.name} ${e.uses.addr}` : 'no ViewModel';
+                return h('div', { class: 'and-card' + (top ? ' and-top' : '') + (e.graph ? ' and-d2-graph' : '') },
+                  h('span', {}, e.graph ? `graph ${e.route}` : e.route), h('small', { class: 'and-d2-vmn' }, vmText));
+              }
+              function paint() { col.replaceChildren(...stack.map((e, i) => cardOf(e, i === stack.length - 1))); }
+              const top = () => stack[stack.length - 1];
+              const graphEntry = () => stack.find(e => e.graph);
+              function nope(msg) { if (busy) return; replay(col, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+              function push(e, msg) {
+                stack.push(e); paint(); replay(col.lastElementChild, 'drop-in');
+                say(o, msg);
+              }
+              function cart() {
+                if (busy) return;
+                if (top().route === 'Cart') return nope('Cart is already on top.');
+                if (graphEntry()) return nope('finish or leave the checkout first.');
+                push(entry('Cart', mkVm('CartViewModel')), `${hl('navigate(Cart)')}  ${note('new entry, new CartViewModel')}`);
+              }
+              function address() {
+                if (busy) return;
+                if (graphEntry()) return nope('the checkout flow is already open.');
+                const shared = mkVm('CheckoutViewModel');
+                stack.push(entry('Checkout', shared, { graph: true }));
+                push(entry('Address', null, { uses: shared }), `${hl('navigate(Checkout)')}  ${note(`graph entry holds CheckoutViewModel ${shared.addr}, Address uses it`)}`);
+              }
+              function payment() {
+                if (busy) return;
+                const g = graphEntry();
+                if (!g || top().route !== 'Address') return nope('open the Address step first.');
+                push(entry('Payment', null, { uses: g.vm }), `${hl('navigate(Payment)')}  ${note(`same CheckoutViewModel ${g.vm.addr}: the address is still there`)}`);
+              }
+              async function pop() {
+                if (busy) return;
+                if (stack.length === 1) return nope('Home is the start destination. Back here leaves the app.');
+                busy = true;
+                const e = stack.pop();
+                col.lastElementChild.classList.add('leave');
+                say(o, `${hl('popBackStack()')}  ${note(`pop ${e.route}`)}`);
+                if (e.vm) line(o, `${hl(`${e.vm.name}.onCleared()`)}  ${note('its entry is gone')}`);
+                else line(o, note(`${e.route} owned no ViewModel. The shared one lives on.`));
+                await sleep(420); if (!el.isConnected) return;
+                if (top().graph) {
+                  const g = stack.pop(); paint();
+                  col.lastElementChild && replay(col.lastElementChild, 'pop');
+                  line(o, `${note(`graph ${g.route} has no screens left, so it is popped too`)}`);
+                  line(o, `${hl(`${g.vm.name}.onCleared()`)}`);
+                } else paint();
+                busy = false;
+              }
+              stack = [entry('Home', mkVm('HomeViewModel'))];
+              paint();
+              say(o, 'One Activity the whole time. Each entry owns its ViewModels.');
+              el.append(
+                h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'back stack: newest on top')),
+                  h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'MainActivity'), h('span', { class: 'and-perm and-ok' }, 'alive throughout'))),
+                h('div', { class: 'controls' }, cmd('navigate(Cart)', cart), cmd('navigate(Checkout)', address), cmd('navigate(Payment)', payment), cmd('popBackStack()', pop)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>The ViewModel survives rotation without any special storage. While an Activity is destroyed for a configuration change, the framework asks it for <code>onRetainNonConfigurationInstance()</code>. <code>ComponentActivity</code> answers with an object that holds its <code>ViewModelStore</code>. The framework keeps that object in memory while it creates the new Activity, which reads it back through <code>getLastNonConfigurationInstance()</code>. Same process, same objects.</p>
+<p><code>ComponentActivity</code> also observes its own <code>ON_DESTROY</code>. If <code>isChangingConfigurations</code> is false, the screen is really going away, so it calls <code>viewModelStore.clear()</code>. Each ViewModel then closes its closeables, including the scope behind <code>viewModelScope</code>, and runs <code>onCleared()</code>. Because all of this lives in memory, process death takes it with it.</p>`,
+          code: `// Inside ComponentActivity, roughly
+override fun onRetainNonConfigurationInstance(): Any =
+    NonConfigurationInstances(viewModelStore)        // handed to the next instance
+
+init {
+    lifecycle.addObserver(LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_DESTROY && !isChangingConfigurations) {
+            viewModelStore.clear()                   // cancels viewModelScope, calls onCleared()
+        }
+    })
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Exposing the mutable state',
+            bad: `class CounterViewModel : ViewModel() {
+    val count = MutableStateFlow(0)
+}
+// anywhere: vm.count.value = 99`,
+            good: `class CounterViewModel : ViewModel() {
+    private val _count = MutableStateFlow(0)
+    val count: StateFlow<Int> = _count.asStateFlow()
+    fun increment() = _count.update { it + 1 }
+}`,
+            why: 'With a public <code>MutableStateFlow</code>, any caller can write any value, and the ViewModel can no longer protect its rules. Expose a read-only <code>StateFlow</code> and named functions.',
+          },
+          {
+            title: 'Loading in the Activity’s scope',
+            bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    lifecycleScope.launch { feed = repo.loadFeed() }   // again after every rotation
+}`,
+            good: `class FeedViewModel(repo: FeedRepository) : ViewModel() {
+    val feed = flow { emit(repo.loadFeed()) }
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+}`,
+            why: 'The Activity’s scope is cancelled on every rotation, so the load starts over each time. Load in the ViewModel and the result is waiting for the new Activity.',
+          },
+          {
+            title: 'Starting the load from composition',
+            bad: `@Composable
+fun FeedRoute(vm: FeedViewModel = viewModel()) {
+    LaunchedEffect(Unit) { vm.load() }   // runs again after rotation
+    FeedScreen(vm.state.collectAsStateWithLifecycle().value)
+}`,
+            good: `class FeedViewModel(repo: FeedRepository) : ViewModel() {
+    init { viewModelScope.launch { /* load once */ } }
+}
+
+@Composable
+fun FeedRoute(vm: FeedViewModel = viewModel()) {
+    FeedScreen(vm.state.collectAsStateWithLifecycle().value)
+}`,
+            why: 'Rotation builds a new composition, so <code>LaunchedEffect(Unit)</code> runs again and fetches data the ViewModel already has. Let the ViewModel start its own loading.',
+          },
         ],
         visual(el) {
           el.classList.add('and-viz');
@@ -767,6 +1418,197 @@ try {
           { q: 'An implicit intent matches no installed app. <code>startActivity()</code>', options: ['does nothing', 'throws <code>ActivityNotFoundException</code>', 'opens the Play Store'], a: 1, why: 'Nothing can handle it, so the call throws. Catch it and tell the user.' },
           { q: 'To open your own <code>SettingsActivity</code> from <code>MainActivity</code>, use', options: ['an explicit intent', 'an implicit intent with a custom action'], a: 0, why: 'Explicit is direct, and no other app can step in and receive it.' },
         ],
+        deeper: [
+          {
+            title: 'Sharing a file: content URIs and read grants',
+            body: `<p>To share a photo you put a URI in <code>EXTRA_STREAM</code>. A <code>file://</code> URI does not work: other apps can't read your private files, and if your app targets Android 7.0 or later, a <code>file://</code> URI leaving your app throws <code>FileUriExposedException</code>.</p>
+<p>Expose the file through a <code>FileProvider</code> as a <code>content://</code> URI instead, and add <code>FLAG_GRANT_READ_URI_PERMISSION</code>. The receiving app may then read that one URI and nothing else. The grant lasts while the receiving Activity's task is alive. When that task finishes, the access is gone.</p>`,
+            code: `// manifest: <provider android:name="androidx.core.content.FileProvider"
+//   android:authorities="\${applicationId}.fileprovider" android:exported="false"
+//   android:grantUriPermissions="true"> with a file_paths.xml for cache/shared
+val file = File(context.cacheDir, "shared/photo.jpg")
+val uri = FileProvider.getUriForFile(context, "\${context.packageName}.fileprovider", file)
+
+val send = Intent(Intent.ACTION_SEND).apply {
+    type = "image/jpeg"
+    putExtra(Intent.EXTRA_STREAM, uri)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}
+startActivity(Intent.createChooser(send, null))   // the chooser passes the grant on`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let busy = false, granted = false;
+              const { dev, view } = device();
+              const STEPS = ['sender: startActivity(...)', 'system: attach URI grant', 'Messages: openInputStream(uri)'];
+              const rows = STEPS.map(s => { const res = h('span', { class: 'and-res' }, ''); const r = h('div', { class: 'and-step' }, h('span', {}, s), res); r.res = res; return r; });
+              const o = out();
+              const msgScreen = (kind, anim) => view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Messages'),
+                kind === 'photo' ? h('div', { class: 'and-d2-photo drop-in' }, 'photo.jpg')
+                  : kind === 'error' ? h('div', { class: 'and-d2-broken' }, 'can’t open attachment')
+                    : h('span', { class: 'and-user' }, 'waiting for a share'),
+                bars(70, 50)));
+              function reset() { rows.forEach(r => { r.className = 'and-step'; r.res.textContent = ''; r.res.className = 'and-res'; }); }
+              async function mark(i, ok, text) {
+                const r = rows[i]; r.classList.add('and-on'); await sleep(420);
+                r.classList.remove('and-on'); r.res.textContent = text; r.res.className = 'and-res ' + (ok ? 'and-ok' : 'and-no'); replay(r.res, 'pop');
+                if (!ok) { replay(r, 'shake'); rows.slice(i + 1).forEach(x => x.classList.add('and-skip')); }
+                return el.isConnected;
+              }
+              async function share(kind) {
+                if (busy) return; busy = true; reset(); granted = false; msgScreen('idle');
+                if (kind === 'file') {
+                  say(o, hl('putExtra(EXTRA_STREAM, Uri.fromFile(file))'));
+                  if (!await mark(0, false, '✗ crash')) return;
+                  line(o, `<span class="bad">FileUriExposedException:</span> file:///…/photo.jpg exposed beyond app through ClipData.Item.getUri()`);
+                  busy = false; return;
+                }
+                say(o, hl(kind === 'nogrant' ? 'putExtra(EXTRA_STREAM, contentUri)  // no flag' : 'putExtra(EXTRA_STREAM, contentUri) + FLAG_GRANT_READ_URI_PERMISSION'));
+                if (!await mark(0, true, '✓ sent')) return;
+                if (!await mark(1, kind === 'grant', kind === 'grant' ? '✓ read granted' : '✗ none')) return;
+                rows[2].classList.remove('and-skip');
+                if (!await mark(2, kind === 'grant', kind === 'grant' ? '✓ read' : '✗ denied')) return;
+                if (kind === 'grant') { granted = true; msgScreen('photo', true); line(o, `<span class="good">Messages shows the photo</span> ${note('it can read this one URI, nothing else in your app')}`); }
+                else { msgScreen('error', true); line(o, `<span class="bad">SecurityException:</span> Permission Denial: opening provider androidx.core.content.FileProvider … that is not exported`); }
+                busy = false;
+              }
+              async function finish() {
+                if (busy) return;
+                if (!granted) { replay(dev, 'shake'); say(o, `${note('nothing is granted right now. Share with the flag first.')}`); return; }
+                busy = true; granted = false;
+                say(o, note('the user finishes in Messages: its task ends'));
+                view.replaceChildren(homeScreen());
+                await sleep(500); if (!el.isConnected) return;
+                rows[1].res.textContent = '✗ revoked'; rows[1].res.className = 'and-res and-no'; replay(rows[1].res, 'pop');
+                line(o, `<span class="good">grant revoked</span> ${note('the URI is unreadable again until you share it again')}`);
+                busy = false;
+              }
+              msgScreen('idle');
+              say(o, 'Share the same photo three ways.');
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), h('div', { class: 'and-steps' }, rows)),
+                h('div', { class: 'controls' },
+                  cmd('Uri.fromFile(file)', () => share('file')),
+                  cmd('contentUri  // no flag', () => share('nogrant')),
+                  cmd('contentUri + FLAG_GRANT_READ_URI_PERMISSION', () => share('grant')),
+                  cmd('Messages task finishes', finish)),
+                o);
+            },
+          },
+          {
+            title: 'Package visibility: seeing apps is not starting them',
+            body: `<p>Since Android 11, an app that targets it sees only some of the other installed apps when it asks the package manager. <code>resolveActivity()</code> and <code>queryIntentActivities()</code> filter out apps you can't see, so a check can answer "no app" while a maps app is installed.</p>
+<p><code>startActivity()</code> is not filtered. An implicit intent still reaches every matching app, which is why the advice is to call it and catch <code>ActivityNotFoundException</code>. Declare a <code>&lt;queries&gt;</code> entry only when you must know in advance, for example to hide a button.</p>`,
+            code: `// Works without any declaration
+try {
+    startActivity(Intent(Intent.ACTION_VIEW, "geo:0,0?q=cafe".toUri()))
+} catch (e: ActivityNotFoundException) {
+    showMessage("No maps app installed")
+}
+
+// Only to check in advance. AndroidManifest.xml:
+// <queries>
+//     <intent>
+//         <action android:name="android.intent.action.VIEW" />
+//         <data android:scheme="geo" />
+//     </intent>
+// </queries>
+val canShowMap = Intent(Intent.ACTION_VIEW, "geo:0,0".toUri()).resolveActivity(packageManager) != null`,
+            visual(el) {
+              el.classList.add('and-viz');
+              let target30 = true, queries = false, busy = false, checked = null;
+              const { dev, view } = device();
+              const mapsTile = h('div', { class: 'and-tile' }, 'Maps', h('small', {}, 'VIEW · geo:'));
+              const youTile = h('div', { class: 'and-tile and-open' }, 'Your app', h('small', {}, 'always visible to itself'));
+              const o = out();
+              const visible = () => !target30 || queries;
+              function paintApps() {
+                mapsTile.classList.toggle('and-miss', !visible());
+                mapsTile.lastChild.textContent = visible() ? 'VIEW · geo: · visible' : 'VIEW · geo: · hidden from queries';
+              }
+              function cafe(anim) {
+                const btn = checked === null ? h('span', { class: 'and-user' }, 'Map button: not checked') : checked ? h('span', { class: 'and-ui drop-in' }, 'Open in Maps') : h('span', { class: 'and-user drop-in' }, 'Map button hidden');
+                view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Café Lumen'), bars(80, 60), btn));
+              }
+              function resolve() {
+                if (busy) return;
+                checked = visible(); cafe(); replay(mapsTile, checked ? 'pop' : 'shake');
+                say(o, `${hl('intent.resolveActivity(packageManager)')} = ${checked ? '<span class="good">ComponentInfo{com.maps/.MapActivity}</span>' : '<span class="bad">null</span>'}  ${note(checked ? (target30 ? '&lt;queries&gt; makes Maps visible' : 'targetSdk 29: every app is visible') : 'Maps is installed, you just can’t see it')}`);
+              }
+              async function start() {
+                if (busy) return; busy = true;
+                say(o, `${hl('startActivity(Intent(ACTION_VIEW, "geo:0,0?q=cafe".toUri()))')}`);
+                mapsTile.classList.add('and-scan'); await sleep(400); if (!el.isConnected) return;
+                mapsTile.classList.remove('and-scan'); mapsTile.classList.add('and-open'); replay(mapsTile, 'pop');
+                view.replaceChildren(h('div', { class: 'and-scr drop-in' }, appbar('Maps'), h('div', { class: 'and-d2-map' }), bars(60)));
+                line(o, `<span class="good">opened Maps</span> ${note('startActivity is not filtered by package visibility')}`);
+                await sleep(1300); if (!el.isConnected) return;
+                mapsTile.classList.remove('and-open'); cafe(true);
+                line(o, note('back to the café screen'));
+                busy = false;
+              }
+              const sw = (id, label, on, set) => h('label', { class: 'switch', for: id }, h('input', { type: 'checkbox', id, checked: on, onchange(e) {
+                if (busy) { e.target.checked = !e.target.checked; return; }
+                set(e.target.checked); checked = null; paintApps(); cafe(); replay(mapsTile, 'pop-soft');
+                say(o, note(`targetSdk ${target30 ? '30+' : '29'}, ${queries ? 'with' : 'no'} <queries> entry for geo`.replace('<', '&lt;').replace('>', '&gt;')));
+              } }), label);
+              paintApps(); cafe();
+              say(o, 'Maps is installed. Ask about it, then just start it.');
+              el.append(
+                h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'what your app can see'), youTile, mapsTile)),
+                h('div', { class: 'controls' }, sw('and-d2-pv-target', 'targetSdk 30 or higher', true, v => { target30 = v; }), sw('and-d2-pv-queries', '<queries> for geo', false, v => { queries = v; })),
+                h('div', { class: 'controls' }, cmd('intent.resolveActivity(packageManager)', resolve), cmd('startActivity(intent)', start)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>startActivity</code> is a Binder call into <code>system_server</code>. There the activity manager asks the package manager to resolve the intent. An explicit intent is a lookup by class. For an implicit one it checks the filters of exported components: the action must match, every category in the intent must be in the filter, and the scheme, host and MIME type must fit. <code>startActivity</code> treats every implicit intent as if it carried <code>CATEGORY_DEFAULT</code>, so a filter without that category never matches it.</p>
+<p>If several apps match and the user has no default, the system starts its own resolver Activity, the "open with" sheet. The chosen Activity runs in its own app's process, forked from the zygote if it isn't running yet. Extras ride along in the same Binder transaction as a parceled Bundle, which is where the size limit of about 1 MB comes from.</p>`,
+          code: `// A filter that implicit startActivity calls can reach
+// <activity android:name=".ShareTargetActivity" android:exported="true">
+//     <intent-filter>
+//         <action android:name="android.intent.action.SEND" />
+//         <category android:name="android.intent.category.DEFAULT" />
+//         <data android:mimeType="text/plain" />
+//     </intent-filter>
+// </activity>`,
+        },
+        mistakes: [
+          {
+            title: 'A custom implicit action for your own screen',
+            bad: `// manifest: EditorActivity, exported="false",
+//   with an intent filter for "com.example.OPEN_EDITOR"
+startActivity(Intent("com.example.OPEN_EDITOR"))`,
+            good: `startActivity(Intent(this, EditorActivity::class.java))`,
+            why: 'For apps that target Android 14 or later, implicit intents are delivered only to exported components, so this throws <code>ActivityNotFoundException</code>. Inside your app, name the class.',
+          },
+          {
+            title: 'A share target without the DEFAULT category',
+            bad: `// <intent-filter>
+//     <action android:name="android.intent.action.SEND" />
+//     <data android:mimeType="text/plain" />
+// </intent-filter>
+// your app never appears in the share sheet`,
+            good: `// <intent-filter>
+//     <action android:name="android.intent.action.SEND" />
+//     <category android:name="android.intent.category.DEFAULT" />
+//     <data android:mimeType="text/plain" />
+// </intent-filter>`,
+            why: 'Implicit <code>startActivity</code> calls only match filters that include <code>CATEGORY_DEFAULT</code>. Without it the filter is valid and silently unreachable.',
+          },
+          {
+            title: 'Passing a big object through extras',
+            bad: `startActivity(
+    Intent(this, ReaderActivity::class.java)
+        .putParcelableArrayListExtra("articles", ArrayList(allArticles))
+)`,
+            good: `startActivity(
+    Intent(this, ReaderActivity::class.java).putExtra("articleId", article.id)
+)
+// ReaderActivity loads the article from the repository`,
+            why: 'Extras cross Binder in one transaction with a limit of about 1 MB. A long list throws <code>TransactionTooLargeException</code>. Pass an id and load the data on the other side.',
+          },
+        ],
         visual(el) {
           el.classList.add('and-viz');
           const sendT = t => t && t.startsWith('text/');
@@ -904,6 +1746,251 @@ navController.navigate(Settings) { popUpTo<Home>() }         // clear down to Ho
           { q: 'The stack is Home, List, Detail. The user presses Back twice. What is on screen?', options: ['Home', 'List', 'The app closes'], a: 0, why: 'Each Back pops one entry: Detail, then List.' },
           { q: 'The stack is Home, Search. You call <code>navigate(Search) { launchSingleTop = true }</code>. The stack is now', options: ['Home, Search', 'Home, Search, Search', 'Search'], a: 0, why: 'Search is already on top, so single top reuses it instead of pushing a copy.' },
           { q: 'The stack is Home, A, B. You call <code>navigate(C) { popUpTo&lt;Home&gt;() }</code>. The stack is now', options: ['Home, A, B, C', 'Home, C', 'C'], a: 1, why: 'Everything above Home is popped, then C is pushed. Add <code>inclusive = true</code> to pop Home too.' },
+        ],
+        deeper: [
+          {
+            title: 'Activities have launch modes',
+            body: `<p>With several Activities, the task is a stack of Activity instances, and the <em>launch mode</em> decides what <code>startActivity</code> does. <code>standard</code>, the default, always creates a new instance on top. <code>singleTop</code> reuses the instance when it is already on top and calls its <code>onNewIntent()</code> instead.</p>
+<p><code>singleTask</code> allows only one instance: starting it again clears every Activity above it and delivers <code>onNewIntent()</code>. <code>singleInstance</code> puts the Activity alone in its own task. Most apps need only <code>standard</code>, plus intent flags for the odd case. Remember <code>setIntent()</code> in <code>onNewIntent</code>, or <code>intent</code> keeps returning the old one.</p>`,
+            code: `// AndroidManifest.xml
+// <activity android:name=".ArticleActivity" android:launchMode="singleTop" />
+
+class ArticleActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)                          // otherwise getIntent() stays old
+        show(intent.getLongExtra("id", -1))
+    }
+}
+
+// Clear everything above MainActivity and reuse it, no manifest change
+startActivity(Intent(this, MainActivity::class.java)
+    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const MODES = ['standard', 'singleTop', 'singleTask'];
+              let mode = 'standard', stack = [], n = 2, seq = 1, busy = false;
+              const col = h('div', { class: 'and-stack' });
+              const o = out();
+              const mk = (name, id) => ({ name, id, no: seq++ });
+              function paint(mark) {
+                col.replaceChildren(...stack.map((a, i) => {
+                  const top = i === stack.length - 1;
+                  return h('div', { class: 'and-card' + (top ? ' and-top' : '') + (mark === a ? ' drop-in' : '') },
+                    h('span', {}, `${a.name} #${a.no}`), h('small', {}, a.id != null ? `id=${a.id}` : top ? 'on screen' : ''));
+                }));
+              }
+              function reset() {
+                seq = 1; n = 2;
+                stack = [mk('MainActivity', null), mk('ArticleActivity', 1)];
+                paint(); press(); artBtn.innerHTML = hl(`startActivity(Article(id = ${n}))`);
+              }
+              const modeBtns = MODES.map(m => cmd(`launchMode="${m}"`, () => {
+                if (busy) return;
+                mode = m; reset();
+                say(o, note(`ArticleActivity is now ${m}. The task was reset.`));
+              }));
+              const press = () => modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(MODES[i] === mode)));
+              function nope(msg) { if (busy) return; replay(col, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+              async function openArticle() {
+                if (busy) return;
+                if (stack.length >= 7) return nope('the task is getting tall. Press Back or pick a mode to reset.');
+                busy = true;
+                const id = n++;
+                artBtn.innerHTML = hl(`startActivity(Article(id = ${n}))`);
+                say(o, `${hl(`startActivity(Article(id = ${id}))`)}  ${note(`launchMode = ${mode}`)}`);
+                const top = stack[stack.length - 1];
+                const existing = stack.findIndex(a => a.name === 'ArticleActivity');
+                if (mode === 'singleTop' && top.name === 'ArticleActivity') {
+                  top.id = id; paint(); replay(col.lastElementChild, 'pop');
+                  line(o, `${hl(`ArticleActivity #${top.no}.onNewIntent(id = ${id})`)}  ${note('already on top: reused')}`);
+                } else if (mode === 'singleTask' && existing >= 0) {
+                  const above = stack.slice(existing + 1).reverse();
+                  for (const a of above) {
+                    col.children[stack.indexOf(a)].classList.add('leave');
+                    line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}  ${note('cleared: it was above ArticleActivity')}`);
+                    await sleep(320); if (!el.isConnected) return;
+                  }
+                  stack = stack.slice(0, existing + 1);
+                  const t = stack[existing]; t.id = id; paint(); replay(col.lastElementChild, 'pop');
+                  line(o, `${hl(`ArticleActivity #${t.no}.onNewIntent(id = ${id})`)}  ${note('the one instance, brought to the top')}`);
+                } else {
+                  const a = mk('ArticleActivity', id); stack.push(a); paint(a);
+                  line(o, `${hl(`ArticleActivity #${a.no}.onCreate()`)}  ${note(mode === 'standard' ? 'standard: always a new instance' : 'not on top, so a new instance')}`);
+                }
+                busy = false;
+              }
+              function openSettings() {
+                if (busy) return;
+                if (stack.length >= 7) return nope('the task is getting tall. Press Back or pick a mode to reset.');
+                const a = mk('SettingsActivity', null); stack.push(a); paint(a);
+                say(o, `${hl('startActivity(Settings)')}  ${note(`SettingsActivity #${a.no}.onCreate()`)}`);
+              }
+              async function back() {
+                if (busy) return;
+                if (stack.length === 1) return nope('MainActivity is the root. On Android 12+, Back here moves the task to the background.');
+                busy = true;
+                const a = stack.pop();
+                col.lastElementChild.classList.add('leave');
+                say(o, `${note('press Back')}`);
+                line(o, `${hl(`${a.name} #${a.no}.onDestroy()`)}`);
+                await sleep(420); if (!el.isConnected) return;
+                paint(); busy = false;
+              }
+              const artBtn = cmd('', openArticle);
+              reset();
+              say(o, note('MainActivity, then an article. Pick a launch mode, then open another article.'));
+              el.append(
+                h('div', { class: 'controls' }, modeBtns),
+                h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'task: newest on top'))),
+                h('div', { class: 'controls' }, artBtn, cmd('startActivity(Settings)', openSettings), cmd('press Back', back)),
+                o);
+            },
+          },
+          {
+            title: 'Intercepting Back the modern way',
+            body: `<p>Sometimes Back should not pop yet, for example when a form has unsaved changes. Don't override <code>onBackPressed()</code>. It is deprecated, and for apps that target Android 16 it is no longer called at all. Register a callback with the <code>OnBackPressedDispatcher</code>, or use <code>BackHandler</code> in Compose.</p>
+<p>Enable the callback only while you need it. With predictive back, the system decides before the gesture ends whether Back stays in your app or shows the screen behind it. An always-enabled callback blocks that preview everywhere. Disable it as soon as the draft is saved.</p>`,
+            code: `@Composable
+fun EditorScreen(state: EditorState, onDiscard: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    BackHandler(enabled = state.hasUnsavedChanges) { confirm = true }
+    if (confirm) DiscardDialog(onDiscard = onDiscard, onKeep = { confirm = false })
+}
+
+// In an Activity or Fragment
+val callback = onBackPressedDispatcher.addCallback(this, enabled = false) {
+    showDiscardDialog()
+}
+callback.isEnabled = hasUnsavedChanges     // update it whenever that changes`,
+          },
+          {
+            title: 'Bottom tabs keep their own stacks',
+            body: `<p>With a bottom bar, each tab should remember where the user was. Navigation supports multiple back stacks. When switching tabs, pop up to the start destination with <code>saveState = true</code>, and navigate to the tab with <code>restoreState = true</code>. The popped entries are saved, with their state and ViewModels, and come back when the user returns to that tab.</p>
+<p>Without those two flags, the popped screens of the old tab are simply destroyed. The user taps back to Feed and lands on its first screen again.</p>`,
+            code: `fun NavController.switchTab(tab: Any) = navigate(tab) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}
+
+NavigationBarItem(
+    selected = current == Feed,
+    onClick = { navController.switchTab(Feed) },
+    icon = { Icon(Icons.Default.Home, contentDescription = null) },
+    label = { Text("Feed") },
+)`,
+            visual(el) {
+              el.classList.add('and-viz');
+              const TABS = ['Feed', 'Search', 'Profile'];
+              const SUB = { Feed: k => `Article(${k})`, Search: k => `Results(page = ${k})`, Profile: k => `EditField(${k})` };
+              let stack = ['Feed'], tab = 'Feed', saved = {}, k = 1, save = true, busy = false;
+              const col = h('div', { class: 'and-stack' });
+              const savedBox = h('div', { class: 'and-d2-saved' });
+              const { dev, view } = device('and-tall');
+              const o = out();
+              function paint(anim) {
+                col.replaceChildren(...stack.map((r, i) => h('div', { class: 'and-card' + (i === stack.length - 1 ? ' and-top' : '') + (anim && i === stack.length - 1 ? ' drop-in' : '') }, h('span', {}, r), h('small', {}, i === 0 ? 'start' : TABS.includes(r) ? 'tab' : ''))));
+                const keys = Object.keys(saved).filter(t => saved[t] && saved[t].length);
+                savedBox.replaceChildren(h('span', { class: 'and-lbl' }, 'saved stacks'), ...(keys.length ? keys.map(t => h('div', { class: 'and-d2-svd drop-in' }, h('b', {}, t), h('span', {}, saved[t].join(' › ')))) : [h('span', { class: 'and-user' }, 'none')]));
+                const top = stack[stack.length - 1];
+                view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar(stack.length > 1 && top !== tab ? `← ${top}` : top), h('span', { class: 'and-big' }, top.replace(/\(.*/, '')), bars(80, 60, 70)),
+                  h('div', { class: 'and-d2-tabs' }, TABS.map(t => h('span', { class: 'and-d2-tab' + (t === tab ? ' and-on' : '') }, t))));
+              }
+              function nope(msg) { if (busy) return; replay(col, 'shake'); say(o, `<span class="bad">not now:</span> ${msg}`); }
+              function switchTab(t) {
+                if (busy) return;
+                if (t === tab) return nope(`${t} is already selected.`);
+                const popped = stack.slice(1);
+                if (save) { if (popped.length) saved[tab] = popped; }
+                stack = ['Feed'];
+                let restored = false;
+                if (save && saved[t] && saved[t].length) {
+                  stack = t === 'Feed' ? ['Feed', ...saved[t]] : ['Feed', ...saved[t]];
+                  delete saved[t]; restored = true;
+                } else if (t !== 'Feed') stack.push(t);
+                tab = t; paint(true);
+                say(o, `${hl(`switchTab(${t})`)}  ${note(`popped ${popped.length} ${save ? (popped.length ? '(saved)' : '') : '(destroyed)'}${restored ? `, restored ${t}’s stack` : ''}`)}`);
+              }
+              function push() {
+                if (busy) return;
+                if (stack.length >= 6) return nope('the stack is getting tall. Press Back.');
+                const r = SUB[tab](k++); stack.push(r); paint(true);
+                say(o, `${hl(`navigate(${r})`)}  ${note(`push inside the ${tab} tab`)}`);
+              }
+              async function back() {
+                if (busy) return;
+                if (stack.length === 1) return nope('Feed is the start destination. Back here leaves the app.');
+                busy = true;
+                const r = stack.pop();
+                col.lastElementChild.classList.add('leave');
+                await sleep(380); if (!el.isConnected) return;
+                if (TABS.includes(r)) tab = 'Feed';
+                paint(true);
+                say(o, `${hl('popBackStack()')}  ${note(`pop ${r}${TABS.includes(r) ? ': back on the Feed tab' : ''}`)}`);
+                busy = false;
+              }
+              const t = h('label', { class: 'switch', for: 'and-d2-tab-save' }, h('input', { type: 'checkbox', id: 'and-d2-tab-save', checked: true, onchange(e) {
+                if (busy) { e.target.checked = save; return; }
+                save = e.target.checked; saved = {}; stack = ['Feed']; tab = 'Feed'; k = 1; paint(true);
+                say(o, note(save ? 'saveState and restoreState on. Stacks reset.' : 'saveState and restoreState off. Stacks reset.'));
+              } }), 'saveState + restoreState');
+              paint();
+              say(o, 'Open an article in Feed, switch to Search, then come back to Feed.');
+              el.append(
+                h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'back stack'), savedBox), dev),
+                h('div', { class: 'controls' }, t),
+                h('div', { class: 'controls' }, TABS.map(x => cmd(`switchTab(${x})`, () => switchTab(x))), cmd('navigate(next screen)', push), cmd('popBackStack()', back)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>In Navigation Compose, the back stack is a list of <code>NavBackStackEntry</code> objects inside the <code>NavController</code>. Each entry is a small owner of its own: it has a <code>Lifecycle</code>, a <code>ViewModelStore</code> and a <code>SavedStateRegistry</code>. The top entry is <code>RESUMED</code>, entries under it are <code>CREATED</code>, and a popped entry moves to <code>DESTROYED</code> and has its ViewModels cleared, unless it was popped with <code>saveState</code>.</p>
+<p>The <code>NavController</code> writes the whole stack, with each entry's arguments and saved state, into the Activity's saved-state Bundle. That is why the user lands on the same screen with the same stack under it after process death. Type-safe routes such as <code>Detail(id = 7)</code> are encoded with kotlinx.serialization into the entry's arguments, so they fit in that Bundle.</p>`,
+          code: `val entry = navController.currentBackStackEntry ?: return
+entry.lifecycle.currentState     // RESUMED for the top entry
+entry.viewModelStore             // ViewModels scoped to this screen
+entry.savedStateHandle           // per-screen saved state, also used for results`,
+        },
+        mistakes: [
+          {
+            title: 'Calling navigate() in the composable body',
+            bad: `@Composable
+fun LoginRoute(state: LoginState, navController: NavController) {
+    if (state.loggedIn) navController.navigate(Home)   // runs on every recomposition
+    LoginScreen(state)
+}`,
+            good: `@Composable
+fun LoginRoute(state: LoginState, onLoggedIn: () -> Unit) {
+    LaunchedEffect(state.loggedIn) { if (state.loggedIn) onLoggedIn() }
+    LoginScreen(state)
+}`,
+            why: 'Composition can run many times, and each run pushes another Home. Navigate from an event callback or an effect keyed on the change, and pass a lambda instead of the NavController.',
+          },
+          {
+            title: 'Whole objects as route arguments',
+            bad: `@Serializable data class Detail(val article: Article)
+
+navController.navigate(Detail(article))`,
+            good: `@Serializable data class Detail(val id: Long)
+
+navController.navigate(Detail(article.id))
+// DetailViewModel reads the id from SavedStateHandle and loads the article`,
+            why: 'Route arguments are saved with the back stack in the saved-state Bundle. A full article bloats it, goes stale, and needs a custom <code>NavType</code>. Pass the id and load the data from the repository.',
+          },
+          {
+            title: 'popBackStack() from an Up arrow on the start screen',
+            bad: `IconButton(onClick = { navController.popBackStack() }) {
+    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+}`,
+            good: `if (navController.previousBackStackEntry != null) {
+    IconButton(onClick = { navController.navigateUp() }) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    }
+}`,
+            why: '<code>popBackStack()</code> happily pops the start destination too, which leaves an empty NavHost and a blank screen. <code>navigateUp()</code> never pops the last entry, and the arrow only shows when there is somewhere to go.',
+          },
         ],
         visual(el) {
           el.classList.add('and-viz');

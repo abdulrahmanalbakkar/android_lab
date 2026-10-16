@@ -67,6 +67,25 @@
 .oo-cell.oo-pass { background: var(--ok-soft); color: var(--ok); }
 .oo-cell.oo-fail { background: var(--err-soft); color: var(--err); }
 .oo-cell.oo-na { opacity: 0.5; border: 1px dashed var(--line); background: transparent; }
+/* depth pass 2: srp, open-closed, isp */
+.oo-srp-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.phone.oo-srp-phone { justify-content: flex-start; align-items: stretch; height: 220px; gap: 8px; }
+.oo-srp-name { font-weight: 800; font-size: 1rem; overflow-wrap: anywhere; }
+.oo-srp-err { margin: auto 0; padding: 10px; border-radius: 10px; background: var(--err-soft); color: var(--err); font: 600 0.76rem/1.4 var(--mono); overflow-wrap: anywhere; }
+.oo-srp-btn { align-self: flex-start; padding: 6px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 0.8rem; }
+.oo-ocp-list { display: grid; gap: 6px; min-width: 0; }
+.oo-ocp-art { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--line); min-width: 0; }
+.oo-ocp-art b { overflow-wrap: anywhere; font-size: 0.9rem; }
+.oo-ocp-art span { font: 500 0.74rem var(--mono); color: var(--muted); }
+.oo-ocp-art.oo-ocp-pin { border-color: var(--warm); background: var(--warm-soft); }
+.oo-line.oo-isp-blink { animation: oo-isp-blink 0.8s ease-out; }
+.oo-line.oo-isp-idle { animation: oo-isp-idle 0.8s ease-out; }
+@keyframes oo-isp-blink { from { background: rgba(158, 223, 165, 0.32); } }
+@keyframes oo-isp-idle { from { background: rgba(255, 255, 255, 0.14); } }
+.oo-isp-field { flex: 1 1 140px; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font: 500 0.9rem var(--mono); min-width: 0; }
+.oo-isp-ctrls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 40px; }
+.oo-isp-seek { flex: 1 1 110px; height: 8px; border-radius: 99px; background: var(--sunk); position: relative; overflow: hidden; }
+.oo-isp-seek::after { content: ""; position: absolute; inset: 0 60% 0 0; background: var(--accent); }
 `;
 
   Lab.addTrack({
@@ -127,6 +146,162 @@ class ProfileViewModel(
         quiz: [
           { q: 'What is a practical test for “one responsibility”?', options: ['The class has under 100 lines', 'Only one kind of stakeholder would ask to change it', 'It has one public method'], a: 1, why: 'Size and method count are side effects. The principle is about reasons to change.' },
           { q: 'Designers change the date format. After a good split, which class changes?', options: ['ProfileViewModel', 'ProfileRepository', 'ProfileFormatter'], a: 2, why: 'Formatting is the formatter’s only job, so the change lands there and nowhere else.' },
+        ],
+        deeper: [
+          {
+            title: 'Too far: one class per function',
+            body: `<p>Splitting has a cost too. Cut every function into its own class and one change is spread over many files again, and the ViewModel has to wire a dozen tiny classes. Code that changes together now lives apart.</p>
+<p>The goal is cohesion: group what changes for the same reason, and split what changes for different reasons. Try the same change requests at three levels of splitting.</p>`,
+            visual(el) {
+              const FNS = [
+                { f: 'fetchProfile()', g: 'api', cls: 'FetchProfile' }, { f: 'parseDto()', g: 'api', cls: 'ParseProfileDto' },
+                { f: 'cacheProfile()', g: 'api', cls: 'CacheProfile' }, { f: 'readCache()', g: 'api', cls: 'ReadCachedProfile' },
+                { f: 'formatName()', g: 'design', cls: 'FormatName' }, { f: 'formatJoinDate()', g: 'design', cls: 'FormatJoinDate' },
+                { f: 'validateEmail()', g: 'rules', cls: 'ValidateEmail' }, { f: 'validateName()', g: 'rules', cls: 'ValidateName' },
+                { f: 'trackView()', g: 'analytics', cls: 'TrackView' }, { f: 'trackEdit()', g: 'analytics', cls: 'TrackEdit' },
+              ];
+              const GROUP = { api: 'ProfileRepository', design: 'ProfileFormatter', rules: 'ProfileValidator', analytics: 'ProfileAnalytics' };
+              const ASKS = [
+                { label: 'Backend adds a bio field', hits: ['parseDto()', 'cacheProfile()', 'readCache()'] },
+                { label: 'Design changes the date format', hits: ['formatJoinDate()'] },
+                { label: 'Names may now contain emoji', hits: ['validateName()', 'formatName()'] },
+              ];
+              const MODES = [{ k: 'god', label: '1 class' }, { k: 'reason', label: 'by reason to change' }, { k: 'fn', label: '1 class per function' }];
+              let mode = 'reason', busy = false;
+              const area = h('div', { class: 'oo-classes' });
+              const stats = h('div', { class: 'oo-srp-stats' });
+              const o = out('');
+              let cards = {}, pills = {};
+              const owner = fn => mode === 'god' ? 'ProfileViewModel' : mode === 'reason' ? GROUP[fn.g] : fn.cls;
+              function render() {
+                cards = {}; pills = {};
+                FNS.forEach(fn => {
+                  const n = owner(fn);
+                  if (!cards[n]) cards[n] = h('div', { class: 'oo-card oo-on drop-in' }, h('span', { class: 'oo-title' }, n), h('div', { class: 'oo-row' }));
+                  cards[n].lastElementChild.append(pills[fn.f] = pill(fn.f, 'oo-acc'));
+                });
+                area.replaceChildren(...Object.values(cards));
+                area.style.gridTemplateColumns = mode === 'fn' ? 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))' : '';
+                stats.replaceChildren(h('span', { class: 'oo-stat', html: `classes the ViewModel wires: <b>${mode === 'god' ? 0 : Object.keys(cards).length}</b>` }));
+              }
+              const modeBtns = MODES.map(m => act(m.label, () => { if (busy) return; mode = m.k; press(modeBtns, modeBtns[MODES.indexOf(m)]); render(); say(o, m.k === 'god' ? 'Everything in one ViewModel.' : m.k === 'reason' ? 'One class per reason to change.' : 'Every function is its own class.'); }));
+              async function ask(a) {
+                if (busy) return; busy = true;
+                Object.values(cards).forEach(c => c.classList.remove('oo-warn'));
+                const files = new Set(a.hits.map(f => owner(FNS.find(x => x.f === f))));
+                const unrelated = [...files].reduce((n, c) => n + FNS.filter(fn => owner(fn) === c && !a.hits.includes(fn.f)).length, 0);
+                files.forEach(c => { cards[c].classList.add('oo-warn'); replay(cards[c], 'shake'); });
+                a.hits.forEach(f => { pills[f].className = 'oo-pill oo-warn'; replay(pills[f], 'pop'); });
+                stats.replaceChildren(
+                  h('span', { class: 'oo-stat', html: `files opened: <b>${files.size}</b>` }),
+                  h('span', { class: 'oo-stat', html: `unrelated functions in them: <b>${unrelated}</b>` }),
+                  h('span', { class: 'oo-stat', html: `classes the ViewModel wires: <b>${mode === 'god' ? 0 : Object.keys(cards).length}</b>` }));
+                say(o, mode === 'god'
+                  ? `${a.label}. <span class="bad">1 file, but ${unrelated} unrelated functions</span> share it, and all of them need retesting.`
+                  : mode === 'fn'
+                    ? `${a.label}. <span class="bad">${files.size} file${files.size > 1 ? 's' : ''} for one change</span>${files.size > 1 ? ', and nothing tells you they belong together' : ''}. The ViewModel wires ${Object.keys(cards).length} classes.`
+                    : `${a.label}. <span class="good">${files.size} focused file${files.size > 1 ? 's' : ''}</span>, ${unrelated} unrelated function${unrelated === 1 ? '' : 's'} nearby. Things that change together stay together.`);
+                await sleep(1300); if (!el.isConnected) return;
+                Object.values(cards).forEach(c => c.classList.remove('oo-warn'));
+                Object.values(pills).forEach(p => { p.className = 'oo-pill oo-acc'; });
+                busy = false;
+              }
+              press(modeBtns, modeBtns[1]); render();
+              say(o, 'Send a change request at each level of splitting.');
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'split'), modeBtns),
+                area, stats,
+                h('div', { class: 'controls' }, ASKS.map(a => act(a.label, () => ask(a)))),
+                o);
+            },
+          },
+          {
+            title: 'Split the composable too',
+            body: `<p>Composables collect jobs just like classes do. A screen that gets its ViewModel, collects state and draws the layout does two things: wiring and drawing. Split it into a <code>ProfileRoute</code> that talks to the ViewModel and a <code>ProfileScreen</code> that only takes state and callbacks.</p>
+<p>The stateless half renders in a <code>@Preview</code> and in UI tests with any state you hand it, with no ViewModel, Hilt or network behind it.</p>`,
+            code: `@Composable
+fun ProfileRoute(vm: ProfileViewModel = hiltViewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    ProfileScreen(state, onSave = vm::save)
+}
+
+@Composable
+fun ProfileScreen(state: ProfileUiState, onSave: () -> Unit) {
+    Column {
+        Text(state.name)
+        Text(state.joined)
+        Button(onClick = onSave) { Text("Save") }
+    }
+}
+
+@Preview
+@Composable
+fun ProfileScreenPreview() =
+    ProfileScreen(ProfileUiState("Ada", "Joined May 2021"), onSave = {})`,
+            visual(el) {
+              const STATES = [
+                { src: 'ProfileUiState("Ada", "Joined May 2021")', name: 'Ada', joined: 'Joined May 2021', what: '@Preview' },
+                { src: 'ProfileUiState("Maximiliana Bartholomew-Okonkwo", ...)', name: 'Maximiliana Bartholomew-Okonkwo', joined: 'Joined Jan 2019', what: 'UI test: a long name' },
+                { src: 'ProfileUiState(name = "", joined = "")', name: '', joined: '', what: 'UI test: empty profile' },
+              ];
+              let split = false, busy = false;
+              const code = h('div', { class: 'oo-code' });
+              const phone = h('div', { class: 'phone oo-srp-phone', 'aria-label': 'Rendered screen' });
+              const sw = h('input', { type: 'checkbox', id: 'oo-srp-split' });
+              const o = out('');
+              function paintCode() {
+                const L = split
+                  ? ['@Composable fun ProfileRoute(vm: ProfileViewModel = hiltViewModel())', '    = ProfileScreen(vm.state..., vm::save)', '@Composable fun ProfileScreen(state: ProfileUiState, onSave: () -> Unit)']
+                  : ['@Composable fun ProfileScreen(vm: ProfileViewModel = hiltViewModel()) {', '    val state by vm.state.collectAsStateWithLifecycle()', '    // draws name, joined date, Save button', '}'];
+                code.replaceChildren(...L.map((t, i) => h('div', { class: `oo-line drop-in${split && i === 2 ? ' oo-ln-ok' : ''}`, html: hl(t) })));
+              }
+              function idle() { phone.replaceChildren(h('span', { class: 'phone-note' }, 'Nothing rendered yet')); }
+              sw.addEventListener('change', () => { if (busy) { sw.checked = split; return; } split = sw.checked; paintCode(); idle(); say(o, split ? 'Split: ProfileScreen now needs only state and a callback.' : 'One composable that builds its own ViewModel.'); });
+              async function render(s) {
+                if (busy) return; busy = true;
+                phone.replaceChildren(h('span', { class: 'phone-note' }, 'Rendering...'));
+                await sleep(500); if (!el.isConnected) return;
+                if (!split) {
+                  phone.replaceChildren(h('div', { class: 'oo-srp-err drop-in' }, `${s.what} failed: there is no Hilt graph to build ProfileViewModel, its repository and its API client.`));
+                  replay(phone, 'shake');
+                  say(o, `<span class="bad">${s.what} can't run:</span> the screen creates its own ViewModel, so you can't hand it a state.`);
+                } else {
+                  phone.replaceChildren(
+                    h('span', { class: 'oo-srp-name drop-in' }, s.name || 'No name yet'),
+                    h('span', { class: 'phone-note drop-in' }, s.joined || 'Joined date unknown'),
+                    h('span', { class: 'oo-srp-btn drop-in' }, 'Save'));
+                  say(o, `${hl(`ProfileScreen(${s.src}, onSave = {})`)} <span class="good">rendered.</span>`);
+                }
+                busy = false;
+              }
+              paintCode(); idle();
+              say(o, 'Render the screen in a preview or a test.');
+              el.append(
+                h('label', { class: 'switch', for: 'oo-srp-split' }, sw, 'Split into ProfileRoute + ProfileScreen'),
+                h('div', { class: 'oo-pair' }, code, phone),
+                h('div', { class: 'controls' }, STATES.map(s => act(s.what, () => render(s)))),
+                o);
+            },
+          },
+          {
+            title: 'When the ViewModel grows: use cases',
+            body: `<p>After data and formatting move out, the ViewModel coordinates. On big screens even that grows: combine several sources, apply a business rule, decide what to show. The optional domain layer in Android's architecture guide moves such logic into use cases, one class per operation, often called through <code>invoke</code>.</p>
+<p>Add one when two ViewModels need the same logic, or when a ViewModel gets hard to read. A use case that only forwards a single call is noise.</p>`,
+            code: `class GetProfileSummary @Inject constructor(
+    private val profiles: ProfileRepository,
+    private val orders: OrderRepository,
+) {
+    operator fun invoke(id: String): Flow<ProfileSummary> =
+        combine(profiles.observe(id), orders.countFor(id)) { p, count ->
+            ProfileSummary(name = p.name, isVip = count >= 10)
+        }
+}`,
+          },
+        ],
+        mistakes: [
+          { title: 'A Utils object that collects everything', bad: 'object Utils {\n    fun formatDate(d: LocalDate): String = TODO()\n    fun isValidEmail(s: String): Boolean = TODO()\n    fun track(event: String) { /* ... */ }\n}', good: 'class DateFormatter(private val locale: Locale) { /* format() */ }\nclass EmailValidator { /* isValid() */ }\nclass Analytics(private val tracker: Tracker) { /* track() */ }', why: 'A utils file is a god class without a name. Every team edits it, and nothing in it can be swapped for a fake in a test. Group functions by who asks for changes.' },
+          { title: 'A repository that shows UI', bad: 'class ProfileRepository(\n    private val api: ProfileApi,\n    private val context: Context,\n) {\n    suspend fun refresh(id: String) {\n        try { api.profile(id) } catch (e: IOException) {\n            Toast.makeText(context, "Offline", Toast.LENGTH_SHORT).show()\n        }\n    }\n}', good: 'class ProfileRepository(private val api: ProfileApi) {\n    suspend fun refresh(id: String): Profile = api.profile(id)\n}\n// ViewModel: catch (e: IOException) -> offline = true in UI state', why: 'Data code now changes when designers restyle errors, and it can\'t run in a unit test without a Context. Let the data layer report the failure and the UI decide how to show it.' },
+          { title: 'One ViewModel for the whole app', bad: 'class MainViewModel : ViewModel() {\n    val feed: StateFlow<FeedState> = TODO()\n    val profile: StateFlow<ProfileState> = TODO()\n    val settings: StateFlow<SettingsState> = TODO()\n    fun refreshFeed() { }\n    fun logout() { }\n}', good: 'class FeedViewModel(/* ... */) : ViewModel()\nclass ProfileViewModel(/* ... */) : ViewModel()\nclass SettingsViewModel(/* ... */) : ViewModel()', why: 'Every screen change edits the same class, and its state lives as long as the app. A ViewModel per screen stays small and is cleared when its screen goes away.' },
         ],
         visual(el) {
           const methods = [
@@ -245,6 +420,176 @@ fun checkoutTotal(amount: Int, method: PaymentMethod) = amount + method.fee()`,
           { q: 'With an open <code>PaymentMethod</code> interface, what does adding Klarna take?', options: ['One new class', 'Editing every function that handles payments', 'Changing the interface'], a: 0, why: 'Each implementation carries its own behaviour, so existing code stays as it is.' },
           { q: 'With a sealed <code>Payment</code>, what does adding a <code>refund()</code> operation take?', options: ['Editing every subtype', 'One new function with a when', 'It is impossible'], a: 1, why: 'Operations live in functions outside the types, so a new one is a single new function.' },
           { q: 'Why avoid <code>else</code> in a <code>when</code> over a sealed type?', options: ['It is slower', 'It hides new subtypes from the compiler', 'It doesn’t compile'], a: 1, why: 'Without <code>else</code>, adding a subtype turns every incomplete <code>when</code> into a compile error.' },
+        ],
+        deeper: [
+          {
+            title: 'Plug-ins through a registry',
+            body: `<p>A <code>when</code> that maps every deep link to a screen has to be edited for each new feature. Turn it around: each feature module contributes a handler to a set, and the router just walks the set. A new feature adds a module and a binding. The router stays closed.</p>
+<p>Hilt builds the set for you with <code>@IntoSet</code>. In Kotlin, inject it as <code>Set&lt;@JvmSuppressWildcards DeepLinkHandler&gt;</code> so the type Dagger sees matches the one it provides.</p>`,
+            code: `interface DeepLinkHandler {
+    fun canHandle(uri: Uri): Boolean
+    fun open(uri: Uri)
+}
+
+// in :feature:news
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class NewsLinks {
+    @Binds @IntoSet
+    abstract fun bind(handler: NewsLinkHandler): DeepLinkHandler
+}
+
+// in :app, never edited for a new feature
+class Router @Inject constructor(
+    private val handlers: Set<@JvmSuppressWildcards DeepLinkHandler>,
+) {
+    fun open(uri: Uri) {
+        handlers.firstOrNull { it.canHandle(uri) }?.open(uri) ?: openHome()
+    }
+}`,
+            visual(el) {
+              const FEATS = [
+                { k: 'news', h: 'NewsLinkHandler', screen: id => `ArticleScreen(${id})` },
+                { k: 'video', h: 'VideoLinkHandler', screen: id => `PlayerScreen(${id})` },
+                { k: 'shop', h: 'ShopLinkHandler', screen: id => `ShopScreen("${id}")` },
+              ];
+              const URLS = [['news', '42'], ['video', '7'], ['shop', 'cart']];
+              const on = new Set(['news']);
+              let busy = false, edits = 0;
+              const set = h('div', { class: 'oo-row' });
+              const setCard = h('div', { class: 'oo-card' }, h('span', { class: 'oo-label oo-raw' }, 'Set<DeepLinkHandler>'), set);
+              const router = h('div', { class: 'oo-code' }, ...['class Router(handlers: Set<DeepLinkHandler>) {', '    fun open(uri: Uri) =', '        handlers.firstOrNull { it.canHandle(uri) }', '            ?.open(uri) ?: openHome()', '}'].map(t => h('div', { class: 'oo-line', html: hl(t) })));
+              const rStat = h('span', { class: 'oo-stat' });
+              const routerCard = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, ':app'), router, rStat);
+              const o = out('');
+              const chips = {};
+              function paintSet(fresh) {
+                set.replaceChildren(...FEATS.filter(f => on.has(f.k)).map(f => (chips[f.k] = pill(f.h, `oo-acc${f.k === fresh ? ' drop-in' : ''}`))));
+                if (!on.size) set.append(h('span', { class: 'tip' }, 'empty set'));
+                rStat.innerHTML = `Router lines edited: <b>${edits}</b>`;
+              }
+              const toggles = FEATS.map(f => {
+                const id = `oo-ocp-feat-${f.k}`;
+                const inp = h('input', { type: 'checkbox', id, checked: on.has(f.k) });
+                inp.addEventListener('change', () => {
+                  if (busy) { inp.checked = on.has(f.k); return; }
+                  if (inp.checked) on.add(f.k); else on.delete(f.k);
+                  paintSet(inp.checked ? f.k : null); replay(routerCard, 'pop-soft');
+                  say(o, inp.checked ? `<span class="good">:feature:${f.k} added</span> ${hl(`@Binds @IntoSet ${f.h}`)}. The Router did not change.` : `:feature:${f.k} removed from the build. The Router did not change.`);
+                });
+                return h('label', { class: 'switch', for: id }, inp, `:feature:${f.k}`);
+              });
+              async function open([k, id]) {
+                if (busy) return; busy = true;
+                const list = FEATS.filter(f => on.has(f.k));
+                Object.values(chips).forEach(c => { c.className = 'oo-pill oo-acc'; });
+                router.children[2].classList.add('oo-cur');
+                let hit = null;
+                for (const f of list) {
+                  const c = chips[f.k]; c.className = 'oo-pill oo-warn'; replay(c, 'pop');
+                  await sleep(380); if (!el.isConnected) return;
+                  if (f.k === k) { c.className = 'oo-pill oo-ok'; hit = f; break; }
+                  c.className = 'oo-pill oo-ghost';
+                }
+                router.children[2].classList.remove('oo-cur');
+                if (hit) say(o, `${hl(`app://${k}/${id}`)} <span class="muted">→</span> <span class="good">${hit.h}</span> opens ${hl(hit.screen(id))}`);
+                else { router.children[3].classList.add('oo-cur'); replay(setCard, 'shake'); say(o, `${hl(`app://${k}/${id}`)} <span class="muted">→ no handler in the set →</span> ${hl('openHome()')}`); await sleep(500); router.children[3].classList.remove('oo-cur'); }
+                busy = false;
+              }
+              paintSet();
+              say(o, 'Turn feature modules on, then open links.');
+              el.append(
+                h('div', { class: 'oo-switches' }, toggles),
+                h('div', { class: 'oo-pair' }, setCard, routerCard),
+                h('div', { class: 'controls' }, URLS.map(u => cmd(`router.open("app://${u[0]}/${u[1]}")`, () => open(u)))),
+                o);
+            },
+          },
+          {
+            title: 'Behaviour passed in: comparators',
+            body: `<p><code>sortedWith</code> is a perfectly closed function. Nobody edits it to support a new order. You pass a <code>Comparator</code>, and comparators combine: <code>compareByDescending { it.pinned }.then(newest)</code> builds a new order out of two small ones.</p>
+<p>The same works in your own code. A function that takes a lambda or a small interface for the part that varies stays closed, while callers extend it.</p>`,
+            code: `val newest = compareByDescending<Article> { it.date }
+val popular = compareByDescending<Article> { it.reads }
+val pinnedFirst = compareByDescending<Article> { it.pinned }.then(newest)
+
+articles.sortedWith(pinnedFirst)`,
+            visual(el) {
+              const ARTS = [
+                { t: 'New metro line opens', d: 12, reads: 900, pin: false },
+                { t: 'Derby ends 2-2', d: 14, reads: 4100, pin: false },
+                { t: 'Rain expected Friday', d: 15, reads: 300, pin: false },
+                { t: 'Election guide', d: 10, reads: 2500, pin: true },
+                { t: 'App update notes', d: 13, reads: 120, pin: false },
+              ];
+              const byDate = (a, b) => b.d - a.d;
+              const CMPS = [
+                { n: 'newest', src: 'compareByDescending { it.date }', f: byDate },
+                { n: 'popular', src: 'compareByDescending { it.reads }', f: (a, b) => b.reads - a.reads },
+                { n: 'title', src: 'compareBy { it.title }', f: (a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0) },
+                { n: 'pinnedFirst', src: 'compareByDescending { it.pinned }.then(newest)', f: (a, b) => (b.pin - a.pin) || byDate(a, b) },
+              ];
+              let busy = false;
+              const list = h('div', { class: 'oo-ocp-list' });
+              const rows = ARTS.map(a => { const r = h('div', { class: `oo-ocp-art${a.pin ? ' oo-ocp-pin' : ''}` }, h('b', {}, a.t), h('span', {}, a.pin ? 'pinned' : ''), h('span', {}, `${a.d} Oct`), h('span', {}, `${a.reads} reads`)); r.a = a; return r; });
+              const call = h('div', { class: 'oo-code' }, h('div', { class: 'oo-line' }), h('div', { class: 'oo-line', html: hl('articles.sortedWith(order)   // never edited') }));
+              const o = out('');
+              const btns = CMPS.map(c => cmd(c.n, () => sortBy(c)));
+              function reorder(order) {
+                const first = new Map(order.map(e => [e, e.getBoundingClientRect()]));
+                list.append(...order);
+                order.forEach(e => { const a = first.get(e), b = e.getBoundingClientRect(); e.style.transition = 'none'; e.style.transform = `translateY(${a.top - b.top}px)`; });
+                void list.offsetWidth;
+                order.forEach(e => { e.style.transition = 'transform 0.5s cubic-bezier(0.3, 1.2, 0.5, 1)'; e.style.transform = ''; });
+              }
+              async function sortBy(c) {
+                if (busy) return; busy = true;
+                press(btns, btns[CMPS.indexOf(c)]);
+                call.firstElementChild.innerHTML = hl(`val order = ${c.src}`); replay(call.firstElementChild, 'oo-flash');
+                reorder([...rows].sort((x, y) => c.f(x.a, y.a)));
+                say(o, `${hl(`articles.sortedWith(${c.n})`)} <span class="muted">→ new order, and</span> <span class="good">sortedWith did not change</span>`);
+                await sleep(600); busy = false;
+              }
+              list.append(...rows);
+              call.firstElementChild.innerHTML = hl('val order = /* pick one */');
+              say(o, 'Pass different comparators to the same function.');
+              el.append(call, h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'order'), btns), list, o);
+            },
+          },
+          {
+            title: 'Extension functions add operations from outside',
+            body: `<p>"Closed for modification" can also mean a module you shouldn't touch. Extension functions add operations to a type from the outside. A UI module can give the domain's <code>Payment</code> an <code>icon()</code> without the domain knowing anything about drawables.</p>
+<p>Extensions are resolved statically, so pair them with a sealed type and an exhaustive <code>when</code>. The compiler still points at every place a new payment type needs handling.</p>`,
+            code: `// :core:domain knows nothing about Android resources
+sealed interface Payment
+data class Card(val last4: String) : Payment
+data object GooglePay : Payment
+
+// :feature:checkout adds a UI-only operation
+@DrawableRes
+fun Payment.icon(): Int = when (this) {
+    is Card -> R.drawable.ic_card
+    GooglePay -> R.drawable.ic_google_pay
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>An exhaustive <code>when</code> over a sealed type compiles to a chain of type and equality checks. Since the compiler proved the list complete, it adds a hidden last branch that throws <code>NoWhenBranchMatchedException</code>. That branch only runs if a subtype appears that this code was not compiled against, for example from a library updated without recompiling your module.</p>
+<p>A <code>when</code> over an enum compiles differently. A generated <code>$WhenMappings</code> class maps each constant's ordinal to a branch number, and the JVM jumps with a <code>tableswitch</code>. Either way, a new case is something your build tells you about, not your users.</p>`,
+          code: `// Kotlin
+fun fee(p: Payment): Int = when (p) {
+    is Card -> 30
+    GooglePay -> 0
+}
+
+// JVM, simplified
+if (p instanceof Card) return 30;
+if (Intrinsics.areEqual(p, GooglePay.INSTANCE)) return 0;
+throw new NoWhenBranchMatchedException();`,
+        },
+        mistakes: [
+          { title: 'A Boolean per variant', bad: 'fun share(\n    text: String,\n    viaSms: Boolean,\n    viaEmail: Boolean,\n    viaWhatsApp: Boolean,\n) {\n    if (viaSms) { /* ... */ }\n    if (viaEmail) { /* ... */ }\n    if (viaWhatsApp) { /* ... */ }\n}', good: 'interface ShareTarget { fun share(text: String) }\n\nfun share(text: String, targets: List<ShareTarget>) =\n    targets.forEach { it.share(text) }', why: 'Every new channel edits the signature, the body and every call site. With a small interface, a new channel is a new class.' },
+          { title: 'Making everything open "for extension"', bad: 'open class PriceFormatter {\n    open fun currency() = "TRY"\n    open fun format(cents: Long) = "${cents / 100} ${currency()}"\n}', good: 'class PriceFormatter(private val currency: String) {\n    fun format(cents: Long) = "${cents / 100} $currency"\n}', why: '<code>open</code> lets subclasses depend on every detail, which is the fragile base class problem again. Extend through constructor parameters or interfaces you designed for it.' },
         ],
         visual(el) {
           const fees = { Card: 30, GooglePay: 0, PayPal: 25, Klarna: 40, Bank: 10 };
@@ -609,6 +954,160 @@ fun skipIntro(p: Seekable) = p.seek(30_000)   // LiveRadio can't be passed in`,
         quiz: [
           { q: 'Why is <code>override fun seek(ms: Long) = TODO()</code> a design smell?', options: ['TODO is deprecated', 'The class was forced to promise something it can’t do', 'It is slower'], a: 1, why: 'A stub that throws means the interface asks for more than this class supports. It also breaks Liskov.' },
           { q: 'After splitting, what happens if you call <code>skipIntro(radio)</code>?', options: ['It crashes at runtime', 'It does not compile', 'It silently does nothing'], a: 1, why: 'LiveRadio is not Seekable, so the compiler rejects the call.' },
+        ],
+        deeper: [
+          {
+            title: 'Fat interfaces in the Android SDK',
+            body: `<p>The SDK has fat interfaces of its own. <code>TextWatcher</code> makes you implement <code>beforeTextChanged</code>, <code>onTextChanged</code> and <code>afterTextChanged</code>, even if you only care about one. Most implementations leave two of them empty.</p>
+<p>The core-ktx library wraps such listeners in small functions. <code>doAfterTextChanged { }</code> asks for exactly one lambda and fills in the rest. Type in the field and compare what you had to write.</p>`,
+            code: `// The full interface: three methods, two of them empty
+search.addTextChangedListener(object : TextWatcher {
+    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+    override fun afterTextChanged(s: Editable?) { vm.onQuery(s.toString()) }
+})
+
+// core-ktx: ask only for the role you need
+search.doAfterTextChanged { vm.onQuery(it.toString()) }`,
+            visual(el) {
+              const WATCHER = [
+                ['search.addTextChangedListener(object : TextWatcher {', null],
+                ['    override fun beforeTextChanged(...) {}', 'idle'],
+                ['    override fun onTextChanged(...) {}', 'idle'],
+                ['    override fun afterTextChanged(s: Editable?) { vm.onQuery(s.toString()) }', 'used'],
+                ['})', null],
+              ];
+              const KTX = [['search.doAfterTextChanged { vm.onQuery(it.toString()) }', 'used']];
+              let ktx = false, n = 0;
+              const code = h('div', { class: 'oo-code' });
+              const stat = h('span', { class: 'oo-stat' });
+              const field = h('input', { class: 'oo-isp-field', id: 'oo-isp-field', type: 'text', value: 'kot', autocomplete: 'off', spellcheck: 'false' });
+              const o = out('');
+              let lineEls = [];
+              function paint() {
+                const L = ktx ? KTX : WATCHER;
+                lineEls = L.map(([t, role]) => { const d = h('div', { class: 'oo-line', html: hl(t) }); d.role = role; return d; });
+                code.replaceChildren(...lineEls);
+                stat.innerHTML = ktx ? 'callbacks you wrote: <b>1</b>, empty ones: <b>0</b>' : 'callbacks you wrote: <b>3</b>, empty ones: <b>2</b>';
+              }
+              function onInput() {
+                n++;
+                const used = lineEls.filter(l => l.role);
+                used.forEach((l, i) => setTimeout(() => { if (el.isConnected) replay(l, l.role === 'used' ? 'oo-isp-blink' : 'oo-isp-idle'); }, i * 160));
+                say(o, ktx
+                  ? `${hl(`vm.onQuery("${field.value}")`)} <span class="muted">one callback ran</span>`
+                  : `${hl(`vm.onQuery("${field.value}")`)} <span class="muted">three callbacks ran, two of them did nothing</span>`);
+              }
+              field.addEventListener('input', onInput);
+              const typeBtn = cmd('type "l"', () => { if (field.value.length > 16) field.value = 'kot'; field.value += 'l'; onInput(); });
+              const modes = [act('object : TextWatcher', () => { ktx = false; press(modes, modes[0]); paint(); say(o, 'Three methods to implement. Type to see which ones run.'); }), act('doAfterTextChanged { }', () => { ktx = true; press(modes, modes[1]); paint(); say(o, 'One lambda. core-ktx supplies the empty methods for you.'); })];
+              press(modes, modes[0]); paint();
+              say(o, 'Type in the field or press the type button.');
+              el.append(
+                h('div', { class: 'controls' }, modes),
+                code, stat,
+                h('label', { class: 'oo-label', for: 'oo-isp-field' }, 'search field'),
+                h('div', { class: 'oo-row' }, field, typeBtn),
+                o);
+            },
+          },
+          {
+            title: 'Ask for a capability at runtime',
+            body: `<p>Sometimes you hold the broad role and want to offer more when the object can do it. A player screen gets a <code>Playable</code>, and shows a seek bar only if that object is also <code>Seekable</code>. Check with <code>is</code> or <code>as?</code>, and the smart cast gives you the narrower role.</p>
+<p>LiveRadio never pretends to seek. The screen just doesn't offer it.</p>`,
+            code: `@Composable
+fun PlayerControls(player: Playable) {
+    Row {
+        PlayPauseButton(player)
+        if (player is Seekable) SeekBar(onSeek = player::seek)   // smart cast
+        (player as? Downloadable)?.let { DownloadButton(it) }
+    }
+}`,
+            visual(el) {
+              const ITEMS = [
+                { n: 'LiveRadio', roles: ['Playable'] },
+                { n: 'Podcast', roles: ['Playable', 'Seekable', 'Downloadable'] },
+                { n: 'LocalSong', roles: ['Playable', 'Seekable'] },
+              ];
+              let cur = ITEMS[1], busy = false;
+              const decl = h('div', { class: 'kt oo-wrap' });
+              const checks = [
+                { src: 'if (player is Seekable)', role: 'Seekable' },
+                { src: 'player as? Downloadable', role: 'Downloadable' },
+              ].map(c => { const res = h('span', { class: 'oo-pill' }); const row = h('div', { class: 'oo-row' }, h('span', { class: 'kt', html: hl(c.src) }), res); row.c = c; row.res = res; return row; });
+              const ctrls = h('div', { class: 'oo-isp-ctrls' });
+              const screen = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'PlayerControls'), ctrls);
+              const o = out('');
+              const btns = ITEMS.map(it => cmd(`PlayerControls(${it.n}())`, () => show(it)));
+              async function show(it) {
+                if (busy) return; busy = true;
+                cur = it; press(btns, btns[ITEMS.indexOf(it)]);
+                decl.innerHTML = hl(`class ${it.n} : ${it.roles.join(', ')}`); replay(decl, 'pop-soft');
+                ctrls.replaceChildren(h('span', { class: 'oo-pill oo-acc drop-in' }, 'Play / Pause'));
+                for (const row of checks) {
+                  row.res.className = 'oo-pill oo-ghost'; row.res.textContent = '...';
+                }
+                for (const row of checks) {
+                  await sleep(380); if (!el.isConnected) return;
+                  const yes = it.roles.includes(row.c.role);
+                  row.res.className = `oo-pill ${yes ? 'oo-ok' : 'oo-ghost'}`; row.res.textContent = yes ? 'true' : 'false';
+                  replay(row.res, 'pop');
+                  if (yes) ctrls.append(row.c.role === 'Seekable' ? h('div', { class: 'oo-isp-seek drop-in', role: 'img', 'aria-label': 'Seek bar' }) : h('span', { class: 'oo-pill oo-acc drop-in' }, 'Download'));
+                }
+                const extra = it.roles.length - 1;
+                say(o, extra ? `${it.n} can do ${extra} more thing${extra > 1 ? 's' : ''}, so the screen shows ${extra > 1 ? 'both extra controls' : 'a seek bar'}.` : 'LiveRadio is only Playable. No stub, no crash, no seek bar.');
+                busy = false;
+              }
+              decl.innerHTML = hl('class Podcast : Playable, Seekable, Downloadable');
+              press(btns, btns[1]);
+              ctrls.append(h('span', { class: 'oo-pill oo-acc' }, 'Play / Pause'), h('div', { class: 'oo-isp-seek', role: 'img', 'aria-label': 'Seek bar' }), h('span', { class: 'oo-pill oo-acc' }, 'Download'));
+              checks.forEach(r => { r.res.className = 'oo-pill oo-ok'; r.res.textContent = 'true'; });
+              say(o, 'Hand the screen a different player.');
+              el.append(
+                h('div', { class: 'controls' }, btns), decl,
+                h('div', { class: 'oo-pair' }, h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'checks'), checks), screen),
+                o);
+            },
+          },
+          {
+            title: 'Split by client: readers and writers',
+            body: `<p>Roles don't have to follow what an object is. Often the best split follows who calls it. Most screens only read articles, and one editor screen writes them. Give each the interface it needs, and let one repository implement both.</p>
+<p>A reading screen then can't delete anything by accident, and its test fake has two methods instead of ten.</p>`,
+            code: `interface ArticleReader {
+    fun observe(id: String): Flow<Article>
+    fun latest(): Flow<List<Article>>
+}
+interface ArticleWriter {
+    suspend fun save(article: Article)
+    suspend fun delete(id: String)
+}
+
+class ArticleRepository @Inject constructor(
+    private val dao: ArticleDao,
+) : ArticleReader, ArticleWriter { /* ... */ }
+// bind both interfaces to ArticleRepository with @Binds
+
+@HiltViewModel
+class ReaderViewModel @Inject constructor(articles: ArticleReader) : ViewModel()
+@HiltViewModel
+class EditorViewModel @Inject constructor(articles: ArticleWriter) : ViewModel()`,
+          },
+        ],
+        underHood: {
+          body: `<p>Small interfaces cost nothing at runtime. Implementing five of them adds five entries to the class's interface list, and a call through any of them is one <code>invokeinterface</code>. <code>player is Seekable</code> compiles to a JVM <code>instanceof</code>, and the smart cast after it is a plain <code>checkcast</code>.</p>
+<p>The <code>TODO()</code> stubs that a fat interface forces on you have a story too. <code>TODO()</code> is an inline function that returns <code>Nothing</code> and always throws <code>NotImplementedError</code>. Since <code>Nothing</code> fits any return type, a stub compiles anywhere, and the crash waits for runtime.</p>`,
+          code: `// Kotlin
+if (player is Seekable) player.seek(30_000)
+
+// JVM, simplified
+if (player instanceof Seekable) {
+    ((Seekable) player).seek(30_000L);   // checkcast, then invokeinterface
+}`,
+        },
+        mistakes: [
+          { title: 'Asking for the whole repository', bad: 'class TitleBar(private val repo: ArticleRepository) {\n    fun title(id: String) = repo.observe(id).map { it.title }\n}\n// its fake must stub all ten repository methods', good: 'class TitleBar(private val articles: ArticleReader) {\n    fun title(id: String) = articles.observe(id).map { it.title }\n}', why: 'Depending on the fat type ties the class to methods it never calls, and every fake has to stub them. Ask for the smallest role that covers the call.' },
+          { title: 'Empty default bodies to dodge the split', bad: 'interface MediaPlayer {\n    fun play()\n    fun seek(ms: Long) {}      // "optional"\n    fun download() {}\n}\nclass LiveRadio : MediaPlayer {\n    override fun play() { /* ... */ }\n}', good: 'interface Playable { fun play() }\ninterface Seekable { fun seek(ms: Long) }\nclass LiveRadio : Playable {\n    override fun play() { /* ... */ }\n}', why: 'The <code>TODO()</code> crash turns into silence: the seek button does nothing and nobody knows why. The type still claims a skill it doesn\'t have.' },
+          { title: 'Splitting roles that always travel together', bad: 'interface Playable { fun play() }\ninterface Pausable { fun pause() }\n\nfun controls(p: Playable, q: Pausable)   // always the same object', good: 'interface Playable {\n    fun play()\n    fun pause()\n}\n\nfun controls(p: Playable)', why: 'If no class implements one without the other and no caller needs just one, the split only adds ceremony. Split where callers really differ.' },
         ],
         visual(el) {
           const caps = { LiveRadio: ['play'], Podcast: ['play', 'seek', 'download'] };

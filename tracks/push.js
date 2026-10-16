@@ -124,7 +124,385 @@
 @media (max-width: 640px) {
   .plt-split { grid-template-columns: minmax(0, 1fr); }
 }
+/* depth pass 2 */
+.plt-ps2-wrap .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.plt-ps2-set { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 600 0.8rem var(--body); cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.plt-ps2-set:focus-visible { outline: 2px solid var(--accent); }
+.plt-ps2-set.plt-ps2-hi { border: 2px solid var(--warm); background: var(--warm-soft); }
+.plt-ps2-knob { flex: none; width: 30px; height: 16px; border-radius: 99px; background: var(--sunk); border: 1px solid var(--line); position: relative; transition: background 0.2s; }
+.plt-ps2-knob::after { content: ""; position: absolute; top: 1px; left: 1px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform 0.2s, background 0.2s; }
+.plt-ps2-set[aria-pressed="true"] .plt-ps2-knob { background: var(--accent-soft); }
+.plt-ps2-set[aria-pressed="true"] .plt-ps2-knob::after { transform: translateX(14px); background: var(--accent); }
+.plt-ps2-dlg { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--surface); border: 2px solid var(--accent); box-shadow: var(--shadow); font-size: 0.82rem; }
+.plt-ps2-dlg button { all: unset; cursor: pointer; font: 700 0.82rem var(--body); color: var(--accent); padding: 4px 0; }
+.plt-ps2-dlg button:focus-visible { outline: 2px solid var(--accent); }
+.plt-ps2-url { font: 600 0.7rem var(--mono); padding: 5px 8px; border-radius: 8px; background: var(--sunk); overflow-wrap: anywhere; }
+.plt-ps2-url.plt-ps2-evil { background: var(--err-soft); color: var(--err); }
+.plt-ps2-crash { border: 2px solid var(--err); }
 `;
+
+  // ─── Depth pass 2: channels, deep links ────────────────────────────────
+  const channelsDepth = {
+    deeper: [
+      {
+        title: 'Check before you rely on it',
+        body: `<p>The user can switch off all of your notifications, or just one channel. Either way <code>notify()</code> returns normally and nothing appears. Before a feature that depends on alerts, check both levels: <code>areNotificationsEnabled()</code> for the app, and the channel's <code>importance</code>, which is <code>IMPORTANCE_NONE</code> when the user blocked it.</p>
+<p>If something is off, say why it matters and open the exact settings screen. <code>ACTION_CHANNEL_NOTIFICATION_SETTINGS</code> with your package name and channel id goes straight to that channel.</p>`,
+        code: `fun goalAlertsBlocked(context: Context): Boolean {
+    val nm = context.getSystemService(NotificationManager::class.java)
+    if (!nm.areNotificationsEnabled()) return true
+    val channel = nm.getNotificationChannel(GOALS_CHANNEL) ?: return true   // minSdk 26
+    return channel.importance == NotificationManager.IMPORTANCE_NONE
+}
+
+fun openGoalSettings(context: Context) {
+    context.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        putExtra(Settings.EXTRA_CHANNEL_ID, GOALS_CHANNEL)
+    })
+}`,
+        visual(el) {
+          let appOn = true, goalsOn = false, transfersOn = true, screen = 'app', busy = false, n = 0;
+          const GOALS = ['Goal! 1-0, 23’', 'Goal! 1-1, 51’', 'Goal! 2-1, 88’'];
+          const ph = phone();
+          const shade = h('div', { class: 'plt-shade' });
+          const o = out();
+          const sw = (label, on, onclick, hi) => h('button', { class: 'plt-ps2-set' + (hi ? ' plt-ps2-hi' : ''), 'aria-pressed': String(on), onclick }, h('span', {}, label), h('span', { class: 'plt-ps2-knob', 'aria-hidden': 'true' }));
+          function paint(hiGoals) {
+            if (screen === 'app') {
+              ph.screen.replaceChildren(h('div', { class: 'plt-appbar' }, 'Scores'),
+                h('div', { class: 'plt-note' }, h('b', {}, 'Galatasaray'), h('span', {}, 'Following · goal alerts')),
+                h('p', { class: 'plt-shade-title' }, 'Notification shade'), shade);
+            } else {
+              ph.screen.replaceChildren(h('div', { class: 'plt-appbar plt-ext' }, 'Settings · Scores'),
+                sw('All Scores notifications', appOn, () => { appOn = !appOn; paint(hiGoals); }),
+                sw('Goal alerts', goalsOn, () => { goalsOn = !goalsOn; paint(hiGoals); if (goalsOn) say(o, '<span class="good">The user turned Goal alerts back on.</span> Go back to the app.'); }, hiGoals),
+                sw('Transfer news', transfersOn, () => { transfersOn = !transfersOn; paint(hiGoals); }),
+                h('button', { class: 'plt-note plt-tap', onclick() { screen = 'app'; paint(); say(o, 'Back in the app.'); } }, h('b', {}, '← Back to Scores')));
+            }
+          }
+          async function post() {
+            if (busy) return; busy = true;
+            try {
+              const text = GOALS[n++ % GOALS.length];
+              say(o, `${hl('notify(goalId, goal)')} <span class="muted">// returns normally</span>`);
+              await sleep(300); if (!el.isConnected) return;
+              if (!appOn || !goalsOn) { replay(ph.dev, 'shake'); o.append(h('div', { class: 'line drop-in', html: `<span class="bad">nothing shown:</span> ${!appOn ? 'the app’s notifications are off' : 'the goals channel is blocked'}. No exception, so your code can’t tell.` })); return; }
+              if (screen !== 'app') { screen = 'app'; paint(); }
+              shade.prepend(note('goals · HIGH', 'Galatasaray', text, 'drop-in'));
+              while (shade.children.length > 3) shade.lastElementChild.remove();
+              o.append(h('div', { class: 'line drop-in', html: '<span class="good">shown.</span>' }));
+            } finally { busy = false; }
+          }
+          function check() {
+            if (busy) return;
+            const blocked = !appOn || !goalsOn;
+            say(o, `${hl('goalAlertsBlocked(context)')} = <span class="${blocked ? 'bad' : 'good'}">${blocked}</span> <span class="muted">// ${!appOn ? 'areNotificationsEnabled() is false' : !goalsOn ? 'channel importance is IMPORTANCE_NONE' : 'both levels are on'}</span>`);
+            if (blocked) o.append(h('div', { class: 'line drop-in' }, 'Show a short explanation with a button to the settings.'));
+          }
+          function openSettings() {
+            if (busy) return;
+            screen = 'settings'; paint(true); replay(ph.dev, 'pop-soft');
+            say(o, `${hl('openGoalSettings(context)')} <span class="muted">// lands on the channel. Tap the highlighted switch on the phone.</span>`);
+          }
+          paint();
+          o.innerHTML = 'The user blocked the Goal alerts channel in Settings last week. Post a goal, then check.';
+          el.append(h('div', { class: 'plt-split' },
+            h('div', { class: 'plt-col' },
+              h('div', { class: 'controls plt-row plt-ps2-wrap' }, cmd('notify(goalId, goal)', post), cmd('goalAlertsBlocked(context)', check), cmd('openGoalSettings(context)', openSettings)),
+              o),
+            ph.dev));
+        },
+      },
+      {
+        title: 'The permission dialog has two chances',
+        body: `<p>On Android 13+, <code>POST_NOTIFICATIONS</code> follows the usual runtime permission rules. If the user denies it twice, the system stops showing the dialog, and every later request comes back denied at once. After the first denial, <code>shouldShowRequestPermissionRationale()</code> returns true. That is your moment to explain the value in your own UI before you ask again.</p>
+<p>Once the dialog is gone for good, only the app's notification settings can turn it on, so link there instead of calling <code>launch()</code> again. Apps that still target Android 12L or lower get the dialog from the system when they create their first channel, at a moment they don't choose.</p>`,
+        code: `fun onFollowClicked() {
+    when {
+        hasNotificationPermission() -> follow()
+        shouldShowRequestPermissionRationale(POST_NOTIFICATIONS) -> showWhyAlertsDialog()
+        askedBefore && !shouldShowRequestPermissionRationale(POST_NOTIFICATIONS) ->
+            showOpenSettingsBanner()            // the dialog won't appear any more
+        else -> { askedBefore = true; launcher.launch(POST_NOTIFICATIONS) }
+    }
+}`,
+        visual(el) {
+          let granted = false, denials = 0, dialog = false, settings = false;
+          const ph = phone();
+          const o = out();
+          const st = { g: tag(''), d: tag(''), r: tag('') };
+          function paintTags() {
+            st.g.textContent = `granted: ${granted}`; st.g.className = 'plt-tag ' + (granted ? 'plt-ok' : 'plt-no');
+            st.d.textContent = `denials: ${denials}`; st.d.className = 'plt-tag ' + (denials >= 2 ? 'plt-no' : denials ? 'plt-wait' : '');
+            const r = !granted && denials === 1;
+            st.r.textContent = `rationale: ${r}`; st.r.className = 'plt-tag ' + (r ? 'plt-acc' : '');
+          }
+          function paint() {
+            const kids = [h('div', { class: 'plt-appbar' }, 'Scores'), h('div', { class: 'plt-note' }, h('b', {}, 'Galatasaray'), h('span', {}, granted ? 'Goal alerts on' : 'Goal alerts need permission'))];
+            if (settings) {
+              ph.screen.replaceChildren(h('div', { class: 'plt-appbar plt-ext' }, 'App info · Notifications'),
+                h('button', { class: 'plt-ps2-set', 'aria-pressed': String(granted), onclick() { granted = !granted; paintTags(); paint(); say(o, granted ? '<span class="good">Allowed from settings.</span> The only way back after two denials.' : 'Turned off again in settings.'); } }, h('span', {}, 'All Scores notifications'), h('span', { class: 'plt-ps2-knob', 'aria-hidden': 'true' })),
+                h('button', { class: 'plt-note plt-tap', onclick() { settings = false; paint(); } }, h('b', {}, '← Back to Scores')));
+              return;
+            }
+            if (dialog) kids.push(h('div', { class: 'plt-ps2-dlg drop-in', role: 'dialog' },
+              h('b', {}, 'Allow Scores to send you notifications?'),
+              h('button', { onclick: () => answer(true) }, 'Allow'),
+              h('button', { onclick: () => answer(false) }, 'Don’t allow')));
+            ph.screen.replaceChildren(...kids);
+          }
+          function answer(ok) {
+            dialog = false;
+            if (ok) granted = true; else denials++;
+            paintTags(); paint();
+            say(o, ok ? '<span class="good">callback: granted = true</span>' : denials === 1 ? '<span class="bad">callback: granted = false.</span> Rationale is now true: explain, then you get one more try.' : '<span class="bad">callback: granted = false.</span> Second denial. The system won’t show this dialog again.');
+          }
+          function ask() {
+            if (dialog || settings) return;
+            say(o, hl('launcher.launch(Manifest.permission.POST_NOTIFICATIONS)'));
+            if (granted) { o.append(h('div', { class: 'line drop-in', html: '<span class="good">callback: granted = true</span>, at once. Already allowed.' })); return; }
+            if (denials >= 2) { replay(ph.dev, 'shake'); o.append(h('div', { class: 'line drop-in', html: '<span class="bad">callback: granted = false</span>, at once. No dialog. Send the user to settings instead.' })); return; }
+            dialog = true; paint();
+            o.append(h('div', { class: 'line drop-in' }, 'The system dialog is up. Answer it on the phone.'));
+          }
+          function rationale() {
+            const r = !granted && denials === 1;
+            say(o, `${hl('shouldShowRequestPermissionRationale(POST_NOTIFICATIONS)')} = ${r}`);
+            o.append(h('div', { class: 'line drop-in' }, granted ? 'Already granted: nothing to explain.' : denials === 0 ? 'Never denied: just ask.' : denials === 1 ? 'Denied once: show your explanation now.' : 'False again, but now because the user denied twice. Combine it with your own "asked before" flag.'));
+          }
+          function openSettings() { if (dialog) return; settings = true; paint(); say(o, 'App notification settings. Flip the switch on the phone.'); }
+          paintTags(); paint();
+          o.innerHTML = 'The user just tapped Follow. Ask for the permission.';
+          el.append(h('div', { class: 'plt-split' },
+            h('div', { class: 'plt-col' },
+              h('div', { class: 'controls plt-row plt-ps2-wrap' }, cmd('launcher.launch(POST_NOTIFICATIONS)', ask), cmd('shouldShowRequestPermissionRationale(...)', rationale), act('Open notification settings', openSettings)),
+              h('div', { class: 'plt-group' }, st.g, st.d, st.r),
+              o),
+            ph.dev));
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>Channels live in <code>system_server</code>, not in your app. The notification manager stores them per package and saves them to disk along with every change the user makes. When you call <code>createNotificationChannel()</code> for an id it already knows, it keeps the stored behavior, such as importance and sound, and only takes your new name and description.</p>
+<p>When you post, the system looks up the channel by id. If the channel is missing or blocked, or the app's notifications are off, the post is dropped there, so your process never hears about it. Deleted channels are not forgotten either: the settings screen shows how many channels an app has deleted, as a guard against spam.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'No small icon',
+        bad: `val n = NotificationCompat.Builder(context, GOALS_CHANNEL)
+    .setContentTitle("Goal!")
+    .setContentText("Galatasaray 1-0")
+    .build()`,
+        good: `val n = NotificationCompat.Builder(context, GOALS_CHANNEL)
+    .setSmallIcon(R.drawable.ic_stat_goal)   // white shape on transparent
+    .setContentTitle("Goal!")
+    .setContentText("Galatasaray 1-0")
+    .build()`,
+        why: 'Posting a notification without a small icon fails with <code>IllegalArgumentException: Invalid notification (no valid small icon)</code>. The status bar draws only the icon’s alpha, so use a flat vector shape.',
+      },
+      {
+        title: 'One channel for everything',
+        bad: `NotificationChannel("general", "Notifications", IMPORTANCE_HIGH)
+// goals, transfer rumours and promotions all go here`,
+        good: `NotificationChannel("goals", "Goal alerts", IMPORTANCE_HIGH)
+NotificationChannel("transfers", "Transfer news", IMPORTANCE_DEFAULT)
+NotificationChannel("promos", "Offers", IMPORTANCE_LOW)`,
+        why: 'When one promotion annoys the user, they block the only channel and lose goal alerts too. Separate channels let them mute just the noise.',
+      },
+      {
+        title: 'Asking for the permission on first launch',
+        bad: `override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)   // before anything
+}`,
+        good: `fun onFollowTeam(team: Team) {
+    viewModel.follow(team)
+    if (Build.VERSION.SDK_INT >= 33 && !hasNotificationPermission()) {
+        askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)   // the user just asked for alerts
+    }
+}`,
+        why: 'With no context the user is likely to tap "Don’t allow", and you only get two dialogs. Ask right after an action that clearly needs notifications.',
+      },
+    ],
+  };
+
+  const deeplinksDepth = {
+    deeper: [
+      {
+        title: 'Make each PendingIntent different where it counts',
+        body: `<p>The system keeps one PendingIntent per key: your package, the request code, and the Intent as compared by <code>filterEquals()</code>, which looks at action, data, type, identifier, class and categories but not extras. Ask again with the same key and you get the existing one back. The flag decides what happens to it: <code>FLAG_UPDATE_CURRENT</code> swaps in the new extras, no flag keeps the old ones, and <code>FLAG_CANCEL_CURRENT</code> cancels the old one, so its notification stops working.</p>
+<p>The cleanest fix is to put the id in the data URI. Then each article has its own Intent, whatever the request code.</p>`,
+        code: `val intent = Intent(
+    Intent.ACTION_VIEW,
+    "https://news.example.com/article/$id".toUri(),   // different data: different PendingIntent
+    context, ArticleActivity::class.java,
+)
+val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)`,
+        visual(el) {
+          const KEYS = { rc0: 'request code 0, id in extras', rcid: 'request code = id', uri: 'id in the data URI' };
+          const FLAGS = { none: 'FLAG_IMMUTABLE', upd: 'FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE', cancel: 'FLAG_CANCEL_CURRENT or FLAG_IMMUTABLE' };
+          let key = 'rc0', flag = 'upd', records = [], notes = {}, busy = false;
+          const ph = phone();
+          const shade = h('div', { class: 'plt-shade' });
+          ph.screen.append(h('p', { class: 'plt-shade-title' }, 'Notification shade'), shade);
+          const table = h('div', { class: 'plt-table' });
+          const src = h('div', { class: 'kt' });
+          const o = out();
+          const keyOf = id => (key === 'rc0' ? 'rc 0 · /article' : key === 'rcid' ? `rc ${id} · /article` : `rc 0 · /article/${id}`);
+          function paintSrc() {
+            const rc = key === 'rcid' ? 'id' : '0';
+            const intent = key === 'uri' ? 'Intent(ACTION_VIEW, ".../article/$id".toUri(), ctx, ArticleActivity::class.java)' : 'Intent(ctx, ArticleActivity::class.java).putExtra("id", id)';
+            src.innerHTML = hl(`PendingIntent.getActivity(ctx, ${rc}, ${intent}, ${FLAGS[flag]})`);
+          }
+          function paintTable() {
+            table.replaceChildren(h('div', { class: 'plt-tr plt-th' }, h('span', {}, 'key'), h('span', {}, 'opens'), h('span', {}, 'state')),
+              ...(records.length ? records.map(r => h('div', { class: 'plt-tr' + (r.dead ? ' plt-gone' : '') }, h('span', {}, r.k), h('span', {}, `article ${r.id}`), r.dead ? tag('canceled', 'no') : tag('live', 'ok')))
+                : [h('span', { class: 'plt-empty' }, 'no PendingIntents yet')]));
+          }
+          function get(id) {
+            const k = keyOf(id), ex = records.find(r => r.k === k && !r.dead);
+            if (!ex) { const r = { k, id }; records.push(r); return [r, 'new']; }
+            if (flag === 'upd') { ex.id = id; return [ex, 'existing, extras replaced']; }
+            if (flag === 'cancel') { ex.dead = true; const r = { k, id }; records.push(r); return [r, 'old one canceled, new one made']; }
+            return [ex, 'existing, old extras kept'];
+          }
+          async function post() {
+            if (busy) return; busy = true;
+            try {
+              records = []; notes = {}; shade.replaceChildren(); paintTable();
+              say(o, 'Posting breaking news for article 41, then 42.');
+              for (const id of [41, 42]) {
+                await sleep(450); if (!el.isConnected) return;
+                const [r, what] = get(id);
+                notes[id] = r;
+                const n = h('button', { class: 'plt-note plt-tap drop-in', onclick: () => tap(id) }, h('span', { class: 'plt-note-ch' }, 'news · tap to open'), h('b', {}, `Article ${id}`), h('span', {}, 'Breaking news'));
+                shade.prepend(n);
+                paintTable();
+                o.append(h('div', { class: 'line drop-in' }, `article ${id}: ${what}`));
+              }
+              o.append(h('div', { class: 'line drop-in' }, 'Tap each notification on the phone.'));
+            } finally { busy = false; }
+          }
+          function tap(id) {
+            if (busy) return;
+            const r = notes[id];
+            if (!r) return;
+            if (r.dead) { replay(ph.dev, 'shake'); say(o, `Article ${id} notification: <span class="bad">nothing happens.</span> Its PendingIntent was canceled.`); return; }
+            const ok = r.id === id;
+            say(o, `Article ${id} notification opens <span class="${ok ? 'good' : 'bad'}">article ${r.id}</span>${ok ? '.' : '. Wrong article.'}`);
+          }
+          const keys = choice('identity', Object.keys(KEYS), key, v => { if (busy) return false; key = v; paintSrc(); records = []; notes = {}; shade.replaceChildren(); paintTable(); }, v => KEYS[v]);
+          const flags = choice('flags', Object.keys(FLAGS), flag, v => { if (busy) return false; flag = v; paintSrc(); records = []; notes = {}; shade.replaceChildren(); paintTable(); }, v => ({ none: 'none', upd: 'UPDATE_CURRENT', cancel: 'CANCEL_CURRENT' })[v]);
+          paintSrc(); paintTable();
+          o.innerHTML = 'Pick how the PendingIntent is made, then post two notifications.';
+          el.append(keys.el, flags.el, src,
+            h('div', { class: 'plt-split' },
+              h('div', { class: 'plt-col' }, h('div', { class: 'controls plt-row' }, act('Post article 41, then 42', post)), h('span', { class: 'plt-label' }, 'PendingIntents the system holds'), table, o),
+              ph.dev));
+        },
+      },
+      {
+        title: 'Treat deep link input as untrusted',
+        body: `<p>Any app, web page or <code>adb</code> command can fire your exported deep link with whatever it likes in the URI. App Link verification decides which app opens your https links. It doesn't stop another app from sending your Activity a crafted Intent.</p>
+<p>So parse defensively: check scheme, host and path, parse ids strictly, and never load a URL from a parameter into a WebView or a redirect unless its host is on an allowlist. Anything you don't recognize goes to the home screen.</p>`,
+        code: `sealed interface Route {
+    data class Article(val id: Long) : Route
+    data class Web(val url: Uri) : Route
+    data object Home : Route
+}
+
+fun parse(uri: Uri?): Route {
+    if (uri == null || uri.scheme != "https" || uri.host != "news.example.com") return Route.Home
+    val path = uri.pathSegments
+    return when {
+        path.size == 2 && path[0] == "article" ->
+            path[1].toLongOrNull()?.let { Route.Article(it) } ?: Route.Home
+        path == listOf("web") ->
+            uri.getQueryParameter("url")?.toUri()
+                ?.takeIf { it.scheme == "https" && it.host in TRUSTED_HOSTS }
+                ?.let { Route.Web(it) } ?: Route.Home
+        else -> Route.Home
+    }
+}`,
+        visual(el) {
+          const IN = [
+            { uri: 'https://news.example.com/article/42', raw: ['article', 'Article 42'], safe: ['article', 'Article 42'] },
+            { uri: 'https://news.example.com/article/42abc', raw: ['crash', 'NumberFormatException: For input string: "42abc"'], safe: ['home', 'not a number: home screen'] },
+            { uri: 'https://news.example.com/web?url=https://evil.example/login', raw: ['web', 'evil.example/login'], safe: ['home', 'host not on the allowlist: home screen'] },
+            { uri: 'https://news.example.com/web?url=https://news.example.com/help', raw: ['web', 'news.example.com/help'], safe: ['web', 'news.example.com/help'] },
+          ];
+          let validate = false;
+          const ph = phone();
+          const o = out();
+          function show(kind, text) {
+            const lines = () => [h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }), h('span', { class: 'plt-ln', style: 'width:80%' })];
+            if (kind === 'article') ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' }, text), ...lines());
+            else if (kind === 'home') ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' }, 'Home'), ...lines());
+            else if (kind === 'web') ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' }, 'News'), h('div', { class: 'plt-ps2-url' + (text.startsWith('evil') ? ' plt-ps2-evil' : '') }, text), text.startsWith('evil') ? h('div', { class: 'plt-note' }, h('b', {}, 'Sign in'), h('span', {}, 'email · password')) : null, ...lines());
+            else ph.screen.replaceChildren(h('div', { class: 'plt-note plt-ps2-crash drop-in' }, h('b', {}, 'Scores keeps stopping'), h('span', {}, 'Close app')));
+          }
+          function fire(x) {
+            const [kind, text] = validate ? x.safe : x.raw;
+            show(kind, text);
+            say(o, `${hl('adb shell am start -a android.intent.action.VIEW -d')} "${x.uri}"`);
+            const bad = kind === 'crash' || (kind === 'web' && text.startsWith('evil'));
+            if (bad) replay(ph.dev, 'shake');
+            o.append(h('div', { class: 'line drop-in', html: kind === 'crash' ? `<span class="bad">FATAL EXCEPTION: ${text}</span>` : kind === 'web' && bad ? '<span class="bad">your WebView shows a fake login page inside your app, under your app bar.</span>' : validate && kind === 'home' ? `<span class="good">rejected:</span> ${text}` : `<span class="good">opened:</span> ${text}` }));
+          }
+          const vt = toggle('plt-ps2-validate', 'parse with checks and an allowlist', false, v => { validate = v; say(o, v ? 'Routing through parse(). Fire the same links again.' : 'Raw handling: the code trusts every part of the URI.'); });
+          show('home', '');
+          o.innerHTML = 'The app reads ids and URLs straight from the URI. Fire some links at it.';
+          el.append(h('div', { class: 'plt-split' },
+            h('div', { class: 'plt-col' }, vt.el, h('div', { class: 'plt-events plt-ps2-wrap' }, IN.map(x => h('button', { class: 'cmd', onclick: () => fire(x) }, x.uri.replace('https://', '')))), o),
+            ph.dev));
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>A PendingIntent is a handle to a record kept by the activity manager in <code>system_server</code>. The record holds the Intent, the flags and your app's identity. Your process can die and the notification still works, because the system keeps the record. On a tap the system starts the stored Intent as your app, with your permissions.</p>
+<p><code>FLAG_IMMUTABLE</code> means whoever holds the handle can't fill in any part of the Intent when sending it. A mutable one lets the sender fill in missing fields, which inline reply needs to add the typed text. With an implicit Intent that is risky, since the holder could fill in where it goes. Apps targeting Android 14 get an exception when they create a mutable PendingIntent with an Intent that names no component or package.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'A mutable PendingIntent with an implicit Intent',
+        bad: `val reply = PendingIntent.getBroadcast(context, id,
+    Intent(ACTION_REPLY),                                 // no component, no package
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)`,
+        good: `val reply = PendingIntent.getBroadcast(context, id,
+    Intent(context, ReplyReceiver::class.java).setAction(ACTION_REPLY),
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)   // RemoteInput fills it in`,
+        why: 'Apps targeting Android 14 get an exception for the first form. Make the Intent explicit. Inline reply still needs <code>FLAG_MUTABLE</code> so the system can add the typed text.',
+      },
+      {
+        title: 'A custom scheme for links people share',
+        bad: `// <intent-filter>
+//     <action android:name="android.intent.action.VIEW" />
+//     <category android:name="android.intent.category.DEFAULT" />
+//     <category android:name="android.intent.category.BROWSABLE" />
+//     <data android:scheme="newsapp" android:host="article" />
+// </intent-filter>`,
+        good: `// <intent-filter android:autoVerify="true">
+//     <action android:name="android.intent.action.VIEW" />
+//     <category android:name="android.intent.category.DEFAULT" />
+//     <category android:name="android.intent.category.BROWSABLE" />
+//     <data android:scheme="https" android:host="news.example.com" android:pathPrefix="/article/" />
+// </intent-filter>`,
+        why: 'Any app can claim <code>newsapp://</code>, and the link is dead where your app isn’t installed. A verified https App Link opens your app when it’s there and your website when it isn’t.',
+      },
+      {
+        title: 'A notification trampoline',
+        bad: `// Tap goes to a receiver that logs, then starts the Activity
+.setContentIntent(PendingIntent.getBroadcast(context, id,
+    Intent(context, TapReceiver::class.java), PendingIntent.FLAG_IMMUTABLE))
+// TapReceiver.onReceive: analytics.log(...); context.startActivity(articleIntent)`,
+        good: `.setContentIntent(PendingIntent.getActivity(context, id,
+    articleIntent, PendingIntent.FLAG_IMMUTABLE))
+// ArticleActivity logs the open itself`,
+        why: 'Apps targeting Android 12 can’t start an Activity from a service or receiver that a notification tap started. The tap then does nothing. Point the PendingIntent at the Activity.',
+      },
+    ],
+  };
 
   Lab.addTrack({
     id: 'push',
@@ -188,6 +566,9 @@ fun showScore(context: Context, id: Int, text: String) {
           { q: 'Which importance shows a heads-up banner?', options: ['<code>IMPORTANCE_HIGH</code>', '<code>IMPORTANCE_DEFAULT</code>', '<code>IMPORTANCE_LOW</code>'], a: 0, why: 'DEFAULT makes a sound but does not pop up. Only HIGH shows the banner.' },
           { q: 'On Android 14 the user denied <code>POST_NOTIFICATIONS</code>. Your code calls <code>notify()</code>. What happens?', options: ['The notification shows anyway', 'Nothing is posted and no exception is thrown', 'It throws <code>SecurityException</code>'], a: 1, why: 'The system drops it quietly. Check the permission yourself so the UI can tell the user.' },
         ],
+        deeper: channelsDepth.deeper,
+        underHood: channelsDepth.underHood,
+        mistakes: channelsDepth.mistakes,
         visual(el) {
           const SCORES = ['Derby ends 2-1', 'Late equalizer, 1-1', 'Away win, 0-3', 'Penalties: 5-4'];
           const MSG = {
@@ -1009,6 +1390,9 @@ fun articleNotification(context: Context, id: String, title: String): Notificati
           { q: 'A notification opens <code>ArticleActivity</code> through a plain <code>getActivity()</code>. The user presses Back. Where do they land?', options: ['On your home screen Activity', 'On the device home screen', 'On the previous article'], a: 1, why: 'The new task holds only ArticleActivity. Use TaskStackBuilder or a Navigation deep link to put your main screen under it.' },
           { q: 'Your App Link filter has <code>autoVerify</code>, but <code>assetlinks.json</code> is missing. A user taps the link in a chat app on Android 13. What opens?', options: ['Your app', 'A chooser dialog', 'The browser'], a: 2, why: 'Since Android 12, unverified web links go to the default browser.' },
         ],
+        deeper: deeplinksDepth.deeper,
+        underHood: deeplinksDepth.underHood,
+        mistakes: deeplinksDepth.mistakes,
         visual(el) {
           const MODES = {
             plain: { label: 'getActivity()', code: 'PendingIntent.getActivity(ctx, 42, Intent(ctx, ArticleActivity::class.java), FLAG_IMMUTABLE)' },

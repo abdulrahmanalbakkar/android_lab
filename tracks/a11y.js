@@ -203,6 +203,69 @@
 .ay-lp-row { display: flex; align-items: center; gap: 8px; height: 44px; flex: none; padding: 0 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font: 700 0.8rem var(--body); }
 .ay-lp-row i { width: 32px; height: 32px; flex: none; border-radius: 8px; background: linear-gradient(135deg, var(--accent-soft), var(--warm-soft)); }
 .ay-lp-phone.ay-show .ay-shade { opacity: 0.6; }
+/* depth 2: why */
+.ay-d2-wl-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: min(260px, 100%); padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.ay-d2-col-btns .cmd { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+/* depth 2: targets */
+.ay-d2-kf { position: relative; width: min(320px, 100%); height: 190px; }
+.ay-d2-kf-item { position: absolute; box-sizing: border-box; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--muted); font: 500 0.8rem var(--body); overflow: hidden; white-space: nowrap; transition: border-color 0.2s, box-shadow 0.2s; }
+.ay-d2-kf-btn { justify-content: center; border-radius: 999px; background: var(--sunk); color: var(--ink); font-weight: 700; }
+.ay-d2-kf-click { border-color: var(--warm); box-shadow: 0 0 0 3px var(--warm-soft); }
+.ay-d2-chipui { width: min(300px, 100%); }
+.ay-d2-chip { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 6px 10px; border-radius: 10px; background: var(--bg); font: 600 0.86rem var(--body); min-width: 0; transition: background 0.2s; }
+.ay-d2-chip.ay-d2-chip-on { background: var(--accent-soft); }
+/* depth 2: text-scale */
+.ay-d2-tr-card { width: min(300px, 100%); padding: 6px 0; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); min-width: 0; }
+.ay-d2-tr-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 14px; min-width: 0; }
+.ay-d2-tr-i { flex: none; width: 24px; height: 24px; border-radius: 6px; background: var(--accent-soft); }
+.ay-d2-tr-txt { flex: 1 1 auto; display: flex; align-items: baseline; justify-content: space-between; gap: 2px 10px; min-width: 0; }
+.ay-d2-tr-l, .ay-d2-tr-v { min-width: 0; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: font-size 0.25s; }
+.ay-d2-tr-l { flex: 1 1 auto; font-weight: 600; }
+.ay-d2-tr-v { flex: 0 1 auto; color: var(--muted); }
+.ay-d2-tr-flow .ay-d2-tr-txt { flex-wrap: wrap; }
+.ay-d2-tr-flow .ay-d2-tr-l, .ay-d2-tr-flow .ay-d2-tr-v { flex: 0 0 auto; max-width: 100%; white-space: normal; overflow: visible; }
+.ay-d2-tr-cut { box-shadow: inset 0 -2px 0 var(--err); }
+.ay-d2-tc { width: min(300px, 100%); display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: var(--surface); color: var(--ink); min-width: 0; transition: filter 0.3s; }
+.ay-d2-tc.ay-d2-tc-gray { filter: grayscale(1); }
+.ay-d2-tc-field { position: relative; display: grid; padding: 18px 40px 8px 12px; border-radius: 8px; border: 2px solid var(--line); min-width: 0; }
+.ay-d2-tc-lab { position: absolute; top: 3px; left: 12px; font: 600 0.68rem var(--body); color: var(--muted); }
+.ay-d2-tc-val { font: 500 0.9rem var(--body); overflow-wrap: anywhere; }
+.ay-d2-tc-err { border-color: var(--err); }
+.ay-d2-tc-err .ay-d2-tc-lab { color: var(--err); }
+.ay-d2-tc-ico { display: none; position: absolute; right: 10px; top: 50%; width: 20px; height: 20px; margin-top: -10px; border-radius: 50%; background: var(--err); color: var(--surface); font: 800 0.8rem/20px var(--body); text-align: center; }
+.ay-d2-tc-msg { display: none; margin: -6px 0 0 12px; font-size: 0.78rem; color: var(--err); }
+.ay-d2-tc-words .ay-d2-tc-ico, .ay-d2-tc-words .ay-d2-tc-msg { display: block; }
+/* depth 2: window-size */
+.ay-d2-wh-stage { min-height: 290px; }
+.ay-d2-wh-win { display: grid; grid-template-rows: auto minmax(0, 1fr); max-width: 100%; border: 2px solid var(--ink); border-radius: 10px; background: var(--surface); color: var(--ink); overflow: hidden; transition: width 0.35s ease, height 0.35s ease; }
+.ay-d2-wh-top { padding: 3px 8px; font: 700 0.7rem var(--display); background: var(--accent-soft); white-space: nowrap; overflow: hidden; }
+.ay-d2-wh-win .ay-app { min-height: 0; overflow: hidden; }
+.ay-d2-wh-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.ay-d2-wa-win { width: min(340px, 100%); height: 170px; }
+.ay-d2-wa-app { display: flex; min-width: 0; min-height: 0; }
+.ay-d2-wa-app .ay-nav { box-sizing: border-box; padding: 6px 2px; align-items: center; }
+.ay-d2-wa-app .ay-nav i { width: 12px; height: 12px; }
+.ay-d2-wa-pane { flex: none; box-sizing: border-box; padding: 6px 4px; min-width: 0; overflow: hidden; border-left: 1px solid var(--line); }
+.ay-d2-wa-card { display: grid; gap: 4px; box-sizing: border-box; padding: 4px; border-radius: 6px; border: 1.5px solid var(--line); background: var(--bg); transition: width 0.3s ease; }
+.ay-d2-wa-img { display: block; height: 34px; border-radius: 4px; background: linear-gradient(135deg, var(--accent-soft), var(--ok-soft)); }
+.ay-d2-wa-specs { display: grid; gap: 3px; min-width: 0; }
+.ay-d2-wa-specs i { display: block; height: 5px; border-radius: 3px; background: var(--sunk); }
+.ay-d2-wa-card.ay-d2-wa-wide { grid-template-columns: 40% minmax(0, 1fr); }
+.ay-d2-wa-wide .ay-d2-wa-img { height: 48px; }
+.ay-d2-wa-card.ay-d2-wa-over { border-color: var(--err); box-shadow: 0 0 0 2px var(--err-soft); }
+/* depth 2: foldables */
+.ay-d2-fh { position: relative; width: min(300px, 100%); height: 180px; box-sizing: border-box; border-radius: 16px; border: 6px solid var(--code-bg); background: var(--surface); color: var(--ink); overflow: hidden; }
+.ay-d2-fh-content { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; padding: 8px; }
+.ay-d2-fh-split .ay-d2-fh-content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; }
+.ay-d2-fh-pane { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.ay-d2-fh-photo { height: 76px; border-radius: 8px; background: linear-gradient(135deg, var(--accent-soft), var(--warm-soft)); }
+.ay-d2-fh-info { display: grid; gap: 4px; font-size: 0.8rem; min-width: 0; }
+.ay-d2-fh-buy { justify-self: center; }
+.ay-d2-fh-hinge { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; transform: translateX(-50%); pointer-events: none; z-index: 1; }
+.ay-d2-fh-flat .ay-d2-fh-hinge { border-left: 1px dashed var(--line); }
+.ay-d2-fh-book .ay-d2-fh-hinge { width: 16px; background: linear-gradient(90deg, transparent, var(--line), transparent); }
+.ay-d2-fh-dual .ay-d2-fh-hinge { width: 18px; background: var(--code-bg); }
+.ay-d2-fs-val { font: 600 0.8rem var(--mono); color: var(--ink); overflow-wrap: anywhere; }
 `;
 
   Lab.addTrack({
@@ -256,6 +319,114 @@ fun ProductCard(product: Product, onFavorite: () -> Unit, onAdd: () -> Unit) {
           { q: 'In what order does a swipe right in TalkBack move through a screen?', options: ['Top to bottom, start to end, through the elements in order', 'Largest element first', 'Only through buttons'], a: 0, why: 'TalkBack follows the semantics order, which by default is reading order. Lesson 3 shows how to change it.' },
           { q: 'A heart icon sits next to the text "Favorite" inside one button. What should the icon’s <code>contentDescription</code> be?', options: ['"Heart"', '"Favorite"', '<code>null</code>'], a: 2, why: 'The text already names the button. A description on the icon would make TalkBack say it twice.' },
           { q: 'A user sets the largest font size in Settings. What changes in your app?', options: ['Text sized in sp grows, dp sizes stay', 'Everything doubles in size', 'Nothing unless you opt in'], a: 0, why: 'Font scale multiplies sp only. Lesson 4 covers what that does to your layouts.' },
+        ],
+        deeper: [
+          {
+            title: 'Write labels that say what happens',
+            body: `<p>A good <code>contentDescription</code> names the action or the content, in a few words. TalkBack adds the role and the hint itself, so leave out “button”, “icon” and “tap to”. Describe what the control does, not how it looks.</p>
+<p>Labels are user-facing text, so they belong in <code>strings.xml</code> like any other text. A hardcoded English label is read in English on a Turkish phone, while TalkBack speaks the role in Turkish around it.</p>`,
+            code: `IconButton(onClick = onFavorite) {
+    Icon(
+        Icons.Default.FavoriteBorder,
+        contentDescription = stringResource(R.string.add_to_favorites),
+    )
+}
+// values/strings.xml:     <string name="add_to_favorites">Add to favorites</string>
+// values-tr/strings.xml:  <string name="add_to_favorites">Favorilere ekle</string>`,
+            visual(el) {
+              const OPTS = [
+                { src: 'null', say: null, verdict: 'bad', note: 'no label: TalkBack can only say the role' },
+                { src: '"Heart icon"', say: 'Heart icon', verdict: 'bad', note: 'describes the look, not what it does' },
+                { src: '"Favorite button"', say: 'Favorite button', verdict: 'bad', note: 'TalkBack adds the role, so it says button twice' },
+                { src: '"Tap to add to favorites"', say: 'Tap to add to favorites', verdict: 'bad', note: 'TalkBack users double-tap, and TalkBack adds its own hint' },
+                { src: '"Add to favorites"', say: 'Add to favorites', verdict: 'good', note: 'the action, in a few words' },
+              ];
+              let pick = 4, tr = false, res = false;
+              const heart = h('span', { class: 'ay-ico ay-focus', html: ICON.heart });
+              const bar = h('div', { class: 'ay-d2-wl-bar', role: 'img', 'aria-label': 'Toolbar with a heart button in focus' }, h('span', { class: 'ay-title' }, 'Trail shoes'), heart);
+              const line = h('div', { class: 'kt' });
+              const o = out();
+              const trSw = sw('ay-d2-wl-tr', 'Phone language: Turkish');
+              const resSw = sw('ay-d2-wl-res', 'Label from strings.xml');
+              const btns = OPTS.map((x, i) => cmd(`contentDescription = ${x.src}`, () => { pick = i; if (i !== 4 && res) { res = false; resSw.input.checked = false; } paint(true); }));
+              function paint(anim) {
+                press(btns, btns[pick]);
+                const x = OPTS[pick];
+                const useRes = res && pick === 4;
+                line.innerHTML = hl(`Icon(Icons.Default.FavoriteBorder, contentDescription = ${useRes ? 'stringResource(R.string.add_to_favorites)' : x.src})`);
+                const role = tr ? 'Düğme' : 'Button';
+                const label = useRes && tr ? 'Favorilere ekle' : x.say;
+                const spoken = label ? `${label}, ${role}` : role;
+                let verdict = x.verdict, note = x.note;
+                if (pick === 4 && tr && !useRes) { verdict = 'bad'; note = 'hardcoded English on a Turkish phone'; }
+                if (pick === 4 && useRes) note = tr ? 'read from values-tr/strings.xml' : 'read from strings.xml';
+                if (anim) replay(heart, 'pop');
+                say(o, `TalkBack: <span class="good">"${esc(spoken)}"</span>  <span class="${verdict === 'good' ? 'good' : 'bad'}">// ${esc(note)}</span>`);
+              }
+              trSw.input.addEventListener('change', () => { tr = trSw.input.checked; paint(true); });
+              resSw.input.addEventListener('change', () => { res = resSw.input.checked; if (res && pick !== 4) pick = 4; paint(true); });
+              paint(false);
+              el.append(
+                h('div', { class: 'stage' }, bar), line,
+                h('div', { class: 'controls ay-d2-col-btns' }, btns),
+                h('div', { class: 'controls' }, trSw.el, resSw.el),
+                o);
+            },
+          },
+          {
+            title: 'Let tests catch the basics',
+            body: `<p>Manual checks with TalkBack and Accessibility Scanner find the most, but they don’t run on every change. Since Compose 1.8, UI tests can run the Accessibility Test Framework checks too. Add the <code>ui-test-junit4-accessibility</code> dependency and call <code>enableAccessibilityChecks()</code>. After that, every test action also checks for missing labels, small touch targets, low contrast and confusing traversal order, and fails the test when it finds one.</p>`,
+            code: `@get:Rule
+val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+@Test
+fun productCard_isAccessible() {
+    composeTestRule.setContent { AppTheme { ProductCard(sampleProduct, {}, {}) } }
+    composeTestRule.enableAccessibilityChecks()
+    composeTestRule.onRoot().tryPerformAccessibilityChecks()
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>TalkBack is an <code>AccessibilityService</code> running in its own process. It never sees your pixels or your code. When it needs the screen, the system asks your app’s process for a tree of <code>AccessibilityNodeInfo</code> objects: each node carries text, a content description, a class name that TalkBack turns into a role, the bounds and the actions it supports. Your app also sends <code>AccessibilityEvent</code>s when focus or content changes.</p>
+<p>A double-tap does not become a touch on your view. TalkBack asks the system to perform <code>ACTION_CLICK</code> on the focused node, and your app runs the click handler. Views build these nodes themselves. Compose builds them from its semantics tree, which the next lesson covers.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Text baked into an image, marked decorative',
+            bad: `Image(
+    painterResource(R.drawable.sale_banner),   // the bitmap says "50% off all shoes"
+    contentDescription = null,
+)`,
+            good: `Image(
+    painterResource(R.drawable.sale_banner),
+    contentDescription = stringResource(R.string.sale_banner),  // "50% off all shoes until Sunday"
+)`,
+            why: '<code>null</code> tells TalkBack there is nothing to read, but the banner carries the main message. Better still, draw the words with <code>Text</code> so they also grow with the font size.',
+          },
+          {
+            title: 'The same label on every row',
+            bad: `items(cart, key = { it.id }) { item ->
+    Row {
+        Text(item.name)
+        IconButton(onClick = { onRemove(item.id) }) {
+            Icon(Icons.Default.Delete, contentDescription = "Remove")
+        }
+    }
+}`,
+            good: `items(cart, key = { it.id }) { item ->
+    Row {
+        Text(item.name)
+        IconButton(onClick = { onRemove(item.id) }) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(R.string.remove_item, item.name),
+            )
+        }
+    }
+}`,
+            why: 'Swiping through the list, TalkBack says “Remove, Button” ten times. Put the item in the label, like “Remove Trail shoes”, so each stop makes sense on its own.',
+          },
         ],
         visual(el) {
           const fix = sw('ay-why-fix', 'Add labels and merge the stars');
@@ -693,6 +864,174 @@ Button(onClick = onChoose, Modifier.semantics { traversalIndex = -1f }) {
           { q: 'Two plan cards sit side by side. Without traversal groups, how does TalkBack read "Basic / $5" and "Pro / $12"?', options: ['Basic, $5, Pro, $12', 'Basic, Pro, $5, $12', 'Pro, $12, Basic, $5'], a: 1, why: 'Default order goes row by row. <code>isTraversalGroup</code> on each card fixes it.' },
           { q: 'Which element is visited first?', options: ['<code>traversalIndex = 1f</code>', '<code>traversalIndex = 0f</code>', '<code>traversalIndex = -1f</code>'], a: 2, why: 'Lower values come first within the traversal group. The default is 0.' },
         ],
+        deeper: [
+          {
+            title: 'Keyboard and D-pad: two kinds of focus moves',
+            body: `<p>Tablets with keyboards, Chromebooks and TVs move focus with keys. Tab and Shift+Tab move in one dimension, through the focusable elements in the order they appear on screen, and wrap at the end. Arrow keys and the D-pad move in two dimensions: to the closest element in that direction, with no wrapping.</p>
+<p>When the closest element is the wrong one, override a direction with <code>focusProperties</code>. Below, Down from the message field lands on Cancel, the nearest button. The fix sends it to Send. A mouse click clears focus, and the next Tab starts again from the first element.</p>`,
+            code: `val send = remember { FocusRequester() }
+
+OutlinedTextField(
+    message, onMessage,
+    Modifier.focusProperties { down = send },
+)
+Button(onClick = onSend, Modifier.focusRequester(send)) { Text("Send") }`,
+            visual(el) {
+              const IT = [
+                { id: 'name', label: 'Name', x: 0, y: 0, w: 40, h: 20 },
+                { id: 'email', label: 'Email', x: 44, y: 0, w: 56, h: 20 },
+                { id: 'msg', label: 'Message', x: 0, y: 28, w: 100, h: 32 },
+                { id: 'cancel', label: 'Cancel', x: 40, y: 68, w: 28, h: 20, btn: true },
+                { id: 'send', label: 'Send', x: 72, y: 68, w: 28, h: 20, btn: true },
+              ];
+              let at = null, lastPos = null, override = false;
+              for (const it of IT) it.el = h('div', { class: 'ay-d2-kf-item' + (it.btn ? ' ay-d2-kf-btn' : ''), style: `left:${it.x}%;top:${it.y}%;width:${it.w}%;height:${it.h}%` }, it.label);
+              const form = h('div', { class: 'ay-d2-kf', role: 'img', 'aria-label': 'Form with five focusable elements' }, IT.map(i => i.el));
+              const o = out();
+              const ov = sw('ay-d2-kf-ov', 'Message: focusProperties { down = send }');
+              const cx = i => i.x + i.w / 2, cy = i => i.y + i.h / 2;
+              function show(i, how) {
+                IT.forEach(x => x.el.classList.remove('ay-focus', 'ay-d2-kf-click'));
+                if (i == null) return;
+                at = i; lastPos = i;
+                IT[i].el.classList.add('ay-focus'); replay(IT[i].el, 'pop-soft');
+                say(o, `${esc(how)} <span class="muted">→</span> <span class="good">${IT[i].label}</span>`);
+              }
+              function tab(dir) {
+                const i = at == null ? (dir > 0 ? 0 : IT.length - 1) : (at + dir + IT.length) % IT.length;
+                const wrapped = at != null && ((dir > 0 && i === 0) || (dir < 0 && i === IT.length - 1));
+                show(i, `${dir > 0 ? 'Tab' : 'Shift+Tab'}${at == null ? ' (nothing focused, start from the first)' : wrapped ? ' (wraps around)' : ''}`);
+              }
+              function arrow(dx, dy, name) {
+                const from = at != null ? at : lastPos;
+                if (from == null) { say(o, 'Nothing focused yet. Press Tab first.'); return; }
+                const c = IT[from];
+                if (override && c.id === 'msg' && dy > 0) { show(IT.findIndex(x => x.id === 'send'), `${name} (focusProperties override)`); return; }
+                let best = null, score = Infinity;
+                IT.forEach((t, j) => {
+                  if (j === from) return;
+                  const major = dy > 0 ? t.y - (c.y + c.h) : dy < 0 ? c.y - (t.y + t.h) : dx > 0 ? t.x - (c.x + c.w) : c.x - (t.x + t.w);
+                  if (major < -0.01) return;
+                  const minor = dy ? Math.abs(cx(t) - cx(c)) : Math.abs(cy(t) - cy(c));
+                  const s = major * 2 + minor;
+                  if (s < score) { score = s; best = j; }
+                });
+                if (best == null) { replay(c.el, 'shake'); say(o, `${name}: <span class="muted">nothing further that way. 2D focus does not wrap.</span>`); at = from; c.el.classList.add('ay-focus'); return; }
+                show(best, `${name} (closest in that direction)`);
+              }
+              function click() {
+                IT.forEach(x => x.el.classList.remove('ay-focus'));
+                at = null; lastPos = 1;
+                IT[1].el.classList.add('ay-d2-kf-click'); replay(IT[1].el, 'pop');
+                say(o, '<span class="muted">Mouse click on Email: keyboard focus is cleared. Tab restarts at the first element. Arrows start from where you clicked.</span>');
+              }
+              ov.input.addEventListener('change', () => { override = ov.input.checked; say(o, override ? 'Down from Message now goes to Send.' : 'Down from Message goes to the nearest element below.'); });
+              say(o, 'Press Tab to start. Then try the arrows from Message.');
+              el.append(
+                h('div', { class: 'stage' }, form),
+                h('div', { class: 'controls' }, act('Tab', () => tab(1)), act('Shift+Tab', () => tab(-1)), act('←', () => arrow(-1, 0, 'Left'), { 'aria-label': 'Arrow left' }), act('↑', () => arrow(0, -1, 'Up'), { 'aria-label': 'Arrow up' }), act('↓', () => arrow(0, 1, 'Down'), { 'aria-label': 'Arrow down' }), act('→', () => arrow(1, 0, 'Right'), { 'aria-label': 'Arrow right' }), act('Click Email with the mouse', click)),
+                h('div', { class: 'controls' }, ov.el),
+                o);
+            },
+          },
+          {
+            title: 'clickable gives more than a tap handler',
+            body: `<p>A tap handler made with <code>pointerInput { detectTapGestures }</code> only handles touch. The element cannot take keyboard focus, has no role, and TalkBack does not offer to activate it. <code>clickable</code> adds focus, Enter key handling, the click action and an indication. For something with an on and off state, <code>toggleable</code> with a role also reports the state.</p>
+<p>Pick an implementation, then reach the chip by touch, by keyboard and with TalkBack.</p>`,
+            code: `Row(
+    Modifier
+        .toggleable(value = express, role = Role.Switch, onValueChange = onExpress)
+        .minimumInteractiveComponentSize()
+        .padding(horizontal = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+) {
+    Text("Express shipping")
+    Spacer(Modifier.width(8.dp))
+    Switch(checked = express, onCheckedChange = null)   // null: the Row handles input
+}`,
+            visual(el) {
+              const IMPL = [
+                { src: 'pointerInput { detectTapGestures { } }', focus: false, talk: () => 'Express shipping', note: 'no role, no action, no state' },
+                { src: 'clickable { }', focus: true, talk: () => 'Express shipping, double-tap to activate', note: 'an action, but no state' },
+                { src: 'toggleable(role = Role.Switch) { }', focus: true, talk: () => `Express shipping, ${on ? 'On' : 'Off'}, Switch`, note: 'role and state' },
+              ];
+              let impl = 0, on = false, kAt = null, tAt = null;
+              const back = h('span', { class: 'ay-ico', html: ICON.back });
+              const chip = h('span', { class: 'ay-d2-chip' }, h('span', {}, 'Express shipping'), h('span', { class: 'ay-sw' }));
+              const pay = h('span', { class: 'ay-pill' }, 'Pay');
+              const ui = h('div', { class: 'ay-set ay-d2-chipui' }, h('div', { class: 'ay-bar ay-between' }, back, h('span', { class: 'ay-title' }, 'Checkout')), h('div', { class: 'ay-set-row' }, chip), h('div', { class: 'ay-set-row' }, pay));
+              const o = out();
+              const els = { back, chip, pay };
+              const kStops = () => ['back', ...(IMPL[impl].focus ? ['chip'] : []), 'pay'];
+              const clear = () => Object.values(els).forEach(x => x.classList.remove('ay-focus'));
+              const paintChip = () => { chip.lastChild.classList.toggle('on', on); chip.classList.toggle('ay-d2-chip-on', on); };
+              const btns = IMPL.map((m, i) => cmd(`Modifier.${m.src}`, () => { impl = i; on = false; kAt = tAt = null; clear(); paintChip(); press(btns, btns[i]); say(o, `Chip now uses ${hl(m.src)}`); }));
+              function tap() { on = !on; paintChip(); replay(chip, 'pop'); say(o, `Touch: <span class="good">toggled ${on ? 'on' : 'off'}</span> <span class="muted">// all three handle a tap</span>`); }
+              function tabKey() {
+                const s = kStops(); kAt = kAt == null ? 0 : (s.indexOf(kAt) + 1) % s.length; kAt = s[kAt]; clear(); els[kAt].classList.add('ay-focus');
+                say(o, `Keyboard focus: <span class="good">${kAt === 'chip' ? 'the chip' : kAt === 'back' ? 'Back' : 'Pay'}</span>${!IMPL[impl].focus && kAt === 'pay' ? '  <span class="bad">// Tab skipped the chip: pointerInput is not focusable</span>' : ''}`);
+              }
+              function enter() {
+                if (kAt !== 'chip') { say(o, `<span class="muted">Enter on ${kAt ? (kAt === 'back' ? 'Back' : 'Pay') : 'nothing'}. Tab to the chip first${IMPL[impl].focus ? '' : ', if you can'}.</span>`); return; }
+                tap();
+              }
+              function talk() {
+                const s = ['back', 'chip', 'pay']; tAt = tAt == null ? 0 : (s.indexOf(tAt) + 1) % s.length; tAt = s[tAt]; clear(); els[tAt].classList.add('ay-focus');
+                const txt = tAt === 'back' ? 'Navigate up, Button' : tAt === 'pay' ? 'Pay, Button' : IMPL[impl].talk();
+                say(o, `TalkBack: <span class="good">"${esc(txt)}"</span>${tAt === 'chip' ? `  <span class="${impl === 2 ? 'good' : 'bad'}">// ${IMPL[impl].note}</span>` : ''}`);
+              }
+              press(btns, btns[0]); paintChip();
+              say(o, 'Try each way of reaching the chip, then switch the implementation.');
+              el.append(
+                h('div', { class: 'controls ay-d2-col-btns' }, btns),
+                h('div', { class: 'ay-split' }, ui, h('div', { class: 'ay-col' },
+                  h('span', { class: 'ay-label' }, 'Reach the chip'),
+                  h('div', { class: 'controls' }, act('Tap it', tap), act('Tab', tabKey), act('Enter', enter), act('TalkBack: swipe right', talk)),
+                  h('p', { class: 'tip' }, 'Exact TalkBack wording varies by version and language.'))),
+                o);
+            },
+          },
+          {
+            title: 'Move focus on purpose',
+            body: `<p>Sometimes the next step is obvious, like typing on a search screen. Request focus for it once the screen appears. Keep it to those cases: moving focus on every screen is disorienting with a keyboard and with a screen reader.</p>`,
+            code: `val searchFocus = remember { FocusRequester() }
+
+TextField(query, onQueryChange, Modifier.focusRequester(searchFocus))
+
+LaunchedEffect(Unit) { searchFocus.requestFocus() }`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>minimumInteractiveComponentSize()</code> is a layout modifier. It reads <code>LocalMinimumInteractiveComponentSize</code>, 48 dp by default, measures the content, then reports at least that size and centers the content inside. The extra space is real layout space, which is why it also makes the accessibility node bigger.</p>
+<p>Compose has a second safety net at touch time. If a pointer input area ends up smaller than <code>ViewConfiguration.minimumTouchTargetSize</code>, the touch target is expanded evenly around it, as long as no other target is hit directly. That rescue only affects touch. It does not change layout or what TalkBack reports, so keep the real 48 dp size.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Padding before clickable',
+            bad: `Row(
+    Modifier
+        .padding(16.dp)
+        .clickable(onClick = onOpen)
+) { Text(title) }`,
+            good: `Row(
+    Modifier
+        .clickable(onClick = onOpen)
+        .padding(16.dp)
+) { Text(title) }`,
+            why: 'Modifiers apply from the outside in. With padding first, the clickable area is only the inner content, and the 16 dp around it does nothing when tapped. Clickable first makes the whole row tappable and shows the ripple across it.',
+          },
+          {
+            title: 'Removing the indication',
+            bad: `Modifier.clickable(
+    interactionSource = null,
+    indication = null,
+    onClick = onSelect,
+)`,
+            good: `Modifier.clickable(onClick = onSelect)
+// or draw your own focus and pressed states from an InteractionSource`,
+            why: 'The indication draws the pressed and focused states. Without it, keyboard and D-pad users cannot see which element has focus.',
+          },
+        ],
         visual(el) {
           // part 1: thumb taps on a toolbar
           const S = 1.8; // px per dp
@@ -833,6 +1172,144 @@ val fontScale = LocalDensity.current.fontScale   // 1.0f is the default`,
           { q: 'What contrast ratio does WCAG AA require for normal body text?', options: ['3:1', '4.5:1', '7:1'], a: 1, why: '4.5:1 for body text. 3:1 is the bar for large text and icons, and 7:1 is the stricter AAA level.' },
           { q: 'Which unit should an icon’s size use?', options: ['sp, so it grows with text', 'dp'], a: 1, why: 'Font scale is for text. Icons and spacing use dp so the layout doesn’t blow up.' },
         ],
+        deeper: [
+          {
+            title: 'Reflow instead of truncating',
+            body: `<p>Rows built for 100% often hold a label and a value side by side. At 200% they no longer fit. With <code>maxLines = 1</code> and an ellipsis, the words that carry the meaning get cut: “Stora…” and “12 of…”. Truncation hides content from exactly the people who asked for bigger text.</p>
+<p>Let the layout reflow instead. A <code>FlowRow</code> moves the value under the label when there is no room beside it. Text can wrap to a second line. Drag the font size to 200% and compare.</p>`,
+            code: `FlowRow(
+    Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    itemVerticalAlignment = Alignment.CenterVertically,
+) {
+    Text("Storage used", style = MaterialTheme.typography.bodyLarge)
+    Text("12 of 64 GB", style = MaterialTheme.typography.bodyMedium)
+}`,
+            visual(el) {
+              const FROM = [8, 10, 12, 14, 18, 20, 24, 30, 100];
+              const TABLES = { 1.15: [9.2, 11.5, 13.8, 16.4, 19.8, 21.8, 25.2, 30, 100], 1.3: [10.4, 13, 15.6, 18.8, 21.6, 23.6, 26.4, 30, 100], 1.5: [12, 15, 18, 22, 24, 26, 28, 30, 100], 1.8: [14.4, 18, 21.6, 24.4, 27.6, 30.8, 32.8, 34.8, 100], 2: [16, 20, 24, 26, 30, 34, 36, 38, 100] };
+              const STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.8, 2];
+              const conv = (sp, s) => { const t = TABLES[s]; if (!t) return sp * s; for (let i = 1; i < FROM.length; i++) if (sp <= FROM[i]) return t[i - 1] + (t[i] - t[i - 1]) * (sp - FROM[i - 1]) / (FROM[i] - FROM[i - 1]); return sp; };
+              let flow = false, tick = 0;
+              const range = h('input', { type: 'range', id: 'ay-d2-tr-scale', class: 'ay-range', min: '0', max: String(STEPS.length - 1), step: '1', value: '1' });
+              const lbl = h('b', {});
+              const label = h('span', { class: 'ay-d2-tr-l' }, 'Storage used');
+              const value = h('span', { class: 'ay-d2-tr-v' }, '12 of 64 GB');
+              const row = h('div', { class: 'ay-d2-tr-row' }, h('span', { class: 'ay-d2-tr-i', 'aria-hidden': 'true' }), h('div', { class: 'ay-d2-tr-txt' }, label, value));
+              const card = h('div', { class: 'ay-d2-tr-card' }, row);
+              const o = out();
+              const modes = [['Row { Text(maxLines = 1, overflow = Ellipsis) }', false], ['FlowRow { Text(...); Text(...) }', true]].map(([src, f]) => cmd(src, () => { flow = f; paint(); }));
+              function paint() {
+                const s = STEPS[+range.value];
+                press(modes, modes[flow ? 1 : 0]);
+                lbl.textContent = `${Math.round(s * 100)}%`;
+                label.style.fontSize = conv(16, s).toFixed(1) + 'px';
+                value.style.fontSize = conv(14, s).toFixed(1) + 'px';
+                row.classList.toggle('ay-d2-tr-flow', flow);
+                const me = ++tick;
+                setTimeout(() => {
+                  if (me !== tick || !row.isConnected) return;
+                  const cut = [label, value].filter(x => x.scrollWidth > x.clientWidth + 1).length;
+                  [label, value].forEach(x => x.classList.toggle('ay-d2-tr-cut', x.scrollWidth > x.clientWidth + 1));
+                  const wrapped = flow && value.offsetTop > label.offsetTop + 2;
+                  say(o, cut
+                    ? `<span class="bad">truncated:</span> ${cut === 2 ? 'both texts are' : 'a text is'} cut at ${Math.round(s * 100)}%. The meaning is gone.`
+                    : wrapped
+                      ? `<span class="good">reflowed:</span> the value moved under the label. Nothing is lost.`
+                      : `<span class="muted">// fits at ${Math.round(s * 100)}%</span>`);
+                }, 280);
+              }
+              range.addEventListener('input', paint);
+              paint();
+              el.append(
+                h('div', { class: 'stage' }, card),
+                h('label', { class: 'ay-label', for: 'ay-d2-tr-scale' }, 'Font size ', lbl), range,
+                h('div', { class: 'controls ay-d2-col-btns' }, modes),
+                o);
+            },
+          },
+          {
+            title: 'Don’t say it with color alone',
+            body: `<p>Contrast is not only about text. Icons, field borders and other parts the user needs to see need 3:1 against what is next to them. And color can never be the only signal. About one in twelve men has some form of color vision deficiency, and a red border in a gray UI may not stand out at all.</p>
+<p>Give every error a second cue: an icon and a message in words. Turn on the grayscale view below to see what the color-only version leaves.</p>`,
+            code: `OutlinedTextField(
+    value = email,
+    onValueChange = onEmail,
+    label = { Text("Email") },
+    isError = emailError != null,
+    supportingText = { emailError?.let { Text(it) } },
+    trailingIcon = {
+        if (emailError != null) Icon(Icons.Filled.Error, contentDescription = null)
+    },
+)`,
+            visual(el) {
+              let words = false;
+              const field = h('div', { class: 'ay-d2-tc-field ay-d2-tc-err' },
+                h('span', { class: 'ay-d2-tc-lab' }, 'Email'),
+                h('span', { class: 'ay-d2-tc-val' }, 'ana@mail'),
+                h('span', { class: 'ay-d2-tc-ico', 'aria-hidden': 'true' }, '!'));
+              const msg = h('p', { class: 'ay-d2-tc-msg' }, 'Enter a full email address, like ana@mail.com');
+              const ok = h('div', { class: 'ay-d2-tc-field' }, h('span', { class: 'ay-d2-tc-lab' }, 'Name'), h('span', { class: 'ay-d2-tc-val' }, 'Ana'));
+              const form = h('div', { class: 'ay-d2-tc' }, ok, field, msg);
+              const gray = sw('ay-d2-tc-gray', 'View in grayscale');
+              const o = out();
+              const modes = [['isError = true', false], ['isError + supportingText + trailingIcon', true]].map(([src, w]) => cmd(src, () => { words = w; paint(true); }));
+              function paint(anim) {
+                press(modes, modes[words ? 1 : 0]);
+                form.classList.toggle('ay-d2-tc-words', words);
+                form.classList.toggle('ay-d2-tc-gray', gray.input.checked);
+                if (anim) replay(field, 'pop-soft');
+                const g = gray.input.checked;
+                say(o, words
+                  ? `<span class="good">ok:</span> the icon and the message say it${g ? ', with or without color' : ''}`
+                  : g ? '<span class="bad">lost:</span> in grayscale the error border looks like any other field' : '<span class="muted">// only the red color marks the error</span>');
+              }
+              gray.input.addEventListener('change', () => paint(true));
+              paint(false);
+              el.append(h('div', { class: 'stage' }, form), h('div', { class: 'controls ay-d2-col-btns' }, modes), h('div', { class: 'controls' }, gray.el), o);
+            },
+          },
+          {
+            title: 'Respect the contrast setting',
+            body: `<p>Newer Android versions let users ask for higher color contrast in Settings. From API 34, <code>UiModeManager.getContrast()</code> returns that preference as a float, with 0 as the standard level and higher values for more contrast. Material Theme Builder can export medium and high contrast color schemes next to the standard ones, so you can switch schemes in your theme.</p>`,
+            code: `@Composable
+fun AppTheme(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val contrast = if (Build.VERSION.SDK_INT >= 34) {
+        context.getSystemService(UiModeManager::class.java).contrast
+    } else 0f
+    val scheme = when {
+        contrast >= 0.66f -> highContrastLightColorScheme
+        contrast >= 0.33f -> mediumContrastLightColorScheme
+        else -> lightScheme
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Compose turns <code>sp</code> into pixels through <code>Density</code>. On Android 14 and later, the <code>Density</code> Compose creates from your context carries a font scale converter. For each font scale step, the converter has a lookup table from sp to dp and interpolates between its entries, which is where the nonlinear curve comes from. Older versions multiply by <code>fontScale</code>.</p>
+<p>So <code>with(LocalDensity.current) { 14.sp.toDp() }</code> gives the size the text will really have. Multiplying by <code>fontScale</code> yourself gives the old linear answer, which is too big for large text.</p>`,
+          code: `val density = LocalDensity.current
+val real = with(density) { 30.sp.toDp() }        // 38.dp at 200% on Android 14+
+val naive = (30 * density.fontScale).dp           // 60.dp: wrong`,
+        },
+        mistakes: [
+          {
+            title: 'Cancelling the user’s font scale',
+            bad: `val fontScale = LocalDensity.current.fontScale
+Text("Total", fontSize = (16 / fontScale).sp)   // stays 16 at any setting`,
+            good: `Text("Total", style = MaterialTheme.typography.bodyLarge)
+// and make the layout around it able to grow`,
+            why: 'Users picked a bigger font because they need it. Undoing the scale makes the text unreadable for them. Fix the layout that breaks, not the text size.',
+          },
+          {
+            title: 'Computing scaled sizes by hand',
+            bad: `val badgeHeight = (16 * LocalDensity.current.fontScale + 8).dp`,
+            good: `val badgeHeight = with(LocalDensity.current) { 16.sp.toDp() } + 8.dp`,
+            why: 'On Android 14 and later scaling is nonlinear, so <code>sp × fontScale</code> overshoots for text above about 12sp: 16sp at 200% is drawn at 28 dp, not 32. <code>toDp()</code> uses the same converter as the text itself.',
+          },
+        ],
         visual(el) {
           // Android 14 FontScaleConverterFactory tables (fromSp -> toSp) per font scale step.
           const FROM = [8, 10, 12, 14, 18, 20, 24, 30, 100];
@@ -968,6 +1445,123 @@ val wide = sizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_
           { q: 'A tablet runs your app in split screen at 400 dp wide. What should you show?', options: ['The tablet layout, since it is a tablet', 'The Compact layout'], a: 1, why: 'Size classes describe the window. A 400 dp window is Compact on any device.' },
           { q: 'On a Compact window, what does <code>NavigableListDetailPaneScaffold</code> do when the user opens an item?', options: ['Squeezes both panes in', 'Shows the detail pane alone, and back returns to the list', 'Opens a new Activity'], a: 1, why: 'With room for one pane it navigates between them and handles back for you.' },
         ],
+        deeper: [
+          {
+            title: 'Height has size classes too',
+            body: `<p>Width decides most layouts, since content scrolls vertically. Height matters when it is short. A phone in landscape is often Medium wide but Compact tall: under 480dp. A tall top app bar and a bottom bar then leave a thin strip for content. Height classes are Compact under 480dp, Medium from 480 to 899dp and Expanded from 900dp.</p>
+<p>Check height with <code>isHeightAtLeastBreakpoint</code>. On a short window, hide or collapse the top app bar and move navigation to a rail at the side.</p>`,
+            code: `val sizeClass = currentWindowAdaptiveInfo().windowSizeClass
+val roomForTopBar = sizeClass.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND)
+val useRail = sizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) || !roomForTopBar`,
+            visual(el) {
+              const PRE = [['Phone portrait', 411, 891], ['Phone landscape', 800, 360], ['Foldable open', 673, 841], ['Tablet landscape', 1280, 800], ['Tablet portrait', 800, 1280]];
+              let cur = 0;
+              const S = 0.2;
+              const winEl = h('div', { class: 'ay-d2-wh-win' });
+              const chips = h('div', { class: 'ay-d2-wh-chips' });
+              const o = out();
+              const wc = w => (w < 600 ? 'Compact' : w < 840 ? 'Medium' : w < 1200 ? 'Expanded' : 'Large');
+              const hc = v => (v < 480 ? 'Compact' : v < 900 ? 'Medium' : 'Expanded');
+              const btns = PRE.map(([n, w, v], i) => act(`${n} ${w}×${v}`, () => { cur = i; paint(true); }));
+              function paint(anim) {
+                const [n, w, v] = PRE[cur];
+                press(btns, btns[cur]);
+                const topBar = v >= 480, rail = w >= 600 || !topBar, two = w >= 840;
+                winEl.style.width = Math.round(w * S) + 'px'; winEl.style.height = Math.round(v * S) + 'px';
+                const nav = h('div', { class: 'ay-nav' + (rail ? ' ay-rail' : '') }, h('i', { class: 'on' }), h('i'), h('i'));
+                const content = h('div', { class: 'ay-panes' }, h('div', { class: 'ay-pane' }, h('div', { class: 'ay-lines' }, h('i', { style: 'width:80%' }), h('i', { style: 'width:60%' }), h('i', { style: 'width:70%' }))),
+                  two ? h('div', { class: 'ay-pane' }, h('div', { class: 'ay-lines' }, h('i', { style: 'width:90%' }), h('i', { style: 'width:50%' }))) : null);
+                const body = h('div', { class: 'ay-app' + (rail ? '' : ' ay-compact') }, nav, content);
+                winEl.replaceChildren(topBar ? h('div', { class: 'ay-d2-wh-top' }, 'Inbox') : null, body);
+                chips.replaceChildren(
+                  h('span', { class: 'ay-badge pass' }, `width ${w} dp: ${wc(w)}`),
+                  h('span', { class: `ay-badge ${v < 480 ? 'fail' : 'pass'}` }, `height ${v} dp: ${hc(v)}`));
+                if (anim) replay(winEl, 'pop-soft');
+                say(o, `${esc(n)}: top app bar <span class="${topBar ? 'good' : 'bad'}">${topBar ? 'shown' : 'hidden, height is Compact'}</span> · navigation: ${rail ? 'rail' : 'bottom bar'} · panes: ${two ? 2 : 1}`);
+              }
+              paint(false);
+              el.append(h('div', { class: 'stage ay-d2-wh-stage' }, winEl), chips, h('div', { class: 'controls' }, btns), o);
+            },
+          },
+          {
+            title: 'Size classes pick the screen layout. Components measure their space',
+            body: `<p>Window size classes describe the whole window. Inside a two-pane layout, the detail pane is much narrower than the window. A card that picks its wide layout because the window is Expanded gets squeezed into that pane.</p>
+<p>Use size classes for the top-level structure: panes and navigation. Inside a component, decide from the space it actually gets, with <code>BoxWithConstraints</code> or a custom layout.</p>`,
+            code: `@Composable
+fun ProductCard(product: Product, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier) {
+        if (maxWidth >= 560.dp) WideProductCard(product) else NarrowProductCard(product)
+    }
+}`,
+            visual(el) {
+              const PRE = [720, 900, 1400];
+              let w = 900, byWindow = true;
+              const winEl = h('div', { class: 'ay-win ay-d2-wa-win' });
+              const o = out();
+              const btns = PRE.map(v => act(`Window ${v} dp`, () => { w = v; paint(true); }));
+              const modes = [['if (windowSizeClass is Medium+) WideCard()', true], ['BoxWithConstraints { if (maxWidth >= 560.dp) ... }', false]].map(([src, b]) => cmd(src, () => { byWindow = b; paint(true); }));
+              function paint(anim) {
+                press(btns, btns[PRE.indexOf(w)]); press(modes, modes[byWindow ? 0 : 1]);
+                const two = w >= 840, detail = w - 80 - (two ? 360 : 0) - 24;
+                const wide = byWindow ? w >= 600 : detail >= 560;
+                const scale = 100 / w;
+                const card = h('div', { class: 'ay-d2-wa-card' + (wide ? ' ay-d2-wa-wide' : ''), style: `width:${((wide ? 560 : Math.min(detail, 360)) * scale).toFixed(2)}%` },
+                  h('span', { class: 'ay-d2-wa-img' }), h('span', { class: 'ay-d2-wa-specs' }, h('i'), h('i'), wide ? h('i') : null));
+                const over = wide && detail < 560;
+                card.classList.toggle('ay-d2-wa-over', over);
+                const detailPane = h('div', { class: 'ay-d2-wa-pane', style: `width:${((detail + 24) * scale).toFixed(2)}%` }, card);
+                winEl.replaceChildren(h('div', { class: 'ay-win-top' }, h('i'), h('i'), h('i'), h('span', {}, `${w} dp`)),
+                  h('div', { class: 'ay-d2-wa-app' },
+                    h('div', { class: 'ay-nav ay-rail', style: `width:${(80 * scale).toFixed(2)}%` }, h('i', { class: 'on' }), h('i')),
+                    two ? h('div', { class: 'ay-d2-wa-pane ay-d2-wa-list', style: `width:${(360 * scale).toFixed(2)}%` }, h('div', { class: 'ay-lines' }, h('i', { style: 'width:80%' }), h('i', { style: 'width:60%' }), h('i', { style: 'width:75%' }))) : null,
+                    detailPane));
+                if (anim) replay(card, 'pop-soft');
+                say(o, `detail pane gets <b>${detail} dp</b> · card: ${wide ? 'WideCard (needs 560 dp)' : 'NarrowCard'} ${over ? '<span class="bad">// squeezed: the window is wide, the pane is not</span>' : '<span class="good">// fits</span>'}`);
+              }
+              paint(false);
+              el.append(h('div', { class: 'stage' }, winEl), h('div', { class: 'controls' }, btns), h('div', { class: 'controls ay-d2-col-btns' }, modes), o);
+            },
+          },
+          {
+            title: 'Test every size without every device',
+            body: `<p><code>@PreviewScreenSizes</code> renders a composable at phone, foldable, tablet and desktop sizes in one go. The resizable emulator switches between those sizes while the app runs. On a real tablet, drag the split-screen divider slowly and watch every size class transition. On tablets with desktop windowing, resize a free-form window too.</p>`,
+            code: `@PreviewScreenSizes
+@Composable
+fun MailAppPreview() {
+    AppTheme { MailApp(sampleMails) }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p><code>currentWindowAdaptiveInfo()</code> reads the size of the current window from Compose, converts it to dp with the current density, and buckets the width and height against the breakpoint list. The result is a plain value. <code>isWidthAtLeastBreakpoint</code> just compares the window’s minimum width for its bucket with the breakpoint you pass. Because the size is read during composition, readers recompose when the window changes size.</p>
+<p>The posture half comes from Jetpack WindowManager. It collects the window’s fold information as State, which the next lesson uses.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Branching on orientation',
+            bad: `val landscape = LocalConfiguration.current.orientation ==
+    Configuration.ORIENTATION_LANDSCAPE
+if (landscape) TwoPane() else OnePane()`,
+            good: `val sizeClass = currentWindowAdaptiveInfo().windowSizeClass
+if (sizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)) TwoPane()
+else OnePane()`,
+            why: 'A phone in landscape has no room for two panes, and a tablet in portrait has plenty. Orientation says nothing about size. Branch on the window width.',
+          },
+          {
+            title: 'State that lives inside a layout branch',
+            bad: `if (wide) {
+    var selected by rememberSaveable { mutableStateOf<Long?>(null) }
+    TwoPane(selected, onSelect = { selected = it })
+} else {
+    var selected by rememberSaveable { mutableStateOf<Long?>(null) }
+    OnePane(selected, onSelect = { selected = it })
+}`,
+            good: `var selected by rememberSaveable { mutableStateOf<Long?>(null) }
+if (wide) TwoPane(selected, onSelect = { selected = it })
+else OnePane(selected, onSelect = { selected = it })`,
+            why: 'Each branch has its own place in the composition. Crossing the breakpoint leaves one branch and enters the other, so the selection starts over. Hoist state above the branch.',
+          },
+        ],
         visual(el) {
           const MAILS = [
             { id: 1, from: 'Ada', subj: 'Standup notes', body: 3 },
@@ -1072,6 +1666,157 @@ val separating = hinges.firstOrNull { it.isSeparating }?.bounds
           { q: 'A foldable is half open with the hinge running left to right, bottom half on the table. What posture is that?', options: ['Book', 'Tabletop', 'Flat'], a: 1, why: 'A horizontal hinge with the device half open is tabletop.' },
           { q: 'Your app targets API 36 and sets <code>screenOrientation="portrait"</code>. What happens on a tablet with Android 16?', options: ['It stays portrait with bars around it', 'The lock is ignored and the app fills the screen', 'It crashes'], a: 1, why: 'Android 16 ignores orientation and resizability limits on displays with a smallest width of 600 dp or more, for apps targeting API 36. Older targets get letterboxed.' },
           { q: 'What happens to the Activity by default when the user unfolds the phone?', options: ['Nothing', 'It is recreated because of a configuration change', 'It is moved to the background'], a: 1, why: 'The screen size changes, and by default that recreates the Activity. Keep state in a ViewModel or rememberSaveable.' },
+        ],
+        deeper: [
+          {
+            title: 'Keep content off the hinge',
+            body: `<p>Not every fold splits the screen. A <code>FoldingFeature</code> reports <code>isSeparating</code>. A flat seamless foldable is one continuous screen, so it is not separating, and content may run across the fold. Half open, the fold separates two areas. On a dual-screen device the hinge is a physical gap: <code>occlusionType</code> is <code>FULL</code> and nothing under it can be seen or tapped.</p>
+<p>When the fold separates, split your panes at the hinge bounds, so nothing sits in the crease or under the gap.</p>`,
+            code: `val hinge = currentWindowAdaptiveInfo().windowPosture.hingeList
+    .firstOrNull { it.isSeparating && it.isVertical }
+
+if (hinge != null) {
+    // hinge.bounds is in window pixels
+    val leftWidth = with(LocalDensity.current) { hinge.bounds.left.toDp() }
+    val gap = with(LocalDensity.current) { hinge.bounds.width.toDp() }
+    Row {
+        PhotoPane(Modifier.width(leftWidth))
+        Spacer(Modifier.width(gap))
+        DetailsPane(Modifier.weight(1f))
+    }
+} else {
+    SinglePane()
+}`,
+            visual(el) {
+              const DEV = {
+                flat: { label: 'Foldable, flat', cls: 'ay-d2-fh-flat', log: 'state = FLAT, isSeparating = false, occlusionType = NONE' },
+                book: { label: 'Foldable, half open', cls: 'ay-d2-fh-book', log: 'state = HALF_OPENED, isSeparating = true, occlusionType = NONE' },
+                dual: { label: 'Dual screen', cls: 'ay-d2-fh-dual', log: 'physical hinge: isSeparating = true, occlusionType = FULL' },
+              };
+              let dev = 'dual';
+              const split = sw('ay-d2-fh-split', 'Split panes at hinge.bounds');
+              const scr = h('div', { class: 'ay-d2-fh' });
+              const o = out();
+              const btns = Object.entries(DEV).map(([k, d]) => act(d.label, () => { dev = k; paint(true); }));
+              function paint(anim) {
+                const d = DEV[dev], sp = split.input.checked;
+                press(btns, btns[Object.keys(DEV).indexOf(dev)]);
+                scr.className = `ay-d2-fh ${d.cls}${sp ? ' ay-d2-fh-split' : ''}`;
+                const photo = h('div', { class: 'ay-d2-fh-photo' });
+                const info = h('div', { class: 'ay-d2-fh-info' }, h('b', {}, 'Ridge trail'), h('div', { class: 'ay-lines' }, h('i', { style: 'width:90%' }), h('i', { style: 'width:70%' })));
+                const buy = h('span', { class: 'ay-pill ay-d2-fh-buy' }, 'Book');
+                scr.replaceChildren(
+                  h('div', { class: 'ay-d2-fh-content' }, sp ? [h('div', { class: 'ay-d2-fh-pane' }, photo), h('div', { class: 'ay-d2-fh-pane' }, info, buy)] : [photo, info, buy]),
+                  h('span', { class: 'ay-d2-fh-hinge', 'aria-hidden': 'true' }));
+                if (anim) replay(scr, 'pop-soft');
+                let verdict;
+                if (sp) verdict = '<span class="good">ok:</span> each pane sits on its own side of the hinge';
+                else if (dev === 'flat') verdict = '<span class="good">ok:</span> a flat seamless fold is one screen, spanning is fine';
+                else if (dev === 'book') verdict = '<span class="bad">awkward:</span> the photo bends over the crease and the button sits in it';
+                else verdict = '<span class="bad">broken:</span> the hinge hides the middle of the photo and the button under it cannot be tapped';
+                say(o, `<span class="muted">FoldingFeature:</span> ${esc(d.log)}<br>${verdict}`);
+              }
+              split.input.addEventListener('change', () => paint(true));
+              paint(false);
+              el.append(h('div', { class: 'stage' }, scr), h('div', { class: 'controls' }, btns), h('div', { class: 'controls' }, split.el), o);
+            },
+          },
+          {
+            title: 'What survives a fold, and what survives the process',
+            body: `<p>Folding recreates the Activity. A plain <code>remember</code> starts over, while <code>rememberSaveable</code> and a ViewModel keep their values. There is a second event to plan for: when your app sits in the background, the system may kill the process to free memory. When the user comes back, the ViewModel is new. Only saved instance state comes back: <code>rememberSaveable</code> and a ViewModel’s <code>SavedStateHandle</code>.</p>
+<p>Type a draft, then fold and kill the process.</p>`,
+            code: `class DraftViewModel(private val handle: SavedStateHandle) : ViewModel() {
+    val draft = handle.getStateFlow("draft", "")
+    fun update(text: String) { handle["draft"] = text }
+}
+// Test process death: background the app, then
+// adb shell am kill com.example.app`,
+            visual(el) {
+              const WORDS = ['Great ', 'trail ', 'today!'];
+              const rows = [
+                { src: 'remember { mutableStateOf("") }', config: false, death: false },
+                { src: 'rememberSaveable { mutableStateOf("") }', config: true, death: true },
+                { src: 'ViewModel: MutableStateFlow("")', config: true, death: false },
+                { src: 'ViewModel: SavedStateHandle', config: true, death: true },
+              ];
+              let w = 0, busy = false;
+              for (const r of rows) {
+                r.val = ''; r.v = h('span', { class: 'ay-d2-fs-val' });
+                r.tag = h('span', { class: 'ay-tag' }, '');
+                r.el = h('div', { class: 'ay-node' }, h('div', { class: 'ay-node-h' }, h('b', {}, r.src), r.tag), r.v);
+              }
+              const o = out();
+              const paint = () => rows.forEach(r => { r.v.textContent = r.val ? `"${r.val}"` : '""  (empty)'; });
+              function type() {
+                if (busy) return;
+                const word = WORDS[w % WORDS.length]; w++;
+                rows.forEach(r => { r.val = (r.val + word).slice(-24); r.el.classList.remove('ay-merged', 'ay-stop'); r.tag.textContent = ''; });
+                paint(); rows.forEach(r => replay(r.v, 'pop-soft'));
+                say(o, `typed "${esc(word.trim())}" into all four`);
+              }
+              async function event(kind) {
+                if (busy) return; busy = true;
+                const keyOf = kind === 'config' ? 'config' : 'death';
+                for (const r of rows) {
+                  await sleep(260);
+                  if (!el.isConnected) return;
+                  const kept = r[keyOf];
+                  if (!kept) r.val = '';
+                  r.el.classList.toggle('ay-merged', !kept); r.el.classList.toggle('ay-stop', kept);
+                  r.tag.textContent = kept ? 'kept' : 'lost';
+                  paint(); replay(r.el, kept ? 'pop-soft' : 'shake');
+                }
+                const lost = rows.filter(r => !r[keyOf]).length;
+                say(o, kind === 'config'
+                  ? `Unfold: configuration change, Activity recreated. <span class="bad">${lost} lost</span>: only plain remember.`
+                  : `Process killed in the background, user returns. <span class="bad">${lost} lost</span>: remember and the plain ViewModel field. Saved state came back.`);
+                busy = false;
+              }
+              paint();
+              say(o, 'Type a few words, then fold. Type again, then kill the process.');
+              el.append(
+                h('div', { class: 'ay-tree' }, rows.map(r => r.el)),
+                h('div', { class: 'controls' }, act('Type a word', type), act('Unfold the phone', () => event('config')), act('Process death, then return', () => event('death'))),
+                o);
+            },
+          },
+          {
+            title: 'Keyboard, mouse and stylus',
+            body: `<p>Large screens often come with a keyboard, a trackpad or a stylus. Add shortcuts for common actions, show a hand cursor over clickable things, and make sure right-click and hover don’t break your gestures. Text fields get stylus handwriting support from Compose on Android 14 and later.</p>`,
+            code: `Box(
+    Modifier
+        .onPreviewKeyEvent { e ->
+            if (e.type == KeyEventType.KeyDown && e.isCtrlPressed && e.key == Key.S) {
+                onSave(); true
+            } else false
+        }
+) {
+    Button(onClick = onSave, Modifier.pointerHoverIcon(PointerIcon.Hand)) { Text("Save") }
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Fold data comes from Jetpack WindowManager. <code>WindowInfoTracker.windowLayoutInfo(activity)</code> is a Flow of <code>WindowLayoutInfo</code>. Behind it, the device maker ships a WindowManager Extensions library on the device, which knows the hardware. On a device without folds, or without extensions, the list of display features is simply empty.</p>
+<p>Each <code>FoldingFeature</code> has bounds in window coordinates, a state (<code>FLAT</code> or <code>HALF_OPENED</code>), an orientation and an occlusion type. Only features that cross your window are reported, so a split-screen app on the other side of the fold sees none. Compose’s <code>currentWindowAdaptiveInfo()</code> collects this flow as State and derives the posture, such as <code>isTabletop</code> for a half-opened horizontal fold.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Detecting foldables by model name',
+            bad: `val isFoldable = Build.MODEL in setOf("SM-F956B", "Pixel Fold")
+if (isFoldable) BookLayout() else PhoneLayout()`,
+            good: `val posture = currentWindowAdaptiveInfo().windowPosture
+val hinge = posture.hingeList.firstOrNull { it.isSeparating }
+if (hinge != null && hinge.isVertical) BookLayout(hinge) else PhoneLayout()`,
+            why: 'New devices ship all the time, and the same foldable can be folded, open or in a split window. Read the posture of the window at runtime.',
+          },
+          {
+            title: 'Saving whole data sets in saved state',
+            bad: `// Photo is @Parcelize and holds its thumbnail bytes
+var photos by rememberSaveable { mutableStateOf(loadedPhotos) }`,
+            good: `var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+val photos by viewModel.photos.collectAsStateWithLifecycle()`,
+            why: 'Saved state travels to the system in a Bundle, which has a small size limit. Too much data crashes with <code>TransactionTooLargeException</code> when the app goes to the background. Save ids and small UI state, and reload the data.',
+          },
         ],
         visual(el) {
           const lock = sw('ay-fd-lock', 'screenOrientation="portrait"');

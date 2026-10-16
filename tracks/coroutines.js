@@ -145,9 +145,215 @@
 .flw-th.blk { border-color: var(--err); background: var(--err-soft); color: var(--err); }
 .flw-th.blk .flw-prog i { background: var(--err); }
 .flw-wrap { flex-wrap: wrap; overflow: visible; }
+/* depth 2: channels */
+.flw-d2ch-flags { display: flex; flex-wrap: wrap; gap: 8px; }
+.flw-chpipe.flw-d2ch-shut { outline: 2px dashed var(--warm); outline-offset: -2px; }
+.flw-d2ch-lane { display: grid; grid-template-columns: 74px minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px; align-items: center; min-width: 0; }
+.flw-d2ch-lane .flw-prog { min-width: 0; }
+.flw-shown .flw-v { margin-left: 6px; vertical-align: middle; }
+@media (max-width: 520px) {
+  .flw-d2ch-lane { grid-template-columns: 64px minmax(0, 1fr); gap: 6px; }
+  .flw-d2ch-lane .flw-strip { grid-column: 2; }
+}
 `;
 
   const pressed = (buttons, keys, k) => buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(keys[i] === k)));
+
+  // ─── Depth pass 2: Channels ─────────────────
+  const channelsDepth = {
+    deeper: [
+      {
+        title: 'close() lets receivers finish, cancel() throws the rest away',
+        body: `<p><code>close()</code> is the sender saying it is done. New sends fail with <code>ClosedSendChannelException</code>, but values already in the buffer can still be received. Once the buffer is empty the channel is closed for receive, and a <code>for</code> loop over it ends normally.</p>
+<p><code>cancel()</code> is the receiver saying it does not want anything more. It closes the channel and drops every buffered value at once. Receives and sends after that throw a <code>CancellationException</code>. The <code>produce { }</code> builder closes its channel for you when its block finishes.</p>`,
+        code: `val numbers: ReceiveChannel<Int> = scope.produce(capacity = 4) {
+    for (i in 1..10) send(i)
+}   // closed automatically when the block ends
+
+for (n in numbers) {            // ends when closed and empty
+    if (n == 3) { numbers.cancel(); break }   // drop the rest, stop the producer
+    show(n)
+}`,
+        visual(el) {
+          const CAP = 4;
+          let buf, n, state, busy = false;
+          const pipe = h('div', { class: 'flw-chpipe' });
+          const got = h('div', { class: 'flw-strip flw-wrap' });
+          const fSend = h('span', { class: 'kt-state' }), fRecv = h('span', { class: 'kt-state' });
+          const o = out();
+          let slots = [];
+          const flags = () => {
+            const cs = state !== 'open', cr = state === 'cancelled' || (state === 'closed' && !buf.length);
+            fSend.textContent = `isClosedForSend = ${cs}`; fSend.className = 'kt-state' + (cs ? ' warn' : ' ok');
+            fRecv.textContent = `isClosedForReceive = ${cr}`; fRecv.className = 'kt-state' + (cr ? ' bad' : ' ok');
+            pipe.classList.toggle('flw-d2ch-shut', state !== 'open');
+          };
+          const relayout = () => buf.forEach((c, i) => moveTo(c, slots[i]));
+          function fresh() {
+            buf = []; n = 0; state = 'open';
+            slots = Array.from({ length: CAP }, () => h('span', { class: 'flw-slot' }));
+            pipe.replaceChildren(...slots); got.replaceChildren(h('span', { class: 'flw-note' }, 'nothing received yet'));
+            [1, 2, 3].forEach(() => { const c = h('span', { class: 'flw-v acc' }, String(++n)); buf.push(c); slots[buf.length - 1].append(c); });
+            flags();
+          }
+          const take = c => { got.querySelectorAll('.flw-note').forEach(x => x.remove()); c.className = 'flw-v ok'; moveTo(c, got); };
+          function send() {
+            if (busy) return;
+            if (state !== 'open') { replay(pipe, 'shake'); say(o, `<span class="bad">send(${n + 1}) throws</span> ${state === 'closed' ? 'ClosedSendChannelException' : 'CancellationException'} <span class="muted">// the channel is ${state}</span>`); return; }
+            if (buf.length >= CAP) { replay(pipe, 'shake'); say(o, '<span class="muted">full:</span> send would suspend here. Receive one first.'); return; }
+            const c = h('span', { class: 'flw-v acc drop-in' }, String(++n)); buf.push(c); slots[buf.length - 1].append(c); flags();
+            say(o, `<span class="good">sent ${n}</span>, ${CAP - buf.length} slot${CAP - buf.length === 1 ? '' : 's'} left`);
+          }
+          function receive() {
+            if (busy) return;
+            if (buf.length) {
+              const c = buf.shift(); take(c); relayout(); flags();
+              say(o, `<span class="good">received ${c.textContent}</span>${state === 'closed' ? (buf.length ? ', still allowed after close()' : '. That was the last one, so the channel is now closed for receive.') : ''}`);
+              return;
+            }
+            replay(pipe, 'shake');
+            if (state === 'open') say(o, '<span class="muted">empty:</span> receive() would suspend until the next send.');
+            else say(o, `<span class="bad">receive() throws</span> ${state === 'closed' ? 'ClosedReceiveChannelException' : 'CancellationException'}. Use receiveCatching() or a for loop to end quietly.`);
+          }
+          async function forLoop() {
+            if (busy) return; busy = true;
+            if (!buf.length && state === 'cancelled') { replay(pipe, 'shake'); say(o, '<span class="bad">the loop throws</span> CancellationException: the channel was cancelled.'); busy = false; return; }
+            while (buf.length) {
+              const c = buf.shift(); take(c); relayout(); flags();
+              await sleep(380); if (!el.isConnected) return;
+            }
+            say(o, state === 'closed'
+              ? '<span class="good">loop ended:</span> the channel was closed and is now empty, so the for loop finished normally.'
+              : '<span class="muted">drained:</span> the buffer is empty but the channel is open, so the loop suspends and waits for the next value.');
+            busy = false;
+          }
+          async function close() {
+            if (busy) return;
+            if (state !== 'open') { replay(pipe, 'shake'); say(o, `<span class="muted">no-op:</span> already ${state}. close() returns false.`); return; }
+            state = 'closed'; flags(); replay(pipe, 'pop-soft');
+            say(o, buf.length ? `<span class="good">closed:</span> no more sends. The ${buf.length} buffered value${buf.length === 1 ? '' : 's'} can still be received.` : '<span class="good">closed</span> and empty, so receivers are done at once.');
+          }
+          async function cancel() {
+            if (busy) return; busy = true;
+            if (state === 'cancelled') { replay(pipe, 'shake'); say(o, '<span class="muted">no-op:</span> already cancelled.'); busy = false; return; }
+            const lost = buf.length;
+            buf.forEach(c => { c.className = 'flw-v bad'; c.classList.add('fly-out'); });
+            await sleep(420); if (!el.isConnected) return;
+            buf.forEach(c => c.remove()); buf = []; state = 'cancelled'; flags();
+            say(o, `<span class="bad">cancelled:</span> ${lost ? `${lost} buffered value${lost === 1 ? ' was' : 's were'} dropped` : 'nothing was buffered'}. The channel is closed both ways.`);
+            busy = false;
+          }
+          fresh();
+          o.innerHTML = 'A channel with room for 4 holds 1, 2 and 3. Close it, then receive. Then try cancel.';
+          el.append(
+            h('div', { class: 'controls' }, cmd('val ch = Channel<Int>(4)', () => { if (busy) return; fresh(); say(o, 'A fresh channel with 1, 2 and 3 in it.'); })),
+            h('div', { class: 'flw-d2ch-flags' }, fSend, fRecv),
+            pipe,
+            h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'received'), got),
+            h('div', { class: 'controls' }, cmd('ch.send(n)', send), cmd('ch.receive()', receive), cmd('for (x in ch) show(x)', forLoop)),
+            h('div', { class: 'controls' }, cmd('ch.close()', close), cmd('ch.cancel()', cancel)),
+            o);
+        },
+      },
+      {
+        title: 'select takes whichever channel is ready first',
+        body: `<p><code>select { }</code> waits on several channels at once and runs the clause of the first one that has a value. Only that value is received. The other channel keeps its value for the next receive.</p>
+<p>If more than one clause is ready at the same moment, <code>select</code> picks the first one in the order you wrote them. Use <code>selectUnbiased</code> when that bias would starve a channel.</p>`,
+        code: `suspend fun firstAnswer(cache: ReceiveChannel<Prices>, network: ReceiveChannel<Prices>): Prices =
+    select {
+        cache.onReceive { it }       // listed first: wins a tie
+        network.onReceive { it }
+    }`,
+        visual(el) {
+          let netFirst = false, busy = false;
+          const lanes = ['cache', 'network'].map(name => {
+            const bar = h('i'), box = h('div', { class: 'flw-strip' }, h('span', { class: 'flw-note' }, 'empty'));
+            return { name, bar, box, row: h('div', { class: 'flw-d2ch-lane' }, h('span', { class: 'lane-name' }, name), h('span', { class: 'flw-prog' }, bar), box) };
+          });
+          const winner = h('div', { class: 'flw-shown wait' }, 'select has not run yet');
+          const o = out();
+          const reset = () => lanes.forEach(l => { l.bar.style.transition = 'none'; l.bar.style.width = '0%'; l.box.replaceChildren(h('span', { class: 'flw-note' }, 'empty')); });
+          const put = (l, text) => { const c = h('span', { class: 'flw-v acc drop-in' }, text); l.box.replaceChildren(c); return c; };
+          async function race() {
+            if (busy) return; busy = true;
+            reset(); winner.className = 'flw-shown wait'; winner.textContent = 'select is suspended on both channels';
+            const ms = netFirst ? [1500, 700] : [600, 1400];
+            const vals = ['cached prices', 'fresh prices'];
+            void lanes[0].bar.offsetWidth;
+            lanes.forEach((l, i) => { l.bar.style.transition = `width ${ms[i]}ms linear`; l.bar.style.width = '100%'; });
+            say(o, hl('select { cache.onReceive { it }; network.onReceive { it } }'));
+            const first = ms[0] < ms[1] ? 0 : 1, second = 1 - first;
+            await sleep(ms[first]); if (!el.isConnected) return;
+            const c = put(lanes[first], vals[first]);
+            await sleep(250); if (!el.isConnected) return;
+            c.className = 'flw-v ok'; moveTo(c, winner); winner.className = 'flw-shown'; winner.firstChild.textContent = `select returned: `;
+            lanes[first].box.replaceChildren(h('span', { class: 'flw-note' }, 'received'));
+            say(o, `<span class="good">${lanes[first].name} was ready first</span>, so its clause ran and select returned.`);
+            await sleep(ms[second] - ms[first]); if (!el.isConnected) return;
+            const late = put(lanes[second], vals[second]); late.className = 'flw-v warn drop-in';
+            say(o, `<span class="good">${lanes[first].name} won.</span> ${lanes[second].name}’s value arrived later and <span class="muted">waits in its channel</span>. select received only one.`);
+            busy = false;
+          }
+          async function tie() {
+            if (busy) return; busy = true;
+            reset();
+            lanes.forEach((l, i) => { l.bar.style.width = '100%'; put(l, ['cached prices', 'fresh prices'][i]); });
+            winner.className = 'flw-shown wait'; winner.textContent = 'both channels already hold a value';
+            await sleep(600); if (!el.isConnected) return;
+            const c = lanes[0].box.firstChild; c.className = 'flw-v ok'; moveTo(c, winner);
+            winner.className = 'flw-shown'; winner.firstChild.textContent = 'select returned: ';
+            lanes[0].box.replaceChildren(h('span', { class: 'flw-note' }, 'received'));
+            say(o, '<span class="good">tie:</span> both were ready, so select took the first clause, cache. selectUnbiased would pick one at random.');
+            busy = false;
+          }
+          const sw = h('input', { type: 'checkbox', id: 'flw-d2ch-net', onchange() { netFirst = this.checked; say(o, netFirst ? 'The cache is cold now, so the network answers first.' : 'The cache answers first again.'); } });
+          o.innerHTML = 'The cache and the network each send one value. Run select and see who wins.';
+          el.append(
+            h('div', { class: 'flw-search' }, lanes.map(l => l.row)),
+            h('label', { class: 'switch', for: 'flw-d2ch-net' }, sw, 'cache is cold: network answers first'),
+            h('div', { class: 'controls' }, cmd('select { cache.onReceive; network.onReceive }', race), cmd('select when both are ready', tie)),
+            winner, o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>Since kotlinx.coroutines 1.7, a channel is a <code>BufferedChannel</code> built on a lock-free algorithm from the paper “Fast and Scalable Channels in Kotlin Coroutines”. Channel cells live in a linked list of small array segments. A send atomically increments a senders counter to claim a cell, and a receive does the same with a receivers counter. If the receiver got to a cell first, it parks its continuation there, and the sender that claims the cell resumes it directly with the value.</p>
+<p>The capacity constants are shortcuts. <code>BUFFERED</code> means 64 unless the <code>kotlinx.coroutines.channels.defaultBuffer</code> system property says otherwise. <code>CONFLATED</code> is the same as capacity 1 with <code>BufferOverflow.DROP_OLDEST</code>.</p>`,
+      code: `Channel<Int>(Channel.CONFLATED)
+// behaves the same as
+Channel<Int>(capacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)`,
+    },
+    mistakes: [
+      {
+        title: 'Expecting every collector to get each event',
+        bad: `val events = _events.receiveAsFlow()
+// Two parts of the screen both collect events
+launch { events.collect { showSnackbar(it) } }
+launch { events.collect { logToAnalytics(it) } }`,
+        good: `// One collector for one-shot events
+launch { events.collect { e -> showSnackbar(e); logToAnalytics(e) } }
+// or a SharedFlow when every collector must see every value`,
+        why: 'Values from a channel are split between collectors. Each event reaches one of them, so the snackbar silently misses about half.',
+      },
+      {
+        title: 'trySend into a rendezvous channel from a callback',
+        bad: `val clicks = Channel<Unit>()          // RENDEZVOUS
+button.setOnClickListener { clicks.trySend(Unit) }`,
+        good: `val clicks = Channel<Unit>(Channel.CONFLATED)
+button.setOnClickListener { clicks.trySend(Unit) }`,
+        why: 'With no buffer, <code>trySend</code> only succeeds if a receiver is waiting at that exact moment. Otherwise it fails and the click is lost without any error.',
+      },
+      {
+        title: 'Collecting consumeAsFlow twice',
+        bad: `val updates = channel.consumeAsFlow()
+updates.collect { render(it) }
+updates.collect { render(it) }   // after a resubscribe`,
+        good: `val updates = channel.receiveAsFlow()   // can be collected again
+updates.collect { render(it) }`,
+        why: '<code>consumeAsFlow</code> cancels the channel when collection ends and throws IllegalStateException if collected a second time. <code>receiveAsFlow</code> allows more collections.',
+      },
+    ],
+  };
 
   // ─── Channels ─────────────────
   const channels = {
@@ -209,6 +415,9 @@ fun onSaved() {
       { q: '<code>val ch = Channel&lt;Int&gt;()</code> and no one is receiving. What does <code>ch.send(1)</code> do?', options: ['Returns at once', 'Suspends until a receiver takes the value', 'Throws'], a: 1, why: 'The default capacity is RENDEZVOUS. With no buffer, send waits for a receiver.' },
       { q: 'An event is sent while the screen rotates and nobody collects. Which one still delivers it to the new screen?', options: ['<code>MutableSharedFlow&lt;UiEvent&gt;()</code>', '<code>Channel&lt;UiEvent&gt;(Channel.BUFFERED)</code> with <code>receiveAsFlow()</code>'], a: 1, why: 'The channel keeps the event in its buffer. A SharedFlow with no replay drops values when it has no collectors.' },
     ],
+    deeper: channelsDepth.deeper,
+    underHood: channelsDepth.underHood,
+    mistakes: channelsDepth.mistakes,
     visual(el) {
       const CAPS = {
         rendezvous: { label: 'Channel<Int>()', slots: 0, name: 'RENDEZVOUS' },

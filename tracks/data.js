@@ -213,6 +213,33 @@
 @media (max-width: 520px) {
   .arc-wire-row { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* depth pass 2 (dt-d2-) */
+.dt-d2-what { font: 700 0.8rem var(--mono); }
+.dt-d2-log { display: grid; gap: 2px; align-content: start; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 12px; font: 500 0.78rem/1.55 var(--mono); min-height: 96px; overflow-x: auto; min-width: 0; }
+.dt-d2-log > div { white-space: pre; }
+.dt-d2-log > .dt-d2-more { color: var(--t-c); }
+.dt-d2-objslot { display: grid; align-content: start; min-width: 0; }
+.dt-d2-objslot .obj { min-width: 0; overflow-wrap: anywhere; }
+.obj.dt-d2-lost { border-color: var(--err); }
+.dt-d2-chain { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; min-width: 0; }
+.dt-d2-chain > .arc-node { flex: 1 1 140px; }
+.dt-d2-chain > .arrow { align-self: center; }
+.arc-node.dt-d2-skip { opacity: 0.35; }
+.meter.dt-d2-meter { height: 12px; }
+.meter.dt-d2-meter span { transition: width 0.14s linear; }
+.bar.dt-d2-bar { transition-property: width; transition-timing-function: linear; }
+.dt-d2-split { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; min-width: 0; }
+.dt-d2-split > .dt-side { flex: 1 1 200px; }
+.phone .item.dt-d2-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 10px; font-size: 0.8rem; }
+.dt-d2-star { border: 0; background: none; cursor: pointer; font: 700 1.1rem var(--body); color: var(--muted); padding: 0 4px; }
+.dt-d2-star.dt-on { color: var(--warm); }
+.dt-d2-star.dt-d2-pend { opacity: 0.45; }
+.dt-d2-avatar { width: 84px; height: 84px; flex: none; border-radius: 50%; border: 2px solid var(--line); background: var(--sunk); display: grid; place-items: center; font: 600 0.7rem var(--mono); color: var(--muted); text-align: center; transition: border-color 0.25s, background 0.25s; }
+.dt-d2-avatar.dt-on { background: linear-gradient(135deg, var(--accent-soft), var(--warm-soft)); border-color: var(--accent); color: var(--ink); }
+.dt-d2-avatar.dt-bad { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.dt-file.dt-d2-tmp { transition: opacity 0.25s; }
+.dt-file.dt-d2-off { opacity: 0.35; }
 `;
 
   Lab.addTrack({
@@ -265,6 +292,103 @@ val Context.dataStore by preferencesDataStore(
           { q: 'You cache 5,000 articles and need search by title. Where do they go?', options: ['Preferences DataStore', 'Room', 'A JSON file in <code>cacheDir</code>'], a: 1, why: 'Room gives you indexed queries, partial updates and Flow results. DataStore and a JSON file would load and rewrite everything.' },
           { q: 'Why is <code>SharedPreferences</code> a poor choice for new code?', options: ['It cannot store booleans', 'Its reads and writes can block the main thread, and it has no transactional updates', 'It was removed in Android 15'], a: 1, why: 'The first read is synchronous disk I/O, and even <code>apply()</code> can stall when an activity stops. DataStore uses coroutines and atomic edits.' },
           { q: 'A photo the user took in your app should show up in Gallery. Where do you save it?', options: ['<code>filesDir</code>', 'MediaStore', 'Room as a BLOB'], a: 1, why: 'Only shared storage through MediaStore is visible to other apps, and it stays after your app is uninstalled.' },
+        ],
+        deeper: [
+          {
+            title: 'What survives Clear cache, Clear storage and low space',
+            body: `
+<p>The place you pick also decides when the data disappears. The system may delete files in <code>cacheDir</code> whenever the device runs low on space, and the user can wipe it with <b>Clear cache</b>. Treat everything there as rebuildable.</p>
+<p><b>Clear storage</b> in App info goes further: it deletes all app-specific data, DataStore files and Room databases included, as if the app were new. Items your app added to MediaStore stay, because they belong to the user. Try each action below. Every run starts from a full set of data.</p>`,
+            visual(el) {
+              const ITEMS = [
+                { k: 'ds', path: 'files/datastore/settings.preferences_pb', what: 'DataStore' },
+                { k: 'db', path: 'databases/news.db', what: 'Room' },
+                { k: 'pdf', path: 'files/issue-42.pdf', what: 'filesDir' },
+                { k: 'thumbs', path: 'cache/thumbs/ (38 files)', what: 'cacheDir' },
+                { k: 'photo', path: 'Pictures/News/card.jpg', what: 'MediaStore' },
+              ];
+              const ACTIONS = {
+                cache: { label: 'App info › Clear cache', gone: ['thumbs'], note: 'Only cacheDir was emptied. Settings, rows and the PDF are untouched.' },
+                low: { label: 'device low on space', gone: ['thumbs'], note: 'The system freed space by deleting cache files. Your app gets no warning, so code must expect cacheDir files to vanish.' },
+                storage: { label: 'App info › Clear storage', gone: ['ds', 'db', 'pdf', 'thumbs'], note: 'Every app-specific file is gone, settings and database too. The photo in MediaStore stays: it belongs to the user.' },
+              };
+              const rows = {};
+              let busy = false;
+              const list = h('div', { class: 'dt-qs' }, ITEMS.map(it => {
+                const pill = h('span', { class: 'dt-pill dt-ok' }, 'kept');
+                const e = h('div', { class: 'dt-q' }, h('span', {}, h('b', { class: 'dt-d2-what' }, it.what), ' ', h('span', { class: 'dt-path' }, it.path)), pill);
+                rows[it.k] = { e, pill };
+                return e;
+              }));
+              const o = out();
+              const fill = () => ITEMS.forEach(it => { const r = rows[it.k]; r.e.className = 'dt-q'; r.pill.className = 'dt-pill dt-ok'; r.pill.textContent = 'kept'; });
+              async function run(key, btn) {
+                if (busy) return; busy = true;
+                press(btns, btn); fill();
+                const a = ACTIONS[key];
+                say(o, `<span class="muted">${a.label}…</span>`);
+                await sleep(350); if (!o.isConnected) return;
+                for (const k of a.gone) {
+                  const r = rows[k];
+                  r.e.classList.add('dt-ask'); replay(r.e, 'shake');
+                  await sleep(260); if (!o.isConnected) return;
+                  r.e.classList.remove('dt-ask'); r.e.classList.add('dt-skip');
+                  r.pill.className = 'dt-pill dt-bad'; r.pill.textContent = 'deleted'; replay(r.pill, 'pop');
+                }
+                say(o, `<span class="${key === 'storage' ? 'bad' : 'good'}">${a.label}:</span> ${a.note}`);
+                busy = false;
+              }
+              const btns = Object.keys(ACTIONS).map(k => act(ACTIONS[k].label, function () { run(k, this); }));
+              say(o, 'Five pieces of data in five places. Pick what happens to the device.');
+              el.append(h('div', { class: 'controls' }, btns), list, o);
+            },
+          },
+          {
+            title: 'Backups: what comes back on a new phone',
+            body: `
+<p>Auto Backup is on by default. It copies most app-specific data to the user’s Google account, up to 25 MB per app: shared preferences, <code>filesDir</code> (DataStore lives there), databases and <code>getExternalFilesDir()</code>. It skips <code>cacheDir</code>, <code>codeCacheDir</code> and <code>noBackupFilesDir</code>. On a new phone, the data comes back when the app is installed.</p>
+<p>That is great for settings, and wrong for some files. A login token, a device id or a push token belongs to this one device. Exclude those with a rules file. Apps on Android 12 and later read <code>android:dataExtractionRules</code>; to support Android 11 and lower, also keep <code>android:fullBackupContent</code>.</p>`,
+            code: `<!-- AndroidManifest.xml: <application android:dataExtractionRules="@xml/data_extraction_rules" ...> -->
+
+<!-- res/xml/data_extraction_rules.xml -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/session.preferences_pb" />
+        <exclude domain="database" path="push_queue.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/session.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>All of this is ordinary files in the app’s private directory. For the main user that is <code>/data/user/0/&lt;package&gt;</code>, and <code>/data/data/&lt;package&gt;</code> points to the same place. Each user or work profile gets its own copy under its own user id.</p>
+<p>Room keeps a SQLite database in <code>databases/</code>. By default it opens it in write-ahead-log mode on most devices, so you see two extra files next to it: <code>-wal</code> holds recent writes, <code>-shm</code> is a shared index for the log. Preferences DataStore writes one protobuf file under <code>files/datastore/</code>. Legacy SharedPreferences are XML files under <code>shared_prefs/</code>.</p>`,
+          code: `/data/user/0/com.example.news/
+├── cache/thumbs/…                          (Clear cache, low space)
+├── databases/news.db, news.db-wal, news.db-shm
+├── files/datastore/settings.preferences_pb
+├── files/issue-42.pdf
+└── shared_prefs/legacy_settings.xml`,
+        },
+        mistakes: [
+          {
+            title: 'Hard-coding the data path',
+            bad: `val draft = File("/data/data/com.example.news/files/draft.md")`,
+            good: `val draft = File(context.filesDir, "draft.md")`,
+            why: 'The real path depends on the user and profile: a work profile uses <code>/data/user/10/…</code>. <code>filesDir</code> always returns the right directory for the current user.',
+          },
+          {
+            title: 'Storing images as BLOBs in Room',
+            bad: `@Entity
+data class Photo(@PrimaryKey val id: Long, val bytes: ByteArray)`,
+            good: `@Entity
+data class Photo(@PrimaryKey val id: Long, val fileName: String)
+// the bytes live in File(context.filesDir, "photos/$fileName")`,
+            why: 'Android reads query results through a cursor window of about 2 MB. A large row fails with <code>SQLiteBlobTooBigException</code>, and even smaller BLOBs make every query slow. Keep the file on disk and its name in the table.',
+          },
         ],
         visual(el) {
           const Q = [
@@ -758,6 +882,206 @@ interface LibraryDao {
           { q: 'Why mark a DAO function that returns <code>AuthorWithBooks</code> with <code>@Transaction</code>?', options: ['Room needs it to write rows', 'Room runs several queries for it, and the transaction keeps them on one consistent snapshot', 'It makes the query run on the main thread'], a: 1, why: 'Parents and children come from separate queries. Without a transaction a write could land between them.' },
           { q: 'What do you need to model "a book has many tags, a tag has many books"?', options: ['A list column on <code>Book</code>', 'A cross-reference entity with one row per (bookId, tagId) pair', 'Two <code>@Embedded</code> fields'], a: 1, why: 'Many-to-many needs a junction table. The relation uses <code>associateBy = Junction(BookTagCrossRef::class)</code>.' },
           { q: 'Is <code>AuthorWithBooks</code> an <code>@Entity</code>?', options: ['Yes, Room creates a table for it', 'No, it is a result class Room fills from existing tables'], a: 1, why: 'Relation classes are read models. The data stays in the flat <code>authors</code> and <code>books</code> tables.' },
+        ],
+        deeper: [
+          {
+            title: 'Why @Relation beats a loop: the N+1 query trap',
+            body: `
+<p>Without <code>@Relation</code>, the natural code loads the authors and then asks for each author’s books in a loop. That is one query for the parents plus one per parent: N+1. With 200 authors it is 201 round trips through SQLite, and the cost grows with every row.</p>
+<p>Room’s relation code does it in two queries, however many parents there are. It collects all parent keys and loads every matching child with one <code>IN (…)</code> query, then groups the children by key. Change the number of authors and compare.</p>`,
+            code: `// N + 1: one query for the authors, then one per author
+suspend fun loadSlow(): List<AuthorWithBooks> =
+    dao.getAuthors().map { AuthorWithBooks(it, dao.getBooksBy(it.authorId)) }
+
+// @Relation: two queries in total
+@Transaction
+@Query("SELECT * FROM authors")
+suspend fun getAuthorsWithBooks(): List<AuthorWithBooks>`,
+            visual(el) {
+              let loop = true, n = 3, busy = false;
+              const log = h('div', { class: 'dt-d2-log', 'aria-live': 'polite' });
+              const count = h('span', { class: 'arc-badge' }, 'queries: 0');
+              const o = out();
+              const q = (html, cls = '') => { const d = h('div', { class: 'drop-in ' + cls, html }); log.append(d); return d; };
+              async function run() {
+                if (busy) return; busy = true;
+                log.replaceChildren(); count.textContent = 'queries: 0';
+                let total = 0;
+                const bump = () => { total++; count.textContent = `queries: ${total}`; };
+                say(o, `<span class="muted">loading ${n} authors with their books…</span>`);
+                q(hl('SELECT * FROM authors')); bump();
+                await sleep(260); if (!o.isConnected) return;
+                if (loop) {
+                  const shown = Math.min(n, 4);
+                  for (let i = 1; i <= shown; i++) {
+                    q(hl(`SELECT * FROM books WHERE authorId = ${i}`)); bump();
+                    await sleep(220); if (!o.isConnected) return;
+                  }
+                  if (n > shown) {
+                    q(`… ${n - shown} more, one per author`, 'dt-d2-more');
+                    for (let i = shown; i < n; i++) { bump(); if (i % 20 === 0) { await sleep(30); if (!o.isConnected) return; } }
+                  }
+                  replay(count, 'shake');
+                  say(o, `<span class="bad">${total} queries</span> for ${n} authors. Each one is a separate trip into SQLite, and the number grows with the table.`);
+                } else {
+                  const keys = n <= 4 ? Array.from({ length: n }, (_, i) => i + 1).join(', ') : `1, 2, 3, … ${n}`;
+                  q(hl(`SELECT * FROM books WHERE authorId IN (${keys})`)); bump();
+                  replay(count, 'pop');
+                  say(o, `<span class="good">${total} queries</span> for ${n} authors. Room grouped the books by authorId in memory.`);
+                }
+                busy = false;
+              }
+              const sizes = [3, 200].map(v => act(`${v} authors`, function () { if (busy) return; n = v; press(sizes, this); run(); }));
+              press(sizes, sizes[0]);
+              const sw = switchEl('dt-d2-rel-loop', 'loop: one query per author', true, i => {
+                if (busy) { i.checked = loop; return; }
+                loop = i.checked; run();
+              });
+              [hl('SELECT * FROM authors'), hl('SELECT * FROM books WHERE authorId = 1'), hl('SELECT * FROM books WHERE authorId = 2'), hl('SELECT * FROM books WHERE authorId = 3')].forEach(x => log.append(h('div', { html: x })));
+              count.textContent = 'queries: 4';
+              say(o, '4 queries for 3 authors with the loop. Try 200 authors, then turn the loop off.');
+              el.append(h('div', { class: 'controls' }, sizes, sw, count), log, o);
+            },
+          },
+          {
+            title: 'What a delete does: CASCADE, NO_ACTION, SET_NULL',
+            body: `
+<p>A foreign key says what happens to the books when their author row is deleted. <code>CASCADE</code> deletes them too. <code>SET_NULL</code> keeps them and clears <code>authorId</code>, which must then be nullable. The default, <code>NO_ACTION</code>, refuses: the delete fails with <code>SQLiteConstraintException</code> while any book still points at the author.</p>
+<p>Pick the rule from the domain. Books of a deleted author should go away: <code>CASCADE</code>. Comments of a deleted user might stay as “anonymous”: <code>SET_NULL</code>. Data that must never be orphaned: keep the default and delete children first.</p>`,
+            code: `@Entity(
+    tableName = "books",
+    foreignKeys = [
+        ForeignKey(
+            entity = Author::class,
+            parentColumns = ["authorId"],
+            childColumns = ["authorId"],
+            onDelete = ForeignKey.SET_NULL,   // or CASCADE; the default is NO_ACTION
+        ),
+    ],
+    indices = [Index("authorId")],
+)
+data class Book(@PrimaryKey val bookId: Long, val authorId: Long?, val title: String)`,
+            visual(el) {
+              const MODES = { CASCADE: 'CASCADE', NO_ACTION: 'NO_ACTION (default)', SET_NULL: 'SET_NULL' };
+              let mode = 'CASCADE', busy = false, authors, books;
+              const aBody = h('div'), bBody = h('div');
+              const aT = h('div', { class: 'dt-table', style: '--dt-cols: 2.5em minmax(0, 1fr)' }, h('div', { class: 'dt-tname' }, 'authors'),
+                h('div', { class: 'dt-tr dt-th' }, h('span', {}, 'id'), h('span', {}, 'name')), aBody);
+              const bT = h('div', { class: 'dt-table', style: '--dt-cols: 2.5em 5.6em minmax(0, 1fr)' }, h('div', { class: 'dt-tname' }, 'books'),
+                h('div', { class: 'dt-tr dt-th' }, h('span', {}, 'id'), h('span', {}, 'authorId'), h('span', {}, 'title')), bBody);
+              const o = out();
+              const reset = () => { authors = [[1, 'Le Guin'], [2, 'Herbert']]; books = [[10, 1, 'Earthsea'], [11, 1, 'The Dispossessed'], [12, 2, 'Dune']]; };
+              const rowsA = {}, rowsB = {};
+              function paint() {
+                aBody.replaceChildren(...authors.map(([id, name]) => (rowsA[id] = h('div', { class: 'dt-tr' }, h('span', {}, String(id)), h('span', {}, name)))));
+                bBody.replaceChildren(...books.map(([id, a, t]) => (rowsB[id] = h('div', { class: 'dt-tr' }, h('span', {}, String(id)), h('span', { class: a == null ? 'dt-newcol' : null }, a == null ? 'NULL' : String(a)), h('span', {}, t)))));
+              }
+              async function del() {
+                if (busy) return;
+                if (!authors.some(a => a[0] === 1)) { say(o, 'Author 1 is already gone. Press restore rows.'); return; }
+                busy = true; paint();
+                rowsA[1].classList.add('dt-hot');
+                say(o, `${hl('dao.delete(author1)')} <span class="muted">// onDelete = ${mode}</span>`);
+                await sleep(550); if (!o.isConnected) return;
+                const kids = books.filter(b => b[1] === 1).map(b => b[0]);
+                if (mode === 'NO_ACTION') {
+                  kids.forEach(id => rowsB[id].classList.add('dt-hot'));
+                  replay(aT, 'shake');
+                  o.append(h('div', { class: 'line drop-in', html: '<span class="bad">SQLiteConstraintException:</span> FOREIGN KEY constraint failed (code 787 SQLITE_CONSTRAINT_FOREIGNKEY)' }));
+                  o.append(h('div', { class: 'line drop-in', html: '<span class="muted">nothing was deleted: books 10 and 11 still point at author 1</span>' }));
+                  await sleep(700); if (!o.isConnected) return;
+                  paint(); busy = false; return;
+                }
+                rowsA[1].classList.add('leave');
+                if (mode === 'CASCADE') kids.forEach(id => rowsB[id].classList.add('leave'));
+                await sleep(420); if (!o.isConnected) return;
+                authors = authors.filter(a => a[0] !== 1);
+                books = mode === 'CASCADE' ? books.filter(b => b[1] !== 1) : books.map(b => (b[1] === 1 ? [b[0], null, b[2]] : b));
+                paint();
+                if (mode === 'SET_NULL') kids.forEach(id => { rowsB[id].classList.add('dt-new'); replay(rowsB[id], 'pop-soft'); });
+                o.append(h('div', { class: 'line drop-in', html: mode === 'CASCADE'
+                  ? '<span class="good">CASCADE:</span> SQLite deleted books 10 and 11 in the same statement.'
+                  : '<span class="good">SET_NULL:</span> the books stay, now with authorId = NULL.' }));
+                busy = false;
+              }
+              const modeBtns = Object.keys(MODES).map(m => act(MODES[m], function () {
+                if (busy) return; mode = m; press(modeBtns, this); reset(); paint();
+                say(o, `onDelete = ${m}. Now delete author 1.`);
+              }));
+              const restore = act('restore rows', () => { if (busy) return; reset(); paint(); say(o, 'Rows restored.'); });
+              reset(); paint(); press(modeBtns, modeBtns[0]);
+              say(o, 'Pick an onDelete rule, then delete Le Guin.');
+              el.append(h('div', { class: 'controls' }, modeBtns), h('div', { class: 'controls' }, cmd('dao.delete(author1)', del), restore), h('div', { class: 'dt-tables' }, aT, bT), o);
+            },
+          },
+          {
+            title: 'Nested relations and projections',
+            body: `
+<p>A relation can contain another relation. To load authors with their books and each book’s tags, make the child type <code>BookWithTags</code> and tell Room which table to read with <code>entity = Book::class</code>. Room runs one more query per level, still not one per row.</p>
+<p>When the screen needs only one column, <code>projection</code> loads just that column into a list of plain values.</p>`,
+            code: `data class AuthorWithBooksAndTags(
+    @Embedded val author: Author,
+    @Relation(
+        entity = Book::class,          // the table behind BookWithTags
+        parentColumn = "authorId",
+        entityColumn = "authorId",
+    )
+    val books: List<BookWithTags>,     // itself a relation class
+)
+
+data class AuthorWithTitles(
+    @Embedded val author: Author,
+    @Relation(
+        entity = Book::class,
+        parentColumn = "authorId",
+        entityColumn = "authorId",
+        projection = ["title"],
+    )
+    val titles: List<String>,
+)`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>For each <code>@Relation</code>, Room’s annotation processor generates a helper in the DAO implementation. After the parent query, it puts every parent key into a map, binds the keys into one <code>SELECT … WHERE authorId IN (?, ?, …)</code>, and adds each child row to the list under its key. If there are more than 999 keys, the old SQLite limit for bound variables, it splits them into batches of 999.</p>
+<p>Foreign keys are enforced by SQLite, not by Room. SQLite leaves them off by default, so when your entities declare foreign keys, Room turns them on with <code>PRAGMA foreign_keys = ON</code> each time it opens the database. That is why <code>CASCADE</code> and the <code>NO_ACTION</code> error work without any code of yours.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'No index on the foreign key column',
+            bad: `@Entity(
+    foreignKeys = [ForeignKey(Author::class, ["authorId"], ["authorId"], onDelete = ForeignKey.CASCADE)],
+)
+data class Book(@PrimaryKey val bookId: Long, val authorId: Long, val title: String)`,
+            good: `@Entity(
+    foreignKeys = [ForeignKey(Author::class, ["authorId"], ["authorId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("authorId")],
+)
+data class Book(@PrimaryKey val bookId: Long, val authorId: Long, val title: String)`,
+            why: 'Without an index, every delete of an author and every relation query scans the whole books table. Room warns about it at build time; read the warning.',
+          },
+          {
+            title: 'Loading every child, then filtering in Kotlin',
+            bad: `val result = dao.getAuthorsWithBooks().map { a ->
+    a.copy(books = a.books.filter { it.published })
+}`,
+            good: `@Query("""
+    SELECT * FROM authors
+    JOIN books ON books.authorId = authors.authorId
+    WHERE books.published = 1
+""")
+fun observePublished(): Flow<Map<Author, List<Book>>>`,
+            why: '<code>@Relation</code> always loads all children. A JOIN with a multimap return type lets SQLite filter. Note that an inner join drops authors with no published books.',
+          },
+          {
+            title: 'A list column instead of a cross-reference table',
+            bad: `@Entity
+data class Book(@PrimaryKey val bookId: Long, val title: String, val tagIds: List<Long>)
+// stored as "3,7,9" through a TypeConverter`,
+            good: `@Entity(primaryKeys = ["bookId", "tagId"], indices = [Index("tagId")])
+data class BookTagCrossRef(val bookId: Long, val tagId: Long)`,
+            why: 'SQLite sees one text value. You can’t index it, join on it or ask “which books have tag 7” without scanning and parsing every row, and nothing stops ids of deleted tags.',
+          },
         ],
         visual(el) {
           const authors = [[1, 'Le Guin'], [2, 'Herbert']];
@@ -1258,6 +1582,178 @@ suspend fun goDark(store: DataStore<UserSettings>) = store.updateData { it.copy(
           { q: 'How do you read a DataStore value?', options: ['A synchronous <code>get()</code>', 'Collect the <code>data</code> Flow', 'Query it with SQL'], a: 1, why: '<code>data</code> emits the current snapshot and every later change. There is no synchronous getter.' },
           { q: 'Two classes each build their own DataStore for <code>settings.preferences_pb</code>. What happens?', options: ['They share the file safely', 'DataStore throws because more than one DataStore is active for the same file', 'The last writer wins silently'], a: 1, why: 'DataStore needs to be the only owner of its file. Declare it once with the top-level delegate or a DI singleton.' },
         ],
+        deeper: [
+          {
+            title: 'A corrupt file needs a corruption handler',
+            body: `
+<p>Files get damaged: a full disk, a bad flash cell, a buggy old version that wrote garbage. When your <code>Serializer</code> can’t decode the bytes, it throws <code>CorruptionException</code>. Without a handler, DataStore throws that on every read and every <code>updateData</code>, and the file stays broken.</p>
+<p>Pass a <code>ReplaceFileCorruptionHandler</code>. On corruption, DataStore calls it, writes the value it returns, and carries on. The user loses those settings, but the app works again. <code>CorruptionException</code> is an <code>IOException</code>, so a <code>catch</code> on the flow hides the symptom for reads but leaves writes failing.</p>`,
+            code: `val Context.settingsStore by dataStore(
+    fileName = "user_settings.json",
+    serializer = UserSettingsSerializer,
+    corruptionHandler = ReplaceFileCorruptionHandler { e ->
+        Log.w("Settings", "Resetting corrupt settings", e)
+        UserSettings()          // written to disk in place of the broken file
+    },
+)`,
+            visual(el) {
+              const GOOD = '{"theme":"dark","fontSize":18}';
+              let handler = false, corrupt = false, data = { theme: '"dark"', fontSize: 18 }, busy = false, emits = 1;
+              const file = h('div', { class: 'dt-file' });
+              const obj = h('div', { class: 'dt-d2-objslot' });
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              function paint() {
+                file.innerHTML = `<span class="dt-fname">files/datastore/user_settings.json</span>\n` + (corrupt ? '{"theme":"da<span class="dt-hit">\\x00\\x00\\x9f\\x03</span>' : data.fontSize === 16 && data.theme === '"system"' ? '{}  <span class="dt-fname">// all defaults: encodeDefaults is off</span>' : `{"theme":${data.theme},"fontSize":${data.fontSize}}`);
+                obj.replaceChildren(h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, `UserSettings · emission ${emits}`), h('span', { class: 'field' }, `theme = ${data.theme}`), h('span', { class: 'field' }, `fontSize = ${data.fontSize}`)));
+              }
+              async function access(write) {
+                if (busy) return; busy = true;
+                say(o, write ? hl('store.updateData { it.copy(fontSize = it.fontSize + 1) }') : hl('store.data.first()'));
+                await sleep(450); if (!o.isConnected) return;
+                if (corrupt && !handler) {
+                  replay(file, 'shake');
+                  line('<span class="bad">CorruptionException:</span> Cannot read settings');
+                  line(`<span class="muted">${write ? 'The write failed too: updateData has to read the current value first.' : 'Every read throws until the file is fixed. Nothing fixes it.'}</span>`);
+                  busy = false; return;
+                }
+                if (corrupt) {
+                  line('<span class="muted">decode failed → ReplaceFileCorruptionHandler { UserSettings() }</span>');
+                  corrupt = false; data = { theme: '"system"', fontSize: 16 }; emits++; paint(); replay(file, 'pop');
+                  await sleep(500); if (!o.isConnected) return;
+                }
+                if (write) { data.fontSize++; emits++; paint(); replay(obj, 'pop-soft'); line(`<span class="good">written:</span> fontSize = ${data.fontSize}`); }
+                else line(`<span class="good">read:</span> UserSettings(theme=${data.theme}, fontSize=${data.fontSize})`);
+                busy = false;
+              }
+              function breakIt() {
+                if (busy) return;
+                corrupt = true; paint(); replay(file, 'shake');
+                say(o, '<span class="bad">the file is damaged.</span> Now read it or write it.');
+              }
+              const sw = toggle('dt-d2-ds-handler', 'corruptionHandler', function () { if (busy) { this.checked = handler; return; } handler = this.checked; say(o, handler ? 'A ReplaceFileCorruptionHandler is installed.' : 'No corruption handler.'); });
+              paint();
+              say(o, 'Settings read fine. Damage the file, then read and write with and without a handler.');
+              el.append(
+                h('div', { class: 'controls' }, act('damage the file', breakIt), cmd('store.data.first()', () => access(false)), cmd('updateData { fontSize + 1 }', () => access(true)), sw),
+                h('div', { class: 'dt-grid' }, file, obj), o);
+            },
+          },
+          {
+            title: 'Change the class without losing users’ settings',
+            body: `
+<p>Typed DataStore with JSON keeps whatever your last version wrote. When an update changes <code>UserSettings</code>, the new code has to read the old file. kotlinx.serialization fills a missing key from the property’s default value. A new property without a default throws <code>MissingFieldException</code>. A key that no longer has a property throws too, unless the <code>Json</code> instance sets <code>ignoreUnknownKeys = true</code>.</p>
+<p>With the corruption handler from the step before, either error turns into a silent reset, and the user’s dark theme is gone after an update. Give every new property a default, ignore unknown keys, and use a <code>DataMigration</code> for real renames.</p>`,
+            code: `private val json = Json { ignoreUnknownKeys = true }   // removed keys don't break reads
+
+@Serializable
+data class UserSettings(
+    val theme: String = "system",
+    val fontSize: Int = 16,
+    val compact: Boolean = false,   // new in v2: the default keeps v1 files readable
+)`,
+            visual(el) {
+              const V1 = '{"theme":"dark","fontSize":18}';
+              const UP = {
+                add: { label: 'v2: val compact = false', cls: 'theme: String = "system"\nfontSize: Int = 16\ncompact: Boolean = false' },
+                nodef: { label: 'v2: val compact (no default)', cls: 'theme: String = "system"\nfontSize: Int = 16\ncompact: Boolean' },
+                drop: { label: 'v3: remove fontSize', cls: 'theme: String = "system"' },
+              };
+              let ignore = false, busy = false;
+              const file = h('div', { class: 'dt-file' });
+              const klass = h('div', { class: 'kt' });
+              const obj = h('div', { class: 'dt-d2-objslot' });
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const card = (fields, cls = '') => h('div', { class: 'obj drop-in ' + cls }, h('span', { class: 'obj-name' }, 'UserSettings'), fields.map(f => h('span', { class: 'field' + (f[2] ? ' changed' : '') }, `${f[0]} = ${f[1]}`)));
+              function v1() {
+                file.innerHTML = `<span class="dt-fname">user_settings.json, written by v1</span>\n${V1}`;
+                klass.textContent = 'data class UserSettings(theme, fontSize)';
+                obj.replaceChildren(card([['theme', '"dark"'], ['fontSize', 18]]));
+              }
+              async function upgrade(k) {
+                if (busy) return; busy = true;
+                v1();
+                klass.innerHTML = hl(`// app ${UP[k].label.split(':')[0]}\n` + UP[k].cls);
+                replay(klass, 'pop-soft');
+                say(o, `<span class="muted">update installed. Reading the v1 file with the ${UP[k].label.split(':')[0]} class…</span>`);
+                await sleep(700); if (!o.isConnected) return;
+                let err = null;
+                if (k === 'nodef') err = 'MissingFieldException: Field \'compact\' is required for type with serial name \'com.example.UserSettings\', but it was missing';
+                if (k === 'drop' && !ignore) err = 'SerializationException: Encountered an unknown key \'fontSize\'';
+                if (err) {
+                  replay(file, 'shake');
+                  line(`<span class="bad">${err}</span>`);
+                  await sleep(500); if (!o.isConnected) return;
+                  line('<span class="muted">readFrom → CorruptionException → handler → UserSettings()</span>');
+                  file.innerHTML = '<span class="dt-fname">user_settings.json, replaced</span>\n{}';
+                  obj.replaceChildren(card(k === 'drop' ? [['theme', '"system"', 1]] : [['theme', '"system"', 1], ['fontSize', 16, 1], ['compact', false]], 'dt-d2-lost'));
+                  line('<span class="bad">reset:</span> no crash, but the user’s dark theme and font size are gone.');
+                } else {
+                  obj.replaceChildren(card(k === 'add' ? [['theme', '"dark"'], ['fontSize', 18], ['compact', 'false', 1]] : [['theme', '"dark"']]));
+                  line(k === 'add'
+                    ? '<span class="good">kept:</span> "compact" was missing in the file, so the default filled it.'
+                    : '<span class="good">kept:</span> ignoreUnknownKeys skipped "fontSize". The theme survived.');
+                }
+                busy = false;
+              }
+              const sw = toggle('dt-d2-ds-ignore', 'Json { ignoreUnknownKeys = true }', function () { if (busy) { this.checked = ignore; return; } ignore = this.checked; say(o, ignore ? 'Unknown keys are now skipped.' : 'Unknown keys throw again.'); });
+              v1();
+              say(o, 'v1 saved a dark theme. Install an update and see if it survives.');
+              el.append(
+                h('div', { class: 'controls' }, Object.keys(UP).map(k => act(UP[k].label, () => upgrade(k))), sw),
+                h('div', { class: 'dt-grid' }, h('div', { class: 'dt-side' }, file, klass), obj), o);
+            },
+          },
+          {
+            title: 'More than one process needs the multi-process factory',
+            body: `
+<p>A normal DataStore caches the data in memory and assumes it is the only writer. If your app runs a second process, for example a service declared with <code>android:process=":sync"</code>, and both processes open the same file, neither sees the other’s writes and they can overwrite each other.</p>
+<p><code>MultiProcessDataStoreFactory</code> creates a DataStore that coordinates through the file itself, so every process sees every change. It costs a little more per operation, so use it only when two processes really share the data.</p>`,
+            code: `val settingsStore: DataStore<UserSettings> = MultiProcessDataStoreFactory.create(
+    serializer = UserSettingsSerializer,
+    produceFile = { File(context.filesDir, "datastore/user_settings.json") },
+)`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Inside, a DataStore keeps the latest value in memory and runs every write through one queue, one at a time. A write reads the current value, runs your transform, and compares the result. If nothing changed, it stops there. Otherwise it serializes the new value into a temporary file next to the real one, syncs it to disk, and renames it over the old file. A rename is atomic, so a crash leaves either the old file or the new one, never half of each.</p>
+<p>The <code>data</code> flow emits from the in-memory value, which is why reads after the first one are fast and why equal values are not emitted twice. Preferences DataStore is the same machine with a built-in serializer: the keys and values are stored as a small protocol buffer, hence the <code>.preferences_pb</code> file name.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Reading outside the transaction',
+            bad: `suspend fun bump() {
+    val size = store.data.first()[FONT_SIZE] ?: 16
+    store.edit { it[FONT_SIZE] = size + 1 }
+}`,
+            good: `suspend fun bump() {
+    store.edit { it[FONT_SIZE] = (it[FONT_SIZE] ?: 16) + 1 }
+}`,
+            why: 'Two calls can both read 16 before either writes, and the result is 17 instead of 18. Inside <code>edit</code>, the read and the write happen as one step.',
+          },
+          {
+            title: 'A mutable settings class',
+            bad: `data class UserSettings(var fontSize: Int = 16)
+
+store.updateData { it.apply { fontSize = 18 } }`,
+            good: `data class UserSettings(val fontSize: Int = 16)
+
+store.updateData { it.copy(fontSize = 18) }`,
+            why: 'DataStore needs an immutable type. Changing the current object in place also changes the copy DataStore compares against, so it may see “no change” and skip the write.',
+          },
+          {
+            title: 'Reusing a key name with another type',
+            bad: `// v1
+val FONT_SIZE = intPreferencesKey("font_size")
+// v2
+val FONT_SIZE = floatPreferencesKey("font_size")`,
+            good: `// v2: a new name, and copy the old value once
+val FONT_SCALE = floatPreferencesKey("font_scale")`,
+            why: 'The file still holds an Int under "font_size". Reading it through a Float key fails with a <code>ClassCastException</code> on every launch for users who upgrade.',
+          },
+        ],
         visual(el) {
           const st = { theme: 'dark', font: 16 };
           let typed = false, emissions = 1, running = false, blocking = false;
@@ -1419,6 +1915,224 @@ suspend fun loadArticle(id: Int): Result<ArticleDto> = try {
           { q: 'The JSON has a <code>"views"</code> key your class doesn’t declare. With <code>ignoreUnknownKeys = true</code>:', options: ['The key is skipped', 'Parsing throws'], a: 0, why: 'Without that setting, an unknown key throws a <code>SerializationException</code>.' },
           { q: 'How do you map <code>"published_at"</code> to <code>publishedAt</code>?', options: ['<code>@SerialName("published_at")</code>', '<code>@Json(name = "published_at")</code>', 'Rename the property to <code>published_at</code>'], a: 0, why: '<code>@SerialName</code> is the kotlinx.serialization annotation. <code>@Json</code> belongs to Moshi.' },
         ],
+        deeper: [
+          {
+            title: 'Interceptors: one place for headers and logging',
+            body: `
+<p>Every request goes through OkHttp, so OkHttp is where cross-cutting work belongs: headers every call needs, auth tokens, logging. An <code>Interceptor</code> sees the request, may change it, calls <code>chain.proceed()</code> and gets the response back.</p>
+<p>Where you add it matters. An <b>application interceptor</b> (<code>addInterceptor</code>) runs once per call, even when the response comes from the cache. A <b>network interceptor</b> (<code>addNetworkInterceptor</code>) runs once per real network request: not at all for a cache hit, and twice when the server redirects. Logging there shows exactly what went over the wire.</p>`,
+            code: `class HeaderInterceptor(private val locale: () -> String) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response =
+        chain.proceed(
+            chain.request().newBuilder()
+                .header("Accept-Language", locale())
+                .header("X-App-Version", BuildConfig.VERSION_NAME)
+                .build(),
+        )
+}
+
+val client = OkHttpClient.Builder()
+    .addInterceptor(HeaderInterceptor { Locale.getDefault().toLanguageTag() })   // once per call
+    .addNetworkInterceptor(HttpLoggingInterceptor().apply {
+        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS else HttpLoggingInterceptor.Level.NONE
+    })                                                                          // once per network request
+    .cache(Cache(File(context.cacheDir, "http"), 20L * 1024 * 1024))
+    .build()`,
+            visual(el) {
+              let busy = false;
+              const tok = (n, text, cls = '') => { const t = h('span', { class: `token ${cls}` }, text); n.box.replaceChildren(t); replay(t, 'pop'); return t; };
+              const cnt = { app: 0, net: 0 };
+              const appB = h('span', { class: 'arc-badge' }, 'ran 0×'), netB = h('span', { class: 'arc-badge' }, 'ran 0×');
+              const appI = node('HeaderInterceptor', 'application interceptor', appB);
+              const cache = node('Cache', 'OkHttp disk cache');
+              const netI = node('HttpLoggingInterceptor', 'network interceptor', netB);
+              const server = node('api.example.com', 'the network');
+              const all = [appI, cache, netI, server];
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const calm = () => all.forEach(n => { n.classList.remove('on', 'ok', 'dt-d2-skip'); n.box.replaceChildren(); });
+              const bump = (k, b) => { cnt[k]++; b.textContent = `ran ${cnt[k]}×`; replay(b, 'pop'); };
+              async function hit(n, text, cls = '') {
+                all.forEach(x => x.classList.remove('on'));
+                n.classList.add('on'); tok(n, text, cls);
+                await sleep(480);
+                return o.isConnected;
+              }
+              async function call(kind) {
+                if (busy) return; busy = true;
+                calm(); cnt.app = 0; cnt.net = 0; appB.textContent = netB.textContent = 'ran 0×';
+                const path = kind === 'redirect' ? '/articles/7' : '/articles/42';
+                say(o, `${hl(`api.getArticle(${kind === 'redirect' ? 7 : 42})`)} <span class="muted">→ GET ${path}</span>`);
+                bump('app', appB);
+                if (!await hit(appI, '+ Accept-Language')) return;
+                if (kind === 'cache') {
+                  if (!await hit(cache, 'fresh: max-age not over', 'arc-back')) return;
+                  netI.classList.add('dt-d2-skip'); server.classList.add('dt-d2-skip');
+                  if (!await hit(appI, '200 (from cache)', 'arc-back')) return;
+                  line('<span class="good">cache hit:</span> the application interceptor ran once. The network interceptor never ran: no bytes went over the wire.');
+                } else {
+                  if (!await hit(cache, 'miss')) return;
+                  bump('net', netB);
+                  if (!await hit(netI, `log GET ${path}`)) return;
+                  if (kind === 'redirect') {
+                    if (!await hit(server, '301 → /v2/articles/7', 'boom')) return;
+                    line('<span class="muted">OkHttp follows the redirect itself and sends a second request…</span>');
+                    bump('net', netB);
+                    if (!await hit(netI, 'log GET /v2/articles/7')) return;
+                  }
+                  if (!await hit(server, '200 OK', 'arc-back')) return;
+                  if (!await hit(appI, '200 OK', 'arc-back')) return;
+                  line(kind === 'redirect'
+                    ? '<span class="good">redirect:</span> the network interceptor saw both requests. The application interceptor ran once and only saw the final response.'
+                    : '<span class="good">network call:</span> each interceptor ran once.');
+                }
+                all.forEach(x => x.classList.remove('on'));
+                busy = false;
+              }
+              say(o, 'Send three calls and count how often each interceptor runs.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('getArticle(42) // not cached', () => call('net')), cmd('getArticle(42) // cache hit', () => call('cache')), cmd('getArticle(7) // 301 redirect', () => call('redirect'))),
+                h('div', { class: 'dt-d2-chain' }, appI, h('span', { class: 'arrow' }, '→'), cache, h('span', { class: 'arrow' }, '→'), netI, h('span', { class: 'arrow' }, '→'), server),
+                o);
+            },
+          },
+          {
+            title: 'Leaving the screen cancels the request',
+            body: `
+<p>A request started in <code>viewModelScope</code> belongs to the screen. Press back, the ViewModel is cleared, its scope is cancelled, and the suspended Retrofit call is cancelled with it. Retrofit cancels the OkHttp <code>Call</code>, which closes the connection. The rest of a 2 MB download never happens.</p>
+<p>Launch the same call in <code>GlobalScope</code> and nothing stops it. The download finishes and the result lands in a ViewModel no one shows. Work that must outlive the screen, like an upload, belongs in WorkManager, not in a stray scope.</p>`,
+            code: `@HiltViewModel
+class ArticleViewModel @Inject constructor(
+    savedState: SavedStateHandle,
+    private val api: NewsApi,
+) : ViewModel() {
+    private val id: Int = checkNotNull(savedState["id"])
+
+    init {
+        viewModelScope.launch {
+            // Back pressed: the scope is cancelled, Retrofit cancels the OkHttp call,
+            // and getArticle throws CancellationException here. Let it propagate.
+            _state.value = ArticleState.Ready(api.getArticle(id))
+        }
+    }
+}`,
+            visual(el) {
+              let global = false, dl = 0, open = false, cleared = false, gen = 0;
+              const tok = (n, text, cls = '') => { const t = h('span', { class: `token ${cls}` }, text); n.box.replaceChildren(t); replay(t, 'pop'); return t; };
+              const bar = h('span', { style: 'width:0%' });
+              const meter = h('div', { class: 'meter dt-d2-meter' }, bar);
+              const kb = h('span', { class: 'arc-badge' }, '0 KB of 2048 KB');
+              const vm = node('ArticleViewModel', 'owns the scope');
+              const call = node('OkHttp Call', 'GET /articles/42/full', meter, kb);
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const paint = () => { bar.style.width = `${dl}%`; kb.textContent = `${Math.round(dl * 20.48)} KB of 2048 KB`; };
+              async function start() {
+                if (open) { say(o, 'The article is already loading.'); return; }
+                open = true; cleared = false; dl = 0; const g = ++gen;
+                [vm, call].forEach(n => { n.classList.remove('bad', 'ok'); n.box.replaceChildren(); });
+                vm.classList.add('on'); tok(vm, global ? 'GlobalScope.launch' : 'viewModelScope.launch');
+                call.classList.add('on'); paint();
+                say(o, '<span class="muted">downloading on a slow connection… press back while it runs.</span>');
+                while (dl < 100) {
+                  await sleep(140);
+                  if (!o.isConnected || g !== gen) return;
+                  dl = Math.min(100, dl + 4); paint();
+                }
+                call.classList.remove('on'); call.classList.add(cleared ? 'bad' : 'ok');
+                tok(call, '200 OK', cleared ? 'boom' : 'arc-back');
+                if (cleared) {
+                  vm.classList.add('bad'); tok(vm, 'state set on a cleared ViewModel', 'boom');
+                  line('<span class="bad">wasted:</span> GlobalScope kept the download going after the screen closed. 2 MB of data and battery for a result nobody will see.');
+                } else {
+                  vm.classList.remove('on'); tok(vm, 'ArticleState.Ready', 'arc-back');
+                  line('<span class="good">loaded</span> while the screen was open.');
+                }
+                open = false;
+              }
+              async function back() {
+                if (!open) { say(o, 'Nothing is loading. Open the article first.'); return; }
+                if (cleared) return;
+                cleared = true;
+                vm.classList.remove('on'); vm.classList.add('bad'); tok(vm, 'onCleared()', 'boom'); replay(vm, 'shake');
+                if (global) {
+                  line('<span class="muted">The ViewModel is cleared, but GlobalScope is not tied to it…</span>');
+                  return;
+                }
+                gen++; open = false;
+                call.classList.remove('on'); call.classList.add('bad'); tok(call, 'Canceled', 'boom'); replay(call, 'shake');
+                line(`<span class="good">cancelled:</span> viewModelScope was cancelled, Retrofit called call.cancel(), and the socket closed after ${Math.round(dl * 20.48)} KB. ${Math.round((100 - dl) * 20.48)} KB were never downloaded.`);
+              }
+              const sw = toggle('dt-d2-net-global', 'GlobalScope.launch instead', function () { if (open) { this.checked = global; return; } global = this.checked; say(o, global ? 'The call now runs in GlobalScope, tied to nothing.' : 'The call runs in viewModelScope again.'); });
+              paint();
+              say(o, 'Open the article, then press back before it finishes.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('open article (2 MB, slow network)', start), act('press back', back), sw),
+                h('div', { class: 'dt-d2-chain' }, vm, h('span', { class: 'arrow' }, '→'), call),
+                o);
+            },
+          },
+          {
+            title: 'Timeouts are per phase',
+            body: `
+<p>OkHttp has four timeouts. Connect, read and write default to 10 seconds each. The read timeout is the longest wait for the next bytes, not for the whole response, so a server that trickles one byte every few seconds never trips it. <code>callTimeout</code> bounds the whole call, from DNS to the last byte, and defaults to 0, which means no limit.</p>
+<p>Every timeout surfaces as an <code>IOException</code> subclass, so the <code>catch (e: IOException)</code> in your repository already handles it. Set the timeouts once on the shared client.</p>`,
+            code: `val client = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)   // default 10 s: open the TCP + TLS connection
+    .readTimeout(10, TimeUnit.SECONDS)      // default 10 s: the gap between incoming bytes
+    .writeTimeout(10, TimeUnit.SECONDS)     // default 10 s: the gap between outgoing bytes
+    .callTimeout(30, TimeUnit.SECONDS)      // default 0 (none): the whole call
+    .build()`,
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>retrofit.create(NewsApi::class.java)</code> returns a <code>java.lang.reflect.Proxy</code>. On the first call to a method, Retrofit reads its annotations once, builds a small request factory and caches it. Later calls skip the parsing.</p>
+<p>The JVM sees a Kotlin <code>suspend</code> function as a normal method with one extra last parameter, a <code>Continuation</code>. Retrofit spots that parameter and adapts the call with <code>suspendCancellableCoroutine</code>: it enqueues the OkHttp call, resumes the coroutine from OkHttp’s callback, and registers <code>invokeOnCancellation { call.cancel() }</code>. That last line is the cancellation you saw above.</p>
+<p>kotlinx.serialization does no reflection at run time. The compiler plugin generates a serializer for every <code>@Serializable</code> class, reachable as <code>ArticleDto.serializer()</code>, that reads the JSON keys in a loop and calls the constructor.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'A new client for every call',
+            bad: `suspend fun load(id: Int): ArticleDto {
+    val api = Retrofit.Builder()
+        .baseUrl("https://api.example.com/")
+        .client(OkHttpClient())
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
+        .create(NewsApi::class.java)
+    return api.getArticle(id)
+}`,
+            good: `@Provides @Singleton
+fun newsApi(client: OkHttpClient): NewsApi = Retrofit.Builder()
+    .baseUrl("https://api.example.com/")
+    .client(client)
+    .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+    .build()
+    .create(NewsApi::class.java)`,
+            why: 'Each <code>OkHttpClient</code> has its own connection pool, threads and cache. A new one per call reconnects every time and never reuses warm connections. Build one client and one API object, and share them.',
+          },
+          {
+            title: 'Logging bodies in release builds',
+            bad: `.addInterceptor(HttpLoggingInterceptor().apply {
+    level = HttpLoggingInterceptor.Level.BODY
+})`,
+            good: `.addInterceptor(HttpLoggingInterceptor().apply {
+    level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+    redactHeader("Authorization")
+})`,
+            why: 'BODY logs every request and response in full, tokens and personal data included, into Logcat on users’ phones. It also buffers each body, which slows large downloads.',
+          },
+          {
+            title: 'A leading slash in the path',
+            bad: `// baseUrl("https://api.example.com/v1/")
+@GET("/articles/{id}")    // → https://api.example.com/articles/42`,
+            good: `// baseUrl("https://api.example.com/v1/")
+@GET("articles/{id}")     // → https://api.example.com/v1/articles/42`,
+            why: 'Retrofit resolves the path like a link in a web page. A leading slash means “from the host root”, so the <code>/v1/</code> part of the base URL is silently dropped.',
+          },
+        ],
         visual(el) {
           const ok = [['{', null], ['  "id": 42,', ['id', '42']], ['  "title": "Room with KSP",', ['title', '"Room with KSP"']], ['  "published_at": "2026-10-01",', ['publishedAt', '"2026-10-01"']], ['  "views": 1280', 'ign'], ['}', null]];
           const missing = [['{', null], ['  "id": 42,', ['id', '42']], ['  "published_at": "2026-10-01"', ['publishedAt', '"2026-10-01"']], ['}', null]];
@@ -1562,6 +2276,191 @@ val client = OkHttpClient.Builder()
           { q: 'Cache-then-network, the device is offline, the cache has yesterday\'s articles. What does the user see?', options: ['A spinner forever', 'Yesterday\'s articles, plus an offline notice', 'An empty list'], a: 1, why: 'The cache shows at once. The failed fetch only adds a notice; it must not clear the stored rows.' },
           { q: 'The TTL is 10 minutes and the cache is 2 minutes old. What does a TTL strategy do on open?', options: ['Fetches anyway', 'Shows the cache and skips the network', 'Clears the cache'], a: 1, why: 'Young data counts as fresh, so there is no request at all.' },
           { q: 'OkHttp has a stale cached response with an ETag. What does it send?', options: ['Nothing, it serves the stale copy', 'A conditional request with <code>If-None-Match</code>; a 304 means the cached body is still good', 'A DELETE for the old response'], a: 1, why: 'Revalidation is cheap: a 304 has no body, and OkHttp serves the cached one.' },
+        ],
+        deeper: [
+          {
+            title: 'Share one refresh between many callers',
+            body: `
+<p>Real apps refresh from several places. The screen refreshes when it opens, the user pulls to refresh, and a periodic worker syncs in the background. When they fire together, a naive repository sends three identical requests and writes the same rows three times.</p>
+<p>Guard the refresh with a <code>Mutex</code> and check the TTL inside the lock. The first caller fetches. The others wait for the lock, then find fresh data and return at once. One request, three happy callers.</p>`,
+            code: `private val refreshLock = Mutex()
+
+suspend fun refreshIfStale(ttl: Duration = 10.minutes) = refreshLock.withLock {
+    // A caller that waited here finds the data the first caller just wrote.
+    val fetchedAt = dao.oldestFetchedAt() ?: 0L
+    if (now() - fetchedAt < ttl.inWholeMilliseconds) return@withLock
+    val fresh = api.latest()
+    dao.replaceAll(fresh.map { it.toEntity(fetchedAt = now()) })
+}`,
+            visual(el) {
+              const CALLERS = ['screen opens', 'pull to refresh', 'SyncWorker'];
+              let locked = false, busy = false;
+              const tracks = CALLERS.map(() => h('div', { class: 'lane-track' }));
+              const tl = h('div', { class: 'timeline' }, CALLERS.map((c, i) => h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, c), tracks[i])));
+              const reqs = h('span', { class: 'chip total' }, '0');
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const bar = (i, cls, left, width, ms) => {
+                const b = h('span', { class: `bar ${cls} dt-d2-bar`, style: `left:${left}%;width:0;transition-duration:${ms}ms` });
+                tracks[i].append(b); void b.offsetWidth; b.style.width = `${width}%`;
+                return b;
+              };
+              async function fire() {
+                if (busy) return; busy = true;
+                tracks.forEach(t => t.replaceChildren()); reqs.textContent = '0';
+                say(o, '<span class="muted">all three call refreshIfStale() within a few milliseconds…</span>');
+                if (!locked) {
+                  CALLERS.forEach((_, i) => bar(i, 'run', 2 + i * 3, 60, 900));
+                  for (let i = 1; i <= 3; i++) { await sleep(120); if (!o.isConnected) return; reqs.textContent = String(i); replay(reqs, 'pop'); }
+                  await sleep(800); if (!o.isConnected) return;
+                  say(o, '<span class="bad">3 requests:</span> each caller saw stale data and fetched. The same rows were downloaded and written three times.');
+                } else {
+                  bar(0, 'run', 2, 60, 900);
+                  bar(1, 'wait', 5, 57, 900); bar(2, 'wait', 8, 54, 900);
+                  await sleep(120); if (!o.isConnected) return;
+                  reqs.textContent = '1'; replay(reqs, 'pop');
+                  line('<span class="muted">screen opens holds the lock and fetches. The others wait.</span>');
+                  await sleep(900); if (!o.isConnected) return;
+                  for (const i of [1, 2]) {
+                    bar(i, 'run', 62 + (i - 1) * 5, 4, 150);
+                    line(`<span class="good">${CALLERS[i]}:</span> got the lock, data is fresh, returned without a request`);
+                    await sleep(300); if (!o.isConnected) return;
+                  }
+                  say(o, '<span class="good">1 request:</span> the lock turned three refreshes into one fetch and two cheap checks.');
+                }
+                busy = false;
+              }
+              const sw = toggle('dt-d2-ca-lock', 'Mutex + TTL check inside', function () { if (busy) { this.checked = locked; return; } locked = this.checked; say(o, locked ? 'refreshIfStale() now runs inside refreshLock.withLock { }.' : 'No lock: every caller checks and fetches on its own.'); });
+              say(o, 'Fire all three refreshes at once and count the requests.');
+              el.append(
+                h('div', { class: 'controls' }, cmd('all three refresh at once', fire), sw, h('span', { class: 'dt-sub' }, 'network requests'), reqs),
+                tl,
+                h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar run' }), 'fetching'), h('span', {}, h('i', { class: 'bar wait' }), 'waiting for the lock')),
+                o);
+            },
+          },
+          {
+            title: 'Optimistic writes: update the cache first, then the server',
+            body: `
+<p>Caching is not only for reads. When the user stars an article, write the change to Room right away. The screen observes Room, so the star turns on instantly, with no spinner. Then send the change to the server.</p>
+<p>If the server refuses, roll the row back and tell the user. Apps that work offline go one step further: they mark the row as pending and let WorkManager retry until the server accepts it.</p>`,
+            code: `suspend fun setSaved(id: Int, saved: Boolean) {
+    dao.setSaved(id, saved)             // the UI updates now, from Room
+    try {
+        api.setSaved(id, saved)
+    } catch (e: IOException) {
+        dao.setSaved(id, !saved)        // roll back, then let the ViewModel show a message
+        throw e
+    }
+}`,
+            visual(el) {
+              const ARTS = ['Compose tips', 'Derby tonight', 'Kotlin 2.3 notes'];
+              const saved = [false, true, false];
+              let fail = false, busy = false;
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'List preview' });
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const stars = [];
+              function paint() {
+                stars.length = 0;
+                phone.replaceChildren(...ARTS.map((t, i) => {
+                  const s = h('button', { class: 'dt-d2-star' + (saved[i] ? ' dt-on' : ''), 'aria-label': `${saved[i] ? 'Unsave' : 'Save'} ${t}`, onclick: () => star(i) }, saved[i] ? '★' : '☆');
+                  stars.push(s);
+                  return h('div', { class: 'item dt-d2-row' }, h('span', {}, t), s);
+                }));
+              }
+              async function star(i) {
+                if (busy) return; busy = true;
+                const next = !saved[i];
+                saved[i] = next; paint(); stars[i].classList.add('dt-d2-pend'); replay(stars[i], 'pop');
+                say(o, `${hl(`dao.setSaved(${i + 1}, ${next})`)} <span class="muted">// the star changed instantly</span>`);
+                await sleep(300); if (!o.isConnected) return;
+                line(`<span class="muted">api.setSaved(${i + 1}, ${next})…</span>`);
+                await sleep(900); if (!o.isConnected) return;
+                if (fail) {
+                  saved[i] = !next; paint(); replay(stars[i], 'shake');
+                  line('<span class="bad">IOException:</span> rolled the row back. Show “Couldn’t save. Try again.”');
+                } else {
+                  stars[i].classList.remove('dt-d2-pend'); replay(stars[i], 'pop-soft');
+                  line('<span class="good">200 OK:</span> the server agrees. Nothing else to do.');
+                }
+                busy = false;
+              }
+              const sw = toggle('dt-d2-ca-fail', 'the server rejects the change', function () { if (busy) { this.checked = fail; return; } fail = this.checked; say(o, fail ? 'The next api.setSaved() call will fail.' : 'The server accepts changes again.'); });
+              paint();
+              say(o, 'Tap a star. The screen changes before the server answers.');
+              el.append(
+                h('div', { class: 'controls' }, sw),
+                h('div', { class: 'dt-d2-split' }, phone, h('div', { class: 'dt-side' },
+                  h('span', { class: 'dt-label' }, 'faded star'), h('span', { class: 'dt-sub' }, 'written to Room, waiting for the server'))),
+                o);
+            },
+          },
+          {
+            title: 'Steer the HTTP cache from the request',
+            body: `
+<p>The server’s headers decide caching by default, but a request can override them. <code>CacheControl.FORCE_CACHE</code> answers only from the cache, even if the copy is stale. Use it when you know the device is offline. If nothing is cached, OkHttp returns a <code>504 Unsatisfiable Request</code> without touching the network.</p>
+<p><code>CacheControl.FORCE_NETWORK</code> skips the cached copy and asks the server, for example after pull-to-refresh. In Retrofit, put the same directives on a method with <code>@Headers</code>.</p>`,
+            code: `// Offline: answer from the cache only, even if stale
+val offline = Request.Builder()
+    .url("https://api.example.com/articles/42")
+    .cacheControl(CacheControl.FORCE_CACHE)    // 504 if nothing is cached
+    .build()
+
+// Pull-to-refresh: go to the server
+val fresh = Request.Builder()
+    .url("https://api.example.com/articles/42")
+    .cacheControl(CacheControl.FORCE_NETWORK)
+    .build()
+
+// Retrofit: accept a cached copy up to an hour past its max-age
+@Headers("Cache-Control: max-stale=3600")
+@GET("articles/{id}")
+suspend fun getArticleAllowStale(@Path("id") id: Int): ArticleDto`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>OkHttp’s <code>Cache</code> is a <code>DiskLruCache</code> in the directory you gave it. Each entry is keyed by an MD5 hash of the URL and holds the response headers and the body as separate files, plus a journal that tracks use, so the oldest entries go first when the size limit is reached. Only <code>GET</code> responses are stored.</p>
+<p>Before each call, a cache strategy compares the stored response’s age with its freshness: <code>max-age</code>, or <code>Expires</code>. If the server sent neither but sent <code>Last-Modified</code>, OkHttp guesses a lifetime of 10% of the time since that date. A fresh entry is returned without a request. A stale entry with an <code>ETag</code> or <code>Last-Modified</code> becomes a conditional request with <code>If-None-Match</code> or <code>If-Modified-Since</code>. On a <code>304</code>, OkHttp merges the new headers into the stored ones and returns the cached body.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Clearing the cache before the fetch',
+            bad: `suspend fun refresh() {
+    dao.deleteAll()
+    val fresh = api.latest()          // throws when offline
+    dao.insertAll(fresh.map { it.toEntity() })
+}`,
+            good: `suspend fun refresh() {
+    val fresh = api.latest()          // fetch first
+    dao.replaceAll(fresh.map { it.toEntity() })   // delete + insert in one @Transaction
+}`,
+            why: 'Offline, the fetch throws after the delete, and the user is left with an empty screen instead of yesterday’s articles. Even online, the screen flashes empty between the two writes.',
+          },
+          {
+            title: 'Keeping the fetch time in memory',
+            bad: `private var lastFetch = 0L
+
+suspend fun refreshIfStale() {
+    if (now() - lastFetch < TTL) return
+    /* fetch, then */ lastFetch = now()
+}`,
+            good: `suspend fun refreshIfStale() {
+    val fetchedAt = dao.oldestFetchedAt() ?: 0L   // stored with the rows
+    if (now() - fetchedAt < TTL) return
+    /* fetch and store fetchedAt = now() */
+}`,
+            why: 'Every cold start and every process death resets the variable to 0, so the app refetches data it fetched a minute ago. Store the time next to the data it describes.',
+          },
+          {
+            title: 'An in-memory cache with no limit',
+            bad: `private val thumbnails = mutableMapOf<String, Bitmap>()`,
+            good: `private val thumbnails = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+}`,
+            why: 'A plain map only grows, until the app runs out of memory. <code>LruCache</code> has a size budget and drops the least recently used entries first.',
+          },
         ],
         visual(el) {
           const STRATS = {
@@ -2126,6 +3025,217 @@ Button(onClick = {
           { q: 'What happens to files in <code>filesDir</code> when the user uninstalls your app?', options: ['They move to Download', 'They are deleted', 'They stay until the user clears them'], a: 1, why: 'App-specific storage belongs to the app and goes with it. Use MediaStore for anything the user should keep.' },
           { q: 'Your app needs one photo from the user\'s gallery. What is the simplest correct approach?', options: ['Request <code>READ_MEDIA_IMAGES</code> and scan the folder', 'Launch the Photo Picker with <code>PickVisualMedia</code>', 'Read <code>/sdcard/DCIM</code> by path'], a: 1, why: 'The picker needs no permission and the user chooses exactly what to share.' },
           { q: 'Why set <code>IS_PENDING = 1</code> before writing a MediaStore item?', options: ['It compresses the file', 'Other apps cannot see a half-written file', 'It makes the file private forever'], a: 1, why: 'Gallery and others skip pending items. Clear the flag when the bytes are complete.' },
+        ],
+        deeper: [
+          {
+            title: 'A picked Uri can stop working after a restart',
+            body: `
+<p>The Photo Picker gives you read access to the chosen item, but by default only until the device restarts or your app stops. Save that Uri as the user’s avatar and it may fail next week with a <code>SecurityException</code>.</p>
+<p>You have two fixes. Call <code>takePersistableUriPermission()</code> to keep the grant across restarts; an app can hold up to 5,000 such media grants. Or copy the bytes into <code>filesDir</code> right away. The copy also survives the user deleting the original photo.</p>`,
+            code: `val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    if (uri != null) {
+        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        viewModel.setAvatar(uri.toString())   // safe to store in Room or DataStore now
+    }
+}
+
+// Or keep your own copy
+suspend fun copyAvatar(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
+    val target = File(context.filesDir, "avatar.jpg")
+    context.contentResolver.openInputStream(uri)!!.use { input ->
+        target.outputStream().use { input.copyTo(it) }
+    }
+    target
+}`,
+            visual(el) {
+              const MODES = { uri: 'store the Uri only', persist: 'takePersistableUriPermission()', copy: 'copy into filesDir' };
+              const URI = 'content://media/picker/0/…/media/1000000041';
+              let mode = 'uri', picked = false, restarted = false, busy = false;
+              const avatar = h('div', { class: 'dt-d2-avatar' }, 'no avatar');
+              const stored = h('div', { class: 'dt-path' }, 'avatar = null');
+              const grant = h('span', { class: 'dt-pill' }, 'no grant');
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              function paintGrant() {
+                if (!picked) { grant.className = 'dt-pill'; grant.textContent = 'no grant'; return; }
+                if (mode === 'copy') { grant.className = 'dt-pill dt-ok'; grant.textContent = 'own file, no grant needed'; return; }
+                const live = !restarted || mode === 'persist';
+                grant.className = 'dt-pill ' + (live ? 'dt-ok' : 'dt-bad');
+                grant.textContent = live ? (mode === 'persist' ? 'read grant: persisted' : 'read grant: until restart') : 'read grant: gone';
+              }
+              async function pick() {
+                if (busy) return; busy = true;
+                picked = true; restarted = false;
+                avatar.className = 'dt-d2-avatar dt-on'; avatar.textContent = 'IMG_2041'; replay(avatar, 'pop');
+                stored.textContent = mode === 'copy' ? 'avatar = files/avatar.jpg' : `avatar = ${URI}`;
+                paintGrant();
+                say(o, `<span class="good">picked:</span> ${mode === 'uri' ? 'the Uri went into Room as is.' : mode === 'persist' ? 'the grant was persisted, then the Uri was stored.' : 'the bytes were copied to filesDir.'}`);
+                await sleep(300); busy = false;
+              }
+              async function restart() {
+                if (busy) return; busy = true;
+                if (!picked) { say(o, 'Pick a photo first.'); busy = false; return; }
+                avatar.className = 'dt-d2-avatar'; avatar.textContent = '…';
+                say(o, '<span class="muted">rebooting the phone…</span>');
+                await sleep(800); if (!o.isConnected) return;
+                restarted = true; paintGrant(); replay(grant, 'pop');
+                avatar.textContent = 'not loaded';
+                line('Back on. Now load the avatar from storage.');
+                busy = false;
+              }
+              async function load() {
+                if (busy) return; busy = true;
+                if (!picked) { say(o, 'Nothing stored yet. Pick a photo first.'); busy = false; return; }
+                say(o, hl(mode === 'copy' ? 'BitmapFactory.decodeFile(avatarFile.path)' : 'contentResolver.openInputStream(Uri.parse(avatar))'));
+                await sleep(500); if (!o.isConnected) return;
+                if (mode === 'uri' && restarted) {
+                  avatar.className = 'dt-d2-avatar dt-bad'; avatar.textContent = 'failed'; replay(avatar, 'shake');
+                  line('<span class="bad">SecurityException: Permission Denial</span> <span class="muted">the temporary grant ended with the restart</span>');
+                } else {
+                  avatar.className = 'dt-d2-avatar dt-on'; avatar.textContent = 'IMG_2041'; replay(avatar, 'pop');
+                  line(`<span class="good">loaded:</span> ${mode === 'copy' ? 'from your own file. No grant involved.' : restarted ? 'the persisted grant survived the restart.' : 'the grant is still valid, but only until the next restart.'}`);
+                }
+                busy = false;
+              }
+              const modeBtns = Object.keys(MODES).map(m => act(MODES[m], function () {
+                if (busy) return; mode = m; picked = false; restarted = false; press(modeBtns, this);
+                avatar.className = 'dt-d2-avatar'; avatar.textContent = 'no avatar'; stored.textContent = 'avatar = null'; paintGrant();
+                say(o, `Strategy: ${MODES[m]}. Pick, restart, load.`);
+              }));
+              press(modeBtns, modeBtns[0]);
+              say(o, 'Choose a strategy, then pick a photo, restart the phone and load the avatar.');
+              el.append(
+                h('div', { class: 'controls' }, modeBtns),
+                h('div', { class: 'controls' }, cmd('pickAvatar.launch(…)', pick), act('restart the phone', restart), cmd('loadAvatar()', load)),
+                h('div', { class: 'dt-d2-split' }, avatar, h('div', { class: 'dt-side' }, h('span', { class: 'dt-label' }, 'stored in Room'), stored, grant)),
+                o);
+            },
+          },
+          {
+            title: 'Write files atomically',
+            body: `
+<p><code>writeText</code> truncates the file and then writes it. If the process dies in between, from a crash, a low-memory kill or a dead battery, the user is left with half a draft, or an empty file.</p>
+<p><code>AtomicFile</code> from AndroidX writes the new bytes to a separate file and swaps it in only in <code>finishWrite()</code>, after syncing it to disk. If the process dies before that, <code>readFully()</code> still returns the old, complete version. DataStore uses the same idea for its own file.</p>`,
+            code: `private val draft = AtomicFile(File(context.filesDir, "draft.md"))
+
+suspend fun save(text: String) = withContext(Dispatchers.IO) {
+    val out = draft.startWrite()
+    try {
+        out.write(text.encodeToByteArray())
+        draft.finishWrite(out)      // sync, then swap the new file in
+    } catch (e: IOException) {
+        draft.failWrite(out)        // the old file stays as it was
+        throw e
+    }
+}
+
+fun load(): String = draft.readFully().decodeToString()`,
+            visual(el) {
+              const V1 = '# Draft\nRoom notes, part one.';
+              const V2 = '# Draft\nRoom notes, part one.\nPart two: migrations and testing.';
+              let atomic = false, busy = false, content = V1, temp = null;
+              const file = h('div', { class: 'dt-file' });
+              const tmpBox = h('div', { class: 'dt-file dt-d2-tmp' });
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+              function paint() {
+                file.innerHTML = `<span class="dt-fname">files/draft.md</span>\n${content === '' ? '<span class="dt-fname">(empty)</span>' : esc(content)}`;
+                tmpBox.innerHTML = temp == null ? '<span class="dt-fname">new copy: none</span>' : `<span class="dt-fname">new copy (being written)</span>\n${esc(temp)}`;
+                tmpBox.classList.toggle('dt-d2-off', !atomic);
+              }
+              async function save(killed) {
+                if (busy) return; busy = true;
+                content = V1; temp = null; paint();
+                say(o, hl(atomic ? 'save(v2) // AtomicFile' : 'file.writeText(v2)'));
+                const cut = killed ? Math.floor(V2.length * 0.45) : V2.length;
+                if (!atomic) { content = ''; paint(); replay(file, 'pop-soft'); await sleep(250); if (!o.isConnected) return; }
+                else { temp = ''; paint(); }
+                for (let i = 6; i <= cut; i += 6) {
+                  await sleep(70); if (!o.isConnected) return;
+                  if (atomic) temp = V2.slice(0, Math.min(i, cut)); else content = V2.slice(0, Math.min(i, cut));
+                  paint();
+                }
+                if (atomic) temp = V2.slice(0, cut); else content = V2.slice(0, cut);
+                paint();
+                if (killed) {
+                  replay(atomic ? tmpBox : file, 'shake');
+                  line('<span class="bad">process killed</span> halfway through the write');
+                  await sleep(500); if (!o.isConnected) return;
+                  if (atomic) line('<span class="good">draft.md is untouched.</span> finishWrite() never ran, so the half-written copy is never used.');
+                  else line('<span class="bad">draft.md is broken:</span> the old text was truncated first, and only half of the new text made it.');
+                } else if (atomic) {
+                  await sleep(250); if (!o.isConnected) return;
+                  content = V2; temp = null; paint(); replay(file, 'pop');
+                  line('<span class="good">finishWrite():</span> synced and swapped in. Readers saw the old file or the new one, never a mix.');
+                } else {
+                  line('<span class="good">written.</span> It worked this time.');
+                }
+                busy = false;
+              }
+              async function read() {
+                if (busy) return;
+                say(o, `${hl('load()')} → <span class="${content === V2 || content === V1 ? 'good' : 'bad'}">${content === V1 ? 'v1, complete' : content === V2 ? 'v2, complete' : content === '' ? 'an empty file' : 'half of v2'}</span>`);
+                replay(file, 'pop-soft');
+              }
+              const sw = toggle('dt-d2-fl-atomic', 'AtomicFile', function () { if (busy) { this.checked = atomic; return; } atomic = this.checked; temp = null; paint(); say(o, atomic ? 'Writes now go to a separate file first.' : 'Plain writeText(): truncate, then write.'); });
+              paint();
+              say(o, 'Save version 2 of the draft. Then save it again and kill the process halfway.');
+              el.append(
+                h('div', { class: 'controls' }, cmd('save(v2)', () => save(false)), cmd('save(v2) // killed halfway', () => save(true)), cmd('load()', read), sw),
+                h('div', { class: 'dt-grid' }, file, tmpBox), o);
+            },
+          },
+          {
+            title: 'Share a private file with FileProvider',
+            body: `
+<p>Other apps can’t read <code>filesDir</code>, and a <code>file://</code> Uri in an Intent throws <code>FileUriExposedException</code> in apps that target Android 7 or later. To let the user send a PDF by mail, wrap the file in a <code>content://</code> Uri from <code>FileProvider</code> and grant read access in the Intent. The receiving app gets that one file, only for as long as it needs it.</p>
+<p>Declare the provider in the manifest with <code>android:authorities="\${applicationId}.fileprovider"</code>, and list the shared folders in <code>res/xml/file_paths.xml</code>, for example <code>&lt;files-path name="exports" path="exports/" /&gt;</code>.</p>`,
+            code: `val file = File(context.filesDir, "exports/issue-42.pdf")
+val uri = FileProvider.getUriForFile(context, "\${context.packageName}.fileprovider", file)
+
+val send = Intent(Intent.ACTION_SEND).apply {
+    type = "application/pdf"
+    putExtra(Intent.EXTRA_STREAM, uri)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+}
+context.startActivity(Intent.createChooser(send, null))`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Since Android 11, shared storage under <code>/storage/emulated/0</code> is served through FUSE. Every file open on that path goes to the MediaProvider process, which checks whether your app owns the file or holds a permission for it. That is why a plain <code>File</code> path to your own MediaStore item works on Android 11 and later, and why reading another app’s photo by path fails with <code>EACCES</code>.</p>
+<p>MediaProvider also keeps the database behind MediaStore. <code>IS_PENDING = 1</code> is a column in that database: queries from other apps skip pending rows, so Gallery never shows a half-written file. Photo Picker Uris point to a separate provider that serves only the items the user picked.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Treating a content Uri as a file path',
+            bad: `val bytes = File(uri.path!!).readBytes()`,
+            good: `val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }`,
+            why: 'A <code>content://</code> Uri names a row in a provider, not a file. Its path is not a place on disk, so <code>File</code> fails. The content resolver opens the stream for you.',
+          },
+          {
+            title: 'File I/O on the main thread',
+            bad: `Button(onClick = {
+    File(context.filesDir, "draft.md").writeText(text)
+}) { Text("Save") }`,
+            good: `Button(onClick = { viewModel.save(text) }) { Text("Save") }
+
+// ViewModel
+fun save(text: String) = viewModelScope.launch {
+    withContext(Dispatchers.IO) { File(filesDir, "draft.md").writeText(text) }
+}`,
+            why: 'Disk writes can take tens of milliseconds, much more on a busy or cheap device. On the main thread that drops frames, and StrictMode flags it in debug builds.',
+          },
+          {
+            title: 'Forgetting to close the stream',
+            bad: `val out = resolver.openOutputStream(uri)!!
+bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)`,
+            good: `resolver.openOutputStream(uri)?.use { out ->
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+}`,
+            why: 'Until the stream is closed, the last bytes may still sit in a buffer and the file descriptor stays open. <code>use</code> closes it even when an exception is thrown.',
+          },
         ],
         visual(el) {
           let busy = false;

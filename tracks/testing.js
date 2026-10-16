@@ -109,6 +109,24 @@
 .phone.tst-dz-phone { width: 170px; height: 220px; justify-content: flex-start; align-items: stretch; gap: 10px; padding: 16px 12px; }
 .tst-dz-panel { border-radius: 10px; background: var(--accent-soft); border: 2px solid var(--accent); box-sizing: border-box; min-height: 0; transition: none; }
 .tst-dz-panel[style*="height: 0px"], .tst-dz-panel[style*="height:0"] { border-width: 0; }
+/* depth pass 2 */
+.tst-d2-row { display: grid; grid-template-columns: minmax(0, 15em) auto minmax(0, 1fr); gap: 6px 10px; align-items: center; padding: 6px; border-radius: 10px; border: 2px solid transparent; min-width: 0; transition: border-color 0.2s, background 0.2s; }
+.tst-d2-row .cmd, .tst-d2-wrap .cmd { text-align: left; white-space: normal; }
+.tst-d2-file { font: 600 0.74rem var(--mono); color: var(--muted); }
+.tst-d2-row.tst-d2-best { border-color: var(--ok); background: var(--ok-soft); }
+.tst-d2-msg { font-size: 0.88rem; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.tst-d2-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.tst-d2-dex { display: grid; gap: 4px; min-width: 0; }
+.tst-d2-pages { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
+.tst-d2-pg { aspect-ratio: 1; border-radius: 3px; background: var(--sunk); border: 1px solid var(--line); min-width: 0; transition: background 0.2s; }
+.tst-d2-pg.tst-d2-start { background: var(--warm-soft); border-color: var(--warm); }
+.tst-d2-pg.tst-d2-hit { background: var(--warm); }
+.tst-d2-ms { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 600 0.74rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .tst-d2-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .tst-d2-msg { grid-column: 1 / -1; }
+  .tst-d2-pages { grid-template-columns: repeat(15, minmax(0, 1fr)); }
+}
 `;
 
   // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
@@ -482,6 +500,680 @@ rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
     ],
   };
 
+  // ─── Depth pass 2: pyramid, fakes, flows, baseline ─────────────────────
+  const pyramidDepth = {
+    deeper: [
+      {
+        title: 'Robolectric: Android classes without a device',
+        body: `<p>Some logic needs Android classes but no screen, like code that reads a <code>Uri</code> or a string resource. In <code>src/test</code> those calls throw, because the JVM only has a stub of the Android framework. Robolectric runs the same test on the JVM with a simulated framework. It needs no device, but it boots a sandbox first, so the first test in a run takes a few seconds.</p>
+<p>Run one test on each layer, then run 50 and watch how the setup cost spreads out.</p>`,
+        code: `// app/src/test/java/.../LinkParserTest.kt
+@RunWith(AndroidJUnit4::class)   // in src/test this runs on Robolectric
+class LinkParserTest {
+    @Test fun extractsArticleId() {
+        val uri = Uri.parse("https://example.com/news/42")
+        assertEquals("42", LinkParser.articleId(uri))
+    }
+}
+
+// app/build.gradle.kts
+// testImplementation("org.robolectric:robolectric:<version>")
+// android { testOptions { unitTests.isIncludeAndroidResources = true } }`,
+        visual(el) {
+          const MODES = {
+            jvm: { label: 'plain JVM', setup: 0, per: 4, setupName: 'nothing to start' },
+            robo: { label: 'Robolectric', setup: 3200, per: 45, setupName: 'boot the Android sandbox' },
+            dev: { label: 'device', setup: 38000, per: 650, setupName: 'build and install two APKs' },
+          };
+          const MAX = 38000 + 50 * 650;
+          let mode = 'robo', n = 1, busy = false;
+          const setupBar = h('span', { class: 'bar queued', style: 'left:0;width:0' });
+          const testBar = h('span', { class: 'bar run', style: 'left:0;width:0' });
+          const clock = h('span', { class: 'clock' }, '0 ms');
+          const verdict = h('span', { class: 'tst-res' }, 'not run');
+          const o = out();
+          const keys = Object.keys(MODES);
+          const modeBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; mode = k; paint(); say(o, `<span class="muted">runner:</span> ${MODES[k].label}. Setup: ${MODES[k].setupName}.`); } }, MODES[k].label));
+          const nBtns = [1, 50].map(v => h('button', { class: 'cmd', onclick() { if (busy) return; n = v; paint(); } }, v === 1 ? '1 test' : '50 tests'));
+          const paint = () => { pressed(modeBtns, keys, mode); pressed(nBtns, [1, 50], n); };
+          const draw = (setup, t) => {
+            setupBar.style.width = (Math.min(t, setup) / MAX) * 100 + '%';
+            testBar.style.left = (setup / MAX) * 100 + '%';
+            testBar.style.width = (Math.max(0, t - setup) / MAX) * 100 + '%';
+            clock.textContent = fmt(t);
+          };
+          async function run() {
+            if (busy) return; busy = true;
+            const m = MODES[mode], fail = mode === 'jvm';
+            const total = m.setup + (fail ? m.per : m.per * n);
+            verdict.textContent = 'running'; verdict.className = 'tst-res';
+            say(o, `<span class="muted">$</span> run ${fail ? 1 : n} test${!fail && n > 1 ? 's' : ''} on ${m.label}`);
+            const t0 = performance.now(), DUR = 400 + 1600 * (total / MAX);
+            try {
+              for (;;) {
+                const p = Math.min(1, (performance.now() - t0) / DUR);
+                draw(m.setup, p * total);
+                if (p >= 1) break;
+                await sleep(30); if (!el.isConnected) return;
+              }
+              if (fail) {
+                verdict.textContent = 'FAILED'; verdict.className = 'tst-res tst-bad drop-in';
+                o.append(h('div', { class: 'line drop-in', html: '<span class="bad">java.lang.RuntimeException: Method parse in android.net.Uri not mocked.</span>' }));
+                o.append(h('div', { class: 'line drop-in' }, 'Fast, but the stub framework throws. This test needs more than plain Kotlin.'));
+              } else {
+                verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
+                o.append(h('div', { class: 'line drop-in', html: `<span class="good">PASSED</span> in ${fmt(total)}: ${fmt(m.setup)} setup, then ${fmt(m.per)} per test.` }));
+              }
+            } finally { busy = false; }
+          }
+          paint(); draw(MODES.robo.setup, MODES.robo.setup + MODES.robo.per);
+          verdict.textContent = 'PASSED';
+          o.innerHTML = 'Last run: 1 test on Robolectric, 3.2 s of it was booting the sandbox. Pick a runner and a test count.';
+          el.append(
+            h('div', { class: 'controls' }, h('span', { class: 'tst-label' }, 'runner'), modeBtns),
+            h('div', { class: 'controls' }, h('span', { class: 'tst-label' }, 'tests'), nBtns, h('button', { class: 'btn primary small', onclick: run }, 'Run'), verdict, clock),
+            h('div', { class: 'timeline' },
+              h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'setup + tests'), h('div', { class: 'lane-track' }, setupBar, testBar))),
+            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar queued' }), 'setup'), h('span', {}, h('i', { class: 'bar run' }), 'running tests')),
+            h('p', { class: 'tip' }, 'Times are typical, not exact. The bar scale is the slowest case: 50 tests on a device.'),
+            o);
+        },
+      },
+      {
+        title: 'Test each bug at the lowest layer that catches it',
+        body: `<p>When a bug reaches users, ask which layer could have caught it, and add the test at the lowest one that can. A wrong price format is pure logic, so a unit test catches it in milliseconds. A wrong Room query needs a real SQLite engine, so it needs an integration test with an in-memory database. A button wired to the wrong screen only shows up when something drives the UI.</p>
+<p>Pick a bug and try each layer.</p>`,
+        visual(el) {
+          const LAYERS = [
+            { k: 'unit', name: 'unit test with a fake', ms: 8 },
+            { k: 'int', name: 'integration: real Room, in memory', ms: 300 },
+            { k: 'ui', name: 'UI test on a device', ms: 4000 },
+          ];
+          const BUGS = [
+            { label: 'Price shows 12.5 instead of ₺12,50', low: 'unit', res: {
+              unit: 'formatter test fails: expected ₺12,50', int: 'caught too, but the database adds nothing here', ui: 'caught too, 500 times slower' } },
+            { label: 'Room query sorts oldest first', low: 'int', res: {
+              unit: null, int: 'the real query runs on SQLite and the order check fails', ui: 'caught, if a UI test happens to look at the order' }, miss: 'missed: the fake has no SQL. It returns the list you gave it.' },
+            { label: 'Pay opens Settings instead of Receipt', low: 'ui', res: {
+              unit: null, int: null, ui: 'tap Pay, assert Receipt is shown: fails' }, miss: 'missed: no screen, no navigation at this layer.' },
+          ];
+          let bug = 0, busy = false;
+          const rows = LAYERS.map(l => {
+            const t = h('span', { class: 'tst-res' }, 'not run');
+            const msg = h('span', { class: 'tst-d2-msg' }, '');
+            const btn = h('button', { class: 'cmd', onclick: () => tryLayer(l) }, l.name);
+            return { l, t, msg, row: h('div', { class: 'tst-d2-row' }, btn, t, msg) };
+          });
+          const o = out();
+          const bugBtns = BUGS.map((b, i) => h('button', { class: 'cmd', onclick() { if (busy) return; bug = i; paint(); } }, b.label));
+          function paint() {
+            pressed(bugBtns, BUGS.map((_, i) => i), bug);
+            rows.forEach(r => { r.t.textContent = 'not run'; r.t.className = 'tst-res'; r.msg.textContent = ''; r.row.classList.remove('tst-d2-best'); });
+            say(o, `<span class="muted">bug:</span> ${BUGS[bug].label}. Which layer catches it?`);
+          }
+          async function tryLayer(l) {
+            if (busy) return; busy = true;
+            const r = rows.find(x => x.l === l), b = BUGS[bug], hit = b.res[l.k];
+            r.t.textContent = 'running'; r.t.className = 'tst-res';
+            await sleep(250 + Math.min(900, l.ms / 5));
+            if (!el.isConnected) return;
+            r.t.textContent = hit ? `caught · ${fmt(l.ms)}` : `missed · ${fmt(l.ms)}`;
+            r.t.className = 'tst-res drop-in' + (hit ? '' : ' tst-bad');
+            r.msg.textContent = hit || b.miss;
+            if (hit && l.k === b.low) {
+              r.row.classList.add('tst-d2-best'); replay(r.row, 'pop-soft');
+              say(o, `<span class="good">lowest layer:</span> ${l.name}. Put the regression test here.`);
+            } else if (hit) say(o, 'Caught, but a cheaper layer might do it. Try the ones below.');
+            else say(o, '<span class="bad">missed.</span> Go one layer up.');
+            busy = false;
+          }
+          el.append(h('div', { class: 'controls tst-d2-wrap' }, bugBtns), h('div', { class: 'tst-sub' }, rows.map(r => r.row)), o);
+          paint();
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>Local tests compile against <code>android.jar</code>, which holds the API signatures and no real code. To make it runnable on the JVM, the Android Gradle plugin generates a copy where every method throws <code>RuntimeException("Method ... not mocked.")</code>. That is the error you see when plain unit test code touches <code>Uri</code> or <code>TextUtils</code>.</p>
+<p>An instrumented run builds two APKs, your app and a test APK, and installs both. Gradle then starts them with <code>am instrument</code>. The system starts your app's process with <code>AndroidJUnitRunner</code> inside it, so the tests run in the same process as your code and use the real framework. Robolectric sits in between: it loads real Android framework code into a sandboxed class loader on the JVM and swaps the parts that need native code or hardware for Java "shadows".</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Silencing "not mocked" with returnDefaultValues',
+        bad: `android {
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+}
+// TextUtils.isEmpty("") now returns false, and the test still passes`,
+        good: `// Keep the rule in plain Kotlin and test that
+fun isBlankTitle(title: String) = title.isBlank()
+
+// or run the test with the real framework on Robolectric
+@RunWith(AndroidJUnit4::class)
+class TitleRulesTest { /* ... */ }`,
+        why: 'With that flag every stub method returns 0, false or null. Tests go green while checking nothing real. Move logic out of Android types, or use Robolectric where you truly need the framework.',
+      },
+      {
+        title: 'Checking a pure rule through a UI test',
+        bad: `// androidTest: a device run to check a formatting rule
+@Test fun showsPriceInLira() {
+    rule.setContent { PriceTag(cents = 1250) }
+    rule.onNodeWithText("₺12,50").assertIsDisplayed()
+}`,
+        good: `// test: milliseconds on the JVM
+@Test fun formatsLira() {
+    assertEquals("₺12,50", PriceFormatter(trLocale).format(1250))
+}`,
+        why: 'The rule has nothing to do with the screen. Test it once at the bottom, and keep UI tests for wiring: this button opens that screen.',
+      },
+      {
+        title: 'UI tests against the real backend',
+        bad: `@HiltAndroidTest
+class CheckoutFlowTest {
+    // uses the real NetworkModule and a staging server
+    @Test fun payOpensReceipt() { /* ... */ }
+}`,
+        good: `@HiltAndroidTest
+@UninstallModules(NetworkModule::class)
+class CheckoutFlowTest {
+    @BindValue @JvmField
+    val api: PaymentApi = FakePaymentApi(result = PaymentResult.Paid)
+
+    @Test fun payOpensReceipt() { /* ... */ }
+}`,
+        why: 'UI tests are already the slowest layer. A real server adds network flakes and data that changes under you. Swap the network layer for a fake through Hilt.',
+      },
+    ],
+  };
+
+  const fakesDepth = {
+    deeper: [
+      {
+        title: 'Fakes survive refactors, call checks do not',
+        body: `<p>A mock test usually pins down <em>how</em> the ViewModel talks to its repository: which function, how many times. A fake test only checks <em>what</em> comes out. Refactor the ViewModel without changing its behavior and the fake test keeps passing, while the call check fails. Worse, a call check can pass while the screen is broken.</p>
+<p>Switch between three versions of <code>load()</code> and run both tests.</p>`,
+        code: `// Mock style (MockK): pins the call
+val repo = mockk<NewsRepository>()
+coEvery { repo.latest() } returns listOf(article)
+NewsViewModel(repo).load()
+coVerify(exactly = 1) { repo.latest() }
+
+// Fake style: checks the result
+val repo = FakeNewsRepository().apply { articles = listOf(article) }
+val vm = NewsViewModel(repo)
+vm.load()
+assertEquals(UiState.Success(listOf(article)), vm.state.value)`,
+        visual(el) {
+          const VERS = {
+            v1: { label: 'v1: original', src: ['fun load() = viewModelScope.launch {', '    _state.value = Success(repo.latest())', '}'],
+              mock: [true, 'latest() was called once'], fake: [true, 'state is Success(1 article)'] },
+            v2: { label: 'v2: cache first (refactor)', src: ['fun load() = viewModelScope.launch {', '    val cached = repo.cached()', '    _state.value = Success(cached.ifEmpty { repo.latest() })', '}'],
+              mock: [false, 'MockKException: no answer found for NewsRepository(#1).cached()'], fake: [true, 'state is Success(1 article). The fake answers cached() with an empty list.'] },
+            v3: { label: 'v3: forgets to set state (bug)', src: ['fun load() = viewModelScope.launch {', '    val list = repo.latest()', '    // _state.value = Success(list)  <- lost in a merge', '}'],
+              mock: [true, 'latest() was called once. Nothing looked at the state.'], fake: [false, 'expected: Success(1 article) but was: Loading'] },
+          };
+          const MOCK = ['coEvery { repo.latest() } returns listOf(a)', 'NewsViewModel(repo).load()', 'coVerify(exactly = 1) { repo.latest() }'];
+          const FAKE = ['val repo = FakeNewsRepository().apply { articles = listOf(a) }', 'val vm = NewsViewModel(repo); vm.load()', 'assertEquals(Success(listOf(a)), vm.state.value)'];
+          let ver = 'v1', busy = false;
+          const vm = h('div', { class: 'tst-script' });
+          const mRows = gwt(MOCK), fRows = gwt(FAKE);
+          const mRes = h('span', { class: 'tst-res' }, 'PASSED'), fRes = h('span', { class: 'tst-res' }, 'PASSED');
+          const o = out();
+          const keys = Object.keys(VERS);
+          const vBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; ver = k; paint(); say(o, `<span class="muted">ViewModel:</span> ${VERS[k].label}. Run both tests.`); } }, VERS[k].label));
+          function paint() {
+            pressed(vBtns, keys, ver);
+            vm.replaceChildren(...gwt(VERS[ver].src));
+            [mRes, fRes].forEach(r => { r.textContent = 'not run'; r.className = 'tst-res'; });
+            mark(mRows, -1); mark(fRows, -1);
+          }
+          async function runOne(rows, res, [ok, msg]) {
+            for (let i = 0; i < rows.length; i++) { mark(rows, i, 'tst-on'); await sleep(320); if (!el.isConnected) return false; }
+            mark(rows, rows.length - 1, ok ? 'tst-pass' : 'tst-fail');
+            res.textContent = ok ? 'PASSED' : 'FAILED'; res.className = 'tst-res drop-in' + (ok ? '' : ' tst-bad');
+            o.append(h('div', { class: 'line drop-in', html: `${ok ? '<span class="good">pass</span>' : '<span class="bad">fail</span>'} ${msg}` }));
+            return true;
+          }
+          async function run() {
+            if (busy) return; busy = true;
+            try {
+              paint(); say(o, `<span class="muted">$</span> ./gradlew test <span class="muted">// ${VERS[ver].label}</span>`);
+              if (!(await runOne(mRows, mRes, VERS[ver].mock))) return;
+              if (!(await runOne(fRows, fRes, VERS[ver].fake))) return;
+              o.append(h('div', { class: 'line drop-in', html: ver === 'v2' ? 'Behavior is the same, yet the mock test broke.' : ver === 'v3' ? '<span class="bad">The screen is broken and the mock test is green.</span>' : 'Both pass on the original code.' }));
+            } finally { busy = false; }
+          }
+          pressed(vBtns, keys, ver); vm.replaceChildren(...gwt(VERS.v1.src));
+          mark(mRows, 2, 'tst-pass'); mark(fRows, 2, 'tst-pass');
+          o.innerHTML = 'Both tests pass on v1. Try the refactor, then the bug.';
+          el.append(
+            h('div', { class: 'controls' }, vBtns),
+            h('div', { class: 'tst-sub' }, h('span', { class: 'tst-label' }, 'NewsViewModel.load()'), vm),
+            h('div', { class: 'tst-cols' },
+              h('div', { class: 'tst-sub' }, h('div', { class: 'tst-d2-head' }, h('span', { class: 'tst-label' }, 'mock test'), mRes), h('div', { class: 'tst-script' }, mRows)),
+              h('div', { class: 'tst-sub' }, h('div', { class: 'tst-d2-head' }, h('span', { class: 'tst-label' }, 'fake test'), fRes), h('div', { class: 'tst-script' }, fRows))),
+            h('div', { class: 'controls' }, cmd('./gradlew test', run)),
+            o);
+        },
+      },
+      {
+        title: 'One shared fake, checked against the real thing',
+        body: `<p>Write each fake once and share it, for example from a <code>:core:testing</code> module, so every feature's tests use the same one. The risk is drift: the real repository changes its behavior and the fake does not, so tests stay green while the app breaks.</p>
+<p>A contract test guards against that. Write the expectations once in an abstract test class, then run it against the fake and against the real implementation backed by an in-memory database.</p>`,
+        code: `abstract class NewsRepositoryContract {
+    abstract fun repo(): NewsRepository
+
+    @Test fun latestIsNewestFirst() = runTest {
+        val repo = repo()
+        repo.save(article(id = 1, publishedAt = 100))
+        repo.save(article(id = 2, publishedAt = 200))
+        assertEquals(listOf(2, 1), repo.latest().map { it.id })
+    }
+}
+
+class FakeNewsRepositoryTest : NewsRepositoryContract() {
+    override fun repo() = FakeNewsRepository()
+}
+
+@RunWith(AndroidJUnit4::class)   // Robolectric or a device: Room needs SQLite
+class RoomNewsRepositoryTest : NewsRepositoryContract() {
+    override fun repo() = RoomNewsRepository(
+        Room.inMemoryDatabaseBuilder(context, NewsDb::class.java).build().newsDao()
+    )
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p>A fake is ordinary code, so nothing is hidden. Mocks are built at runtime. Kotlin classes and functions are final by default, so a mocking library can't simply subclass them. Mockito 5 uses its inline mock maker by default, and MockK works in a similar way: both attach a Java agent and rewrite the bytecode of the mocked class while the test runs, so every call goes to the library's recorder.</p>
+<p>That is why the first mock in a run is slow, and why a mock only answers calls you stubbed. A MockK mock throws <code>MockKException</code> for any other call unless you create it with <code>relaxed = true</code>.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Mocking a data class you could just build',
+        bad: `val article = mockk<Article>()
+every { article.title } returns "Kotlin 2.3 is out"
+every { article.id } returns 7`,
+        good: `val article = Article(id = 7, title = "Kotlin 2.3 is out")`,
+        why: 'Data classes are plain values. A real one is shorter, can be compared with <code>assertEquals</code>, and can’t return something its constructor would never allow.',
+      },
+      {
+        title: 'A fake shared as a singleton object',
+        bad: `object FakeNewsRepository : NewsRepository {
+    var articles = emptyList<Article>()
+    override suspend fun latest() = articles
+}`,
+        good: `class FakeNewsRepository : NewsRepository {
+    var articles = emptyList<Article>()
+    override suspend fun latest() = articles
+}
+// a new instance in every test`,
+        why: 'An <code>object</code> keeps its state for the whole test JVM. One test leaves articles behind, and the next one passes or fails depending on run order.',
+      },
+    ],
+  };
+
+  const flowsDepth = {
+    deeper: [
+      {
+        title: 'StateFlow conflates, so assert the value',
+        body: `<p>A <code>StateFlow</code> keeps only its latest value. If the ViewModel sets <code>Loading</code> and then <code>Success</code> without suspending in between, a collector that runs later only finds <code>Success</code>. Which values a test sees depends on the collector's dispatcher, not on your code.</p>
+<p>A collector on <code>UnconfinedTestDispatcher</code> resumes at once on every change and records each one. On <code>StandardTestDispatcher</code> it is queued, runs when the test yields, and reads only the newest value. For state, assert on <code>value</code>. Collect only when the sequence itself is what you test.</p>`,
+        code: `@Test fun refreshEndsInSuccess() = runTest {
+    vm.refresh()
+    assertEquals(UiState.Success(articles), vm.state.value)   // state: check the value
+}
+
+@Test fun refreshShowsLoadingFirst() = runTest {
+    val seen = mutableListOf<UiState>()
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.toList(seen) }
+    vm.refresh()
+    assertEquals(listOf(Idle, Loading, Success(articles)), seen)   // the order matters here
+}`,
+        visual(el) {
+          let busy = false, pending = false, value = 'Idle', std = [], unc = [];
+          const valSlot = h('span', {}, h('span', { class: 'tst-ev' }, 'Idle'));
+          const stdEl = h('div', { class: 'tst-evs' }), uncEl = h('div', { class: 'tst-evs' });
+          const queue = h('div', { class: 'tst-queue', 'aria-label': 'Test scheduler queue' });
+          const o = out();
+          const chip = (v, cls = '') => h('span', { class: `tst-ev drop-in ${cls}` }, v);
+          const setVal = v => { value = v; valSlot.replaceChildren(chip(v)); };
+          function paintQueue() { queue.replaceChildren(...(pending ? [h('span', { class: 'tst-task drop-in' }, 'resume standard collector')] : [])); }
+          function reset() {
+            pending = false; std = ['Idle']; unc = ['Idle']; setVal('Idle');
+            stdEl.replaceChildren(chip('Idle')); uncEl.replaceChildren(chip('Idle')); paintQueue();
+          }
+          async function refresh() {
+            if (busy) return; busy = true;
+            try {
+              say(o, `${hl('vm.refresh()')} <span class="muted">// sets Loading, then Success, no suspension between</span>`);
+              for (const v of ['Loading', 'Success(3)']) {
+                setVal(v); unc.push(v); uncEl.append(chip(v));
+                if (!pending) { pending = true; paintQueue(); }
+                await sleep(450); if (!el.isConnected) return;
+              }
+              o.append(h('div', { class: 'line drop-in' }, 'Unconfined recorded both. The standard collector is still waiting in the queue.'));
+            } finally { busy = false; }
+          }
+          function runCurrent() {
+            if (busy) return;
+            if (!pending) { replay(queue, 'shake'); say(o, `${hl('runCurrent()')} <span class="muted">// nothing queued</span>`); return; }
+            pending = false; paintQueue();
+            std.push(value); stdEl.append(chip(value));
+            say(o, `${hl('runCurrent()')} <span class="muted">// the standard collector wakes up and reads the current value: ${value}. Loading is gone.</span>`);
+          }
+          function check() {
+            if (busy) return;
+            const want = ['Idle', 'Loading', 'Success(3)'];
+            const okU = unc.join() === want.join(), okS = std.join() === want.join();
+            say(o, `${hl('assertEquals(listOf(Idle, Loading, Success(3)), seen)')}`);
+            o.append(h('div', { class: 'line drop-in', html: `unconfined: ${okU ? '<span class="good">pass</span>' : `<span class="bad">fail</span>, seen [${unc.join(', ')}]`}` }));
+            o.append(h('div', { class: 'line drop-in', html: `standard: ${okS ? '<span class="good">pass</span>' : `<span class="bad">fail</span>, seen [${std.join(', ')}]`}` }));
+            o.append(h('div', { class: 'line drop-in', html: `${hl('assertEquals(Success(3), vm.state.value)')} ${value === 'Success(3)' ? '<span class="good">pass either way</span>' : '<span class="muted">refresh first</span>'}` }));
+          }
+          reset();
+          o.innerHTML = 'Both collectors started and got the initial Idle. Call vm.refresh().';
+          el.append(
+            h('div', { class: 'tst-clocks' }, h('span', { class: 'tst-state' }, 'vm.state.value ', valSlot)),
+            h('div', { class: 'tst-cols' },
+              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'collector on StandardTestDispatcher'), stdEl),
+              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'collector on UnconfinedTestDispatcher'), uncEl)),
+            queue,
+            h('div', { class: 'controls' }, cmd('vm.refresh()', refresh), cmd('runCurrent()', runCurrent), cmd('assertEquals(...)', check),
+              h('button', { class: 'btn small', onclick() { if (busy) return; reset(); say(o, 'Fresh test: both collectors hold Idle.'); } }, 'New test')),
+            o);
+        },
+      },
+      {
+        title: 'stateIn with WhileSubscribed needs a collector',
+        body: `<p>ViewModels often build state with <code>stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Loading)</code>. That flow only collects its upstream while someone collects it. A test that just reads <code>.value</code> has no subscriber, so the upstream never starts and the value stays <code>Loading</code> forever.</p>
+<p>Start an empty collector in <code>backgroundScope</code> first, even if you only assert on <code>value</code>. Turn it on and off below.</p>`,
+        code: `@Test fun showsArticles() = runTest {
+    val repo = HotFakeNewsRepository()          // MutableSharedFlow inside
+    val vm = NewsViewModel(repo)                 // uiState = repo.articles.map(...).stateIn(...)
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+    repo.emit(listOf(article))
+    assertEquals(UiState.Success(listOf(article)), vm.uiState.value)
+}`,
+        visual(el) {
+          let sub = false, value = 'Loading', busy = false;
+          const valSlot = h('span', {}, h('span', { class: 'tst-ev' }, 'Loading'));
+          const upTag = h('span', { class: 'tst-res tst-bad' }, 'upstream idle');
+          const subTag = h('b', {}, '0');
+          const repoEl = h('div', { class: 'tst-evs' });
+          const o = out();
+          const sw = h('input', { type: 'checkbox', id: 'tst-d2-sub', onchange() {
+            if (busy) { sw.checked = sub; return; }
+            sub = sw.checked; paint();
+            say(o, sub ? `${hl('backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }')} <span class="muted">// one subscriber: WhileSubscribed starts the upstream</span>`
+              : '<span class="muted">collector removed:</span> no subscribers. After the 5 s timeout the upstream stops.');
+          } });
+          function paint() {
+            subTag.textContent = sub ? '1' : '0';
+            upTag.textContent = sub ? 'upstream collecting' : 'upstream idle';
+            upTag.className = 'tst-res drop-in' + (sub ? '' : ' tst-bad');
+          }
+          async function emit() {
+            if (busy) return; busy = true;
+            try {
+              const e = h('span', { class: 'tst-ev drop-in' }, 'listOf(article)');
+              repoEl.replaceChildren(e);
+              await sleep(400); if (!el.isConnected) return;
+              if (sub) {
+                value = 'Success(1)'; valSlot.replaceChildren(h('span', { class: 'tst-ev tst-ok drop-in' }, value));
+                say(o, `${hl('repo.emit(listOf(article))')} <span class="good">// mapped and stored in uiState</span>`);
+              } else {
+                e.classList.add('tst-gone');
+                say(o, `${hl('repo.emit(listOf(article))')} <span class="bad">// nobody collects the upstream, the emission goes nowhere</span>`);
+              }
+            } finally { busy = false; }
+          }
+          function check() {
+            if (busy) return;
+            const ok = value === 'Success(1)';
+            say(o, `${hl('assertEquals(Success(listOf(article)), vm.uiState.value)')} ${ok ? '<span class="good">PASSED</span>' : `<span class="bad">FAILED</span> <span class="muted">// was ${value}</span>`}`);
+            if (!ok) replay(valSlot, 'shake');
+          }
+          paint();
+          o.innerHTML = 'No collector yet. Emit from the fake, then assert.';
+          el.append(
+            h('label', { class: 'switch', for: 'tst-d2-sub' }, sw, h('span', { html: hl('backgroundScope collector') })),
+            h('div', { class: 'tst-cols' },
+              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'fake repository'), repoEl),
+              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'stateIn(WhileSubscribed)'), upTag, h('span', { class: 'tst-stats' }, h('span', {}, 'subscribers ', subTag))),
+              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'vm.uiState.value'), valSlot)),
+            h('div', { class: 'controls' }, cmd('repo.emit(listOf(article))', emit), cmd('assertEquals(...)', check),
+              h('button', { class: 'btn small', onclick() { if (busy) return; value = 'Loading'; valSlot.replaceChildren(h('span', { class: 'tst-ev' }, 'Loading')); repoEl.replaceChildren(); say(o, 'New ViewModel: uiState is Loading again.'); } }, 'New test')),
+            o);
+        },
+      },
+      {
+        title: 'Two flows at once: turbineScope and testIn',
+        body: `<p><code>test { }</code> covers one flow. When an action changes state and also sends a one-off event, collect both. Inside <code>turbineScope</code>, <code>testIn(backgroundScope)</code> returns a Turbine you assert on later, and <code>runTest</code> cancels its collector when the test ends.</p>
+<p><code>skipItems(n)</code> drops items you don't care about, and <code>expectMostRecentItem()</code> takes the newest one and ignores the rest.</p>`,
+        code: `@Test fun saveUpdatesStateAndShowsSnackbar() = runTest {
+    turbineScope {
+        val states = vm.state.testIn(backgroundScope)
+        val events = vm.events.testIn(backgroundScope)
+        states.skipItems(1)                      // the current value
+
+        vm.save()
+
+        assertEquals(Event.Saved, events.awaitItem())
+        assertEquals(UiState.Saved, states.expectMostRecentItem())
+    }
+}`,
+      },
+    ],
+    underHood: {
+      body: `<p><code>test { }</code> launches a coroutine that collects your flow and sends every item into a channel. Turbine guarantees the flow runs up to its first suspension point before your block's first line, so an initial value is already queued. <code>awaitItem()</code> receives from that channel. When the block ends, Turbine cancels the collector and fails if events are still waiting.</p>
+<p>The 3 second timeout is wall clock time, not <code>runTest</code>'s virtual time. Delays in your code are skipped as usual, while a missing emission still fails after 3 real seconds.</p>`,
+    },
+    mistakes: [
+      {
+        title: 'Triggering an event before collecting it',
+        bad: `@Test fun saveShowsSnackbar() = runTest {
+    vm.save()                         // emits Event.Saved on a SharedFlow
+    vm.events.test {
+        assertEquals(Event.Saved, awaitItem())   // No value produced in 3s
+    }
+}`,
+        good: `@Test fun saveShowsSnackbar() = runTest {
+    vm.events.test {
+        vm.save()                     // collector is already running
+        assertEquals(Event.Saved, awaitItem())
+    }
+}`,
+        why: 'A <code>SharedFlow</code> without replay drops values nobody is collecting. Start <code>test { }</code> first and trigger the action inside it.',
+      },
+      {
+        title: 'Using first() to wait for a later state',
+        bad: `vm.refresh()                                   // launches in viewModelScope
+assertEquals(UiState.Success(articles), vm.state.first())`,
+        good: `vm.refresh()
+assertEquals(
+    UiState.Success(articles),
+    vm.state.first { it is UiState.Success },
+)`,
+        why: 'A <code>StateFlow</code> always has a value, so <code>first()</code> returns the current one at once, often still <code>Loading</code>. Wait for the state you mean with a predicate, or advance the scheduler and read <code>value</code>.',
+      },
+      {
+        title: 'Forgetting the StateFlow’s current value in Turbine',
+        bad: `vm.state.test {
+    vm.refresh()
+    assertEquals(UiState.Success(articles), awaitItem())   // got Idle
+}`,
+        good: `vm.state.test {
+    assertEquals(UiState.Idle, awaitItem())   // the current value comes first
+    vm.refresh()
+    assertEquals(UiState.Success(articles), expectMostRecentItem())
+}`,
+        why: 'Turbine receives the StateFlow’s current value as soon as it starts collecting. Take it first, or skip it with <code>skipItems(1)</code>.',
+      },
+    ],
+  };
+
+  const baselineDepth = {
+    deeper: [
+      {
+        title: 'Startup Profiles also lay out the DEX files',
+        body: `<p>A Baseline Profile decides which code gets compiled. A <em>Startup Profile</em>, a subset of it, also decides where that code sits. With R8 on, AGP puts the startup classes together at the front of <code>classes.dex</code>, so a launch reads one compact block of the file instead of pieces spread over several DEX files. Google reports startup usually 15% to 30% faster than with a Baseline Profile alone.</p>
+<p>It needs AGP 8.2 or newer and <code>isMinifyEnabled = true</code>. Mark startup journeys with <code>includeInStartupProfile = true</code>, and keep them small enough to fit in the first DEX file.</p>`,
+        code: `@Test fun startup() = baselineProfileRule.collect(
+    packageName = "com.example.news",
+    includeInStartupProfile = true,   // also writes startup-prof.txt
+) {
+    pressHome()
+    startActivityAndWait()
+}
+// Output: src/<variant>/generated/baselineProfiles/startup-prof.txt, read by AGP`,
+        visual(el) {
+          const FILES = ['classes.dex', 'classes2.dex', 'classes3.dex'], PER = 30;
+          const SPREAD = [2, 7, 12, 19, 26, 33, 41, 48, 55, 63, 70, 77, 84, 88];
+          const PACKED = [0, 1, 2, 3, 4];
+          let packed = false, busy = false;
+          const cells = [];
+          const files = FILES.map((name, f) => h('div', { class: 'tst-d2-dex' }, h('span', { class: 'tst-d2-file' }, name),
+            h('div', { class: 'tst-d2-pages' }, Array.from({ length: PER }, (_, i) => (cells[f * PER + i] = h('span', { class: 'tst-d2-pg' }))))));
+          const stat = h('span', { class: 'tst-stats' });
+          const o = out();
+          const startup = () => (packed ? PACKED : SPREAD);
+          function paint() {
+            cells.forEach(c => { c.className = 'tst-d2-pg'; });
+            startup().forEach(i => cells[i].classList.add('tst-d2-start'));
+            stat.innerHTML = 'pages with startup code: <b>—</b> · files opened: <b>—</b>';
+          }
+          const sw = h('input', { type: 'checkbox', id: 'tst-d2-dexlayout', onchange() {
+            if (busy) { sw.checked = packed; return; }
+            packed = sw.checked; paint();
+            say(o, packed ? 'Rebuilt with a Startup Profile: the startup classes moved to the front of classes.dex.' : 'No Startup Profile: startup classes sit wherever the build happened to put them.');
+          } });
+          async function launch() {
+            if (busy) return; busy = true;
+            try {
+              paint();
+              say(o, `${hl('startActivityAndWait()')} <span class="muted">// cold start, reading startup code</span>`);
+              const list = startup(), seenFiles = new Set();
+              for (const i of list) {
+                cells[i].classList.add('tst-d2-hit'); replay(cells[i], 'pop');
+                seenFiles.add(Math.floor(i / PER));
+                stat.innerHTML = `pages with startup code: <b>${list.indexOf(i) + 1}</b> · files opened: <b>${seenFiles.size}</b>`;
+                await sleep(packed ? 220 : 160); if (!el.isConnected) return;
+              }
+              o.append(h('div', { class: 'line drop-in', html: packed ? '<span class="good">5 pages, 1 file.</span> Less to read and keep in memory before the first frame.' : '<span class="bad">14 pages in 3 files.</span> Each page also holds code startup never needs.' }));
+            } finally { busy = false; }
+          }
+          paint();
+          o.innerHTML = 'Each square is a page of a DEX file. Orange pages hold startup code. Run a cold start.';
+          el.append(
+            h('label', { class: 'switch', for: 'tst-d2-dexlayout' }, sw, h('span', { html: hl('includeInStartupProfile = true') })),
+            h('div', { class: 'tst-sub' }, files),
+            h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: launch }, 'Cold start'), stat),
+            h('p', { class: 'tip' }, 'A simplified picture. Real gains depend on the app and the device.'),
+            o);
+        },
+      },
+      {
+        title: 'How the profile reaches a phone',
+        body: `<p>The profile ships in the APK as <code>assets/dexopt/baseline.prof</code>. Play passes it to the device at install, so ART compiles the listed methods before the first launch. Play also aggregates profiles from real users into Cloud Profiles, but those take hours to days after each release. Your Baseline Profile covers that gap.</p>
+<p>Other install paths may not use the profile at install. Then <code>androidx.profileinstaller</code> writes it on the first run, and the benefit arrives when the background dexopt job runs, likely overnight. Since AGP 8.4, installing a non-debuggable build from Studio or Gradle also installs the profile, so local release builds behave like Play installs.</p>`,
+        visual(el) {
+          const PATHS = { play: 'Google Play', side: 'Other store or sideload', local: 'Studio / Gradle (AGP 8.4+)' };
+          let path = 'play', compiled = true, written = false, launches = [], busy = false;
+          const lanes = h('div', { class: 'timeline' });
+          const state = h('span', { class: 'tst-res' });
+          const o = out();
+          const keys = Object.keys(PATHS);
+          const pBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; path = k; install(); } }, PATHS[k]));
+          function paintState() {
+            state.textContent = compiled ? 'startup code: AOT compiled' : written ? 'profile written, not compiled yet' : 'no profile on device';
+            state.className = 'tst-res drop-in' + (compiled ? '' : ' tst-bad');
+          }
+          function paintLanes() {
+            lanes.replaceChildren(...(launches.length ? launches.map((l, i) => h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, `launch ${l.n}`),
+              h('div', { class: 'lane-track' }, h('span', { class: `bar ${l.aot ? 'tst-aotbar' : 'tst-interp'}` + (i === launches.length - 1 ? ' drop-in' : ''), style: `left:0;width:${(l.ms / 1400) * 100}%` }),
+                h('span', { class: 'tst-d2-ms' }, `${l.ms} ms`)))) : [h('p', { class: 'tip' }, 'No launches yet.')]));
+          }
+          let count = 0;
+          function install() {
+            pressed(pBtns, keys, path);
+            compiled = path !== 'side'; written = compiled; launches = []; count = 0;
+            paintState(); paintLanes();
+            say(o, path === 'side' ? 'Installed without install-time compilation. Launch it.' : `Installed from ${PATHS[path]}: dex2oat compiled the profile during install.`);
+          }
+          async function launch() {
+            if (busy) return; busy = true;
+            try {
+              await sleep(250); if (!el.isConnected) return;
+              const ms = compiled ? 680 + (count % 3) * 9 : 1020 - Math.min(count, 2) * 18;
+              launches.push({ n: ++count, ms, aot: compiled }); if (launches.length > 5) launches.shift();
+              paintLanes();
+              say(o, `cold start ${count}: first frame at ${compiled ? `<span class="good">${ms} ms</span>` : `<span class="bad">${ms} ms</span>`}`);
+              if (!written) { written = true; paintState(); o.append(h('div', { class: 'line drop-in' }, 'ProfileInstaller: wrote the baseline profile. ART compiles it at the next background dexopt.')); }
+              else if (!compiled) o.append(h('div', { class: 'line drop-in' }, 'Still interpreted and JIT compiled. The profile waits for the idle job.'));
+            } finally { busy = false; }
+          }
+          function night() {
+            if (busy) return;
+            if (compiled) { say(o, 'Background dexopt ran. Startup code was already compiled, nothing changes.'); return; }
+            if (!written) { say(o, 'Background dexopt ran, but no profile was written yet. Launch the app once first.'); return; }
+            compiled = true; paintState(); replay(state, 'pop');
+            say(o, '<span class="good">Overnight, idle and charging:</span> background dexopt compiled the profile with speed-profile.');
+          }
+          install();
+          launches = [{ n: 1, ms: 680, aot: true }]; count = 1; paintLanes();
+          o.innerHTML = 'Installed from Play and launched once: 680 ms. Pick another install path.';
+          el.append(
+            h('div', { class: 'controls' }, h('span', { class: 'tst-label' }, 'install from'), pBtns),
+            h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: launch }, 'Launch app'), h('button', { class: 'btn small', onclick: night }, 'Leave it overnight'), state),
+            lanes,
+            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar tst-aotbar' }), 'AOT from the profile'), h('span', {}, h('i', { class: 'bar tst-interp' }), 'interpreted + JIT')),
+            o);
+        },
+      },
+    ],
+    underHood: {
+      body: `<p>The generated rules are plain text. Each line names a class, or a method with flags: <code>H</code> for hot, <code>S</code> for used during startup, <code>P</code> for used after startup. AGP merges your rules with the ones libraries ship, rewrites the names to match R8's output, and compiles everything into the binary <code>baseline.prof</code> in <code>assets/dexopt/</code>. ART uses it only while it stays under 1.5 MB.</p>
+<p>At install, <code>dex2oat</code> runs with the <code>speed-profile</code> filter. It compiles exactly the methods in the profile to machine code and leaves the rest to the interpreter and the JIT. While the app runs, ART records which other methods get hot, and the background dexopt job later compiles those as well.</p>`,
+      code: `# baseline-prof.txt (excerpt)
+Lcom/example/news/MainActivity;
+HSPLcom/example/news/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLcom/example/news/feed/FeedViewModel;-><init>(Lcom/example/news/data/NewsRepository;)V
+PLcom/example/news/feed/FeedScreenKt;->FeedRow(Lcom/example/news/Article;Landroidx/compose/runtime/Composer;I)V`,
+    },
+    mistakes: [
+      {
+        title: 'No profileinstaller in the app',
+        bad: `dependencies {
+    implementation(platform(libs.compose.bom))
+    "baselineProfile"(project(":baselineprofile"))
+    // the profile is generated, but nothing installs it off Play
+}`,
+        good: `dependencies {
+    implementation(platform(libs.compose.bom))
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    "baselineProfile"(project(":baselineprofile"))
+}`,
+        why: 'Installs that skip install-time compilation, and older devices, get the profile only through <code>profileinstaller</code>. Macrobenchmark also uses it to install the profile for <code>CompilationMode.Partial()</code>.',
+      },
+      {
+        title: 'A profile generated once and never again',
+        bad: `// baseline-prof.txt committed a year ago.
+// Since then: new home screen, renamed ViewModels, a new DI setup.`,
+        good: `// CI, before every release build:
+// ./gradlew :app:generateReleaseBaselineProfile
+// then commit the regenerated src/release/generated/baselineProfiles/`,
+        why: 'Rules for methods that were renamed or removed match nothing, and new startup code is missing. Regenerate the profile as part of each release.',
+      },
+      {
+        title: 'Benchmarking with CompilationMode.Full()',
+        bad: `@Test fun startupWithProfile() = startup(CompilationMode.Full())`,
+        good: `@Test fun startupWithProfile() = startup(CompilationMode.Partial())`,
+        why: '<code>Full()</code> compiles the whole app ahead of time, which no user’s device does. It hides how good or bad your profile is. <code>Partial()</code> installs your Baseline Profile, like a real install.',
+      },
+    ],
+  };
+
   Lab.addTrack({
     id: 'testing',
     title: 'Testing and quality',
@@ -534,6 +1226,9 @@ class CheckoutFlowTest {
           { q: 'Why should most of your tests be local unit tests?', options: ['They give the most confidence that the real screen works', 'They are fast and stable enough to run on every change', 'Instrumented tests cannot use assertions'], a: 1, why: 'Milliseconds per test means you get feedback right away. The slower layers stay few.' },
           { q: 'Which layer tells you most directly that a real user can finish checkout?', options: ['A local unit test of the price formatter', 'A UI test that taps through the checkout screen'], a: 1, why: 'The UI test exercises the real screens together. That confidence is why you keep a few, even though they are slow.' },
         ],
+        deeper: pyramidDepth.deeper,
+        underHood: pyramidDepth.underHood,
+        mistakes: pyramidDepth.mistakes,
         visual(el) {
           const layers = [
             { id: 'ui', name: 'UI tests', w: '46%', n: 6, ms: 4000, where: 'Device. Drives whole screens.', speed: 1, cost: 3, conf: 3 },
@@ -663,6 +1358,9 @@ class NewsViewModelTest {
           { q: 'What has to be true about <code>NewsViewModel</code> so a test can pass it a fake?', options: ['It creates its repository inside init', 'It takes a NewsRepository interface in its constructor', 'It is an object'], a: 1, why: 'Constructor injection of an interface lets the test choose the implementation.' },
           { q: 'In Given / When / Then, where does <code>vm.load()</code> go?', options: ['Given', 'When', 'Then'], a: 1, why: 'When is the one action under test. Given sets up the fake, Then asserts.' },
         ],
+        deeper: fakesDepth.deeper,
+        underHood: fakesDepth.underHood,
+        mistakes: fakesDepth.mistakes,
         visual(el) {
           const runsReal = [
             { ms: 1240, ok: true }, { ms: 3000, ok: false, msg: 'SocketTimeoutException: timeout' },
@@ -954,6 +1652,9 @@ class SyncViewModelTest {
           { q: 'The block ends with one emission still in the queue. Result?', options: ['The test passes', 'The test fails with unconsumed events'], a: 1, why: 'Turbine checks the queue is empty at the end. Use <code>cancelAndIgnoreRemainingEvents()</code> if leftovers are fine.' },
           { q: 'What is the first item a <code>StateFlow</code> gives a new collector?', options: ['Its current value, right away', 'Nothing until the next change'], a: 0, why: 'StateFlow always has a value and replays it to every new collector.' },
         ],
+        deeper: flowsDepth.deeper,
+        underHood: flowsDepth.underHood,
+        mistakes: flowsDepth.mistakes,
         visual(el) {
           const script = [
             { src: 'vm.uiState.test {', kind: 'start' },
@@ -1252,6 +1953,9 @@ class StartupBenchmark {
           { q: 'What does <code>CompilationMode.None()</code> measure?', options: ['Startup with no AOT compilation, the worst case', 'Startup with the Baseline Profile', 'Startup with everything compiled'], a: 0, why: 'It resets compilation, so code runs interpreted and JIT-compiled. Compare it with <code>Partial()</code> to see the profile’s gain.' },
           { q: 'Why benchmark a non-debuggable release build?', options: ['Debuggable builds skip optimizations, so the numbers are not real', 'Macrobenchmark only installs from Play'], a: 0, why: 'Users run release builds. Debuggable builds run slower in ways that hide or invent problems.' },
         ],
+        deeper: baselineDepth.deeper,
+        underHood: baselineDepth.underHood,
+        mistakes: baselineDepth.mistakes,
         visual(el) {
           const TOTAL = 1100;
           const modes = {

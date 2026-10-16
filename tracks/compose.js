@@ -317,6 +317,140 @@
 @media (max-width: 640px) {
   .cmp-rs-lane { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
+/* depth 2: modifiers */
+.cmp-d2m-row { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 160px; padding: 16px; background: var(--bg); border-radius: 12px; border: 1px dashed var(--line); overflow: hidden; min-width: 0; }
+.cmp-d2m-nb { position: relative; z-index: 1; flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 2px solid var(--ink); background: var(--surface); font: 700 0.9rem var(--mono); }
+.cmp-d2m-slot { position: relative; z-index: 2; flex: none; width: 100px; height: 100px; outline: 2px dashed var(--warm); transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-d2m-box { position: absolute; display: grid; place-items: center; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: 700 0.9rem var(--mono); opacity: 0.88; transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-d2m-box.cmp-d2m-spill { box-shadow: 0 0 0 3px var(--err); }
+.cmp-d2m-sizes { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 500 0.82rem var(--mono); color: var(--muted); }
+.cmp-d2m-sizes i { display: inline-block; width: 16px; height: 12px; margin-right: 6px; vertical-align: -1px; border-radius: 3px; }
+.cmp-d2m-k1 { outline: 2px dashed var(--warm); outline-offset: -2px; }
+.cmp-d2m-k2 { background: var(--accent); }
+.cmp-d2m-strip { display: flex; flex-wrap: wrap; align-items: center; min-height: 70px; padding: 14px; background: var(--bg); border-radius: 12px; border: 1px dashed var(--line); min-width: 0; }
+.cmp-d2m-outer { display: inline-flex; outline: 1px dashed var(--muted); outline-offset: -1px; transition: padding 0.3s; }
+.cmp-d2m-outer.cmp-d2m-gap { padding-right: 8px; }
+.cmp-d2m-pill { padding: 4px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); font: 700 0.9rem var(--body); transition: padding 0.3s; }
+.cmp-d2m-pill.cmp-d2m-fat { padding: 4px 20px; }
+/* depth 2: layouts */
+.cmp-d2l-track { position: relative; display: flex; height: 74px; border-radius: 10px; border: 2px dashed var(--accent); background: var(--surface); overflow: hidden; min-width: 0; }
+.cmp-d2l-seg { position: relative; z-index: 1; flex: none; width: 0; display: grid; place-items: center; align-content: center; overflow: hidden; border-radius: 8px; white-space: nowrap; font: 700 0.9rem var(--mono); color: var(--ink); opacity: 0.35; transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s; }
+.cmp-d2l-seg.cmp-d2l-on { opacity: 1; }
+.cmp-d2l-seg small { font: 500 0.66rem var(--mono); color: var(--muted); }
+.cmp-d2l-seg.cmp-d2l-tiny small { display: none; }
+.cmp-d2l-a { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--ink); }
+.cmp-d2l-b { background: var(--warm-soft); box-shadow: inset 0 0 0 2px var(--warm); }
+.cmp-d2l-c { background: var(--ok-soft); box-shadow: inset 0 0 0 2px var(--ok); }
+.cmp-d2l-left { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: repeating-linear-gradient(45deg, var(--sunk) 0 6px, transparent 6px 12px); pointer-events: none; transition: left 0.4s, width 0.4s; }
+.cmp-d2l-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 2px; min-height: 4.8em; font: 500 0.8rem/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.cmp-d2l-screen { display: flex; flex-direction: column; width: min(320px, 100%); height: 220px; margin: 0 auto; border-radius: 18px; border: 6px solid var(--code-bg); background: var(--surface); overflow: hidden; }
+.cmp-d2l-irow { display: flex; align-items: flex-start; gap: 8px; padding: 8px; flex: 1 0 auto; background: var(--bg); border-bottom: 1px dashed var(--line); transition: flex-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cmp-d2l-irow.cmp-d2l-fit { flex-grow: 0; }
+.cmp-d2l-txt { flex: 1 1 0; min-width: 0; font: 700 0.85rem var(--body); overflow-wrap: anywhere; }
+.cmp-d2l-txt small { display: block; font-weight: 400; color: var(--muted); }
+.cmp-d2l-div { flex: none; width: 3px; align-self: stretch; border-radius: 2px; background: var(--accent); }
+.cmp-d2l-below { padding: 8px; font: 600 0.8rem var(--body); color: var(--muted); }
+/* depth 2: scaffold */
+.cmp-d2s-phone { position: relative; width: 220px; height: 320px; border-radius: 26px; border: 8px solid var(--code-bg); background: var(--bg); overflow: hidden; justify-self: center; }
+.cmp-d2s-scroll { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.cmp-d2s-scroll::-webkit-scrollbar { display: none; }
+.cmp-d2s-inner { display: grid; gap: 6px; padding: 0 10px 10px; }
+.cmp-d2s-row { padding: 10px; border-radius: 10px; background: var(--surface); font: 700 0.82rem var(--body); }
+.cmp-d2s-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: flex-end; padding: 0 14px 14px; background: var(--accent-soft); overflow: hidden; transition: transform 0.12s linear; }
+.cmp-d2s-title { font: 700 1rem var(--display); transition: font-size 0.2s; }
+.cmp-d2s-bar.cmp-d2s-large .cmp-d2s-title { font-size: 1.4rem; }
+.cmp-d2s-box { position: relative; min-height: 250px; padding: 10px 10px 74px; border-radius: 14px; border: 1px dashed var(--line); background: var(--bg); overflow: hidden; min-width: 0; }
+.cmp-d2s-list { display: grid; gap: 6px; }
+.cmp-d2s-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--surface); font: 700 0.88rem var(--body); min-width: 0; }
+.cmp-d2s-item .cmd { padding: 5px 10px; font-size: 0.78rem; }
+.cmp-d2s-item.cmp-d2s-gone { display: none; }
+.cmp-d2s-snack { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; padding: 10px 8px 12px 14px; border-radius: 8px; background: var(--code-bg); color: var(--code-ink); font: 500 0.85rem var(--body); overflow: hidden; opacity: 0; transform: translateY(20px); pointer-events: none; transition: opacity 0.3s, transform 0.3s; }
+.cmp-d2s-snack.cmp-on { opacity: 1; transform: none; pointer-events: auto; }
+.cmp-d2s-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cmp-d2s-undo { border: 0; background: transparent; color: var(--t-k); font: 700 0.85rem var(--body); cursor: pointer; padding: 4px 6px; }
+.cmp-d2s-x { border: 0; background: transparent; color: var(--code-ink); font: 700 1rem var(--body); cursor: pointer; padding: 2px 6px; }
+.cmp-d2s-fill { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--t-k); }
+/* depth 2: theming */
+.cmp-d2t-card { display: grid; gap: 8px; justify-items: start; width: min(300px, 100%); margin: 0 auto; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.cmp-d2t-card b { font: 700 1.1rem var(--display); }
+.cmp-d2t-pro { padding: 6px 16px; border-radius: 999px; font: 700 0.95rem var(--body); transition: background-color 0.4s, color 0.4s; }
+.cmp-d2t-pro.cmp-d2t-warn { outline: 2px dashed var(--err); outline-offset: 3px; }
+.cmp-d2t-sub { font-size: 0.8rem; color: var(--muted); }
+.cmp-d2t-screen { display: grid; gap: 8px; justify-items: start; width: min(320px, 100%); margin: 0 auto; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); }
+.cmp-d2t-screen > b { font: 700 1.1rem var(--display); }
+.cmp-d2t-btn { padding: 7px 16px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 0.82rem var(--body); transition: background-color 0.4s, color 0.4s; }
+.cmp-d2t-zone { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; padding: 10px; border-radius: 12px; border: 1px dashed var(--line); transition: border-color 0.4s; }
+.cmp-d2t-zlabel { width: 100%; font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.cmp-d2t-zone.cmp-d2t-on { border-color: var(--err); }
+.cmp-d2t-zone.cmp-d2t-on .cmp-d2t-btn { background: var(--err); color: var(--surface); }
+/* depth 2: rememberSaveable */
+.cmp-d2v-proc { display: grid; gap: 8px; justify-items: start; align-content: start; width: min(260px, 100%); min-height: 96px; padding: 14px; border-radius: 14px; border: 2px solid var(--ink); background: var(--surface); transition: opacity 0.4s, border-color 0.3s, background-color 0.3s; }
+.cmp-d2v-proc.cmp-d2v-dead { opacity: 0.35; border-style: dashed; }
+.cmp-d2v-proc.cmp-d2v-crash { border-color: var(--err); background: var(--err-soft); }
+.cmp-d2v-obj { max-width: 100%; padding: 6px 10px; border-radius: 8px; background: var(--code-bg); color: var(--code-ink); font: 600 0.8rem var(--mono); overflow-wrap: anywhere; }
+.cmp-d2v-entries { display: grid; gap: 6px; justify-items: start; }
+.cmp-d2v-code { max-width: 100%; padding: 4px 10px; border-radius: 6px; background: var(--code-bg); color: var(--code-ink); font: 600 0.8rem var(--mono); overflow-wrap: anywhere; }
+.cmp-d2v-err { font: 700 0.78rem var(--mono); color: var(--err); overflow-wrap: anywhere; }
+.cmp-d2v-grid { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); }
+.cmp-d2v-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; background: var(--surface); }
+.cmp-d2v-name { font: 600 0.82rem var(--mono); overflow-wrap: anywhere; }
+.cmp-d2v-val { min-width: 2.4em; text-align: center; padding: 3px 8px; border-radius: 999px; background: var(--sunk); font: 700 0.85rem var(--mono); font-variant-numeric: tabular-nums; transition: background-color 0.3s, color 0.3s; }
+.cmp-d2v-val.cmp-d2v-kept { background: var(--ok-soft); color: var(--ok); }
+.cmp-d2v-val.cmp-d2v-lost { background: var(--err-soft); color: var(--err); }
+.cmp-d2v-screen { display: grid; gap: 6px; justify-items: center; min-width: min(200px, 100%); padding: 16px 20px; border-radius: 14px; border: 2px solid var(--ink); background: var(--surface); transition: opacity 0.3s; }
+.cmp-d2v-screen .cmp-label { overflow-wrap: anywhere; text-align: center; }
+.cmp-d2v-num { padding: 0 8px; border-radius: 8px; font: 700 2rem var(--display); font-variant-numeric: tabular-nums; }
+.cmp-d2v-off { opacity: 0.5; }
+/* depth 2: hoisting */
+.cmp-d2h-card { display: grid; align-items: center; min-height: 3.2em; padding: 14px 16px; border-radius: 14px; border: 2px solid var(--accent); background: var(--surface); font: 700 0.95rem var(--body); overflow-wrap: anywhere; }
+.cmp-d2h-card.cmp-d2h-done { border-color: var(--ok); color: var(--muted); }
+.cmp-d2h-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cmp-d2h-col { display: grid; gap: 6px; align-content: start; min-height: 90px; padding: 10px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); min-width: 0; }
+.cmp-d2h-col .cmp-label { text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+.cmp-d2h-drop { display: grid; gap: 6px; }
+.cmp-d2h-chip { padding: 6px 8px; border-radius: 8px; background: var(--accent-soft); font: 600 0.78rem var(--body); overflow-wrap: anywhere; }
+.cmp-d2h-list { display: grid; gap: 6px; }
+.cmp-d2h-try { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font: 600 0.88rem var(--body); min-width: 0; }
+.cmp-d2h-mark { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--sunk); color: var(--muted); font: 700 0.85rem var(--mono); }
+.cmp-d2h-mark.cmp-d2h-ok { background: var(--ok-soft); color: var(--ok); }
+.cmp-d2h-mark.cmp-d2h-no { background: var(--err-soft); color: var(--err); }
+.cmp-d2h-line { min-width: 0; overflow-wrap: anywhere; }
+/* depth 2: text input */
+.cmp-d2i-field { min-width: 0; }
+.cmp-d2i-pad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: min(240px, 100%); }
+.cmp-d2i-pad .cmp-kb-key { min-width: 0; }
+/* depth 2: lists */
+.cmp-d2z-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; align-items: start; min-width: 0; }
+.cmp-d2z-frame { position: relative; min-width: 0; border-radius: 18px; border: 6px solid var(--code-bg); background: var(--surface); overflow: hidden; }
+.cmp-d2z-view { height: 250px; overflow: auto; overscroll-behavior: contain; }
+.cmp-d2z-inner { display: grid; gap: 6px; padding: 8px; }
+.cmp-d2z-row { display: flex; gap: 10px; align-items: center; height: 40px; padding: 0 10px; border-radius: 10px; border: 2px solid transparent; background: var(--sunk); font: 700 0.88rem var(--body); }
+.cmp-d2z-row i { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 700 0.72rem var(--mono); font-style: normal; }
+.cmp-d2z-fab { position: absolute; right: 12px; bottom: 12px; width: 46px; height: 46px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); font: 700 1.3rem/1 var(--body); cursor: pointer; transform: scale(0); transition: transform 0.25s; }
+.cmp-d2z-fab.cmp-on { transform: scale(1); }
+.cmp-d2z-meters { display: grid; gap: 6px; }
+.cmp-d2z-meters > div { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-width: 0; }
+.cmp-d2z-foot { display: flex; gap: 8px; align-items: center; justify-content: center; min-height: 40px; font: 600 0.8rem var(--mono); color: var(--muted); }
+.cmp-d2z-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: cmp-d2z-spin 0.8s linear infinite; }
+@keyframes cmp-d2z-spin { to { transform: rotate(360deg); } }
+/* depth 2: gestures */
+.cmp-d2g-frame { position: relative; width: 230px; height: 280px; border-radius: 24px; border: 8px solid var(--code-bg); background: var(--bg); overflow: hidden; justify-self: center; transition: box-shadow 0.3s; }
+.cmp-d2g-frame.cmp-d2g-win-list { box-shadow: 0 0 0 3px var(--warm); }
+.cmp-d2g-col { display: grid; gap: 6px; padding: 10px; }
+.cmp-d2g-row { display: flex; align-items: center; height: 40px; padding: 0 12px; border-radius: 10px; border: 2px solid transparent; background: var(--surface); font: 700 0.82rem var(--body); }
+.cmp-d2g-row.cmp-d2g-me { border-color: var(--accent); background: var(--accent-soft); }
+.cmp-d2g-frame.cmp-d2g-win-row .cmp-d2g-me { border-color: var(--warm); background: var(--warm-soft); }
+.cmp-d2g-finger { position: absolute; z-index: 3; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--warm); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.cmp-d2g-finger.cmp-on { opacity: 0.6; }
+.cmp-d2g-track { position: relative; height: 76px; border-radius: 14px; background: var(--sunk); overflow: hidden; min-width: 0; }
+.cmp-d2g-under { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 18px; background: var(--ok-soft); color: var(--ok); font: 700 0.8rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
+.cmp-d2g-card { position: absolute; inset: 0; display: grid; align-content: center; gap: 2px; padding: 0 16px; border-radius: 14px; border: 2px solid var(--ink); background: var(--surface); cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.cmp-d2g-card b { font: 700 1rem var(--display); }
+.cmp-d2g-card small { font-size: 0.78rem; color: var(--muted); }
+.cmp-d2g-card.cmp-d2g-held { cursor: grabbing; border-color: var(--accent); }
+@media (max-width: 560px) {
+  .cmp-d2h-cols { grid-template-columns: minmax(0, 1fr); }
+}
 `;
 
   Lab.addTrack({
@@ -666,6 +800,126 @@ Box(
           { q: 'Which button has the bigger touch target?', options: ['<code>.clickable { }.padding(12.dp)</code>', '<code>.padding(12.dp).clickable { }</code>'], a: 0, why: 'When clickable comes first, it wraps the padding, so the padding area responds to taps.' },
           { q: 'How big is <code>Modifier.size(96.dp).padding(16.dp)</code>?', options: ['96 × 96 dp', '128 × 128 dp', '64 × 64 dp'], a: 0, why: 'The size is outermost. The padding eats into it and leaves 64 dp for the content.' },
         ],
+        deeper: [
+          {
+            title: 'The first size wins',
+            body: `<p>Layout modifiers pass <em>constraints</em> down the chain. Each one gets a min and max size from the modifier before it, and it has to answer with a size that fits. <code>size(100.dp)</code> sets the constraints to exactly 100 dp. A later <code>size(50.dp)</code> must fit inside those, so it is coerced up to 100.</p>
+<p><code>requiredSize</code> ignores the incoming constraints. The content takes the size it asked for, the parent still sees the size it allowed, and Compose centers the content in that space. If the content is bigger, it spills over its neighbors.</p>`,
+            code: `Box(Modifier.size(100.dp).size(50.dp))          // 100 dp: the first size wins
+Box(Modifier.size(100.dp).requiredSize(50.dp))  // 50 dp content, centered in 100 dp
+Box(Modifier.size(50.dp).requiredSize(100.dp))  // parent sees 50 dp, content draws 100 dp`,
+            visual(el) {
+              const CASES = [
+                { src: '.size(100.dp).size(50.dp)', slot: 100, box: 100, note: 'The first size fixes the constraints at 100 dp. The second size must fit them, so it becomes 100.' },
+                { src: '.size(50.dp).size(100.dp)', slot: 50, box: 50, note: 'Same rule the other way round. The first size wins, so the box is 50 dp.' },
+                { src: '.size(100.dp).requiredSize(50.dp)', slot: 100, box: 50, note: 'requiredSize ignores the constraints. 50 dp of content, centered in the 100 dp slot.' },
+                { src: '.size(50.dp).requiredSize(100.dp)', slot: 50, box: 100, note: 'The parent reserves 50 dp. The content insists on 100 and draws over A and C.' },
+              ];
+              const content = h('div', { class: 'cmp-d2m-box' }, 'B');
+              const slotEl = h('div', { class: 'cmp-d2m-slot' }, content);
+              const row = h('div', { class: 'cmp-d2m-row', role: 'img', 'aria-label': 'Row with A, B and C' },
+                h('div', { class: 'cmp-d2m-nb' }, 'A'), slotEl, h('div', { class: 'cmp-d2m-nb' }, 'C'));
+              const sizes = h('div', { class: 'cmp-d2m-sizes' });
+              const o = out();
+              const btns = CASES.map(c => cmd(`B(Modifier${c.src})`, () => pick(c)));
+              function pick(c) {
+                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(CASES[i] === c)));
+                slotEl.style.width = slotEl.style.height = `${c.slot}px`;
+                const off = (c.slot - c.box) / 2;
+                Object.assign(content.style, { width: `${c.box}px`, height: `${c.box}px`, left: `${off}px`, top: `${off}px` });
+                content.classList.toggle('cmp-d2m-spill', c.box > c.slot);
+                sizes.innerHTML = `<span><i class="cmp-d2m-k1"></i>parent sees ${c.slot} × ${c.slot} dp</span><span><i class="cmp-d2m-k2"></i>content draws ${c.box} × ${c.box} dp</span>`;
+                replay(content, 'pop-soft');
+                say(o, esc(c.note));
+              }
+              el.append(row, sizes, h('div', { class: 'controls' }, btns), o);
+              pick(CASES[0]);
+            },
+          },
+          {
+            title: 'Take a modifier, apply it first',
+            body: `<p>Every reusable composable should take <code>modifier: Modifier = Modifier</code> as its first optional parameter and apply it to its root, before its own modifiers. The caller then controls the outside: spacing, size, weight and clicks. Your component controls the inside.</p>
+<p>If you add the caller’s modifier at the end with <code>.then(modifier)</code>, its padding lands inside your background. If you ignore it, the caller can’t place your component at all.</p>`,
+            code: `@Composable
+fun Tag(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        modifier                                  // the caller's part goes outside
+            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    )
+}
+
+Tag("New", Modifier.padding(end = 8.dp))      // spacing between tags`,
+            visual(el) {
+              const IMPL = [
+                { src: 'Text(text, modifier.background(…).padding(…))', at: 'first', note: '<span class="good">Right.</span> The caller’s padding is outside the pill, so it spaces the tags apart.' },
+                { src: 'Text(text, Modifier.background(…).padding(…).then(modifier))', at: 'last', note: '<span class="bad">Wrong place.</span> The caller’s padding ends up inside the pill. The tags get fatter and still touch.' },
+                { src: 'Text(text, Modifier.background(…).padding(…))', at: 'none', note: '<span class="bad">Ignored.</span> The caller passed padding and nothing happened. There is no way to fix it from outside.' },
+              ];
+              const strip = h('div', { class: 'cmp-d2m-strip', role: 'img', 'aria-label': 'Three tags in a row' });
+              const call = h('div', { class: 'kt' });
+              const o = out();
+              const btns = IMPL.map(x => cmd(x.src, () => pick(x)));
+              function tag(label, at) {
+                const pill = h('span', { class: 'cmp-d2m-pill' }, label);
+                if (at === 'last') pill.classList.add('cmp-d2m-fat');
+                return h('span', { class: `cmp-d2m-outer${at === 'first' ? ' cmp-d2m-gap' : ''}` }, pill);
+              }
+              function pick(x) {
+                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(IMPL[i] === x)));
+                strip.replaceChildren(...['New', 'Sale', 'Hot'].map(t => tag(t, x.at)));
+                strip.querySelectorAll('.cmp-d2m-pill').forEach(p => replay(p, 'pop-soft'));
+                say(o, x.note);
+              }
+              call.innerHTML = hl('// the caller, the same in all three cases\nTag("New", Modifier.padding(end = 8.dp))');
+              el.append(call, strip, h('div', { class: 'controls' }, btns), o);
+              pick(IMPL[0]);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>A <code>Modifier</code> is an immutable chain. Each call like <code>.padding(16.dp)</code> returns <code>this then PaddingElement(...)</code>. <code>then</code> builds a <code>CombinedModifier(outer, inner)</code>, so the order you write is the order stored.</p>
+<p>The elements are cheap descriptions. When the layout node is created, each element creates a long-lived <code>Modifier.Node</code>. On recomposition Compose compares the new elements with the old ones and updates the existing nodes in place, instead of building new ones. During measure, each layout node calls the next one in the chain with its own constraints. That is why the first <code>size</code> decides what the later ones can do.</p>`,
+          code: `// Roughly what the library does (simplified)
+fun Modifier.padding(all: Dp): Modifier =
+    this then PaddingElement(start = all, top = all, end = all, bottom = all, rtlAware = true)
+
+infix fun Modifier.then(other: Modifier): Modifier =
+    if (other === Modifier) this else CombinedModifier(this, other)`,
+        },
+        mistakes: [
+          {
+            title: 'No modifier parameter',
+            bad: `@Composable
+fun Avatar(painter: Painter) {
+    Image(painter, null, Modifier.size(40.dp).clip(CircleShape))
+}`,
+            good: `@Composable
+fun Avatar(painter: Painter, modifier: Modifier = Modifier) {
+    Image(painter, null, modifier.size(40.dp).clip(CircleShape))
+}`,
+            why: 'Without a <code>modifier</code> parameter, callers can’t add padding, a click or a weight. Take one and put it first in the chain on the root element.',
+          },
+          {
+            title: 'Passing the same modifier to the children',
+            bad: `@Composable
+fun Note(title: String, body: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(title, modifier)
+        Text(body, modifier)
+    }
+}`,
+            good: `@Composable
+fun Note(title: String, body: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(title)
+        Text(body)
+    }
+}`,
+            why: 'The caller’s padding, size or click now applies three times. The <code>modifier</code> parameter belongs to the root only. Children get their own <code>Modifier</code> chains.',
+          },
+        ],
         visual(el) {
           const MODS = { padding: '.padding(16.dp)', background: '.background(Purple)', clickable: '.clickable { onClick() }', size: '.size(96.dp)' };
           const PRESETS = [
@@ -777,6 +1031,161 @@ fun BellWithCount(count: Int) {
           { q: 'In a <code>Row</code>, which parameter moves the children up and down?', options: ['<code>horizontalArrangement</code>', '<code>verticalAlignment</code>', '<code>contentAlignment</code>'], a: 1, why: 'Up and down is the cross axis of a Row, and the cross axis is set by alignment.' },
           { q: 'One child of a Row has <code>Modifier.weight(1f)</code>. What does <code>Arrangement.SpaceBetween</code> do now?', options: ['Spreads the children to both ends', 'Nothing visible, because the weight used up the leftover space', 'It throws at runtime'], a: 1, why: 'Arrangement only shares leftover space. A weighted child already took all of it.' },
           { q: 'Which layout draws its children on top of each other?', options: ['<code>Row</code>', '<code>Column</code>', '<code>Box</code>'], a: 2, why: 'A Box stacks its children. The last one draws on top.' },
+        ],
+        deeper: [
+          {
+            title: 'How weight shares the space',
+            body: `<p>A Row measures in two rounds. First it measures every child without weight, one after another, each with whatever width is still free. Then it takes the leftover width and splits it between the weighted children by their weights: <code>weight(2f)</code> gets twice what <code>weight(1f)</code> gets.</p>
+<p>By default a weighted child must fill its share exactly. With <code>weight(1f, fill = false)</code> the share is only a maximum, so a small child stays small and the rest of its share stays empty.</p>`,
+            code: `Row(Modifier.width(300.dp)) {
+    A(Modifier.width(60.dp))           // round 1: 60 dp
+    B(Modifier.weight(1f))             // round 2: 240 × 1/3 = 80 dp
+    C(Modifier.weight(2f))             // round 2: 240 × 2/3 = 160 dp
+}`,
+            visual(el) {
+              const W = 300, A = 60, NAT = { B: 80, C: 50 };
+              const B_OPTS = [['B()', 0, true], ['B(Modifier.weight(1f))', 1, true], ['B(Modifier.weight(2f))', 2, true]];
+              const C_OPTS = [['C()', 0, true], ['C(Modifier.weight(1f))', 1, true], ['C(Modifier.weight(1f, fill = false))', 1, false]];
+              let b = B_OPTS[1], c = C_OPTS[1], busy = false;
+              const seg = n => h('div', { class: `cmp-d2l-seg cmp-d2l-${n.toLowerCase()}` }, h('b', {}, n), h('small', {}));
+              const S = { A: seg('A'), B: seg('B'), C: seg('C') };
+              const left = h('div', { class: 'cmp-d2l-left' });
+              const track = h('div', { class: 'cmp-d2l-track', role: 'img', 'aria-label': 'Row 300 dp wide' }, S.A, S.B, S.C, left);
+              const steps = h('ol', { class: 'cmp-d2l-steps' });
+              const o = out();
+              const bBtns = B_OPTS.map(x => cmd(x[0], () => set(() => { b = x; })));
+              const cBtns = C_OPTS.map(x => cmd(x[0], () => set(() => { c = x; })));
+              const pct = dp => `${(dp / W) * 100}%`;
+              function setW(n, dp, label) {
+                S[n].style.width = pct(dp);
+                S[n].querySelector('small').textContent = label === '' ? '' : `${Math.round(dp)} dp`;
+                S[n].classList.toggle('cmp-d2l-tiny', dp < 34);
+              }
+              async function run() {
+                busy = true;
+                const kids = [['A', 0, true, A], ['B', b[1], b[2], NAT.B], ['C', c[1], c[2], NAT.C]];
+                bBtns.forEach((x, i) => x.setAttribute('aria-pressed', String(B_OPTS[i] === b)));
+                cBtns.forEach((x, i) => x.setAttribute('aria-pressed', String(C_OPTS[i] === c)));
+                steps.replaceChildren();
+                left.style.width = '0'; left.style.left = '0';
+                for (const [n] of kids) { setW(n, 0, ''); S[n].classList.remove('cmp-d2l-on'); }
+                await sleep(350); if (!el.isConnected) return;
+                let used = 0;
+                const fixed = kids.filter(k => !k[1]);
+                for (const [n, , , nat] of fixed) {
+                  setW(n, nat); S[n].classList.add('cmp-d2l-on'); used += nat;
+                  await sleep(380); if (!el.isConnected) return;
+                }
+                steps.append(h('li', { class: 'drop-in' }, `Round 1: measure ${fixed.map(k => k[0]).join(', ')} without weight → ${used} dp used`));
+                const rest = W - used, weighted = kids.filter(k => k[1]), total = weighted.reduce((s, k) => s + k[1], 0);
+                left.style.left = pct(used); left.style.width = pct(rest);
+                await sleep(450); if (!el.isConnected) return;
+                if (!weighted.length) {
+                  steps.append(h('li', { class: 'drop-in' }, `No weights. ${rest} dp stays free for Arrangement to place.`));
+                  say(o, `Nothing has weight, so ${rest} dp is left over. Arrangement decides where it goes.`);
+                  busy = false; return;
+                }
+                steps.append(h('li', { class: 'drop-in' }, `Leftover: ${W} − ${used} = ${rest} dp, total weight ${total}`));
+                let unused = 0;
+                for (const [n, w, fill, nat] of weighted) {
+                  const share = rest * w / total, got = fill ? share : Math.min(nat, share);
+                  unused += share - got;
+                  setW(n, got); S[n].classList.add('cmp-d2l-on');
+                  steps.append(h('li', { class: 'drop-in' }, `Round 2: ${n} gets ${rest} × ${w}/${total} = ${Math.round(share)} dp${fill ? '' : `, fill = false so it keeps ${nat} dp`}`));
+                  await sleep(450); if (!el.isConnected) return;
+                }
+                left.style.left = pct(W - unused); left.style.width = pct(unused);
+                say(o, unused > 0.5
+                  ? `<span class="muted">fill = false:</span> C took only ${NAT.C} dp of its share. ${Math.round(unused)} dp stays empty.`
+                  : `<span class="good">All ${W} dp used.</span> Weighted children split the leftover by weight.`);
+                busy = false;
+              }
+              function set(fn) { if (busy) return; fn(); run(); }
+              el.append(track, steps,
+                h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'B'), h('div', { class: 'controls' }, bBtns)),
+                h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'C'), h('div', { class: 'controls' }, cBtns)),
+                o);
+              say(o, 'A is always 60 dp. Pick weights for B and C and watch the two rounds.');
+              setTimeout(() => { if (el.isConnected) run(); }, 60);
+            },
+          },
+          {
+            title: 'Match the tallest child with IntrinsicSize',
+            body: `<p>Compose measures each child only once per pass, so a child can’t simply ask “how tall is my sibling?”. Say you want a divider between two texts that is exactly as tall as the taller text. With <code>fillMaxHeight()</code> alone, the divider fills the Row’s maximum height, which can be the whole screen.</p>
+<p><code>Modifier.height(IntrinsicSize.Min)</code> on the Row fixes it. Before measuring, the Row asks each child for its <em>intrinsic</em> height: the smallest height that shows its content. It takes the largest answer as its own height, and then <code>fillMaxHeight()</code> means “as tall as the tallest text”. Intrinsic queries cost an extra pass over the children, so use them where you need them.</p>`,
+            code: `Row(Modifier.height(IntrinsicSize.Min)) {
+    Text(left, Modifier.weight(1f))
+    VerticalDivider(Modifier.fillMaxHeight())     // as tall as the taller Text
+    Text(right, Modifier.weight(1f))
+}`,
+            visual(el) {
+              let on = false;
+              const div = h('div', { class: 'cmp-d2l-div' });
+              const row = h('div', { class: 'cmp-d2l-irow' },
+                h('div', { class: 'cmp-d2l-txt' }, 'Departs 08:40', h('small', {}, 'Lisbon')),
+                div,
+                h('div', { class: 'cmp-d2l-txt' }, 'Arrives 11:55', h('small', {}, 'Berlin, Terminal 1, Gate B12')));
+              const screen = h('div', { class: 'cmp-d2l-screen', role: 'img', 'aria-label': 'Row with a divider inside a screen' }, row, h('div', { class: 'cmp-d2l-below' }, 'Next item'));
+              const code = h('div', { class: 'kt' });
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2l-intr' });
+              function paint() {
+                row.classList.toggle('cmp-d2l-fit', on);
+                code.innerHTML = hl(`Row(${on ? 'Modifier.height(IntrinsicSize.Min)' : ''}) {\n    Text(left, Modifier.weight(1f))\n    VerticalDivider(Modifier.fillMaxHeight())\n    Text(right, Modifier.weight(1f))\n}`);
+                replay(div, 'pop-soft');
+                say(o, on
+                  ? '<span class="good">IntrinsicSize.Min:</span> the Row asked both texts for their height first. The divider matches the taller one.'
+                  : '<span class="bad">No intrinsics:</span> fillMaxHeight takes the Row’s max height, so the divider and the Row grow to fill the screen.');
+              }
+              sw.addEventListener('change', () => { on = sw.checked; paint(); });
+              el.append(screen, h('label', { class: 'switch', for: 'cmp-d2l-intr' }, sw, 'Modifier.height(IntrinsicSize.Min)'), code, o);
+              paint();
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>Row</code>, <code>Column</code> and <code>Box</code> are inline functions that call <code>Layout</code> with a <code>MeasurePolicy</code>. Layout in Compose is a single pass down and up the tree: a parent passes constraints down, each child returns its size, and the parent places the children. Measuring the same child twice in one pass throws an exception, which keeps deep trees fast.</p>
+<p>Row’s policy measures the children without weight first, then gives each weighted child its share of the rest, then places them all with the arrangement and alignment you passed. Box measures every child and takes the size of the largest. If you need a different rule, you write your own <code>Layout</code>, which the Compose, advanced track covers.</p>`,
+          code: `// Row's measure policy, heavily simplified
+var used = 0
+for (child in unweightedChildren) {
+    used += child.measure(Constraints(maxWidth = constraints.maxWidth - used)).width
+}
+val remaining = constraints.maxWidth - used
+for (child in weightedChildren) {
+    val share = (remaining * child.weight / totalWeight).roundToInt()
+    child.measure(
+        if (child.fill) Constraints.fixedWidth(share)   // weight(1f)
+        else Constraints(maxWidth = share)              // weight(1f, fill = false)
+    )
+}
+// then: place along the main axis with arrangement, across it with alignment`,
+        },
+        mistakes: [
+          {
+            title: 'fillMaxWidth on two children of a Row',
+            bad: `Row {
+    Text(from, Modifier.fillMaxWidth())
+    Text(to, Modifier.fillMaxWidth())   // gets 0 dp
+}`,
+            good: `Row {
+    Text(from, Modifier.weight(1f))
+    Text(to, Modifier.weight(1f))
+}`,
+            why: 'The Row measures children in order. The first one fills all the width and leaves nothing for the second. <code>weight</code> splits the space instead.',
+          },
+          {
+            title: 'A long text pushes the icon out',
+            bad: `Row(verticalAlignment = Alignment.CenterVertically) {
+    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null)
+}`,
+            good: `Row(verticalAlignment = Alignment.CenterVertically) {
+    Text(title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null)
+}`,
+            why: 'Without weight, the Text is measured first and takes all the width it wants. The icon gets what is left, which can be 0. A weighted Text is measured last, with only the leftover space, so it ellipsizes and the icon stays.',
+          },
         ],
         visual(el) {
           const ARR = ['Start', 'Center', 'End', 'SpaceBetween', 'SpaceAround', 'SpaceEvenly'];
@@ -954,6 +1363,215 @@ fun InboxScreen(messages: List<Message>, onCompose: () -> Unit) {
           { q: 'You call <code>showSnackbar</code> twice in quick succession. What happens?', options: ['The second replaces the first at once', 'The second waits until the first is dismissed', 'Both show, stacked'], a: 1, why: 'SnackbarHostState shows one message at a time and queues the rest.' },
           { q: 'Why can’t you call <code>showSnackbar</code> straight from <code>onClick</code>?', options: ['It is a suspend function, so it needs a coroutine', 'It only works inside a ViewModel', 'It has to run on a background thread'], a: 0, why: 'It suspends until the snackbar is dismissed. Launch it with <code>rememberCoroutineScope()</code>.' },
         ],
+        deeper: [
+          {
+            title: 'Top bars that react to scrolling',
+            body: `<p>A top app bar can collapse while the content scrolls. Create a scroll behavior from <code>TopAppBarDefaults</code>, pass it to the bar, and connect it to the scroll with <code>Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)</code> on the Scaffold.</p>
+<p>That modifier is the link. A lazy list reports every scroll delta to its nested scroll parents, and the connection takes part of each delta to move or shrink the bar. Forget it and the bar never hears about the scroll. <code>enterAlwaysScrollBehavior</code> hides the bar on the way down and brings it back as soon as you scroll up. <code>exitUntilCollapsedScrollBehavior</code>, used with <code>MediumTopAppBar</code> or <code>LargeTopAppBar</code>, shrinks the bar to its small size and grows it again only at the top of the list.</p>`,
+            code: `@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FeedScreen(posts: List<Post>) {
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { TopAppBar(title = { Text("Feed") }, scrollBehavior = scrollBehavior) },
+    ) { innerPadding ->
+        LazyColumn(contentPadding = innerPadding) {
+            items(posts, key = { it.id }) { PostRow(it) }
+        }
+    }
+}`,
+            visual(el) {
+              const MODES = {
+                pinned: { src: 'pinnedScrollBehavior()', bar: 'TopAppBar', max: 64, min: 64 },
+                always: { src: 'enterAlwaysScrollBehavior()', bar: 'TopAppBar', max: 64, min: 0 },
+                exit: { src: 'exitUntilCollapsedScrollBehavior()', bar: 'LargeTopAppBar', max: 112, min: 64 },
+              };
+              let mode = 'always', nested = true, offset = 0, lastTop = 0;
+              const PX = 0.75;
+              const title = h('span', { class: 'cmp-d2s-title' }, 'Feed');
+              const bar = h('div', { class: 'cmp-d2s-bar' }, title);
+              const inner = h('div', { class: 'cmp-d2s-inner' });
+              for (let i = 1; i <= 24; i++) inner.append(h('div', { class: 'cmp-d2s-row' }, `Post ${i}`));
+              const scroller = h('div', { class: 'cmp-d2s-scroll', tabindex: '0', 'aria-label': 'Scrollable feed' }, inner);
+              const phone = h('div', { class: 'cmp-d2s-phone' }, scroller, bar);
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              const modeBtns = Object.entries(MODES).map(([k, m]) => cmd(`TopAppBarDefaults.${m.src}`, () => setMode(k)));
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2s-nested', checked: true });
+              function paint() {
+                const m = MODES[mode];
+                let height = m.max, shift = 0;
+                if (nested && mode === 'always') shift = offset;
+                if (nested && mode === 'exit') height = Math.max(m.min, m.max - scroller.scrollTop / PX);
+                bar.style.height = `${height * PX}px`;
+                bar.style.transform = `translateY(${shift * PX}px)`;
+                bar.classList.toggle('cmp-d2s-large', mode === 'exit' && height > m.min + 20);
+                const hOff = mode === 'always' ? shift : height - m.max, limit = mode === 'always' ? -64 : m.min - m.max;
+                const frac = limit ? Math.min(1, hOff / limit) : 0;
+                read.innerHTML = hl(`${m.bar}(scrollBehavior = ${m.src.replace('()', '')})\nstate.heightOffset = ${Math.round(hOff)}f\nstate.collapsedFraction = ${frac.toFixed(2)}f`);
+              }
+              function setMode(k) {
+                mode = k; offset = 0;
+                modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(MODES)[i] === k)));
+                inner.style.paddingTop = `${MODES[k].max * PX + 6}px`;
+                title.textContent = k === 'exit' ? 'Large feed' : 'Feed';
+                scroller.scrollTop = 0; lastTop = 0;
+                paint();
+                say(o, k === 'pinned' ? 'Pinned: the bar never moves. Content scrolls under it.' : k === 'always' ? 'enterAlways: scroll down to hide the bar, scroll up a little to bring it back.' : 'exitUntilCollapsed: the large bar shrinks to 64 dp and grows back only at the top.');
+              }
+              scroller.addEventListener('scroll', () => {
+                const dy = (scroller.scrollTop - lastTop) / PX;
+                lastTop = scroller.scrollTop;
+                offset = Math.max(-64, Math.min(0, offset - dy));
+                paint();
+              }, { passive: true });
+              sw.addEventListener('change', () => {
+                nested = sw.checked; offset = 0; paint(); replay(bar, 'shake');
+                say(o, nested ? `${hl('Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)')} <span class="muted">// the bar hears the scroll again</span>` : '<span class="bad">No nestedScroll:</span> the list scrolls, but the bar never receives the deltas. It stays put.');
+              });
+              const by = d => scroller.scrollBy({ top: d, behavior: 'smooth' });
+              el.append(
+                h('div', { class: 'cmp-sc-wrap' }, phone, h('div', { class: 'cmp-sc-side' }, read,
+                  h('label', { class: 'switch', for: 'cmp-d2s-nested' }, sw, 'Modifier.nestedScroll(...)'),
+                  h('div', { class: 'controls' }, act('Scroll down', () => by(150)), act('Scroll up a little', () => by(-50))))),
+                h('div', { class: 'controls' }, modeBtns), o);
+              setMode('always');
+            },
+          },
+          {
+            title: 'Snackbar results and Undo',
+            body: `<p><code>showSnackbar</code> returns a <code>SnackbarResult</code>: <code>ActionPerformed</code> if the user tapped the action, or <code>Dismissed</code> if it timed out or was closed. That makes Undo simple. Hide the item right away, show the snackbar, and only delete for real when the result is <code>Dismissed</code>.</p>
+<p>Watch the duration. When you pass an <code>actionLabel</code>, the default duration is <code>SnackbarDuration.Indefinite</code>, so the snackbar stays until the user acts, and every other message waits behind it. Pass <code>SnackbarDuration.Short</code> or <code>Long</code> if it should go away on its own. When an accessibility service is on, the system can make these times longer.</p>`,
+            code: `fun onDelete(photo: Photo) {
+    vm.hide(photo.id)                         // gone from the list, still in storage
+    scope.launch {
+        val result = snackbarHostState.showSnackbar(
+            message = "Photo deleted",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Short,   // with an action the default is Indefinite
+        )
+        when (result) {
+            SnackbarResult.ActionPerformed -> vm.restore(photo.id)
+            SnackbarResult.Dismissed -> vm.deleteForever(photo.id)
+        }
+    }
+}`,
+            visual(el) {
+              const PHOTOS = ['Beach.jpg', 'Dog.jpg', 'Cake.jpg', 'Snow.jpg'];
+              let short = true, storage = PHOTOS.length, showing = null, timer = 0, logN = 0;
+              const queue = [], rows = new Map();
+              const list = h('div', { class: 'cmp-d2s-list' });
+              PHOTOS.forEach(n => {
+                const r = h('div', { class: 'cmp-d2s-item' }, h('span', {}, n), act('Delete', () => del(n)));
+                rows.set(n, r); list.append(r);
+              });
+              const snackText = h('span', { class: 'cmp-d2s-msg' });
+              const fill = h('i', { class: 'cmp-d2s-fill' });
+              const snack = h('div', { class: 'cmp-d2s-snack', 'aria-live': 'polite' }, snackText,
+                h('button', { class: 'cmp-d2s-undo', type: 'button', onclick: () => finish('ActionPerformed') }, 'Undo'),
+                h('button', { class: 'cmp-d2s-x', type: 'button', 'aria-label': 'Dismiss', onclick: () => finish('Dismissed') }, '×'), fill);
+              const box = h('div', { class: 'cmp-d2s-box' }, list, snack);
+              const store = h('div', { class: 'cmp-label' });
+              const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2s-short', checked: true });
+              function addLog(html) {
+                log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
+                while (log.children.length > 4) log.lastElementChild.remove();
+              }
+              const paintStore = () => { store.textContent = `In storage: ${storage} · waiting in SnackbarHostState: ${queue.length}`; };
+              function del(n) {
+                const r = rows.get(n);
+                if (!r || r.classList.contains('cmp-d2s-gone')) return;
+                r.classList.add('cmp-d2s-gone');
+                queue.push(n); paintStore();
+                addLog(`${hl(`vm.hide("${n}")`)} <span class="muted">// still in storage</span>`);
+                if (showing) say(o, `${hl('showSnackbar')} suspends. ${esc(n)} waits until the current snackbar is done.`);
+                pump();
+              }
+              function pump() {
+                if (showing || !queue.length || !el.isConnected) return;
+                const n = showing = queue.shift(); paintStore();
+                snackText.textContent = `${n} deleted`;
+                snack.classList.add('cmp-on');
+                fill.style.transition = 'none'; fill.style.width = '100%'; void fill.offsetWidth;
+                if (short) {
+                  fill.style.transition = 'width 4s linear'; fill.style.width = '0';
+                  timer = setTimeout(() => { if (el.isConnected && showing === n) finish('Dismissed'); }, 4000);
+                  say(o, `${hl('duration = SnackbarDuration.Short')} <span class="muted">// about 4 s. Tap Undo, or wait.</span>`);
+                } else {
+                  fill.style.width = '0';
+                  say(o, '<span class="bad">Indefinite:</span> no timer. The snackbar waits for Undo or ×, and every other message waits behind it.');
+                }
+              }
+              function finish(result) {
+                if (!showing) return;
+                clearTimeout(timer);
+                const n = showing; showing = null;
+                snack.classList.remove('cmp-on');
+                const r = rows.get(n);
+                if (result === 'ActionPerformed') {
+                  r.classList.remove('cmp-d2s-gone'); replay(r, 'pop-soft');
+                  addLog(`result = ${hl('ActionPerformed')} → ${hl(`vm.restore("${n}")`)}`);
+                  say(o, `<span class="good">Undo:</span> ${esc(n)} was never deleted, so it simply comes back.`);
+                } else {
+                  storage--; r.remove(); rows.delete(n);
+                  addLog(`result = ${hl('Dismissed')} → ${hl(`vm.deleteForever("${n}")`)}`);
+                  say(o, `Dismissed. Now ${esc(n)} is deleted for real.`);
+                }
+                paintStore();
+                setTimeout(pump, 350);
+              }
+              sw.addEventListener('change', () => {
+                short = sw.checked;
+                say(o, short ? `${hl('duration = SnackbarDuration.Short')} <span class="muted">// times out on its own</span>` : `${hl('showSnackbar("…", actionLabel = "Undo")')} <span class="muted">// no duration: Indefinite</span>`);
+              });
+              paintStore();
+              addLog('<span class="muted">// results show up here</span>');
+              say(o, 'Delete a photo. It disappears at once, but storage only changes when the snackbar is dismissed.');
+              el.append(box,
+                h('label', { class: 'switch', for: 'cmp-d2s-short' }, sw, 'duration = SnackbarDuration.Short'),
+                store, log, o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>Scaffold</code> is built on <code>SubcomposeLayout</code>, a layout that can compose its children during measure. It first composes and measures the top bar, bottom bar, snackbar host and FAB. From their sizes and the <code>contentWindowInsets</code> (system bars by default) it computes a <code>PaddingValues</code>. Only then does it compose your content lambda and hand it that value as <code>innerPadding</code>.</p>
+<p>That order is why <code>innerPadding</code> is a lambda parameter and not something you read from a state object. It also means a bar that changes height, like a collapsing top bar, produces a new <code>innerPadding</code> on the next layout.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Deleting before the Undo answer',
+            bad: `onDelete = { photo ->
+    repository.delete(photo)
+    scope.launch {
+        snackbarHostState.showSnackbar("Deleted", actionLabel = "Undo")
+    }
+}`,
+            good: `onDelete = { photo ->
+    vm.hide(photo.id)
+    scope.launch {
+        val result = snackbarHostState.showSnackbar(
+            "Deleted", actionLabel = "Undo", duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) vm.restore(photo.id)
+        else vm.deleteForever(photo.id)
+    }
+}`,
+            why: 'The data is gone before the user can say Undo, and the result is ignored. Without a duration, the snackbar with an action also stays until the user acts.',
+          },
+          {
+            title: 'Hard-coding the bar heights',
+            bad: `Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { _ ->
+    LazyColumn(Modifier.padding(top = 88.dp)) { /* ... */ }
+}`,
+            good: `Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { innerPadding ->
+    LazyColumn(contentPadding = innerPadding) { /* ... */ }
+}`,
+            why: 'Status bar and app bar heights change with the device, display cutouts, font size and collapsing bars. <code>innerPadding</code> is measured on every layout, so it is always right.',
+          },
+        ],
         visual(el) {
           const STATUS = 24, TOPBAR = 64, NAVBAR = 80, NAVINSET = 24, PX = 0.75;
           let hasTop = true, hasBottom = true, hasFab = true, usePad = true, drafts = 0, showing = false;
@@ -1115,6 +1733,136 @@ Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme
           { q: 'The app runs on Android 11 with <code>dynamicColor = true</code>. Which scheme does <code>AppTheme</code> use?', options: ['<code>dynamicLightColorScheme</code>', 'Your own <code>LightColors</code> or <code>DarkColors</code>', 'It crashes'], a: 1, why: 'The API check fails on Android 11, so the <code>when</code> falls through to your own schemes.' },
           { q: 'Text inside a filled <code>Button</code> should use which role?', options: ['<code>primary</code>', '<code>onPrimary</code>', '<code>surface</code>'], a: 1, why: 'The button is painted <code>primary</code>. The “on” partner is picked to read well on top of it.' },
           { q: 'How does a Compose app usually follow the system dark theme?', options: ['<code>isSystemInDarkTheme()</code> picks a dark color scheme for MaterialTheme', 'Android inverts the colors on its own', 'Each composable reads a setting and picks colors'], a: 0, why: 'One check at the theme level swaps the whole scheme. Components just read the roles.' },
+        ],
+        deeper: [
+          {
+            title: 'Surface picks the text color for you',
+            body: `<p>A <code>Text</code> without a color reads <code>LocalContentColor</code>. <code>Surface</code> sets it: its <code>contentColor</code> defaults to <code>contentColorFor(color)</code>, which returns the matching “on” role. Put a <code>Surface(color = primary)</code> around a Text and it turns <code>onPrimary</code> without you saying so. Scaffold, Card and Button do the same.</p>
+<p>A plain <code>Modifier.background</code> paints a color and nothing else. The Text keeps the content color from further up, which may be unreadable on the new background. And <code>contentColorFor</code> only knows the scheme’s own roles. For any other color it falls back to the current content color, so pass <code>contentColor</code> yourself.</p>`,
+            code: `Box(Modifier.background(MaterialTheme.colorScheme.primary)) {
+    Text("Pro")                 // keeps the outer content color
+}
+
+Surface(color = MaterialTheme.colorScheme.primary) {
+    Text("Pro")                 // onPrimary, from contentColorFor(primary)
+}
+
+Surface(color = BrandPurple, contentColor = Color.White) {
+    Text("Pro")                 // not a scheme role: say the content color
+}`,
+            visual(el) {
+              const CASES = [
+                { src: 'Box(Modifier.background(primary)) { Text("Pro") }', bg: 'var(--accent)', fg: 'var(--ink)', local: 'onSurface (from the Scaffold above)', ok: false, note: 'background only paints. The Text still uses the content color from the Scaffold above, and it is hard to read here.' },
+                { src: 'Surface(color = primary) { Text("Pro") }', bg: 'var(--accent)', fg: 'var(--accent-ink)', local: 'onPrimary', ok: true, note: 'Surface set LocalContentColor to contentColorFor(primary), which is onPrimary.' },
+                { src: 'Surface(color = primaryContainer) { Text("Pro") }', bg: 'var(--accent-soft)', fg: 'var(--accent)', local: 'onPrimaryContainer', ok: true, note: 'Each container role has its own “on” partner. contentColorFor finds it.' },
+                { src: 'Surface(color = BrandPurple) { Text("Pro") }', bg: 'var(--t-f)', fg: 'var(--ink)', local: 'onSurface (fallback)', ok: false, note: 'BrandPurple is not a scheme role, so contentColorFor falls back to the current content color. In dark theme that is light text on a light purple.' },
+              ];
+              const badge = h('span', { class: 'cmp-d2t-pro' }, 'Pro');
+              const card = h('div', { class: 'cmp-d2t-card' }, h('b', {}, 'Plan'), badge, h('span', { class: 'cmp-d2t-sub' }, 'Text on the Scaffold uses onSurface.'));
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              const btns = CASES.map(c => cmd(c.src, () => pick(c)));
+              function pick(c) {
+                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(CASES[i] === c)));
+                badge.style.background = c.bg; badge.style.color = c.fg;
+                badge.classList.toggle('cmp-d2t-warn', !c.ok);
+                replay(badge, 'pop');
+                read.innerHTML = hl(`LocalContentColor = ${c.local}`);
+                say(o, `${c.ok ? '<span class="good">Readable.</span>' : '<span class="bad">Check the contrast.</span>'} ${esc(c.note)}`);
+              }
+              el.append(card, read, h('div', { class: 'controls' }, btns), o);
+              pick(CASES[0]);
+            },
+          },
+          {
+            title: 'Theme one part of the screen',
+            body: `<p><code>MaterialTheme</code> can be nested. An inner <code>MaterialTheme</code> overrides only what you pass and inherits the rest. <code>ColorScheme.copy</code> changes a few roles, so a danger zone can make its buttons use error colors while the rest of the screen stays on brand.</p>
+<p>The override only reaches the composables inside the inner call. For tokens Material doesn’t have, like a “success” color, create your own <code>CompositionLocal</code> next to your theme. The Compose, advanced track covers how.</p>`,
+            code: `@Composable
+fun DangerZone(content: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    MaterialTheme(
+        colorScheme = scheme.copy(primary = scheme.error, onPrimary = scheme.onError),
+        content = content,              // typography and shapes are inherited
+    )
+}
+
+Column {
+    Button(onClick = onExport) { Text("Export data") }          // brand primary
+    DangerZone {
+        Button(onClick = onDelete) { Text("Delete account") }   // error colors
+    }
+}`,
+            visual(el) {
+              let nested = false;
+              const btn = (t, danger) => h('span', { class: `cmp-d2t-btn${danger ? ' cmp-d2t-dz' : ''}` }, t);
+              const zone = h('div', { class: 'cmp-d2t-zone' }, h('span', { class: 'cmp-d2t-zlabel' }, 'Danger zone'), btn('Delete account', true), btn('Reset app', true));
+              const screen = h('div', { class: 'cmp-d2t-screen', role: 'img', 'aria-label': 'Settings screen preview' },
+                h('b', {}, 'Settings'), btn('Export data'), btn('Sync now'), zone);
+              const code = h('div', { class: 'kt' });
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2t-nest' });
+              function paint() {
+                zone.classList.toggle('cmp-d2t-on', nested);
+                code.innerHTML = hl(nested ? 'MaterialTheme(colorScheme = scheme.copy(\n    primary = scheme.error, onPrimary = scheme.onError,\n)) {\n    DangerButtons()\n}' : 'DangerButtons()   // same theme as the rest');
+                zone.querySelectorAll('.cmp-d2t-btn').forEach(b => replay(b, 'pop-soft'));
+                say(o, nested ? 'Only the buttons inside the inner MaterialTheme switched to error colors. Export and Sync still read the outer primary.' : 'One theme for the whole screen. The dangerous buttons look like the safe ones.');
+              }
+              sw.addEventListener('change', () => { nested = sw.checked; paint(); });
+              el.append(screen, h('label', { class: 'switch', for: 'cmp-d2t-nest' }, sw, 'Wrap in a nested MaterialTheme'), code, o);
+              paint();
+            },
+          },
+        ],
+        underHood: {
+          body: `<p><code>MaterialTheme</code> is a <code>CompositionLocalProvider</code>. It puts the color scheme, typography and shapes into a CompositionLocal created with <code>staticCompositionLocalOf</code>. <code>MaterialTheme.colorScheme</code> is a getter marked <code>@Composable @ReadOnlyComposable</code> that reads that local’s current value.</p>
+<p>A static local does not track who read it, so changing the theme recomposes everything inside the provider. That trade is fine because a theme rarely changes, and it makes every read cheap. <code>ColorScheme</code> is an <code>@Immutable</code> class of plain <code>Color</code> values. <code>LocalContentColor</code> is a separate local with a default of black, which is why text outside any Surface or Scaffold shows black, even in dark theme.</p>`,
+          code: `// Inside Surface (simplified)
+CompositionLocalProvider(LocalContentColor provides contentColor) {
+    content()
+}
+
+// Inside Text (simplified): explicit color, then style color, then content color
+val textColor = color.takeOrElse { style.color.takeOrElse { LocalContentColor.current } }`,
+        },
+        mistakes: [
+          {
+            title: 'Checking dark theme in every composable',
+            bad: `@Composable
+fun Banner(text: String) {
+    val bg = if (isSystemInDarkTheme()) Color(0xFF1B1B1F) else Color.White
+    Text(text, Modifier.background(bg))
+}`,
+            good: `@Composable
+fun Banner(text: String) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+        Text(text)
+    }
+}`,
+            why: 'Each hand-made check ignores dynamic color and any in-app theme switch. The theme already chose a scheme. Read its roles.',
+          },
+          {
+            title: 'Hand-sized text instead of the type scale',
+            bad: `Text("Trips", fontSize = 22.sp, fontWeight = FontWeight.Bold)`,
+            good: `Text("Trips", style = MaterialTheme.typography.titleLarge)`,
+            why: 'Fixed sizes drift apart across screens and ignore your <code>Typography</code>. Use the scale roles so one change in the theme updates every title.',
+          },
+          {
+            title: 'No Surface at the root',
+            bad: `setContent {
+    AppTheme {
+        Text("Hello")         // LocalContentColor is still the default: black
+    }
+}`,
+            good: `setContent {
+    AppTheme {
+        Surface {             // provides surface color and onSurface text
+            Text("Hello")
+        }
+    }
+}`,
+            why: 'Nothing has set a content color yet, so the text is black on a dark window. A root <code>Surface</code> or <code>Scaffold</code> paints the background and sets the matching text color.',
+          },
         ],
         visual(el) {
           const SEEDS = { brand: 'var(--t-k)', 'wallpaper 1': 'var(--t-n)', 'wallpaper 2': 'var(--t-s)', 'wallpaper 3': 'var(--t-t)' };
@@ -1497,6 +2245,235 @@ fun Counters() {
           { q: 'Android kills your app in the background and the user returns to it. What happens to <code>rememberSaveable</code> state?', options: ['It is restored', 'It is lost'], a: 0, why: 'Saved instance state is written to disk by the system and restored with the new process.' },
           { q: 'Where should a list of 500 items from the network live?', options: ['<code>rememberSaveable</code>', 'A ViewModel or a database'], a: 1, why: 'The Bundle has a small size limit. Save an id or a query there, not the data itself.' },
         ],
+        deeper: [
+          {
+            title: 'A Saver for your own type',
+            body: `<p>A Bundle only holds simple types: primitives, strings, arrays, <code>Parcelable</code> and a few more. For your own class you have two options. On Android, mark it <code>@Parcelize</code> with the <code>kotlin-parcelize</code> plugin. Anywhere, including shared KMP code, write a <code>Saver</code> that turns it into Bundle-friendly values and back.</p>
+<p><code>mapSaver</code> and <code>listSaver</code> are the quick ways to build one. <code>save</code> runs when the state is about to be saved. <code>restore</code> runs only when the screen comes back, so a bug in it stays hidden until you rotate or the process dies.</p>`,
+            code: `data class Filter(val tag: String, val minPrice: Int)
+
+val FilterSaver = mapSaver(
+    save = { mapOf("tag" to it.tag, "min" to it.minPrice) },
+    restore = { Filter(it["tag"] as String, it["min"] as Int) },
+)
+
+var filter by rememberSaveable(stateSaver = FilterSaver) {
+    mutableStateOf(Filter("all", 0))
+}`,
+            visual(el) {
+              const TAGS = ['all', 'shoes', 'bags'];
+              let tag = 'all', min = 0, saver = true, busy = false;
+              const obj = h('div', { class: 'cmp-d2v-obj' });
+              const phone = h('div', { class: 'cmp-d2v-proc' }, h('span', { class: 'cmp-label' }, 'App process'), obj);
+              const bundle = h('div', { class: 'cmp-bundle' }, h('span', { class: 'cmp-bundle-title' }, 'Saved state Bundle'));
+              const bundleBody = h('div', { class: 'cmp-d2v-entries' }, h('span', { class: 'tip' }, 'Empty'));
+              bundle.append(bundleBody);
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2v-saver', checked: true });
+              const paintObj = () => { obj.innerHTML = hl(`Filter(tag = "${tag}", minPrice = ${min})`); };
+              function change(fn, src) {
+                if (busy) return;
+                fn(); paintObj(); replay(obj, 'pop-soft');
+                say(o, `${hl(src)} <span class="muted">// in memory only, nothing saved yet</span>`);
+              }
+              async function kill() {
+                if (busy) return; busy = true;
+                bundleBody.replaceChildren();
+                say(o, 'The app goes to the background. The system asks every rememberSaveable for its value.');
+                await sleep(700); if (!el.isConnected) return;
+                if (!saver) {
+                  replay(obj, 'shake'); phone.classList.add('cmp-d2v-crash');
+                  bundleBody.replaceChildren(h('span', { class: 'cmp-d2v-err drop-in' }, 'IllegalArgumentException'));
+                  say(o, '<span class="bad">crash:</span> a plain Filter can’t go into a Bundle. rememberSaveable needs a Saver or a Parcelable type.');
+                  await sleep(1400); if (!el.isConnected) return;
+                  phone.classList.remove('cmp-d2v-crash'); busy = false; return;
+                }
+                const entries = [`"tag" to "${tag}"`, `"min" to ${min}`];
+                say(o, `${hl('FilterSaver.save(filter)')} <span class="muted">// becomes a map of simple values</span>`);
+                for (const e of entries) {
+                  bundleBody.append(h('span', { class: 'cmp-d2v-code drop-in', html: hl(e) }));
+                  await sleep(380); if (!el.isConnected) return;
+                }
+                phone.classList.add('cmp-d2v-dead'); obj.textContent = 'process killed';
+                say(o, 'The system kills the process to free memory. The Bundle is kept by the system.');
+                await sleep(1100); if (!el.isConnected) return;
+                phone.classList.remove('cmp-d2v-dead'); obj.textContent = 'new process…';
+                say(o, 'The user comes back. A new process starts and gets the Bundle back.');
+                await sleep(800); if (!el.isConnected) return;
+                bundleBody.querySelectorAll('.cmp-d2v-code').forEach(x => replay(x, 'pop'));
+                paintObj(); replay(obj, 'cmp-flash');
+                say(o, `<span class="good">restored:</span> ${hl('FilterSaver.restore(map)')} built the same Filter again.`);
+                busy = false;
+              }
+              sw.addEventListener('change', () => {
+                if (busy) { sw.checked = saver; return; }
+                saver = sw.checked;
+                say(o, saver ? `${hl('rememberSaveable(stateSaver = FilterSaver)')} <span class="muted">// knows how to save Filter</span>` : `${hl('rememberSaveable { mutableStateOf(Filter(...)) }')} <span class="muted">// no Saver for a plain class</span>`);
+              });
+              paintObj();
+              say(o, 'Change the filter, then send the app to the background.');
+              el.append(
+                h('div', { class: 'stage' }, phone, bundle),
+                h('div', { class: 'controls' },
+                  cmd('filter = filter.copy(tag = …)', () => change(() => { tag = TAGS[(TAGS.indexOf(tag) + 1) % TAGS.length]; }, `filter = filter.copy(tag = "${TAGS[(TAGS.indexOf(tag) + 1) % TAGS.length]}")`)),
+                  cmd('filter = filter.copy(minPrice = minPrice + 10)', () => change(() => { min += 10; }, `filter = filter.copy(minPrice = ${min + 10})`)),
+                  act('Background, then process death', kill)),
+                h('label', { class: 'switch', for: 'cmp-d2v-saver' }, sw, 'stateSaver = FilterSaver'),
+                o);
+            },
+          },
+          {
+            title: 'What survives what',
+            body: `<p>Each place you can keep state has its own lifetime. <code>remember</code> lives as long as the composable stays in the composition. <code>rememberSaveable</code> also survives rotation and process death. A <code>ViewModel</code> survives rotation, but the system does not keep it through process death. <code>SavedStateHandle</code> is the ViewModel’s own small Bundle, so it survives both.</p>
+<p>Two cases surprise people. When a composable leaves the composition, its <code>rememberSaveable</code> value is dropped too, because nothing is left to save. And when the user swipes the app away from Recents, saved state is cleared on purpose. Only storage on disk, like Room or DataStore, survives that.</p>`,
+            visual(el) {
+              const HOLDERS = ['remember', 'rememberSaveable', 'ViewModel', 'SavedStateHandle', 'Room / DataStore'];
+              const EVENTS = [
+                { src: 'Rotate the device', keep: [0, 1, 1, 1, 1], note: 'Rotation recreates the Activity. The ViewModel store is kept across it, and the Bundle carries the saved values.' },
+                { src: 'Process death in the background', keep: [0, 1, 0, 1, 1], note: 'A new process starts. The old ViewModel is gone, but saved state is handed back.' },
+                { src: 'Composable leaves the composition', keep: [0, 0, 1, 1, 1], note: 'An if turned false. Both remember and rememberSaveable belonged to that spot in the tree, so both are dropped.' },
+                { src: 'User swipes the app from Recents', keep: [0, 0, 0, 0, 1], note: 'The user closed the app on purpose. Saved state is cleared too. Only data on disk is left.' },
+              ];
+              let busy = false, n = 7;
+              const vals = HOLDERS.map(() => h('span', { class: 'cmp-d2v-val' }, '7'));
+              const rows = HOLDERS.map((name, i) => h('div', { class: 'cmp-d2v-row' }, h('span', { class: 'cmp-d2v-name' }, name), vals[i]));
+              const grid = h('div', { class: 'cmp-d2v-grid' }, rows);
+              const o = out();
+              function bump() {
+                if (busy) return;
+                n++; vals.forEach(v => { v.textContent = String(n); v.className = 'cmp-d2v-val'; replay(v, 'pop-soft'); });
+                say(o, `${hl(`count = ${n}`)} <span class="muted">// written to all five places</span>`);
+              }
+              async function hit(ev) {
+                if (busy) return; busy = true;
+                say(o, `${esc(ev.src)}…`);
+                for (let i = 0; i < HOLDERS.length; i++) {
+                  await sleep(260); if (!el.isConnected) return;
+                  const v = vals[i];
+                  if (ev.keep[i]) { v.className = 'cmp-d2v-val cmp-d2v-kept'; replay(v, 'pop'); }
+                  else { v.className = 'cmp-d2v-val cmp-d2v-lost'; v.textContent = '0'; replay(v, 'shake'); }
+                }
+                say(o, `${ev.keep.filter(Boolean).length} of 5 kept. ${esc(ev.note)}`);
+                busy = false;
+              }
+              el.append(grid,
+                h('div', { class: 'controls' }, cmd('count++', bump)),
+                h('div', { class: 'controls' }, EVENTS.map(ev => act(ev.src, () => hit(ev)))),
+                o);
+              say(o, 'Each row holds the same count. Fire an event and see who keeps it.');
+            },
+          },
+          {
+            title: 'Keep state for screens that come back',
+            body: `<p>Say you switch tabs with a plain <code>when (tab)</code>. The old tab leaves the composition, so its <code>rememberSaveable</code> values are gone when you return. <code>rememberSaveableStateHolder()</code> fixes that. Wrap each screen in <code>SaveableStateProvider(key)</code> and the holder keeps that screen’s saved values while it is away, then hands them back.</p>
+<p>You use this more often than you think. Navigation Compose keeps one per back stack entry, which is why a screen you return to keeps its scroll and fields. Lazy lists keep one per item key, so <code>rememberSaveable</code> inside a row survives scrolling off screen. That is also why lazy item keys must be types a Bundle can hold.</p>`,
+            code: `@Composable
+fun HomeTabs(tab: Tab) {
+    val holder = rememberSaveableStateHolder()
+    holder.SaveableStateProvider(key = tab.name) {
+        when (tab) {
+            Tab.Feed -> FeedScreen()         // its rememberSaveable state is kept per key
+            Tab.Profile -> ProfileScreen()
+        }
+    }
+}`,
+            visual(el) {
+              let tab = 'Feed', held = false, busy = false;
+              const counts = { Feed: 0, Profile: 0 }, stash = {};
+              const num = h('b', { class: 'cmp-d2v-num' }, '0');
+              const screen = h('div', { class: 'cmp-d2v-screen' }, h('span', { class: 'cmp-label' }), num);
+              const store = h('div', { class: 'cmp-d2v-entries' });
+              const holderBox = h('div', { class: 'cmp-bundle' }, h('span', { class: 'cmp-bundle-title' }, 'SaveableStateHolder'), store);
+              const o = out();
+              const tabBtns = ['Feed', 'Profile'].map(t => cmd(`tab = Tab.${t}`, () => go(t)));
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2v-holder' });
+              function paint() {
+                screen.firstElementChild.textContent = `${tab}Screen · rememberSaveable`;
+                num.textContent = String(counts[tab]);
+                tabBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(['Feed', 'Profile'][i] === tab)));
+                const entries = Object.entries(stash);
+                store.replaceChildren(...(entries.length
+                  ? entries.map(([k, v]) => h('span', { class: 'cmp-d2v-code', html: hl(`"${k}" → likes = ${v}`) }))
+                  : [h('span', { class: 'tip' }, held ? 'Empty' : 'Not used')]));
+                holderBox.classList.toggle('cmp-d2v-off', !held);
+              }
+              async function go(t) {
+                if (busy || t === tab) return; busy = true;
+                const old = tab;
+                if (held) { stash[old] = counts[old]; paint(); }
+                screen.classList.add('cmp-fade');
+                say(o, `${old}Screen leaves the composition.${held ? ' The holder keeps its saved values.' : ' Its rememberSaveable values are dropped.'}`);
+                await sleep(450); if (!el.isConnected) return;
+                if (!held) counts[old] = 0;
+                tab = t;
+                const back = held && stash[t] !== undefined;
+                counts[t] = back ? stash[t] : (held ? counts[t] : 0);
+                if (back) delete stash[t];
+                screen.classList.remove('cmp-fade'); paint(); replay(num, back ? 'cmp-flash' : 'pop');
+                say(o, back ? `<span class="good">restored:</span> ${t}Screen got likes = ${counts[t]} back from the holder.` : `${t}Screen starts fresh at ${counts[t]}.${held ? '' : ' <span class="muted">Anything it had before is gone.</span>'}`);
+                busy = false;
+              }
+              function like() { if (busy) return; counts[tab]++; num.textContent = String(counts[tab]); replay(num, 'pop'); say(o, `${hl('likes++')} <span class="muted">// on ${tab}Screen</span>`); }
+              sw.addEventListener('change', () => {
+                if (busy) { sw.checked = held; return; }
+                held = sw.checked; Object.keys(stash).forEach(k => delete stash[k]); paint(); replay(holderBox, 'pop-soft');
+                say(o, held ? `${hl('holder.SaveableStateProvider(key = tab.name)')} <span class="muted">// like, switch tabs, come back</span>` : 'Plain when (tab). Like, switch tabs, come back.');
+              });
+              paint();
+              say(o, 'Like a few times, switch to Profile, then come back to Feed.');
+              el.append(
+                h('div', { class: 'stage' }, screen, holderBox),
+                h('div', { class: 'controls' }, tabBtns, cmd('likes++', like)),
+                h('label', { class: 'switch', for: 'cmp-d2v-holder' }, sw, 'Wrap in SaveableStateProvider'),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Every <code>rememberSaveable</code> registers a value provider with the nearest <code>SaveableStateRegistry</code>, found through <code>LocalSaveableStateRegistry</code>. If you don’t pass a key, the key comes from <code>currentCompositeKeyHash</code>, which describes the call’s position in the tree. On Android, the registry at the root is connected to the <code>SavedStateRegistry</code> of the owner that hosts the composition, usually the Activity or a navigation back stack entry.</p>
+<p>When the Activity saves its state, the registry calls every provider, runs each value through its Saver, checks that the result can go into a Bundle, and stores everything as one map. On restore, the new registry starts with that map, and each <code>rememberSaveable</code> takes back the value under its key. When the composable leaves the composition, it unregisters its provider, so nothing is saved for it any more.</p>`,
+          code: `// rememberSaveable, as a sketch
+val registry = LocalSaveableStateRegistry.current
+val key = currentCompositeKeyHash.toString(36)           // its position in the tree
+val value = remember {
+    registry?.consumeRestored(key)?.let { saver.restore(it) } ?: init()
+}
+DisposableEffect(registry, key) {
+    val entry = registry?.registerProvider(key) { saver.save(value) }
+    onDispose { entry?.unregister() }                    // left the tree: forgotten
+}`,
+        },
+        mistakes: [
+          {
+            title: 'remember for what the user typed',
+            bad: `var note by remember { mutableStateOf("") }
+OutlinedTextField(value = note, onValueChange = { note = it })`,
+            good: `var note by rememberSaveable { mutableStateOf("") }
+OutlinedTextField(value = note, onValueChange = { note = it })`,
+            why: 'Users rotate the phone and switch apps in the middle of typing. Input they made belongs in <code>rememberSaveable</code> or a <code>SavedStateHandle</code>.',
+          },
+          {
+            title: 'A listSaver that restores in the wrong order',
+            bad: `val FilterSaver = listSaver<Filter, Any>(
+    save = { listOf(it.tag, it.minPrice) },
+    restore = { Filter(it[1] as String, it[0] as Int) },
+)`,
+            good: `val FilterSaver = listSaver<Filter, Any>(
+    save = { listOf(it.tag, it.minPrice) },
+    restore = { Filter(it[0] as String, it[1] as Int) },
+)`,
+            why: '<code>restore</code> only runs when the screen comes back, so this <code>ClassCastException</code> hides during normal use. Rotate, or turn on “Don’t keep activities” in developer options, to test restore paths.',
+          },
+          {
+            title: 'Saving the data instead of the key to it',
+            bad: `var results by rememberSaveable {
+    mutableStateOf(emptyList<Product>())   // 500 Parcelable products
+}`,
+            good: `var query by rememberSaveable { mutableStateOf("") }
+val results by vm.results.collectAsStateWithLifecycle()   // loaded from query`,
+            why: 'Saved state travels through a Binder transaction. Android recommends keeping it under 50 KB, and going past the 1 MB buffer throws <code>TransactionTooLargeException</code>. Save the query or an id and reload the data.',
+          },
+        ],
         visual(el) {
           let plain = 3, saved = 3, land = false, busy = false;
           const pslot = h('div', { class: 'cmp-vslot' }, h('span', { class: 'chip' }, '3'));
@@ -1590,6 +2567,188 @@ fun EmailField(value: String, onValueChange: (String) -> Unit) {
           { q: 'In unidirectional data flow, which way do events travel?', options: ['Down, from parent to child', 'Up, from child to the state owner'], a: 1, why: 'State goes down as parameters. Events go up through callbacks like <code>onValueChange</code>.' },
           { q: 'What makes <code>EmailField(value, onValueChange)</code> stateless?', options: ['It has no parameters', 'It holds no state of its own and shows only what it is given', 'It uses <code>rememberSaveable</code>'], a: 1, why: 'The caller owns the state. The field just renders <code>value</code> and reports changes.' },
           { q: 'The field keeps its text in its own <code>remember</code>. Can the parent clear it?', options: ['Yes, by calling it again', 'No, the parent can’t reach that state'], a: 1, why: 'State inside a composable is private to it. Hoist it if anyone else needs to read or change it.' },
+        ],
+        deeper: [
+          {
+            title: 'Pick the right owner',
+            body: `<p>Hoisting doesn’t mean “move everything to the ViewModel”. There are three common owners. State only one composable cares about, like whether its menu is open, stays in that composable with <code>remember</code>. State with UI logic that several composables share goes into a <em>plain state holder</em>: a small class you create with a <code>remember…State()</code> function, like <code>LazyListState</code> or your own <code>SearchBarState</code>. State that comes from or feeds business logic, like data from a repository, goes in the screen’s <code>ViewModel</code>.</p>
+<p>Ask two questions: who reads it, and does the app’s logic care about it? Hoist to the lowest owner that answers both.</p>`,
+            code: `@Stable
+class SearchBarState(initialQuery: String = "") {
+    var query by mutableStateOf(initialQuery)
+        private set
+    var expanded by mutableStateOf(false)
+        private set
+
+    fun onQueryChange(q: String) { query = q; expanded = q.isNotEmpty() }
+    fun close() { expanded = false }
+}
+
+@Composable
+fun rememberSearchBarState(): SearchBarState = remember { SearchBarState() }
+// Add a Saver and rememberSaveable if the query should survive rotation.`,
+            visual(el) {
+              const OWNERS = [['local', 'remember in the composable'], ['holder', 'plain state holder class'], ['vm', 'ViewModel']];
+              const CASES = [
+                { q: 'Is this overflow menu open?', a: 'local', why: 'Only the menu reads it, and no business logic cares. Keep it inside.' },
+                { q: 'Scroll position, so the screen can show “Back to top”', a: 'holder', why: 'LazyListState is a plain state holder. Hoist rememberLazyListState() to the screen so both the list and the button can use it.' },
+                { q: 'Query text, suggestions shown, expanded: a search bar’s UI logic', a: 'holder', why: 'Several fields that change together, with UI rules. A SearchBarState class keeps them in one place and easy to test.' },
+                { q: 'The list of orders loaded from the repository', a: 'vm', why: 'It comes from business logic and must survive rotation. That is the ViewModel’s job.' },
+              ];
+              let i = 0, busy = false;
+              const cols = OWNERS.map(([k, label]) => h('div', { class: 'cmp-d2h-col', 'data-k': k }, h('span', { class: 'cmp-label' }, label), h('div', { class: 'cmp-d2h-drop' })));
+              const card = h('div', { class: 'cmp-d2h-card' });
+              const o = out();
+              const btns = OWNERS.map(([k, label]) => act(label, () => answer(k)));
+              function show() {
+                if (i >= CASES.length) {
+                  card.textContent = 'All placed. Reset to try again.'; card.classList.add('cmp-d2h-done');
+                  btns.forEach(b => { b.disabled = true; });
+                  return;
+                }
+                card.textContent = CASES[i].q; card.classList.remove('cmp-d2h-done');
+                replay(card, 'drop-in');
+              }
+              async function answer(k) {
+                if (busy || i >= CASES.length) return;
+                const c = CASES[i];
+                if (k !== c.a) {
+                  replay(card, 'shake');
+                  say(o, `<span class="bad">Not quite.</span> ${k === 'vm' ? 'A ViewModel would work, but this is pure UI state. Hoist only as high as its readers.' : k === 'local' ? 'Others need to read or drive it, so it can’t stay private.' : 'A class adds structure that this case doesn’t need, or lacks the lifetime it needs.'}`);
+                  return;
+                }
+                busy = true;
+                const col = cols[OWNERS.findIndex(x => x[0] === k)];
+                const chip = h('span', { class: 'cmp-d2h-chip drop-in' }, c.q);
+                col.querySelector('.cmp-d2h-drop').append(chip);
+                replay(col, 'cmp-flash');
+                say(o, `<span class="good">Yes.</span> ${esc(c.why)}`);
+                i++;
+                await sleep(500); if (!el.isConnected) return;
+                show(); busy = false;
+              }
+              el.append(card, h('div', { class: 'controls' }, btns), h('div', { class: 'cmp-d2h-cols' }, cols), o);
+              show();
+              say(o, 'Where should this state live? Pick an owner.');
+            },
+          },
+          {
+            title: 'Pass values and lambdas, not the ViewModel',
+            body: `<p>Only the screen-level composable should know about the ViewModel. It collects the state and passes plain values and lambdas down. A leaf like <code>EmailField(value, onValueChange)</code> then works anywhere: in a <code>@Preview</code> with fake data, in a UI test with a lambda that records calls, and on another screen with a different ViewModel.</p>
+<p>A leaf that takes the ViewModel can only run where that ViewModel can be built, with its repository and everything behind it.</p>`,
+            code: `@Composable
+fun SignupRoute(vm: SignupViewModel = hiltViewModel()) {
+    val email by vm.email.collectAsStateWithLifecycle()
+    SignupScreen(email = email, onEmailChange = vm::onEmailChange, onSubmit = vm::submit)
+}
+
+@Preview
+@Composable
+fun SignupScreenPreview() {
+    SignupScreen(email = "ada@lab.dev", onEmailChange = {}, onSubmit = {})
+}`,
+            visual(el) {
+              const TRIES = [
+                { k: 'preview', src: 'Render the @Preview', ok: 'Rendered with email = "ada@lab.dev". No ViewModel needed.', bad: 'The preview can’t build SignupViewModel. It needs a repository and a network client.' },
+                { k: 'test', src: 'Run a UI test', ok: 'The test passed a lambda that records calls, typed, and checked it got "ada@". Done.', bad: 'The test has to build a fake repository and a whole ViewModel just to type into one field.' },
+                { k: 'reuse', src: 'Reuse on the Profile screen', ok: 'ProfileScreen passes its own email and callback. Same field, different owner.', bad: 'EmailField only knows SignupViewModel. Profile can’t use it without that ViewModel.' },
+              ];
+              let plain = true, busy = false;
+              const sig = h('div', { class: 'kt' });
+              const rows = TRIES.map(t => ({ t, mark: h('span', { class: 'cmp-d2h-mark' }, '·'), line: h('span', { class: 'cmp-d2h-line' }, t.src) }));
+              const list = h('div', { class: 'cmp-d2h-list' }, rows.map(r => h('div', { class: 'cmp-d2h-try' }, r.mark, r.line)));
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2h-plain', checked: true });
+              function paintSig() {
+                sig.innerHTML = hl(plain ? '@Composable\nfun EmailField(value: String, onValueChange: (String) -> Unit)' : '@Composable\nfun EmailField(vm: SignupViewModel)');
+                rows.forEach(r => { r.mark.textContent = '·'; r.mark.className = 'cmp-d2h-mark'; });
+              }
+              async function tryIt(r) {
+                if (busy) return; busy = true;
+                r.mark.textContent = '…'; r.mark.className = 'cmp-d2h-mark';
+                await sleep(450); if (!el.isConnected) return;
+                r.mark.textContent = plain ? '✓' : '✗';
+                r.mark.className = `cmp-d2h-mark ${plain ? 'cmp-d2h-ok' : 'cmp-d2h-no'}`;
+                replay(r.mark, 'pop');
+                say(o, `${plain ? '<span class="good">Works.</span>' : '<span class="bad">Stuck.</span>'} ${esc(plain ? r.t.ok : r.t.bad)}`);
+                busy = false;
+              }
+              sw.addEventListener('change', () => {
+                if (busy) { sw.checked = plain; return; }
+                plain = sw.checked; paintSig(); replay(sig, 'pop-soft');
+                say(o, plain ? 'Stateless leaf: it takes a value and a lambda.' : 'The leaf takes the whole ViewModel. Try the same three things.');
+              });
+              paintSig();
+              say(o, 'Try each use of EmailField. Then switch the signature and try again.');
+              el.append(sig, list,
+                h('div', { class: 'controls' }, rows.map(r => act(r.t.src, () => tryIt(r)))),
+                h('label', { class: 'switch', for: 'cmp-d2h-plain' }, sw, 'value + onValueChange'),
+                o);
+            },
+          },
+          {
+            title: 'Offer a stateful and a stateless version',
+            body: `<p>A reusable component often comes in two layers. The stateless one takes the value and a callback, so callers keep full control. A stateful overload owns the state and calls the stateless one, for callers who don’t care. Material follows the same idea: a <code>Slider</code> takes <code>value</code> and <code>onValueChange</code>, and its state lives with the caller.</p>
+<p>Write the stateless version first. The stateful one is then three lines, and tests and previews use the stateless one directly.</p>`,
+            code: `// Stateless: the caller owns the value
+@Composable
+fun Stepper(value: Int, onValueChange: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { onValueChange(value - 1) }) { Text("−") }
+        Text("$value")
+        IconButton(onClick = { onValueChange(value + 1) }) { Text("+") }
+    }
+}
+
+// Stateful convenience overload
+@Composable
+fun Stepper(modifier: Modifier = Modifier) {
+    var value by rememberSaveable { mutableIntStateOf(0) }
+    Stepper(value = value, onValueChange = { value = it }, modifier = modifier)
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>Hoisting is plain Kotlin: a value parameter and a function parameter. The interesting part is what happens to the lambda. Writing <code>onValueChange = { email = it }</code> inside a composable would create a new lambda object on every recomposition, and a new object would stop <code>EmailField</code> from skipping.</p>
+<p>With strong skipping, the default since Kotlin 2.0.20, the Compose compiler wraps lambdas created in a composable in <code>remember</code>, keyed on the values they capture. Here the lambda captures the <code>MutableState</code> behind <code>email</code>, which is the same object every time, so the same lambda instance is reused and <code>EmailField</code> can skip. The Compose, advanced track goes deeper on stability.</p>`,
+          code: `// You write
+var email by remember { mutableStateOf("") }
+EmailField(value = email, onValueChange = { email = it })
+
+// With strong skipping, the compiler produces roughly
+val emailState = remember { mutableStateOf("") }
+EmailField(
+    value = emailState.value,
+    onValueChange = remember(emailState) { { text: String -> emailState.value = text } },
+)`,
+        },
+        mistakes: [
+          {
+            title: 'Passing MutableState down',
+            bad: `@Composable
+fun EmailField(email: MutableState<String>) {
+    OutlinedTextField(value = email.value, onValueChange = { email.value = it })
+}`,
+            good: `@Composable
+fun EmailField(value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(value = value, onValueChange = onValueChange)
+}`,
+            why: 'The child can now write the state behind the owner’s back, so any trimming or validation in the owner is skipped. With a callback, every change goes through the owner.',
+          },
+          {
+            title: 'Hoisting UI-only state into the ViewModel',
+            bad: `class ProfileViewModel : ViewModel() {
+    val menuExpanded = MutableStateFlow(false)
+    fun toggleMenu() { menuExpanded.update { !it } }
+}`,
+            good: `@Composable
+fun OverflowMenu(onSignOut: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, "More") }
+    DropdownMenu(expanded, onDismissRequest = { expanded = false }) { /* items */ }
+}`,
+            why: 'Hoist only as high as the readers. Nothing outside the menu reads <code>expanded</code>, and no business rule depends on it, so the ViewModel only adds plumbing.',
+          },
         ],
         visual(el) {
           let hoisted = true, text = 'ada', shown = 'ada', busy = false;
@@ -1739,6 +2898,181 @@ fun LoginForm(onSubmit: (String, String) -> Unit) {
           { q: 'With <code>onValueChange = { }</code>, what happens when the user types?', options: ['The text appears anyway', 'Nothing changes, because the field keeps showing value'], a: 1, why: 'The field is controlled by your state. It never updates itself.' },
           { q: 'Which option adds an @ key to the soft keyboard?', options: ['<code>imeAction = ImeAction.Next</code>', '<code>keyboardType = KeyboardType.Email</code>', '<code>singleLine = true</code>'], a: 1, why: 'The keyboard type chooses the layout. The IME action only changes the action key.' },
           { q: 'You set <code>imeAction = ImeAction.Next</code> and no <code>keyboardActions</code>. What does the key do?', options: ['Submits the form', 'Moves focus to the next field', 'Nothing'], a: 1, why: 'Next moves focus by default. Pass <code>KeyboardActions(onNext = ...)</code> only to change that.' },
+        ],
+        deeper: [
+          {
+            title: 'TextFieldState and transformations',
+            body: `<p>The newer text field API takes a <code>TextFieldState</code> in place of <code>value</code> and <code>onValueChange</code>. Create it with <code>rememberTextFieldState()</code>, which also survives rotation and process death. Read the text with <code>state.text</code>, and change it with <code>state.edit { }</code> or <code>state.setTextAndPlaceCursorAtEnd()</code>.</p>
+<p>Two hooks shape the text. An <code>InputTransformation</code> runs on every edit before it is stored. It can change the edit or reject it with <code>revertAllChanges()</code>, and <code>InputTransformation.maxLength(10)</code> is built in. An <code>OutputTransformation</code> only changes what is drawn. Below, the state holds 10 plain digits while the field shows a formatted phone number.</p>`,
+            code: `object DigitsOnly : InputTransformation {
+    override fun TextFieldBuffer.transformInput() {
+        if (!asCharSequence().all { it.isDigit() }) revertAllChanges()
+    }
+}
+
+object PhoneFormat : OutputTransformation {
+    override fun TextFieldBuffer.transformOutput() {
+        if (length > 0) insert(0, "(")
+        if (length > 4) insert(4, ")")
+        if (length > 8) insert(8, "-")
+    }
+}
+
+val phone = rememberTextFieldState()
+OutlinedTextField(
+    state = phone,
+    label = { Text("Phone") },
+    lineLimits = TextFieldLineLimits.SingleLine,
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+    inputTransformation = InputTransformation.maxLength(10).then(DigitsOnly),
+    outputTransformation = PhoneFormat,     // draws (555)123-4567, stores 5551234567
+)`,
+            visual(el) {
+              let text = '555', fmt = true;
+              const shown = h('span', { class: 'cmp-d2i-shown' });
+              const field = h('div', { class: 'cmp-field cmp-d2i-field' }, h('span', { class: 'cmp-field-label' }, 'Phone'), h('span', { class: 'cmp-field-line' }, shown, h('span', { class: 'cmp-caret' })));
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2i-fmt', checked: true });
+              const format = s => {
+                let b = s;
+                if (b.length > 0) b = '(' + b;
+                if (b.length > 4) b = b.slice(0, 4) + ')' + b.slice(4);
+                if (b.length > 8) b = b.slice(0, 8) + '-' + b.slice(8);
+                return b;
+              };
+              function paint() {
+                shown.textContent = fmt ? format(text) : text;
+                read.innerHTML = hl(`phone.text = "${text}"   // what is stored\nshown on screen = "${fmt ? format(text) : text}"`);
+              }
+              function edit(proposed, label) {
+                if (proposed.length > 10) {
+                  replay(field, 'shake');
+                  say(o, `${hl('InputTransformation.maxLength(10)')} <span class="bad">rejected</span> ${esc(label)}. The state keeps 10 digits.`);
+                  return;
+                }
+                if (!/^\d*$/.test(proposed)) {
+                  replay(field, 'shake');
+                  say(o, `${hl('DigitsOnly')} called ${hl('revertAllChanges()')}: ${esc(label)} had characters that are not digits. <span class="muted">Nothing was stored.</span>`);
+                  return;
+                }
+                text = proposed; paint(); replay(shown, 'pop-soft');
+                say(o, `${esc(label)} <span class="muted">→</span> ${hl(`phone.text = "${text}"`)}${fmt ? ' <span class="muted">// PhoneFormat only changes the drawing</span>' : ''}`);
+              }
+              const key = d => h('button', { class: 'cmp-kb-key', type: 'button', onclick: () => edit(text + d, `typed ${d}`) }, d);
+              const pad = h('div', { class: 'cmp-d2i-pad' },
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(key),
+                h('button', { class: 'cmp-kb-key', type: 'button', 'aria-label': 'Delete', onclick: () => edit(text.slice(0, -1), 'backspace') }, '⌫'),
+                key('0'));
+              sw.addEventListener('change', () => {
+                fmt = sw.checked; paint(); replay(shown, 'pop-soft');
+                say(o, fmt ? `${hl('outputTransformation = PhoneFormat')} <span class="muted">// same state, formatted drawing</span>` : 'No OutputTransformation. The field draws exactly what is stored.');
+              });
+              paint();
+              say(o, 'Type digits on the pad. Then try pasting a formatted number.');
+              el.append(
+                h('div', { class: 'cmp-ti-wrap' }, h('div', { class: 'cmp-ly-group' }, field, pad), read),
+                h('div', { class: 'controls' },
+                  cmd('phone.setTextAndPlaceCursorAtEnd("")', () => { text = ''; paint(); say(o, `${hl('setTextAndPlaceCursorAtEnd("")')} <span class="muted">// code edits go through the state too</span>`); }),
+                  act('Paste "+1 (555) 010-9999"', () => edit('+1 (555) 010-9999', 'the paste'))),
+                h('label', { class: 'switch', for: 'cmp-d2i-fmt' }, sw, 'outputTransformation = PhoneFormat'),
+                o);
+            },
+          },
+          {
+            title: 'Keep value updates synchronous',
+            body: `<p>With <code>value</code> and <code>onValueChange</code>, the field reports an edit and then shows whatever <code>value</code> you pass back on the next frame. If that write is late, for example because it goes through a <code>Flow</code>, a debounce or a database first, the keyboard keeps typing on top of an old value. Letters get lost or the cursor jumps.</p>
+<p>So write the new text to state right away, in <code>onValueChange</code>. Do slow work like searching after that, by observing the state. The <code>TextFieldState</code> API has no <code>onValueChange</code> at all, so it can’t get out of sync this way.</p>`,
+            code: `class SearchViewModel(private val repo: SearchRepository) : ViewModel() {
+    var query by mutableStateOf("")
+        private set
+
+    fun onQueryChange(q: String) {
+        query = q                        // synchronous: the field shows it next frame
+    }
+
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val results = snapshotFlow { query }
+        .debounce(300)                   // slow work happens after, not in between
+        .mapLatest { repo.search(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+}`,
+            visual(el) {
+              const DELAY = 160, GAP = 70, WORD = 'hello';
+              let sync = true, value = '', busy = false, logN = 0;
+              const shown = h('span', {});
+              const field = h('div', { class: 'cmp-field cmp-d2i-field' }, h('span', { class: 'cmp-field-label' }, 'Search'), h('span', { class: 'cmp-field-line' }, shown, h('span', { class: 'cmp-caret' })));
+              const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
+              const o = out();
+              const modeBtns = [[true, 'onValueChange = { query = it }'], [false, 'onValueChange = { queryFlow.emit(it) }  // arrives later']].map(([s, src]) => cmd(src, () => {
+                if (busy) return;
+                sync = s; modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (s ? 0 : 1))));
+                say(o, s ? 'Synchronous: state changes inside the callback.' : `Async: each update reaches the state ${DELAY} ms later. <span class="muted">A simplified model.</span>`);
+              }));
+              function addLog(html) {
+                log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
+                while (log.children.length > 6) log.lastElementChild.remove();
+              }
+              const paint = () => { shown.textContent = value; };
+              async function typeFast() {
+                if (busy) return; busy = true;
+                value = ''; paint(); log.replaceChildren(); logN = 0;
+                say(o, `Typing ${hl(`"${WORD}"`)}, one key every ${GAP} ms…`);
+                for (const ch of WORD) {
+                  const proposed = value + ch;
+                  addLog(`key ${hl(`'${ch}'`)} → ${hl(`onValueChange("${proposed}")`)}`);
+                  if (sync) { value = proposed; paint(); replay(shown, 'pop-soft'); }
+                  else setTimeout(() => { if (!el.isConnected) return; value = proposed; paint(); addLog(`<span class="muted">late update:</span> ${hl(`value = "${proposed}"`)}`); }, DELAY);
+                  await sleep(GAP); if (!el.isConnected) return;
+                }
+                await sleep(DELAY + 120); if (!el.isConnected) return;
+                const ok = value === WORD;
+                replay(field, ok ? 'cmp-flash' : 'shake');
+                say(o, ok ? `<span class="good">Typed "${WORD}", got "${value}".</span> Every edit was built on the latest value.` : `<span class="bad">Typed "${WORD}", got "${esc(value)}".</span> Each edit was built on a value that was already old.`);
+                busy = false;
+              }
+              modeBtns[0].setAttribute('aria-pressed', 'true');
+              paint();
+              say(o, 'Type a word quickly, then switch to the late update and type again.');
+              el.append(field, h('div', { class: 'controls' }, modeBtns), h('div', { class: 'controls' }, act(`Type “${WORD}” fast`, typeFast)), log, o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>The soft keyboard is a separate app, the IME. It talks to the focused field through an input connection and sends edit commands: commit this text, set this composing text, delete around the cursor. The field applies them to its own editing buffer.</p>
+<p>In the value-based API, the field then calls <code>onValueChange</code> and waits for you to pass the result back. The <code>TextFieldValue</code> form carries the text, the selection and the composition, the underlined word the keyboard is still working on. If the value you pass back differs from the buffer, the field resets the buffer and updates the keyboard to match. With <code>TextFieldState</code> there is no round trip. The state is the buffer, so the keyboard’s edits land in it directly, after your <code>InputTransformation</code> has seen them.</p>`,
+          code: `// The value-based field reports the whole editing state
+TextField(
+    value = fieldValue,                       // TextFieldValue(text, selection, composition)
+    onValueChange = { fieldValue = it },      // write it back, unchanged or filtered
+)`,
+        },
+        mistakes: [
+          {
+            title: 'A password field with a text keyboard',
+            bad: `OutlinedTextField(
+    value = password,
+    onValueChange = { password = it },
+    visualTransformation = PasswordVisualTransformation(),
+)`,
+            good: `OutlinedTextField(
+    value = password,
+    onValueChange = { password = it },
+    visualTransformation = PasswordVisualTransformation(),
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+)`,
+            why: 'The dots only change the drawing. With a normal text keyboard, the IME may suggest words and learn what was typed. <code>KeyboardType.Password</code> tells it this is a password.',
+          },
+          {
+            title: 'Expecting initialText to follow your data',
+            bad: `val name = rememberTextFieldState(initialText = user.name)
+// user loads later: the field stays empty`,
+            good: `val name = rememberTextFieldState()
+LaunchedEffect(user.id) {
+    name.setTextAndPlaceCursorAtEnd(user.name)
+}`,
+            why: '<code>initialText</code> is used once, when the state is created. A different value on a later recomposition is ignored. Set the text with an edit call when the data arrives.',
+          },
         ],
         visual(el) {
           let email = '', password = '', active = 'email', type = 'Email', ignore = false, hidePw = true, touched = false, logN = 0, kbSig = '';
@@ -1906,6 +3240,174 @@ fun PhotoGrid(photos: List<Photo>) {
           { q: 'A LazyColumn has 10,000 items and 8 fit on screen. About how many are composed?', options: ['10,000', 'About 8 to 10', 'Exactly 1'], a: 1, why: 'Only visible items, plus one or two prefetched ahead, are composed.' },
           { q: 'What does <code>contentPadding</code> do that <code>Modifier.padding</code> on the list does not?', options: ['Items scroll through the padded space instead of being clipped at it', 'It adds space between items', 'Nothing, they are the same'], a: 0, why: '<code>Modifier.padding</code> shrinks the viewport. <code>contentPadding</code> pads the content inside it.' },
           { q: 'Which call adds one header that pins to the top while its section scrolls?', options: ['<code>item { }</code>', '<code>stickyHeader { }</code>', '<code>items(list) { }</code>'], a: 1, why: 'A sticky header stays at the top until the next header pushes it out.' },
+        ],
+        deeper: [
+          {
+            title: 'LazyListState: read and drive the scroll',
+            body: `<p>Hoist <code>rememberLazyListState()</code> and pass it to the list as <code>state</code>. It tells you where the list is with <code>firstVisibleItemIndex</code> and <code>firstVisibleItemScrollOffset</code>, and it moves the list with <code>scrollToItem</code> and <code>animateScrollToItem</code>, which are suspend functions.</p>
+<p>These values change very often. The offset changes on every frame of a scroll. If a composable reads them directly, it recomposes just as often. For a yes or no question like “show the Back to top button?”, wrap the read in <code>derivedStateOf</code>, so readers recompose only when the answer flips. The Compose, advanced track explains <code>derivedStateOf</code> in depth.</p>`,
+            code: `val listState = rememberLazyListState()
+val scope = rememberCoroutineScope()
+val showTop by remember {
+    derivedStateOf { listState.firstVisibleItemIndex > 0 }
+}
+
+Box {
+    LazyColumn(state = listState) {
+        items(posts, key = { it.id }) { PostRow(it) }
+    }
+    AnimatedVisibility(showTop, Modifier.align(Alignment.BottomEnd)) {
+        FloatingActionButton(onClick = { scope.launch { listState.animateScrollToItem(0) } }) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Back to top")
+        }
+    }
+}`,
+            visual(el) {
+              const PITCH = 46;
+              let idx = 0, off = 0, show = false, raf = 0;
+              const counts = { offset: 0, index: 0, derived: 0 };
+              const inner = h('div', { class: 'cmp-d2z-inner' });
+              for (let i = 0; i < 40; i++) inner.append(h('div', { class: 'cmp-d2z-row' }, h('i', {}, String(i)), `Post ${i}`));
+              const view = h('div', { class: 'cmp-d2z-view', tabindex: '0', 'aria-label': 'Scrollable list' }, inner);
+              const fab = h('button', { class: 'cmp-d2z-fab', type: 'button', 'aria-label': 'Back to top', onclick: () => top() }, '↑');
+              const frame = h('div', { class: 'cmp-d2z-frame' }, view, fab);
+              const read = h('div', { class: 'kt' });
+              const badge = () => h('span', { class: 'cmp-badge' }, '0');
+              const B = { offset: badge(), index: badge(), derived: badge() };
+              const meters = h('div', { class: 'cmp-d2z-meters' },
+                h('div', {}, h('span', { class: 'cmp-fx-name' }, 'reads firstVisibleItemScrollOffset'), B.offset),
+                h('div', {}, h('span', { class: 'cmp-fx-name' }, 'reads firstVisibleItemIndex'), B.index),
+                h('div', {}, h('span', { class: 'cmp-fx-name' }, 'reads derivedStateOf { index > 0 }'), B.derived));
+              const o = out();
+              const hit = k => { counts[k]++; B[k].textContent = String(counts[k]); replay(B[k], 'pop'); };
+              function update() {
+                raf = 0;
+                if (!el.isConnected) return;
+                const st = Math.max(0, view.scrollTop - 8), ni = Math.floor(st / PITCH), no = Math.round(st - ni * PITCH);
+                if (no !== off || ni !== idx) hit('offset');
+                if (ni !== idx) hit('index');
+                if ((ni > 0) !== show) { show = ni > 0; hit('derived'); fab.classList.toggle('cmp-on', show); }
+                idx = ni; off = no;
+                read.innerHTML = hl(`listState.firstVisibleItemIndex = ${idx}\nlistState.firstVisibleItemScrollOffset = ${off}\nshowTop = ${show}`);
+              }
+              view.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(update); }, { passive: true });
+              function top() {
+                view.scrollTo({ top: 0, behavior: 'smooth' });
+                say(o, `${hl('scope.launch { listState.animateScrollToItem(0) }')} <span class="muted">// back to the first item</span>`);
+              }
+              read.innerHTML = hl('listState.firstVisibleItemIndex = 0\nlistState.firstVisibleItemScrollOffset = 0\nshowTop = false');
+              say(o, 'Scroll the list and compare how often each reader would recompose.');
+              el.append(
+                h('div', { class: 'cmp-d2z-wrap' }, frame, h('div', { class: 'cmp-ly-group' }, read, meters)),
+                h('div', { class: 'controls' },
+                  act('Scroll down', () => { view.scrollBy({ top: 200, behavior: 'smooth' }); say(o, 'Scrolling. Watch the three counters.'); }),
+                  cmd('listState.animateScrollToItem(0)', top)),
+                o);
+            },
+          },
+          {
+            title: 'Load more near the end',
+            body: `<p>For long feeds you load data in pages. The list can tell you when to fetch the next one: <code>listState.layoutInfo</code> lists the visible items and the total count. When the last visible index gets close to the end, ask the ViewModel for more, and show a loading row as the last item.</p>
+<p>Wrap the check in <code>derivedStateOf</code> so it is computed on scroll but only changes when the answer does, and react to it in a <code>LaunchedEffect</code>. For real network paging, the Paging 3 library does this for you, with <code>collectAsLazyPagingItems()</code>.</p>`,
+            code: `val listState = rememberLazyListState()
+val nearEnd by remember {
+    derivedStateOf {
+        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        last >= listState.layoutInfo.totalItemsCount - 3
+    }
+}
+LaunchedEffect(nearEnd) {
+    if (nearEnd) vm.loadNextPage()          // the ViewModel ignores calls while loading
+}
+
+LazyColumn(state = listState) {
+    items(posts, key = { it.id }) { PostRow(it) }
+    if (isLoading) item(key = "loading") { LoadingRow() }
+}`,
+            visual(el) {
+              const PAGE = 10, MAX = 40;
+              let total = 0, loading = false, raf = 0, ended = false;
+              const inner = h('div', { class: 'cmp-d2z-inner' });
+              const footer = h('div', { class: 'cmp-d2z-foot' });
+              const view = h('div', { class: 'cmp-d2z-view', tabindex: '0', 'aria-label': 'Scrollable feed' }, inner, footer);
+              const frame = h('div', { class: 'cmp-d2z-frame' }, view);
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              function addPage() {
+                for (let i = 0; i < PAGE; i++) { total++; inner.append(h('div', { class: `cmp-d2z-row${loading ? ' cmp-ls-in' : ''}` }, h('i', {}, String(total - 1)), `Post ${total - 1}`)); }
+              }
+              function lastVisible() {
+                const v = view.getBoundingClientRect();
+                let last = 0;
+                [...inner.children].forEach((r, i) => { if (r.getBoundingClientRect().top < v.bottom) last = i; });
+                return last;
+              }
+              async function load() {
+                loading = true;
+                footer.replaceChildren(h('span', { class: 'cmp-d2z-spin', 'aria-hidden': 'true' }), 'Loading page…');
+                say(o, `${hl('nearEnd = true')} → ${hl('vm.loadNextPage()')} <span class="muted">// the loading row shows as the last item</span>`);
+                await sleep(900); if (!el.isConnected) return;
+                addPage(); loading = false;
+                if (total >= MAX) { ended = true; footer.textContent = 'End of feed'; } else footer.replaceChildren();
+                say(o, `<span class="good">Page loaded.</span> ${total} items now.${ended ? ' No more pages.' : ' Keep scrolling.'}`);
+                check();
+              }
+              function check() {
+                raf = 0;
+                if (!el.isConnected) return;
+                const last = lastVisible(), near = last >= total - 3;
+                read.innerHTML = hl(`lastVisibleIndex = ${last}\ntotalItemsCount = ${total}\nnearEnd = ${near}`);
+                if (near && !loading && !ended) load();
+              }
+              view.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(check); }, { passive: true });
+              addPage();
+              read.innerHTML = hl(`lastVisibleIndex = 0\ntotalItemsCount = ${total}\nnearEnd = false`);
+              say(o, 'Scroll toward the end of the list. A new page loads before you reach it.');
+              el.append(
+                h('div', { class: 'cmp-d2z-wrap' }, frame, read),
+                h('div', { class: 'controls' }, act('Scroll to the end', () => view.scrollTo({ top: view.scrollHeight, behavior: 'smooth' }))),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>The <code>LazyColumn { }</code> block does not compose anything. It runs a small DSL that records <em>intervals</em>: “items 0 to 29 come from this list, with this key and this content lambda”. The list itself is a <code>LazyLayout</code>, built on <code>SubcomposeLayout</code>.</p>
+<p>During measure, it starts at the first visible index, composes one item, measures it, and repeats until the viewport is full. Items that scroll away are disposed or kept for reuse: a new item of the same <code>contentType</code> can take over an old item’s composition instead of building one from scratch. Between frames, a prefetcher composes and measures the next item in the scroll direction, so it is ready before it appears.</p>`,
+          code: `LazyColumn {
+    item { Header() }                                   // interval: 1 item
+    items(posts, key = { it.id }, contentType = { "post" }) { PostRow(it) }  // interval: posts.size
+}
+// Only the items that fit the viewport, plus the prefetched one, are composed.`,
+        },
+        mistakes: [
+          {
+            title: 'Items with zero height before they load',
+            bad: `items(photos, key = { it.id }) { photo ->
+    AsyncImage(model = photo.url, contentDescription = photo.title)
+}`,
+            good: `items(photos, key = { it.id }) { photo ->
+    AsyncImage(
+        model = photo.url,
+        contentDescription = photo.title,
+        modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
+    )
+}`,
+            why: 'Before the images load, every item is 0 px tall, so all of them fit in the viewport and the list composes them all at once. Give items their size up front, or a placeholder of the right size.',
+          },
+          {
+            title: 'animateItem without keys',
+            bad: `LazyColumn {
+    items(tasks) { task ->
+        TaskRow(task, Modifier.animateItem())
+    }
+}`,
+            good: `LazyColumn {
+    items(tasks, key = { it.id }) { task ->
+        TaskRow(task, Modifier.animateItem())
+    }
+}`,
+            why: 'Without keys, items are tracked by position. When a task moves, the list sees new content at the old positions, so nothing slides. Keys let <code>animateItem</code> find where each item went.',
+          },
         ],
         visual(el) {
           const FIRST = ['Ada', 'Alan', 'Anita', 'Arun', 'Ava', 'Ben', 'Bianca', 'Bo', 'Bruno', 'Bea', 'Carla', 'Chen', 'Cleo', 'Cyrus', 'Cora', 'Dana', 'Dev', 'Dina', 'Dmitri', 'Duke', 'Eli', 'Emma', 'Ezra', 'Esme', 'Eve', 'Farah', 'Felix', 'Fiona', 'Femi', 'Finn'];
@@ -2369,6 +3871,240 @@ fun DraggableDot() {
           { q: 'You add <code>onDoubleClick</code> to a <code>combinedClickable</code>. What happens on a single tap?', options: ['<code>onClick</code> fires right away', '<code>onClick</code> fires once the double-tap timeout passes', '<code>onClick</code> never fires'], a: 1, why: 'Compose has to wait to see if a second tap is coming.' },
           { q: 'Which gives you the exact position of a tap?', options: ['<code>Modifier.clickable</code>', '<code>pointerInput</code> with <code>detectTapGestures</code>', 'Both'], a: 1, why: '<code>onTap</code> in <code>detectTapGestures</code> receives an <code>Offset</code>. <code>clickable</code> only says that a click happened.' },
           { q: 'Why prefer <code>clickable</code> over <code>pointerInput</code> for a button-like tap?', options: ['It is faster', 'It adds ripple feedback and click semantics for accessibility', '<code>pointerInput</code> can’t detect taps'], a: 1, why: 'A raw detector gives you neither feedback nor semantics. <code>clickable</code> includes both.' },
+        ],
+        deeper: [
+          {
+            title: 'Who gets the drag?',
+            body: `<p>A swipeable row inside a scrolling list means two gesture handlers see the same finger. Each one waits until the finger has moved past the <em>touch slop</em>, a few dp, and the first one to claim the movement consumes it. The other then sees consumed changes and backs off.</p>
+<p><code>detectDragGestures</code> claims a drag in any direction, so a vertical swipe on the row is eaten by the row, and the list can’t scroll from there. <code>detectHorizontalDragGestures</code> only claims horizontal movement. On a vertical swipe it never claims, and the list scrolls as usual. Pick the detector that matches the direction you need. <code>Modifier.draggable</code> works the same way with an <code>orientation</code>.</p>`,
+            code: `Modifier.pointerInput(Unit) {
+    detectHorizontalDragGestures { change, dragAmount ->
+        change.consume()
+        offsetX += dragAmount              // vertical swipes go to the list
+    }
+}`,
+            visual(el) {
+              let horiz = false, busy = false, scrollY = 0, rowX = 0;
+              const rows = [];
+              for (let i = 0; i < 9; i++) rows.push(h('div', { class: `cmp-d2g-row${i === 2 ? ' cmp-d2g-me' : ''}` }, i === 2 ? 'Swipeable row' : `Message ${i + 1}`));
+              const col = h('div', { class: 'cmp-d2g-col' }, rows);
+              const finger = h('span', { class: 'cmp-d2g-finger', 'aria-hidden': 'true' });
+              const frame = h('div', { class: 'cmp-d2g-frame', role: 'img', 'aria-label': 'List with a swipeable row' }, col, finger);
+              const code = h('div', { class: 'kt' });
+              const o = out();
+              const modeBtns = [[false, 'detectDragGestures'], [true, 'detectHorizontalDragGestures']].map(([v, src]) => cmd(src, () => {
+                if (busy) return;
+                horiz = v; paint();
+                say(o, v ? 'The row only claims horizontal drags now.' : 'The row claims a drag in any direction.');
+              }));
+              function paint() {
+                modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (horiz ? 1 : 0))));
+                code.innerHTML = hl(`Row(Modifier.pointerInput(Unit) {\n    ${horiz ? 'detectHorizontalDragGestures { change, dx ->' : 'detectDragGestures { change, dragAmount ->'}\n        change.consume()\n        offsetX += ${horiz ? 'dx' : 'dragAmount.x'}\n    }\n})`);
+              }
+              const place = () => { col.style.transform = `translateY(${-scrollY}px)`; rows[2].style.transform = `translateX(${rowX}px)`; };
+              async function swipe(dir) {
+                if (busy) return; busy = true;
+                frame.classList.remove('cmp-d2g-win-row', 'cmp-d2g-win-list');
+                scrollY = 0; rowX = 0; col.style.transition = rows[2].style.transition = 'transform 0.3s'; place();
+                await sleep(320); if (!el.isConnected) return;
+                col.style.transition = rows[2].style.transition = 'none';
+                const r = rows[2].getBoundingClientRect(), f = frame.getBoundingClientRect();
+                let x = r.left - f.left + r.width * 0.6, y = r.top - f.top + r.height / 2;
+                finger.style.left = `${x}px`; finger.style.top = `${y}px`; finger.classList.add('cmp-on');
+                const vertical = dir === 'up';
+                const winner = vertical ? (horiz ? 'list' : 'row') : 'row';
+                say(o, `Finger down on the row, moving ${vertical ? 'up' : 'left'}…`);
+                for (let s = 1; s <= 12; s++) {
+                  await sleep(55); if (!el.isConnected) return;
+                  const dx = vertical ? 0 : -9, dy = vertical ? -9 : 0;
+                  x += dx; y += dy;
+                  finger.style.left = `${x}px`; finger.style.top = `${y}px`;
+                  if (s === 2) {
+                    frame.classList.add(winner === 'row' ? 'cmp-d2g-win-row' : 'cmp-d2g-win-list');
+                    say(o, `Past touch slop: the ${winner === 'row' ? 'row' : 'list'} claims the gesture and consumes it.`);
+                  }
+                  if (s > 2) {
+                    if (winner === 'list') scrollY = Math.min(140, scrollY - dy);
+                    else rowX = Math.max(-110, rowX + dx);
+                    place();
+                  }
+                }
+                finger.classList.remove('cmp-on');
+                if (vertical && !horiz) say(o, '<span class="bad">Stuck.</span> The row claimed a vertical drag, then only used dragAmount.x. The list never got to scroll.');
+                else if (vertical) say(o, '<span class="good">The list scrolled.</span> The horizontal detector never claimed a vertical drag.');
+                else say(o, `<span class="good">The row moved.</span> A horizontal swipe is the row’s, with either detector.`);
+                busy = false;
+              }
+              paint();
+              say(o, 'Pick a detector, then swipe up on the row.');
+              el.append(
+                h('div', { class: 'cmp-sc-wrap' }, frame, h('div', { class: 'cmp-sc-side' }, code,
+                  h('div', { class: 'controls' }, act('Swipe up on the row', () => swipe('up')), act('Swipe left on the row', () => swipe('left'))))),
+                h('div', { class: 'controls' }, modeBtns), o);
+            },
+          },
+          {
+            title: 'Settle on release with velocity',
+            body: `<p>A swipe should finish on its own when the finger lifts. Move the item with an <code>Animatable</code>: <code>snapTo</code> while dragging, <code>animateTo</code> on release. Then decide where it settles. Distance alone feels wrong, because a short, fast flick clearly means “throw it away”.</p>
+<p>A <code>VelocityTracker</code> collects recent pointer positions and estimates the speed at release. Archive if the item moved past half its width <em>or</em> the release was fast enough. Material’s <code>SwipeToDismissBox</code> packages the same idea for list items.</p>`,
+            code: `val offsetX = remember { Animatable(0f) }
+val scope = rememberCoroutineScope()
+val currentOnArchive by rememberUpdatedState(onArchive)
+
+Modifier
+    .pointerInput(Unit) {                    // before offset: positions stay in the row's space
+        val tracker = VelocityTracker()
+        val minFling = 600.dp.toPx()
+        detectHorizontalDragGestures(
+            onDragStart = { tracker.resetTracking() },
+            onDragEnd = {
+                val v = tracker.calculateVelocity().x
+                val gone = abs(offsetX.value) > size.width / 2f || abs(v) > minFling
+                scope.launch {
+                    if (gone) {
+                        offsetX.animateTo(if (offsetX.value < 0f) -size.width.toFloat() else size.width.toFloat())
+                        currentOnArchive()
+                    } else offsetX.animateTo(0f, spring())
+                }
+            },
+        ) { change, dragAmount ->
+            change.consume()
+            tracker.addPosition(change.uptimeMillis, change.position)
+            scope.launch { offsetX.snapTo(offsetX.value + dragAmount) }
+        }
+    }
+    .offset { IntOffset(offsetX.value.roundToInt(), 0) }`,
+            visual(el) {
+              const MIN_FLING = 600;
+              let useVel = true, busy = false, x = 0, n = 1, drag = null;
+              const card = h('div', { class: 'cmp-d2g-card' }, h('b', {}, 'Email 1'), h('small', {}, 'Drag me, or use the buttons'));
+              const under = h('div', { class: 'cmp-d2g-under' }, 'Archive');
+              const track = h('div', { class: 'cmp-d2g-track' }, under, card);
+              const read = h('div', { class: 'kt' });
+              const o = out();
+              const sw = h('input', { type: 'checkbox', id: 'cmp-d2g-vel', checked: true });
+              const W = () => track.clientWidth || 300;
+              const setX = (v, ms) => { x = v; card.style.transition = ms ? `transform ${ms}ms cubic-bezier(0.2, 0.8, 0.2, 1)` : 'none'; card.style.transform = `translateX(${x}px)`; };
+              function show(v) { read.innerHTML = hl(`offset = ${Math.round(x)} px (${Math.round(Math.abs(x) / W() * 100)}% of width)\nvelocity = ${Math.round(v)} dp/s   // fling at ${MIN_FLING}\nuseVelocity = ${useVel}`); }
+              async function release(v) {
+                const far = Math.abs(x) > W() / 2, fast = useVel && Math.abs(v) > MIN_FLING;
+                show(v);
+                if (far || fast) {
+                  setX(x < 0 ? -W() - 20 : W() + 20, 320);
+                  say(o, `<span class="good">Archived.</span> ${far ? 'It passed half the width.' : `Only ${Math.round(Math.abs(x) / W() * 100)}% of the width, but the release was fast.`}`);
+                  await sleep(900); if (!el.isConnected) return;
+                  n++; card.firstElementChild.textContent = `Email ${n}`;
+                  setX(0, 0); replay(card, 'drop-in');
+                } else {
+                  setX(0, 450);
+                  say(o, `<span class="muted">Sprang back.</span> ${!useVel && Math.abs(v) > MIN_FLING ? '<span class="bad">That flick was fast, but velocity is ignored, so it feels broken.</span>' : 'Not far enough and not fast enough.'}`);
+                }
+              }
+              async function sim(frac, ms, label) {
+                if (busy || drag) return; busy = true;
+                say(o, `${esc(label)}…`);
+                const target = -frac * W(), steps = Math.max(4, Math.round(ms / 30));
+                for (let i = 1; i <= steps; i++) {
+                  setX(target * i / steps, 0);
+                  await sleep(ms / steps); if (!el.isConnected) return;
+                }
+                await release(-frac * W() / (ms / 1000));
+                busy = false;
+              }
+              let hist = [];
+              card.addEventListener('pointerdown', e => {
+                if (busy) return;
+                drag = { start: e.clientX - x }; hist = [{ t: performance.now(), x }];
+                card.setPointerCapture && card.setPointerCapture(e.pointerId);
+                card.classList.add('cmp-d2g-held');
+              });
+              card.addEventListener('pointermove', e => {
+                if (!drag) return;
+                setX(e.clientX - drag.start, 0);
+                hist.push({ t: performance.now(), x }); hist = hist.filter(p => performance.now() - p.t < 100);
+                show(0);
+              });
+              const up = () => {
+                if (!drag) return;
+                drag = null; card.classList.remove('cmp-d2g-held');
+                const a = hist[0], b = hist[hist.length - 1], dt = (b.t - a.t) / 1000;
+                busy = true;
+                release(dt > 0 ? (b.x - a.x) / dt : 0).then(() => { busy = false; });
+              };
+              card.addEventListener('pointerup', up);
+              card.addEventListener('pointercancel', up);
+              sw.addEventListener('change', () => {
+                useVel = sw.checked; show(0);
+                say(o, useVel ? 'Distance or velocity: a fast flick counts.' : 'Distance only: try the quick flick now.');
+              });
+              show(0);
+              say(o, 'Drag the card left and let go, or use a button.');
+              el.append(track, read,
+                h('div', { class: 'controls' },
+                  act('Slow drag to 30%', () => sim(0.3, 900, 'Slow drag to 30%')),
+                  act('Quick flick, 25%', () => sim(0.25, 90, 'Quick flick to 25%')),
+                  act('Slow drag to 60%', () => sim(0.6, 1000, 'Slow drag to 60%'))),
+                h('label', { class: 'switch', for: 'cmp-d2g-vel' }, sw, 'Use VelocityTracker'),
+                o);
+            },
+          },
+          {
+            title: 'Give custom gestures a way in for everyone',
+            body: `<p>A swipe made with <code>pointerInput</code> is invisible to TalkBack and Switch Access. Those users can’t perform the gesture, and nothing tells them it exists. Add the same action through semantics, so it shows up in the accessibility actions menu.</p>
+<p><code>clickable</code> and <code>combinedClickable</code> add click semantics on their own. Raw detectors never do. The Accessibility track covers semantics in depth.</p>`,
+            code: `Modifier
+    .pointerInput(Unit) { detectHorizontalDragGestures(/* swipe to archive */) }
+    .semantics {
+        customActions = listOf(
+            CustomAccessibilityAction(label = "Archive") { onArchive(); true },
+        )
+    }`,
+          },
+        ],
+        underHood: {
+          body: `<p>The block you pass to <code>pointerInput</code> is a suspend function. Compose runs it in a coroutine tied to the modifier and restarts it when a key changes. Inside, the detectors are ordinary loops that suspend until the next pointer event arrives.</p>
+<p>Each event travels through the hit-tested elements in three passes: <code>Initial</code> from parent to child, <code>Main</code> from child to parent, and <code>Final</code> from parent to child again. Detectors normally act in the Main pass, so the innermost element gets the first chance. “Consuming” just sets a flag on the <code>PointerInputChange</code>. Other handlers check that flag and back off, which is how the row and the list in step 1 avoid fighting.</p>`,
+          code: `// A tiny tap detector, written by hand
+Modifier.pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown()                         // suspends until a finger touches
+        val up = waitForUpOrCancellation()       // null if another handler consumed it
+        if (up != null) {
+            up.consume()
+            onTap(up.position)
+        }
+    }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Moving with the value version of offset',
+            bad: `var offsetX by remember { mutableFloatStateOf(0f) }
+Box(
+    Modifier
+        .offset(x = offsetX.dp)
+        .pointerInput(Unit) { detectHorizontalDragGestures { _, dx -> offsetX += dx } }
+)`,
+            good: `var offsetX by remember { mutableFloatStateOf(0f) }
+Box(
+    Modifier
+        .offset { IntOffset(offsetX.roundToInt(), 0) }
+        .pointerInput(Unit) { detectHorizontalDragGestures { _, dx -> offsetX += dx } }
+)`,
+            why: 'The value version reads the state during composition, so the Box recomposes on every frame of the drag. It also treats pixels as dp, so the box outruns the finger on dense screens. The lambda version reads in the layout phase, in pixels.',
+          },
+          {
+            title: 'A tiny clickable icon',
+            bad: `Icon(
+    Icons.Default.Close,
+    contentDescription = "Close",
+    modifier = Modifier.size(24.dp).clickable { onClose() },
+)`,
+            good: `IconButton(onClick = onClose) {
+    Icon(Icons.Default.Close, contentDescription = "Close")
+}`,
+            why: 'The touch target is only 24 dp, hard to hit. <code>IconButton</code> keeps the 24 dp icon but makes the target at least 48 dp and gives it the button role.',
+          },
         ],
         visual(el) {
           const LONG = 400, DOUBLE = 300;

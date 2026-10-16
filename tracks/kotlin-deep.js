@@ -122,6 +122,28 @@
 .phone.kd-mini-phone { height: 200px; }
 
 @media (max-width: 600px) { .kd-split { grid-template-columns: minmax(0, 1fr); } }
+/* depth pass 2: dsl, value, sequences, operators */
+.kd-dsl-stack { display: grid; gap: 8px; min-width: 0; }
+.kd-node.kd-dsl-ok { border-color: var(--ok); background: var(--ok-soft); }
+.kd-tag.kd-dsl-match { outline: 2px solid var(--ok); outline-offset: 1px; }
+.kd-tag.kd-dsl-miss { outline: 2px solid var(--err); outline-offset: 1px; }
+.kd-vcl-bits { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.kd-vcl-bit { width: 34px; height: 42px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); color: var(--muted); font: 700 1rem var(--mono); cursor: pointer; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+.kd-vcl-bit[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.kd-sqn-belt { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 10px; min-width: 0; }
+.kd-sqn-st { display: grid; gap: 6px; align-content: start; padding: 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); min-width: 0; transition: opacity 0.25s; }
+.kd-sqn-st.kd-sqn-off { opacity: 0.35; border-style: dashed; }
+.kd-sqn-well { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; align-content: flex-start; }
+.kd-sqn-chip { font: 600 0.8rem var(--mono); padding: 3px 8px; border-radius: 7px; background: var(--surface); border: 2px solid var(--ink); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; transition: opacity 0.3s; }
+.kd-sqn-chip.kd-sqn-gone { opacity: 0.25; }
+.kd-sqn-chip.kd-sqn-keep { border-color: var(--ok); background: var(--ok-soft); }
+.kd-cell.kd-sqn-cell { flex: 1 1 64px; padding: 0 6px; font-size: 0.76rem; }
+.kd-line.kd-sqn-run { background: rgba(255, 212, 121, 0.24); }
+.kd-opr-item { font: 600 0.8rem var(--mono); padding: 2px 8px; border-radius: 6px; background: var(--sunk); color: var(--ink); }
+.kd-opr-vers { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 48px; padding: 12px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); }
+.kd-opr-banner { padding: 8px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font-weight: 700; font-size: 0.9rem; transition: background 0.25s, border-color 0.25s; }
+.kd-opr-banner.kd-opr-ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
+.kd-opr-banner.kd-opr-bad { border-color: var(--err); background: var(--err-soft); color: var(--err); }
 `;
 
   Lab.addTrack({
@@ -913,6 +935,166 @@ val screen = settings {
           { q: 'What is the difference between <code>(T) -> Unit</code> and <code>T.() -> Unit</code>?', options: ['In the second, <code>T</code> is <code>this</code>, so you call its members without a prefix', 'The second runs on another thread', 'None, they are different spellings of one type'], a: 0, why: 'With a receiver you write <code>append("x")</code>; with a parameter you write <code>it.append("x")</code>.' },
           { q: 'What does <code>@DslMarker</code> change?', options: ['Calling an outer receiver of the same DSL implicitly becomes a compile error', 'The DSL runs faster', 'It generates the builder classes'], a: 0, why: 'You can still reach the outer one explicitly with <code>this@settings</code>.' },
         ],
+        deeper: [
+          {
+            title: 'Receiver or parameter: the scope functions',
+            body: `<p>The five scope functions are the smallest DSLs you use every day. <code>apply</code>, <code>run</code> and <code>with</code> take a lambda with receiver, so the object is <code>this</code>. <code>also</code> and <code>let</code> take a plain lambda, so the object is <code>it</code>.</p>
+<p>They also differ in what they return. <code>apply</code> and <code>also</code> hand back the object itself, which is why builders end with <code>apply(block)</code>. <code>run</code>, <code>let</code> and <code>with</code> return the lambda's last expression.</p>`,
+            code: `val user = User(name = "Ada")
+
+user.apply { name.length }     // this = user, returns user
+user.also { it.name.length }   // it = user,   returns user
+user.run { name.length }       // this = user, returns 3
+user.let { it.name.length }    // it = user,   returns 3
+with(user) { name.length }     // this = user, returns 3`,
+            visual(el) {
+              const FNS = [
+                { n: 'apply', src: 'val r = user.apply { name.length }', type: 'User.() -> Unit', ref: 'this', ret: 'user', retT: 'User' },
+                { n: 'also', src: 'val r = user.also { it.name.length }', type: '(User) -> Unit', ref: 'it', ret: 'user', retT: 'User' },
+                { n: 'run', src: 'val r = user.run { name.length }', type: 'User.() -> R', ref: 'this', ret: '3', retT: 'Int' },
+                { n: 'let', src: 'val r = user.let { it.name.length }', type: '(User) -> R', ref: 'it', ret: '3', retT: 'Int' },
+                { n: 'with', src: 'val r = with(user) { name.length }', type: 'User.() -> R', ref: 'this', ret: '3', retT: 'Int' },
+              ];
+              let busy = false;
+              const call = h('div', { class: 'kt' });
+              const type = h('span', { class: 'kd-tag' });
+              const inside = h('div', { class: 'kd-slot' });
+              const result = h('div', { class: 'kd-slot' });
+              const rtype = h('span', { class: 'kd-count' });
+              const lam = h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'lambda type'), type, h('span', { class: 'kd-label' }, 'inside the braces'), inside);
+              const res = h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'r holds'), result, rtype);
+              const o = out('');
+              const btns = FNS.map(f => cmd(f.n, () => run(f)));
+              function show(f) {
+                press(btns, btns[FNS.indexOf(f)]);
+                lines(call, [{ src: f.src, cls: 'kd-flash' }]);
+                type.innerHTML = hl(f.type); replay(type, 'pop-soft');
+              }
+              async function run(f) {
+                if (busy) return; busy = true;
+                show(f);
+                lam.classList.add('kd-hit');
+                swap(inside, `${f.ref} = user`);
+                say(o, `${hl(f.n)} <span class="muted">runs the lambda with the object as</span> ${hl(f.ref)}`);
+                await sleep(600); if (!el.isConnected) return;
+                lam.classList.remove('kd-hit'); res.classList.add('kd-hit');
+                swap(result, f.ret); rtype.textContent = `r: ${f.retT}`;
+                say(o, `${hl(f.n)} <span class="muted">returns</span> ${hl(f.ret)} <span class="muted">(${f.ret === 'user' ? 'the object itself, the last expression is ignored' : 'the last expression of the lambda'})</span>`);
+                await sleep(450); res.classList.remove('kd-hit'); busy = false;
+              }
+              show(FNS[0]); swap(inside, 'this = user'); swap(result, 'user'); rtype.textContent = 'r: User';
+              say(o, 'Same body every time: name.length. Pick a scope function.');
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kd-label' }, 'user = User(name = "Ada")'), btns),
+                call,
+                h('div', { class: 'kd-pair' }, lam, res),
+                o);
+            },
+          },
+          {
+            title: 'The innermost receiver wins, and this@label reaches out',
+            body: `<p>Inside nested lambdas, Kotlin looks for a name on the innermost receiver first, then on each outer one. If two builders both have a <code>title</code>, the nearer one shadows the outer one, and nothing warns you which one you got.</p>
+<p>With <code>@DslMarker</code>, an outer receiver of the same DSL is off limits for implicit calls, even when it is the only match. To use it on purpose, name it with a label. <code>this@section</code> means the receiver of the lambda passed to <code>section</code>.</p>`,
+            code: `settings {                        // this@settings: SettingsBuilder
+    title = "Preferences"
+    section("Account") {          // this@section: SectionBuilder
+        title = "Account"
+        toggle {                  // this@toggle: ToggleBuilder
+            label = this@section.title    // explicit: always allowed
+        }
+    }
+}`,
+            visual(el) {
+              const RECV = [
+                { lbl: 'this@toggle', t: 'ToggleBuilder', m: { label: '""', enabled: 'true' } },
+                { lbl: 'this@section', t: 'SectionBuilder', m: { title: '"Account"', 'toggle { }': '' } },
+                { lbl: 'this@settings', t: 'SettingsBuilder', m: { title: '"Preferences"', 'section { }': '' } },
+              ];
+              const CALLS = [
+                { src: 'label = "Sync"', name: 'label', from: 0 },
+                { src: 'label = title', name: 'title', from: 0 },
+                { src: 'label = this@section.title', name: 'title', from: 1, explicit: true },
+                { src: 'label = this@settings.title', name: 'title', from: 2, explicit: true },
+              ];
+              let marker = true, busy = false;
+              const cards = RECV.map(r => {
+                const mem = {};
+                const row = h('div', { class: 'kd-row' }, Object.keys(r.m).map(k => (mem[k] = h('span', { class: 'kd-tag' }, k))));
+                const c = h('div', { class: 'kd-node' }, h('b', { html: hl(`${r.lbl}: ${r.t}`) }), row);
+                c.mem = mem; return c;
+              });
+              const sw = h('input', { type: 'checkbox', id: 'kd-dsl-marker2', checked: true });
+              const o = out('');
+              function clear() {
+                cards.forEach(c => { c.classList.remove('kd-hit', 'kd-dsl-ok', 'kd-bad', 'kd-dim'); Object.values(c.mem).forEach(m => m.classList.remove('kd-dsl-match', 'kd-dsl-miss')); });
+              }
+              sw.addEventListener('change', () => {
+                if (busy) { sw.checked = marker; return; }
+                marker = sw.checked; clear();
+                say(o, marker ? '@DslMarker on: only the innermost receiver is implicit.' : '@DslMarker off: every outer receiver is searched, nearest first.');
+              });
+              async function call(c) {
+                if (busy) return; busy = true;
+                clear();
+                for (let i = c.from; i < cards.length; i++) {
+                  const card = cards[i], hit = card.mem[c.name];
+                  card.classList.add('kd-hit'); replay(card, 'pop-soft');
+                  await sleep(420); if (!el.isConnected) return;
+                  card.classList.remove('kd-hit');
+                  if (!hit) { card.classList.add('kd-dim'); continue; }
+                  const val = RECV[i].m[c.name];
+                  if (i > 0 && !c.explicit && marker) {
+                    card.classList.add('kd-bad'); hit.classList.add('kd-dsl-miss'); replay(card, 'shake');
+                    say(o, `${hl(c.src)} <span class="bad">compile error:</span> '${c.name}' can't be used in this context by implicit receiver. Use the explicit one if necessary.`);
+                  } else {
+                    card.classList.add('kd-dsl-ok'); hit.classList.add('kd-dsl-match'); replay(hit, 'pop');
+                    const shadow = i === 1 && !c.explicit;
+                    say(o, `${hl(c.src)} <span class="good">resolves on ${RECV[i].t}:</span> ${hl(val)}${shadow ? ' <span class="muted">(SettingsBuilder.title is shadowed)</span>' : ''}`);
+                  }
+                  break;
+                }
+                await sleep(300); busy = false;
+              }
+              say(o, 'The code runs inside toggle { }. Assign label and watch where each name resolves.');
+              el.append(
+                h('label', { class: 'switch', for: 'kd-dsl-marker2' }, sw, '@DslMarker on all three builders'),
+                h('div', { class: 'kd-dsl-stack' }, h('span', { class: 'kd-label' }, 'implicit receivers, innermost first'), cards),
+                h('div', { class: 'controls' }, CALLS.map(c => cmd(c.src, () => call(c)))),
+                o);
+            },
+          },
+          {
+            title: 'Words that exist only inside one block',
+            body: `<p>A scope interface can declare extension functions as members. Compose does this with <code>Modifier.weight()</code>. It is declared inside <code>RowScope</code> and <code>ColumnScope</code>, so it only resolves inside the content lambda of a <code>Row</code> or <code>Column</code>. Inside a <code>Box</code> it is an unresolved reference.</p>
+<p>Compose also marks its lazy list scopes with its own DSL marker, <code>@LazyScopeMarker</code>. That is why calling <code>items()</code> from inside one item's content doesn't compile.</p>`,
+            code: `interface RowScope {
+    fun Modifier.weight(weight: Float, fill: Boolean = true): Modifier
+    // ...
+}
+
+Row {
+    Text("Name", Modifier.weight(1f))   // ok: this is RowScope
+}
+Box {
+    Text("Name", Modifier.weight(1f))   // error: unresolved reference 'weight'
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>A receiver is just a first parameter. At runtime <code>StringBuilder.() -> Unit</code> and <code>(StringBuilder) -> Unit</code> are the same type, <code>Function1&lt;StringBuilder, Unit&gt;</code>, and Kotlin lets you assign one to the other. <code>sb.greet()</code> and <code>greet(sb)</code> compile to the same <code>invoke(sb)</code> call.</p>
+<p>The scope functions and <code>buildString</code> are <code>inline</code>, so the lambda body is pasted into the caller and no function object exists. A non-inline builder like <code>settings { }</code> does get a lambda object. Since Kotlin 2.0 the JVM backend creates it with <code>invokedynamic</code> by default. <code>@DslMarker</code> only changes what the compiler accepts. It adds no runtime check.</p>`,
+          code: `val greet: StringBuilder.() -> Unit = { append("Hi") }
+val plain: (StringBuilder) -> Unit = greet   // same type underneath
+
+val sb = StringBuilder()
+sb.greet()     // greet.invoke(sb)
+greet(sb)      // greet.invoke(sb), identical`,
+        },
+        mistakes: [
+          { title: 'Using apply when you need the result', bad: 'val nameLength = user.apply { name.length }\n// nameLength is the User, not an Int', good: 'val nameLength = user.run { name.length }', why: '<code>apply</code> always returns its receiver and drops the last expression. Use <code>run</code> or <code>let</code> when you want what the lambda computes.' },
+          { title: 'Marking only one builder', bad: '@DslMarker annotation class SettingsDsl\n\n@SettingsDsl class SettingsBuilder { /* section() */ }\nclass SectionBuilder { /* toggle() */ }\n// section() still leaks into section blocks', good: '@DslMarker annotation class SettingsDsl\n\n@SettingsDsl class SettingsBuilder { /* section() */ }\n@SettingsDsl class SectionBuilder { /* toggle() */ }', why: 'An outer receiver is blocked only when a nearer receiver carries the same marker. Put it on every builder class, or on an interface they all implement.' },
+          { title: 'A self-assignment hidden by shadowing', bad: 'class Header(var text: String = "")\n\nclass Screen(private val text: String) {\n    fun header() = Header().apply {\n        text = text   // Header.text = Header.text\n    }\n}', good: 'class Screen(private val text: String) {\n    fun header() = Header().apply {\n        text = this@Screen.text\n    }\n}', why: 'Inside <code>apply</code>, the receiver\'s members shadow the outer class. Both sides of <code>text = text</code> mean <code>Header.text</code>. Name the outer one with a label, or rename it.' },
+        ],
         visual(el) {
           const NAMES = ['Account', 'Alerts', 'Storage'];
           const TOGS = ['Sync', 'Backup', 'Sound', 'Vibrate', 'Wi-Fi only', 'Badges'];
@@ -1027,6 +1209,146 @@ val maybe: Cents? = price               // boxed: a long can't be null`,
           { q: 'Why choose a value class over <code>typealias UserId = String</code>?', options: ['A typealias accepts any String, so mixed-up arguments still compile', 'A typealias is slower at runtime', 'A typealias can’t be used as a parameter type'], a: 0, why: 'A typealias is just another name. A value class is a different type for the compiler.' },
           { q: 'Where is a <code>UserId</code> passed as the bare <code>String</code> at runtime?', options: ['As the parameter of <code>fun load(id: UserId)</code>', 'When assigned to <code>val a: Any</code>', 'Inside <code>mutableListOf(id)</code>'], a: 0, why: 'Used as its own type, it is unwrapped. As <code>Any</code> or in a generic, it is boxed.' },
         ],
+        deeper: [
+          {
+            title: 'Name mangling keeps overloads apart',
+            body: `<p>At runtime both <code>UserId</code> and <code>OrderId</code> are a <code>String</code>. So <code>load(id: UserId)</code> and <code>load(id: OrderId)</code> would both become <code>load(String)</code> on the JVM, which is a clash. The compiler avoids it by adding a stable hash to the name of every function that takes a value class: <code>load-&lt;hash&gt;(String)</code>.</p>
+<p>Java can't call a name with a dash in it. To expose such a function to Java, choose its JVM name yourself with <code>@JvmName</code>.</p>`,
+            code: `@JvmInline value class UserId(val raw: String)
+@JvmInline value class OrderId(val raw: String)
+
+fun load(id: UserId) { }       // JVM: load-<hash>(String)
+fun load(id: OrderId) { }      // JVM: load-<hash2>(String)
+
+@JvmName("refundOrder")
+fun refund(id: OrderId) { }    // JVM: refundOrder(String), callable from Java`,
+            visual(el) {
+              let mangle = true, jvmName = false, busy = false;
+              const src = h('div', { class: 'kt' });
+              const jvm = h('div', { class: 'kt' });
+              const o = out('');
+              const swM = h('input', { type: 'checkbox', id: 'kd-vcl-mangle', checked: true });
+              const swJ = h('input', { type: 'checkbox', id: 'kd-vcl-jvmname' });
+              const sigs = () => [
+                mangle ? 'load-<hash>(String)' : 'load(String)',
+                mangle ? 'load-<hash2>(String)' : 'load(String)',
+                jvmName ? 'refundOrder(String)' : (mangle ? 'refund-<hash3>(String)' : 'refund(String)'),
+              ];
+              function paintSrc() {
+                lines(src, [
+                  { src: 'fun load(id: UserId)' },
+                  { src: 'fun load(id: OrderId)' },
+                  ...(jvmName ? [{ src: '@JvmName("refundOrder")', cls: 'kd-new' }] : []),
+                  { src: 'fun refund(id: OrderId)' },
+                ]);
+                lines(jvm, [{ src: '// press Compile', cls: 'kd-off' }]);
+              }
+              async function compile() {
+                if (busy) return; busy = true;
+                paintSrc();
+                const s = sigs(), rows = [];
+                for (let i = 0; i < s.length; i++) {
+                  await sleep(300); if (!el.isConnected) return;
+                  const clash = !mangle && i < 2;
+                  rows.push({ src: `void ${s[i]}`, cls: clash ? 'kd-warn' : 'kd-new', note: clash ? 'same signature' : '', noteCls: 'bad' });
+                  lines(jvm, rows);
+                }
+                if (!mangle) { replay(jvm, 'shake'); say(o, '<span class="bad">Platform declaration clash:</span> The following declarations have the same JVM signature (load(Ljava/lang/String;)V) <span class="muted">(this is what mangling prevents)</span>'); }
+                else say(o, '<span class="good">compiled:</span> each function got its own JVM name, so the two load overloads no longer collide.');
+                busy = false;
+              }
+              async function fromJava() {
+                if (busy) return; busy = true;
+                if (jvmName) say(o, `${hl('RepoKt.refundOrder("o_77");')} <span class="good">ok from Java:</span> @JvmName gave it a legal name. Java passes a plain String.`);
+                else { replay(src, 'shake'); say(o, `${hl('RepoKt.refund("o_77");')} <span class="bad">Java can't see it:</span> the JVM name is ${hl(mangle ? 'refund-<hash3>' : 'refund')}${mangle ? ', and a dash is not legal in a Java identifier' : ''}.`); }
+                await sleep(400); busy = false;
+              }
+              swM.addEventListener('change', () => { if (busy) { swM.checked = mangle; return; } mangle = swM.checked; paintSrc(); say(o, mangle ? 'Mangling on, as the real compiler does.' : '<span class="bad">pretend mode:</span> no hash suffix. Compile and see why it exists.'); });
+              swJ.addEventListener('change', () => { if (busy) { swJ.checked = jvmName; return; } jvmName = swJ.checked; paintSrc(); replay(src, 'pop-soft'); say(o, jvmName ? '@JvmName("refundOrder") added to refund().' : '@JvmName removed.'); });
+              paintSrc();
+              say(o, 'Compile the file and read the JVM signatures.');
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'kd-vcl-mangle' }, swM, 'Mangle names'), h('label', { class: 'switch', for: 'kd-vcl-jvmname' }, swJ, '@JvmName on refund()')),
+                h('div', { class: 'kd-pair' },
+                  h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'Kotlin source'), src),
+                  h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'JVM signatures'), jvm)),
+                h('div', { class: 'controls' }, act('Compile', compile), cmd('RepoKt.refund("o_77")  // from Java', fromJava)),
+                o);
+            },
+          },
+          {
+            title: 'Unsigned types: same bits, different type',
+            body: `<p><code>UByte</code>, <code>UShort</code>, <code>UInt</code> and <code>ULong</code> are value classes in the standard library. A <code>UByte</code> wraps a <code>Byte</code>: the same eight bits in memory, but a different type, so the compiler reads them differently.</p>
+<p>This matters when you parse bytes from Bluetooth or a binary file. <code>Byte</code> is signed, so the bits <code>1111 1111</code> read as -1. Convert with <code>toUByte()</code>, or mask with <code>and 0xFF</code>, to get 255.</p>`,
+            code: `val raw: Byte = packet[0]          // bits 1111 1111
+raw.toInt()                        // -1: Byte is signed
+raw.toUByte().toInt()              // 255: same bits, unsigned type
+raw.toInt() and 0xFF               // 255: the classic mask`,
+            visual(el) {
+              let v = 0xFF;
+              const bits = Array.from({ length: 8 }, (_, i) => {
+                const w = 7 - i;
+                return h('button', { class: 'kd-vcl-bit', type: 'button', 'aria-label': `bit ${w}`, onclick() { v ^= 1 << w; paint(true); } });
+              });
+              const signed = h('span', { class: 'chip' }), unsigned = h('span', { class: 'chip' });
+              const sCard = h('div', { class: 'kd-card' }, h('span', { class: 'kd-tag', html: hl('raw.toInt()') }), signed, h('span', { class: 'kd-label' }, 'as Byte (signed)'));
+              const uCard = h('div', { class: 'kd-card' }, h('span', { class: 'kd-tag', html: hl('raw.toUByte().toInt()') }), unsigned, h('span', { class: 'kd-label' }, 'as UByte'));
+              const hex = h('span', { class: 'kd-count' });
+              const o = out('');
+              function paint(anim) {
+                bits.forEach((b, i) => { const on = (v >> (7 - i)) & 1; b.textContent = String(on); b.setAttribute('aria-pressed', String(!!on)); });
+                const s = v >= 128 ? v - 256 : v;
+                signed.textContent = String(s); unsigned.textContent = String(v);
+                hex.textContent = `0x${v.toString(16).toUpperCase().padStart(2, '0')} · one byte in memory either way`;
+                sCard.classList.toggle('kd-hit', s !== v);
+                if (anim) { replay(signed, 'pop'); replay(unsigned, 'pop'); }
+                say(o, s === v ? `Top bit is 0: both types read ${v}.` : `Top bit is 1: as a signed Byte it means ${s}, as a UByte it means ${v}.`);
+              }
+              const preset = n => cmd(`0x${n.toString(16).toUpperCase().padStart(2, '0')}`, () => { v = n; paint(true); });
+              paint(false);
+              el.append(
+                h('div', { class: 'kd-vcl-bits', role: 'group', 'aria-label': 'Eight bits of one byte, tap to flip' }, bits), hex,
+                h('div', { class: 'controls' }, h('span', { class: 'kd-label' }, 'presets'), preset(0x7F), preset(0x80), preset(0xFF), preset(0x2A)),
+                h('div', { class: 'kd-pair' }, sCard, uCard),
+                o);
+            },
+          },
+          {
+            title: 'Two values in one: packing',
+            body: `<p>A value class holds exactly one property, but that property can carry more than one value. Compose's <code>Offset</code> is a value class over a single <code>Long</code> named <code>packedValue</code>. The x float sits in the top 32 bits and the y float in the bottom 32. Two numbers, no object per offset.</p>
+<p>You can do the same for small pairs that you create in large numbers. Keep the packing private and expose readable properties.</p>`,
+            code: `@JvmInline
+value class GridCell private constructor(private val packed: Long) {
+    constructor(row: Int, col: Int) :
+        this((row.toLong() shl 32) or (col.toLong() and 0xFFFFFFFFL))
+
+    val row: Int get() = (packed shr 32).toInt()
+    val col: Int get() = packed.toInt()
+}
+
+val c = GridCell(row = 3, col = 7)   // one long at runtime
+c.row   // 3
+c.col   // 7`,
+          },
+        ],
+        underHood: {
+          body: `<p>The compiler keeps a real <code>Cents</code> class, but most code never creates one. Construction calls a static <code>constructor-impl</code>, which runs your <code>init</code> checks and returns the bare <code>long</code>. Each member becomes a static function with an <code>-impl</code> suffix that takes that long as its first argument.</p>
+<p>When the value must be an object, as <code>Any</code>, in a generic or as a nullable <code>Long</code>-backed type, the compiler inserts <code>box-impl</code>, and <code>unbox-impl</code> on the way back.</p>`,
+          code: `// Kotlin
+val p = Cents(1999)
+p.format()
+val a: Any = p
+
+// JVM, simplified
+long p = Cents.constructor-impl(1999L);   // runs init, returns 1999L
+Cents.format-impl(p);                     // static, takes the long
+Object a = Cents.box-impl(p);             // a real Cents object`,
+        },
+        mistakes: [
+          { title: 'Unwrapping at the first chance', bad: 'fun charge(userId: String, cents: Long) { /* ... */ }\n\ncharge(user.id.raw, price.value)', good: 'fun charge(userId: UserId, amount: Cents) { /* ... */ }\n\ncharge(user.id, price)', why: 'Once <code>.raw</code> travels through your code, the mix-up the value class prevented is possible again. Unwrap only at the edges: the database, the network, Java callers.' },
+          { title: 'A public constructor next to a validating factory', bad: '@JvmInline value class Email(val address: String) {\n    companion object {\n        fun parse(s: String): Email? =\n            if ("@" in s) Email(s) else null\n    }\n}\nval e = Email("not an email")   // skips parse()', good: '@JvmInline value class Email private constructor(val address: String) {\n    companion object {\n        fun parse(s: String): Email? =\n            if ("@" in s) Email(s) else null\n    }\n}', why: 'The type only means "valid" if every way in checks. Make the constructor private, or put the check in <code>init</code>.' },
+          { title: 'Expecting no objects in a big collection', bad: 'val prices: List<Cents> =\n    List(100_000) { Cents(it.toLong()) }\n// 100,000 boxed Cents objects', good: 'val prices = LongArray(100_000) { it.toLong() }\n// one array, no object per item\nfun priceAt(i: Int) = Cents(prices[i])', why: 'Generics always box. For large numeric data, store a primitive array and wrap single values at the API boundary.' },
+        ],
         visual(el) {
           let kind = 'alias';
           const decl = h('div', { class: 'kt' });
@@ -1108,6 +1430,215 @@ val powers = generateSequence(1) { it * 2 }.take(5).toList()  // [1, 2, 4, 8, 16
           { q: '<code>listOf(1, 2, 3).asSequence().map { println(it); it }</code> with no terminal operation. What prints?', options: ['Nothing', '1 2 3', 'It fails to compile'], a: 0, why: 'Intermediate sequence steps are lazy. Nothing runs until something like <code>toList()</code> pulls.' },
           { q: 'For a lazy <code>map { }.filter { }</code>, in what order do the lambdas run for the first two elements?', options: ['map(1), filter(1), map(2), filter(2)', 'map(1), map(2), filter(1), filter(2)', 'filter(1), filter(2), map(1), map(2)'], a: 0, why: 'Each element goes through the whole chain before the next one starts.' },
           { q: 'When is a plain List usually the better choice?', options: ['Two steps over a small list', 'Stopping at the first match among a million items', 'An infinite stream'], a: 0, why: 'For small eager work, the per-element overhead of a sequence costs more than the lists it saves.' },
+        ],
+        deeper: [
+          {
+            title: 'sorted() has to see everything first',
+            body: `<p>Most sequence steps take one element and pass it on. A few are stateful. <code>sorted()</code> can't hand out its first element until it has seen the last one. So it pulls the whole upstream into a list, sorts it, and only then continues lazily.</p>
+<p>That cancels the early stop for every step above it, and on an infinite sequence it never finishes. <code>distinct()</code> is stateful too, but milder: it remembers what it has seen and still passes each new item on at once.</p>`,
+            code: `val lowest2 = scores.asSequence()
+    .map { it * 3 }
+    .sorted()       // pulls every element before emitting one
+    .take(2)
+    .toList()`,
+            visual(el) {
+              const SRC = [5, 2, 8, 1, 9, 3];
+              let sorted = true, busy = false, n = 0;
+              const chain = h('div', { class: 'kt' });
+              const st = name => { const well = h('div', { class: 'kd-sqn-well' }); const box = h('div', { class: 'kd-sqn-st' }, h('span', { class: 'kd-label' }, name), well); box.well = well; return box; };
+              const S = { src: st('source'), map: st('map { it * 3 }'), sort: st('sorted()'), take: st('take(2)') };
+              const calls = h('span', { class: 'kd-stat' });
+              const sw = h('input', { type: 'checkbox', id: 'kd-sqn-sorted', checked: true });
+              const o = out('');
+              const chip = (v, cls = '') => h('span', { class: `kd-sqn-chip ${cls}` }, String(v));
+              function paint() {
+                lines(chain, [{ src: 'scores.asSequence()' }, { src: '    .map { it * 3 }' }, ...(sorted ? [{ src: '    .sorted()', cls: 'kd-new' }] : []), { src: '    .take(2)' }, { src: '    .toList()' }]);
+                S.sort.classList.toggle('kd-sqn-off', !sorted);
+                Object.values(S).forEach(s => s.well.replaceChildren());
+                S.src.well.append(...SRC.map(v => chip(v)));
+                n = 0; calls.textContent = 'map calls: 0';
+              }
+              sw.addEventListener('change', () => { if (busy) { sw.checked = sorted; return; } sorted = sw.checked; paint(); say(o, sorted ? 'sorted() is back in the chain. Run it.' : 'No sorted(): take(2) can stop the chain early.'); });
+              async function run() {
+                if (busy) return; busy = true; paint();
+                const buf = [], res = [];
+                for (let i = 0; i < SRC.length; i++) {
+                  if (!sorted && res.length === 2) break;
+                  S.src.well.children[i].classList.add('kd-sqn-gone');
+                  S.map.well.replaceChildren(chip(SRC[i] * 3, 'drop-in'));
+                  n++; calls.textContent = `map calls: ${n}`; replay(calls, 'pop-soft');
+                  await sleep(380); if (!el.isConnected) return;
+                  S.map.well.replaceChildren();
+                  const v = SRC[i] * 3;
+                  if (sorted) { buf.push(v); S.sort.well.append(chip(v, 'drop-in')); }
+                  else { res.push(v); S.take.well.append(chip(v, 'kd-sqn-keep drop-in')); }
+                  await sleep(160); if (!el.isConnected) return;
+                }
+                if (sorted) {
+                  say(o, 'sorted() now holds every element. It sorts, then starts emitting.');
+                  await sleep(500); if (!el.isConnected) return;
+                  buf.sort((a, b) => a - b);
+                  S.sort.well.replaceChildren(...buf.map(v => chip(v, 'pop')));
+                  await sleep(550); if (!el.isConnected) return;
+                  for (let k = 0; k < 2; k++) {
+                    S.sort.well.firstElementChild.remove(); res.push(buf[k]);
+                    S.take.well.append(chip(buf[k], 'kd-sqn-keep drop-in'));
+                    await sleep(350); if (!el.isConnected) return;
+                  }
+                }
+                say(o, `<span class="good">result:</span> ${hl(`[${res.join(', ')}]`)} <span class="muted">${sorted ? `map ran ${n} times: sorted() needed them all` : `map ran only ${n} times, in source order`}</span>`);
+                busy = false;
+              }
+              paint();
+              say(o, 'Run the chain and count the map calls.');
+              el.append(
+                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'kd-sqn-sorted' }, sw, '.sorted() in the chain'), h('button', { class: 'btn primary small', onclick: run }, 'Run')),
+                chain,
+                h('div', { class: 'kd-sqn-belt' }, S.src, S.map, S.sort, S.take),
+                h('div', { class: 'kd-stats' }, calls),
+                o);
+            },
+          },
+          {
+            title: 'A sequence is a recipe, not a result',
+            body: `<p>A sequence stores no values. Every terminal operation runs the whole chain again from the source. Call <code>count()</code> and then <code>toList()</code>, and every <code>map</code> lambda runs twice.</p>
+<p>If you need the values more than once, collect them once with <code>toList()</code> and reuse the list. Some sequences can't even run twice. One made with <code>iterator.asSequence()</code> throws <code>IllegalStateException</code> with "This sequence can be consumed only once." on the second pass.</p>`,
+            code: `val parsed = lines.asSequence().map { parse(it) }   // a recipe
+
+parsed.count()     // parses every line
+parsed.first()     // parses again, from the start
+parsed.toList()    // and again
+
+val rows = parsed.toList()   // parse once, reuse rows`,
+            visual(el) {
+              const N = 5;
+              let total = 0, cached = false, filled = false, busy = false;
+              const cells = Array.from({ length: N }, (_, i) => h('span', { class: 'kd-cell kd-sqn-cell' }, `line ${i + 1}`));
+              const counter = h('span', { class: 'kd-stat' });
+              const rowsCard = h('div', { class: 'kd-node kd-dim' }, h('b', { html: hl('val rows: List<Row>') }), h('span', { class: 'kd-empty' }, 'not collected yet'));
+              const sw = h('input', { type: 'checkbox', id: 'kd-sqn-cache' });
+              const o = out('');
+              const paintCount = () => { counter.textContent = `parse calls so far: ${total}`; replay(counter, 'pop-soft'); };
+              async function parse(k) {
+                cells.forEach(c => c.className = 'kd-cell kd-sqn-cell');
+                for (let i = 0; i < k; i++) {
+                  cells[i].classList.add('kd-hot'); total++; paintCount();
+                  await sleep(200); if (!el.isConnected) return false;
+                  cells[i].classList.replace('kd-hot', 'kd-keep');
+                }
+                return true;
+              }
+              const RES = { count: '5', first: 'Row(1)', toList: '[Row(1), ..., Row(5)]' };
+              async function term(kind) {
+                if (busy) return; busy = true;
+                const before = total;
+                if (cached) {
+                  if (!filled) {
+                    say(o, `${hl('val rows = parsed.toList()')} <span class="muted">runs the recipe once...</span>`);
+                    if (!await parse(N)) return;
+                    filled = true; rowsCard.classList.remove('kd-dim');
+                    rowsCard.lastElementChild.replaceWith(h('span', { class: 'kd-sqn-chip kd-sqn-keep drop-in' }, '5 rows in memory'));
+                  } else { cells.forEach(c => c.className = 'kd-cell kd-sqn-cell kd-idle'); replay(rowsCard, 'pop'); }
+                  say(o, `${hl(`rows.${kind}()`)} = ${hl(RES[kind])} <span class="good">${total - before} new parse calls</span>${total === before ? ' <span class="muted">(reads the stored list)</span>' : ''}`);
+                } else {
+                  if (!await parse(kind === 'first' ? 1 : N)) return;
+                  say(o, `${hl(`parsed.${kind}()`)} = ${hl(RES[kind])} <span class="${total - before > 1 ? 'bad' : 'muted'}">${total - before} new parse call${total - before === 1 ? '' : 's'}</span>`);
+                }
+                busy = false;
+              }
+              sw.addEventListener('change', () => {
+                if (busy) { sw.checked = cached; return; }
+                cached = sw.checked; filled = false; total = 0; paintCount();
+                rowsCard.className = 'kd-node kd-dim'; rowsCard.lastElementChild.replaceWith(h('span', { class: 'kd-empty' }, 'not collected yet'));
+                cells.forEach(c => c.className = 'kd-cell kd-sqn-cell');
+                say(o, cached ? 'Callers now use rows, a list collected once.' : 'Callers use the sequence directly again.');
+              });
+              paintCount();
+              say(o, 'Call a few terminal operations and watch the parse counter.');
+              el.append(
+                h('div', { class: 'kd-row' }, cells), counter,
+                h('div', { class: 'controls' }, cmd('count()', () => term('count')), cmd('first()', () => term('first')), cmd('toList()', () => term('toList'))),
+                h('label', { class: 'switch', for: 'kd-sqn-cache' }, sw, 'Collect once: val rows = parsed.toList()'), rowsCard,
+                o);
+            },
+          },
+          {
+            title: 'sequence { }: a generator that pauses at yield',
+            body: `<p><code>sequence { }</code> lets you write the producer as ordinary code. Each <code>yield(x)</code> hands one value to the consumer and pauses the block right there. The next pull resumes it on the following line.</p>
+<p>Pulls are driven by the iterator. <code>hasNext()</code> runs the block up to the next <code>yield</code> and keeps that value ready. <code>next()</code> returns it. Once the block ends, <code>hasNext()</code> is false and <code>next()</code> throws <code>NoSuchElementException</code>.</p>`,
+            code: `val ids = sequence {
+    println("start")
+    yield(1)
+    println("after 1")
+    yield(2)
+    yieldAll(listOf(3, 4))
+}
+val it = ids.iterator()
+it.next()   // prints "start", returns 1
+it.next()   // prints "after 1", returns 2`,
+            visual(el) {
+              const SRC = ['val ids = sequence {', '    println("start")', '    yield(1)', '    println("after 1")', '    yield(2)', '    yieldAll(listOf(3, 4))', '}'];
+              const EV = [{ line: 1, print: 'start' }, { line: 2, y: 1 }, { line: 3, print: 'after 1' }, { line: 4, y: 2 }, { line: 5, y: 3 }, { line: 5, y: 4 }, { line: 6, end: true }];
+              let pos, ready, paused, busy = false;
+              const code = h('div', { class: 'kt' });
+              const log = h('div', { class: 'kd-log' });
+              const o = out('');
+              function paint(run) {
+                lines(code, SRC.map((s, i) => ({ src: s, cls: i === run ? 'kd-sqn-run' : (i === paused ? 'kd-new' : ''), note: i === paused && run == null ? (paused === 0 ? 'not started' : paused === 6 ? 'finished' : 'paused here') : '' })));
+              }
+              function reset() { pos = 0; ready = null; paused = 0; log.replaceChildren(h('span', { class: 'kd-empty' }, 'console is empty')); paint(); }
+              const print = t => { if (log.querySelector('.kd-empty')) log.replaceChildren(); log.append(h('div', { class: 'kd-log-line drop-in' }, t)); };
+              async function advance() {
+                while (pos < EV.length) {
+                  const e = EV[pos++];
+                  paint(e.line);
+                  await sleep(380); if (!el.isConnected) return undefined;
+                  if (e.print) print(e.print);
+                  if (e.y != null) { paused = e.line; paint(); return e.y; }
+                  if (e.end) { paused = 6; paint(); return null; }
+                }
+                return null;
+              }
+              async function hasNext() {
+                if (busy) return; busy = true;
+                if (ready == null) {
+                  const v = await advance(); if (v === undefined) return;
+                  ready = v;
+                }
+                say(o, ready != null ? `${hl('it.hasNext()')} = ${hl('true')} <span class="muted">value ${ready} is computed and waiting</span>` : `${hl('it.hasNext()')} = ${hl('false')} <span class="muted">the block has finished</span>`);
+                busy = false;
+              }
+              async function next() {
+                if (busy) return; busy = true;
+                let v = ready, ran = false;
+                if (v == null) { v = await advance(); ran = true; if (v === undefined) return; }
+                ready = null;
+                if (v == null) { replay(code, 'shake'); say(o, `${hl('it.next()')} <span class="bad">NoSuchElementException</span> <span class="muted">nothing left to yield</span>`); }
+                else say(o, `${hl('it.next()')} = ${hl(String(v))} <span class="muted">${ran ? 'ran the block up to the next yield' : 'returned the value hasNext() already computed'}</span>`);
+                busy = false;
+              }
+              reset();
+              say(o, 'Nothing has run yet. Building the sequence executes no line of the block.');
+              el.append(
+                h('div', { class: 'kd-pair' }, code, h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'console'), log)),
+                h('div', { class: 'controls' }, cmd('it.hasNext()', hasNext), cmd('it.next()', next), act('Restart', () => { if (!busy) { reset(); say(o, 'New iterator. The block starts from the top on the first pull.'); } })),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `<p>Each intermediate step wraps the previous sequence in a small object. <code>map</code> returns a <code>TransformingSequence</code> and <code>filter</code> a <code>FilteringSequence</code>. Nothing runs yet. The terminal operation asks the outermost one for an iterator, and each <code>next()</code> pulls one element up through the chain of iterators below it.</p>
+<p>That is also where the per-element overhead comes from. <code>Iterable.map</code> is <code>inline</code>, so the list version has no lambda objects. <code>Sequence.map</code> is not inline, so each step keeps its lambda as an object and every element passes through a few interface calls. <code>sequence { }</code> compiles to a coroutine state machine. Its scope, <code>SequenceScope</code>, is marked <code>@RestrictsSuspension</code>, which is why only <code>yield</code> and <code>yieldAll</code> may suspend inside it.</p>`,
+          code: `// What the chain builds, simplified
+names.asSequence()              // a Sequence over the list's iterator
+    .map { it.uppercase() }     // TransformingSequence(source, transformer)
+    .filter { it.length > 4 }   // FilteringSequence(source, predicate)
+    .first()                    // iterator().next() pulls through both`,
+        },
+        mistakes: [
+          { title: 'Letting a sequence escape useLines', bad: 'fun errors(file: File): Sequence<String> =\n    file.useLines { lines ->\n        lines.filter { "ERROR" in it }\n    }\n\nerrors(log).first()   // the reader is already closed', good: 'fun errors(file: File): List<String> =\n    file.useLines { lines ->\n        lines.filter { "ERROR" in it }.toList()\n    }', why: '<code>useLines</code> closes the file when its lambda returns. The lazy sequence escapes before anything was read, so the first pull hits a closed reader. Finish the work inside the block.' },
+          { title: 'Indexing into a sequence in a loop', bad: 'val rows = lines.asSequence().map(::parse)\nfor (i in 0 until rows.count()) {\n    show(rows.elementAt(i))\n}', good: 'val rows = lines.asSequence().map(::parse)\nfor (row in rows) {\n    show(row)\n}', why: '<code>count()</code> runs the whole chain, and every <code>elementAt(i)</code> walks it again from the start. That is quadratic work. Iterate once.' },
+          { title: 'Suspending inside sequence { }', bad: 'val pages = sequence {\n    var page = 1\n    while (true) yield(api.load(page++))   // suspend fun\n}', good: 'val pages = flow {\n    var page = 1\n    while (true) emit(api.load(page++))\n}', why: 'A <code>sequence { }</code> block may only suspend in its own <code>yield</code> calls, so calling a suspend function there doesn\'t compile. A producer that waits belongs in a <code>Flow</code>.' },
         ],
         visual(el) {
           const SRC = [1, 2, 3, 4, 5, 6];
@@ -1489,6 +2020,176 @@ for ((key, value) in mapOf("a" to 1)) println("$key=$value")`,
           { q: 'What does <code>a[i] = v</code> compile to?', options: ['<code>a.set(i, v)</code>', '<code>a.get(i).assign(v)</code>', '<code>a.put(i, v)</code>'], a: 0, why: 'Indexed assignment maps to the <code>set</code> operator with the index first.' },
           { q: '<code>data class User(val name: String, val age: Int)</code>. After <code>val (age, name) = User("Ada", 36)</code>, what is <code>age</code>?', options: ['<code>"Ada"</code>', '<code>36</code>', 'It doesn’t compile'], a: 0, why: 'Destructuring is by position. The first name gets <code>component1()</code>, which is <code>name</code>.' },
           { q: 'Which functions can be marked <code>infix</code>?', options: ['Member or extension functions with exactly one parameter', 'Any top-level function', 'Only operator functions'], a: 0, why: 'An infix call has exactly two sides: the receiver and the single argument.' },
+        ],
+        deeper: [
+          {
+            title: '+= on a val, a var, or both',
+            body: `<p><code>a += b</code> has two possible meanings. If <code>a</code> has a <code>plusAssign</code> operator, the object changes in place. Otherwise, if <code>a</code> is a <code>var</code>, Kotlin writes <code>a = a + b</code>: <code>plus</code> builds a new object and the variable now points at it.</p>
+<p>The difference shows when something else still holds the old object. A <code>var</code> holding a <code>MutableList</code> has both options, so <code>+=</code> doesn't compile at all. Pick one: a <code>val</code> with a mutable list, or a <code>var</code> with a read-only one.</p>`,
+            code: `val a = mutableListOf(1, 2)
+a += 3          // a.plusAssign(3): same list, now [1, 2, 3]
+
+var b = listOf(1, 2)
+b += 3          // b = b + 3: a new list, the old one unchanged
+
+var c = mutableListOf(1, 2)
+c += 3          // compile error: plus and plusAssign both match`,
+            visual(el) {
+              const KINDS = [
+                { src: 'val x = mutableListOf(1, 2)', mode: 'mutate', t: 'MutableList' },
+                { src: 'var x = listOf(1, 2)', mode: 'replace', t: 'List' },
+                { src: 'var x = mutableListOf(1, 2)', mode: 'ambiguous', t: 'MutableList' },
+              ];
+              let kind = KINDS[0], objs, xRef, nextN, busy = false;
+              const decl = h('div', { class: 'kt' });
+              const heap = h('div', { class: 'kd-heap', 'aria-label': 'Objects on the heap' });
+              const xTag = h('span', { class: 'kd-tag' }), oldTag = h('span', { class: 'kd-tag' });
+              const o = out('');
+              const plusBtn = cmd('x += 3', plus);
+              const kBtns = KINDS.map(k => cmd(k.src, () => { if (busy) return; kind = k; reset(); say(o, k.mode === 'ambiguous' ? 'A var holding a MutableList. Try +=.' : `x and old point at the same ${k.t}. Now try +=.`); }));
+              function paint(freshObj, freshItem) {
+                heap.replaceChildren(...objs.map(ob => h('div', { class: 'kd-node' + (ob.id === xRef ? ' kd-hit' : '') + (ob === freshObj ? ' drop-in' : '') },
+                  h('b', {}, `#${ob.id} ${kind.t}`),
+                  h('div', { class: 'kd-row' }, ob.items.map((v, i) => h('span', { class: 'kd-opr-item' + (ob === freshItem && i === ob.items.length - 1 ? ' drop-in' : '') }, String(v)))))));
+                xTag.innerHTML = hl(`x → #${xRef}`); oldTag.innerHTML = hl('old → #1');
+                plusBtn.innerHTML = hl(`x += ${nextN}`);
+              }
+              function reset() {
+                press(kBtns, kBtns[KINDS.indexOf(kind)]);
+                lines(decl, [{ src: kind.src }, { src: 'val old = x' }]);
+                objs = [{ id: 1, items: [1, 2] }]; xRef = 1; nextN = 3; paint();
+              }
+              async function plus() {
+                if (busy) return; busy = true;
+                if (nextN > 6) { reset(); say(o, 'Started over.'); busy = false; return; }
+                const n = nextN;
+                if (kind.mode === 'ambiguous') {
+                  replay(decl, 'shake');
+                  say(o, `${hl(`x += ${n}`)} <span class="bad">compile error: assignment operators ambiguity</span> <span class="muted">x = x.plus(${n}) and x.plusAssign(${n}) both fit</span>`);
+                } else if (kind.mode === 'mutate') {
+                  const ob = objs.find(b => b.id === xRef); ob.items.push(n); nextN++; paint(null, ob);
+                  replay(oldTag, 'pop');
+                  say(o, `${hl(`x += ${n}`)} <span class="muted">→</span> ${hl(`x.plusAssign(${n})`)} <span class="good">#1 changed in place.</span> old sees ${hl(`[${ob.items.join(', ')}]`)} too.`);
+                } else {
+                  const cur = objs.find(b => b.id === xRef);
+                  const ob = { id: objs.length + 1, items: [...cur.items, n] };
+                  objs.push(ob); xRef = ob.id; nextN++; paint(ob);
+                  replay(xTag, 'pop');
+                  say(o, `${hl(`x += ${n}`)} <span class="muted">→</span> ${hl(`x = x + ${n}`)} <span class="good">new list #${ob.id}.</span> old still points at #1 ${hl('[1, 2]')}.`);
+                }
+                await sleep(400); busy = false;
+              }
+              reset();
+              say(o, 'Pick a declaration, then press += a few times.');
+              el.append(
+                h('div', { class: 'controls' }, kBtns), decl,
+                h('div', { class: 'kd-pair' },
+                  h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'variables'), xTag, oldTag),
+                  h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'heap'), heap)),
+                h('div', { class: 'controls' }, plusBtn),
+                o);
+            },
+          },
+          {
+            title: 'compareTo powers <, >, sorting and ranges',
+            body: `<p>Implement <code>Comparable</code> and one function, <code>compareTo</code>, gives your type every comparison operator. <code>a &lt; b</code> compiles to <code>a.compareTo(b) &lt; 0</code>. The same function drives <code>sorted()</code>, <code>maxOf</code> and ranges like <code>min..max</code>.</p>
+<p>Version strings are the classic trap. Strings compare character by character, so <code>"1.10.0" &lt; "1.9.0"</code> is true. A force-update check built on that tells users on the newest version to update.</p>`,
+            code: `data class Version(val major: Int, val minor: Int, val patch: Int) : Comparable<Version> {
+    override fun compareTo(other: Version) =
+        compareValuesBy(this, other, Version::major, Version::minor, Version::patch)
+}
+
+val current = Version(1, 10, 0)
+val minimum = Version(1, 9, 0)
+current >= minimum                      // true: current.compareTo(minimum) >= 0
+current in minimum..Version(2, 0, 0)    // true: rangeTo works on any Comparable`,
+            visual(el) {
+              const VERS = ['1.10.0', '1.2.0', '2.0.0', '1.9.3', '1.2.10'];
+              const num = s => s.split('.').map(Number);
+              const cmpV = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+              const cmpS = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+              let typed = false, busy = false;
+              const wrap = h('div', { class: 'kd-opr-vers' });
+              const chips = VERS.map(v => h('span', { class: 'kd-sqn-chip' }, v));
+              const banner = h('div', { class: 'kd-opr-banner' });
+              const o = out('');
+              const modes = [act('String', () => setMode(false)), act('Version : Comparable', () => setMode(true))];
+              function setMode(t) {
+                if (busy) return; typed = t; press(modes, modes[t ? 1 : 0]);
+                chips.forEach(c => { c.classList.remove('kd-sqn-keep'); c.textContent = t ? `Version(${c.dataset.v.split('.').join(', ')})` : `"${c.dataset.v}"`; });
+                banner.className = 'kd-opr-banner'; banner.textContent = 'minimum supported: 1.9.0, installed: 1.10.0';
+                say(o, t ? 'Compared field by field as numbers.' : 'Compared as text, one character at a time.');
+              }
+              function reorder(order) {
+                const first = new Map(order.map(e => [e, e.getBoundingClientRect()]));
+                wrap.append(...order);
+                order.forEach(e => { const a = first.get(e), b = e.getBoundingClientRect(); e.style.transition = 'none'; e.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px)`; });
+                void wrap.offsetWidth;
+                order.forEach(e => { e.style.transition = 'transform 0.55s cubic-bezier(0.3, 1.2, 0.5, 1)'; e.style.transform = ''; });
+              }
+              async function sort() {
+                if (busy) return; busy = true;
+                const order = [...chips].sort((a, b) => (typed ? cmpV : cmpS)(a.dataset.v, b.dataset.v));
+                reorder(order);
+                const wrong = !typed;
+                say(o, `${hl('versions.sorted()')} <span class="muted">→</span> ${order.map(c => c.dataset.v).join(' < ')}${wrong ? ' <span class="bad">1.10.0 sorts before 1.2.0</span>' : ' <span class="good">numeric order</span>'}`);
+                await sleep(650); busy = false;
+              }
+              async function check() {
+                if (busy) return; busy = true;
+                const ok = typed ? cmpV('1.10.0', '1.9.0') >= 0 : cmpS('1.10.0', '1.9.0') >= 0;
+                banner.className = `kd-opr-banner ${ok ? 'kd-opr-ok' : 'kd-opr-bad'}`;
+                banner.textContent = ok ? 'Up to date' : 'Update required. Please install the latest version.';
+                replay(banner, ok ? 'pop' : 'shake');
+                say(o, typed
+                  ? `${hl('current >= minimum')} <span class="muted">→ compareTo compares 10 with 9 →</span> ${hl('true')}`
+                  : `${hl('"1.10.0" >= "1.9.0"')} <span class="muted">→ the third character: '1' < '9' →</span> ${hl('false')} <span class="bad">blocks the newest version</span>`);
+                await sleep(500); busy = false;
+              }
+              chips.forEach((c, i) => { c.dataset.v = VERS[i]; });
+              wrap.append(...chips);
+              setMode(false);
+              el.append(
+                h('div', { class: 'controls' }, h('span', { class: 'kd-label' }, 'compare as'), modes),
+                wrap,
+                h('div', { class: 'controls' }, cmd('versions.sorted()', sort), cmd('current >= minimum', check)),
+                banner, o);
+            },
+          },
+          {
+            title: 'invoke: objects you call like functions',
+            body: `<p><code>operator fun invoke</code> makes an instance callable with parentheses. Android code uses it for use cases: a class with one job, injected like any other dependency and called like a function.</p>
+<p>Keep it for classes that really do one thing. If a class has two entry points, <code>invoke</code> hides which one you are calling.</p>`,
+            code: `class GetUnreadCount @Inject constructor(private val repo: InboxRepository) {
+    operator fun invoke(): Flow<Int> =
+        repo.messages().map { list -> list.count { !it.read } }
+}
+
+@HiltViewModel
+class InboxViewModel @Inject constructor(getUnreadCount: GetUnreadCount) : ViewModel() {
+    val unread: StateFlow<Int> = getUnreadCount()      // getUnreadCount.invoke()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+}`,
+          },
+        ],
+        underHood: {
+          body: `<p>An operator call is an ordinary method call. <code>a + b</code> on your <code>Vec</code> compiles to <code>a.plus(b)</code>, and <code>val (x, y) = v</code> to <code>v.component1()</code> and <code>v.component2()</code>. There is no extra dispatch layer.</p>
+<p>For built-in number types the compiler goes further. <code>Int + Int</code> becomes a single JVM add instruction, not a call. In <code>for ((k, v) in map)</code>, <code>component1()</code> and <code>component2()</code> on <code>Map.Entry</code> are inline extensions from the standard library, so they compile straight to <code>getKey()</code> and <code>getValue()</code>.</p>`,
+          code: `// Kotlin
+val c = a + b
+val (x, y) = c
+val n = 2 + 3 * k
+
+// JVM, simplified
+Vec c = a.plus(b);
+int x = c.component1();
+int y = c.component2();
+int n = 2 + 3 * k;     // imul, iadd: no method calls`,
+        },
+        mistakes: [
+          { title: 'A plus that changes the left side', bad: 'class Basket(val items: MutableList<Item>) {\n    operator fun plus(item: Item): Basket {\n        items += item      // mutates this basket\n        return this\n    }\n}\nval full = empty + apple   // empty changed too', good: 'data class Basket(val items: List<Item>) {\n    operator fun plus(item: Item) = Basket(items + item)\n}', why: 'Readers expect <code>a + b</code> to leave <code>a</code> alone, as it does for numbers. Return a new object from <code>plus</code>. In-place change is what <code>plusAssign</code> is for.' },
+          { title: 'compareTo that disagrees with equals', bad: 'data class Version(val major: Int, val minor: Int) : Comparable<Version> {\n    override fun compareTo(other: Version) =\n        major.compareTo(other.major)\n}\nsortedSetOf(Version(1, 2), Version(1, 9)).size   // 1', good: 'override fun compareTo(other: Version) =\n    compareValuesBy(this, other, Version::major, Version::minor)', why: 'Sorted collections like <code>TreeSet</code> treat <code>compareTo == 0</code> as "the same element". Comparing only part of the state silently drops items that <code>equals</code> says are different.' },
+          { title: 'A Pair where names would help', bad: 'fun bounds(): Pair<Int, Int> = 0 to 100\n\nval (max, min) = bounds()   // swapped, still compiles', good: 'data class Bounds(val min: Int, val max: Int)\nfun bounds() = Bounds(min = 0, max = 100)\n\nval b = bounds()\nb.max', why: 'Destructuring goes by position, and a <code>Pair</code> carries no names at all. A small data class lets the reader see which value is which.' },
         ],
         visual(el) {
           const A = [2, 1], B = [1, 2];

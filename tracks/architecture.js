@@ -195,6 +195,42 @@
 }
 /* depth steps */
 .arc-flow > .arc-table { flex: 1 1 210px; }
+
+/* depth pass 2 (arc-d2-) */
+.arc-d2-src { flex: 1 1 170px; min-width: 0; display: grid; }
+.arc-d2-src > * { grid-area: 1 / 1; }
+.arc-node.arc-d2-off { opacity: 0.35; }
+.obj.arc-d2-badcard { border-color: var(--err); }
+.bar.arc-d2-bar { transition-property: width; transition-timing-function: linear; }
+.arc-d2-frames { display: flex; gap: 2px; min-width: 0; }
+.arc-d2-frame { flex: 1 1 0; min-width: 0; height: 22px; border-radius: 3px; background: var(--sunk); transition: background 0.15s; }
+.arc-d2-drawn { background: var(--ok); }
+.arc-d2-work { background: var(--warm); }
+.arc-d2-drop { background: var(--warm); outline: 2px solid var(--err); outline-offset: -2px; }
+.legend i.arc-d2-key { display: inline-block; height: 12px; }
+.arc-d2-strip { display: flex; height: 28px; border-radius: 8px; overflow: hidden; background: var(--sunk); min-width: 0; }
+.arc-d2-seg { min-width: 0; display: grid; place-items: center; font: 600 0.68rem var(--mono); white-space: nowrap; overflow: hidden; color: var(--ink); }
+.legend i.arc-d2-seg { display: inline-block; height: 12px; }
+.arc-d2-old { background: var(--sunk); color: var(--muted); }
+.arc-d2-spin { background: var(--warm-soft); color: var(--warm); }
+.arc-d2-flash { background: var(--err-soft); color: var(--err); outline: 2px solid var(--err); outline-offset: -2px; }
+.arc-d2-content { background: var(--accent-soft); }
+.phone .arc-d2-sec { width: 100%; display: grid; gap: 4px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); font-size: 0.74rem; min-width: 0; }
+.phone .arc-d2-sec > b { font: 700 0.72rem var(--mono); color: var(--muted); }
+.phone .arc-d2-sec.bad { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+.phone .arc-d2-sec .arc-mini span { font-size: 0.72rem; padding: 3px 6px; }
+.spinner.arc-d2-spin-s { width: 18px; height: 18px; border-width: 3px; }
+.arc-screen.arc-d2-hot { border-color: var(--warm); background: var(--warm-soft); color: var(--warm); }
+.arc-d2-center { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-width: 0; }
+.arc-d2-rings { display: grid; gap: 8px; min-width: 0; }
+.arc-d2-edges { display: grid; gap: 6px; min-width: 0; }
+.arc-d2-edge { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font: 600 0.78rem var(--mono); min-width: 0; }
+.arc-d2-edge > span { min-width: 0; overflow-wrap: anywhere; }
+.arc-d2-edge .arc-d2-verb { color: var(--muted); font-weight: 500; }
+.arc-d2-edge.hot { border-color: var(--warm); background: var(--warm-soft); }
+.arc-d2-edge.hot .arc-tag { background: var(--warm); color: var(--accent-ink); }
+.arc-d2-screen { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
+.arc-d2-msg { font-weight: 700; color: var(--ink); }
 `;
 
   Lab.addTrack({
@@ -256,6 +292,135 @@ class NewsRepository @Inject constructor(
           { q: 'Which dependency is allowed?', options: ['<code>NewsViewModel</code> uses <code>NewsRepository</code>', '<code>NewsRepository</code> uses <code>NewsViewModel</code>', 'Both, as long as it compiles'], a: 0, why: 'Dependencies point from the UI layer down to the data layer. A repository that knows a ViewModel can’t be reused or tested on its own.' },
           { q: 'Does every app need a domain layer?', options: ['Yes, every ViewModel must call a use case', 'No, add it when logic is shared or a ViewModel gets too big'], a: 1, why: 'Google marks the domain layer optional. A ViewModel may call a repository directly.' },
           { q: 'A button is tapped. Who should start the network call?', options: ['The Composable, with <code>api.getLatest()</code>', 'The ViewModel, through a use case or repository'], a: 1, why: 'The UI reports the tap. The ViewModel asks the layer below and turns the result into UiState.' },
+        ],
+        deeper: [
+          {
+            title: 'Swap a data source and the screen never knows',
+            body: `
+<p>The repository is the seam. It depends on an interface for each data source, and something outside it, usually Hilt, decides which class fills that interface. A unit test passes a fake that returns a fixed list. A Compose preview passes sample data. The app passes the Retrofit one.</p>
+<p>None of that touches the layers above. The ViewModel asks <code>NewsRepository</code> for news and gets <code>List&lt;Article&gt;</code> back, whoever produced it. Swap the source below and count what changed.</p>`,
+            code: `interface NewsRemoteDataSource {
+    suspend fun latest(): List<ArticleDto>
+}
+
+class RetrofitNewsDataSource @Inject constructor(
+    private val api: NewsApi,
+) : NewsRemoteDataSource {
+    override suspend fun latest() = api.getLatest()
+}
+
+// In a unit test: no network, same repository, same ViewModel
+class FakeNewsDataSource(var articles: List<ArticleDto>) : NewsRemoteDataSource {
+    override suspend fun latest() = articles
+}
+
+val repository = NewsRepository(remote = FakeNewsDataSource(testArticles), dao = FakeArticleDao())`,
+            visual(el) {
+              const SRC = {
+                real: { name: 'RetrofitNewsDataSource', sub: 'real HTTP through NewsApi', ask: 'GET /latest', items: ['Room 2.8 notes', 'KSP is the default', 'Navigation 3 guide'], who: 'the app' },
+                fake: { name: 'FakeNewsDataSource', sub: 'a fixed list, no network', ask: 'return articles', items: ['Test story 1', 'Test story 2'], who: 'a unit test' },
+                preview: { name: 'PreviewNewsDataSource', sub: 'sample data for @Preview', ask: 'return sample', items: ['Sample headline'], who: 'a Compose preview' },
+              };
+              let cur = 'real', busy = false, src;
+              const list = h('div', { class: 'arc-mini' });
+              const screen = node('NewsScreen', 'draws UiState', list);
+              const vm = node('NewsViewModel', 'knows NewsRepository');
+              const repo = node('NewsRepository', 'knows the interface NewsRemoteDataSource');
+              const slotEl = h('div', { class: 'arc-d2-src' });
+              const o = out();
+              const mkSrc = (k, anim) => { const n = node(SRC[k].name, SRC[k].sub); if (anim) n.classList.add('drop-in'); return n; };
+              const paintList = fresh => list.replaceChildren(...SRC[cur].items.map((t, i) => h('span', { class: fresh && i === 0 ? 'arc-new drop-in' : null }, t)));
+              const all = () => [screen, vm, repo, src];
+              const calm = () => all().forEach(x => { x.classList.remove('on', 'ok'); x.box.replaceChildren(); });
+              const hop = async (n, text, back) => {
+                calm(); n.classList.add('on'); tok(n, text, back ? 'arc-back' : '');
+                await sleep(480);
+                return o.isConnected;
+              };
+              async function use(k, btn) {
+                if (busy) return; busy = true;
+                btns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+                const swapped = k !== cur;
+                if (swapped) {
+                  cur = k; src = mkSrc(k, true); swapIn(slotEl, src);
+                  say(o, `<span class="muted">wiring changed: remote = ${SRC[k].name}() for ${SRC[k].who}…</span>`);
+                  await sleep(650); if (!o.isConnected) return;
+                }
+                for (const [n, t] of [[vm, 'refresh()'], [repo, 'latest()'], [src, SRC[k].ask]]) if (!await hop(n, t)) return;
+                for (const [n, t] of [[repo, 'List<Article>'], [vm, `UiState(items = ${SRC[k].items.length})`]]) if (!await hop(n, t, true)) return;
+                calm();
+                paintList(true); screen.classList.add('ok'); replay(screen, 'pop-soft');
+                tok(vm, 'unchanged', 'arc-back'); tok(repo, 'unchanged', 'arc-back');
+                say(o, swapped
+                  ? `<span class="good">swapped:</span> one line of wiring changed. NewsScreen, NewsViewModel and NewsRepository changed 0 lines.`
+                  : `<span class="good">same source:</span> the screen got ${SRC[k].items.length} item${SRC[k].items.length > 1 ? 's' : ''} from ${SRC[k].name}.`);
+                busy = false;
+              }
+              const btns = ['real', 'fake', 'preview'].map(k => cmd(`remote = ${SRC[k].name}(${k === 'real' ? 'api' : ''})`, function () { use(k, this); }));
+              btns[0].setAttribute('aria-pressed', 'true');
+              src = mkSrc(cur); slotEl.append(src); paintList(false);
+              say(o, 'Pick another data source. Watch which boxes have to change.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, btns),
+                h('div', { class: 'arc-layers' }, band('UI layer', screen, vm), h('div', { class: 'arc-dir' }, '↓ depends on'), band('Data layer', repo, slotEl)),
+                o);
+            },
+          },
+          {
+            title: 'The layer that does slow work moves it off the main thread',
+            body: `
+<p>A ViewModel launches work in <code>viewModelScope</code>, which runs on the main thread. So every function the data layer exposes should be <b>main-safe</b>: safe to call from the main thread without freezing it.</p>
+<p>Retrofit <code>suspend</code> calls and Room <code>suspend</code> or <code>Flow</code> queries are main-safe already. Your own blocking work is not: writing a file, parsing a big JSON string, sorting thousands of rows. The class that does that work wraps it in <code>withContext</code>, so its callers never think about threads. Inject the dispatcher so a test can swap it.</p>`,
+            code: `class NewsRepository @Inject constructor(
+    private val dao: ArticleDao,
+    @IoDispatcher private val io: CoroutineDispatcher,   // your own qualifier
+) {
+    // Safe to call from viewModelScope: the slow part moves itself.
+    suspend fun exportCsv(target: File) = withContext(io) {
+        val rows = dao.getAll()
+        target.writeText(rows.joinToString("\\n") { "\${it.id},\${it.title}" })
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>A tap on refresh starts one coroutine, and that one coroutine walks through every layer. <code>viewModelScope.launch</code> starts it on <code>Dispatchers.Main.immediate</code>. The compiler gives every <code>suspend</code> function a hidden <code>Continuation</code> parameter, and each call passes it on: ViewModel to use case, use case to repository, repository to Retrofit.</p>
+<p>When Retrofit sends the request, the function returns a special <code>COROUTINE_SUSPENDED</code> marker all the way up, and the main thread is free to draw frames. OkHttp waits for the response on its own thread. When it arrives, Retrofit resumes the continuation, and the coroutine’s dispatcher posts the rest of the work back to the main thread. The line after <code>getLatestNews()</code> runs on Main, holding the result. No layer created a thread or a callback of its own.</p>`,
+          code: `// You write
+suspend fun latest(): List<Article>
+
+// The JVM sees (simplified)
+fun latest(continuation: Continuation<List<Article>>): Any?
+// returns COROUTINE_SUSPENDED while waiting, or the list if it finished at once`,
+        },
+        mistakes: [
+          {
+            title: 'Holding an Activity in the data layer',
+            bad: `class NewsRepository(private val activity: Activity) {
+    private val cacheDir = activity.cacheDir
+}`,
+            good: `class NewsRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
+    private val cacheDir = context.cacheDir
+}`,
+            why: 'A repository often lives as long as the app. If it keeps an Activity, every rotation leaks the old Activity and its whole view tree. The application context lives exactly as long as the repository.',
+          },
+          {
+            title: 'The ViewModel builds its own dependencies',
+            bad: `class NewsViewModel : ViewModel() {
+    private val repository = NewsRepository(
+        RetrofitNewsDataSource(retrofit.create(NewsApi::class.java)),
+        AppDatabase.get().articleDao(),
+    )
+}`,
+            good: `@HiltViewModel
+class NewsViewModel @Inject constructor(
+    private val repository: NewsRepository,
+) : ViewModel()`,
+            why: 'A ViewModel that constructs the data layer depends on every class below it and can’t be tested with a fake. Take the repository as a constructor parameter and let Hilt or the test decide what it is.',
+          },
         ],
         visual(el) {
           const pool = ['Room 2.8 notes', 'Hilt in 5 minutes', 'KSP is the default', 'StateFlow vs LiveData', 'Navigation 3 guide', 'Baseline profiles'];
@@ -821,6 +986,249 @@ class CartMviViewModel : ViewModel() {
           { q: 'What does an MVI reducer take and return?', options: ['The current state and an intent in, the next state out', 'An intent in, a network result out', 'Nothing; it changes the state in place'], a: 0, why: 'It is a pure function. That is why a log of intents can rebuild the same state again.' },
           { q: 'A settings screen has two toggles that never affect each other. What fits best?', options: ['Plain MVVM functions', 'Full MVI with a reducer and an intent log'], a: 0, why: 'MVI’s extra types pay off when many actions touch shared state. Two independent toggles don’t need them.' },
         ],
+        deeper: [
+          {
+            title: 'Effects run outside the reducer, and results come back as intents',
+            body: `
+<p>A reducer can’t call the network, so where does checkout happen? Split it in two. The reducer handles <code>Checkout</code> by returning a state that says an order is in progress. Then the ViewModel, outside the reducer, launches the call.</p>
+<p>When the call returns, the ViewModel does not touch the state directly. It sends the result back in as one more intent: <code>OrderPlaced</code> or <code>OrderFailed</code>. Every change still goes through one function, and the intent log shows the whole story, the server’s answer included.</p>`,
+            code: `fun onIntent(intent: CartIntent) {
+    _state.update { reduce(it, intent) }
+    if (intent is CartIntent.Checkout) viewModelScope.launch {
+        val result = try {
+            CartIntent.OrderPlaced(checkoutApi.placeOrder(_state.value.toOrder()))
+        } catch (e: IOException) {
+            CartIntent.OrderFailed(e.message ?: "Network error")
+        }
+        onIntent(result)   // the answer is just another intent
+    }
+}
+
+private fun reduce(s: CartState, i: CartIntent): CartState = when (i) {
+    CartIntent.Increment -> s.copy(qty = s.qty + 1)
+    CartIntent.Checkout -> s.copy(isPlacingOrder = true, error = null)
+    is CartIntent.OrderPlaced -> s.copy(isPlacingOrder = false, orderId = i.id)
+    is CartIntent.OrderFailed -> s.copy(isPlacingOrder = false, error = i.message)
+}`,
+            visual(el) {
+              let s = { qty: 2, placing: false, orderId: null, error: null }, fail = false, busy = false, n = 1040;
+              const log = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'intents'));
+              const red = h('div', { class: 'arc-node' }, h('b', {}, 'reduce(state, intent)'), h('small', {}, 'pure: no I/O, no launch'));
+              const slot = h('div', { class: 'arc-stateslot' });
+              const fx = node('viewModelScope.launch { }', 'the effect: the only part that talks to the network');
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const card = (changed, anim) => stateCard('CartState', [['qty', s.qty], ['isPlacingOrder', s.placing], ['orderId', quote(s.orderId)], ['error', quote(s.error)]], changed, anim);
+              const push = (text, cls = '') => {
+                const toks = log.querySelectorAll('.token');
+                if (toks.length >= 3) toks[0].remove();
+                log.append(h('span', { class: `token drop-in ${cls}` }, text));
+              };
+              async function reduce(text, patch, changed, cls) {
+                push(text, cls);
+                await sleep(380); if (!o.isConnected) return false;
+                red.classList.add('on'); replay(red, 'pop-soft');
+                await sleep(380); if (!o.isConnected) return false;
+                Object.assign(s, patch); swapIn(slot, card(changed, true)); red.classList.remove('on');
+                return true;
+              }
+              async function checkout() {
+                if (busy) return; busy = true;
+                fx.classList.remove('ok', 'bad'); fx.box.replaceChildren();
+                say(o, '<span class="muted">Checkout goes through the reducer first…</span>');
+                if (!await reduce('Checkout', { placing: true, error: null, orderId: null }, ['isPlacingOrder', 'error', 'orderId'])) return;
+                line('<span class="muted">The state says "placing". Now the ViewModel launches the call.</span>');
+                fx.classList.add('on'); tok(fx, 'checkoutApi.placeOrder(…)'); replay(fx, 'pop-soft');
+                await sleep(1100); if (!o.isConnected) return;
+                fx.classList.remove('on');
+                if (fail) {
+                  fx.classList.add('bad'); tok(fx, 'IOException', 'boom'); replay(fx, 'shake');
+                  if (!await reduce('OrderFailed("timeout")', { placing: false, error: 'timeout' }, ['isPlacingOrder', 'error'], 'boom')) return;
+                  say(o, '<span class="bad">failed:</span> the effect turned the exception into an <b>OrderFailed</b> intent. The reducer cleared the spinner and stored the error.');
+                } else {
+                  n++;
+                  fx.classList.add('ok'); tok(fx, `"A-${n}"`, 'arc-back');
+                  if (!await reduce(`OrderPlaced("A-${n}")`, { placing: false, orderId: `A-${n}` }, ['isPlacingOrder', 'orderId'], 'arc-back')) return;
+                  say(o, '<span class="good">placed:</span> the result came back as an <b>OrderPlaced</b> intent. Even the server’s answer changed the state through reduce().');
+                }
+                busy = false;
+              }
+              async function inc() {
+                if (busy) return; busy = true;
+                if (!await reduce('Increment', { qty: s.qty + 1 }, ['qty'])) return;
+                say(o, '<span class="muted">Increment needs no effect. The reducer alone handles it.</span>');
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-mvi-fail', 'the server fails', false, i => {
+                if (busy) { i.checked = fail; return; }
+                fail = i.checked;
+                say(o, fail ? 'The next placeOrder() call will throw an IOException.' : 'The server answers again.');
+              });
+              slot.append(card([]));
+              say(o, 'Check out the cart. Watch where the network call happens.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('onIntent(Checkout)', checkout), cmd('onIntent(Increment)', inc), sw),
+                h('div', { class: 'arc-col' }, log, h('div', { class: 'arc-dir' }, '↓'), red, h('div', { class: 'arc-dir' }, '↓ new state'), slot, h('div', { class: 'arc-dir' }, 'after Checkout: launch, then send the answer back up as an intent'), fx),
+                o);
+            },
+          },
+          {
+            title: 'Slow answers can arrive in the wrong order',
+            body: `
+<p>A search box sends <code>QueryChanged</code> on every key. Each one starts a request, and the requests don’t finish in the order they started. A short query like <code>"k"</code> matches more rows and can answer last. If every answer is applied, the screen ends up showing results for <code>"k"</code> under the query <code>"kot"</code>.</p>
+<p>Cancel the previous search when a new query arrives. Keep the <code>Job</code> and call <code>cancel()</code>, or route queries through a flow with <code>mapLatest</code>. Because every query passes through one entry point in MVI, the rule lives in one place.</p>`,
+            code: `private var searchJob: Job? = null
+
+fun onIntent(intent: SearchIntent) {
+    _state.update { reduce(it, intent) }
+    if (intent is SearchIntent.QueryChanged) {
+        searchJob?.cancel()                   // the older, slower search is dropped
+        searchJob = viewModelScope.launch {
+            val hits = repository.search(intent.query)
+            onIntent(SearchIntent.ResultsLoaded(intent.query, hits))
+        }
+    }
+}`,
+            visual(el) {
+              const Q = [['k', 0, 1700], ['ko', 300, 1100], ['kot', 600, 500]];
+              const TOTAL = 1900;
+              let cancel = false, busy = false, st = { query: '""', results: '[]' };
+              const tracks = {};
+              const tl = h('div', { class: 'timeline' }, Q.map(([q]) => {
+                const tr = h('div', { class: 'lane-track' }); tracks[q] = tr;
+                return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, `"${q}"`), tr);
+              }));
+              const slot = h('div', { class: 'arc-stateslot' });
+              const o = out();
+              const line = html => o.append(h('div', { class: 'line drop-in', html }));
+              const card = (changed, bad) => {
+                const c = stateCard('SearchState', [['query', st.query], ['results', st.results]], changed, true);
+                if (bad) c.classList.add('arc-d2-badcard');
+                return c;
+              };
+              async function type() {
+                if (busy) return; busy = true;
+                Object.values(tracks).forEach(t => t.replaceChildren());
+                st = { query: '""', results: '[]' }; swapIn(slot, card([]));
+                say(o, '<span class="muted">typing k, o, t…</span>');
+                const ev = [];
+                Q.forEach(([q, start, lat], i) => {
+                  ev.push({ t: start, kind: 'start', q, lat });
+                  const next = Q[i + 1];
+                  if (cancel && next) ev.push({ t: next[1], kind: 'cancel', q, start });
+                  else ev.push({ t: start + lat, kind: 'end', q });
+                });
+                ev.sort((a, b) => a.t - b.t || (a.kind === 'cancel' ? -1 : 1));
+                const bars = {};
+                let now = 0;
+                for (const e of ev) {
+                  await sleep(e.t - now); now = e.t;
+                  if (!o.isConnected) return;
+                  if (e.kind === 'start') {
+                    const b = h('span', { class: 'bar run arc-d2-bar', style: `left:${e.t / TOTAL * 100}%;width:0;transition-duration:${e.lat}ms` });
+                    tracks[e.q].append(b); void b.offsetWidth;
+                    b.style.width = `${e.lat / TOTAL * 100}%`; bars[e.q] = b;
+                    st.query = `"${e.q}"`; swapIn(slot, card(['query']));
+                  } else if (e.kind === 'cancel') {
+                    const b = bars[e.q];
+                    b.style.transitionDuration = '0ms'; b.style.width = `${(e.t - e.start) / TOTAL * 100}%`;
+                    b.classList.remove('run'); b.classList.add('queued');
+                    line(`<span class="muted">search("${e.q}") cancelled</span>`);
+                  } else {
+                    st.results = `for "${e.q}"`;
+                    const bad = st.query !== `"${e.q}"`;
+                    swapIn(slot, card(['results'], bad));
+                    line(bad ? `<span class="bad">results for "${e.q}" landed</span>` : `<span class="good">results for "${e.q}" landed</span>`);
+                  }
+                }
+                await sleep(200); if (!o.isConnected) return;
+                say(o, cancel
+                  ? '<span class="good">consistent:</span> the older searches were cancelled, so only the results for "kot" landed.'
+                  : '<span class="bad">stale:</span> "kot" answered first, then the slower "k" search overwrote it. The screen shows results for "k" under the query "kot".');
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-mvi-cancel', 'searchJob?.cancel()', false, i => {
+                if (busy) { i.checked = cancel; return; }
+                cancel = i.checked;
+                say(o, cancel ? 'Each new query now cancels the one before it.' : 'Every search runs to the end and applies its answer.');
+              });
+              slot.append(card([]));
+              say(o, 'Type "kot" fast. The shortest query takes longest to answer.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('type "kot"', type), sw),
+                tl, slot, o);
+            },
+          },
+          {
+            title: 'Test the reducer with plain values',
+            body: `
+<p>A pure reducer needs no ViewModel, no dispatcher and no fake to test. Move it out of the class as an <code>internal</code> top-level function and feed it a list of intents with <code>fold</code>. The test runs in microseconds and reads like the user’s story.</p>`,
+            code: `internal fun reduce(state: CartState, intent: CartIntent): CartState = when (intent) {
+    CartIntent.Increment -> state.copy(qty = state.qty + 1)
+    CartIntent.Decrement -> state.copy(qty = (state.qty - 1).coerceAtLeast(0))
+    is CartIntent.ApplyCoupon -> state.copy(coupon = intent.code)
+}
+
+class CartReducerTest {
+    @Test
+    fun couponTakesTenPercentOff() {
+        val state = listOf(CartIntent.Increment, CartIntent.ApplyCoupon("SAVE10"))
+            .fold(CartState(), ::reduce)
+
+        assertEquals(2, state.qty)
+        assertEquals(21.6, state.total, 0.001)
+    }
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>_state.update { reduce(it, intent) }</code> is a compare-and-set loop. It reads the state, runs the reducer and swaps the result in only if nobody changed the state in between. When two intents arrive from different threads at the same moment, one swap fails and <code>update</code> runs your reducer again on the newer state. A pure reducer makes that retry harmless. A reducer that sent a request would send it twice.</p>
+<p>A <code>when</code> over a sealed type with no <code>else</code> compiles to a chain of type and equality checks. The compiler still adds a final branch that throws <code>NoWhenBranchMatchedException</code>. It can only run if a subtype shows up that this code was not compiled against, for example from a library that was updated without a rebuild.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Reading the clock inside the reducer',
+            bad: `is NoteIntent.Add -> s.copy(
+    notes = s.notes + Note(i.text, createdAt = System.currentTimeMillis()),
+)`,
+            good: `data class Add(val text: String, val at: Long) : NoteIntent
+
+// The ViewModel reads the clock once and puts it in the intent
+onIntent(NoteIntent.Add(text, at = clock.millis()))
+
+is NoteIntent.Add -> s.copy(notes = s.notes + Note(i.text, createdAt = i.at))`,
+            why: 'A reducer that reads the clock or a random number gives a different state for the same intents, so replays and tests stop matching. Put every outside value into the intent.',
+          },
+          {
+            title: 'Sending intents with tryEmit into an unbuffered flow',
+            bad: `private val intents = MutableSharedFlow<CartIntent>()
+
+fun onIntent(intent: CartIntent) {
+    intents.tryEmit(intent)   // may send nothing
+}`,
+            good: `fun onIntent(intent: CartIntent) {
+    _state.update { reduce(it, intent) }
+}
+
+// or, if you need a stream of intents:
+private val intents = MutableSharedFlow<CartIntent>(extraBufferCapacity = 64)`,
+            why: 'With no buffer, <code>tryEmit</code> drops the value when nobody collects yet and returns <code>false</code> without sending when it would have to wait. Taps get lost and nothing reports it. Calling <code>update</code> directly is simpler and never drops.',
+          },
+          {
+            title: 'Keeping public functions next to onIntent',
+            bad: `class CartMviViewModel : ViewModel() {
+    fun onIntent(intent: CartIntent) = _state.update { reduce(it, intent) }
+
+    fun applyCoupon(code: String) = _state.update { it.copy(coupon = code) }
+}`,
+            good: `class CartMviViewModel : ViewModel() {
+    fun onIntent(intent: CartIntent) = _state.update { reduce(it, intent) }
+    // every action is a CartIntent; no other public way in
+}`,
+            why: 'A second way to change the state skips the reducer and the intent log. Replays and reducer tests no longer describe what the screen really did.',
+          },
+        ],
         visual(el) {
           const PRICE = 12, start = { qty: 1, coupon: null };
           let st = { ...start }, busy = false;
@@ -984,6 +1392,219 @@ class GetArticleUseCase @Inject constructor(private val news: NewsRepository) {
           { q: 'What does <code>operator fun invoke</code> give you?', options: ['Callers can write <code>getFeed()</code> instead of <code>getFeed.execute()</code>', 'It runs the use case on a background thread', 'It lets Hilt inject the class'], a: 0, why: 'It is a calling convention. Threading comes from suspend functions and Flow; injection comes from <code>@Inject</code>.' },
           { q: 'May a use case depend on another use case?', options: ['Yes, and on repositories, but never on the UI layer', 'No, only on repositories'], a: 0, why: 'Use cases can build on each other. Like everything in the domain layer, they never point up at the UI.' },
         ],
+        deeper: [
+          {
+            title: 'A rule that writes belongs in one place',
+            body: `
+<p>Use cases are not only for reading. Saving a bookmark looks like one repository call, until the business adds a rule: free users can keep three. Now two screens can save, and both must apply the same limit.</p>
+<p>If each ViewModel checks the limit itself, the copies drift. Someone changes one and forgets the other, and the app behaves differently depending on where the user taps. Put the rule in <code>SaveArticleUseCase</code> and both screens call it. Turn the switch off to see the drift.</p>`,
+            code: `class SaveArticleUseCase @Inject constructor(
+    private val bookmarks: BookmarksRepository,
+    private val user: UserDataRepository,
+) {
+    suspend operator fun invoke(id: Int): SaveResult {
+        val limit = if (user.isPremium()) Int.MAX_VALUE else 3
+        if (bookmarks.count() >= limit) return SaveResult.LimitReached(limit)
+        bookmarks.add(id)
+        return SaveResult.Saved
+    }
+}`,
+            visual(el) {
+              const LIMIT = 3;
+              let shared = true, saved = [1, 2], next = 3, busy = false;
+              const count = h('span', { class: 'chip total' }, '2');
+              const repo = node('BookmarksRepository', 'stores saved ids', count);
+              const uc = node('SaveArticleUseCase', 'free users keep 3');
+              const avm = node('ArticleViewModel', 'calls saveArticle(id)');
+              const fvm = node('FeedViewModel', 'calls saveArticle(id)');
+              const sub = n => n.querySelector('small');
+              const o = out();
+              const ucBand = band('Domain layer', uc);
+              function paint() {
+                sub(avm).innerHTML = shared ? 'calls saveArticle(id)' : 'checks count &lt; 3 itself';
+                sub(fvm).innerHTML = shared ? 'calls saveArticle(id)' : 'checks count &lt; 5 itself <span class="arc-baddep">(old copy)</span>';
+                ucBand.classList.toggle('off', !shared);
+                count.textContent = String(saved.length);
+              }
+              const calm = () => [avm, fvm, uc, repo].forEach(n => { n.classList.remove('on', 'ok', 'bad'); n.box.replaceChildren(); });
+              async function save(vm, ownLimit, who) {
+                if (busy) return; busy = true;
+                calm();
+                vm.classList.add('on'); tok(vm, `save(${next})`);
+                await sleep(450); if (!o.isConnected) return;
+                let checker = vm, limit = ownLimit;
+                if (shared) {
+                  vm.classList.remove('on'); checker = uc; limit = LIMIT;
+                  uc.classList.add('on'); tok(uc, `count ${saved.length} < ${LIMIT}?`);
+                  await sleep(550); if (!o.isConnected) return;
+                } else {
+                  tok(vm, `count ${saved.length} < ${ownLimit}?`);
+                  await sleep(550); if (!o.isConnected) return;
+                }
+                if (saved.length >= limit) {
+                  checker.classList.remove('on'); checker.classList.add('bad');
+                  tok(checker, `LimitReached(${limit})`, 'boom'); replay(checker, 'shake');
+                  say(o, `<span class="good">blocked:</span> ${who} can’t save more than ${limit}. ${shared ? 'Both screens get this answer from the same class.' : ''}`);
+                } else {
+                  saved.push(next++); paint(); replay(count, 'pop');
+                  checker.classList.remove('on');
+                  repo.classList.add(saved.length > LIMIT ? 'bad' : 'ok'); tok(repo, `add(${saved[saved.length - 1]})`, 'arc-back');
+                  say(o, saved.length > LIMIT
+                    ? `<span class="bad">rule broken:</span> ${who} saved bookmark number ${saved.length}. Its copy of the limit still says 5, so the two screens disagree.`
+                    : `<span class="good">saved:</span> ${saved.length} of ${LIMIT} bookmarks.`);
+                }
+                busy = false;
+              }
+              function clear() {
+                if (busy) return;
+                calm(); saved = []; paint(); replay(count, 'pop');
+                say(o, 'All bookmarks removed. Save again from either screen.');
+              }
+              const sw = switchEl('arc-d2-uc-rule', 'rule lives in SaveArticleUseCase', true, i => {
+                if (busy) { i.checked = shared; return; }
+                shared = i.checked; calm(); paint();
+                say(o, shared ? 'Both ViewModels call the use case again.' : 'Each ViewModel now has its own copy of the rule. One copy is out of date.');
+              });
+              paint();
+              say(o, 'Two bookmarks are saved. Save from both screens and watch who checks the limit.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('ArticleScreen: save()', () => save(avm, LIMIT, 'ArticleViewModel')), cmd('FeedScreen: save()', () => save(fvm, 5, 'FeedViewModel')), cmd('bookmarks.clear()', clear), sw),
+                h('div', { class: 'arc-layers' }, band('UI layer', avm, fvm), h('div', { class: 'arc-dir' }, '↓'), ucBand, h('div', { class: 'arc-dir' }, '↓'), band('Data layer', repo)),
+                o);
+            },
+          },
+          {
+            title: 'Heavy work in a use case runs on the collector’s thread',
+            body: `
+<p>Room runs its SQL off the main thread. The operators you add after it do not. The lambda inside <code>combine</code> runs wherever the flow is collected, and <code>stateIn(viewModelScope, …)</code> collects on the main thread. Filtering and sorting 5,000 articles there freezes the screen for a moment every time a topic changes.</p>
+<p><code>flowOn</code> moves everything above it to another dispatcher. Put it at the end of the use case, so every caller gets a main-safe flow. Inject the dispatcher so tests can pass a test one.</p>`,
+            code: `class GetPersonalizedFeedUseCase @Inject constructor(
+    private val news: NewsRepository,
+    private val userData: UserDataRepository,
+    @DefaultDispatcher private val default: CoroutineDispatcher,
+) {
+    operator fun invoke(): Flow<List<Article>> =
+        combine(news.observeNews(), userData.observeFollowedTopics()) { articles, topics ->
+            articles.filter { it.topic in topics }.sortedByDescending { it.publishedAt }
+        }.flowOn(default)   // the lambda above now runs off the main thread
+}`,
+            visual(el) {
+              const N = 18, W0 = 5, W1 = 12;
+              let off = false, busy = false;
+              const mk = () => Array.from({ length: N }, () => h('span', { class: 'arc-d2-frame' }));
+              const mainC = mk(), defC = mk();
+              const dropped = h('span', { class: 'arc-badge' }, 'dropped: 0');
+              const tl = h('div', { class: 'timeline' },
+                h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'Main'), h('div', { class: 'arc-d2-frames' }, mainC)),
+                h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'Default'), h('div', { class: 'arc-d2-frames' }, defC)));
+              const legend = h('div', { class: 'legend' },
+                h('span', {}, h('i', { class: 'arc-d2-key arc-d2-drawn' }), 'frame drawn'),
+                h('span', {}, h('i', { class: 'arc-d2-key arc-d2-work' }), 'filter + sort'),
+                h('span', {}, h('i', { class: 'arc-d2-key arc-d2-drop' }), 'frame dropped'));
+              const o = out();
+              async function follow() {
+                if (busy) return; busy = true;
+                [...mainC, ...defC].forEach(c => { c.className = 'arc-d2-frame'; });
+                let lost = 0; dropped.textContent = 'dropped: 0';
+                say(o, '<span class="muted">topics emitted, combine runs…</span>');
+                for (let i = 0; i < N; i++) {
+                  await sleep(70); if (!o.isConnected) return;
+                  const work = i >= W0 && i < W1;
+                  if (work && !off) {
+                    mainC[i].classList.add('arc-d2-work', 'arc-d2-drop');
+                    lost++; dropped.textContent = `dropped: ${lost}`; replay(dropped, 'pop');
+                  } else {
+                    mainC[i].classList.add('arc-d2-drawn');
+                    if (work) defC[i].classList.add('arc-d2-work');
+                  }
+                }
+                say(o, off
+                  ? '<span class="good">smooth:</span> flowOn moved combine to a Default thread. Main drew every frame.'
+                  : `<span class="bad">jank:</span> combine filtered 5,000 articles on Main. ${lost} frames were never drawn.`);
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-uc-flowon', '.flowOn(default)', false, i => {
+                if (busy) { i.checked = off; return; }
+                off = i.checked;
+                say(o, off ? 'The combine lambda now runs on Dispatchers.Default.' : 'No flowOn: the lambda runs where stateIn collects, on Main.');
+              });
+              say(o, 'Follow a topic. The use case filters and sorts 5,000 articles.');
+              el.append(h('div', { class: 'controls arc-fit' }, cmd('userData.follow("Sports")', follow), sw, dropped), tl, legend, o);
+            },
+          },
+          {
+            title: 'Test a use case with fakes',
+            body: `
+<p>A use case that takes repository interfaces in its constructor can be tested without Room, Retrofit or Hilt. Give it fakes backed by a <code>MutableStateFlow</code>, read the first value, change a fake, read again.</p>`,
+            code: `class FakeUserDataRepository(followed: Set<String>) : UserDataRepository {
+    private val topics = MutableStateFlow(followed)
+    override fun observeFollowedTopics(): Flow<Set<String>> = topics
+    fun follow(topic: String) = topics.update { it + topic }
+}
+
+@Test
+fun feedKeepsOnlyFollowedTopics() = runTest {
+    val news = FakeNewsRepository(listOf(article(1, "Kotlin"), article(2, "Sports")))
+    val user = FakeUserDataRepository(followed = setOf("Kotlin"))
+    val getFeed = GetPersonalizedFeedUseCase(news, user, StandardTestDispatcher(testScheduler))
+
+    assertEquals(listOf(1), getFeed().first().map { it.id })
+
+    user.follow("Sports")
+    assertEquals(setOf(1, 2), getFeed().first().map { it.id }.toSet())
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>getFeed()</code> is plain syntax. The compiler turns it into <code>getFeed.invoke()</code>, an ordinary method call with no reflection and no extra object.</p>
+<p>A use case with an <code>@Inject</code> constructor and no scope annotation is <b>unscoped</b>. Dagger generates a factory for it, and every time a ViewModel asks for one, the factory builds a new instance from the providers of its dependencies. So <code>ForYouViewModel</code> and <code>TopStoriesViewModel</code> each get their own copy. That is fine, and cheap, as long as the use case keeps no state of its own.</p>`,
+          code: `// Generated by Dagger (simplified)
+public final class GetPersonalizedFeedUseCase_Factory implements Factory<GetPersonalizedFeedUseCase> {
+  @Override public GetPersonalizedFeedUseCase get() {
+    return newInstance(newsProvider.get(), userDataProvider.get());
+  }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Keeping state inside a use case',
+            bad: `class GetFeedUseCase @Inject constructor(private val news: NewsRepository) {
+    private var cache: List<Article>? = null
+
+    suspend operator fun invoke() = cache ?: news.latest().also { cache = it }
+}`,
+            good: `class GetFeedUseCase @Inject constructor(private val news: NewsRepository) {
+    operator fun invoke(): Flow<List<Article>> = news.observeNews()
+}
+// the cache lives in the repository, the single source of truth`,
+            why: 'An unscoped use case is a new object for each ViewModel, so each one keeps its own stale copy. Data belongs in the repository, which the whole app shares.',
+          },
+          {
+            title: 'Returning UI types from the domain',
+            bad: `class GetFeedUseCase @Inject constructor(...) {
+    operator fun invoke(): Flow<NewsUiState> = ...
+}`,
+            good: `class GetFeedUseCase @Inject constructor(...) {
+    operator fun invoke(): Flow<List<Article>> = ...
+}
+// each ViewModel maps articles to its own UiState`,
+            why: 'A use case that returns one screen’s UiState can’t be shared with a second screen, and the domain layer now changes whenever a screen does.',
+          },
+          {
+            title: 'Fire-and-forget work inside invoke',
+            bad: `class RefreshFeedUseCase @Inject constructor(private val news: NewsRepository) {
+    operator fun invoke() {
+        GlobalScope.launch { news.refresh() }
+    }
+}`,
+            good: `class RefreshFeedUseCase @Inject constructor(private val news: NewsRepository) {
+    suspend operator fun invoke() = news.refresh()
+}
+// the caller decides the scope: viewModelScope, or WorkManager for work that must finish`,
+            why: 'The caller can’t wait for it, cancel it or see its errors, and it keeps running after the screen is gone. A <code>suspend</code> function lets the caller own the coroutine.',
+          },
+        ],
         visual(el) {
           const extra = [{ t: 'Coroutines deep dive', topic: 'Kotlin' }, { t: 'Cup final tonight', topic: 'Sports' }, { t: 'Material 3 update', topic: 'Compose' }];
           let articles = [
@@ -1145,6 +1766,218 @@ state.userMessage?.let { message ->
           { q: 'Pull-to-refresh should keep the list visible while it reloads. Which model makes that easy?', options: ['A sealed type where <code>Loading</code> replaces <code>Success</code>', 'A data class with <code>isLoading</code> next to <code>items</code>'], a: 1, why: 'Flags can hold the old items and a loading flag at once. A single sealed value can only be one of them.' },
           { q: 'Why give an empty list its own look?', options: ['So the screen says “No stories yet” instead of looking broken', 'Because <code>emptyList()</code> can’t be collected'], a: 0, why: 'Empty is a real result. Users need to see that loading worked and there is nothing there.' },
           { q: 'A delete shows a snackbar. Where should its text live?', options: ['In UiState, cleared when the UI calls <code>userMessageShown()</code>', 'In a <code>var</code> inside the Composable', 'In a Boolean <code>showSnackbar</code> that is never reset'], a: 0, why: 'State survives rotation and the acknowledgement clears it, so it shows once. A flag that is never reset shows again after every rotation.' },
+        ],
+        deeper: [
+          {
+            title: 'Don’t flash a spinner for a fast load',
+            body: `
+<p>Most refreshes answer in a few hundred milliseconds. A spinner that appears for 120 ms and vanishes reads as a glitch, and the list behind it jumps twice. Wait a little before showing it. If the data arrives first, the user never sees a spinner at all.</p>
+<p>Start a second coroutine that sets <code>isLoading</code> after a short <code>delay</code>, and cancel it when the load finishes. Slow loads still show progress. Some apps also keep the spinner up for a minimum time once it appears, for the same reason.</p>`,
+            code: `fun refresh() = viewModelScope.launch {
+    val spinner = launch {
+        delay(300)          // a fast load finishes first and never shows it
+        _uiState.update { it.copy(isLoading = true) }
+    }
+    try {
+        val items = repository.latest()
+        _uiState.update { it.copy(items = items, errorMessage = null) }
+    } catch (e: IOException) {
+        _uiState.update { it.copy(errorMessage = "No connection") }
+    } finally {
+        spinner.cancel()
+        _uiState.update { it.copy(isLoading = false) }
+    }
+}`,
+            visual(el) {
+              const D = 300, ITEMS = ['Compose tips', 'Derby tonight', 'Kotlin 2.3 notes'];
+              let delayOn = false, busy = false;
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'Screen preview' });
+              const strip = h('div', { class: 'arc-d2-strip' });
+              const o = out();
+              const show = kind => phone.replaceChildren(...(kind === 'spin'
+                ? [h('div', { class: 'arc-center' }, h('div', { class: 'spinner' }), h('p', { class: 'phone-note' }, 'Loading…'))]
+                : ITEMS.map(t => h('div', { class: 'item arc-small' }, t))));
+              async function load(ms) {
+                if (busy) return; busy = true;
+                strip.replaceChildren(h('span', { class: 'arc-d2-seg arc-d2-old', style: 'flex-basis:100%' }, 'refreshing…'));
+                say(o, `<span class="muted">refresh() started. The repository answers in ${ms} ms…</span>`);
+                const segs = [];
+                if (!delayOn) {
+                  show('spin');
+                  await sleep(ms); if (!o.isConnected) return;
+                  segs.push(['spin', ms]);
+                } else if (ms <= D) {
+                  await sleep(ms); if (!o.isConnected) return;
+                  segs.push(['old', ms]);
+                } else {
+                  await sleep(D); if (!o.isConnected) return;
+                  show('spin');
+                  await sleep(ms - D); if (!o.isConnected) return;
+                  segs.push(['old', D], ['spin', ms - D]);
+                }
+                show('items'); replay(phone, 'pop-soft');
+                segs.push(['content', 500]);
+                const total = segs.reduce((a, x) => a + x[1], 0);
+                const flash = !delayOn && ms < D;
+                strip.replaceChildren(...segs.map(([k, t]) => h('span', {
+                  class: `arc-d2-seg drop-in ${k === 'spin' ? (flash ? 'arc-d2-flash' : 'arc-d2-spin') : k === 'old' ? 'arc-d2-old' : 'arc-d2-content'}`,
+                  style: `flex-basis:${t / total * 100}%`, title: k === 'content' ? 'new list' : `${k === 'spin' ? 'spinner' : 'old list'} ${t} ms`,
+                }, k === 'content' ? 'new list' : `${t} ms`)));
+                say(o, flash ? '<span class="bad">flicker:</span> the spinner showed for 120 ms. Too short to read, so it looks like a glitch.'
+                  : delayOn && ms <= D ? '<span class="good">no flicker:</span> the data came back before 300 ms, so the spinner never appeared. The old list stayed until the new one replaced it.'
+                  : delayOn ? '<span class="good">spinner after 300 ms:</span> slow loads still show progress, fast ones never flash.'
+                  : '<span class="muted">A 1.5 s spinner is fine. The problem is only the very short one.</span>');
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-uis-delay', 'wait 300 ms before the spinner', false, i => {
+                if (busy) { i.checked = delayOn; return; }
+                delayOn = i.checked;
+                say(o, delayOn ? 'The spinner now waits 300 ms. Try the fast load again.' : 'The spinner shows the moment loading starts.');
+              });
+              show('items');
+              strip.append(h('span', { class: 'arc-d2-seg arc-d2-content', style: 'flex-basis:100%' }, 'list on screen'));
+              say(o, 'Refresh twice: once fast, once slow. The strip records what the screen showed.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('refresh() // 120 ms', () => load(120)), cmd('refresh() // 1.5 s', () => load(1500)), sw),
+                h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' },
+                  h('div', { class: 'arc-cap' }, 'what the screen showed, in order'), strip,
+                  h('div', { class: 'legend' },
+                    h('span', {}, h('i', { class: 'arc-d2-seg arc-d2-old' }), 'old list'),
+                    h('span', {}, h('i', { class: 'arc-d2-seg arc-d2-spin' }), 'spinner'),
+                    h('span', {}, h('i', { class: 'arc-d2-seg arc-d2-flash' }), 'spinner flash'),
+                    h('span', {}, h('i', { class: 'arc-d2-seg arc-d2-content' }), 'new list')))),
+                o);
+            },
+          },
+          {
+            title: 'One screen, several loads: give each section its own state',
+            body: `
+<p>A home screen often loads news and weather from two sources. With one <code>isLoading</code> and one <code>errorMessage</code> for the whole screen, a failed weather call hides the news that loaded fine.</p>
+<p>Give each section its own small state: loading, ready or failed. The screen draws what it has, and the broken part gets its own message and retry button. A generic <code>SectionState&lt;T&gt;</code> keeps the pattern short.</p>`,
+            code: `sealed interface SectionState<out T> {
+    data object Loading : SectionState<Nothing>
+    data class Ready<T>(val data: T) : SectionState<T>
+    data class Failed(val message: String) : SectionState<Nothing>
+}
+
+data class HomeUiState(
+    val news: SectionState<List<Article>> = SectionState.Loading,
+    val weather: SectionState<Forecast> = SectionState.Loading,
+)
+
+fun retryWeather() = viewModelScope.launch {
+    _uiState.update { it.copy(weather = SectionState.Loading) }
+    val next = try {
+        SectionState.Ready(weatherRepository.today())
+    } catch (e: IOException) {
+        SectionState.Failed("Weather unavailable")
+    }
+    _uiState.update { it.copy(weather = next) }
+}`,
+            visual(el) {
+              let split = true, busy = false, news = 'Ready', weather = 'Ready';
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'Home screen preview' });
+              const slot = h('div', { class: 'arc-stateslot' });
+              const o = out();
+              const sec = (title, st, body) => h('div', { class: 'arc-d2-sec' + (st === 'Failed' ? ' bad' : '') }, h('b', {}, title),
+                st === 'Loading' ? h('div', { class: 'spinner arc-d2-spin-s' })
+                  : st === 'Failed' ? h('span', {}, `Couldn’t load ${title.toLowerCase()}. `, h('span', { class: 'arc-retry' }, 'Retry'))
+                    : body);
+              function paint(changed = []) {
+                const failed = news === 'Failed' || weather === 'Failed', loading = news === 'Loading' || weather === 'Loading';
+                if (!split && loading) phone.replaceChildren(h('div', { class: 'arc-center' }, h('div', { class: 'spinner' }), h('p', { class: 'phone-note' }, 'Loading…')));
+                else if (!split && failed) phone.replaceChildren(h('div', { class: 'arc-center' }, h('div', { class: 'err-icon' }, '!'), h('p', { class: 'phone-note' }, 'Something went wrong'), h('span', { class: 'arc-retry' }, 'Retry')));
+                else phone.replaceChildren(
+                  sec('Weather', weather, h('span', {}, '18° and sunny')),
+                  sec('News', news, h('div', { class: 'arc-mini' }, ['Compose tips', 'Derby tonight', 'Title race'].map(t => h('span', {}, t)))));
+                swapIn(slot, split
+                  ? stateCard('HomeUiState', [['news', news], ['weather', weather]], changed, true)
+                  : stateCard('HomeUiState', [['isLoading', loading], ['errorMessage', failed ? '"Weather unavailable"' : 'null'], ['items', news === 'Ready' ? '[3 articles]' : '[]']], changed, true));
+              }
+              async function load(weatherFails) {
+                if (busy) return; busy = true;
+                news = 'Loading'; weather = 'Loading'; paint(split ? ['news', 'weather'] : ['isLoading']);
+                say(o, '<span class="muted">loading news and weather in parallel…</span>');
+                await sleep(600); if (!o.isConnected) return;
+                news = 'Ready'; paint(split ? ['news'] : ['items']);
+                await sleep(500); if (!o.isConnected) return;
+                weather = weatherFails ? 'Failed' : 'Ready';
+                paint(split ? ['weather'] : ['isLoading', 'errorMessage']); replay(phone, weatherFails ? 'shake' : 'pop-soft');
+                say(o, !weatherFails ? '<span class="good">both loaded.</span>'
+                  : split ? '<span class="good">partial failure:</span> news is on screen. Only the weather card shows an error and a retry.'
+                    : '<span class="bad">all or nothing:</span> one error flag for the whole screen. The news loaded fine, but the error screen hides it.');
+                busy = false;
+              }
+              async function retry() {
+                if (busy) return;
+                if (!split) { load(false); return; }
+                busy = true;
+                weather = 'Loading'; paint(['weather']);
+                say(o, '<span class="muted">retryWeather(): only the weather section reloads…</span>');
+                await sleep(700); if (!o.isConnected) return;
+                weather = 'Ready'; paint(['weather']); replay(phone, 'pop-soft');
+                say(o, '<span class="good">weather is back.</span> The news section never reloaded or flickered.');
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-uis-split', 'a state per section', true, i => {
+                if (busy) { i.checked = split; return; }
+                split = i.checked; paint();
+                say(o, split ? 'Each section has its own state.' : 'One isLoading and one errorMessage for the whole screen.');
+              });
+              paint();
+              say(o, 'Load the screen with a failing weather service, in both models.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('load() // weather fails', () => load(true)), cmd('load() // both work', () => load(false)), cmd('retryWeather()', retry), sw),
+                h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' }, slot)),
+                o);
+            },
+          },
+        ],
+        underHood: {
+          body: `
+<p><code>LaunchedEffect(message)</code> starts a coroutine when it enters the composition and cancels it when it leaves, or when <code>message</code> changes. Rotate while a snackbar is up and the old composition leaves. Its coroutine is cancelled inside <code>showSnackbar</code>, so <code>userMessageShown()</code> never runs. The message is still in UiState, and the new composition shows it again. Nothing is lost, and nothing shows twice once it was acknowledged.</p>
+<p><code>SnackbarHostState</code> guards <code>showSnackbar</code> with a <code>Mutex</code>. A second call waits until the current snackbar is dismissed, so two messages queue instead of overlapping.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'An initial value that claims the list is empty',
+            bad: `val uiState = repository.observeNews()
+    .map { if (it.isEmpty()) FeedUiState.Empty else FeedUiState.Success(it) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FeedUiState.Empty)`,
+            good: `val uiState = repository.observeNews()
+    .map { if (it.isEmpty()) FeedUiState.Empty else FeedUiState.Success(it) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FeedUiState.Loading)`,
+            why: 'The screen draws the initial value before the first query result arrives. With <code>Empty</code> it flashes “No stories yet” on every open, even when there are stories.',
+          },
+          {
+            title: 'No catch before stateIn',
+            bad: `val uiState: StateFlow<FeedUiState> = repository.observeNews()
+    .map<List<Article>, FeedUiState> { FeedUiState.Success(it) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FeedUiState.Loading)`,
+            good: `val uiState: StateFlow<FeedUiState> = repository.observeNews()
+    .map<List<Article>, FeedUiState> { FeedUiState.Success(it) }
+    .catch { emit(FeedUiState.Error(it.message ?: "Could not load")) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FeedUiState.Loading)`,
+            why: 'An exception in the upstream flow ends the collection inside <code>viewModelScope</code>, which has no handler, so the app crashes. <code>catch</code> turns it into an error state the screen can draw.',
+          },
+          {
+            title: 'Catching Exception turns cancellation into an error',
+            bad: `fun load() = viewModelScope.launch {
+    try {
+        _uiState.update { it.copy(items = repository.latest()) }
+    } catch (e: Exception) {
+        _uiState.update { it.copy(errorMessage = "Something went wrong") }
+    }
+}`,
+            good: `fun load() = viewModelScope.launch {
+    try {
+        _uiState.update { it.copy(items = repository.latest()) }
+    } catch (e: IOException) {
+        _uiState.update { it.copy(errorMessage = "No connection") }
+    }
+}`,
+            why: 'Cancelling a coroutine throws <code>CancellationException</code> inside it. <code>catch (e: Exception)</code> swallows it, so cancelled work keeps going and records a fake error. Catch the specific failures, or rethrow <code>CancellationException</code>.',
+          },
         ],
         visual(el) {
           const pool = ['Compose tips', 'Kotlin 2.2 notes', 'Room 2.8 notes', 'Hilt in 5 minutes', 'Paging 3 basics'];
@@ -2018,6 +2851,233 @@ dependencies {
           { q: 'Who builds the NavHost that connects every feature?', options: ['<code>:app</code>, which depends on every impl module', 'Each feature builds its own NavHost and they find each other at run time', '<code>:core:ui</code>'], a: 0, why: 'Only <code>:app</code> sees every impl, so it calls each feature’s <code>NavGraphBuilder</code> extension and passes callbacks between them.' },
           { q: 'What belongs in an api module?', options: ['Routes and small interfaces other features use', 'The screens and ViewModels', 'The Room database'], a: 0, why: 'Keep it small and stable. Everything that changes often lives in impl, where only the feature and <code>:app</code> recompile.' },
         ],
+        deeper: [
+          {
+            title: 'Share a service, not a screen: interface in api, binding in impl',
+            body: `
+<p>Sometimes a feature needs data, not navigation. Bookmarks wants to show which articles are downloaded, and downloads belong to News. Put a small interface in <code>:feature:news:api</code> and bind the real class in <code>:feature:news:impl</code> with Hilt’s <code>@Binds</code>. Bookmarks injects the interface and never sees the class behind it.</p>
+<p>Bookmarks compiles on its own, because it only needs the interface. Whether a binding exists is checked when Hilt builds the graph in <code>:app</code>. Leave news:impl out of <code>:app</code> and that build fails, with a clear error.</p>`,
+            code: `// :feature:news:api
+interface ArticleDownloads {
+    fun isDownloaded(id: Int): Flow<Boolean>
+}
+
+// :feature:news:impl
+class RoomArticleDownloads @Inject constructor(
+    private val dao: DownloadDao,
+) : ArticleDownloads {
+    override fun isDownloaded(id: Int) = dao.observeExists(id)
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class NewsBindingsModule {
+    @Binds abstract fun downloads(impl: RoomArticleDownloads): ArticleDownloads
+}
+
+// :feature:bookmarks:impl, knows only the interface
+@HiltViewModel
+class BookmarksViewModel @Inject constructor(
+    downloads: ArticleDownloads,
+) : ViewModel()`,
+            visual(el) {
+              let withImpl = true, busy = false;
+              const bm = node('BookmarksViewModel', ':feature:bookmarks:impl');
+              const api = node('ArticleDownloads', ':feature:news:api · interface');
+              const impl = node('RoomArticleDownloads', ':feature:news:impl · @Binds');
+              const app = node('SingletonComponent', ':app · Hilt builds the graph here');
+              const nodes = [bm, api, impl, app];
+              const o = out();
+              const calm = () => nodes.forEach(n => { n.classList.remove('on', 'ok', 'bad'); n.box.replaceChildren(); });
+              const paint = () => impl.classList.toggle('arc-d2-off', !withImpl);
+              async function step(n, text, cls, kind = 'on') {
+                n.classList.add(kind); tok(n, text, cls);
+                await sleep(520);
+                return o.isConnected;
+              }
+              async function compileFeature() {
+                if (busy) return; busy = true;
+                calm();
+                say(o, '<span class="muted">compiling :feature:bookmarks:impl…</span>');
+                if (!await step(bm, 'needs ArticleDownloads')) return;
+                if (!await step(api, 'interface found', 'arc-back', 'ok')) return;
+                bm.classList.remove('on'); bm.classList.add('ok');
+                say(o, `<span class="good">BUILD SUCCESSFUL:</span> bookmarks only needs the interface from news:api. ${withImpl ? '' : 'It compiles even now, without news:impl in :app. '}Who implements it is :app’s problem.`);
+                busy = false;
+              }
+              async function buildApp() {
+                if (busy) return; busy = true;
+                calm();
+                say(o, '<span class="muted">./gradlew :app:assembleDebug, Hilt collects every @InstallIn module on the classpath…</span>');
+                if (!await step(app, 'collecting modules')) return;
+                if (!await step(bm, 'asks for ArticleDownloads')) return;
+                if (!await step(api, 'who implements me?')) return;
+                if (withImpl) {
+                  if (!await step(impl, '@Binds → RoomArticleDownloads', 'arc-back', 'ok')) return;
+                  [bm, api, app].forEach(n => { n.classList.remove('on'); n.classList.add('ok'); });
+                  tok(bm, 'gets RoomArticleDownloads', 'arc-back');
+                  say(o, '<span class="good">BUILD SUCCESSFUL:</span> NewsBindingsModule came in through news:impl, so Hilt found the binding. Bookmarks still never named the class.');
+                } else {
+                  app.classList.remove('on'); app.classList.add('bad'); tok(app, 'MissingBinding', 'boom'); replay(app, 'shake');
+                  say(o, '<span class="bad">error: [Dagger/MissingBinding]</span> ArticleDownloads cannot be provided without an @Provides-annotated method. <span class="muted">The interface exists, but no module on :app’s classpath binds it.</span>');
+                }
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-mod-impl', ':app depends on news:impl', true, i => {
+                if (busy) { i.checked = withImpl; return; }
+                withImpl = i.checked; calm(); paint();
+                say(o, withImpl ? 'news:impl is back in :app, and with it NewsBindingsModule.' : 'news:impl is no longer a dependency of :app. Build both again.');
+              });
+              say(o, 'Build the feature alone, then the app. Then drop news:impl from :app.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd(':feature:bookmarks:impl:compileDebugKotlin', compileFeature), cmd(':app:assembleDebug', buildApp), sw),
+                h('div', { class: 'arc-graph' },
+                  h('div', { class: 'arc-row' }, bm),
+                  h('div', { class: 'arc-dir' }, '↓ injects'),
+                  h('div', { class: 'arc-row' }, api),
+                  h('div', { class: 'arc-dir' }, '↑ bound by'),
+                  h('div', { class: 'arc-row' }, impl),
+                  h('div', { class: 'arc-dir' }, '↑ collected in'),
+                  h('div', { class: 'arc-row' }, app)),
+                o);
+            },
+          },
+          {
+            title: 'Beware the :core:common grab bag',
+            body: `
+<p>Core modules hold what features share: models, the design system, networking. The easy shortcut is one <code>:core:common</code> for everything. Soon every feature depends on it, and every public change in it makes Gradle rerun the compile task of every feature, even those that never use the changed file.</p>
+<p>Split core by purpose, so each feature depends only on what it uses. Then a change to the date formatter reaches the two features that format dates and leaves the rest alone. The same split keeps more of the build cache valid on CI.</p>`,
+            code: `// feature/settings/impl/build.gradle.kts
+dependencies {
+    implementation(projects.core.ui)          // not core.common
+}
+
+// feature/news/impl/build.gradle.kts
+dependencies {
+    implementation(projects.core.date)
+    implementation(projects.core.analytics)
+    implementation(projects.core.ui)
+}`,
+            visual(el) {
+              const FEAT = { news: ['date', 'analytics'], bookmarks: ['date'], search: ['analytics'], settings: ['ui'] };
+              const CORE = { date: 'DateFormat.kt', analytics: 'Analytics.kt', ui: 'Theme.kt' };
+              let split = false, busy = false;
+              const chip = (text, cls = '') => h('span', { class: `arc-screen ${cls}` }, text);
+              const featEls = {}; Object.keys(FEAT).forEach(f => { featEls[f] = chip(`:feature:${f}`); });
+              const appEl = chip(':app');
+              const coreRow = h('div', { class: 'arc-screens' });
+              const deps = h('div', { class: 'arc-mini' });
+              const tally = h('span', { class: 'arc-badge' }, 'tasks rerun: 0');
+              const o = out();
+              let coreEls = {};
+              function paint() {
+                coreEls = {};
+                if (split) Object.keys(CORE).forEach(c => { coreEls[c] = chip(`:core:${c}`); });
+                else coreEls.common = chip(':core:common');
+                coreRow.replaceChildren(...Object.values(coreEls));
+                deps.replaceChildren(...Object.entries(FEAT).map(([f, uses]) => h('span', {}, `:feature:${f} → ${split ? uses.map(u => ':core:' + u).join(', ') : ':core:common'}`)));
+              }
+              const calm = () => [appEl, ...Object.values(featEls), ...Object.values(coreEls)].forEach(c => c.classList.remove('arc-now', 'arc-d2-hot'));
+              async function edit(core) {
+                if (busy) return; busy = true;
+                calm();
+                const src = split ? coreEls[core] : coreEls.common;
+                src.classList.add('arc-now'); replay(src, 'pop');
+                say(o, `<span class="muted">public change in ${CORE[core]} (${split ? ':core:' + core : ':core:common'})…</span>`);
+                const hit = Object.keys(FEAT).filter(f => !split || FEAT[f].includes(core));
+                let n = 1; tally.textContent = `tasks rerun: ${n}`;
+                for (const f of hit) {
+                  await sleep(320); if (!o.isConnected) return;
+                  featEls[f].classList.add('arc-d2-hot'); replay(featEls[f], 'pop-soft');
+                  tally.textContent = `tasks rerun: ${++n}`;
+                }
+                await sleep(320); if (!o.isConnected) return;
+                appEl.classList.add('arc-d2-hot'); tally.textContent = `tasks rerun: ${++n}`; replay(tally, 'pop');
+                const skipped = Object.keys(FEAT).filter(f => !hit.includes(f));
+                say(o, split
+                  ? `<span class="good">${n} compile tasks reran.</span> Only ${hit.join(' and ')} use :core:${core}. ${skipped.map(f => ':feature:' + f).join(', ')} stayed up to date.`
+                  : `<span class="bad">${n} compile tasks reran.</span> Every feature depends on :core:common, so all of them had to recompile, even ${Object.keys(FEAT).find(f => !FEAT[f].includes(core))}, which never uses ${CORE[core]}.`);
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-mod-split', 'split :core:common by purpose', false, i => {
+                if (busy) { i.checked = split; return; }
+                split = i.checked; paint(); tally.textContent = 'tasks rerun: 0';
+                say(o, split ? 'Three small core modules. Each feature depends only on what it uses.' : 'One :core:common that every feature depends on.');
+              });
+              paint();
+              say(o, 'Edit a shared file and count the compile tasks that must run again.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('edit DateFormat.kt', () => edit('date')), cmd('edit Analytics.kt', () => edit('analytics')), sw, tally),
+                h('div', { class: 'arc-graph' },
+                  h('div', { class: 'arc-screens arc-d2-center' }, appEl),
+                  h('div', { class: 'arc-dir' }, '↓'),
+                  h('div', { class: 'arc-screens arc-d2-center' }, Object.values(featEls)),
+                  h('div', { class: 'arc-dir' }, '↓'),
+                  h('div', { class: 'arc-d2-center' }, coreRow)),
+                deps, o);
+            },
+          },
+          {
+            title: 'Keep the inside of a feature internal',
+            body: `
+<p>Kotlin’s <code>internal</code> means “visible inside this Gradle module only”. Mark screens, ViewModels and helpers in an impl module <code>internal</code>, and leave public only what <code>:app</code> calls: the <code>NavGraphBuilder</code> extension. Even if someone adds an impl-to-impl dependency by mistake, there is nothing to import.</p>`,
+            code: `// :feature:news:impl
+fun NavGraphBuilder.newsSection() {             // the only public entry point
+    composable<ArticleRoute> { entry ->
+        ArticleScreen(id = entry.toRoute<ArticleRoute>().id)
+    }
+}
+
+@Composable
+internal fun ArticleScreen(id: Int) { /* ... */ }
+
+internal fun Article.readingTime(): String = "\${words / 200} min"`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>Each Gradle module compiles against its compile classpath: its own <code>implementation</code> and <code>api</code> dependencies, plus the <code>api</code> dependencies of those, and nothing else. That is why a class in news:impl does not exist for bookmarks:impl. The Kotlin compiler reports an unresolved reference.</p>
+<p>Hilt still needs every module to build one graph. For each <code>@InstallIn</code> module and entry point, Hilt’s processor writes a small marker class into the package <code>hilt_aggregated_deps</code>. When <code>:app</code> builds, the Hilt Gradle plugin’s aggregating task scans the full runtime classpath of <code>:app</code> for those markers and generates the components from all of them. That is how a binding in news:impl reaches the graph while news:impl stays an <code>implementation</code> dependency.</p>`,
+        },
+        mistakes: [
+          {
+            title: 'Putting screens in the api module',
+            bad: `// :feature:news:api
+@Serializable data class ArticleRoute(val id: Int)
+
+@Composable
+fun ArticleScreen(id: Int, viewModel: ArticleViewModel = hiltViewModel()) { /* ... */ }`,
+            good: `// :feature:news:api
+@Serializable data class ArticleRoute(val id: Int)
+
+// ArticleScreen and ArticleViewModel live in :feature:news:impl`,
+            why: 'The api module is meant to be small and stable. With a screen inside, every UI tweak changes the api, and every feature that depends on it compiles again.',
+          },
+          {
+            title: 'Navigating by hand-built strings',
+            bad: `// :feature:bookmarks:impl
+navController.navigate("article/$id")`,
+            good: `// :feature:bookmarks:impl
+onOpenArticle(id)   // :app passes navController::navigateToArticle
+
+// :feature:news:api
+fun NavController.navigateToArticle(id: Int) = navigate(ArticleRoute(id))`,
+            why: 'A string route is copied into every feature that uses it, and a typo or a renamed argument only fails at run time. A <code>@Serializable</code> route from the api module is checked by the compiler.',
+          },
+          {
+            title: 'A feature that depends on :app',
+            bad: `// feature/bookmarks/impl/build.gradle.kts
+dependencies {
+    implementation(projects.app)   // to reach AppNavigator
+}`,
+            good: `// :feature:bookmarks:impl
+fun NavGraphBuilder.bookmarksSection(onOpenArticle: (Int) -> Unit) { /* ... */ }
+
+// :app passes the behaviour in
+bookmarksSection(onOpenArticle = navController::navigateToArticle)`,
+            why: '<code>:app</code> already depends on bookmarks:impl, so Gradle refuses the circular dependency. Pass behaviour down as a lambda and the feature never needs to know the app.',
+          },
+        ],
         visual(el) {
           const M = {
             app: { name: ':app', short: 'app', deps: ['newsImpl', 'bmImpl'], role: 'wires everything' },
@@ -2180,6 +3240,207 @@ fun Article.toUi(now: Instant): ArticleUi {
           { q: 'Which import breaks the dependency rule in the domain module?', options: ['<code>kotlinx.coroutines.flow.Flow</code>', '<code>androidx.room.Entity</code>', '<code>java.time.Instant</code>'], a: 1, why: 'Room is a framework in the outer ring. Flow and Instant are general-purpose types most teams allow in the domain.' },
           { q: 'The API renames <code>"title"</code> to <code>"headline"</code>. With a DTO and mappers, what changes?', options: ['The DTO: <code>@SerialName("headline") val title</code>', 'Every model from the DTO to the UI', 'The domain model and every use case'], a: 0, why: 'The DTO absorbs the JSON shape. Its Kotlin property keeps its name, so the mapper, the domain and the UI don’t change.' },
           { q: 'You are building a one-screen app with one API call. Is the full set of rings worth it?', options: ['Yes, every app needs every ring and mapper', 'Usually not: one model and a repository are enough until the app grows'], a: 1, why: 'Each ring adds models and mappers to maintain. Start small and split when a second data source or team shows up.' },
+        ],
+        deeper: [
+          {
+            title: 'Two kinds of arrows: imports point in, calls go out',
+            body: `
+<p>The dependency rule is about source code: which file imports which. It is not about which way calls travel at run time. When a use case asks for news, the call goes outward, into the data layer and down to Room. Yet the use case never imports anything from there.</p>
+<p>The trick is <b>dependency inversion</b>. The domain owns the <code>NewsRepository</code> interface. The data layer imports that interface and implements it, so its arrow points inward. At run time, Hilt hands the use case the data layer’s object behind the interface. Compare both views below.</p>`,
+            code: `// :core:domain declares what it needs
+interface NewsRepository { fun observeNews(): Flow<List<Article>> }
+
+class GetFeedUseCase @Inject constructor(private val repo: NewsRepository) {
+    operator fun invoke() = repo.observeNews()   // calls outward at run time
+}
+
+// :core:data imports the domain and implements it: the import points inward
+class OfflineFirstNewsRepository @Inject constructor(
+    private val dao: ArticleDao,
+) : NewsRepository { /* ... */ }
+
+// :core:data, the one place that connects them
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class DataModule {
+    @Binds abstract fun news(impl: OfflineFirstNewsRepository): NewsRepository
+}`,
+            visual(el) {
+              const C = {
+                vm: ['ForYouViewModel', 'mid'], uc: ['GetFeedUseCase', 'in'], repo: ['NewsRepository', 'in'],
+                impl: ['OfflineFirstNewsRepository', 'mid'], dao: ['ArticleDao', 'out'],
+              };
+              const els = {};
+              const ring = (cls, name, keys) => h('div', { class: `arc-ring arc-${cls}` }, h('span', { class: 'arc-ring-name' }, name),
+                h('div', { class: 'arc-cls' }, keys.map(k => (els[k] = h('span', { class: 'arc-cl' }, C[k][0] + (k === 'repo' ? ' «interface»' : ''))))));
+              const edges = h('div', { class: 'arc-d2-edges' });
+              const o = out();
+              let busy = false;
+              const VIEWS = {
+                imports: [
+                  ['vm', 'imports', 'uc', 'inward'],
+                  ['uc', 'imports', 'repo', 'same ring'],
+                  ['impl', 'implements', 'repo', 'inward'],
+                  ['impl', 'imports', 'dao', 'adapter uses framework'],
+                ],
+                calls: [
+                  ['vm', 'calls getFeed() on', 'uc', 'inward'],
+                  ['uc', 'calls observeNews() on', 'repo', 'same ring'],
+                  ['repo', 'runs as', 'impl', 'outward'],
+                  ['impl', 'calls observeAll() on', 'dao', 'outward'],
+                ],
+              };
+              async function show(kind, btn) {
+                if (busy) return; busy = true;
+                btns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+                edges.replaceChildren();
+                Object.values(els).forEach(e => e.classList.remove('on', 'hot'));
+                say(o, kind === 'imports' ? '<span class="muted">reading the import lines of each file…</span>' : '<span class="muted">following one getFeed() call at run time…</span>');
+                for (const [a, verb, b, tag] of VIEWS[kind]) {
+                  Object.values(els).forEach(e => e.classList.remove('on', 'hot'));
+                  els[a].classList.add('on'); els[b].classList.add(tag === 'outward' ? 'hot' : 'on');
+                  edges.append(h('div', { class: 'arc-d2-edge drop-in' + (tag === 'outward' ? ' hot' : '') },
+                    h('span', {}, C[a][0]), h('span', { class: 'arc-d2-verb' }, verb), h('span', {}, C[b][0]),
+                    h('span', { class: 'arc-tag' }, tag)));
+                  await sleep(650); if (!o.isConnected) return;
+                }
+                Object.values(els).forEach(e => e.classList.remove('on', 'hot'));
+                say(o, kind === 'imports'
+                  ? '<span class="good">no import leaves the domain.</span> GetFeedUseCase and NewsRepository name nothing outside the center. The data layer reaches in to implement the interface.'
+                  : '<span class="good">the call still reaches Room.</span> At run time it travels outward through the interface, to an object the domain never named. That is dependency inversion.');
+                busy = false;
+              }
+              const btns = [cmd('// imports: who names whom?', function () { show('imports', this); }), cmd('getFeed() // calls: who runs whom?', function () { show('calls', this); })];
+              say(o, 'Two views of the same five classes. Start with the imports.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, btns),
+                h('div', { class: 'arc-d2-rings' },
+                  ring('out', 'Frameworks', ['dao']),
+                  ring('mid', 'Adapters', ['vm', 'impl']),
+                  ring('in', 'Domain', ['uc', 'repo'])),
+                edges, o);
+            },
+          },
+          {
+            title: 'Map errors at the border too',
+            body: `
+<p>Models are not the only thing that crosses a border. Retrofit throws <code>HttpException</code> and <code>IOException</code>. If those reach the ViewModel, the UI layer has to import Retrofit to tell a 401 from a 503, and swapping the HTTP library touches every screen.</p>
+<p>Translate failures in the data layer, like you translate DTOs. The domain declares a small <code>DomainError</code> type for the cases the app cares about. The ViewModel maps those to messages and never sees a library exception.</p>`,
+            code: `// :core:domain
+sealed interface DomainError {
+    data object Offline : DomainError
+    data object SignedOut : DomainError
+    data class Server(val code: Int) : DomainError
+}
+class DomainException(val error: DomainError) : Exception()
+
+// :core:data, the only module that knows Retrofit
+suspend fun <T> apiCall(block: suspend () -> T): T = try {
+    block()
+} catch (e: IOException) {
+    throw DomainException(DomainError.Offline)
+} catch (e: HttpException) {
+    throw DomainException(if (e.code() == 401) DomainError.SignedOut else DomainError.Server(e.code()))
+}`,
+            visual(el) {
+              const F = {
+                off: { thrown: 'IOException', mapped: 'DomainError.Offline', msg: 'You’re offline. Showing saved stories.' },
+                auth: { thrown: 'HttpException(401)', mapped: 'DomainError.SignedOut', msg: 'Please sign in again.' },
+                down: { thrown: 'HttpException(503)', mapped: 'DomainError.Server(503)', msg: 'Server trouble. Try again soon.' },
+              };
+              let mapOn = true, busy = false;
+              const retro = node('Retrofit call', 'framework');
+              const mapper = node('apiCall { }', ':core:data · the border');
+              const vm = node('ForYouViewModel', 'turns failures into text');
+              const screen = h('div', { class: 'phone-note arc-d2-msg' }, 'Stories load normally.');
+              const o = out();
+              const all = [retro, mapper, vm];
+              const calm = () => all.forEach(n => { n.classList.remove('on', 'ok', 'bad', 'arc-d2-off'); n.box.replaceChildren(); });
+              async function fail(k) {
+                if (busy) return; busy = true;
+                calm();
+                const f = F[k];
+                retro.classList.add('bad'); tok(retro, f.thrown, 'boom'); replay(retro, 'shake');
+                say(o, `<span class="muted">the call throws ${f.thrown}…</span>`);
+                await sleep(650); if (!o.isConnected) return;
+                if (mapOn) {
+                  mapper.classList.add('on'); tok(mapper, f.mapped, 'arc-back');
+                  await sleep(650); if (!o.isConnected) return;
+                  mapper.classList.remove('on'); mapper.classList.add('ok');
+                  vm.classList.add('ok'); tok(vm, `when (${f.mapped.split('(')[0].replace('DomainError.', '')})`, 'arc-back');
+                  screen.textContent = f.msg; replay(screen, 'pop');
+                  say(o, `<span class="good">mapped:</span> ${f.thrown} became ${f.mapped}. The ViewModel imports only the domain.`);
+                } else {
+                  mapper.classList.add('arc-d2-off');
+                  await sleep(300); if (!o.isConnected) return;
+                  vm.classList.add('bad'); tok(vm, 'import retrofit2.HttpException', 'boom'); replay(vm, 'shake');
+                  screen.textContent = f.msg; replay(screen, 'pop');
+                  say(o, '<span class="bad">leaked:</span> the screen works, but ForYouViewModel now imports Retrofit to read the status code. Switch to Ktor and every ViewModel changes.');
+                }
+                busy = false;
+              }
+              const sw = switchEl('arc-d2-clean-err', 'map to DomainError in :core:data', true, i => {
+                if (busy) { i.checked = mapOn; return; }
+                mapOn = i.checked; calm();
+                say(o, mapOn ? 'Failures are translated at the border again.' : 'Now Retrofit’s exceptions travel up unchanged.');
+              });
+              say(o, 'Make the network fail three different ways.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('no network', () => fail('off')), cmd('HTTP 401', () => fail('auth')), cmd('HTTP 503', () => fail('down')), sw),
+                h('div', { class: 'arc-flow' }, retro, h('span', { class: 'arrow' }, '→'), mapper, h('span', { class: 'arrow' }, '→'), vm),
+                h('div', { class: 'arc-d2-screen' }, h('span', { class: 'arc-cap' }, 'on screen'), screen),
+                o);
+            },
+          },
+          {
+            title: 'Let the build enforce the rule',
+            body: `
+<p>A rule that lives only in code review gets broken on a busy day. Make the domain a plain Kotlin module with no Android plugin. <code>android.*</code>, Room and Compose are then not on its classpath, and an import of them simply does not compile. In a Kotlin Multiplatform project, <code>commonMain</code> gives the same guarantee, and the domain runs on iOS too.</p>`,
+            code: `// core/domain/build.gradle.kts
+plugins {
+    alias(libs.plugins.kotlin.jvm)   // no Android plugin: android.* is not on the classpath
+}
+
+dependencies {
+    implementation(libs.kotlinx.coroutines.core)   // Flow is allowed
+    implementation(libs.javax.inject)              // @Inject constructors, no Hilt runtime
+}`,
+          },
+        ],
+        underHood: {
+          body: `
+<p>A top-level extension function like <code>fun ArticleEntity.toDomain()</code> is compiled to a static method on a class named after its file, for example <code>ArticleMappersKt.toDomain(ArticleEntity)</code>. The receiver becomes the first parameter. There is no wrapper object and no reflection, and R8 can inline small ones in a release build.</p>
+<p><code>rows.map { it.toDomain() }</code> is an <code>inline</code> function, so the lambda becomes a plain loop that fills a new <code>ArrayList</code> sized to the input. The cost is one new list and one new object per row, on every emission. Room re-runs a Flow query whenever its table changes, so the mapping runs again too. For a few hundred rows that is tiny next to the query itself.</p>`,
+          code: `// fun ArticleEntity.toDomain() = Article(id, title, Instant.ofEpochMilli(publishedAtMillis))
+// compiles to roughly:
+public final class ArticleMappersKt {
+    public static final Article toDomain(ArticleEntity $this$toDomain) { ... }
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Mappers that live in the domain',
+            bad: `// :core:domain
+data class Article(val id: Int, val title: String, val publishedAt: Instant) {
+    fun toEntity() = ArticleEntity(id, title, publishedAt.toEpochMilli())
+}`,
+            good: `// :core:data
+fun Article.toEntity() = ArticleEntity(id, title, publishedAt.toEpochMilli())
+fun ArticleEntity.toDomain() = Article(id, title, Instant.ofEpochMilli(publishedAtMillis))`,
+            why: 'A mapper names both models, so it must sit in the outer ring. Inside <code>Article</code> it makes the domain import the Room entity, and the center depends on the database again.',
+          },
+          {
+            title: 'A repository interface that returns data-layer types',
+            bad: `// :core:domain
+interface NewsRepository {
+    fun observeNews(): Flow<List<ArticleEntity>>
+}`,
+            good: `// :core:domain
+interface NewsRepository {
+    fun observeNews(): Flow<List<Article>>
+}`,
+            why: 'The interface is the domain’s contract. If it mentions <code>ArticleEntity</code>, the domain needs the data module to compile, and a table change ripples into every use case.',
+          },
         ],
         visual(el) {
           const PUB = '2026-10-16T08:00:00Z', MS = Date.UTC(2026, 9, 16, 8, 0, 0);
