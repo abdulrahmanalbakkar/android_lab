@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16: new logo
+
+- **Logo:** "Parallel lines" (three topic lines bending into one station) replaces the "fun" badge in the header. It switches colors with the theme.
+- **Icons:** new favicon, 192 and 512 app icons, a maskable icon for Android home screens, and a new social preview image (og.png).
+- **Service worker cache:** version bumped to v6.
+
 ## 2026-10-16: depth pass 2 (no gaps)
 
 - **Every lesson deepened:** all 159 lessons now have Go deeper steps and Common mistakes, and almost all have an Under the hood panel. The site has 312 step demos in total.

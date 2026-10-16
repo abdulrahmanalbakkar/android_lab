@@ -63,4 +63,4 @@ All paths are relative, so the site works from a subpath such as `/android_lab/`
 
 ## Social preview and icons
 
-`og.png` (1200×630) is the Open Graph and Twitter image. `favicon.svg` is the tab icon; `icon-512.png` is the home-screen icon used by `manifest.webmanifest` and iOS.
+`og.png` (1200×630) is the Open Graph and Twitter image. The logo is "Parallel lines": three topic lines bending into one station. `favicon.svg` is the tab icon (a simpler two-line version that reads at 16px). `icon-192.png` is the iOS icon, `icon-512.png` and `icon-maskable-512.png` are the app icons in `manifest.webmanifest`. The header logo is inline SVG in `index.html` and its colors follow the theme.

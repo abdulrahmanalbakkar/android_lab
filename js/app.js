@@ -156,16 +156,20 @@ const Lab = (() => {
 
   function homeView() {
     const pins = tracks.flatMap(t => t.lessons.map(l => ({ t, l })));
-    let i = 0;
-    const text = h('p', { class: 'flash-text' }), from = h('span'), count = h('span');
-    const card = h('a', { class: 'flash-card', href: '#home' }, h('div', { class: 'flash-top' }, h('span', { class: 'flash-label' }, 'Pin this'), count), text, h('span', { class: 'flash-hint' }, from, ' →'));
-    const show = () => {
-      const { t, l } = pins[i];
-      text.textContent = l.remember; from.textContent = `${t.title} · ${l.title}`;
-      count.textContent = `${i + 1}/${pins.length}`; card.href = '#' + key(t, l);
-    };
-    if (pins.length) show();
-    if (pins.length > 1) flashTimer = setInterval(() => { i = (i + 1) % pins.length; replay(card, 'turn'); setTimeout(show, 300); }, 4500);
+    const at = k => { const [tid, lid] = (k || '').split('.'); const t = tracks.find(x => x.id === tid); const l = t && t.lessons.find(x => x.id === lid); return l && { t, l }; };
+    const doneTotal = pins.filter(p => state.done[key(p.t, p.l)]).length;
+    // Where to go next: the lesson after the last one opened (or that one, if unfinished); a new visitor starts at the first track.
+    let next = at(state.last);
+    if (next && state.done[key(next.t, next.l)]) { const nl = nextLesson(next.t); next = state.done[key(next.t, nl)] ? null : { t: next.t, l: nl }; }
+    if (!next && tracks[0]) next = { t: tracks[0], l: nextLesson(tracks[0]) };
+    const due = dueCards().length;
+    const row = (href, label, title, sub, primary) => h('a', { class: 'today-row' + (primary ? ' primary' : ''), href },
+      h('span', { class: 'today-label' }, label), h('span', { class: 'today-title' }, title), sub && h('span', { class: 'today-sub' }, sub));
+    const card = h('div', { class: 'today', 'aria-label': 'Today' },
+      h('div', { class: 'today-top' }, h('span', { class: 'flash-label' }, doneTotal ? 'Pick up where you left off' : 'Start here'), h('span', {}, `${doneTotal}/${pins.length} done`)),
+      next && row('#' + key(next.t, next.l), doneTotal ? 'Continue' : 'First lesson', next.l.title, `${next.t.title} · ${next.l.tagline || ''}`, true),
+      due ? row('#review', 'Review', `${due} card${due > 1 ? 's' : ''} due`, 'Answer them before you forget') : row('#review', 'Review', 'Nothing due', 'Quiz answers come back here on a schedule'),
+      row('#interview', 'Practice', 'Interview round', '10 mixed questions, optional timer'));
 
     const lessons = pins.length, projects = tracks.filter(isProject).length;
     return h('div', { class: 'wrap home' },
@@ -174,7 +178,7 @@ const Lab = (() => {
           h('h1', {}, 'Android Lab'),
           h('p', { class: 'lede' }, 'Learn Kotlin and Android one live demo at a time, then keep it with spaced review.'),
           h('p', { class: 'hero-meta' }, [`${tracks.length - projects} lines`, projects && `${projects} capstone${projects > 1 ? 's' : ''}`, `${lessons} stations`].filter(Boolean).join(' · '))),
-        h('div', { class: 'flash', 'aria-label': 'Rules from each lesson' }, card)),
+        card),
       mapView());
   }
 
@@ -205,13 +209,41 @@ const Lab = (() => {
         rs.length ? h('p', { class: 'xfers' + (miss.length ? ' mnote' : '') },
           h('span', { class: 'xfers-label' }, miss.length ? 'Recommended after' : 'Transfer from'),
           rs.map(r => h('span', { class: 'xchip', style: `--hue:${hue(r)}` }, h('span', { class: 'xring', 'aria-hidden': 'true' }), r.title))) : null),
-      h('ol', { class: 'mrail', 'aria-label': `${t.title} ${proj ? 'steps' : 'stations'}` }, t.lessons.map((l, j) => {
-        const k = key(t, l), d = state.done[k], at = state.last === k;
-        const side = j < n / 3 ? 'tip-l' : j >= (n * 2) / 3 ? 'tip-r' : null;
-        return h('li', { class: ['mstop', d && 'done', at && 'here'].filter(Boolean).join(' '), style: `--j:${j}` },
-          h('a', { href: '#' + k, class: side, 'data-tip': l.title, 'aria-label': `${j + 1}. ${l.title}${d ? ', done' : ''}${at ? ', you are here' : ''}` },
-            h('span', { class: ['mdot', d && 'done', at && 'here'].filter(Boolean).join(' ') })));
-      })));
+      lineBody(t, n, proj));
+  }
+
+  // Rail + always-visible captions. Names never depend on hover: the "Next" line names a lesson,
+  // tapping a station (touch) shows its name before navigating, and "All lessons" lists every name.
+  function lineBody(t, n, proj) {
+    const nxt = nextLesson(t), allDone = doneCount(t) === n;
+    const unit = proj ? 'steps' : 'lessons';
+    const peek = h('p', { class: 'mpeek', hidden: true, 'aria-live': 'polite' });
+    const list = h('ol', { class: 'mlist', hidden: true }, t.lessons.map((l, j) => {
+      const k = key(t, l), d = state.done[k];
+      return h('li', { class: d ? 'done' : null }, h('a', { href: '#' + k }, h('span', { class: 'mlist-n' }, d ? '✓' : String(j + 1)), l.title));
+    }));
+    const toggle = h('button', { type: 'button', class: 'mtoggle', 'aria-expanded': 'false', onclick() {
+      const open = list.hidden; list.hidden = !open; this.setAttribute('aria-expanded', String(open));
+      this.textContent = open ? `Hide ${unit}` : `All ${n} ${unit}`;
+    } }, `All ${n} ${unit}`);
+    let picked = null;
+    const touch = () => matchMedia('(hover: none)').matches;
+    const rail = h('ol', { class: 'mrail', 'aria-label': `${t.title} ${proj ? 'steps' : 'stations'}` }, t.lessons.map((l, j) => {
+      const k = key(t, l), d = state.done[k], at = state.last === k;
+      const side = j < n / 3 ? 'tip-l' : j >= (n * 2) / 3 ? 'tip-r' : null;
+      return h('li', { class: ['mstop', d && 'done', at && 'here'].filter(Boolean).join(' '), style: `--j:${j}` },
+        h('a', { href: '#' + k, class: side, 'data-tip': l.title, 'aria-label': `${j + 1}. ${l.title}${d ? ', done' : ''}${at ? ', you are here' : ''}`, onclick(e) {
+          if (!touch() || picked === k) return; // desktop, or second tap: go
+          e.preventDefault(); picked = k;
+          rail.querySelectorAll('a.picked').forEach(a => a.classList.remove('picked')); this.classList.add('picked');
+          peek.replaceChildren(...[h('span', { class: 'mpeek-n' }, `${j + 1}/${n}`), ' ', h('a', { href: '#' + k }, l.title, ' →'), d && h('span', { class: 'mpeek-done' }, ' done')].filter(Boolean));
+          peek.hidden = false;
+        } }, h('span', { class: ['mdot', d && 'done', at && 'here'].filter(Boolean).join(' ') })));
+    }));
+    const next = h('p', { class: 'mnext' },
+      nxt ? [h('span', { class: 'mnext-label' }, allDone ? 'Done · start again' : doneCount(t) ? 'Next' : 'Start'), ' ', h('a', { href: '#' + key(t, nxt) }, nxt.title, ' →')] : null,
+      toggle);
+    return h('div', { class: 'mbody' }, rail, peek, next, list);
   }
 
   function softNote(t, onClose) {
