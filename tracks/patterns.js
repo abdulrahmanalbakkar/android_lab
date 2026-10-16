@@ -76,7 +76,7 @@
     id: 'patterns',
     title: 'Design patterns',
     description: 'Classic design patterns written the idiomatic Kotlin way, with the places they show up in Android.',
-    group: 'Foundations', requires: ['oop'],
+    group: 'Foundations', requires: ['solid'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────

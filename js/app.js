@@ -24,9 +24,25 @@ const Lab = (() => {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
       if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {}, iv: s.iv || {} };
+      migrate();
     } catch (e) { /* storage blocked: run without saving */ }
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* same */ } }
+
+  // Lessons that moved between tracks. Saved progress, review cards and old links follow them.
+  const MOVED = {
+    'oop.srp': 'solid.srp', 'oop.open-closed': 'solid.open-closed', 'oop.liskov': 'solid.liskov', 'oop.isp': 'solid.isp', 'oop.dip': 'solid.dip',
+    'kotlin.coroutines': 'coroutines.basics', 'flow.structured': 'coroutines.structured', 'flow.dispatchers': 'coroutines.dispatchers', 'flow.channels': 'coroutines.channels',
+    'platform.channels': 'push.channels', 'platform.fcm': 'push.fcm', 'platform.messages': 'push.messages', 'platform.deeplinks': 'push.deeplinks',
+    'platform.workmanager': 'background.workmanager', 'platform.fgs': 'background.fgs', 'platform.receivers': 'background.receivers',
+    'arch.room': 'data.room', 'arch.net': 'data.net',
+  };
+  const MOVED_TRACKS = { platform: 'push' };
+  const moved = k => { if (!k) return k; const m = k.match(/^([\w-]+\.[\w-]+)(\..*)?$/); return m && MOVED[m[1]] ? MOVED[m[1]] + (m[2] || '') : k; };
+  function migrate() {
+    const remap = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [moved(k), v]));
+    state.done = remap(state.done); state.cards = remap(state.cards); state.last = moved(state.last);
+  }
 
   // ---------- tiny DOM helpers, also used by track files ----------
   function h(tag, props, ...kids) {
@@ -100,6 +116,8 @@ const Lab = (() => {
   function render() {
     clearInterval(flashTimer); clearInterval(ivTimer);
     const route = decodeURIComponent(location.hash.slice(1));
+    const to = MOVED[route] || MOVED_TRACKS[route];
+    if (to) { location.replace('#' + to); return; }
     let view; here = {};
     if (route === 'review') view = reviewView();
     else if (route === 'glossary') view = glossaryView();
@@ -576,7 +594,7 @@ const Lab = (() => {
   // Timed, mixed-topic practice from every lesson quiz. Options keep their order, so q.a always stays valid.
   // Nothing touches the review schedule unless the learner presses "Add missed to Review".
   const IV_PRESETS = [
-    { label: 'Android interview', tracks: ['kotlin', 'android', 'compose', 'flow', 'arch'] },
+    { label: 'Android interview', tracks: ['kotlin', 'android', 'compose', 'coroutines', 'flow', 'arch'] },
     { label: 'Kotlin only', tracks: ['kotlin', 'kdeep'] },
     { label: 'Everything', tracks: null },
   ];

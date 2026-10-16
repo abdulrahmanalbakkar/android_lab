@@ -329,7 +329,7 @@
     title: 'Ship the news reader',
     kind: 'project',
     group: 'Shipping',
-    requires: ['capapp', 'platform', 'build'],
+    requires: ['capapp', 'push', 'background', 'build'],
     description: 'Add breaking-news push to the offline-first news reader, harden it, and ship it to Play in stages.',
     builds: 'A signed, staged Play release of the news reader where a breaking story travels from your server through FCM to a notification that opens the right article, already synced into Room.',
     css,
@@ -340,7 +340,7 @@
         title: 'Channels and the permission ask',
         tagline: 'Make room for alerts on the device before the first push arrives.',
         level: 'intermediate',
-        refs: ['platform.channels', 'android.permissions'],
+        refs: ['push.channels', 'android.permissions'],
         body: `
 <p>We start on the device. The news reader from the last project shows headlines from Room. Now it gets two notification channels: <code>breaking</code> at high importance, so alerts pop up as heads-up banners, and <code>digest</code> at low importance for quiet updates. <code>NewsApp.onCreate()</code> creates both. Creating a channel that already exists never overrides what the user set, so the call runs on every launch.</p>
 <p>On Android 13 and higher the app also needs <code>POST_NOTIFICATIONS</code>, and a new install starts without it. We don’t ask at launch. A card in the feed explains what alerts are for, and only a tap on <b>Turn on</b> starts the system dialog. After a second no, the dialog stops appearing, so the card switches to opening the app’s notification settings.</p>
@@ -491,7 +491,7 @@ fun AlertsOptInCard(onEnabled: () -> Unit) {
         title: 'Tokens and topics',
         tagline: 'Register each install with your server and let readers pick categories.',
         level: 'intermediate',
-        refs: ['platform.fcm', 'platform.workmanager', 'data.datastore', 'arch.hilt'],
+        refs: ['push.fcm', 'background.workmanager', 'data.datastore', 'arch.hilt'],
         body: `
 <p>Now the app joins FCM. We add the Firebase BoM and <code>firebase-messaging</code>, whose Kotlin APIs now live in the main module, and declare <code>NewsMessagingService</code> with <code>exported="false"</code>. FCM gives each install a registration token and calls <code>onNewToken()</code> on first start and after every rotation. The callback only enqueues <code>TokenUploadWorker</code>, unique work with <code>REPLACE</code>, so an upload still waiting for a network is swapped for the newest token.</p>
 <p>Categories use topics. When a reader turns on Tech, <code>AlertsRepository</code> saves it in DataStore and calls <code>subscribeToTopic("news-tech")</code>. Your server sends one message to the topic and FCM fans it out. Topics fit public news like this. FCM tunes them for throughput rather than latency, and an install can follow up to 2,000 of them. Anything personal, like a reply to the reader’s comment, goes to tokens.</p>
@@ -677,7 +677,7 @@ class TokenUploadWorker @AssistedInject constructor(
         title: 'Data messages for breaking news',
         tagline: 'Send data, post the notification yourself, and know when your code runs.',
         level: 'intermediate',
-        refs: ['platform.messages', 'platform.fcm', 'platform.channels'],
+        refs: ['push.messages', 'push.fcm', 'push.channels'],
         body: `
 <p>Time to send. Your server calls the FCM HTTP v1 API with a data-only message to the topic <code>news-breaking</code>. It carries <code>type</code>, <code>article_id</code> and <code>title</code>, all strings, within the 4 KB limit. <code>android.priority</code> is <code>high</code> because every breaking message ends in a visible notification; FCM can downgrade high-priority messages that keep showing nothing. A <code>ttl</code> of one hour drops alerts that are no longer news, and a <code>collapse_key</code> means a phone that was offline gets only the newest one.</p>
 <p>Why not a notification message? In the background the SDK would draw it for us and our code would never run. We couldn’t pick the channel, attach a deep link with a back stack, or start a sync. A data message reaches <code>onMessageReceived()</code> in the foreground, in the background, and after the user swipes the app away, because FCM starts the process. A force-stopped app gets nothing until the user opens it again.</p>
@@ -803,7 +803,7 @@ class BreakingNotifier @Inject constructor(@ApplicationContext private val conte
         title: 'A tap opens the article',
         tagline: 'A deep link into the nav graph, with the feed underneath for Back.',
         level: 'intermediate',
-        refs: ['platform.deeplinks', 'compose2.navigation', 'android.backstack'],
+        refs: ['push.deeplinks', 'compose2.navigation', 'android.backstack'],
         body: `
 <p>A tap on the alert should open that article, and Back should land on the feed, not the home screen. We give <code>ArticleDetail</code> a deep link in the nav graph with <code>navDeepLink&lt;ArticleDetail&gt;(basePath = ...)</code>. The required <code>id</code> becomes a path segment, so the pattern is <code>https://news.example.com/article/{id}</code>.</p>
 <p><code>BreakingNotifier</code> now builds an <code>ACTION_VIEW</code> Intent for that URI, aimed at <code>MainActivity</code>, and wraps it with <code>TaskStackBuilder</code>. The PendingIntent starts a cleared task. When <code>NavHost</code> sets up its graph, it hands the launch Intent to <code>handleDeepLink()</code>, which puts <code>ArticleList</code>, the start destination, under the article. Each article has its own URI, so two alerts never share a PendingIntent. We pass <code>FLAG_IMMUTABLE</code>; Android 12+ requires choosing one.</p>
@@ -921,7 +921,7 @@ private fun openArticle(articleId: String): PendingIntent? {
         title: 'Prefetch with WorkManager',
         tagline: 'The push starts an expedited job, so the article is in Room before the tap.',
         level: 'advanced',
-        refs: ['platform.workmanager', 'arch.ssot', 'arch.hilt', 'data.caching'],
+        refs: ['background.workmanager', 'arch.ssot', 'arch.hilt', 'data.caching'],
         body: `
 <p>The alert is up, but the article itself may not be in Room yet. If the reader taps it on a train with no signal, the screen is empty. So <code>onMessageReceived()</code> also enqueues <code>ArticleSyncWorker</code>, which calls a new <code>NewsRepository.refreshArticle(id)</code> to fetch that one story and upsert it into Room. Room stays the single source of truth: <code>NewsViewModel</code> and <code>ArticleViewModel</code> observe it and update on their own.</p>
 <p>FCM gives a brief exemption to start an expedited job right after a high-priority message. So we call <code>setExpedited()</code> with <code>RUN_AS_NON_EXPEDITED_WORK_REQUEST</code> as the fallback when the quota runs out. On Android 11 and lower, WorkManager runs expedited work as a foreground service, so the worker overrides <code>getForegroundInfo()</code>. Unique work named after the article stops a repeated message from fetching twice, and the network constraint holds the job until the phone is online.</p>
@@ -1363,7 +1363,7 @@ androidComponents {
         title: 'Staged rollout and the whole path',
         tagline: 'Roll out in steps, keep old versions working, and watch it all run.',
         level: 'advanced',
-        refs: ['build.tracks', 'platform.messages', 'arch.ssot'],
+        refs: ['build.tracks', 'push.messages', 'arch.ssot'],
         body: `
 <p>Upload the bundle to internal testing, send a breaking alert from the dev project to a dev build, and tap through on a real phone. Then release to production as a staged rollout: 5% first, then 20, 50 and 100 while Android vitals and your push numbers stay calm. If crashes spike, halt it. Phones that already updated keep the new version, so the fix is a release with a higher <code>versionCode</code>.</p>
 <p>During a rollout, two app versions read the same pushes for days or weeks. Add payload keys, never rename or reuse them, and keep the <code>else -&gt; Unit</code> branch so older versions ignore types they don’t know. Send <code>appVersion</code> with each token registration, so the server knows which installs can handle a new message type.</p>

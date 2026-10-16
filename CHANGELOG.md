@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-16: track restructure (26 lines)
+
+- **OOP and SOLID** became **OOP basics** (encapsulation, composition, polymorphism, abstraction) and **SOLID principles** (5 lessons). Design patterns is now recommended after SOLID.
+- **Coroutines and Flow** became **Coroutines** (basics moved in from the Kotlin track, structured concurrency, dispatchers, channels) and **Flow** (8 lessons).
+- **Platform and push** became **Notifications and push** (channels, FCM, message types, deep links, under Shipping) and **Background work** (WorkManager, foreground services, receivers, under Going deeper).
+- **Room basics** and **Retrofit** moved from App architecture to **Data and networking**. Architecture is now design only.
+- **Saved progress:** completed lessons, review cards and "you are here" move to the new ids automatically. Old links such as `#platform.fcm` redirect.
+- **Kept together:** capstone "Review first" links, "recommended after" hints and the interview presets now use the new ids. The service worker cache version is bumped to v2.
+- **Testing:** all 26 lines and 192 lessons, at 1280px light and 400px dark. No script errors and no page wider than the screen.
+
 ## 2026-10-16: fact-check, capstones, interview mode, polish
 
 ### Fact-check (primary sources: Android, Kotlin, Firebase docs, AOSP/AndroidX source, kotlinc 2.2.20 output)

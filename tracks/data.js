@@ -1,6 +1,6 @@
-/* Data and storage track. Same shape as tracks/kotlin.js.
-   Room basics, the repository and Retrofit live in the architecture track; this one goes past them.
-   Demo styles live in the css string below; every class is prefixed dt-. */
+/* Data and networking track. Same shape as tracks/kotlin.js.
+   Room basics and Retrofit moved here from the architecture track; the repository and SSOT stay there.
+   Demo styles live in the css string below; classes are prefixed dt-, and the Room and Retrofit demos keep their arc- classes. */
 (() => {
   const { h, sleep, hl, replay, swap } = Lab;
   const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
@@ -11,6 +11,19 @@
   const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
   const toggle = (id, label, onchange) => {
     const input = h('input', { type: 'checkbox', id, onchange });
+    return Object.assign(h('label', { class: 'switch', for: id }, input, label), { input });
+  };
+
+  // Used by the Room basics and Retrofit lessons (moved from the architecture track).
+  // A labelled box with a slot that tokens land in.
+  function node(name, sub, ...extra) {
+    const slot = h('div', { class: 'arc-slot' });
+    const el = h('div', { class: 'arc-node' }, h('b', {}, name), sub ? h('small', { html: sub }) : null, ...extra, slot);
+    return Object.assign(el, { box: slot });
+  }
+  const switchEl = (id, label, checked, onchange) => {
+    const input = h('input', { type: 'checkbox', id, checked });
+    input.addEventListener('change', () => onchange(input));
     return Object.assign(h('label', { class: 'switch', for: id }, input, label), { input });
   };
 
@@ -130,13 +143,83 @@
 .dt-ver.dt-dev { outline: 2px dashed var(--warm); outline-offset: 2px; }
 .dt-ver.dt-on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .dt-ver.dt-fail { border-color: var(--err); background: var(--err-soft); color: var(--err); }
+
+/* Room basics and Retrofit: arc- rules copied from the architecture track */
+.arc-fit, .arc-udf, .arc-db, .arc-map, .arc-wire-row { min-width: 0; }
+.arc-node { flex: 1 1 150px; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; transition: border-color 0.2s, background 0.2s; }
+.arc-node > b { font: 600 0.84rem var(--mono); overflow-wrap: anywhere; }
+.arc-node > small { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+.arc-node.on { border-color: var(--accent); background: var(--accent-soft); }
+.arc-node.ask { border-style: dashed; border-color: var(--accent); }
+.arc-node.ok { border-color: var(--ok); }
+.arc-node.bad { border-color: var(--err); background: var(--err-soft); }
+.arc-slot { min-height: 34px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.arc-slot .token { font-size: 0.8rem; padding: 4px 10px; max-width: 100%; overflow-wrap: anywhere; }
+.token.arc-back { background: var(--ok); }
+.arc-dir { text-align: center; font: 600 0.78rem var(--mono); color: var(--muted); padding: 2px; }
+.arc-dir.bad { color: var(--err); }
+.arc-mini { display: grid; gap: 4px; }
+.arc-mini span { font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; background: var(--sunk); overflow-wrap: anywhere; }
+.arc-mini span.arc-new { background: var(--ok-soft); }
+.arc-node .chip { height: 32px; min-width: 0; font-size: 0.82rem; padding: 0 10px; }
+.arc-node .chip.total { justify-self: start; min-width: 80px; }
+.phone .item.arc-small { padding: 7px 10px; font-size: 0.82rem; }
+.phone.arc-top { justify-content: flex-start; gap: 6px; }
+
+.arc-udf { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
+.arc-col { display: grid; gap: 10px; min-width: 0; }
+.arc-lane { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line); min-height: 48px; }
+.arc-lane-name { font: 600 0.74rem var(--mono); color: var(--muted); min-width: 6.5em; }
+.arc-lane .token { font-size: 0.78rem; padding: 4px 10px; overflow-wrap: anywhere; max-width: 100%; }
+
+.arc-db { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.arc-table { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); min-width: 0; transition: border-color 0.2s; }
+.arc-table.inval { border-color: var(--warm); }
+.arc-tname { font: 600 0.74rem var(--mono); color: var(--muted); padding: 6px 10px; background: var(--sunk); }
+.arc-tr { display: grid; grid-template-columns: 3em minmax(0, 1fr) 4.2em; gap: 6px; padding: 7px 10px; border-top: 1px solid var(--line); font: 500 0.84rem var(--mono); align-items: center; }
+.arc-tr > span { overflow-wrap: anywhere; }
+.arc-tr.arc-th { font-weight: 700; color: var(--muted); border-top: 0; }
+.arc-tr.changed { background: var(--warm-soft); }
+.arc-tr.added { background: var(--ok-soft); }
+.arc-tr.bad { background: var(--err-soft); }
+.arc-empty { padding: 12px 10px; color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--line); }
+.arc-badge { justify-self: start; font: 600 0.72rem var(--mono); padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.arc-badge.hot { background: var(--warm); color: var(--accent-ink); }
+
+.arc-wire-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.arc-end { font: 700 0.8rem var(--mono); padding: 10px 12px; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); text-align: center; }
+.arc-end.bad { outline: 2px solid var(--err); }
+.arc-wire { position: relative; height: 40px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
+.arc-wire::before { content: ""; position: absolute; left: 10px; right: 10px; top: 50%; border-top: 2px dashed var(--line); }
+.arc-packet { position: absolute; top: 6px; left: 0; transform: translateX(0); transition: left 0.85s ease-in-out, transform 0.85s ease-in-out; font: 600 0.74rem var(--mono); padding: 5px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.arc-packet.far { left: 100%; transform: translateX(-100%); }
+.arc-packet.mid { left: 50%; transform: translateX(-50%); }
+.arc-packet.okp { background: var(--ok); }
+.arc-packet.errp { background: var(--err); }
+.arc-map { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.arc-json { display: grid; background: var(--code-bg); border-radius: 12px; padding: 10px 6px; min-height: 150px; align-content: start; overflow-x: auto; }
+.arc-json .branch::after { color: var(--t-c); }
+.arc-json .branch.hit::after { content: "  ✓"; }
+.arc-json .branch.ign { opacity: 0.45; text-decoration: line-through; }
+.arc-json .branch.ign::after { content: "   ignored"; }
+.arc-objslot { display: grid; min-height: 150px; place-items: center; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); padding: 10px; min-width: 0; }
+.arc-objslot .obj { min-width: 0; width: 100%; }
+.arc-cap { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+
+@media (max-width: 860px) {
+  .arc-udf, .arc-db, .arc-map { grid-template-columns: minmax(0, 1fr); }
+  .arc-udf .phone { justify-self: center; }
+}
+@media (max-width: 520px) {
+  .arc-wire-row { grid-template-columns: minmax(0, 1fr); }
+}
 `;
 
   Lab.addTrack({
     id: 'data',
-    title: 'Data and storage',
-    description: 'Pick the right place for each kind of data, then use DataStore, Room relations, migrations, Paging, MediaStore and caching well.',
-    group: 'Building apps', requires: ['arch'],
+    title: 'Data and networking',
+    description: 'Store data on the device with Room, DataStore and files, load it from the network with Retrofit, then cache and page it.',
+    group: 'Building apps', requires: ['android', 'coroutines'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────
@@ -254,173 +337,344 @@ val Context.dataStore by preferencesDataStore(
 
       // 2 ─────────────────────────────────────────────
       {
-        id: 'datastore',
-        title: 'DataStore',
-        tagline: 'Settings as a Flow, changed in safe transactions.',
-        level: 'intermediate',
+        id: 'room',
+        title: 'Room basics',
+        tagline: 'A table, a DAO, and queries that keep watching.',
         body: `
-<p>DataStore stores a small amount of data in one file. You read it through <code>data</code>, a <code>Flow</code> that emits the whole snapshot now and again after every change. You never read it synchronously, so the main thread never waits on disk.</p>
-<p>You write with <code>edit { }</code> (Preferences DataStore) or <code>updateData { }</code> (typed DataStore). Each call is a transaction. DataStore reads the current value, runs your block, writes a temp file and renames it into place. Edits run one at a time, so two concurrent increments both count.</p>
-<p>Preferences DataStore uses typed keys like <code>intPreferencesKey("font_size")</code>. Typed DataStore stores your own class through a <code>Serializer</code>, for example with kotlinx.serialization JSON or Protocol Buffers. Create one DataStore per file and keep it as a singleton. Two instances on the same file throw.</p>`,
-        code: `// Preferences DataStore: one instance per file, declared once at the top level
-val Context.dataStore by preferencesDataStore(name = "settings")
+<p>Room is a layer over SQLite. You describe a table with an <code>@Entity</code> data class, write queries in a <code>@Dao</code> interface, and list both in a <code>@Database</code> class. KSP generates the code that runs the SQL, and it checks your queries at compile time.</p>
+<p>Write operations are <code>suspend</code> functions, so they run off the main thread. Queries can return a <code>Flow</code>. A Flow query doesn’t run once and stop: Room re-runs it every time its table changes and emits the new result.</p>
+<p>Change the table below and watch both observers react on their own.</p>`,
+        code: `@Entity(tableName = "articles")
+data class ArticleEntity(
+    @PrimaryKey val id: Int,
+    val title: String,
+    val read: Boolean = false,
+)
 
-object Keys {
-    val THEME = stringPreferencesKey("theme")
-    val FONT_SIZE = intPreferencesKey("font_size")
+@Dao
+interface ArticleDao {
+    @Query("SELECT * FROM articles ORDER BY id")
+    fun observeAll(): Flow<List<ArticleEntity>>
+
+    @Query("SELECT COUNT(*) FROM articles WHERE read = 0")
+    fun observeUnreadCount(): Flow<Int>
+
+    @Insert suspend fun insert(article: ArticleEntity)
+    @Update suspend fun update(article: ArticleEntity)
+    @Delete suspend fun delete(article: ArticleEntity)
 }
 
-class SettingsRepository(private val store: DataStore<Preferences>) {
-    val theme: Flow<String> = store.data
-        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
-        .map { it[Keys.THEME] ?: "system" }
-        .distinctUntilChanged()
-
-    // read and write in one transaction, so no update is lost
-    suspend fun bumpFont() = store.edit { prefs ->
-        prefs[Keys.FONT_SIZE] = (prefs[Keys.FONT_SIZE] ?: 16) + 1
-    }
+@Database(entities = [ArticleEntity::class], version = 1)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun articleDao(): ArticleDao
 }
 
-// Typed DataStore: your own class plus a Serializer
-@Serializable
-data class UserSettings(val theme: String = "system", val fontSize: Int = 16)
-
-object UserSettingsSerializer : Serializer<UserSettings> {
-    override val defaultValue = UserSettings()
-
-    override suspend fun readFrom(input: InputStream): UserSettings =
-        try {
-            Json.decodeFromString(input.readBytes().decodeToString())
-        } catch (e: SerializationException) {
-            throw CorruptionException("Cannot read settings", e)
-        }
-
-    override suspend fun writeTo(t: UserSettings, output: OutputStream) =
-        output.write(Json.encodeToString(t).encodeToByteArray())
-}
-
-val Context.settingsStore by dataStore("user_settings.json", UserSettingsSerializer)
-
-suspend fun goDark(store: DataStore<UserSettings>) = store.updateData { it.copy(theme = "dark") }`,
-        remember: 'Read DataStore as a Flow, write it in edit { }. One instance per file.',
+// build.gradle.kts
+// ksp(libs.androidx.room.compiler)`,
+        remember: '@Entity is the table, @Dao the queries, @Database ties them up. A Flow query re-emits on every change.',
+        level: 'intermediate',
         terms: [
-          { term: 'Preferences DataStore', def: 'A DataStore that stores key-value pairs addressed by typed keys such as intPreferencesKey.' },
-          { term: 'Typed DataStore', def: 'A DataStore that stores one object of your own type, turned into bytes by a Serializer you provide.' },
-          { term: 'DataStore.edit', def: 'A suspend function that reads the current preferences, applies your changes and writes them atomically.' },
-          { term: 'CorruptionException', def: 'The exception a DataStore Serializer throws when the file cannot be decoded, so a corruption handler can replace it.' },
+          { term: '@Entity', def: 'A Room annotation that turns a data class into a database table.' },
+          { term: '@Dao', def: 'A Room annotation for an interface whose functions are the queries and writes for your tables.' },
+          { term: '@Database', def: 'A Room annotation on an abstract RoomDatabase class that lists the entities and exposes the DAOs.' },
+          { term: '@Upsert', def: 'A Room DAO annotation that inserts a row, or updates it if a row with the same primary key exists.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Declare the key and bump it inside a transaction.', code: 'val FONT_SIZE = [[intPreferencesKey]]("font_size")\n\nsuspend fun bump(store: DataStore<Preferences>) {\n    store.[[edit]] { prefs ->\n        prefs[FONT_SIZE] = (prefs[FONT_SIZE] ?: 16) + 1\n    }\n}', why: 'Keys are typed, so <code>prefs[FONT_SIZE]</code> is an <code>Int?</code>. <code>edit</code> runs the read and the write as one atomic step.' },
-          { type: 'bug', prompt: 'The app sometimes freezes on launch for a moment. Tap the line.', code: 'class MainActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        val theme = runBlocking { dataStore.data.first()[THEME] }\n        setContent {\n            AppTheme(theme) { App() }\n        }\n    }\n}', bug: 3, fix: '        // expose theme as a StateFlow in a ViewModel and use collectAsStateWithLifecycle() inside setContent', why: '<code>runBlocking</code> on the main thread waits for disk I/O and can drop frames or cause an ANR. Collect the Flow instead and show a default until the first value arrives.' },
+          { type: 'blank', prompt: 'Declare the table, its key, and a query that keeps emitting.', code: '@[[Entity]](tableName = "articles")\ndata class ArticleEntity(\n    @[[PrimaryKey]] val id: Int,\n    val title: String,\n)\n\n@Dao\ninterface ArticleDao {\n    @Query("SELECT * FROM articles")\n    fun observeAll(): [[Flow]]<List<ArticleEntity>>\n}', why: '<code>@Entity</code> makes the table, <code>@PrimaryKey</code> marks its key, and a <code>Flow</code> return type makes Room re-run the query on every change.' },
+          { type: 'bug', prompt: 'Calling one of these from a button click crashes the app. Tap the line.', code: '@Dao\ninterface ArticleDao {\n    @Query("SELECT * FROM articles ORDER BY id")\n    fun observeAll(): Flow<List<ArticleEntity>>\n\n    @Insert\n    fun insert(article: ArticleEntity)\n\n    @Delete\n    suspend fun delete(article: ArticleEntity)\n}', bug: 6, fix: '    suspend fun insert(article: ArticleEntity)', why: 'A blocking DAO call on the main thread throws <code>IllegalStateException</code>. Mark writes <code>suspend</code> and Room runs them off the main thread.' },
         ],
         quiz: [
-          { q: 'Two coroutines call <code>edit { it[COUNT] = (it[COUNT] ?: 0) + 1 }</code> at the same time, starting from 5. What is stored?', options: ['6, one update is lost', '7', 'It throws a concurrent modification error'], a: 1, why: 'DataStore runs edits one after another. The second edit reads the result of the first.' },
-          { q: 'How do you read a DataStore value?', options: ['A synchronous <code>get()</code>', 'Collect the <code>data</code> Flow', 'Query it with SQL'], a: 1, why: '<code>data</code> emits the current snapshot and every later change. There is no synchronous getter.' },
-          { q: 'Two classes each build their own DataStore for <code>settings.preferences_pb</code>. What happens?', options: ['They share the file safely', 'DataStore throws because more than one DataStore is active for the same file', 'The last writer wins silently'], a: 1, why: 'DataStore needs to be the only owner of its file. Declare it once with the top-level delegate or a DI singleton.' },
+          { q: 'You collect <code>dao.observeAll()</code>, then insert a row. What happens?', options: ['Nothing until you call <code>observeAll()</code> again', 'The Flow re-runs the query and emits the new list'], a: 1, why: 'Room tracks which tables a query reads and re-runs it after any write to them.' },
+          { q: 'Which annotation turns a data class into a table?', options: ['<code>@Dao</code>', '<code>@Entity</code>', '<code>@Database</code>'], a: 1, why: '<code>@Entity</code> describes a table. <code>@Dao</code> holds queries; <code>@Database</code> lists entities and DAOs.' },
+          { q: 'A plain <code>@Insert</code> gets an id that already exists. What happens?', options: ['The row is replaced', 'It throws <code>SQLiteConstraintException</code>', 'It is skipped silently'], a: 1, why: 'The default conflict strategy is ABORT. Use <code>@Upsert</code> or <code>onConflict</code> to change that.' },
+        ],
+        deeper: [
+          {
+            title: 'Flow queries and one-shot queries',
+            body: `
+<p>The return type decides how a query behaves. A function that returns <code>Flow</code> is not <code>suspend</code>. It runs when collected and again after every change. A <code>suspend</code> function runs once and returns the result as it was at that moment.</p>
+<p>Use a Flow for anything a screen shows. Use a one-shot query inside logic that needs a value now, like checking whether a row exists before a write.</p>`,
+            code: `@Dao
+interface ArticleDao {
+    @Query("SELECT * FROM articles ORDER BY id")
+    fun observeAll(): Flow<List<ArticleEntity>>          // keeps emitting
+
+    @Query("SELECT * FROM articles WHERE id = :id")
+    suspend fun getById(id: Int): ArticleEntity?         // runs once
+
+    @Query("SELECT * FROM articles WHERE id = :id")
+    fun observeById(id: Int): Flow<ArticleEntity?>       // null while the row is missing
+}`,
+          },
+          {
+            title: 'Room watches tables, not rows',
+            body: `
+<p>Room knows which tables a query reads, not which rows. Any write to <code>articles</code> re-runs every Flow query on that table, even one that only reads the row with id 1. The query then emits again, often with the exact same value.</p>
+<p>Usually that is cheap. When the collector does real work, like a redraw or a network call, add <code>distinctUntilChanged()</code> so equal results stop there. A <code>StateFlow</code> already does this for you.</p>`,
+            code: `val article: Flow<ArticleEntity?> =
+    dao.observeById(1)
+        .distinctUntilChanged()   // drop results equal to the last one`,
+            visual(el) {
+              let rows, runs = 1, draws = 1, distinct = false, busy = false, t1 = 0;
+              const body = h('div');
+              const table = h('div', { class: 'arc-table' }, h('div', { class: 'arc-tname' }, 'table: articles'),
+                h('div', { class: 'arc-tr arc-th' }, h('span', {}, 'id'), h('span', {}, 'title'), h('span', {}, 'edits')), body);
+              const runBadge = h('span', { class: 'arc-badge' }), valChip = h('span', { class: 'token arc-back' });
+              const drawBadge = h('span', { class: 'arc-badge' });
+              const Q = node('observeById(1)', '<code>WHERE id = 1</code>', runBadge, valChip);
+              const C = node('collector', 'redraws the detail screen', drawBadge);
+              const filt = h('div', { class: 'arc-dir' });
+              const o = out();
+              const rowEl = new Map();
+              function paint(mark) {
+                rowEl.clear();
+                body.replaceChildren(...rows.map(r => { const e = h('div', { class: 'arc-tr' + (mark === r.id ? ' changed' : '') }, h('span', {}, String(r.id)), h('span', {}, `"${r.title}"`), h('span', {}, String(r.n))); rowEl.set(r.id, e); return e; }));
+                runBadge.textContent = `query ran ${runs}×`;
+                drawBadge.textContent = `redrew ${draws}×`;
+                valChip.textContent = `"${rows[0].title}"`;
+                filt.textContent = distinct ? '↓ distinctUntilChanged()' : '↓';
+              }
+              async function write(id) {
+                if (busy) return; busy = true;
+                const r = rows.find(x => x.id === id), before = rows[0].title;
+                r.n++;
+                if (id === 1) r.title = ['Room 2.8', 'Room KMP', 'Room'][t1++ % 3];
+                say(o, hl(`dao.update(article${id})`) + ` <span class="muted">// row ${id} changed</span>`);
+                paint(id); replay(rowEl.get(id), 'pop-soft');
+                await sleep(500); if (!el.isConnected) return;
+                table.classList.add('inval');
+                o.append(h('div', { class: 'line drop-in', html: '<span class="muted">table "articles" changed: re-run its queries</span>' }));
+                await sleep(450); if (!el.isConnected) return;
+                runs++; Q.classList.add('on'); paint(); replay(Q, 'pop');
+                const same = rows[0].title === before;
+                await sleep(450); if (!el.isConnected) return;
+                Q.classList.remove('on'); table.classList.remove('inval');
+                if (same && distinct) {
+                  replay(filt, 'shake');
+                  o.append(h('div', { class: 'line drop-in', html: '<span class="good">same result, dropped by distinctUntilChanged()</span>' }));
+                } else {
+                  draws++; C.classList.add(same ? 'bad' : 'ok'); paint(); replay(C, 'pop');
+                  o.append(h('div', { class: 'line drop-in', html: same ? '<span class="bad">same result emitted again, the screen redrew for nothing</span>' : '<span class="good">row 1 really changed, the screen redrew</span>' }));
+                  await sleep(500); if (!el.isConnected) return;
+                  C.classList.remove('bad', 'ok');
+                }
+                busy = false;
+              }
+              const sw = switchEl('arc-d-distinct', '.distinctUntilChanged()', false, i => {
+                if (busy) { i.checked = distinct; return; }
+                distinct = i.checked; paint();
+                say(o, distinct ? 'Equal results now stop before the collector.' : 'Every re-run reaches the collector again.');
+              });
+              rows = [{ id: 1, title: 'Room', n: 0 }, { id: 2, title: 'Flow', n: 0 }, { id: 3, title: 'KSP', n: 0 }];
+              paint();
+              say(o, 'The query only reads row 1. Update row 3 and watch it run anyway.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('dao.update(article3)', () => write(3)), cmd('dao.update(article1)', () => write(1)), sw),
+                h('div', { class: 'arc-db' }, table, h('div', { class: 'arc-col' }, Q, filt, C)),
+                o);
+            },
+          },
+          {
+            title: 'Group writes in one transaction',
+            body: `
+<p>Each DAO write is its own transaction, and Room notifies observers when a transaction ends. If you replace a list with <code>deleteAll()</code> and then <code>insertAll()</code>, an observer can see the empty table in between. The screen flashes its empty state.</p>
+<p>Wrap related writes in a <code>@Transaction</code> DAO function, or in <code>db.withTransaction { }</code>. Observers then see one change, from the old rows straight to the new ones. If a write in the middle fails, the whole transaction rolls back.</p>`,
+            code: `@Dao
+abstract class ArticleDao {
+    @Query("DELETE FROM articles")
+    abstract suspend fun deleteAll()
+
+    @Insert
+    abstract suspend fun insertAll(rows: List<ArticleEntity>)
+
+    @Transaction
+    open suspend fun replaceAll(rows: List<ArticleEntity>) {
+        deleteAll()
+        insertAll(rows)
+    }
+}`,
+            visual(el) {
+              const SETS = [['Room', 'Flow', 'KSP'], ['Hilt', 'Paging', 'Coil'], ['Compose', 'DataStore', 'WorkManager']];
+              let set = 0, tx = true, busy = false;
+              const phone = h('div', { class: 'phone arc-top', role: 'img', 'aria-label': 'Screen preview' });
+              const lane = h('div', { class: 'arc-lane' }, h('span', { class: 'arc-lane-name' }, 'emissions'));
+              const o = out();
+              const draw = (list, anim) => phone.replaceChildren(...(list.length
+                ? list.map(t => h('div', { class: 'item arc-small' + (anim ? ' drop-in' : '') }, t))
+                : [h('p', { class: 'phone-note pop' }, 'No articles yet.')]));
+              const emit = (list) => {
+                const toks = lane.querySelectorAll('.token');
+                if (toks.length >= 5) toks[0].remove();
+                lane.append(h('span', { class: `token drop-in ${list.length ? 'arc-back' : 'boom'}` }, `[${list.length}]`));
+                draw(list, true); replay(phone, 'pop-soft');
+              };
+              const log = html => o.append(h('div', { class: 'line drop-in', html }));
+              async function replace() {
+                if (busy) return; busy = true;
+                const next = SETS[(set = (set + 1) % SETS.length)];
+                say(o, hl(tx ? 'dao.replaceAll(rows)  // @Transaction' : 'dao.deleteAll(); dao.insertAll(rows)'));
+                const step = async html => { await sleep(500); if (!el.isConnected) return false; log(html); return true; };
+                if (tx) {
+                  if (!await step('BEGIN')) return;
+                  if (!await step('DELETE FROM articles')) return;
+                  if (!await step('INSERT INTO articles … (3 rows)')) return;
+                  if (!await step('COMMIT <span class="muted">→ observers notified once</span>')) return;
+                  await sleep(300); if (!el.isConnected) return;
+                  emit(next);
+                  log('<span class="good">one emission: the old list went straight to the new one</span>');
+                } else {
+                  if (!await step('DELETE FROM articles <span class="muted">→ commit, observers notified</span>')) return;
+                  await sleep(250); if (!el.isConnected) return;
+                  emit([]);
+                  if (!await step('INSERT INTO articles … (3 rows) <span class="muted">→ commit, notified again</span>')) return;
+                  await sleep(250); if (!el.isConnected) return;
+                  emit(next);
+                  log('<span class="bad">two emissions: the screen showed its empty state for a moment</span>');
+                }
+                busy = false;
+              }
+              const sw = switchEl('arc-d-tx', 'inside one @Transaction', true, i => {
+                if (busy) { i.checked = tx; return; }
+                tx = i.checked;
+                say(o, tx ? 'Both writes run in one transaction again.' : 'Now each write commits on its own. Replace the list and watch the screen.');
+              });
+              draw(SETS[0]); lane.append(h('span', { class: 'token arc-back' }, '[3]'));
+              say(o, 'Replace all rows. Then turn the transaction off and do it again.');
+              el.append(
+                h('div', { class: 'controls arc-fit' }, cmd('replaceAll(newRows)', replace), sw),
+                h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' }, lane, o)));
+            },
+          },
+        ],
+        underHood: {
+          body: `
+<p>KSP generates a class for every DAO and for the database, named like <code>ArticleDao_Impl</code> and <code>AppDatabase_Impl</code>. Each <code>@Query</code> becomes code that prepares the SQL statement, binds your arguments and reads each row’s columns into your entity’s constructor. Queries are checked against the schema while this code is generated, which is why a typo in a column name fails the build.</p>
+<p>For Flow queries, Room registers the query’s table names with its <code>InvalidationTracker</code>. The tracker adds triggers to those tables that record each change in a small temporary table. When a write transaction ends, Room reads that record, finds the observers of the changed tables and re-runs their queries. That is the whole mechanism: table-level change tracking, with no knowledge of rows.</p>`,
+          code: `// Simplified shape of the generated code, not the exact source
+class ArticleDao_Impl(private val db: RoomDatabase) : ArticleDao {
+    override fun observeAll(): Flow<List<ArticleEntity>> =
+        db.createFlow(tables = arrayOf("articles")) {        // re-run when "articles" changes
+            db.query("SELECT * FROM articles ORDER BY id") { row ->
+                ArticleEntity(row.getInt("id"), row.getText("title"), row.getInt("read") != 0)
+            }
+        }
+
+    override suspend fun insert(article: ArticleEntity) =
+        db.writeTransaction { insertAdapter.insert(article) }   // off the main thread
+}`,
+        },
+        mistakes: [
+          {
+            title: 'Building the database more than once',
+            bad: `class NewsRepository(context: Context) {
+    private val db = Room.databaseBuilder(context, AppDatabase::class.java, "news.db").build()
+}`,
+            good: `@Provides @Singleton
+fun provideDb(@ApplicationContext context: Context): AppDatabase =
+    Room.databaseBuilder(context, AppDatabase::class.java, "news.db").build()`,
+            why: 'Each instance has its own invalidation tracker. A write through one instance doesn’t wake Flows from another, so screens go stale. Build one database for the app.',
+          },
+          {
+            title: 'A field type Room can’t store',
+            bad: `@Entity
+data class ArticleEntity(
+    @PrimaryKey val id: Int,
+    val tags: List<String>,
+)`,
+            good: `class Converters {
+    @TypeConverter fun fromTags(tags: List<String>): String = Json.encodeToString(tags)
+    @TypeConverter fun toTags(value: String): List<String> = Json.decodeFromString(value)
+}
+
+@Database(entities = [ArticleEntity::class], version = 1)
+@TypeConverters(Converters::class)
+abstract class AppDatabase : RoomDatabase()`,
+            why: 'The build fails with “Cannot figure out how to save this field into database”. A <code>@TypeConverter</code> maps it to a column type. If you need to query by tag, use a separate table instead.',
+          },
         ],
         visual(el) {
-          const st = { theme: 'dark', font: 16 };
-          let typed = false, emissions = 1, running = false, blocking = false;
-          const queue = [];
-          const file = h('div', { class: 'dt-file' });
-          const txs = h('div', { class: 'dt-queue' });
-          const uiText = h('p', { class: 'dt-ui-text' }, 'Derby tonight: kickoff at 20:00');
-          const uiMeta = h('span', { class: 'dt-sub' });
-          const ui = h('div', { class: 'dt-ui' }, h('span', { class: 'dt-label' }, 'UI collecting data'), uiText, uiMeta);
-          const track = h('div', { class: 'lane-track' });
+          const pool = ['Hilt', 'Retrofit', 'Paging', 'DataStore', 'WorkManager', 'Compose', 'Coil'];
+          let rows = [{ id: 1, title: 'Room', read: false }, { id: 2, title: 'Flow', read: true }, { id: 3, title: 'KSP', read: false }];
+          let nextId = 4, p = 0, busy = false, nAll = 1, nCount = 1;
+          const body = h('div');
+          const table = h('div', { class: 'arc-table' }, h('div', { class: 'arc-tname' }, 'table: articles'),
+            h('div', { class: 'arc-tr arc-th' }, h('span', {}, 'id'), h('span', {}, 'title'), h('span', {}, 'read')), body);
+          const allList = h('div', { class: 'arc-mini' });
+          const allBadge = h('span', { class: 'arc-badge' });
+          const cnt = h('span', { class: 'chip total' });
+          const cntBadge = h('span', { class: 'arc-badge' });
+          const obsAll = node('observeAll()', '<code>.collect { list -> … }</code>', allBadge, allList);
+          const obsCnt = node('observeUnreadCount()', '<code>.collect { n -> … }</code>', cntBadge, cnt);
           const o = out();
-          const paintFile = changed => {
-            const mark = (k, v) => (k === changed ? `<span class="dt-hit">${v}</span>` : v);
-            file.innerHTML = typed
-              ? `<span class="dt-fname">files/datastore/user_settings.json</span>\n{ "theme": ${mark('theme', `"${st.theme}"`)}, "fontSize": ${mark('font', st.font)} }`
-              : `<span class="dt-fname">files/datastore/settings.preferences_pb</span>\ntheme     = ${mark('theme', `"${st.theme}"`)}\nfont_size = ${mark('font', st.font)}`;
-          };
-          const paintUi = () => {
-            ui.classList.toggle('dt-dark', st.theme === 'dark');
-            uiText.style.fontSize = Math.min(st.font, 26) + 'px';
-            uiMeta.textContent = `theme = ${st.theme} · fontSize = ${st.font} · emission #${emissions}`;
-          };
-          const frames = () => {
-            track.replaceChildren(...Array.from({ length: 12 }, (_, i) => h('div', { class: 'bar dt-frame', style: `left:${i * 8.3 + 1}%;width:3%` })));
-          };
-          const labels = () => {
-            const next = st.theme === 'dark' ? 'light' : 'dark';
-            themeBtn.innerHTML = hl(typed ? `updateData { it.copy(theme = "${next}") }` : `edit { it[THEME] = "${next}" }`);
-            fontBtn.innerHTML = hl(typed ? '2x launch { updateData { it.copy(fontSize = it.fontSize + 1) } }' : '2x launch { edit { it[FONT] = (it[FONT] ?: 16) + 1 } }');
-          };
-          async function drain() {
-            if (running) return; running = true;
-            while (queue.length) {
-              const tx = queue[0];
-              tx.chip.classList.add('dt-run'); replay(tx.chip, 'pop');
-              line(o, `<span class="muted">${tx.name}:</span> read file, ${tx.key === 'font' ? 'fontSize' : 'theme'} = ${tx.key === 'font' ? st.font : `"${st.theme}"`}`);
-              await sleep(420); if (!o.isConnected) return;
-              tx.apply();
-              line(o, `<span class="muted">${tx.name}:</span> block sets ${tx.key === 'font' ? `fontSize = ${st.font}` : `theme = "${st.theme}"`}`);
-              await sleep(380); if (!o.isConnected) return;
-              paintFile(tx.key); replay(file, 'pop-soft');
-              line(o, `<span class="muted">${tx.name}:</span> write temp file, rename over the old one`);
-              await sleep(380); if (!o.isConnected) return;
-              emissions++; paintUi(); replay(ui, 'pop');
-              line(o, `<span class="good">data emits</span> the new snapshot`);
-              tx.chip.classList.remove('dt-run'); tx.chip.classList.add('dt-done');
-              queue.shift();
-              await sleep(260); if (!o.isConnected) return;
-            }
-            running = false;
-            paintFile(); labels();
-            await sleep(900); if (!o.isConnected || running) return;
-            txs.replaceChildren();
+          const rowEl = new Map();
+          function paintTable(mark = {}) {
+            rowEl.clear();
+            body.replaceChildren(...(rows.length ? rows.map(r => {
+              const e = h('div', { class: 'arc-tr' + (mark[r.id] ? ' ' + mark[r.id] : '') }, h('span', {}, String(r.id)), h('span', {}, `"${r.title}"`), h('span', {}, r.read ? '1' : '0'));
+              rowEl.set(r.id, e); return e;
+            }) : [h('div', { class: 'arc-empty' }, 'No rows. Insert one.')]));
           }
-          let n = 0;
-          const enqueue = (key, apply) => {
-            const name = `edit #${++n}`;
-            const chip = h('span', { class: 'dt-tx drop-in' }, name);
-            txs.append(chip); queue.push({ name, key, apply, chip });
+          function paintObs(hot) {
+            allList.replaceChildren(...(rows.length ? rows.map(r => h('span', {}, `${r.read ? '✓' : '•'} ${r.title}`)) : [h('span', {}, '(empty list)')]));
+            const unread = rows.filter(r => !r.read).length;
+            const same = cnt.textContent === String(unread);
+            cnt.textContent = String(unread);
+            allBadge.textContent = `emission #${nAll}`; cntBadge.textContent = `emission #${nCount}${hot && same ? ' · same value' : ''}`;
+            allBadge.classList.toggle('hot', !!hot); cntBadge.classList.toggle('hot', !!hot);
+            if (hot) { replay(obsAll, 'pop'); replay(obsCnt, 'pop'); }
+          }
+          async function write(sql, change, mark) {
+            if (busy) return; busy = true;
+            say(o, hl(sql));
+            change();
+            paintTable(mark);
+            const e = mark && rowEl.get(+Object.keys(mark)[0]);
+            if (e) replay(e, 'drop-in');
+            await sleep(450); if (!el.isConnected) return;
+            table.classList.add('inval'); replay(table, 'pop-soft');
+            o.append(h('div', { class: 'line drop-in', html: hl('// Room: table "articles" changed, re-running 2 queries') }));
+            await sleep(450); if (!el.isConnected) return;
+            nAll++; nCount++; paintObs(true);
+            await sleep(500); if (!el.isConnected) return;
+            table.classList.remove('inval'); paintTable();
+            busy = false;
+          }
+          const insert = () => {
+            const t = pool[p++ % pool.length], id = nextId++;
+            write(`dao.insert(ArticleEntity(${id}, "${t}"))`, () => rows.push({ id, title: t, read: false }), { [id]: 'added' });
           };
-          const themeBtn = cmd('', () => {
-            if (queue.length >= 3) { replay(txs, 'shake'); return; }
-            if (!running) say(o, 'One edit is one transaction:');
-            enqueue('theme', () => { st.theme = st.theme === 'dark' ? 'light' : 'dark'; });
-            drain();
-          });
-          const fontBtn = cmd('', () => {
-            if (queue.length >= 3) { replay(txs, 'shake'); return; }
-            if (!running) say(o, `Two coroutines edit at once. Start: fontSize = ${st.font}. They run one after the other:`);
-            enqueue('font', () => { st.font += 1; });
-            enqueue('font', () => { st.font += 1; });
-            drain();
-          });
-          const blockBtn = cmd('runBlocking { dataStore.data.first() }', async () => {
-            if (blocking) return; blocking = true;
-            frames();
-            const bar = h('div', { class: 'bar block', style: 'left:18%;width:0' });
-            track.append(bar);
-            say(o, '<span class="muted">main thread waits for disk...</span>');
-            await sleep(40); if (!o.isConnected) return;
-            bar.classList.add('dt-grow'); bar.style.width = '55%';
-            await sleep(950); if (!o.isConnected) return;
-            track.querySelectorAll('.dt-frame').forEach((f, i) => { if (i >= 2 && i <= 8) f.classList.add('dt-lost'); });
-            say(o, '<span class="bad">Choreographer:</span> Skipped 34 frames! The application may be doing too much work on its main thread.');
-            line(o, '<span class="muted">// fix: collect data in a ViewModel and show a default until it emits</span>');
-            replay(ui, 'shake');
-            blocking = false;
-          });
-          const typedSw = toggle('dt-ds-typed', 'typed DataStore (JSON Serializer)', () => {
-            if (running) { typedSw.input.checked = typed; replay(txs, 'shake'); return; }
-            typed = typedSw.input.checked;
-            paintFile(); labels(); replay(file, 'flip');
-            say(o, typed ? 'Same data, now one <code>UserSettings</code> object. You change it with <code>updateData { it.copy(...) }</code>.' : 'Back to key-value pairs with typed keys.');
-          });
-          frames(); paintFile(); paintUi(); labels();
-          say(o, 'The UI is collecting <code>dataStore.data</code>. Change a value and watch the transaction.');
+          const markRead = () => {
+            if (busy) return;
+            const r = rows.find(x => !x.read);
+            if (!r) { replay(table, 'shake'); say(o, '<span class="muted">Every row is already read. Insert one first.</span>'); return; }
+            write(`dao.update(article${r.id}.copy(read = true))`, () => { r.read = true; }, { [r.id]: 'changed' });
+          };
+          const del = async () => {
+            if (busy) return;
+            const r = rows[rows.length - 1];
+            if (!r) { replay(table, 'shake'); say(o, '<span class="muted">The table is empty. Insert a row first.</span>'); return; }
+            busy = true;
+            const e = rowEl.get(r.id); e.classList.add('leave');
+            await sleep(420); if (!el.isConnected) return;
+            busy = false;
+            write(`dao.delete(article${r.id})`, () => { rows = rows.filter(x => x !== r); });
+          };
+          const dup = () => {
+            if (busy) return;
+            const r = rows[0];
+            if (!r) { replay(table, 'shake'); say(o, '<span class="muted">The table is empty, so there is no id to clash with.</span>'); return; }
+            paintTable({ [r.id]: 'bad' }); replay(rowEl.get(r.id), 'shake');
+            say(o, `<span class="bad">SQLiteConstraintException:</span> UNIQUE constraint failed: articles.id <span class="muted">// nothing was written, so nothing emits</span>`);
+          };
+          paintTable(); paintObs(false);
+          say(o, 'Both observers are collecting. Change the table and watch them re-emit.');
           el.append(
-            h('div', { class: 'dt-grid' },
-              h('div', { class: 'dt-card' }, h('span', { class: 'dt-label' }, 'On disk'), file, h('span', { class: 'dt-label' }, 'Edits, one at a time'), txs),
-              ui),
-            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'main thread'), track)),
-            h('div', { class: 'controls' }, themeBtn, fontBtn, blockBtn, typedSw),
+            h('div', { class: 'arc-db' }, table, h('div', { class: 'arc-col' }, obsAll, obsCnt)),
+            h('div', { class: 'controls arc-fit' },
+              cmd('dao.insert(…)', insert),
+              cmd('dao.update(it.copy(read = true))', markRead),
+              cmd('dao.delete(last)', del),
+              cmd('dao.insert(ArticleEntity(1, "Dup"))', dup)),
             o);
         },
       },
@@ -939,6 +1193,492 @@ class MigrationTest {
 
       // 5 ─────────────────────────────────────────────
       {
+        id: 'datastore',
+        title: 'DataStore',
+        tagline: 'Settings as a Flow, changed in safe transactions.',
+        level: 'intermediate',
+        body: `
+<p>DataStore stores a small amount of data in one file. You read it through <code>data</code>, a <code>Flow</code> that emits the whole snapshot now and again after every change. You never read it synchronously, so the main thread never waits on disk.</p>
+<p>You write with <code>edit { }</code> (Preferences DataStore) or <code>updateData { }</code> (typed DataStore). Each call is a transaction. DataStore reads the current value, runs your block, writes a temp file and renames it into place. Edits run one at a time, so two concurrent increments both count.</p>
+<p>Preferences DataStore uses typed keys like <code>intPreferencesKey("font_size")</code>. Typed DataStore stores your own class through a <code>Serializer</code>, for example with kotlinx.serialization JSON or Protocol Buffers. Create one DataStore per file and keep it as a singleton. Two instances on the same file throw.</p>`,
+        code: `// Preferences DataStore: one instance per file, declared once at the top level
+val Context.dataStore by preferencesDataStore(name = "settings")
+
+object Keys {
+    val THEME = stringPreferencesKey("theme")
+    val FONT_SIZE = intPreferencesKey("font_size")
+}
+
+class SettingsRepository(private val store: DataStore<Preferences>) {
+    val theme: Flow<String> = store.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { it[Keys.THEME] ?: "system" }
+        .distinctUntilChanged()
+
+    // read and write in one transaction, so no update is lost
+    suspend fun bumpFont() = store.edit { prefs ->
+        prefs[Keys.FONT_SIZE] = (prefs[Keys.FONT_SIZE] ?: 16) + 1
+    }
+}
+
+// Typed DataStore: your own class plus a Serializer
+@Serializable
+data class UserSettings(val theme: String = "system", val fontSize: Int = 16)
+
+object UserSettingsSerializer : Serializer<UserSettings> {
+    override val defaultValue = UserSettings()
+
+    override suspend fun readFrom(input: InputStream): UserSettings =
+        try {
+            Json.decodeFromString(input.readBytes().decodeToString())
+        } catch (e: SerializationException) {
+            throw CorruptionException("Cannot read settings", e)
+        }
+
+    override suspend fun writeTo(t: UserSettings, output: OutputStream) =
+        output.write(Json.encodeToString(t).encodeToByteArray())
+}
+
+val Context.settingsStore by dataStore("user_settings.json", UserSettingsSerializer)
+
+suspend fun goDark(store: DataStore<UserSettings>) = store.updateData { it.copy(theme = "dark") }`,
+        remember: 'Read DataStore as a Flow, write it in edit { }. One instance per file.',
+        terms: [
+          { term: 'Preferences DataStore', def: 'A DataStore that stores key-value pairs addressed by typed keys such as intPreferencesKey.' },
+          { term: 'Typed DataStore', def: 'A DataStore that stores one object of your own type, turned into bytes by a Serializer you provide.' },
+          { term: 'DataStore.edit', def: 'A suspend function that reads the current preferences, applies your changes and writes them atomically.' },
+          { term: 'CorruptionException', def: 'The exception a DataStore Serializer throws when the file cannot be decoded, so a corruption handler can replace it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Declare the key and bump it inside a transaction.', code: 'val FONT_SIZE = [[intPreferencesKey]]("font_size")\n\nsuspend fun bump(store: DataStore<Preferences>) {\n    store.[[edit]] { prefs ->\n        prefs[FONT_SIZE] = (prefs[FONT_SIZE] ?: 16) + 1\n    }\n}', why: 'Keys are typed, so <code>prefs[FONT_SIZE]</code> is an <code>Int?</code>. <code>edit</code> runs the read and the write as one atomic step.' },
+          { type: 'bug', prompt: 'The app sometimes freezes on launch for a moment. Tap the line.', code: 'class MainActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        val theme = runBlocking { dataStore.data.first()[THEME] }\n        setContent {\n            AppTheme(theme) { App() }\n        }\n    }\n}', bug: 3, fix: '        // expose theme as a StateFlow in a ViewModel and use collectAsStateWithLifecycle() inside setContent', why: '<code>runBlocking</code> on the main thread waits for disk I/O and can drop frames or cause an ANR. Collect the Flow instead and show a default until the first value arrives.' },
+        ],
+        quiz: [
+          { q: 'Two coroutines call <code>edit { it[COUNT] = (it[COUNT] ?: 0) + 1 }</code> at the same time, starting from 5. What is stored?', options: ['6, one update is lost', '7', 'It throws a concurrent modification error'], a: 1, why: 'DataStore runs edits one after another. The second edit reads the result of the first.' },
+          { q: 'How do you read a DataStore value?', options: ['A synchronous <code>get()</code>', 'Collect the <code>data</code> Flow', 'Query it with SQL'], a: 1, why: '<code>data</code> emits the current snapshot and every later change. There is no synchronous getter.' },
+          { q: 'Two classes each build their own DataStore for <code>settings.preferences_pb</code>. What happens?', options: ['They share the file safely', 'DataStore throws because more than one DataStore is active for the same file', 'The last writer wins silently'], a: 1, why: 'DataStore needs to be the only owner of its file. Declare it once with the top-level delegate or a DI singleton.' },
+        ],
+        visual(el) {
+          const st = { theme: 'dark', font: 16 };
+          let typed = false, emissions = 1, running = false, blocking = false;
+          const queue = [];
+          const file = h('div', { class: 'dt-file' });
+          const txs = h('div', { class: 'dt-queue' });
+          const uiText = h('p', { class: 'dt-ui-text' }, 'Derby tonight: kickoff at 20:00');
+          const uiMeta = h('span', { class: 'dt-sub' });
+          const ui = h('div', { class: 'dt-ui' }, h('span', { class: 'dt-label' }, 'UI collecting data'), uiText, uiMeta);
+          const track = h('div', { class: 'lane-track' });
+          const o = out();
+          const paintFile = changed => {
+            const mark = (k, v) => (k === changed ? `<span class="dt-hit">${v}</span>` : v);
+            file.innerHTML = typed
+              ? `<span class="dt-fname">files/datastore/user_settings.json</span>\n{ "theme": ${mark('theme', `"${st.theme}"`)}, "fontSize": ${mark('font', st.font)} }`
+              : `<span class="dt-fname">files/datastore/settings.preferences_pb</span>\ntheme     = ${mark('theme', `"${st.theme}"`)}\nfont_size = ${mark('font', st.font)}`;
+          };
+          const paintUi = () => {
+            ui.classList.toggle('dt-dark', st.theme === 'dark');
+            uiText.style.fontSize = Math.min(st.font, 26) + 'px';
+            uiMeta.textContent = `theme = ${st.theme} · fontSize = ${st.font} · emission #${emissions}`;
+          };
+          const frames = () => {
+            track.replaceChildren(...Array.from({ length: 12 }, (_, i) => h('div', { class: 'bar dt-frame', style: `left:${i * 8.3 + 1}%;width:3%` })));
+          };
+          const labels = () => {
+            const next = st.theme === 'dark' ? 'light' : 'dark';
+            themeBtn.innerHTML = hl(typed ? `updateData { it.copy(theme = "${next}") }` : `edit { it[THEME] = "${next}" }`);
+            fontBtn.innerHTML = hl(typed ? '2x launch { updateData { it.copy(fontSize = it.fontSize + 1) } }' : '2x launch { edit { it[FONT] = (it[FONT] ?: 16) + 1 } }');
+          };
+          async function drain() {
+            if (running) return; running = true;
+            while (queue.length) {
+              const tx = queue[0];
+              tx.chip.classList.add('dt-run'); replay(tx.chip, 'pop');
+              line(o, `<span class="muted">${tx.name}:</span> read file, ${tx.key === 'font' ? 'fontSize' : 'theme'} = ${tx.key === 'font' ? st.font : `"${st.theme}"`}`);
+              await sleep(420); if (!o.isConnected) return;
+              tx.apply();
+              line(o, `<span class="muted">${tx.name}:</span> block sets ${tx.key === 'font' ? `fontSize = ${st.font}` : `theme = "${st.theme}"`}`);
+              await sleep(380); if (!o.isConnected) return;
+              paintFile(tx.key); replay(file, 'pop-soft');
+              line(o, `<span class="muted">${tx.name}:</span> write temp file, rename over the old one`);
+              await sleep(380); if (!o.isConnected) return;
+              emissions++; paintUi(); replay(ui, 'pop');
+              line(o, `<span class="good">data emits</span> the new snapshot`);
+              tx.chip.classList.remove('dt-run'); tx.chip.classList.add('dt-done');
+              queue.shift();
+              await sleep(260); if (!o.isConnected) return;
+            }
+            running = false;
+            paintFile(); labels();
+            await sleep(900); if (!o.isConnected || running) return;
+            txs.replaceChildren();
+          }
+          let n = 0;
+          const enqueue = (key, apply) => {
+            const name = `edit #${++n}`;
+            const chip = h('span', { class: 'dt-tx drop-in' }, name);
+            txs.append(chip); queue.push({ name, key, apply, chip });
+          };
+          const themeBtn = cmd('', () => {
+            if (queue.length >= 3) { replay(txs, 'shake'); return; }
+            if (!running) say(o, 'One edit is one transaction:');
+            enqueue('theme', () => { st.theme = st.theme === 'dark' ? 'light' : 'dark'; });
+            drain();
+          });
+          const fontBtn = cmd('', () => {
+            if (queue.length >= 3) { replay(txs, 'shake'); return; }
+            if (!running) say(o, `Two coroutines edit at once. Start: fontSize = ${st.font}. They run one after the other:`);
+            enqueue('font', () => { st.font += 1; });
+            enqueue('font', () => { st.font += 1; });
+            drain();
+          });
+          const blockBtn = cmd('runBlocking { dataStore.data.first() }', async () => {
+            if (blocking) return; blocking = true;
+            frames();
+            const bar = h('div', { class: 'bar block', style: 'left:18%;width:0' });
+            track.append(bar);
+            say(o, '<span class="muted">main thread waits for disk...</span>');
+            await sleep(40); if (!o.isConnected) return;
+            bar.classList.add('dt-grow'); bar.style.width = '55%';
+            await sleep(950); if (!o.isConnected) return;
+            track.querySelectorAll('.dt-frame').forEach((f, i) => { if (i >= 2 && i <= 8) f.classList.add('dt-lost'); });
+            say(o, '<span class="bad">Choreographer:</span> Skipped 34 frames! The application may be doing too much work on its main thread.');
+            line(o, '<span class="muted">// fix: collect data in a ViewModel and show a default until it emits</span>');
+            replay(ui, 'shake');
+            blocking = false;
+          });
+          const typedSw = toggle('dt-ds-typed', 'typed DataStore (JSON Serializer)', () => {
+            if (running) { typedSw.input.checked = typed; replay(txs, 'shake'); return; }
+            typed = typedSw.input.checked;
+            paintFile(); labels(); replay(file, 'flip');
+            say(o, typed ? 'Same data, now one <code>UserSettings</code> object. You change it with <code>updateData { it.copy(...) }</code>.' : 'Back to key-value pairs with typed keys.');
+          });
+          frames(); paintFile(); paintUi(); labels();
+          say(o, 'The UI is collecting <code>dataStore.data</code>. Change a value and watch the transaction.');
+          el.append(
+            h('div', { class: 'dt-grid' },
+              h('div', { class: 'dt-card' }, h('span', { class: 'dt-label' }, 'On disk'), file, h('span', { class: 'dt-label' }, 'Edits, one at a time'), txs),
+              ui),
+            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'main thread'), track)),
+            h('div', { class: 'controls' }, themeBtn, fontBtn, blockBtn, typedSw),
+            o);
+        },
+      },
+
+      // 6 ─────────────────────────────────────────────
+      {
+        id: 'net',
+        title: 'Retrofit and kotlinx.serialization',
+        tagline: 'JSON in, a Kotlin object out, failures as values.',
+        body: `
+<p>Retrofit turns an interface into HTTP calls. Mark a function <code>suspend</code>, annotate it with <code>@GET</code> and the path, and Retrofit runs the request off the main thread and returns the parsed body.</p>
+<p>kotlinx.serialization does the parsing. Mark the data class <code>@Serializable</code> and each JSON key fills the property with the same name. <code>@SerialName</code> handles keys like <code>published_at</code>. With <code>ignoreUnknownKeys = true</code>, extra fields from the server don’t break your app.</p>
+<p>Calls fail. A 4xx or 5xx response throws <code>HttpException</code>. No connection throws an <code>IOException</code>. JSON that doesn’t match your class throws a <code>SerializationException</code>. Catch them in the repository and return a <code>Result</code>, so the ViewModel gets a value instead of a crash.</p>`,
+        code: `@Serializable
+data class ArticleDto(
+    val id: Int,
+    val title: String,
+    @SerialName("published_at") val publishedAt: String,
+)
+
+interface NewsApi {
+    @GET("articles/{id}")
+    suspend fun getArticle(@Path("id") id: Int): ArticleDto
+}
+
+private val json = Json { ignoreUnknownKeys = true }
+
+val api: NewsApi = Retrofit.Builder()
+    .baseUrl("https://api.example.com/")
+    .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+    .build()
+    .create(NewsApi::class.java)
+
+suspend fun loadArticle(id: Int): Result<ArticleDto> = try {
+    Result.success(api.getArticle(id))
+} catch (e: HttpException) {           // 404, 500, …
+    Result.failure(e)
+} catch (e: IOException) {             // offline, timeout
+    Result.failure(e)
+} catch (e: SerializationException) {  // JSON doesn't match
+    Result.failure(e)
+}`,
+        remember: 'suspend fun in an interface, @Serializable on the class, and every failure caught and returned as a value.',
+        level: 'intermediate',
+        terms: [
+          { term: 'Retrofit', def: 'A library that turns an annotated Kotlin interface into HTTP calls.' },
+          { term: '@Serializable', def: 'A kotlinx.serialization annotation that generates the code to turn a class into JSON and back.' },
+          { term: '@SerialName', def: 'A kotlinx.serialization annotation that maps a property to a JSON key with a different name.' },
+          { term: 'HttpException', def: 'The exception Retrofit throws when a call returns a non-2xx status code.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Skip unknown JSON keys and declare a GET call that runs off the main thread.', code: 'private val json = Json { [[ignoreUnknownKeys]] = true }\n\ninterface NewsApi {\n    @[[GET]]("articles/{id}")\n    [[suspend]] fun getArticle(@Path("id") id: Int): ArticleDto\n}', why: '<code>ignoreUnknownKeys</code> stops extra server fields from throwing. A <code>suspend</code> Retrofit function runs the request off the main thread.' },
+          { type: 'bug', prompt: 'Every response fails with <code>MissingFieldException</code> for <code>publishedAt</code>. Tap the wrong line.', code: '@Serializable\ndata class ArticleDto(\n    val id: Int,\n    val title: String,\n    @SerializedName("published_at") val publishedAt: String,\n)', bug: 4, fix: '    @SerialName("published_at") val publishedAt: String,', why: '<code>@SerializedName</code> is Gson’s annotation. kotlinx.serialization ignores it and looks for a <code>publishedAt</code> key, which the JSON doesn’t have.' },
+        ],
+        quiz: [
+          { q: '<code>suspend fun getArticle(id: Int): ArticleDto</code> gets a 404. What happens?', options: ['It returns null', 'It throws <code>HttpException</code>', 'It returns an empty ArticleDto'], a: 1, why: 'When the return type is the body, Retrofit throws for any non-2xx response. Return <code>Response&lt;ArticleDto&gt;</code> if you want to inspect the code yourself.' },
+          { q: 'The JSON has a <code>"views"</code> key your class doesn’t declare. With <code>ignoreUnknownKeys = true</code>:', options: ['The key is skipped', 'Parsing throws'], a: 0, why: 'Without that setting, an unknown key throws a <code>SerializationException</code>.' },
+          { q: 'How do you map <code>"published_at"</code> to <code>publishedAt</code>?', options: ['<code>@SerialName("published_at")</code>', '<code>@Json(name = "published_at")</code>', 'Rename the property to <code>published_at</code>'], a: 0, why: '<code>@SerialName</code> is the kotlinx.serialization annotation. <code>@Json</code> belongs to Moshi.' },
+        ],
+        visual(el) {
+          const ok = [['{', null], ['  "id": 42,', ['id', '42']], ['  "title": "Room with KSP",', ['title', '"Room with KSP"']], ['  "published_at": "2026-10-01",', ['publishedAt', '"2026-10-01"']], ['  "views": 1280', 'ign'], ['}', null]];
+          const missing = [['{', null], ['  "id": 42,', ['id', '42']], ['  "published_at": "2026-10-01"', ['publishedAt', '"2026-10-01"']], ['}', null]];
+          let busy = false;
+          const app = h('div', { class: 'arc-end' }, 'App');
+          const server = h('div', { class: 'arc-end' }, 'api.example.com');
+          const wire = h('div', { class: 'arc-wire' });
+          const jsonBox = h('div', { class: 'arc-json' });
+          const objSlot = h('div', { class: 'arc-objslot' });
+          const req = h('div', { class: 'kt' });
+          const o = out();
+          const packet = async (text, cls, to) => {
+            wire.querySelectorAll('.arc-packet').forEach(p => p.remove());
+            const p = h('span', { class: `arc-packet ${cls}${to === 'back' ? ' far' : ''}` }, text);
+            wire.append(p); void p.offsetWidth;
+            p.classList.remove('far');
+            if (to === 'far') p.classList.add('far');
+            else if (to === 'mid') p.classList.add('mid');
+            await sleep(900);
+            return el.isConnected;
+          };
+          const showObj = (fields, anim) => {
+            const card = h('div', { class: 'obj' + (anim ? ' drop-in' : '') }, h('span', { class: 'obj-name' }, 'ArticleDto'));
+            fields.forEach(([k, v]) => card.append(h('span', { class: 'field' }, `${k} = ${v}`)));
+            objSlot.replaceChildren(card);
+            return card;
+          };
+          const reset = () => { [app, server].forEach(x => x.classList.remove('bad')); jsonBox.replaceChildren(); objSlot.replaceChildren(h('span', { class: 'tip' }, 'waiting for a response')); };
+          async function run(kind) {
+            if (busy) return; busy = true;
+            reset();
+            req.innerHTML = hl('api.getArticle(42)') + '  <span class="muted">→ GET /articles/42</span>';
+            say(o, '<span class="muted">request sent…</span>');
+            if (kind === 'offline') {
+              if (!await packet('GET /articles/42', '', 'mid')) return;
+              const p = wire.querySelector('.arc-packet'); p.classList.add('errp'); replay(p, 'shake'); app.classList.add('bad');
+              objSlot.replaceChildren(h('span', { class: 'build-fail' }, 'no object'));
+              say(o, `<span class="bad">UnknownHostException</span> <span class="muted">is an IOException →</span> ${hl('Result.failure(e)')} <span class="muted">→ UiState.Error("No connection")</span>`);
+              busy = false; return;
+            }
+            if (!await packet('GET /articles/42', '', 'far')) return;
+            replay(server, 'pop');
+            const status = kind === 'notfound' ? '404 Not Found' : '200 OK';
+            if (!await packet(status, kind === 'notfound' ? 'errp' : 'okp', 'back')) return;
+            const lines = kind === 'notfound' ? [['{ "error": "not found" }', null]] : kind === 'missing' ? missing : ok;
+            const rowsEls = lines.map(([t]) => h('div', { class: 'branch', html: hl(t) }));
+            for (const r of rowsEls) { jsonBox.append(r); replay(r, 'drop-in'); await sleep(120); }
+            if (!el.isConnected) return;
+            if (kind === 'notfound') {
+              server.classList.add('bad');
+              objSlot.replaceChildren(h('span', { class: 'build-fail' }, 'no object'));
+              say(o, `<span class="bad">HttpException: HTTP 404</span> <span class="muted">Retrofit throws for any non-2xx →</span> ${hl('Result.failure(e)')}`);
+              busy = false; return;
+            }
+            const card = showObj([], true);
+            for (let i = 0; i < lines.length; i++) {
+              const m = lines[i][1]; if (!m) continue;
+              rowsEls[i].classList.add('scan'); await sleep(380); if (!el.isConnected) return;
+              rowsEls[i].classList.remove('scan');
+              if (m === 'ign') { rowsEls[i].classList.add('ign'); continue; }
+              rowsEls[i].classList.add('hit');
+              card.append(h('span', { class: 'field changed drop-in' }, `${m[0]} = ${m[1]}`));
+            }
+            if (kind === 'missing') {
+              card.classList.add('shake'); card.style.borderColor = 'var(--err)';
+              say(o, `<span class="bad">MissingFieldException:</span> Field 'title' is required for type with serial name 'com.example.ArticleDto', but it was missing. <span class="muted">A SerializationException: catch it too, or the app crashes.</span>`);
+            } else {
+              say(o, `${hl('Result.success(ArticleDto(id=42, title="Room with KSP", publishedAt="2026-10-01"))')} <span class="muted">// "views" was ignored</span>`);
+            }
+            busy = false;
+          }
+          // Open on a finished successful call.
+          req.innerHTML = hl('api.getArticle(42)') + '  <span class="muted">→ GET /articles/42</span>';
+          ok.forEach(([t, m]) => jsonBox.append(h('div', { class: 'branch' + (m === 'ign' ? ' ign' : m ? ' hit' : ''), html: hl(t) })));
+          showObj(ok.filter(x => Array.isArray(x[1])).map(x => x[1]));
+          wire.append(h('span', { class: 'arc-packet okp' }, '200 OK'));
+          say(o, `${hl('Result.success(ArticleDto(id=42, …))')} <span class="muted">Replay it, or try a failure.</span>`);
+          el.append(
+            h('div', { class: 'controls arc-fit' },
+              cmd('200 OK', () => run('ok')),
+              cmd('404 Not Found', () => run('notfound')),
+              cmd('no network', () => run('offline')),
+              cmd('JSON without "title"', () => run('missing'))),
+            req,
+            h('div', { class: 'arc-wire-row' }, app, wire, server),
+            h('div', { class: 'arc-map' },
+              h('div', {}, h('div', { class: 'arc-cap' }, 'response body (JSON)'), jsonBox),
+              h('div', {}, h('div', { class: 'arc-cap' }, 'Kotlin object'), objSlot)),
+            o);
+        },
+      },
+
+      // 7 ─────────────────────────────────────────────
+      {
+        id: 'caching',
+        title: 'Caching strategies',
+        tagline: 'Show something now, fetch something fresh, and know when to skip the network.',
+        level: 'advanced',
+        body: `
+<p>A cache answers two questions: what do I show right now, and when do I ask the network? Network-only shows a spinner until the server answers and an error when offline. Cache-then-network shows the stored copy at once, always fetches, and swaps in the fresh data when it arrives.</p>
+<p>A time to live (TTL) adds a rule: while the cache is younger than, say, 10 minutes, skip the network. Stale-while-revalidate says what happens after that: keep showing the old copy and refresh in the background, instead of blocking the screen. With Room as the source of truth, the UI just observes the table and the refresh writes into it.</p>
+<p>OkHttp can also cache whole HTTP responses. Give the client a <code>Cache</code> and it follows the server's <code>Cache-Control</code> headers. Within <code>max-age</code> it skips the network. After that it sends <code>If-None-Match</code>, and a <code>304 Not Modified</code> reply costs only headers.</p>`,
+        code: `class ArticleRepository(
+    private val dao: ArticleDao,
+    private val api: NewsApi,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
+    // The UI always reads the cache, so stale rows show up at once.
+    val articles: Flow<List<Article>> = dao.observeAll().map { rows -> rows.map { it.toModel() } }
+
+    // TTL plus stale-while-revalidate: skip the network while the cache is young.
+    suspend fun refreshIfStale(ttl: Duration = 10.minutes): Result<Unit> {
+        val fetchedAt = dao.oldestFetchedAt() ?: 0L
+        if (now() - fetchedAt < ttl.inWholeMilliseconds) return Result.success(Unit)
+        return try {
+            val fresh = api.latest()
+            dao.replaceAll(fresh.map { it.toEntity(fetchedAt = now()) })   // one @Transaction
+            Result.success(Unit)
+        } catch (e: IOException) {
+            Result.failure(e)   // the stale rows stay on screen; show a small offline banner
+        }
+    }
+}
+
+// HTTP-level cache: OkHttp follows Cache-Control and revalidates with ETags for you
+val client = OkHttpClient.Builder()
+    .cache(Cache(File(context.cacheDir, "http"), 20L * 1024 * 1024))
+    .build()`,
+        remember: 'Show the cache now, refresh when the TTL runs out, and never wipe good data because the network failed.',
+        terms: [
+          { term: 'Cache-then-network', def: 'A strategy that shows cached data immediately, always fetches from the network, and replaces the data when the response arrives.' },
+          { term: 'Stale-while-revalidate', def: 'Serving an expired cached copy right away while a background request fetches a fresh one.' },
+          { term: 'TTL', def: 'Time to live: how long cached data counts as fresh before the app asks the network again.' },
+          { term: 'HTTP cache', def: 'OkHttp’s on-disk response cache that follows Cache-Control and ETag headers to skip or shrink requests.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give OkHttp a 20 MB disk cache in the right directory.', code: 'val client = OkHttpClient.Builder()\n    .[[cache]](Cache(File(context.[[cacheDir]], "http"), 20L * 1024 * 1024))\n    .build()', why: 'The HTTP cache is throwaway data, so it belongs in <code>cacheDir</code>, which the system may clear when space runs low.' },
+          { type: 'bug', prompt: 'The app hits the network on every open but never refreshes old data. Tap the line.', code: 'suspend fun refreshIfStale(ttl: Duration = 10.minutes) {\n    val fetchedAt = dao.oldestFetchedAt() ?: 0L\n    val age = System.currentTimeMillis() - fetchedAt\n    if (age > ttl.inWholeMilliseconds) return\n    val fresh = api.latest()\n    dao.replaceAll(fresh.map { it.toEntity(fetchedAt = System.currentTimeMillis()) })\n}', bug: 3, fix: '    if (age < ttl.inWholeMilliseconds) return   // still fresh, skip the network', why: 'The early return should fire while the cache is young. With <code>&gt;</code> it skips exactly the stale case and fetches when the data is fresh.' },
+        ],
+        quiz: [
+          { q: 'Cache-then-network, the device is offline, the cache has yesterday\'s articles. What does the user see?', options: ['A spinner forever', 'Yesterday\'s articles, plus an offline notice', 'An empty list'], a: 1, why: 'The cache shows at once. The failed fetch only adds a notice; it must not clear the stored rows.' },
+          { q: 'The TTL is 10 minutes and the cache is 2 minutes old. What does a TTL strategy do on open?', options: ['Fetches anyway', 'Shows the cache and skips the network', 'Clears the cache'], a: 1, why: 'Young data counts as fresh, so there is no request at all.' },
+          { q: 'OkHttp has a stale cached response with an ETag. What does it send?', options: ['Nothing, it serves the stale copy', 'A conditional request with <code>If-None-Match</code>; a 304 means the cached body is still good', 'A DELETE for the old response'], a: 1, why: 'Revalidation is cheap: a 304 has no body, and OkHttp serves the cached one.' },
+        ],
+        visual(el) {
+          const STRATS = {
+            net: 'network only',
+            ctn: 'cache then network',
+            ttl: 'TTL + stale-while-revalidate',
+            http: 'OkHttp HTTP cache',
+          };
+          let strat = 'ctn', busy = false;
+          const lanes = ['UI', 'cache', 'network'].map(n => {
+            const track = h('div', { class: 'lane-track' });
+            const cur = h('div', { class: 'cursor', style: 'left:0' });
+            track.append(cur);
+            return { n, track, cur, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, n), track) };
+          });
+          const L = { UI: lanes[0], cache: lanes[1], network: lanes[2] };
+          const screen = h('div', { class: 'dt-screen', 'aria-live': 'polite' });
+          const o = out();
+          const offSw = toggle('dt-ca-off', 'offline', () => {});
+          const oldSw = toggle('dt-ca-old', 'cache is 2 h old (TTL 10 min)', () => {});
+          oldSw.input.checked = true;
+          const ageText = () => (oldSw.input.checked ? '2 h old' : '2 min old');
+          function show(kind, banner) {
+            const list = tag => [h('div', { class: 'dt-head' }, h('b', {}, 'Top stories'), tag), h('div', { class: 'dt-item' }, kind === 'fresh' ? 'Derby tonight: line-ups are out' : 'Derby tonight: kickoff at 20:00'), h('div', { class: 'dt-item' }, kind === 'fresh' ? 'Weather: storm warning lifted' : 'Weather: storm warning')];
+            const kids =
+              kind === 'spin' ? [h('div', { class: 'spinner' }), h('span', { class: 'dt-sub' }, 'Loading...')] :
+              kind === 'error' ? [h('div', { class: 'err-icon' }, '!'), h('b', {}, 'No connection'), h('span', { class: 'dt-sub' }, 'Nothing saved to show.')] :
+              kind === 'blank' ? [h('span', { class: 'dt-sub' }, 'Screen not open yet.')] :
+              list(h('span', { class: 'dt-pill ' + (kind === 'fresh' ? 'dt-ok' : 'dt-warn') }, kind === 'fresh' ? 'fresh' : `cached · ${ageText()}`));
+            if (banner) kids.push(h('span', { class: 'dt-pill dt-bad' }, banner));
+            screen.replaceChildren(...kids);
+            screen.style.justifyItems = kind === 'spin' || kind === 'error' ? 'center' : '';
+            replay(screen, 'pop-soft');
+          }
+          function plan() {
+            const off = offSw.input.checked, old = oldSw.input.checked;
+            const B = [], E = [];
+            const bar = (lane, s, end, cls) => B.push({ lane, s, end, cls });
+            const ev = (t, fn) => E.push({ t, fn });
+            const log = (t, html) => ev(t, () => line(o, html));
+            if (strat === 'net') {
+              bar('UI', 0, off ? 40 : 62, 'wait');
+              ev(0, () => show('spin')); log(0, 'no cache in this design: spinner until the server answers');
+              if (off) { bar('network', 4, 40, 'block'); ev(40, () => show('error')); log(40, '<span class="bad">IOException:</span> Unable to resolve host "api.example.com"'); }
+              else { bar('network', 4, 60, 'run'); bar('UI', 62, 100, 'dt-bar-ok'); ev(62, () => show('fresh')); log(60, '<span class="good">200 OK</span> after 1.3 s, the user waited the whole time'); }
+            } else if (strat === 'http') {
+              if (!old) {
+                bar('UI', 0, 9, 'wait'); bar('cache', 2, 9, 'run'); bar('UI', 9, 100, 'dt-bar-ok');
+                ev(0, () => show('spin')); ev(9, () => show('fresh'));
+                log(9, '<span class="good">cache hit</span> within max-age=600: no network request' + (off ? ', so offline is fine' : ''));
+              } else if (off) {
+                bar('UI', 0, 32, 'wait'); bar('network', 3, 32, 'block');
+                ev(0, () => show('spin')); ev(32, () => show('error'));
+                log(32, '<span class="bad">IOException</span>: stale entry needs revalidation <span class="muted">// accept stale with CacheControl max-stale when offline</span>');
+              } else {
+                bar('UI', 0, 38, 'wait'); bar('network', 3, 30, 'run'); bar('cache', 30, 38, 'run'); bar('UI', 38, 100, 'dt-bar-ok');
+                ev(0, () => show('spin'));
+                log(3, `${hl('GET /latest')} <span class="muted">If-None-Match: "a1f9"</span>`);
+                log(30, '<span class="good">304 Not Modified</span>: headers only, body comes from disk');
+                ev(38, () => { show('fresh'); });
+              }
+            } else {
+              bar('cache', 0, 8, 'run'); bar('UI', 0, 8, 'wait');
+              ev(0, () => show('blank'));
+              ev(8, () => show('stale')); log(8, `Room emits the cached rows (${ageText()}) at once`);
+              const fetch = strat === 'ctn' || old;
+              if (!fetch) { bar('UI', 8, 100, 'dt-bar-stale'); log(10, `<span class="good">age 2 min &lt; TTL 10 min:</span> no network call at all`); }
+              else if (off) {
+                bar('network', 8, 42, 'block'); bar('UI', 8, 100, 'dt-bar-stale');
+                ev(42, () => show('stale', 'offline: showing saved copy'));
+                log(42, '<span class="bad">IOException</span>: keep the cached rows, add a banner');
+              } else {
+                if (strat === 'ttl') log(9, '<span class="muted">age 2 h &gt; TTL: revalidate in the background, keep showing the stale copy</span>');
+                else log(9, '<span class="muted">always fetch, even if the cache were 1 second old</span>');
+                bar('network', 8, 58, 'run'); bar('cache', 58, 64, 'run'); bar('UI', 8, 64, 'dt-bar-stale'); bar('UI', 64, 100, 'dt-bar-ok');
+                log(58, `<span class="good">200 OK</span> ${hl('dao.replaceAll(fresh)')}`);
+                ev(64, () => show('fresh')); log(64, 'Room emits again, the screen swaps to fresh data');
+              }
+            }
+            return { B, E, refreshed: !off && (strat === 'ctn' || (strat !== 'net' && old)) };
+          }
+          async function run() {
+            if (busy) return; busy = true;
+            const { B, E, refreshed } = plan();
+            lanes.forEach(l => { l.track.querySelectorAll('.bar').forEach(b => b.remove()); l.cur.style.left = '0'; });
+            const bars = B.map(b => { const node = h('div', { class: 'bar ' + b.cls, style: `left:${b.s}%;width:0` }); L[b.lane].track.insertBefore(node, L[b.lane].cur); return { ...b, node }; });
+            say(o, `<b>${STRATS[strat]}</b>${offSw.input.checked ? ' · offline' : ''}: openScreen()`);
+            const fired = new Set();
+            for (let t = 0; t <= 100; t += 2) {
+              lanes.forEach(l => { l.cur.style.left = t + '%'; });
+              bars.forEach(b => { if (t >= b.s) b.node.style.width = Math.max(0.8, Math.min(t, b.end) - b.s) + '%'; });
+              E.forEach((x, i) => { if (!fired.has(i) && x.t <= t) { fired.add(i); x.fn(); } });
+              await sleep(40); if (!o.isConnected) return;
+            }
+            if (refreshed && oldSw.input.checked) { oldSw.input.checked = false; line(o, '<span class="muted">the cache is fresh now: open again to see the TTL skip the network</span>'); }
+            busy = false;
+          }
+          const sBtns = Object.entries(STRATS).map(([k, label]) => act(label, function () { if (busy) return; strat = k; press(sBtns, this); run(); }));
+          press(sBtns, sBtns[1]);
+          el.append(
+            h('div', { class: 'controls' }, sBtns),
+            h('div', { class: 'controls' }, offSw, oldSw, cmd('openScreen()', run)),
+            h('div', { class: 'dt-grid' },
+              h('div', { class: 'timeline' }, lanes.map(l => l.el),
+                h('div', { class: 'legend' },
+                  h('span', {}, h('i', { class: 'bar wait' }), 'waiting'), h('span', {}, h('i', { class: 'bar run' }), 'working'),
+                  h('span', {}, h('i', { class: 'bar block' }), 'failed'), h('span', {}, h('i', { class: 'bar dt-bar-stale' }), 'stale shown'),
+                  h('span', {}, h('i', { class: 'bar dt-bar-ok' }), 'fresh shown'))),
+              screen),
+            o);
+          show('blank');
+          run();
+        },
+      },
+
+      // 8 ─────────────────────────────────────────────
+      {
         id: 'paging',
         title: 'Paging 3',
         tagline: 'Load a long list one page at a time, as the user scrolls.',
@@ -1338,7 +2078,7 @@ val items = vm.articles().collectAsLazyPagingItems()`,
         },
       },
 
-      // 6 ─────────────────────────────────────────────
+      // 9 ─────────────────────────────────────────────
       {
         id: 'files',
         title: 'Files and MediaStore',
@@ -1478,172 +2218,6 @@ Button(onClick = {
             sheetSlot,
             h('div', { class: 'controls' }, writeFile, writeExt, insert, readPath, picker, uninstall),
             o);
-        },
-      },
-
-      // 7 ─────────────────────────────────────────────
-      {
-        id: 'caching',
-        title: 'Caching strategies',
-        tagline: 'Show something now, fetch something fresh, and know when to skip the network.',
-        level: 'advanced',
-        body: `
-<p>A cache answers two questions: what do I show right now, and when do I ask the network? Network-only shows a spinner until the server answers and an error when offline. Cache-then-network shows the stored copy at once, always fetches, and swaps in the fresh data when it arrives.</p>
-<p>A time to live (TTL) adds a rule: while the cache is younger than, say, 10 minutes, skip the network. Stale-while-revalidate says what happens after that: keep showing the old copy and refresh in the background, instead of blocking the screen. With Room as the source of truth, the UI just observes the table and the refresh writes into it.</p>
-<p>OkHttp can also cache whole HTTP responses. Give the client a <code>Cache</code> and it follows the server's <code>Cache-Control</code> headers. Within <code>max-age</code> it skips the network. After that it sends <code>If-None-Match</code>, and a <code>304 Not Modified</code> reply costs only headers.</p>`,
-        code: `class ArticleRepository(
-    private val dao: ArticleDao,
-    private val api: NewsApi,
-    private val now: () -> Long = System::currentTimeMillis,
-) {
-    // The UI always reads the cache, so stale rows show up at once.
-    val articles: Flow<List<Article>> = dao.observeAll().map { rows -> rows.map { it.toModel() } }
-
-    // TTL plus stale-while-revalidate: skip the network while the cache is young.
-    suspend fun refreshIfStale(ttl: Duration = 10.minutes): Result<Unit> {
-        val fetchedAt = dao.oldestFetchedAt() ?: 0L
-        if (now() - fetchedAt < ttl.inWholeMilliseconds) return Result.success(Unit)
-        return try {
-            val fresh = api.latest()
-            dao.replaceAll(fresh.map { it.toEntity(fetchedAt = now()) })   // one @Transaction
-            Result.success(Unit)
-        } catch (e: IOException) {
-            Result.failure(e)   // the stale rows stay on screen; show a small offline banner
-        }
-    }
-}
-
-// HTTP-level cache: OkHttp follows Cache-Control and revalidates with ETags for you
-val client = OkHttpClient.Builder()
-    .cache(Cache(File(context.cacheDir, "http"), 20L * 1024 * 1024))
-    .build()`,
-        remember: 'Show the cache now, refresh when the TTL runs out, and never wipe good data because the network failed.',
-        terms: [
-          { term: 'Cache-then-network', def: 'A strategy that shows cached data immediately, always fetches from the network, and replaces the data when the response arrives.' },
-          { term: 'Stale-while-revalidate', def: 'Serving an expired cached copy right away while a background request fetches a fresh one.' },
-          { term: 'TTL', def: 'Time to live: how long cached data counts as fresh before the app asks the network again.' },
-          { term: 'HTTP cache', def: 'OkHttp’s on-disk response cache that follows Cache-Control and ETag headers to skip or shrink requests.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Give OkHttp a 20 MB disk cache in the right directory.', code: 'val client = OkHttpClient.Builder()\n    .[[cache]](Cache(File(context.[[cacheDir]], "http"), 20L * 1024 * 1024))\n    .build()', why: 'The HTTP cache is throwaway data, so it belongs in <code>cacheDir</code>, which the system may clear when space runs low.' },
-          { type: 'bug', prompt: 'The app hits the network on every open but never refreshes old data. Tap the line.', code: 'suspend fun refreshIfStale(ttl: Duration = 10.minutes) {\n    val fetchedAt = dao.oldestFetchedAt() ?: 0L\n    val age = System.currentTimeMillis() - fetchedAt\n    if (age > ttl.inWholeMilliseconds) return\n    val fresh = api.latest()\n    dao.replaceAll(fresh.map { it.toEntity(fetchedAt = System.currentTimeMillis()) })\n}', bug: 3, fix: '    if (age < ttl.inWholeMilliseconds) return   // still fresh, skip the network', why: 'The early return should fire while the cache is young. With <code>&gt;</code> it skips exactly the stale case and fetches when the data is fresh.' },
-        ],
-        quiz: [
-          { q: 'Cache-then-network, the device is offline, the cache has yesterday\'s articles. What does the user see?', options: ['A spinner forever', 'Yesterday\'s articles, plus an offline notice', 'An empty list'], a: 1, why: 'The cache shows at once. The failed fetch only adds a notice; it must not clear the stored rows.' },
-          { q: 'The TTL is 10 minutes and the cache is 2 minutes old. What does a TTL strategy do on open?', options: ['Fetches anyway', 'Shows the cache and skips the network', 'Clears the cache'], a: 1, why: 'Young data counts as fresh, so there is no request at all.' },
-          { q: 'OkHttp has a stale cached response with an ETag. What does it send?', options: ['Nothing, it serves the stale copy', 'A conditional request with <code>If-None-Match</code>; a 304 means the cached body is still good', 'A DELETE for the old response'], a: 1, why: 'Revalidation is cheap: a 304 has no body, and OkHttp serves the cached one.' },
-        ],
-        visual(el) {
-          const STRATS = {
-            net: 'network only',
-            ctn: 'cache then network',
-            ttl: 'TTL + stale-while-revalidate',
-            http: 'OkHttp HTTP cache',
-          };
-          let strat = 'ctn', busy = false;
-          const lanes = ['UI', 'cache', 'network'].map(n => {
-            const track = h('div', { class: 'lane-track' });
-            const cur = h('div', { class: 'cursor', style: 'left:0' });
-            track.append(cur);
-            return { n, track, cur, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, n), track) };
-          });
-          const L = { UI: lanes[0], cache: lanes[1], network: lanes[2] };
-          const screen = h('div', { class: 'dt-screen', 'aria-live': 'polite' });
-          const o = out();
-          const offSw = toggle('dt-ca-off', 'offline', () => {});
-          const oldSw = toggle('dt-ca-old', 'cache is 2 h old (TTL 10 min)', () => {});
-          oldSw.input.checked = true;
-          const ageText = () => (oldSw.input.checked ? '2 h old' : '2 min old');
-          function show(kind, banner) {
-            const list = tag => [h('div', { class: 'dt-head' }, h('b', {}, 'Top stories'), tag), h('div', { class: 'dt-item' }, kind === 'fresh' ? 'Derby tonight: line-ups are out' : 'Derby tonight: kickoff at 20:00'), h('div', { class: 'dt-item' }, kind === 'fresh' ? 'Weather: storm warning lifted' : 'Weather: storm warning')];
-            const kids =
-              kind === 'spin' ? [h('div', { class: 'spinner' }), h('span', { class: 'dt-sub' }, 'Loading...')] :
-              kind === 'error' ? [h('div', { class: 'err-icon' }, '!'), h('b', {}, 'No connection'), h('span', { class: 'dt-sub' }, 'Nothing saved to show.')] :
-              kind === 'blank' ? [h('span', { class: 'dt-sub' }, 'Screen not open yet.')] :
-              list(h('span', { class: 'dt-pill ' + (kind === 'fresh' ? 'dt-ok' : 'dt-warn') }, kind === 'fresh' ? 'fresh' : `cached · ${ageText()}`));
-            if (banner) kids.push(h('span', { class: 'dt-pill dt-bad' }, banner));
-            screen.replaceChildren(...kids);
-            screen.style.justifyItems = kind === 'spin' || kind === 'error' ? 'center' : '';
-            replay(screen, 'pop-soft');
-          }
-          function plan() {
-            const off = offSw.input.checked, old = oldSw.input.checked;
-            const B = [], E = [];
-            const bar = (lane, s, end, cls) => B.push({ lane, s, end, cls });
-            const ev = (t, fn) => E.push({ t, fn });
-            const log = (t, html) => ev(t, () => line(o, html));
-            if (strat === 'net') {
-              bar('UI', 0, off ? 40 : 62, 'wait');
-              ev(0, () => show('spin')); log(0, 'no cache in this design: spinner until the server answers');
-              if (off) { bar('network', 4, 40, 'block'); ev(40, () => show('error')); log(40, '<span class="bad">IOException:</span> Unable to resolve host "api.example.com"'); }
-              else { bar('network', 4, 60, 'run'); bar('UI', 62, 100, 'dt-bar-ok'); ev(62, () => show('fresh')); log(60, '<span class="good">200 OK</span> after 1.3 s, the user waited the whole time'); }
-            } else if (strat === 'http') {
-              if (!old) {
-                bar('UI', 0, 9, 'wait'); bar('cache', 2, 9, 'run'); bar('UI', 9, 100, 'dt-bar-ok');
-                ev(0, () => show('spin')); ev(9, () => show('fresh'));
-                log(9, '<span class="good">cache hit</span> within max-age=600: no network request' + (off ? ', so offline is fine' : ''));
-              } else if (off) {
-                bar('UI', 0, 32, 'wait'); bar('network', 3, 32, 'block');
-                ev(0, () => show('spin')); ev(32, () => show('error'));
-                log(32, '<span class="bad">IOException</span>: stale entry needs revalidation <span class="muted">// accept stale with CacheControl max-stale when offline</span>');
-              } else {
-                bar('UI', 0, 38, 'wait'); bar('network', 3, 30, 'run'); bar('cache', 30, 38, 'run'); bar('UI', 38, 100, 'dt-bar-ok');
-                ev(0, () => show('spin'));
-                log(3, `${hl('GET /latest')} <span class="muted">If-None-Match: "a1f9"</span>`);
-                log(30, '<span class="good">304 Not Modified</span>: headers only, body comes from disk');
-                ev(38, () => { show('fresh'); });
-              }
-            } else {
-              bar('cache', 0, 8, 'run'); bar('UI', 0, 8, 'wait');
-              ev(0, () => show('blank'));
-              ev(8, () => show('stale')); log(8, `Room emits the cached rows (${ageText()}) at once`);
-              const fetch = strat === 'ctn' || old;
-              if (!fetch) { bar('UI', 8, 100, 'dt-bar-stale'); log(10, `<span class="good">age 2 min &lt; TTL 10 min:</span> no network call at all`); }
-              else if (off) {
-                bar('network', 8, 42, 'block'); bar('UI', 8, 100, 'dt-bar-stale');
-                ev(42, () => show('stale', 'offline: showing saved copy'));
-                log(42, '<span class="bad">IOException</span>: keep the cached rows, add a banner');
-              } else {
-                if (strat === 'ttl') log(9, '<span class="muted">age 2 h &gt; TTL: revalidate in the background, keep showing the stale copy</span>');
-                else log(9, '<span class="muted">always fetch, even if the cache were 1 second old</span>');
-                bar('network', 8, 58, 'run'); bar('cache', 58, 64, 'run'); bar('UI', 8, 64, 'dt-bar-stale'); bar('UI', 64, 100, 'dt-bar-ok');
-                log(58, `<span class="good">200 OK</span> ${hl('dao.replaceAll(fresh)')}`);
-                ev(64, () => show('fresh')); log(64, 'Room emits again, the screen swaps to fresh data');
-              }
-            }
-            return { B, E, refreshed: !off && (strat === 'ctn' || (strat !== 'net' && old)) };
-          }
-          async function run() {
-            if (busy) return; busy = true;
-            const { B, E, refreshed } = plan();
-            lanes.forEach(l => { l.track.querySelectorAll('.bar').forEach(b => b.remove()); l.cur.style.left = '0'; });
-            const bars = B.map(b => { const node = h('div', { class: 'bar ' + b.cls, style: `left:${b.s}%;width:0` }); L[b.lane].track.insertBefore(node, L[b.lane].cur); return { ...b, node }; });
-            say(o, `<b>${STRATS[strat]}</b>${offSw.input.checked ? ' · offline' : ''}: openScreen()`);
-            const fired = new Set();
-            for (let t = 0; t <= 100; t += 2) {
-              lanes.forEach(l => { l.cur.style.left = t + '%'; });
-              bars.forEach(b => { if (t >= b.s) b.node.style.width = Math.max(0.8, Math.min(t, b.end) - b.s) + '%'; });
-              E.forEach((x, i) => { if (!fired.has(i) && x.t <= t) { fired.add(i); x.fn(); } });
-              await sleep(40); if (!o.isConnected) return;
-            }
-            if (refreshed && oldSw.input.checked) { oldSw.input.checked = false; line(o, '<span class="muted">the cache is fresh now: open again to see the TTL skip the network</span>'); }
-            busy = false;
-          }
-          const sBtns = Object.entries(STRATS).map(([k, label]) => act(label, function () { if (busy) return; strat = k; press(sBtns, this); run(); }));
-          press(sBtns, sBtns[1]);
-          el.append(
-            h('div', { class: 'controls' }, sBtns),
-            h('div', { class: 'controls' }, offSw, oldSw, cmd('openScreen()', run)),
-            h('div', { class: 'dt-grid' },
-              h('div', { class: 'timeline' }, lanes.map(l => l.el),
-                h('div', { class: 'legend' },
-                  h('span', {}, h('i', { class: 'bar wait' }), 'waiting'), h('span', {}, h('i', { class: 'bar run' }), 'working'),
-                  h('span', {}, h('i', { class: 'bar block' }), 'failed'), h('span', {}, h('i', { class: 'bar dt-bar-stale' }), 'stale shown'),
-                  h('span', {}, h('i', { class: 'bar dt-bar-ok' }), 'fresh shown'))),
-              screen),
-            o);
-          show('blank');
-          run();
         },
       },
     ],

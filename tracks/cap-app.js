@@ -930,7 +930,7 @@ composable<ArticleList> {
         title: 'Retrofit and kotlinx.serialization',
         tagline: 'Real headlines from the API, and what happens offline.',
         level: 'intermediate',
-        refs: ['arch.net', 'flow.cold', 'flow.dispatchers'],
+        refs: ['data.net', 'flow.cold', 'coroutines.dispatchers'],
         body: `
 <p>Time for real data. <code>NewsApi</code> is a Retrofit interface with one <code>suspend</code> function. The JSON comes back as <code>ArticlesResponse</code>, a <code>@Serializable</code> DTO. <code>@SerialName</code> maps <code>published_at</code>, and <code>ignoreUnknownKeys</code> lets the server add fields without breaking the app. A small mapper turns each <code>ArticleDto</code> into our own <code>Article</code>.</p>
 <p>To get it on screen, a temporary <code>OnlineNewsRepository</code> fetches inside a cold <code>flow { }</code>. Retrofit’s suspend calls are main-safe, so there is no <code>withContext</code>. Add the <code>INTERNET</code> permission, or every call fails.</p>
@@ -1062,7 +1062,7 @@ class OnlineNewsRepository(private val api: NewsApi) : NewsRepository {
         title: 'Room cache as the single source of truth',
         tagline: 'The screen reads Room. The network only writes to it.',
         level: 'advanced',
-        refs: ['arch.room', 'arch.ssot', 'data.caching', 'flow.operators'],
+        refs: ['data.room', 'arch.ssot', 'data.caching', 'flow.operators'],
         body: `
 <p>Now the app keeps what it downloads. <code>ArticleEntity</code> is the table, <code>ArticleDao</code> has a query that returns a <code>Flow</code>, and <code>NewsDatabase</code> ties them together. Room’s KSP processor writes the code behind them.</p>
 <p><code>OfflineFirstNewsRepository</code> replaces the online one. <code>observeArticles()</code> reads only from Room. <code>refresh()</code> fetches from the API and upserts the rows. Room sees the write and re-runs the query, so new rows reach the screen through the same Flow. The ViewModel calls <code>refresh()</code> once in <code>init</code> and keeps the cached rows when it fails.</p>

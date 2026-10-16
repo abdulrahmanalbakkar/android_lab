@@ -301,7 +301,7 @@
     title: 'Expense Tracker Core',
     kind: 'project',
     group: 'Foundations',
-    requires: ['kotlin', 'oop'],
+    requires: ['kotlin', 'solid'],
     description: 'Build the core of an expense tracker in plain Kotlin, step by step, before any Android code.',
     builds: 'A tested Kotlin module that parses expenses, reports totals, checks budgets and syncs in the background, with a small console app on top.',
     css,
@@ -609,7 +609,7 @@ println(march.topCategories())      // [(RENT, 950.00), (FUN, 45.99), (TRAVEL, 2
         title: 'A storage interface',
         tagline: 'ExpenseTracker depends on an interface, not on where data lives.',
         level: 'intermediate',
-        refs: ['oop.dip', 'kotlin.inheritance', 'oop.encapsulation'],
+        refs: ['solid.dip', 'kotlin.inheritance', 'oop.encapsulation'],
         body: `
 <p>Now the pieces need a home. <code>ExpenseTracker</code> is the class the app talks to: it parses a line, stores the expense and builds reports. Where should it store things? Today, in memory. Later, in a file or a database.</p>
 <p>So the tracker depends on an <code>ExpenseRepository</code> interface and receives it through its constructor. This is dependency inversion from the OOP track: the high-level class owns the interface, and storage details plug into it. <code>InMemoryExpenseRepository</code> is the first implementation. It keeps its list private and hands out copies, so no caller can change it behind its back.</p>
@@ -846,7 +846,7 @@ monthly.check(tracker.report())   // [Near(category=FUN, spent=64.00, limit=80.0
         title: 'Sync with coroutines',
         tagline: 'Upload in parallel batches, retry with backoff, cancel cleanly.',
         level: 'intermediate',
-        refs: ['kotlin.coroutines', 'flow.structured', 'kotlin.exceptions', 'kotlin.inheritance'],
+        refs: ['coroutines.basics', 'coroutines.structured', 'kotlin.exceptions', 'kotlin.inheritance'],
         body: `
 <p>The tracker should back up new expenses to a server. There is no server yet, so we hide it behind a <code>SyncApi</code> interface and write a <code>FakeSyncApi</code> that waits a little and can fail on purpose. Same idea as the repository: the service depends on an interface.</p>
 <p><code>SyncService.syncPending()</code> is a <code>suspend</code> function. It splits pending expenses into batches with <code>chunked</code>, starts one <code>async</code> per batch inside <code>coroutineScope</code>, and waits with <code>awaitAll</code>. That is structured concurrency: the function returns only when every batch is done. If one batch fails for good, the scope cancels the others and the error reaches the caller.</p>
@@ -1193,7 +1193,7 @@ class ExpenseTrackerTest {
         title: 'You built it',
         tagline: 'A console app wires every piece together. Then, where to go next.',
         level: 'intermediate',
-        refs: ['kotlin.when', 'arch.layers', 'oop.srp'],
+        refs: ['kotlin.when', 'arch.layers', 'solid.srp'],
         body: `
 <p>The last piece is <code>main()</code>. It is the one place that picks concrete classes: the in-memory repository, the fake sync API, today’s date and the budget. Everything else only knows interfaces and plain data. This place is called the composition root. A loop reads lines with <code>readlnOrNull()</code> and a <code>when</code> routes them: <code>report</code>, <code>sync</code>, <code>quit</code>, or an expense to parse.</p>
 <p>Look at what you have: value and data classes for the model, null-safe parsing into a <code>Result</code>, collection reports, storage behind an interface, a budget DSL with sealed alerts, parallel sync with retries, and a test suite that runs in milliseconds. None of it imports Android, so all of it can move into an app unchanged.</p>
