@@ -4,7 +4,7 @@ Interactive lessons for Kotlin and Android. Each lesson has an animated demo, a 
 
 Plain HTML, CSS and JavaScript. No build step and no dependencies. Open `index.html`, or serve the folder to get offline support.
 
-Live at https://android-lab.abedalrahmanalbakkar.workers.dev/
+Live at https://abdulrahmanalbakkar.github.io/android_lab/
 
 ## Features
 
