@@ -146,6 +146,9 @@ class ProfileViewModel(
         quiz: [
           { q: 'What is a practical test for “one responsibility”?', options: ['The class has under 100 lines', 'Only one kind of stakeholder would ask to change it', 'It has one public method'], a: 1, why: 'Size and method count are side effects. The principle is about reasons to change.' },
           { q: 'Designers change the date format. After a good split, which class changes?', options: ['ProfileViewModel', 'ProfileRepository', 'ProfileFormatter'], a: 2, why: 'Formatting is the formatter’s only job, so the change lands there and nowhere else.' },
+          { q: 'A team splits every function of ProfileViewModel into its own class. What goes wrong?', options: ['The app gets slower at runtime', 'One change is spread over many files again, and the ViewModel wires a dozen tiny classes', 'Hilt can’t inject that many classes'], a: 1, why: 'The goal is cohesion: keep together what changes for the same reason. Splitting past that pulls apart code that always changes together.' },
+          { q: 'Which of these can render in a @Preview with no ViewModel, Hilt or network?', options: ['<code>ProfileRoute(vm = hiltViewModel())</code>', 'Both of them', '<code>ProfileScreen(state, onSave)</code>'], a: 2, why: 'ProfileScreen only takes state and callbacks, so you can hand it any state. ProfileRoute is the wiring half that talks to the ViewModel.' },
+          { q: 'When does a use case pay off?', options: ['For every repository call, by default', 'Only when the app has more than one module', 'When two ViewModels need the same logic, or a ViewModel gets hard to read'], a: 2, why: 'The domain layer is optional. A use case that only forwards a single call is noise.' },
         ],
         deeper: [
           {
@@ -420,6 +423,8 @@ fun checkoutTotal(amount: Int, method: PaymentMethod) = amount + method.fee()`,
           { q: 'With an open <code>PaymentMethod</code> interface, what does adding Klarna take?', options: ['One new class', 'Editing every function that handles payments', 'Changing the interface'], a: 0, why: 'Each implementation carries its own behaviour, so existing code stays as it is.' },
           { q: 'With a sealed <code>Payment</code>, what does adding a <code>refund()</code> operation take?', options: ['Editing every subtype', 'One new function with a when', 'It is impossible'], a: 1, why: 'Operations live in functions outside the types, so a new one is a single new function.' },
           { q: 'Why avoid <code>else</code> in a <code>when</code> over a sealed type?', options: ['It is slower', 'It hides new subtypes from the compiler', 'It doesn’t compile'], a: 1, why: 'Without <code>else</code>, adding a subtype turns every incomplete <code>when</code> into a compile error.' },
+          { q: 'With the @IntoSet deep link registry, a new :feature:sports adds its own links. What changes in :app’s Router?', options: ['A new branch in its when', 'Nothing: the new module adds a handler and a binding', 'Its constructor gets a new parameter'], a: 1, why: 'The Router walks whatever set Hilt builds, so it stays closed while each feature extends it.' },
+          { q: '<code>fun notify(user: User, sms: Boolean, push: Boolean, email: Boolean)</code> must support WhatsApp. What does that cost?', options: ['One new class', 'Nothing', 'A new parameter, a change in the body, and an edit at every call site'], a: 2, why: 'A Boolean per variant puts every channel into one function’s signature. With a small Channel interface, a new channel is just a new class.' },
         ],
         deeper: [
           {
@@ -716,6 +721,10 @@ data class Sq(val side: Int) : Shape { override val area get() = side * side }`,
         quiz: [
           { q: 'Square extends Rectangle and compiles. Why can it still break LSP?', options: ['Squares are slower', 'It changes behaviour callers rely on: width and height are no longer independent', 'It needs an interface'], a: 1, why: 'LSP is about behaviour. The compiler checks signatures, not promises.' },
           { q: 'Which of these breaks LSP?', options: ['An override that returns a more specific type', 'An override that throws for inputs the parent accepted', 'An override that logs extra info'], a: 1, why: 'Rejecting input the parent accepted strengthens the precondition, and callers written for the parent will fail.' },
+          { q: 'Uploader promises to accept files up to 10 MB and return an https URL. Which implementation is a valid substitute?', options: ['One that rejects files over 1 MB', 'One that returns an http URL', 'One that accepts up to 100 MB'], a: 2, why: 'A subtype may accept more and promise more, never less. Rejecting a 5 MB file or returning http breaks callers written for the parent.' },
+          { q: 'A read-only Settings implements <code>put()</code> as an empty body that does nothing. Does it keep the contract?', options: ['No: a caller that saves and then shows “Saved” now lies', 'Yes, because it never throws', 'Yes, if the KDoc mentions it'], a: 0, why: 'A silent no-op breaks the promise as surely as an exception. A type that can’t write should implement a smaller, read-only interface.' },
+          { q: 'What happens?<pre class="code mini"><code>val list: List&lt;Int&gt; = listOf(1)\n(list as MutableList&lt;Int&gt;).add(2)</code></pre>', options: ['It throws UnsupportedOperationException', 'The list becomes [1, 2]', 'It does not compile'], a: 0, why: 'The cast compiles and even succeeds, but listOf returns a list that can’t grow. Return a new list instead of casting.' },
+          { q: 'How do you check that every Settings implementation keeps the same promises?', options: ['An abstract contract test class with a factory method, and one small subclass per implementation', 'Write the rules in a KDoc comment', 'Copy the same tests into each implementation’s test file'], a: 0, why: 'The contract is written once and runs against every implementation. One that fails is not a valid substitute.' },
         ],
         deeper: [
           {
@@ -954,6 +963,8 @@ fun skipIntro(p: Seekable) = p.seek(30_000)   // LiveRadio can't be passed in`,
         quiz: [
           { q: 'Why is <code>override fun seek(ms: Long) = TODO()</code> a design smell?', options: ['TODO is deprecated', 'The class was forced to promise something it can’t do', 'It is slower'], a: 1, why: 'A stub that throws means the interface asks for more than this class supports. It also breaks Liskov.' },
           { q: 'After splitting, what happens if you call <code>skipIntro(radio)</code>?', options: ['It crashes at runtime', 'It does not compile', 'It silently does nothing'], a: 1, why: 'LiveRadio is not Seekable, so the compiler rejects the call.' },
+          { q: 'A LiveRadio, which is only Playable, is passed to the PlayerControls composable above. What is shown?', options: ['Play, pause and a seek bar that crashes', 'Play and pause only', 'Nothing, it does not compile'], a: 1, why: 'player is Seekable is false for LiveRadio, so no seek bar is offered. The radio never has to pretend it can seek.' },
+          { q: 'You only need the text after each change in an EditText. What asks for the smallest role?', options: ['<code>editText.doAfterTextChanged { }</code> from core-ktx', 'An object implementing all three TextWatcher methods', 'A subclass of EditText'], a: 0, why: 'doAfterTextChanged takes exactly one lambda and fills in the other two TextWatcher methods for you.' },
         ],
         deeper: [
           {
@@ -1212,6 +1223,9 @@ val vm = NewsViewModel(FakeNewsRepository(listOf(sampleArticle)))`,
           { q: 'What gets “inverted” in dependency inversion?', options: ['The order of constructor parameters', 'The direction of the arrow: the detail now depends on an abstraction the high-level code owns', 'The call stack'], a: 1, why: 'The low-level class points up at the interface by implementing it, instead of the high-level class pointing down at it.' },
           { q: 'You switch from a network repository to an offline-first one. With DIP and Hilt, what changes?', options: ['NewsViewModel', 'The @Binds line in the module', 'Every screen'], a: 1, why: 'The module is the one place that names the concrete class.' },
           { q: 'Why does DIP make ViewModel tests easier?', options: ['Tests can pass a fake repository through the constructor', 'Hilt runs faster in tests', 'ViewModels don’t need tests'], a: 0, why: 'The ViewModel only needs something that implements the interface, so a fake with fixed data works.' },
+          { q: 'You need a Retrofit instance in the graph. Retrofit has no @Inject constructor. What do you write?', options: ['A @Binds function', '<code>@Inject</code> on Retrofit’s constructor', 'A @Provides function that builds it'], a: 2, why: '@Binds maps an interface to a class you wrote with an @Inject constructor. Library types made by builders go in a @Provides function.' },
+          { q: 'A checkout form’s state holder is bound as @Singleton. What goes wrong?', options: ['Hilt refuses to compile', 'The form resets on every rotation', 'The half-filled form shows up in the next checkout, even after a logout'], a: 2, why: 'A singleton lives as long as the process. Scope state to the screen that owns it, for example @ViewModelScoped or the ViewModel itself.' },
+          { q: 'A binding has no scope annotation. Three classes inject it. How many instances does Hilt create?', options: ['Three, one per injection', 'One for the whole app', 'One per Activity'], a: 0, why: 'Without a scope, Hilt calls the factory every time something asks. A scope keeps one instance per component.' },
         ],
         deeper: [
           {

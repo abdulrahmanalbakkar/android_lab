@@ -54,38 +54,8 @@
   <p><span><kbd>←</kbd><kbd>→</kbd> lessons</span><span><kbd>/</kbd> search</span><span><kbd>m</kbd> map</span><span><kbd>r</kbd> review</span><span><kbd>i</kbd> interview</span><span><kbd>g</kbd> glossary</span><span><kbd>t</kbd> theme</span><button id="keys-btn" type="button"><kbd>?</kbd> all shortcuts</button></p>
 </footer>
 <script src="js/app.js"></script>
-<!-- One script per track. To add a topic, copy tracks/kotlin.js's shape into a new file and list it here. A missing file just doesn't load. -->
-<script src="tracks/kotlin.js"></script>
-<script src="tracks/git.js"></script>
-<script src="tracks/kotlin-deep.js"></script>
-<script src="tracks/oop.js"></script>
-<script src="tracks/solid.js"></script>
-<script src="tracks/patterns.js"></script>
-<script src="tracks/android.js"></script>
-<script src="tracks/compose.js"></script>
-<script src="tracks/tools.js"></script>
-<script src="tracks/coroutines.js"></script>
-<script src="tracks/flow.js"></script>
-<script src="tracks/architecture.js"></script>
-<script src="tracks/data.js"></script>
-<script src="tracks/views.js"></script>
-<script src="tracks/compose-advanced.js"></script>
-<script src="tracks/a11y.js"></script>
-<script src="tracks/testing.js"></script>
-<script src="tracks/perf.js"></script>
-<script src="tracks/media.js"></script>
-<script src="tracks/push.js"></script>
-<script src="tracks/background.js"></script>
-<script src="tracks/security.js"></script>
-<script src="tracks/build.js"></script>
-<script src="tracks/kmp.js"></script>
-<script src="tracks/launch.js"></script>
-<script src="tracks/cs.js"></script>
-<!-- Capstone projects (kind: 'project'). Listed after the tracks; the map puts each at the end of its group anyway. -->
-<script src="tracks/cap-kotlin.js"></script>
-<script src="tracks/cap-app.js"></script>
-<script src="tracks/cap-quality.js"></script>
-<script src="tracks/cap-ship.js"></script>
+<!-- Lesson list, terms and quizzes. Rebuild with: node tools/catalog.js. Full lessons load from tracks/ on demand. -->
+<script src="js/catalog.js"></script>
 <!-- Official documentation links per lesson. -->
 <script src="js/docs.js"></script>
 </body>

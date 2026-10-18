@@ -347,6 +347,8 @@ println("slow: $slow, fast: $fast")`,
       { q: 'A function loops over a list, and inside that loop it loops over the same list again. What is its time complexity?', options: ['O(n)', 'O(2n)', 'O(n²)'], a: 2, why: 'For each of the n items it does n more steps: n × n.' },
       { q: 'Binary search halves the range on every step. About how many steps for 1,000,000 sorted items?', options: ['About 20', 'About 1,000', 'About 500,000'], a: 0, why: '2²⁰ is about 1,048,576, so 20 halvings get from a million down to one.' },
       { q: '<code>val copy = list.sorted()</code>. How much extra space does it use?', options: ['O(1)', 'O(n), because it returns a new list'], a: 1, why: '<code>sorted()</code> leaves the original alone and builds a new list of n items. <code>sort()</code> on a mutable list sorts in place.' },
+      { q: 'a and b are Lists with n and m items. What is the cost of <code>a.filter { it in b }</code>?', options: ['O(n), one loop', 'O(n × m), because <code>in</code> on a List scans it', 'O(n + m)'], a: 1, why: 'The filter runs n times and each <code>in</code> walks b. Build <code>b.toHashSet()</code> once to make it O(n + m).' },
+      { q: '<code>fun sumTo(n: Int): Long = if (n == 0) 0 else n + sumTo(n - 1)</code>. How much extra memory does it use?', options: ['O(1)', 'O(log n)', 'O(n), one stack frame per call that has not returned yet'], a: 2, why: 'Each call waits for the next one, so n frames sit on the call stack at once. The loop version uses O(1).' },
     ],
   });
 
@@ -490,6 +492,8 @@ fun add(e: Any?) {
       { q: 'Why is <code>add()</code> at the end of an ArrayList called O(1) amortized?', options: ['It never copies', 'It copies rarely, so the average cost per add stays constant', 'The JVM caches it'], a: 1, why: 'A full array is copied into a bigger one, but the growth is by a factor, so total copies stay proportional to the number of adds.' },
       { q: 'Which call is O(n) on an ArrayList of n items?', options: ['list[n / 2]', 'list.add(x)', 'list.add(0, x)'], a: 2, why: 'Inserting at index 0 shifts every item one slot right.' },
       { q: 'You need cheap adds and removes at both ends. Which type?', options: ['ArrayList', 'ArrayDeque', 'IntArray'], a: 1, why: '<code>ArrayDeque</code> is a ring buffer: both ends are O(1) amortized.' },
+      { q: '<pre>var i = 0\nwhile (i &lt; list.size) {\n  if (list[i] &lt; 0)\n    list.removeAt(i)\n  else i++\n}</pre>What is the worst-case cost, and what does it in one pass?', options: ['O(n²); <code>list.removeAll { it &lt; 0 }</code>', 'O(n); it is already fine', 'O(n log n); sort the list first'], a: 0, why: 'Every removeAt shifts the rest of the list, so many removals cost O(n²). removeAll does the job in one pass.' },
+      { q: 'You read <code>linked[5_000]</code> on a java.util.LinkedList of 10,000 items. What does it cost?', options: ['O(1), like an array', 'O(n), it walks node by node from one end', 'O(log n)'], a: 1, why: 'A linked list has no index math. It follows pointers from the nearer end, and the scattered nodes make the walk slow too.' },
     ],
   });
 
@@ -644,6 +648,8 @@ fun indexFor(key: Any?, tableSize: Int): Int {
       { q: 'Two keys land in the same bucket. What does HashMap use to tell them apart?', options: ['hashCode()', 'equals()', 'toString()'], a: 1, why: 'The hash code only picks the bucket. Inside it, keys are compared with <code>equals()</code>.' },
       { q: 'Which of these keeps insertion order when you iterate?', options: ['hashMapOf()', 'mutableMapOf()', 'HashSet()'], a: 1, why: '<code>mutableMapOf()</code> returns a <code>LinkedHashMap</code>.' },
       { q: 'Why is HashMap.get O(1) only on average?', options: ['Because of garbage collection', 'If many keys collide in one bucket, the map has to search that bucket', 'Because Strings are immutable'], a: 1, why: 'With a good hash, buckets hold one or two keys. With a bad one, many keys pile into one bucket.' },
+      { q: '<pre>data class Tag(var name: String)\nval tags = hashSetOf(Tag("a"))\nval t = tags.first()\nt.name = "b"\nprintln(t in tags)</pre>What does it print?', options: ['true', 'false', 'It throws ConcurrentModificationException'], a: 1, why: 't is filed under the hash it had with name "a". The lookup uses the new hash and searches another bucket, so the entry is lost. Keys should be immutable.' },
+      { q: '<pre>class P(val x: Int, val y: Int)\nval s = HashSet&lt;P&gt;()\ns.add(P(1, 2))\ns.add(P(1, 2))\nprintln(s.size)</pre>What does it print?', options: ['2', '1', 'It does not compile'], a: 0, why: 'A plain class inherits identity equals and hashCode, so the two points are different keys. A data class would print 1.' },
     ],
   });
 
@@ -837,6 +843,8 @@ fun daysUntilWarmer(temps: IntArray): IntArray {
       { q: 'You push A, then B, then C onto a stack and pop once. What comes out?', options: ['A', 'B', 'C'], a: 2, why: 'Last in, first out: C was pushed last.' },
       { q: 'Which structure does BFS use to pick the next node?', options: ['A stack', 'A queue', 'A hash map'], a: 1, why: 'A queue hands out nodes in the order they were found, which is the order of their distance.' },
       { q: 'Why prefer ArrayDeque over LinkedList for a queue?', options: ['It is thread-safe', 'Its elements sit in one array: less memory, faster walks, still O(1) at both ends', 'It keeps elements sorted'], a: 1, why: 'Neither is thread-safe. <code>ArrayDeque</code> avoids one node object per element.' },
+      { q: 'The bracket checker pushes openers and pops on closers. What does it return for <code>([)]</code>?', options: ['true, every opener has a closer', 'false, at the end, because the stack is not empty', 'false, at <code>)</code>, because the top of the stack is <code>[</code>'], a: 2, why: 'On a closer the checker pops and compares. <code>)</code> pops <code>[</code>, which does not match, so it stops right there.' },
+      { q: 'With <code>compileSdk = 35</code> and <code>minSdk = 24</code>, you call <code>history.removeLast()</code> on a MutableList. What happens on an Android 14 phone?', options: ['It works, Kotlin provides removeLast()', 'It returns null', 'NoSuchMethodError, because the call resolved to the Java method Android 15 added'], a: 2, why: 'With compileSdk 35, Kotlin picks the new Java List.removeLast(), which older devices lack. Use removeLastOrNull() or removeAt(lastIndex); lint’s NewApi flags it.' },
     ],
   });
 
@@ -1013,6 +1021,8 @@ fun dedupe(nums: IntArray): Int {
       { q: 'Two pointers from both ends rely on what?', options: ['The array is sorted', 'The array has no duplicates', 'The array size is even'], a: 0, why: 'Sorting is what tells you which pointer to move when the sum is too small or too big.' },
       { q: 'Why is a sliding window O(n) even with a while loop inside the for loop?', options: ['The while loop runs at most once', 'Each item enters the window once and leaves at most once', 'Kotlin optimizes the loop'], a: 1, why: '<code>left</code> never moves back, so all the inner loop runs add up to at most n steps.' },
       { q: 'Sorted array, pointers at both ends, the sum is too small. What moves?', options: ['left moves right', 'right moves left', 'both move'], a: 0, why: 'Only a bigger left value can raise the sum.' },
+      { q: '<code>maxSumOfK(intArrayOf(2, 1, 5, 1, 3, 2), k = 3)</code>. What does it return?', options: ['8', '9', '11'], a: 1, why: 'The windows sum to 8, 7, 9 and 6. Each step adds the item entering and subtracts the one leaving, and the best is 9 (5 + 1 + 3).' },
+      { q: 'An unsorted array, and you need the original indexes of two numbers that add up to a target. Which tool fits?', options: ['Two pointers from both ends', 'Sort first, then two pointers', 'One pass with a hash map from each value you need to its index'], a: 2, why: 'The two-pointer rule needs sorted data, and sorting loses the original indexes. A map of what you have seen finds the pair in O(n).' },
     ],
   });
 
@@ -1173,6 +1183,9 @@ fun daysNeeded(weights: IntArray, cap: Int): Int {
       { q: '<code>listOf(10, 20, 30).binarySearch(25)</code> returns?', options: ['-1', '-3', '2'], a: 1, why: '25 would go at index 2, so the result is −2 − 1 = −3.' },
       { q: 'What does binary search need from the data?', options: ['Sorted in the same order you search with', 'Stored in a HashMap', 'No duplicates'], a: 0, why: 'Duplicates are fine. Without sorting, dropping half the range is not safe.' },
       { q: 'Inclusive bounds <code>lo..hi</code>, and <code>a[mid] &gt; target</code>. Which update is right?', options: ['hi = mid', 'hi = mid - 1', 'lo = mid'], a: 1, why: '<code>mid</code> is already ruled out and everything right of it is bigger still.' },
+      { q: '<pre>var lo = 0\nvar hi = a.lastIndex\nwhile (lo &lt;= hi) {\n  val mid = (lo + hi) ushr 1\n  if (a[mid] == t) return mid\n  if (a[mid] &lt; t) lo = mid + 1\n  else hi = mid\n}</pre>Which line is the bug?', options: ['<code>var hi = a.lastIndex</code>', '<code>while (lo &lt;= hi)</code>', '<code>else hi = mid</code>'], a: 2, why: 'With inclusive bounds, <code>hi = mid</code> can leave the range the same size when lo == hi, so the loop never ends. Use <code>hi = mid - 1</code>.' },
+      { q: '<code>lowerBound(intArrayOf(10, 20, 20, 30), 20)</code>. What does it return?', options: ['1', '2', '3'], a: 0, why: 'lowerBound returns the first index whose value is at least the target. The first 20 is at index 1.' },
+      { q: 'Why can binary search find the smallest truck capacity that ships every parcel in 5 days?', options: ['The weights are sorted', 'The answer to "can capacity c do it?" is no up to some point and yes from there on', 'There are fewer than 1,000 parcels'], a: 1, why: 'Binary search works on any yes/no question that flips once. Each check is O(n), and the search takes O(log(range)) checks.' },
     ],
   });
 
@@ -1368,6 +1381,8 @@ fun <T : Comparable<T>> Iterable<T>.sorted(): List<T> {
       { q: 'What does “stable” mean for <code>sortedBy</code>?', options: ['It never throws', 'Items with equal keys keep their original order', 'It runs in O(n)'], a: 1, why: 'Stability is about ties: equal items do not swap places.' },
       { q: 'Which sort is O(n log n) in the worst case and stable?', options: ['Quick sort', 'Merge sort', 'Selection sort'], a: 1, why: 'Merge sort always splits in half and merges with ties going left. Quick sort can hit O(n²) and is not stable.' },
       { q: 'You only need the biggest number in a list. Best call?', options: ['sortedDescending().first()', 'maxOrNull()', 'sorted().last()'], a: 1, why: 'One pass, O(n), and no new list.' },
+      { q: '<code>listOf("Can" to 2, "Ali" to 1, "Ece" to 2).sortedBy { it.second }</code>. What is the order of names?', options: ['Ali, Can, Ece', 'Ali, Ece, Can', 'Can, Ece, Ali'], a: 0, why: 'sortedBy is stable. Can and Ece both have 2, so they keep their input order: Can before Ece.' },
+      { q: 'The quick sort from the lesson always picks the last item as the pivot. You give it an array that is already sorted. What happens?', options: ['It finishes in O(n), since nothing moves', 'It stays O(n log n)', 'It degrades to O(n²), because every partition splits off only one item'], a: 2, why: 'The pivot is the biggest item every time, so each partition leaves one side empty. That is n levels of O(n) work.' },
     ],
   });
 
@@ -1557,6 +1572,8 @@ fun countViews(view: View): Int =
       { q: 'In-order traversal of a binary search tree gives?', options: ['The values sorted ascending', 'The values level by level', 'The root last'], a: 0, why: 'Left subtree (smaller), then the node, then right subtree (bigger), at every level.' },
       { q: 'What does every recursive function need?', options: ['A loop', 'A base case that stops it', 'A global variable'], a: 1, why: 'Without one it never stops calling itself.' },
       { q: 'Which order records the root first?', options: ['Pre-order', 'In-order', 'Post-order'], a: 0, why: 'Pre-order records each node before its children, and the root is visited first.' },
+      { q: 'You build a binary search tree by inserting 1, 2, 3, 4, 5 in that order. What does <code>contains(5)</code> cost?', options: ['O(n), because the tree has become a line', 'O(log n), because it is a binary search tree', 'O(1)'], a: 0, why: 'Search costs O(height). Sorted inserts make every node a right child, so the height is n.' },
+      { q: 'A tree can be 100,000 levels deep and each node has two children. Which fix does NOT avoid the StackOverflowError?', options: ['Keep your own stack in an ArrayDeque', 'Mark the function <code>tailrec</code>', 'Wrap it in DeepRecursiveFunction'], a: 1, why: 'tailrec only works when the recursive call is the very last thing the function does. With two children, one call always has to come back first.' },
     ],
   });
 
@@ -1775,6 +1792,9 @@ fun hasCycle(g: Map<String, List<String>>): Boolean {
       { q: 'Why does BFS find the shortest path in an unweighted graph?', options: ['It visits nodes in order of their distance from the start', 'It tries every possible path', 'It uses recursion'], a: 0, why: 'The queue hands out all distance-1 nodes before any distance-2 node, so the first time it reaches a node is along a shortest path.' },
       { q: 'How much memory does an adjacency list need for V nodes and E edges?', options: ['O(V²)', 'O(V + E)', 'O(E²)'], a: 1, why: 'One entry per node plus one list item per edge (two for undirected edges).' },
       { q: 'In DFS cycle detection, you reach a node that is still gray. What does it mean?', options: ['There is a cycle', 'It is a dead end', 'It is the shortest path'], a: 0, why: 'Gray nodes are on the current path, so you have walked back onto your own path.' },
+      { q: 'Each road has a driving time in minutes. You need the fastest route. Which algorithm fits?', options: ['BFS, it finds shortest paths', 'Dijkstra with a priority queue', 'DFS with a visited set'], a: 1, why: 'BFS counts edges, but a route with more roads can still take fewer minutes. Dijkstra always expands the cheapest node found so far.' },
+      { q: '<pre>val node = queue.removeFirst()\nif (!seen.add(node)) continue\nfor (n in g[node].orEmpty())\n  queue.addLast(n)</pre>The results are right, but it is slow on a dense graph. Why?', options: ['It should use a stack', 'removeFirst() is O(n)', 'Nodes are marked when taken out, so the same node can sit in the queue many times'], a: 2, why: 'Mark a node the moment you add it to the queue. Then each node is queued once.' },
+      { q: 'A social graph has 1,000,000 users who follow about 200 accounts each. How do you store it?', options: ['An adjacency list: O(V + E) memory', 'An adjacency matrix: O(1) edge checks are worth it', 'A list of all edges, scanned each time'], a: 0, why: 'A matrix would need 10¹² cells for a graph that has about 200 million edges. Sparse graphs fit an adjacency list.' },
     ],
   });
 
@@ -1924,6 +1944,9 @@ fun gridPaths(rows: Int, cols: Int): Long {
       { q: 'Memoization vs tabulation?', options: ['Memoization is top-down recursion with a cache; tabulation fills a table bottom-up', 'They are the same thing', 'Tabulation always uses recursion'], a: 0, why: 'Both store subproblem answers. They differ in direction and in whether recursion drives the order.' },
       { q: 'Why is the plain recursive <code>ways(n)</code> slow?', options: ['Recursion is slow on Android', 'It solves the same subproblems many times', 'It uses Long'], a: 1, why: 'The number of calls grows exponentially because <code>ways(k)</code> is recomputed for every path that reaches it.' },
       { q: 'Coins 1, 3 and 4. Fewest coins for 6?', options: ['2', '3', '6'], a: 0, why: '3 + 3. Greedy picks 4 + 1 + 1, which is 3 coins.' },
+      { q: '<pre>fun ways(n: Int): Long {\n  val memo = HashMap&lt;Int,Long&gt;()\n  if (n &lt;= 1) return 1\n  return memo.getOrPut(n) {\n    ways(n - 1) + ways(n - 2)\n  }\n}</pre>What is wrong?', options: ['It returns the wrong answer', 'Each call makes a new empty memo, so it is as slow as plain recursion', 'getOrPut cannot be called recursively'], a: 1, why: 'The answers are right, but nothing is ever found in a fresh map. Pass one shared memo through all calls.' },
+      { q: 'Which order does the lesson give for solving a DP problem?', options: ['Write the code, then find the base case, then name the state', 'Fill the table, then define the transition, then the state', 'Define the state, then the transition, then the base case, then the fill order'], a: 2, why: 'Say what dp[i] means first. The transition and base case follow from it, and the fill order makes sure every value you read is already there.' },
+      { q: '<code>gridPaths(3, 3)</code>: paths from the top-left to the bottom-right of a 3 × 3 grid, moving only right or down. What does it return?', options: ['6', '4', '9'], a: 0, why: 'The first row and column are 1. Then dp[1][1] = 2, dp[1][2] = 3, dp[2][1] = 3, and dp[2][2] = 3 + 3 = 6.' },
     ],
   });
 
@@ -2044,6 +2067,8 @@ check(firstUnique("zzzz") == null)        // all the same`,
       { q: 'What should you do first when you get a problem?', options: ['Write the optimal code', 'Clarify the inputs, outputs and edge cases', 'Pick the fastest language'], a: 1, why: 'Questions about size, empty input and the no-answer case shape everything after.' },
       { q: 'Why say the brute force solution out loud?', options: ['It gives a correct baseline and a Big-O to improve on', 'Interviewers want slow code', 'It is always the final answer'], a: 0, why: 'A working baseline shows you can solve it, and its cost points at the repeated work to remove.' },
       { q: 'The input is sorted and you need a pair with a given sum. Which tool fits?', options: ['Two pointers', 'Dynamic programming', 'A stack'], a: 0, why: 'Sorted input lets you move one pointer or the other based on the sum, in O(n).' },
+      { q: 'Which order is the five-step routine?', options: ['Brute force, clarify, optimize, examples, test', 'Clarify, examples, brute force, optimize, test', 'Examples, optimize, clarify, test, brute force'], a: 1, why: 'Clarifying first can change the problem, examples check your understanding, and the brute force gives a baseline to improve before you test.' },
+      { q: '<code>fun maxGap(a: IntArray) = (1 until a.size).maxOf { a[it] - a[it - 1] }</code>. What does <code>maxGap(intArrayOf(5))</code> do?', options: ['Returns 0', 'Returns 5', 'Throws NoSuchElementException'], a: 2, why: 'With one item the range 1 until 1 is empty, and maxOf throws on an empty range. One-item and empty inputs are the first tests to try.' },
     ],
   });
 

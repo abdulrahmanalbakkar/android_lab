@@ -647,3 +647,39 @@ input.blank.wrong { border-color: var(--t-e); color: var(--t-e); }
 .docs a { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-weight: 700; color: var(--ink); text-decoration-color: var(--lc); text-underline-offset: 3px; overflow-wrap: anywhere; }
 .docs a::after { content: "↗"; color: var(--muted); font-weight: 400; }
 .docs-host { font: 500 0.78rem var(--mono); color: var(--muted); }
+
+/* Roadmap: goal picker, jump bar, folded stages, finish line */
+.rm-goal-q { color: var(--muted); margin: -8px 0 -12px; }
+.rm-goals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+.rm-goal { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; transition: border-color 0.15s; }
+.rm-goal b { font: 700 1rem var(--display); }
+.rm-goal span { font-size: 0.85rem; color: var(--muted); line-height: 1.35; }
+.rm-goal:hover { border-color: var(--accent); }
+.rm-goal[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.rm-jump { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; min-width: 0; }
+.rm-jump button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 0.82rem var(--body); cursor: pointer; white-space: nowrap; }
+.rm-jump button span { font: 600 0.72rem var(--mono); color: var(--muted); }
+.rm-jump button.is-off { color: var(--muted); }
+.rm-jump button:hover { border-color: var(--accent); }
+.rm-unfold { margin-top: 6px; font: 600 0.78rem var(--mono); color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; position: relative; z-index: 1; }
+.rm-unfold:hover { color: var(--ink); border-color: var(--accent); }
+.rm-stage.is-folded .rm-nodes { display: none; }
+.rm-stage.is-off .rm-stage-head h3, .rm-stage.is-off .rm-stage-n { opacity: 0.6; }
+.rm-stage.is-folded { gap: 0; }
+.rm-stage.is-finish { animation: none; }
+.rm-finish { position: relative; z-index: 1; justify-self: center; width: min(100%, 520px); display: grid; gap: 10px; padding: 22px; border-radius: 20px; background: var(--surface); border: 2px solid var(--line); text-align: center; }
+.rm-finish-label { font: 600 0.74rem var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); }
+.rm-finish h3 { font-size: 1.3rem; }
+.rm-finish-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.rm-credit { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+.rm-credit a { color: inherit; }
+@media (max-width: 720px) {
+  .rm-unfold { grid-column: 2; justify-self: start; }
+  .rm-finish { justify-self: stretch; text-align: left; }
+  .rm-finish-actions { justify-content: flex-start; }
+}
+
+/* Code inside quiz questions and options scrolls in its own box instead of widening the page. */
+.q, .q > *, .opts, .opt { min-width: 0; }
+.q-text pre, .opt pre { max-width: 100%; overflow-x: auto; margin: 8px 0 0; font-weight: 400; }
+.q-text pre.code.mini, .opt pre.code.mini { padding: 10px 12px; font-size: 0.82rem; line-height: 1.55; border-radius: 10px; }

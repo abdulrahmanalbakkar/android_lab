@@ -2,13 +2,14 @@
 
 Interactive lessons for Kotlin and Android. Each lesson has an animated demo, a one-line rule to remember, practice challenges, and a quiz that comes back on a spaced-review schedule.
 
-Plain HTML, CSS and JavaScript. No build step and no dependencies. Open `index.html`, or serve the folder to get offline support.
+Plain HTML, CSS and JavaScript, no dependencies. The only build-like step is `node tools/catalog.js` after editing a track. Serve the folder (for example `python3 -m http.server`) to try it locally; lessons load on demand, and offline support needs http(s).
 
 Live at https://abdulrahmanalbakkar.github.io/android_lab/
 
 ## Features
 
-- **Roadmap** (`#home`): one path from Programming basics to Ship it, in 8 stages. Each stage lists its topics as cards (core, optional or project) with progress, and "You are here" marks the topic you're on.
+- **Roadmap** (`#home`): one path from Programming basics to Get the job. Each stage lists its topics as cards (core, optional or project) with progress, and "You are here" marks the topic you're on.
+- **Goals**: New to programming, Growing to senior, Interview prep or Everything. The chosen goal opens its stages and folds the rest; a jump bar scrolls to any stage, and a finish line card shows progress for the goal.
 - **Track pages** (`#<track>`) and **lesson pages** (`#<track>.<lesson>`): demo, code, "Pin this" rule, optional Go deeper / Under the hood / Common mistakes, practice, terms and a quiz.
 - **Capstone projects**: guided builds shown as a double-bordered card at the end of their stage. A project page shows "What you'll build" and its steps; each step links the lessons to review first.
 - **Interview practice** (`#interview`): timed, mixed-topic questions drawn from every quiz. Pick topics or a preset, 10/20/30 questions and no limit, 30 s or 60 s per question. Results show a per-topic breakdown, explanations for every miss, and a button that adds the misses to Review. Best scores are kept per setup.
@@ -22,8 +23,11 @@ Progress lives in this browser's `localStorage` under `android-lab:v1`.
 
 ## Add a track
 
-1. Copy the shape of `tracks/kotlin.js` into `tracks/<name>.js` and call `Lab.addTrack({...})`. Put it on the roadmap by adding its id to a stage in `STAGES` in `js/app.js` (or give the track `stage: '<stage title>'`, plus `optional: true` if it's optional). The header comment in `js/app.js` lists the other optional fields (`requires`, `hue`, lesson `deeper` / `underHood` / `mistakes`).
-2. Add `<script src="tracks/<name>.js"></script>` to `index.html`, before the capstone scripts.
+1. Copy the shape of `tracks/kotlin.js` into `tracks/<name>.js` and call `Lab.addTrack({...})`.
+2. Put it on the roadmap by adding its id to a stage in `STAGES` in `js/app.js` (or give the track `stage: '<stage title>'`, plus `optional: true` if it's optional). The header comment in `js/app.js` lists the other optional fields (`requires`, `hue`, lesson `deeper` / `underHood` / `mistakes`).
+3. Run `node tools/catalog.js`. It rebuilds `js/catalog.js` and checks for duplicate ids and missing quizzes.
+
+**Run step 3 after every change to a track file**, then commit `js/catalog.js` with it. The page loads only the catalog (titles, terms and quizzes, about 140 KB gzipped) and fetches a track's full file the first time one of its lessons opens. If a track file and the catalog disagree, the browser console says so.
 
 The roadmap, search, glossary, level filters, review, interview mode and the offline cache pick it up automatically.
 
@@ -41,7 +45,7 @@ Lab.addTrack({
 });
 ```
 
-`refs` are `track.lesson` ids shown as "Review first" links; ids that don't resolve are skipped. List the script after the regular tracks in `index.html`.
+`refs` are `track.lesson` ids shown as "Review first" links; ids that don't resolve are skipped. Then run `node tools/catalog.js`.
 
 ## Check
 
@@ -55,7 +59,8 @@ It checks the spaced-review schedule and prints `ok`.
 
 `sw.js` is a service worker, registered only when the site is served over http(s) (not from `file://`).
 
-- On install it caches the page, `style.css`, `js/app.js`, the icons, the manifest and every script listed in `index.html`. It reads that list from `index.html`, so a new track needs no change in `sw.js`.
+- On install it caches the page, `style.css`, `js/app.js`, `js/catalog.js`, `js/docs.js`, the icons and the manifest.
+- Track files are cached the first time one of their lessons opens, so a visited lesson works offline.
 - Those files are served cache-first and refreshed in the background, so an edit shows up on the visit after the next one.
 - Everything else, fonts included, is network-first with the cache as a fallback.
 - To push fresh files to everyone at once, bump `VERSION` in `sw.js`; old caches are deleted when the new worker activates.

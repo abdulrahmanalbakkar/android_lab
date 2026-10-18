@@ -157,6 +157,8 @@ val vm = HomeViewModel(FakeAnalytics())`,
           { q: 'When is a Kotlin <code>object</code> instance created?', options: ['When the app starts', 'The first time code accesses it', 'Every time you reference it'], a: 1, why: 'Objects are initialized lazily on first access, and only once.' },
           { q: 'Why prefer a Hilt <code>@Singleton</code> over a global <code>object</code> for an analytics client?', options: ['It is faster', 'Tests can pass a fresh fake through the constructor', 'Objects cannot implement interfaces'], a: 1, why: 'You still get one instance in the app, but tests don’t share its state and can swap it out.' },
           { q: 'A singleton needs a <code>Context</code>. Which one is safe to store?', options: ['The current Activity', 'The application context', 'A Fragment’s requireContext()'], a: 1, why: 'The application context lives as long as the process, so holding it leaks nothing.' },
+          { q: 'An object’s initializer throws the first time it is used. What does the next access get, later in the same process?', options: ['NoClassDefFoundError', 'A second try at the initializer', 'null'], a: 0, why: 'The JVM marks the class as failed. The first caller gets ExceptionInInitializerError and every later access NoClassDefFoundError, so keep object initializers unable to fail.' },
+          { q: 'A user types a draft that is kept in <code>object DraftHolder { var text = "" }</code>. Android kills the app in the background, and the user comes back. What is text?', options: ['<code>""</code>: a fresh process built a fresh object', 'The draft, restored automatically', 'It crashes with UninitializedPropertyAccessException'], a: 0, why: 'One instance means one per running process. State that must survive belongs in storage like DataStore, Room or SavedStateHandle.' },
         ],
         deeper: [
           {
@@ -408,6 +410,8 @@ fun DetailRoute(vm: DetailViewModel = viewModel(factory = detailFactory)) { /* .
         quiz: [
           { q: 'You rotate the phone. Does your <code>viewModelFactory</code> initializer run again?', options: ['Yes, the Activity is new', 'No, the existing ViewModel comes back from the ViewModelStore', 'Only on API 34+'], a: 1, why: 'The store survives configuration changes. The factory only runs when no instance exists yet.' },
           { q: 'What does a companion <code>operator fun invoke</code> let you write?', options: ['<code>Logger.invoke.create()</code>', '<code>Logger(debug = true)</code> on an interface', '<code>new Logger()</code>'], a: 1, why: 'The call looks like a constructor but runs your factory and returns any implementation.' },
+          { q: 'A HorizontalPager shows three DetailViewModel pages from the same owner, each created with <code>viewModel { DetailViewModel(repo, id) }</code> and no key. What do the pages get?', options: ['All three get the first ViewModel', 'Each page gets its own ViewModel', 'It throws on the second page'], a: 0, why: 'The default key is the class name, so the second request finds the first ViewModel and the factory does not run. Pass key = "detail-$id".' },
+          { q: 'What can a factory function do that a constructor can’t?', options: ['Run an init block', 'Take default arguments', 'Return a shared instance, null, or a subtype'], a: 2, why: 'A constructor always makes a new object of exactly its class. emptyList() and toIntOrNull() show the other options.' },
         ],
         deeper: [
           {
@@ -722,6 +726,7 @@ val retrofit = Retrofit.Builder()
           { q: 'What replaces most builders in Kotlin?', options: ['Interfaces', 'Default and named arguments', 'Extension functions'], a: 1, why: 'Optional parameters get defaults, and callers name only what they change.' },
           { q: 'You forget a required parameter in <code>Request(...)</code>. When do you find out?', options: ['At compile time', 'When <code>build()</code> runs', 'When the request is sent'], a: 0, why: 'A parameter without a default must be passed, and the compiler enforces it. A builder can only check at runtime.' },
           { q: 'What does <code>Paint().apply { color = Color.RED }</code> return?', options: ['Unit', 'The Paint', 'Color.RED'], a: 1, why: '<code>apply</code> runs the block on the object and returns that same object.' },
+          { q: 'You forget <code>setSmallIcon</code> on a NotificationCompat.Builder. When do you find out?', options: ['At runtime, when the notification is posted', 'At compile time', 'Never: Android uses the app icon'], a: 0, why: 'A Java builder can only check required parts at runtime. Kotlin parameters without defaults are checked by the compiler.' },
         ],
         deeper: [
           {
@@ -1007,6 +1012,9 @@ val count by cart.count.collectAsStateWithLifecycle()`,
         quiz: [
           { q: 'An Activity calls <code>addListener(this)</code> but never removes it. What happens after rotation?', options: ['Nothing, Android removes it', 'The old Activity stays in memory and keeps getting callbacks', 'The app crashes immediately'], a: 1, why: 'The subject still references the destroyed Activity, so it can’t be collected.' },
           { q: 'A new collector starts on a <code>StateFlow</code> whose value is 3. What does it get first?', options: ['Nothing until the next change', '3, right away', 'Every value since 0'], a: 1, why: 'A StateFlow always has a value and replays the current one to each new collector.' },
+          { q: 'A MutableStateFlow holds 5. You set <code>value = 5</code> again. What do collectors receive?', options: ['5 again', 'Nothing', 'An error'], a: 1, why: 'StateFlow compares the new value with equals and skips equal ones. It holds state, not a stream of every assignment.' },
+          { q: 'What is the problem here?<pre class="code mini"><code>lifecycleScope.launch {\n    vm.count.collect { badge(it) }\n    vm.name.collect { title(it) }\n}</code></pre>', options: ['Both run in parallel, so badge and title flicker', 'name is never collected: collecting a StateFlow never completes', 'It does not compile'], a: 1, why: 'collect on a StateFlow suspends forever, so the next line is never reached. Give each collector its own launch.' },
+          { q: 'After save(), the screen should show a “Saved” snackbar exactly once, even across rotation. Which design fits?', options: ['Put it in a StateFlow and never clear it', 'Keep the message in UI state and clear it with onMessageShown() after showing it', 'Send it on a SharedFlow with no replay'], a: 1, why: 'Uncleared state shows again to the new collector after rotation, and a no-replay event is lost if it fires while nobody collects.' },
         ],
         deeper: [
           {
@@ -1294,6 +1302,8 @@ val rows = cart.sortedWith(byPriceDesc)`,
         quiz: [
           { q: 'A new “Black Friday” discount arrives. With the strategy pattern, what changes in <code>Checkout</code>?', options: ['A new branch in its when', 'Nothing, you pass it a new Pricing', 'Its constructor signature'], a: 1, why: 'The discount is a new function. Checkout just calls whatever pricing it holds.' },
           { q: 'When is an interface a better fit than a function type for a strategy?', options: ['Always', 'When it needs a name, state, or several methods', 'Never in Kotlin'], a: 1, why: 'A lambda covers one operation. An interface groups related operations and can hold data.' },
+          { q: 'What is wrong with this comparator for article timestamps in milliseconds?<pre class="code mini"><code>Comparator&lt;Article&gt; { a, b -&gt;\n    (b.publishedMs - a.publishedMs).toInt()\n}</code></pre>', options: ['Nothing, it sorts newest first', 'It sorts oldest first', 'Large gaps overflow Int and flip the sign, so the order breaks'], a: 2, why: 'About 25 days is more than Int.MAX_VALUE milliseconds, so toInt() wraps. compareByDescending { it.publishedMs } never overflows.' },
+          { q: 'Remote config sends a promo name that the app does not know. With <code>pricings[promo] ?: regular</code>, what happens?', options: ['The cart crashes', 'The total is null', 'Checkout uses regular pricing'], a: 2, why: 'The choice lives in one place at the edge, with a safe default. Unknown data falls back instead of breaking Checkout.' },
         ],
         deeper: [
           {
@@ -1582,6 +1592,9 @@ class ArticleAdapter : ListAdapter<Article, ArticleAdapter.Holder>(Diff) {
         quiz: [
           { q: 'The API renames <code>headline</code> to <code>title</code>. What should change?', options: ['Every screen that shows a title', 'The DTO and its mapper', 'The RecyclerView adapter'], a: 1, why: 'The domain model and the UI depend on your Article, not on the JSON.' },
           { q: 'What does <code>ListAdapter</code> add over a plain <code>RecyclerView.Adapter</code>?', options: ['Click handling', 'Diffing on submitList so only changed rows update', 'Paging'], a: 1, why: 'It runs DiffUtil for you and dispatches minimal updates.' },
+          { q: 'You add an item to the same MutableList you submitted before, then call <code>submitList(list)</code> again. What happens?', options: ['Only the new row is inserted', 'It crashes with ConcurrentModificationException', 'Nothing updates: ListAdapter skips a list it already holds'], a: 2, why: 'submitList ignores the very same list object, and the diff would have no old state to compare anyway. Always submit a new list.' },
+          { q: 'In <code>ConcatAdapter(header, articles, footer)</code> the header has 1 item, articles 20, the footer 1. What is the footer row’s bindingAdapterPosition?', options: ['21', '22', '0'], a: 2, why: 'bindingAdapterPosition is the position inside the row’s own adapter. absoluteAdapterPosition would be 21, its place in the whole list.' },
+          { q: 'A like counter ticks often and the whole row blinks and reloads its image. What fixes it?', options: ['Call notifyDataSetChanged()', 'Override getChangePayload and update only the likes view', 'Make areItemsTheSame compare the whole object'], a: 1, why: 'With a payload, the adapter calls the three-argument onBindViewHolder on the same ViewHolder, so there is no cross-fade and no image reload.' },
         ],
         deeper: [
           {
@@ -1945,6 +1958,8 @@ val client = OkHttpClient.Builder()
           { q: 'What must a decorator have in common with the object it wraps?', options: ['The same constructor', 'The same interface', 'The same package'], a: 1, why: 'Callers depend on the interface, so the wrapper can stand in for the original anywhere.' },
           { q: 'In <code>Logging(Caching(Network(api)))</code>, a second call for the same id is a cache hit. Does the log line still print?', options: ['Yes, Logging wraps Caching', 'No, the cache short-circuits everything'], a: 0, why: 'The outer layer sees every call. Only the layers inside the cache are skipped.' },
           { q: 'What does <code>: UserRepository by inner</code> do?', options: ['Inherits from inner’s class', 'Forwards every interface member you don’t override to inner', 'Makes inner lazy'], a: 1, why: 'Class delegation generates the forwarding methods, so you write only the decorated one.' },
+          { q: 'A response comes straight from OkHttp’s cache. How many times does a network interceptor run for that call?', options: ['0', '1', '2'], a: 0, why: 'A network interceptor sits next to the socket, so it runs only for requests that really go out. An application interceptor would still run once.' },
+          { q: 'Which failure should RetryingUserRepository retry?', options: ['An IOException from a dropped connection', 'An HTTP 404', 'A CancellationException'], a: 0, why: 'Retry only errors that can go away. A 404 fails the same way every time, and cancellation must pass through so the scope can stop.' },
         ],
         deeper: [
           {
@@ -2296,6 +2311,9 @@ class FeedViewModel(private val repo: ArticleRepository) : ViewModel() {
         quiz: [
           { q: 'Which classes should <code>FeedViewModel</code> know about?', options: ['ArticleDao and NewsApi', 'ArticleRepository only', 'All three'], a: 1, why: 'The repository is the facade. Everything behind it can change without touching the ViewModel.' },
           { q: 'The network is down and the user pulls to refresh. With Room as the source of truth, what does the screen show?', options: ['An empty list', 'The last cached articles plus an offline message', 'A crash'], a: 1, why: 'The UI stream comes from Room, which still has data. Only the refresh call fails.' },
+          { q: 'The refresh rule is 15 minutes and the cache was synced 3 minutes ago. Someone starts collecting articles(). What happens?', options: ['The repository calls the network first and then emits', 'Nothing is emitted until a refresh succeeds', 'The cached rows are sent and no network call is made'], a: 2, why: 'Only the repository knows the staleness rule. Fresh enough means Room alone, and the ViewModel code never changes.' },
+          { q: 'What should refresh() return so the facade doesn’t leak Retrofit to the ViewModel?', options: ['Retrofit’s Response<T>', 'A small sealed RefreshResult that the app owns', 'Nothing, and let HttpException escape'], a: 1, why: 'Translate at the boundary. The ViewModel then handles your own cases, and swapping the HTTP library doesn’t touch it.' },
+          { q: 'Two composables each collect <code>repo.articles()</code> directly, without stateIn. What happens?', options: ['They share one collection automatically', 'Two Room observers run, with two queries after every write', 'The second collect throws'], a: 1, why: 'A cold Flow is a recipe, run again for each collector. stateIn in the ViewModel collects once and shares the latest value.' },
         ],
         deeper: [
           {
@@ -2628,6 +2646,9 @@ class FeedViewModel : ViewModel() {
           { q: 'Why a sealed <code>UiState</code> instead of <code>isLoading</code>, <code>items</code> and <code>error</code> fields?', options: ['It uses less memory', 'Impossible combinations can’t be represented', 'StateFlow requires sealed types'], a: 1, why: 'Three independent fields allow states like loading with an error. A sealed type allows exactly one state at a time.' },
           { q: 'The state is <code>Idle</code> and a late <code>Loaded</code> event arrives. What does the reducer return?', options: ['Success', 'Idle, unchanged', 'It throws'], a: 1, why: 'Idle accepts only Load. Every other event falls through to <code>else state</code>.' },
           { q: 'Why is a pure reducer easy to test?', options: ['It needs an emulator', 'Same input always gives the same output, with no Android types', 'Hilt generates its tests'], a: 1, why: 'You call <code>reduce(state, event)</code> and assert on the result. No dispatcher, no lifecycle.' },
+          { q: 'The state is Loading and the user taps Load three more times. With effects triggered on transitions, how many requests start?', options: ['None more: the reducer ignores Load while loading', 'Three more', 'One more'], a: 0, why: 'The reducer returns the same state, so there is no transition into Loading and no effect fires.' },
+          { q: 'Two coroutines run <code>_state.value = reduce(_state.value, e)</code> at nearly the same time. What can happen?', options: ['Both events apply in order', 'It deadlocks', 'One event is lost: both read the same old state'], a: 2, why: 'Both compute from the same old value and the second write erases the first. update { } retries on the newer state, so neither event is lost.' },
+          { q: 'A search screen must survive process death. What goes into SavedStateHandle?', options: ['The Loading state', 'The full list of results', 'The query, so init can send Submit again'], a: 2, why: 'Save only the inputs needed to restart the machine. Loading means nothing in a new process, and big lists should be reloaded.' },
         ],
         deeper: [
           {

@@ -293,6 +293,8 @@ public final class Rect {
           { q: 'A <code>lateinit</code> property is read before it was assigned. What happens?', options: ['It returns null', 'It throws UninitializedPropertyAccessException', 'It returns a default value'], a: 1, why: 'The getter checks the field and throws, naming the property in the message.' },
           { q: 'Which declaration compiles?', options: ['<code>lateinit var count: Int</code>', '<code>lateinit var name: String?</code>', '<code>lateinit var name: String</code>'], a: 2, why: '<code>lateinit</code> needs a non-null type that isn’t a primitive like <code>Int</code>.' },
           { q: '<code>val db by lazy { openDb() }</code> is read three times. How many times does <code>openDb()</code> run?', options: ['Once', 'Three times', 'Never, until you call it'], a: 0, why: '<code>lazy</code> runs the block on the first read and stores the result for every later read.' },
+          { q: 'A Fragment keeps <code>private lateinit var binding: FeedBinding</code> and never clears it. The user opens another screen and this Fragment goes to the back stack. What is the problem?', options: ['The next read of binding throws UninitializedPropertyAccessException', 'Android sets binding back to unassigned in onDestroyView', 'The old view tree stays in memory while the Fragment object lives'], a: 2, why: 'The Fragment outlives its view on the back stack, and the lateinit field still points at the destroyed views. A nullable backing property cleared in onDestroyView lets them go.' },
+          { q: 'You need “assign later, crash if read early” for <code>var pageSize: Int</code>. Which declaration works?', options: ['<code>lateinit var pageSize: Int</code>', '<code>val pageSize: Int by lazy</code>', '<code>var pageSize: Int by Delegates.notNull()</code>'], a: 2, why: 'lateinit is not allowed on primitive types like Int. Delegates.notNull() gives the same rule and throws IllegalStateException on an early read.' },
         ],
         deeper: [
           {
@@ -447,6 +449,8 @@ val json = """
           { q: 'What type does <code>val x = 3_000_000_000</code> get?', options: ['<code>Int</code>', '<code>Long</code>', '<code>Double</code>'], a: 1, why: 'The number is bigger than Int’s maximum of about 2.1 billion, so Kotlin picks Long.' },
           { q: '<code>val a = 1; val b = 2</code>. What does <code>"$a + $b"</code> contain?', options: ['<code>"1 + 2"</code>', '<code>"3"</code>', '<code>"$a + $b"</code>'], a: 0, why: 'Each <code>$name</code> is replaced on its own. To compute the sum, write <code>"${a + b}"</code>.' },
           { q: 'What does <code>"abc".toInt()</code> do?', options: ['Returns 0', 'Returns null', 'Throws NumberFormatException'], a: 2, why: '<code>toInt()</code> throws on text that is not a number. Use <code>toIntOrNull()</code> to get null instead.' },
+          { q: 'What does <code>val ms = 30 * 24 * 60 * 60 * 1000</code> hold?', options: ['A wrong negative number: the Int overflowed', '2592000000', 'Nothing: it throws ArithmeticException'], a: 0, why: 'Every factor is an Int, so the math runs in Int and wraps past 2,147,483,647 without a warning. Write 30L or use 30.days.inWholeMilliseconds.' },
+          { q: 'What does <code>println(0.1 + 0.2 == 0.3)</code> print?', options: ['true', 'false', 'It does not compile'], a: 1, why: 'Doubles store binary fractions, and 0.1 + 0.2 is 0.30000000000000004. Compare with a tolerance, or keep money in Long cents.' },
         ],
         deeper: [
           {
@@ -671,6 +675,8 @@ repeat(3) { println("Hi") }`,
           { q: 'How many times does <code>for (i in 1..3)</code> run?', options: ['2', '3', '4'], a: 1, why: '<code>1..3</code> includes both ends: 1, 2, 3.' },
           { q: '<code>(1 until 4).toList()</code> is', options: ['<code>[1, 2, 3]</code>', '<code>[1, 2, 3, 4]</code>', '<code>[2, 3]</code>'], a: 0, why: '<code>until</code> stops before the end value.' },
           { q: 'Does <code>val label = if (ok) "yes" else "no"</code> compile?', options: ['Yes, if is an expression', 'No, use a ternary <code>?:</code>'], a: 0, why: 'Kotlin has no ternary operator. <code>if</code> with an <code>else</code> returns a value.' },
+          { q: 'What does <code>for (i in 5..1) print(i)</code> print?', options: ['Nothing', '54321', '12345'], a: 0, why: 'A range whose start is above its end is empty, so the loop runs zero times with no error. Use 5 downTo 1 to count down.' },
+          { q: 'You search a grid with two nested for loops and want to stop both at the first match. The outer loop is labelled <code>rows@</code>. What do you write?', options: ['<code>break@rows</code>', '<code>break</code>', '<code>continue@rows</code>'], a: 0, why: 'A plain break only leaves the inner loop, so the search carries on with the next row. break@rows leaves the labelled outer loop too.' },
         ],
         deeper: [
           {
@@ -843,6 +849,8 @@ if (name != null) {
           { q: '<code>val n: String? = null</code>. What is <code>n?.length ?: -1</code>?', options: ['<code>null</code>', '<code>-1</code>', '<code>0</code>', 'It throws'], a: 1, why: '<code>?.</code> produces null, so Elvis supplies -1.' },
           { q: 'When is <code>!!</code> a reasonable choice?', options: ['Whenever the compiler complains about nulls', 'When a null there would be a bug you want to see right away', 'Never, it does not compile'], a: 1, why: '<code>!!</code> turns null into a crash. Use it only where null means a programming mistake.' },
           { q: 'Which type can hold <code>null</code>?', options: ['<code>String</code>', '<code>String?</code>', 'Both'], a: 1, why: 'Only types with <code>?</code> allow null.' },
+          { q: 'Does this compile?<pre class="code mini"><code>class Form(var name: String?)\n\nfun show(form: Form) {\n    if (form.name != null) println(form.name.length)\n}</code></pre>', options: ['Yes: the if proves it is not null', 'No: form.name is a var property, so it is not smart-cast. Copy it into a local val', 'Only if show() runs on the main thread'], a: 1, why: 'A mutable property could change between the check and the use, so the compiler won’t smart-cast it. A local val, or form.name?.let { }, fixes it.' },
+          { q: 'A user has no address. What is <code>user.address?.city?.name ?: "?"</code>?', options: ['null', '"?"', 'It throws NullPointerException'], a: 1, why: 'The first null ends the safe-call chain, so the whole chain is null, and the Elvis at the end catches it.' },
         ],
         deeper: [
           {
@@ -1057,6 +1065,9 @@ listOf(1, 2, 3).map { it * 10 }   // [10, 20, 30]`,
         quiz: [
           { q: 'What is the type of <code>{ s: String -> s.length }</code>?', options: ['<code>(String) -> Int</code>', '<code>(Int) -> String</code>', '<code>String</code>'], a: 0, why: 'It takes a String and returns its length, an Int.' },
           { q: '<code>listOf(1, 2, 3).map { it + 1 }</code> returns', options: ['<code>[1, 2, 3]</code>', '<code>[2, 3, 4]</code>', '<code>6</code>'], a: 1, why: '<code>it</code> is each item in turn, so every item gets 1 added.' },
+          { q: 'What does this print?<pre class="code mini"><code>fun makeCounter(): () -&gt; Int {\n    var count = 0\n    return { count += 1; count }\n}\nval a = makeCounter()\nval b = makeCounter()\na(); a()\nprintln(b())</code></pre>', options: ['1', '3', '2'], a: 0, why: 'Each makeCounter() call creates a fresh count, and each lambda keeps its own. b has been called once.' },
+          { q: 'With <code>fun twice(f: (Int) -&gt; Int): (Int) -&gt; Int = { x -&gt; f(f(x)) }</code>, what is <code>g(5)</code> after <code>val g = twice { it * 2 }</code>?', options: ['20', '10', '25'], a: 0, why: 'twice returns a lambda that applies f two times: 5 * 2 = 10, then 10 * 2 = 20.' },
+          { q: 'What happens when the button is tapped?<pre class="code mini"><code>button.setOnClickListener { viewModel::refresh }</code></pre>', options: ['refresh() runs on every tap', 'It does not compile', 'Nothing runs: the lambda only produces a function reference'], a: 2, why: 'The lambda’s last expression is the reference itself, and the Unit-returning listener ignores it. Pass the reference directly, or call viewModel.refresh() inside the lambda.' },
         ],
         deeper: [
           {
@@ -1273,6 +1284,8 @@ val result = numbers
           { q: '<code>listOf(1, 2, 3, 4).filter { it > 2 }</code>', options: ['<code>[1, 2]</code>', '<code>[3, 4]</code>', '<code>[true, true]</code>'], a: 1, why: '<code>filter</code> keeps the items where the lambda is true.' },
           { q: 'After <code>val b = a.map { it * 2 }</code>, what is in <code>a</code>?', options: ['The doubled values', 'The original values', 'Nothing'], a: 1, why: 'Collection operations return a new list and leave the original alone.' },
           { q: '<code>listOf(1, 2, 3).map { it * 2 }.sum()</code>', options: ['<code>6</code>', '<code>12</code>', '<code>[2, 4, 6]</code>'], a: 1, why: '2 + 4 + 6 = 12.' },
+          { q: 'What is <code>listOf("ab", "ac", "b").associateBy { it.first() }</code>?', options: ['<code>{a=ab, b=b}</code>', '<code>{a=ac, b=b}</code>', '<code>{a=[ab, ac], b=[b]}</code>'], a: 1, why: 'associateBy keeps one value per key, and the last one wins, so "ab" is gone. groupBy would keep both in a list.' },
+          { q: 'You must remove every read message from a <code>MutableList&lt;Message&gt;</code>. Which is right?', options: ['<code>for (m in messages) if (m.read) messages.remove(m)</code>', '<code>messages.removeAll { it.read }</code>', '<code>messages.filter { !it.read }</code> and ignore the result'], a: 1, why: 'Removing inside a for loop over the same list throws ConcurrentModificationException, and filter returns a new list without changing the original. removeAll does it in one safe pass.' },
         ],
         deeper: [
           {
@@ -1521,6 +1534,9 @@ add("elma"); add("armut"); add("elma")
           { q: '<code>setOf(1, 2, 2, 3).size</code>', options: ['<code>3</code>', '<code>4</code>', 'It doesn’t compile'], a: 0, why: 'A set keeps each item once, so the second 2 is dropped.' },
           { q: '<code>mapOf("a" to 1)["b"]</code>', options: ['<code>0</code>', '<code>null</code>', 'It throws'], a: 1, why: 'Indexing a map with a missing key returns null.' },
           { q: 'You check <code>if (id in seen)</code> thousands of times. Which type should <code>seen</code> be?', options: ['<code>List</code>', '<code>Set</code>', 'It makes no difference'], a: 1, why: '<code>in</code> on a list checks items one by one. A hash set finds the item by its hash, in about the same time whatever its size.' },
+          { q: 'What does <code>mapOf("tr" to "Türkçe").getValue("de")</code> do?', options: ['Throws NoSuchElementException', 'Returns null', 'Returns an empty String'], a: 0, why: 'getValue is for keys that must be there, so a missing key fails with a message that names it. Use map[key] ?: fallback when missing is normal.' },
+          { q: 'What is <code>setOf(1, 2, 3) subtract setOf(2, 3, 4)</code>?', options: ['<code>[4]</code>', '<code>[1, 4]</code>', '<code>[1]</code>'], a: 2, why: 'subtract keeps what is in the left set but not in the right one, so order matters. [1, 4] would be both differences together.' },
+          { q: 'This line is slow with 10,000 orders and 10,000 users. What is the best fix?<pre class="code mini"><code>orders.map { o -&gt; users.first { it.id == o.userId } }</code></pre>', options: ['Build <code>val byId = users.associateBy { it.id }</code> once, then read <code>byId[o.userId]</code>', 'Sort users by id first', 'Call <code>users.asSequence()</code> inside the lambda'], a: 0, why: 'first scans the whole user list for every order. A map built once turns each lookup into a hash lookup.' },
         ],
         deeper: [
           {
@@ -1692,6 +1708,7 @@ println(m.javaClass)  // class java.util.LinkedHashMap`,
         quiz: [
           { q: 'With the code above, what does <code>describe(0)</code> return?', options: ['<code>"zero"</code>', '<code>"negative"</code>', 'Both branches run'], a: 0, why: 'The <code>0</code> branch comes first and only the first match runs.' },
           { q: 'Inside <code>is String -> ...</code>, why can you write <code>x.length</code>?', options: ['x is smart-cast to String in that branch', 'Any has a length property', 'You can’t, it needs a cast'], a: 0, why: 'After an <code>is</code> check, Kotlin treats the value as that type inside the branch.' },
+          { q: 'With <code>shipping(weightKg = 25.0, express = true, member = true)</code> from the no-subject when above, what is returned?', options: ['25.0', '12.0', '0.0'], a: 0, why: 'Branches are tried top to bottom and the first true condition wins. weightKg > 20 comes first, so the later true conditions never count.' },
         ],
         deeper: [
           {
@@ -1915,6 +1932,7 @@ val d = User("Dee", 1990, 2026)      // secondary: age = 36`,
           { q: '<code>class P(name: String)</code>. Does <code>P("Ada").name</code> compile?', options: ['Yes', 'No, name is not a property'], a: 1, why: 'Only parameters marked <code>val</code> or <code>var</code> become properties.' },
           { q: 'With the code above, what is <code>User("Bo").age</code>?', options: ['<code>0</code>', '<code>18</code>', 'It doesn’t compile'], a: 1, why: 'The caller skipped <code>age</code>, so its default of 18 is used.' },
           { q: 'When does an <code>init</code> block run?', options: ['Each time an object is created', 'Once, when the class is loaded', 'Only if you call it'], a: 0, why: '<code>init</code> is part of construction, so it runs for every new object.' },
+          { q: 'With the User class above, what does <code>User("Dee", 1990, 2026)</code> print, in order?', options: ['“from birth year”, then “Created Dee, age 36”', 'Only “from birth year”', '“Created Dee, age 36”, then “from birth year”'], a: 2, why: 'A secondary constructor first delegates to the primary one through this(...), which runs the initializers and init blocks. Its own body runs after that.' },
         ],
         deeper: [
           {
@@ -2144,6 +2162,7 @@ player.score = 999    // doesn't compile: the setter is private`,
           { q: 'What is the visibility of a declaration with no modifier?', options: ['<code>private</code>', '<code>internal</code>', '<code>public</code>'], a: 2, why: 'Kotlin uses <code>public</code> when you write no modifier.' },
           { q: '<code>var score = 0; private set</code>. What can code outside the class do?', options: ['Read and write it', 'Read it only', 'Nothing'], a: 1, why: 'The getter keeps the property’s visibility. Only the setter is private.' },
           { q: 'In an app with <code>:app</code> and <code>:core</code> modules, who sees an <code>internal</code> class in <code>:core</code>?', options: ['Only code in :core', 'Code in :app and :core', 'Only the same file'], a: 0, why: '<code>internal</code> means the same module. <code>:app</code> is a different module.' },
+          { q: 'What happens when code assigns <code>user.name = " Ada "</code>?<pre class="code mini"><code>var name = ""\n    set(value) { name = value.trim() }</code></pre>', options: ['name becomes "Ada"', 'It does not compile', 'StackOverflowError: the setter calls itself'], a: 2, why: 'Inside its own setter, name = … calls the setter again, forever. Write field = value.trim() to store the value directly.' },
         ],
         deeper: [
           {
@@ -2299,6 +2318,7 @@ b.move()       // "flies"`,
           { q: '<code>class A</code> and <code>class B : A()</code>. Does it compile?', options: ['Yes', 'No, A is final'], a: 1, why: 'Classes are final unless marked <code>open</code> or <code>abstract</code>.' },
           { q: 'Can you write <code>Shape()</code> when <code>Shape</code> is abstract?', options: ['Yes', 'No'], a: 1, why: 'An abstract class can only be created through a concrete subclass.' },
           { q: 'How many classes can a Kotlin class extend, and how many interfaces can it implement?', options: ['One class, many interfaces', 'Many of both', 'One of each'], a: 0, why: 'Kotlin has single class inheritance, but a class can implement any number of interfaces.' },
+          { q: 'Two interfaces both give <code>fun move()</code> a default body. <code>class Duck : Swimmer, Flyer</code> does not override move(). What happens?', options: ['Swimmer’s version wins because it is listed first', 'It throws at runtime when move() is called', 'It does not compile until Duck overrides move()'], a: 2, why: 'Kotlin refuses to guess between two inherited bodies. Duck must override move(), and can call super<Swimmer>.move() or super<Flyer>.move() inside it.' },
         ],
         deeper: [
           {
@@ -2498,6 +2518,7 @@ val byLength = object : Comparator<String> {
         quiz: [
           { q: 'How many instances of <code>object Analytics</code> exist in a running app?', options: ['One', 'One per call', 'One per thread'], a: 0, why: 'An object declaration is a singleton: every reference points at the same instance.' },
           { q: '<code>fun guest()</code> sits in <code>User</code>’s companion object. How do you call it?', options: ['<code>User.guest()</code>', '<code>User().guest()</code>', '<code>guest(User)</code>'], a: 0, why: 'Companion members are called on the class name, with no instance needed.' },
+          { q: 'With the Config object above, this runs. How many times is “Config init” printed?<pre class="code mini"><code>println(Config.VERSION)\nConfig.isOn("search")\nConfig.isOn("chat")</code></pre>', options: ['Never', 'Twice', 'Once'], a: 2, why: 'A const val is copied into the reading code, so the first line doesn’t create the object. The first isOn() runs init, and it never runs again.' },
         ],
         deeper: [
           {
@@ -2698,6 +2719,7 @@ Light.RED.next()        // GREEN`,
           { q: 'What is <code>Light.entries.size</code> for the code above?', options: ['2', '3', '0'], a: 1, why: 'There are three entries: RED, YELLOW and GREEN.' },
           { q: 'A <code>when (light)</code> covers RED, YELLOW and GREEN. Does it need <code>else</code>?', options: ['Yes, always', 'No, it is exhaustive'], a: 1, why: 'The compiler knows every entry, so covering them all is enough.' },
           { q: 'Each error case needs its own message and code. Enum or sealed?', options: ['Enum', 'Sealed'], a: 1, why: 'Sealed subtypes can carry different data per case. Enum entries all share one shape.' },
+          { q: 'You store the user’s chosen Priority in DataStore. What should you save?', options: ['Its ordinal', 'Its hashCode()', 'Its name, or a stable key of its own'], a: 2, why: 'Ordinals shift when entries are added or reordered, so saved numbers would point at the wrong entry. A name or own key stays put.' },
         ],
         deeper: [
           {
@@ -2911,6 +2933,8 @@ println(a)  // User(name=Ada, age=36)`,
         quiz: [
           { q: 'For a plain (non-data) class, <code>User("Ada") == User("Ada")</code> is', options: ['<code>true</code>', '<code>false</code>'], a: 1, why: 'Without <code>data</code>, <code>==</code> checks whether both are the same object, and these are two separate objects.' },
           { q: 'What does <code>a.copy(age = 37)</code> do to <code>a</code>?', options: ['Sets its age to 37', 'Nothing. It returns a new object.'], a: 1, why: '<code>copy()</code> builds a new object. With <code>val</code> properties, <code>a</code> can’t change at all.' },
+          { q: 'What does this print?<pre class="code mini"><code>data class Item(val id: Int) {\n    var selected = false\n}\nval a = Item(1).apply { selected = true }\nprintln(a == Item(1))</code></pre>', options: ['true', 'false', 'It does not compile'], a: 0, why: 'The generated equals uses only primary constructor properties. selected is declared in the body, so it doesn’t count.' },
+          { q: 'A data class with a var property is in a HashSet. You change that property. What does <code>set.contains(item)</code> return?', options: ['true', 'It throws ConcurrentModificationException', 'false'], a: 2, why: 'The hash changed, so the set looks in a different bucket and misses the object. It is still in the set, just unreachable.' },
         ],
         deeper: [
           {
@@ -3118,6 +3142,7 @@ fun String.initials(): String =
         quiz: [
           { q: 'Inside <code>fun Int.isOdd() = this % 2 == 1</code>, what is <code>this</code>?', options: ['The Int it was called on', 'The file it lives in', 'Nothing, extensions have no this'], a: 0, why: '<code>this</code> is the receiver: in <code>5.isOdd()</code> it is 5.' },
           { q: 'Can an extension function read a class’s <code>private</code> members?', options: ['Yes, it becomes part of the class', 'No, it is an ordinary function called with dot syntax'], a: 1, why: 'Extensions are compiled to regular functions that take the receiver as a parameter, so they can’t see private members.' },
+          { q: 'What does <code>s.label()</code> return?<pre class="code mini"><code>open class Shape\nclass Circle : Shape()\nfun Shape.label() = "a shape"\nfun Circle.label() = "a circle"\n\nval s: Shape = Circle()</code></pre>', options: ['"a circle"', '"a shape"', 'It does not compile: the call is ambiguous'], a: 1, why: 'Extensions are picked at compile time from the declared type, here Shape. Only members dispatch on the real object.' },
         ],
         deeper: [
           {
@@ -3299,6 +3324,8 @@ val q = p.also { println(it.age) }        // the same Person`,
           { q: 'Configure an object and keep it: <code>val tv = TextView(ctx).___ { text = "Hi" }</code>', options: ['<code>let</code>', '<code>apply</code>', '<code>run</code>'], a: 1, why: '<code>apply</code> gives you <code>this</code> (so <code>text = …</code> works) and returns the TextView.' },
           { q: 'Which returns the block’s result and calls the object <code>it</code>?', options: ['<code>also</code>', '<code>let</code>', '<code>with</code>'], a: 1, why: '<code>let</code>: <code>it</code> inside, last expression out.' },
           { q: '<code>val x = "abc".also { it.length }</code>. What is <code>x</code>?', options: ['<code>3</code>', '<code>"abc"</code>'], a: 1, why: '<code>also</code> always returns the object it was called on.' },
+          { q: 'What is <code>r</code>?<pre class="code mini"><code>val r = 5.let { it * 2 }\n    .also { it + 1 }\n    .run { this + 3 }</code></pre>', options: ['13', '14', '16'], a: 0, why: 'let passes on 10. also passes on the object it got, 10, and drops it + 1. run returns 10 + 3.' },
+          { q: 'What is <code>"0".toIntOrNull()?.takeIf { it in 1..65535 } ?: 8080</code>?', options: ['8080', '0', 'null'], a: 0, why: '0 is outside the range, so takeIf returns null and the Elvis supplies the fallback.' },
         ],
         deeper: [
           {
@@ -3502,6 +3529,8 @@ fun render(state: UiState) = when (state) {
         quiz: [
           { q: 'You add <code>data object Empty : UiState</code>. What happens to a <code>when</code> with no <code>else</code> that doesn’t handle it?', options: ['It compiles and skips Empty', 'It stops compiling until you add the branch', 'It crashes at runtime'], a: 1, why: 'The compiler knows every subtype, so it reports the missing case.' },
           { q: 'Inside <code>is UiState.Error -> …</code>, can you read <code>state.message</code>?', options: ['Yes, state is smart-cast to Error', 'No, you must cast it yourself'], a: 0, why: 'The <code>is</code> check smart-casts <code>state</code> inside that branch.' },
+          { q: 'Error is a nested sealed interface with Offline and Server. Does this when compile?<pre class="code mini"><code>when (s) {\n    UiState.Loading -&gt; showSpinner()\n    is UiState.Success -&gt; showList(s.items)\n    UiState.Error.Offline -&gt; showOffline()\n}</code></pre>', options: ['Yes: every top-level case has a branch', 'No: UiState.Error.Server is not covered', 'Only with an else branch added at the top'], a: 1, why: 'The compiler checks down to every leaf. Add a Server branch, or one is UiState.Error branch for the whole group.' },
+          { q: 'An existing enum NetworkFailure should become one case of Failure. How should you declare Failure?', options: ['<code>sealed interface Failure</code>', '<code>sealed class Failure</code>', '<code>abstract class Failure</code>'], a: 0, why: 'An enum class can’t extend another class, but it can implement an interface. A sealed interface lets the enum join the closed list.' },
         ],
         deeper: [
           {
@@ -3788,6 +3817,7 @@ fun fail(): Nothing = error("unreachable")   // IllegalStateException`,
           { q: '<code>val x = try { "7".toInt() } catch (e: Exception) { 0 } finally { println("end") }</code>. What is <code>x</code>?', options: ['<code>7</code>', '<code>0</code>', '<code>Unit</code>'], a: 0, why: 'Nothing was thrown, so the value comes from the try block. finally runs but doesn’t change the value.' },
           { q: 'Does Kotlin force you to catch <code>IOException</code>?', options: ['Yes, like Java', 'No, Kotlin has no checked exceptions'], a: 1, why: 'Every exception is unchecked in Kotlin. You decide where to handle it.' },
           { q: 'What does <code>require(false)</code> throw?', options: ['<code>IllegalStateException</code>', '<code>IllegalArgumentException</code>', 'Nothing'], a: 1, why: '<code>require</code> is for arguments. <code>check</code> and <code>error</code> throw IllegalStateException.' },
+          { q: 'What does this print?<pre class="code mini"><code>fun b() { try { error("x") } finally { print("B") } }\nfun a() { try { b() } finally { print("A") } }\n\ntry { a() } catch (e: Exception) { print("C") }</code></pre>', options: ['ABC', 'BAC', 'C'], a: 1, why: 'The exception climbs from b() to a() to the caller. Each finally runs on the way out, innermost first, and the catch runs last.' },
         ],
         deeper: [
           {

@@ -394,6 +394,8 @@ git init`, why: 'Git acts on the current folder. Running <code>git init</code> i
           { q: 'What does <code>cd ..</code> do?', options: ['Goes to your home folder', 'Moves up one level to the parent folder', 'Lists hidden files'], a: 1, why: '<code>..</code> always means the parent of the current folder.' },
           { q: 'In <code>git commit -m "Fix crash"</code>, what is <code>"Fix crash"</code>?', options: ['A subcommand', 'A flag', 'An argument, the value of -m'], a: 2, why: 'The quoted text is the argument that <code>-m</code> expects. Quotes keep the two words together.' },
           { q: 'A command printed nothing at all. What most likely happened?', options: ['It failed', 'It succeeded and had nothing to report', 'The terminal froze'], a: 1, why: 'Many commands stay silent on success. Check the exit code with <code>echo $?</code> if you are unsure.' },
+          { q: 'You are in <code>/home/deniz/projects/MynetHaber/app/src</code> and run <code>cd ../..</code>. Where are you now?', options: ['<code>/home/deniz/projects</code>', '<code>/home/deniz/projects/MynetHaber/app</code>', '<code>/home/deniz/projects/MynetHaber</code>'], a: 2, why: 'Each .. goes up one level: first to app, then to MynetHaber.' },
+          { q: '<code>cd Android Projects</code> fails, but the folder exists. Why?', options: ['Folder names can’t contain spaces', 'The shell split the name into two arguments; quote it: <code>cd "Android Projects"</code>', 'cd only accepts absolute paths'], a: 1, why: 'The shell splits words on spaces before the program sees them. Quotes keep the folder name together as one argument.' },
         ],
       },
 
@@ -564,6 +566,8 @@ git commit -m "Show source name on news cards"`, why: '<code>git add .</code> st
           { q: 'You changed 3 files but want only 2 in the next commit. How?', options: ['git commit -m with the 2 names in the message', 'git add the 2 files, then git commit', 'Delete the third file'], a: 1, why: 'The staging area exists for exactly this. Only staged changes go into the commit.' },
           { q: 'After git add, you edit the same file again. What does git commit save?', options: ['The newest version', 'The version you staged', 'Both versions'], a: 1, why: 'git add copies the file as it was at that moment. The later edit is unstaged until you add again.' },
           { q: 'Where does Git store the history of a repository?', options: ['On GitHub only', 'In the hidden .git folder', 'In each file'], a: 1, why: 'Everything Git knows is in <code>.git</code>. Delete it and the folder is no longer a repository.' },
+          { q: 'You staged a file, then edited it again. Which command shows only that second, unstaged edit?', options: ['<code>git diff --staged</code>', '<code>git diff</code>', '<code>git log -p</code>'], a: 1, why: 'Plain git diff compares your files with the staging area. --staged shows what the next commit will contain.' },
+          { q: 'You created a new file Search.kt and edited a tracked file. What does <code>git commit -am "Add search"</code> commit?', options: ['Both files', 'Nothing, because Search.kt is not staged', 'Only the edit to the tracked file'], a: 2, why: '-a stages changes to files Git already tracks. A new file stays untracked until you git add it.' },
         ],
       },
 
@@ -712,6 +716,8 @@ git commit -m "Initial commit"`, why: 'Ignore rules do not untrack files that ar
           { q: 'Why is <code>local.properties</code> not committed?', options: ['It is too big', 'It holds a path that is only valid on your computer', 'Gradle forbids it'], a: 1, why: 'It points to your own SDK folder. A teammate’s machine needs its own value.' },
           { q: 'You add <code>secrets.txt</code> to .gitignore, but it was committed last week. What happens?', options: ['Git deletes it from history', 'Nothing: Git keeps tracking it', 'Git untracks it automatically'], a: 1, why: '.gitignore only affects untracked files. Use <code>git rm --cached</code>, and rotate any secret that was pushed.' },
           { q: 'Which is the best commit summary line?', options: ['changes', 'Fix login button doing nothing on Android 14', 'Updated LoginScreen.kt, LoginViewModel.kt and strings.xml with fixes'], a: 1, why: 'Short, imperative, and it says what the change does. The file list is already in the diff.' },
+          { q: 'local.properties is already committed. Which command stops tracking it but keeps the file on your disk?', options: ['<code>git rm local.properties</code>', '<code>git rm --cached local.properties</code>', '<code>git restore local.properties</code>'], a: 1, why: 'git rm --cached removes the file from the index only. Plain git rm also deletes it from your disk.' },
+          { q: 'A signing keystore password was pushed to the shared GitHub repository. What do you do first?', options: ['Delete it in a new commit', 'Revoke or rotate the key and password', 'Add it to .gitignore'], a: 1, why: 'Anything that reached a shared repository may already be copied, and a new commit doesn’t remove it from history. Make the leaked secret useless first, then clean up.' },
         ],
       },
 
@@ -842,6 +848,8 @@ git commit -am "Add search bar"`, why: '<code>git branch</code> only creates the
           { q: 'What happens to <code>main</code> when you commit while on <code>feature</code>?', options: ['main moves too', 'main stays where it was', 'main is deleted'], a: 1, why: 'Only the branch HEAD points to moves forward.' },
           { q: 'How much does creating a branch copy?', options: ['The whole project', 'Only changed files', 'Nothing, it writes one commit id'], a: 2, why: 'A branch is a small file holding a commit id. That is why branching is instant.' },
           { q: 'What does HEAD usually point to?', options: ['The newest commit in the repository', 'The branch you are on', 'The remote server'], a: 1, why: 'HEAD points to the current branch, which points to a commit. In detached HEAD it points to a commit directly.' },
+          { q: 'You are on main and run <code>git branch feature</code>, then <code>git commit -m "Add search"</code>. Which branch has the new commit?', options: ['feature', 'Both', 'main'], a: 2, why: 'git branch only creates the label. HEAD stays on main, so main moves. git switch -c feature creates and switches.' },
+          { q: 'In detached HEAD you make a commit, then run <code>git switch main</code>. What happens to that commit?', options: ['No branch points to it, so it is left behind unless you create a branch for it', 'It is added to main', 'Git deletes it immediately'], a: 0, why: 'A commit in detached HEAD moves no branch. Create a branch with git switch -c while you are there, or find it later in the reflog.' },
         ],
       },
 
@@ -964,6 +972,8 @@ git commit`, why: '<code>git add</code> marks a file resolved without looking in
           { q: 'When does <code>git merge</code> fast-forward?', options: ['When there are no conflicts', 'When the current branch has no commits the other branch lacks', 'Always'], a: 1, why: 'If your branch is fully contained in the other one, Git can just move the label ahead.' },
           { q: 'How many parents does a merge commit have?', options: ['One', 'Two (or more)', 'None'], a: 1, why: 'It joins two lines of history, so it points back to both.' },
           { q: 'In a conflict, what sits between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code>=======</code>?', options: ['The incoming branch', 'Your current branch', 'The merge base'], a: 1, why: 'HEAD is the branch you are on. The incoming side is after <code>=======</code>.' },
+          { q: 'main and feature both have new commits. What does <code>git merge --ff-only feature</code> do?', options: ['Creates a merge commit', 'Rebases feature onto main', 'Stops without merging'], a: 2, why: '--ff-only only slides the branch forward. When the histories have split, a fast-forward is impossible, so Git refuses.' },
+          { q: 'A merge stopped with a conflict in strings.xml. Which order finishes it?', options: ['git commit → git add → edit the file', 'git add → edit the file → git commit', 'Edit the file and remove the markers → git add → git commit'], a: 2, why: 'git add marks the file as resolved without looking inside, so fix it first. git commit then creates the merge commit.' },
         ],
       },
 
@@ -1095,6 +1105,9 @@ git push`, why: 'Everyone else’s main still has the old commits. After your fo
           { q: 'After <code>git rebase main</code>, what happens to your commits’ ids?', options: ['They stay the same', 'They change: the commits are recreated', 'Only the last one changes'], a: 1, why: 'Each commit gets a new parent, so it is a new commit with a new id.' },
           { q: 'Which is safe?', options: ['Rebasing main after others pulled it', 'Rebasing your own unpushed feature commits', 'Rebasing a teammate’s branch you both push to'], a: 1, why: 'Nobody else has those commits, so rewriting them hurts no one.' },
           { q: 'In <code>git rebase -i</code>, what does <code>fixup</code> do?', options: ['Fixes merge conflicts', 'Melds the commit into the one above and drops its message', 'Deletes the commit'], a: 1, why: 'fixup is like squash without keeping the message. drop deletes.' },
+          { q: 'In the list that <code>git rebase -i HEAD~4</code> opens, in what order are the commits shown?', options: ['Newest first, like git log', 'Oldest first', 'In alphabetical order of their messages'], a: 1, why: 'The list is the order in which the commits will be replayed, so it starts with the oldest. That is the reverse of git log.' },
+          { q: 'You rebased your feature branch, which you had already pushed. The push is rejected. What do you run?', options: ['<code>git push --force-with-lease</code>', '<code>git push --force</code>', '<code>git pull</code>, then push'], a: 0, why: '--force-with-lease overwrites only if the remote still points where you last saw it. git pull would merge the old copies of your commits back in.' },
+          { q: 'You have two unpushed commits, and a teammate pushed to the same branch. What does <code>git pull --rebase</code> do?', options: ['Makes a merge commit joining both', 'Replays your two commits on top of the teammate’s', 'Throws away your two commits'], a: 1, why: 'Your unpushed commits are only yours, so rewriting them is safe and keeps the history straight.' },
         ],
       },
 
@@ -1235,6 +1248,8 @@ git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <c
           { q: 'What does <code>git fetch</code> change?', options: ['Your files and your main', 'Only remote-tracking branches like origin/main', 'Nothing at all'], a: 1, why: 'It downloads commits and moves origin/*. Your branches and files stay as they are.' },
           { q: 'Your push is rejected with "fetch first". Why?', options: ['Your SSH key expired', 'The remote has commits you do not have', 'The branch is protected'], a: 1, why: 'Git refuses to overwrite remote commits. Pull, then push.' },
           { q: '<code>git pull</code> is the same as…', options: ['git fetch followed by a merge (or rebase)', 'git push in reverse', 'git clone again'], a: 0, why: 'pull = fetch + integrate the upstream into your current branch.' },
+          { q: '<code>git status</code> says your branch is up to date with origin/main, but a teammate pushed five minutes ago. Why?', options: ['The teammate’s push failed', 'status only compares local branches', 'status compares with origin/main as of your last fetch'], a: 2, why: 'origin/main only moves when you talk to the server. Run git fetch, and status will show you are behind.' },
+          { q: 'Pushing over HTTPS, Git asks for a password. What do you enter?', options: ['Your GitHub account password', 'A personal access token', 'Your SSH key passphrase'], a: 1, why: 'GitHub removed password sign-in for Git operations. A token takes its place, and a credential helper can remember it.' },
         ],
       },
 
@@ -1395,6 +1410,8 @@ git push -u origin fix/quick-fix
           { q: 'A reviewer asks for changes. What do you do?', options: ['Close the PR and open a new one', 'Push more commits to the same branch', 'Merge anyway'], a: 1, why: 'The PR follows the branch. New commits show up in it and CI runs again.' },
           { q: 'What do status checks on a PR usually come from?', options: ['The reviewer', 'CI, such as a build and test workflow', 'Git itself'], a: 1, why: 'CI systems report results on each commit. A repository can require them to pass before merging.' },
           { q: 'What does "Squash and merge" put on main?', options: ['Every commit of the PR', 'One commit containing all the PR changes', 'A merge commit plus every commit'], a: 1, why: 'Squash combines the PR into a single commit on the base branch.' },
+          { q: 'You want feedback on half-done work, but it must not be merged yet. What do you open?', options: ['A draft pull request', 'A normal pull request with “WIP” in the title', 'Nothing: push to main and ask for review'], a: 0, why: 'Drafts can’t be merged, and code owners aren’t asked to review until you mark the PR ready.' },
+          { q: 'Which merge mode puts every PR commit on main without adding a merge commit?', options: ['Squash and merge', 'Create a merge commit', 'Rebase and merge'], a: 2, why: 'Rebase and merge replays each commit onto main. Squash makes one commit, and a merge commit keeps the commits plus a merge commit.' },
         ],
       },
 
@@ -1566,6 +1583,9 @@ git reset --hard origin/main`, why: 'Uncommitted changes are not in any commit, 
           { q: 'Which reset keeps your changes in the files but unstaged?', options: ['--soft', '--mixed (the default)', '--hard'], a: 1, why: '--mixed moves the branch and resets the index, but leaves the working tree alone.' },
           { q: 'You ran <code>git reset --hard HEAD~2</code> by mistake. The commits were real commits. Are they lost?', options: ['Yes, permanently', 'No: git reflog shows them and you can reset back', 'Only if you pushed'], a: 1, why: 'Commits stay in the object store and the reflog for weeks. Uncommitted edits are the ones --hard truly destroys.' },
           { q: 'How do you undo a commit that teammates already pulled?', options: ['git reset --hard and force push', 'git revert', 'Delete the branch'], a: 1, why: 'revert adds a new commit, so nobody’s history is rewritten.' },
+          { q: 'After <code>git reset --soft HEAD~1</code>, where are the changes from the undone commit?', options: ['In your files, unstaged', 'Staged, ready to commit again', 'Gone'], a: 1, why: '--soft only moves the branch. The index and your files keep the changes, so they stay staged.' },
+          { q: 'You created a new file and edited a tracked one, then ran <code>git stash</code>. What happens to the new file?', options: ['It is stashed with the edit', 'Git deletes it', 'It stays in your working tree; add -u to stash it'], a: 2, why: 'git stash saves changes to tracked files by default. Untracked files are left behind unless you pass -u.' },
+          { q: 'You had uncommitted edits and ran <code>git reset --hard</code>. Can <code>git reflog</code> bring them back?', options: ['Yes, for 30 days', 'No: they were never in a commit', 'Yes, with git stash pop'], a: 1, why: 'The reflog records positions of HEAD, which are commits. Edits that were never committed are not in any of them.' },
         ],
       },
     ],

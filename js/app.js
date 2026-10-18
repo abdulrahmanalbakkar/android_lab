@@ -19,11 +19,11 @@ const Lab = (() => {
   // ponytail: progress lives in this browser only. Move to a backend when accounts exist.
   const KEY = 'android-lab:v1';
   // iv: interview mode, { setup, best: { [setupKey]: run }, history: [run] }. Added later; older saves simply lack it.
-  let state = { done: {}, cards: {}, level: 'all', last: null, hide: {}, iv: {} };
+  let state = { done: {}, cards: {}, level: 'all', last: null, hide: {}, iv: {}, goal: null };
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {}, iv: s.iv || {} };
+      if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {}, iv: s.iv || {}, goal: s.goal || null };
       migrate();
     } catch (e) { /* storage blocked: run without saving */ }
   }
@@ -104,6 +104,7 @@ const Lab = (() => {
   // (it joins that stage, optional if `optional: true`) or lands in "More" at the end.
   const STAGES = [
     { title: 'Programming basics', blurb: 'Write Kotlin and use Git with confidence', tracks: ['kotlin', 'git', 'kdeep'], optional: ['kdeep'] },
+    { title: 'Computer science foundations', blurb: 'What runs under your app: OS, network, database, runtime', tracks: ['os', 'net', 'db', 'concurrency', 'runtime', 'sweng'], optional: ['os', 'net', 'db', 'concurrency', 'runtime', 'sweng'] },
     { title: 'Think in objects', blurb: 'Design code that is easy to change', tracks: ['oop', 'solid', 'patterns', 'capkotlin'] },
     { title: 'Your first app', blurb: 'Screens, state and navigation', tracks: ['android', 'compose', 'tools', 'views'], optional: ['views'] },
     { title: 'Async and data', blurb: 'Load, store and stream without freezing the UI', tracks: ['coroutines', 'flow', 'data'] },
@@ -111,8 +112,19 @@ const Lab = (() => {
     { title: 'Quality', blurb: 'Tested, fast and usable by everyone', tracks: ['testing', 'perf', 'a11y', 'compose2', 'capquality'], optional: ['compose2'] },
     { title: 'Platform features', blurb: 'Push, background work, security and media', tracks: ['push', 'background', 'security', 'media'], optional: ['media'] },
     { title: 'Ship it', blurb: 'Build, sign, release and keep the app healthy', tracks: ['build', 'launch', 'capship', 'kmp'], optional: ['kmp'] },
+    { title: 'Beyond the app', blurb: 'System design, a Kotlin backend and the cloud around it', tracks: ['sysdesign', 'backend', 'cloud'] },
     { title: 'Get the job', blurb: 'Data structures, algorithms and interview practice', tracks: ['cs'] },
   ];
+  // Learner goals: which stages are open on the map. null (never chosen) and 'all' open every stage.
+  const GOALS = [
+    { id: 'start', label: 'New to programming', sub: 'Kotlin first, then your first real Android apps', stages: ['Programming basics', 'Think in objects', 'Your first app', 'Async and data', 'Architecture'] },
+    { id: 'senior', label: 'Growing to senior', sub: 'Fill the gaps and learn what seniors are expected to know', stages: ['Computer science foundations', 'Async and data', 'Architecture', 'Quality', 'Platform features', 'Ship it', 'Beyond the app'] },
+    { id: 'interview', label: 'Interview prep', sub: 'Fundamentals, system design and practice questions', stages: ['Programming basics', 'Computer science foundations', 'Async and data', 'Architecture', 'Beyond the app', 'Get the job'] },
+    { id: 'all', label: 'Everything', sub: 'The whole map, every stage open', stages: null },
+  ];
+  const goalOf = () => GOALS.find(g => g.id === state.goal) || null;
+  const inGoal = s => { const g = goalOf(); return !g || !g.stages || g.stages.includes(s.title); };
+  const opened = new Set(); // stages the learner expanded by hand this visit
   let stageCache;
   function stages() {
     if (stageCache && stageCache.n === tracks.length) return stageCache.list;
@@ -149,7 +161,8 @@ const Lab = (() => {
       const [tid, lid] = route.split('.');
       const t = !RESERVED.includes(tid) && trackById(tid);
       const l = t && lid != null && t.lessons.find(x => x.id === lid);
-      if (l) { here = { t, l }; view = lessonView(t, l); }
+      if (l && !t.full) { here = { t, l }; view = loadingView(t, l); }
+      else if (l) { here = { t, l }; view = lessonView(t, l); }
       else if (t && lid == null) { here = { t }; view = trackView(t); }
       else view = homeView();
     }
@@ -158,6 +171,28 @@ const Lab = (() => {
     updateNav(route);
     window.scrollTo(0, 0);
     paintReadbar();
+  }
+
+  // Lessons (demos, code, challenges) live in tracks/<file>.js and load the first time one of the track's lessons opens.
+  // Everything else (map, track pages, search, glossary, review, interview) runs off js/catalog.js.
+  const loading = {};
+  function loadTrack(t) {
+    if (t.full) return Promise.resolve(t);
+    return loading[t.id] || (loading[t.id] = new Promise((resolve, reject) => {
+      const s = h('script', { src: t.file });
+      s.onload = () => (t.full ? resolve(t) : reject(new Error(t.file + ' did not register ' + t.id)));
+      s.onerror = () => { delete loading[t.id]; s.remove(); reject(new Error('Could not load ' + t.file)); };
+      document.head.append(s);
+    }));
+  }
+  function loadingView(t, l) {
+    const msg = h('p', { class: 'muted-text', role: 'status' }, 'Loading the lesson…');
+    const route = location.hash;
+    loadTrack(t).then(() => { if (location.hash === route) render(); }, () => {
+      msg.replaceChildren('Couldn’t load this lesson. Check your connection and ',
+        h('button', { type: 'button', class: 'btn small', onclick() { render(); } }, 'try again'));
+    });
+    return h('div', { class: 'wrap lesson-loading', style: `--hue:${hue(t)}` }, crumbs([['Map', '#home'], [t.title, '#' + t.id], [l.title]]), h('h1', {}, l.title), msg);
   }
 
   function updateNav(route) {
@@ -184,7 +219,8 @@ const Lab = (() => {
     // Where to go next: the lesson after the last one opened (or that one, if unfinished); a new visitor starts at the first roadmap topic.
     let next = at(state.last);
     if (next && state.done[key(next.t, next.l)]) { const nl = nextLesson(next.t); next = state.done[key(next.t, nl)] ? null : { t: next.t, l: nl }; }
-    const first = stages()[0].tracks[0] || tracks[0];
+    const firstStage = stages().find(inGoal) || stages()[0];
+    const first = (firstStage && firstStage.tracks[0]) || tracks[0];
     if (!next && first) next = { t: first, l: nextLesson(first) };
     const due = dueCards().length;
     const row = (href, label, title, sub, primary) => h('a', { class: 'today-row' + (primary ? ' primary' : ''), href },
@@ -210,6 +246,35 @@ const Lab = (() => {
   // One spine, top to bottom. Each stage is a checkpoint; its topics hang off the spine left and right (stacked on phones).
   function roadView(cur) {
     const tdone = t => doneCount(t) === t.lessons.length;
+    const list = stages();
+    const stageEls = [];
+    const goalBar = h('div', { class: 'rm-goals', role: 'group', 'aria-label': 'Your goal' },
+      GOALS.map(g => h('button', { type: 'button', class: 'rm-goal', 'aria-pressed': String(state.goal === g.id || (!state.goal && g.id === 'all')), onclick() {
+        state.goal = g.id; opened.clear(); save(); render();
+      } }, h('b', {}, g.label), h('span', {}, g.sub))));
+    const jump = h('nav', { class: 'rm-jump', 'aria-label': 'Jump to stage' }, list.map((s, i) => h('button', { type: 'button', class: inGoal(s) ? '' : 'is-off', onclick() {
+      const el = stageEls[i]; if (!el) return;
+      if (el.classList.contains('is-folded')) el.querySelector('.rm-unfold').click();
+      el.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+    } }, h('span', {}, String(i + 1)), s.title)));
+    const all = list.flatMap(s => s.tracks), goalTracks = list.filter(inGoal).flatMap(s => s.tracks);
+    const count = ts => [ts.reduce((a, t) => a + doneCount(t), 0), ts.reduce((a, t) => a + t.lessons.length, 0)];
+    const [gd, gn] = count(goalTracks), [ad, an] = count(all), g = goalOf();
+    const scoped = g && g.stages;
+    const finished = gn && gd === gn;
+    const due = dueCards().length;
+    const finish = h('li', { class: 'rm-stage is-finish' },
+      h('div', { class: 'rm-finish' },
+        h('p', { class: 'rm-finish-label' }, finished ? 'Path complete' : 'Finish line'),
+        h('h3', {}, finished ? (scoped ? `You finished “${g.label}”` : 'You finished the whole map') : `${gd} of ${gn} lessons${scoped ? ` in “${g.label}”` : ''}`),
+        h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': gn, 'aria-valuenow': gd, 'aria-label': 'Path progress' }, h('span', { style: `width:${gn ? (gd / gn) * 100 : 0}%` })),
+        h('p', { class: 'muted-text' }, finished
+          ? (scoped && ad < an ? `Keep it fresh with Review and Interview practice, or pick another goal: ${an - ad} lessons are left on the full map.` : 'Keep it fresh: Review brings answers back before you forget, and Interview practice mixes every topic.')
+          : 'Every finished lesson adds its quiz to Review. Mix topics in Interview practice whenever you like.'),
+        h('div', { class: 'rm-finish-actions' },
+          h('a', { class: 'btn', href: '#interview' }, 'Interview practice'),
+          h('a', { class: 'btn ghost', href: '#review' }, due ? `Review · ${due} due` : 'Review')),
+        h('p', { class: 'rm-credit' }, 'Built by ', h('a', { href: 'https://abdulrahmanalbakkar.github.io/' }, 'Abdulrahman Albakkar'))));
     return h('section', { class: 'rm-road', 'aria-labelledby': 'rm-road-h' },
       h('div', { class: 'rm-road-head' },
         h('h2', { id: 'rm-road-h' }, 'Your path'),
@@ -217,19 +282,32 @@ const Lab = (() => {
           h('li', {}, h('span', { class: 'rm-key' }), 'Core'),
           h('li', {}, h('span', { class: 'rm-key is-opt' }), 'Optional'),
           h('li', {}, h('span', { class: 'rm-key is-proj' }), 'Project'))),
+      h('p', { class: 'rm-goal-q' }, state.goal ? 'Your goal' : 'What’s your goal? The map opens the stages that matter for it.'),
+      goalBar, jump,
       h('ol', { class: 'rm-stages' },
-        stages().map((s, i) => {
+        list.map((s, i) => {
           const core = s.tracks.filter(t => !s.optional.includes(t.id));
           const done = core.length && core.every(tdone);
-          const n = s.tracks.reduce((a, t) => a + t.lessons.length, 0), d = s.tracks.reduce((a, t) => a + doneCount(t), 0);
-          return h('li', { class: 'rm-stage' + (done ? ' is-done' : '') + (s.tracks.includes(cur) ? ' is-cur' : ''), style: `--i:${i}` },
+          const [d, n] = count(s.tracks);
+          // Folded: outside the goal, or finished; the current stage and hand-opened ones stay open.
+          const folded = !opened.has(s.title) && !s.tracks.includes(cur) && (!inGoal(s) || done);
+          const nodes = h('ul', { class: 'rm-nodes', id: `rm-st-${i}` }, s.tracks.map(t => nodeCard(t, s.optional.includes(t.id), t === cur)));
+          const li = h('li', { class: 'rm-stage' + (done ? ' is-done' : '') + (s.tracks.includes(cur) ? ' is-cur' : '') + (folded ? ' is-folded' : '') + (inGoal(s) ? '' : ' is-off'), style: `--i:${i}` },
             h('div', { class: 'rm-stage-head' },
               h('span', { class: 'rm-stage-n', 'aria-hidden': 'true' }, done ? '✓' : String(i + 1)),
               h('h3', {}, s.title),
-              h('p', {}, s.blurb, h('span', { class: 'rm-stage-count' }, ` · ${d}/${n}`))),
-            h('ul', { class: 'rm-nodes' }, s.tracks.map(t => nodeCard(t, s.optional.includes(t.id), t === cur))));
+              h('p', {}, s.blurb, h('span', { class: 'rm-stage-count' }, ` · ${d}/${n}`)),
+              h('button', { type: 'button', class: 'rm-unfold', 'aria-expanded': String(!folded), 'aria-controls': `rm-st-${i}`, onclick() {
+                const open = li.classList.toggle('is-folded') === false;
+                if (open) opened.add(s.title); else opened.delete(s.title);
+                this.setAttribute('aria-expanded', String(open));
+                this.textContent = open ? 'Hide topics' : `Show ${s.tracks.length} topic${s.tracks.length > 1 ? 's' : ''}`;
+              } }, folded ? `Show ${s.tracks.length} topic${s.tracks.length > 1 ? 's' : ''}` : 'Hide topics')),
+            nodes);
+          stageEls[i] = li;
+          return li;
         }),
-        h('li', { class: 'rm-stage is-goal' }, h('div', { class: 'rm-stage-head' }, h('span', { class: 'rm-stage-n', 'aria-hidden': 'true' }, '★'), h('h3', {}, 'Job ready'), h('p', {}, 'Then keep it: Review and Interview practice stay open.')))));
+        finish));
   }
 
   function nodeCard(t, optional, cur) {
@@ -276,6 +354,7 @@ const Lab = (() => {
   }
 
   function trackView(t) {
+    setTimeout(() => loadTrack(t).catch(() => {}), 300); // warm up: the first lesson then opens instantly
     const n = t.lessons.length, done = doneCount(t), nxt = nextLesson(t), proj = isProject(t);
     const wrap = h('div', { class: 'wrap track-page' + (proj ? ' project' : ''), style: `--hue:${hue(t)}` });
     const empty = h('p', { class: 'muted-text tline-empty', hidden: true }, 'No lessons at this level in this track.');
@@ -626,6 +705,8 @@ const Lab = (() => {
   const IV_PRESETS = [
     { label: 'Android interview', tracks: ['kotlin', 'android', 'compose', 'coroutines', 'flow', 'arch'] },
     { label: 'Kotlin only', tracks: ['kotlin', 'kdeep'] },
+    { label: 'System design & backend', tracks: ['sysdesign', 'backend', 'cloud'] },
+    { label: 'CS fundamentals', tracks: ['os', 'net', 'db', 'concurrency', 'runtime', 'cs'] },
     { label: 'Everything', tracks: null },
   ];
   const IV_COUNTS = [10, 20, 30], IV_TIMES = [0, 30, 60];
@@ -674,7 +755,8 @@ const Lab = (() => {
       const counts = {};
       for (const c of allCards()) counts[c.t.id] = (counts[c.t.id] || 0) + 1;
 
-      const presets = IV_PRESETS.filter(p => presetTracks(p).length).map(p => h('button', { type: 'button', class: 'iv-chip', 'aria-pressed': 'false', onclick() { sel = new Set(presetTracks(p)); sync(); } }, p.label));
+      const shown = IV_PRESETS.filter(p => presetTracks(p).length);
+      const presets = shown.map(p => h('button', { type: 'button', class: 'iv-chip', 'aria-pressed': 'false', onclick() { sel = new Set(presetTracks(p)); sync(); } }, p.label));
       const boxes = tracks.filter(t => counts[t.id]).map(t => {
         const input = h('input', { type: 'checkbox', value: t.id, onchange() { if (input.checked) sel.add(t.id); else sel.delete(t.id); sync(); } });
         return h('label', { class: 'iv-track' + (isProject(t) ? ' project' : ''), style: `--hue:${hue(t)}` }, input,
@@ -693,7 +775,7 @@ const Lab = (() => {
       function sync() {
         const ids = [...sel], pool = poolFor(ids).length;
         boxes.forEach(b => { const i = b.querySelector('input'); i.checked = sel.has(i.value); });
-        presets.forEach((b, i) => b.setAttribute('aria-pressed', String(sameSet(presetTracks(IV_PRESETS[i]), ids))));
+        presets.forEach((b, i) => b.setAttribute('aria-pressed', String(sameSet(presetTracks(shown[i]), ids))));
         note.textContent = !ids.length ? 'Pick at least one topic.' : pool < n ? `These topics hold ${pool} question${pool > 1 ? 's' : ''}, so you get all of them.` : `${n} of ${pool} questions, drawn at random.`;
         go.disabled = !pool;
         const b = ids.length && state.iv.best && state.iv.best[setupKey({ tracks: ids, n, secs })];
@@ -925,9 +1007,20 @@ const Lab = (() => {
       h('ul', {}, list.map(([title, url]) => h('li', {}, h('a', { href: url, target: '_blank', rel: 'noopener' }, title, h('span', { class: 'docs-host' }, ' ' + new URL(url).hostname.replace(/^www\./, '')))))));
   }
 
-  function addTrack(t) { tracks.push(t); if (t.css && typeof document !== 'undefined') document.head.append(h('style', {}, t.css)); }
+  // Catalog entries come first (js/catalog.js); a track file then fills its entry in place, so every
+  // reference to the track object stays valid. Without a catalog entry the track is simply added.
+  function catalog(list) { for (const t of list) if (!trackById(t.id)) tracks.push({ ...t, full: false }); }
+  function addTrack(t) {
+    const known = trackById(t.id);
+    if (known) {
+      const ids = x => x.lessons.map(l => l.id).join();
+      if (ids(known) !== ids(t)) console.warn(`[Android Lab] ${t.id}: lessons differ from js/catalog.js. Run node tools/catalog.js`);
+      Object.assign(known, t, { full: true });
+    } else tracks.push(Object.assign(t, { full: true }));
+    if (t.css && typeof document !== 'undefined') document.head.append(h('style', {}, t.css));
+  }
 
-  return { addTrack, addDocs, start, schedule, h, sleep, hl, code, replay, swap };
+  return { addTrack, catalog, addDocs, start, schedule, h, sleep, hl, code, replay, swap };
 })();
 
 if (typeof module !== 'undefined') module.exports = Lab;

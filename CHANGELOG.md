@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-10-18: CS foundations, Beyond the app, goals, faster loading
+
+- **Faster loading:**
+  - **Up front:** the page loads `js/catalog.js` (lesson titles, terms and quizzes, about 260 KB gzipped) instead of every track file, which was over 5 MB.
+  - **On demand:** a track's file is fetched the first time one of its lessons opens. Opening a track page warms it up in the background.
+  - **Adding a track:** run `node tools/catalog.js` after adding or editing one. It also checks for duplicate ids and missing quizzes.
+- **New stage, Computer science foundations (optional), 50 lessons:**
+  - Operating systems (8)
+  - Computer networks (8)
+  - Databases (8)
+  - Concurrency fundamentals (6)
+  - How code runs (7)
+  - Software engineering practice (7)
+- **New stage, Beyond the app, 27 lessons:**
+  - Mobile system design (11)
+  - Backend with Kotlin (9, using Ktor)
+  - Cloud and DevOps basics (7)
+- **Independent review:** a reviewer who did not write the new lessons checked each one against official docs. About 35 corrections were made, for example Docker comments, Mutex fairness, SELinux targetSdk rules, cleartext defaults and Ktor config failures.
+- **Goals:** a new picker with New to programming, Growing to senior, Interview prep and Everything. The goal opens its stages and folds the others, and finished stages fold too. A jump bar scrolls to any stage.
+- **Finish line card** at the end of the roadmap:
+  - progress for your goal
+  - Interview practice and Review buttons
+  - a "Built by" credit
+- **Quizzes:**
+  - **Sizing:** quiz size now follows the lesson. About 465 questions were added to existing lessons (append-only, so saved review progress is kept), and most lessons now have 4–6.
+  - **Question styles:** what does this print, put in order, which line is the bug, and which choice fits.
+  - **Totals:** 1,561 questions in all.
+- **Interview mode:** new presets, System design & backend and CS fundamentals.
+- **Official docs:** all 348 lessons have links (781 in total).
+- **Service worker cache:** version bumped to v11. It caches the catalog and docs on install, and track files when first opened.
+
 ## 2026-10-16: deep dives promoted to lessons (36 new)
 
 Deep-dive steps that were a concept of their own became full lessons, placed right after their parent. Gap-audit topics were added in the same pass. Existing lesson ids are unchanged, so saved progress is kept.
