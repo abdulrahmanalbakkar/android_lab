@@ -747,6 +747,12 @@ if (Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
       { q: 'Inline replies arrive with no text. Which line is the bug?<pre class="code mini">val pi = PendingIntent.getBroadcast(\n  ctx, chatId,                    // 1\n  replyIntent,                    // 2\n  PendingIntent.FLAG_IMMUTABLE)   // 3\nbuilder.addRemoteInput(input)     // 4</pre>', options: ['Line 1', 'Line 3', 'Line 4'], a: 1, why: 'The system writes the reply into the action’s Intent, so the reply PendingIntent must be FLAG_MUTABLE and explicit. An immutable one cannot be filled in.' },
       { q: 'Your receiver reads the inline reply and sends it, but the reply box in the notification keeps spinning. What is missing?', options: ['setOnlyAlertOnce(true) on the original notification', 'Posting the notification again with the same id', 'Calling cancelAll() on the NotificationManager'], a: 1, why: 'The spinner stays until you update the notification. Post it again with the same id, for example with the sent message added.' },
     ],
+    predict: {
+      q: "A notification uses <code>BigTextStyle</code> with a long paragraph. What shows before the user expands it?",
+      options: ["The whole paragraph", "One line of text, cut off; the full paragraph appears when expanded", "Only the app name"],
+      a: 1,
+      why: "Every style has a collapsed form of one line. The style only shapes the expanded view.",
+    },
     visual(el) {
       const STY = {
         plain: { label: 'none', src: '// no setStyle(): one line, the rest is cut' },
@@ -980,6 +986,12 @@ adb shell am start -a android.intent.action.VIEW \\
       { q: 'Your filters list news.example.com and m.news.example.com. assetlinks.json is served only on news.example.com. On Android 13, a user taps a link to m.news.example.com. What opens?', options: ['The app, since one verified host covers the others', 'The browser, because each host is checked on its own', 'A dialog asking which app to use'], a: 1, why: 'Verification is per host. Serve the file on every host your filters list.' },
       { q: 'On Android 15 with Google services, dynamic_app_link_components lists first <code>/promo/*</code> with <code>"exclude": true</code>, then <code>/*</code>. A user taps /promo/sale. What opens?', options: ['The app, because /* matches', 'The browser, because the first match wins and it excludes', 'The app, because dynamic rules widen the manifest'], a: 1, why: 'Rules are checked in order and the first match decides. Dynamic rules can only narrow what the manifest declares.' },
     ],
+    predict: {
+      q: "Your app is already installed on an Android 14 phone. You fix a broken <code>assetlinks.json</code> on the server. When does that phone pick up the fix?",
+      options: ["Right away, on the next link tap", "When the app is installed again or updated", "Never: verification only runs once per device"],
+      a: 1,
+      why: "On Android 14 and lower, verification runs at install and update. Android 15+ also re-checks in the background, which can take days.",
+    },
     visual(el) {
       const HOSTS = ['news.example.com', 'm.news.example.com'];
       const PROB = { ok: 'file OK', missing: '404', redirect: '301 redirect', upload: 'upload key' };
@@ -1116,6 +1128,12 @@ fun showScore(context: Context, id: Int, text: String) {
         deeper: channelsDepth.deeper,
         underHood: channelsDepth.underHood,
         mistakes: channelsDepth.mistakes,
+        predict: {
+          q: "You post a notification to a channel created with <code>IMPORTANCE_LOW</code>. What does the user notice?",
+          options: ["A sound and a heads-up banner", "A sound, no banner", "A status bar icon, no sound", "Nothing at all until they open the shade"],
+          a: 2,
+          why: "The channel sets the alert level. <code>LOW</code> is silent with a status bar icon; only <code>HIGH</code> adds a banner, and <code>MIN</code> drops the icon too.",
+        },
         visual(el) {
           const SCORES = ['Derby ends 2-1', 'Late equalizer, 1-1', 'Away win, 0-3', 'Penalties: 5-4'];
           const MSG = {
@@ -1504,77 +1522,31 @@ FirebaseMessaging.getInstance().isAutoInitEnabled = true`,
           },
         ],
         visual(el) {
-          const mk = name => { const body = h('div', { class: 'plt-node-body' }); return { node: h('div', { class: 'plt-node' }, h('span', { class: 'plt-node-name' }, name), body), body }; };
-          const app = mk('App'), fcm = mk('FCM'), srv = mk('Your server');
-          const net = h('div', { class: 'plt-net' }, app.node, fcm.node, srv.node);
-          const o = out('The app is installed and its token is on your server. Send a push.');
-          let token = newToken(), live = new Set([token]), stored = token, busy = false;
-          const paint = () => {
-            app.body.innerHTML = token ? `token<br>${token}` : 'no token<br>(data cleared)';
-            fcm.body.innerHTML = `${live.size} live token${live.size === 1 ? '' : 's'}`;
-            srv.body.innerHTML = stored ? `ada →<br>${stored}` : 'ada → none';
-          };
-          async function fly(a, b, label, bad) {
-            const mid = x => x.node.offsetLeft + x.node.offsetWidth / 2;
-            const p = h('span', { class: 'plt-packet' + (bad ? ' plt-bad' : '') }, label);
-            p.style.left = mid(a) + 'px'; net.append(p); void p.offsetWidth;
-            a.node.classList.add('plt-on'); p.style.left = mid(b) + 'px';
-            await sleep(750);
-            a.node.classList.remove('plt-on'); p.remove(); replay(b.node, 'pop');
-            await sleep(150);
-          }
-          async function send() {
-            if (busy) return;
-            if (!stored) { replay(srv.node, 'shake'); say(o, 'The server has no token for ada. There is nobody to send to until the app registers again.'); return; }
-            busy = true;
-            say(o, `Server: POST messages:send with token ${stored}`);
-            await fly(srv, fcm, 'send');
-            if (!live.has(stored)) {
-              await fly(fcm, srv, '404', true);
-              stored = null; paint();
-              say(o, '<span class="bad">404 UNREGISTERED:</span> that install has no such token any more. The server deletes the row.');
-            } else {
-              await fly(fcm, app, 'message');
-              say(o, '<span class="good">delivered:</span> onMessageReceived() runs on the device.');
-            }
-            busy = false;
-          }
-          async function launch() {
-            if (busy) return;
-            if (token) { say(o, 'getToken() returns the same token. onNewToken() does not fire. Pass it to the server at login anyway.'); replay(app.node, 'pop'); return; }
-            busy = true;
-            await fly(app, fcm, 'register');
-            token = newToken(); live.add(token); paint();
-            await fly(fcm, app, 'token');
-            say(o, `onNewToken("${token}") fires. Forward it.`);
-            await sleep(500);
-            await fly(app, srv, 'POST /devices');
-            stored = token; paint();
-            say(o, '<span class="good">stored:</span> the server replaced the old token. Pushes work again.');
-            busy = false;
-          }
-          async function rotate() {
-            if (busy || !token) return;
-            busy = true;
-            live.delete(token); token = newToken(); live.add(token); paint();
-            await fly(fcm, app, 'new token');
-            say(o, `FCM rotated the token. onNewToken("${token}") fires.`);
-            await sleep(500);
-            await fly(app, srv, 'POST /devices');
-            stored = token; paint();
-            say(o, '<span class="good">stored:</span> because onNewToken forwarded it, the server never had a stale token.');
-            busy = false;
-          }
-          function clear() {
-            if (busy) return;
-            if (!token) { say(o, 'Already cleared. Launch the app to get a new token.'); return; }
-            live.delete(token); token = null; paint(); replay(app.node, 'shake');
-            say(o, 'Data cleared. FCM forgets the old token, but your server still stores it. Send a push now.');
-          }
-          paint();
-          el.append(net,
-            h('div', { class: 'controls plt-row' }, act('Server sends a push', send), act('Clear app data', clear), act('Launch app', launch), act('FCM rotates token', rotate)),
-            o);
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'srv', label: 'Your server', sub: 'tokens table' },
+              { id: 'fcm', label: 'FCM', sub: 'HTTP v1 API' },
+              { id: 'app', label: 'App', sub: 'on the phone' },
+            ],
+            predict: {
+              q: 'The user clears the app’s data, so the app gets a new token. Your server never hears about it and sends to the old token. What comes back from FCM?',
+              options: ['<code>200</code>: FCM forwards it to the new token', '<code>404 UNREGISTERED</code>', 'Nothing: FCM holds the message until the app opens'],
+              a: 1,
+              why: 'A token belongs to one install state. Once it is replaced, FCM reports it as unregistered, and only the token the server stored can be used.',
+            },
+            frames: [
+              { say: 'A fresh install. Follow its registration token from birth to death.' },
+              { at: 'app', packet: 'token A', say: 'On first start the SDK creates a token and calls <code>onNewToken()</code>.' },
+              { at: 'srv', packet: 'token A', mark: { srv: 'ok' }, say: 'Your code sends it to your server, which stores it next to the user.' },
+              { at: 'fcm', packet: 'send to A', say: 'To push, the server calls <code>messages:send</code> with that token.' },
+              { at: 'app', packet: 'message', tone: 'ok', say: 'FCM delivers it, and <code>onMessageReceived()</code> runs on the phone.' },
+              { mark: { app: 'warm' }, say: 'The user clears the app’s data. On the next start the SDK makes token B and calls <code>onNewToken()</code> again. This build forgets to forward it.' },
+              { at: 'srv', packet: 'send to A', mark: { srv: 'warm' }, say: 'The server only knows token A, so it sends to A.' },
+              { at: 'fcm', packet: 'send to A', say: 'FCM looks up A. No install has that token any more.' },
+              { at: 'srv', packet: '404 UNREGISTERED', tone: 'err', mark: { srv: 'err', fcm: 'err' }, say: 'FCM answers <code>404 UNREGISTERED</code>. The server deletes that row, and the user gets nothing.' },
+              { at: 'srv', packet: 'token B', tone: 'ok', mark: { srv: 'ok', fcm: 'ok', app: 'ok' }, say: 'The fix: forward every <code>onNewToken()</code>, and the current token at login. With token B stored, pushes reach the phone again.' },
+            ],
+          });
         },
       },
 
@@ -1816,75 +1788,28 @@ override fun onNewIntent(intent: Intent) {
           },
         ],
         visual(el) {
-          const TYPES = ['notification', 'data', 'both'];
-          const STATES = ['foreground', 'background', 'stopped'];
-          const STATE_LABEL = { foreground: 'Foreground', background: 'Background or swiped away', stopped: 'Force-stopped' };
-          const RES = {
-            notification: { foreground: ['app', 'Your code'], background: ['sys', 'System tray'] },
-            data: { foreground: ['app', 'Your code'], background: ['app', 'Your code'] },
-            both: { foreground: ['app', 'Your code'], background: ['sys', 'Tray + extras'] },
-          };
-          const res = (t, s) => (s === 'stopped' ? ['none', 'Not delivered'] : RES[t][s]);
-          let type = 'notification', state = 'background', prio = 'high', doze = false, busy = false;
-          const cells = {};
-          const mx = h('div', { class: 'plt-mx', role: 'group', 'aria-label': 'Message type by app state' },
-            h('span', { class: 'plt-mh' }, ''), STATES.map(s => h('span', { class: 'plt-mh' }, STATE_LABEL[s])),
-            TYPES.flatMap(t => [h('span', { class: 'plt-rh' }, t), ...STATES.map(s => {
-              const [k, label] = res(t, s);
-              return (cells[t + s] = h('button', { class: `plt-cell plt-${k}`, onclick() { if (busy) return; pickType(t); pickState(s); send(); } }, label));
-            })]));
-          const steps = h('div', { class: 'plt-steps' });
-          const step = (k, who, text) => steps.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', { html: text })));
-          const paint = () => { Object.values(cells).forEach(c => c.classList.remove('plt-cur')); const c = cells[type + state]; c.classList.add('plt-cur'); replay(c, 'pop'); };
-          const types = choice('payload', TYPES, type, v => { if (busy) return false; pickType(v); });
-          const states = choice('app', STATES, state, v => { if (busy) return false; pickState(v); });
-          const prios = choice('priority', ['high', 'normal'], prio, v => { if (busy) return false; prio = v; });
-          function pickType(v) {
-            type = v; types.set(v);
-            prio = v === 'data' ? 'normal' : 'high'; prios.set(prio);
-            paint();
-            steps.replaceChildren();
-            step('', 'default', `${v === 'data' ? 'Data messages' : 'Messages with a notification block'} default to <b>${prio}</b> priority.`);
-          }
-          function pickState(v) { state = v; states.set(v); paint(); }
-          const dozes = toggle('plt-doze', 'Device in Doze', false, v => { doze = v; });
-          async function send() {
-            if (busy) return; busy = true;
-            steps.replaceChildren();
-            const wait = () => sleep(550);
-            step('', 'FCM', `sends a <code>${type}</code> message, priority <code>${prio}</code>.`); await wait();
-            if (!el.isConnected) return;
-            if (state === 'stopped') {
-              step('bad', 'Device', 'The app is force-stopped. Nothing is delivered until the user opens it again.');
-              replay(steps, 'shake'); busy = false; return;
-            }
-            if (doze && prio === 'normal') {
-              step('wait', 'Doze', 'Normal priority waits for the next maintenance window.'); await sleep(1300);
-              step('', 'Doze', 'Maintenance window opens. Delivered now.'); await wait();
-            } else if (doze) {
-              step('good', 'Doze', 'High priority wakes the device and delivers now.'); await wait();
-            } else {
-              step('good', 'Device', 'Awake. Delivered right away.'); await wait();
-            }
-            if (!el.isConnected) return;
-            if (state === 'foreground') {
-              step('', 'Your code', type === 'notification'
-                ? '<code>onMessageReceived()</code> runs. <code>message.notification</code> has the title and body. Nothing shows unless you post it.'
-                : '<code>onMessageReceived()</code> runs with the payload. Nothing shows unless you post it.');
-            } else if (type === 'data') {
-              step('', 'Your code', '<code>onMessageReceived()</code> runs in the background. You build and post the notification.');
-              if (prio === 'high') { await wait(); step('wait', 'Note', 'Post a visible notification for high priority messages, or FCM may start treating them as normal.'); }
-            } else {
-              step('', 'System', 'The FCM SDK shows it in the tray. Your code does not run.'); await wait();
-              step('', 'On tap', type === 'both' ? 'The launcher Activity opens. The <code>data</code> payload is in its intent extras.' : 'The launcher Activity opens.');
-            }
-            busy = false;
-          }
-          paint();
-          step('', 'Ready', 'Pick a payload and an app state, or tap any cell in the table.');
-          el.append(types.el, states.el,
-            h('div', { class: 'controls plt-row' }, prios.el, dozes.el, cmd('send(message)', send)),
-            mx, steps);
+          const app = (extra = '') => `<div class="ui-m-bar">News</div><div class="ui-m-body"><div class="ui-m-row"><span class="ui-m-av"></span><div>Morning briefing</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Weather this week</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Final score: 2–1</div></div></div>${extra}`;
+          const home = (note = '') => `<div class="ui-m-body" style="background:var(--sunk)">${note}<div class="ui-m-center ui-m-muted">Home screen</div></div>`;
+          const tray = by => `<div class="ui-m-card n1"><b>Final score: 2–1</b><span class="ui-m-muted">News · ${by}</span></div>`;
+          const article = '<div class="ui-m-bar">← Article 42</div><div class="ui-m-body"><b>Final score: 2–1</b><div class="ui-m-img"></div><div class="ui-m-line"></div><div class="ui-m-line short"></div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'What runs',
+            predict: {
+              q: 'Your app is open (foreground) and a <em>notification message</em> arrives. What does the user see?',
+              options: ['A notification in the tray, posted by the FCM SDK', 'Nothing, unless your <code>onMessageReceived</code> shows something', 'The app restarts to show it'],
+              a: 1,
+              why: 'In the foreground the SDK hands every message to <code>onMessageReceived</code> and shows nothing by itself.',
+            },
+            frames: [
+              { screen: app(), log: '// app in foreground', say: 'The app is open. The server sends a <em>notification message</em>: it has a <code>notification</code> block.' },
+              { log: 'onMessageReceived(message)', say: 'In the foreground the SDK does not post anything. It calls <code>onMessageReceived</code>, and showing something is your job.' },
+              { screen: home(), log: '// user leaves: app in background', say: 'The user goes to the home screen. The same kind of message arrives again.' },
+              { screen: home(tray('posted by the FCM SDK')), log: 'SDK posts it to the tray (your code does not run)', say: 'In the background the SDK shows it in the tray for you. Your code does not run.' },
+              { tap: '.n1', screen: article, log: 'MainActivity.onCreate: intent.extras["article_id"] = "42"', say: 'Tapping it opens the launcher Activity. The message data waits in the intent extras.' },
+              { screen: home(), log: '// data message, app in background', say: 'Now a <em>data message</em>: only a <code>data</code> block, no <code>notification</code>.' },
+              { screen: home(tray('posted by your code')), log: ['onMessageReceived(message)', 'Notifier.showArticle(...)'], say: 'Data messages reach <code>onMessageReceived</code> in the foreground and the background. You post the notification yourself, with your channel and deep link.' },
+            ],
+          });
         },
       },
 
@@ -1948,6 +1873,12 @@ fun articleNotification(context: Context, id: String, title: String): Notificati
         deeper: deeplinksDepth.deeper,
         underHood: deeplinksDepth.underHood,
         mistakes: deeplinksDepth.mistakes,
+        predict: {
+          q: "The notification’s PendingIntent comes from <code>TaskStackBuilder</code> with <code>addNextIntentWithParentStack()</code>. The user taps it, then presses Back. Where do they land?",
+          options: ["On the home screen", "On <code>MainActivity</code>, the parent screen", "In the app they used before"],
+          a: 1,
+          why: "TaskStackBuilder puts the parent Activities from the manifest under the target, so Back walks up through your app.",
+        },
         visual(el) {
           const MODES = {
             plain: { label: 'getActivity()', code: 'PendingIntent.getActivity(ctx, 42, Intent(ctx, ArticleActivity::class.java), FLAG_IMMUTABLE)' },

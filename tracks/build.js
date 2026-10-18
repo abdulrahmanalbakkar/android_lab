@@ -438,58 +438,26 @@ androidComponents.onVariants { variant ->
           },
         ],
         visual(el) {
-          const TASKS = [['mergeDebugResources', 'res'], ['processDebugResources', 'res'], ['compileDebugKotlin', 'kt'], ['dexBuilderDebug', 'kt'], ['mergeDexDebug', 'kt'], ['packageDebug', 'both']];
-          let built = false, kt = false, res = false, cached = false, busy = false;
-          const ph = (t, d) => { const s = h('small', {}, d); return Object.assign(h('div', { class: 'bd-phase' }, h('b', {}, t), s), { s }); };
-          const p1 = ph('1 Initialization', 'Reads settings.gradle.kts to find the projects.');
-          const p2 = ph('2 Configuration', 'Runs each build.gradle.kts and builds the task graph.');
-          const p3 = ph('3 Execution', 'Runs the needed tasks. Skips the up-to-date ones.');
-          const rows = TASKS.map(([n, k]) => { const st = h('span', { class: 'bd-st' }, 'waiting'); return { k, st, row: h('div', { class: 'bd-task' }, h('span', {}, ':app:' + n), st) }; });
-          const life = h('div', { class: 'bd-task' }, h('span', {}, ':app:assembleDebug'), h('span', { class: 'bd-st' }, 'lifecycle task'));
-          const o = out('Run the build. Then edit a file and run it again.');
-          const cc = toggle('bd-cc', 'Configuration cache', function () {
-            if (!this.checked) cached = false;
-            say(o, this.checked ? 'Configuration cache on. The next build stores the task graph. The one after reuses it.' : 'Configuration cache off. Every build runs every build script again.');
+          const T = ['preBuild', 'mergeDebugResources', 'processDebugResources', 'compileDebugKotlin', 'dexBuilderDebug', 'mergeDexDebug', 'packageDebug', 'assembleDebug'];
+          const tasks = ran => T.map(t => `&gt; Task :app:${t}${t === 'preBuild' || !ran.includes(t) ? ' <span class="muted">UP-TO-DATE</span>' : ''}`).join('\n');
+          const ph = (a, b, c) => [['1 Initialization', 'read settings.gradle.kts', a], ['2 Configuration', 'run every build.gradle.kts', b], ['3 Execution', 'run the tasks that are needed', c]]
+            .map(([n, d, s]) => `<p><b>${n}</b><br><span class="${s === 'ran' ? 'good' : 'muted'}">${s}</span> <span class="muted">· ${d}</span></p>`).join('');
+          Lab.ui.terminal(el, {
+            panelTitle: 'Build phases',
+            predict: {
+              q: 'You change one line in <code>MainActivity.kt</code> and run the same build again. Which tasks do real work?',
+              options: ['All of them, from scratch', '<code>compileDebugKotlin</code> and the tasks that use its output', 'Only <code>packageDebug</code>'],
+              a: 1,
+              why: 'Gradle compares each task’s inputs and outputs with the last run. Resource tasks see the same files and stay UP-TO-DATE.',
+            },
+            frames: [
+              { panel: ph('waiting', 'waiting', 'waiting'), say: 'One app module, with <code>org.gradle.configuration-cache=true</code> in <code>gradle.properties</code>. Run the debug build.' },
+              { cmd: './gradlew assembleDebug --console=plain', out: tasks(T) + '\n\nBUILD SUCCESSFUL in 41s\n38 actionable tasks: 38 executed\nConfiguration cache entry stored.', panel: ph('ran', 'ran', 'ran'), say: 'The first build runs all three phases. The task list is shortened here. Gradle stores the task graph in the configuration cache.' },
+              { cmd: './gradlew assembleDebug --console=plain', out: 'Reusing configuration cache.\n' + tasks([]) + '\n\nBUILD SUCCESSFUL in 2s\n38 actionable tasks: 38 up-to-date\nConfiguration cache entry reused.', panel: ph('skipped', 'skipped', 'ran'), say: 'Nothing changed. The scripts don’t run at all, and every task finds the same inputs and outputs, so it is UP-TO-DATE.' },
+              { cmd: './gradlew assembleDebug --console=plain', out: 'Reusing configuration cache.\n' + tasks(['compileDebugKotlin', 'dexBuilderDebug', 'mergeDexDebug', 'packageDebug', 'assembleDebug']) + '\n\nBUILD SUCCESSFUL in 9s\n38 actionable tasks: 4 executed, 34 up-to-date\nConfiguration cache entry reused.', say: 'You changed one line in <code>MainActivity.kt</code>. Only the Kotlin compile and the tasks downstream of it run again.' },
+              { cmd: './gradlew assembleDebug --console=plain', out: 'Calculating task graph as configuration cache cannot be reused because file \'app/build.gradle.kts\' has changed.\n' + tasks([]) + '\n\nBUILD SUCCESSFUL in 6s\n38 actionable tasks: 38 up-to-date\nConfiguration cache entry stored.', panel: ph('ran', 'ran', 'ran'), say: 'You added a comment to <code>app/build.gradle.kts</code>. A script changed, so configuration runs again. No task input changed, so execution still skips everything.' },
+            ],
           });
-          async function run() {
-            if (busy) return; busy = true;
-            [p1, p2, p3].forEach(p => p.classList.remove('bd-on', 'bd-skip'));
-            rows.forEach(r => { r.st.textContent = 'waiting'; r.st.className = 'bd-st'; });
-            say(o, '<span class="muted">$ ./gradlew assembleDebug</span>');
-            p1.classList.add('bd-on'); p1.s.textContent = 'settings.gradle.kts: 1 project, :app.';
-            await sleep(500); if (!el.isConnected) return;
-            p1.classList.remove('bd-on');
-            const reuse = cc.input.checked && cached;
-            if (reuse) { p2.classList.add('bd-skip'); p2.s.textContent = 'Skipped: reusing the configuration cache.'; await sleep(250); }
-            else { p2.classList.add('bd-on'); p2.s.textContent = 'Ran app/build.gradle.kts. Graph: 6 tasks for assembleDebug.'; await sleep(750); p2.classList.remove('bd-on'); }
-            if (!el.isConnected) return;
-            cached = cc.input.checked;
-            p3.classList.add('bd-on'); p3.s.textContent = 'Walking the graph in dependency order.';
-            let ran = 0;
-            for (const r of rows) {
-              const need = !built || (kt && r.k !== 'res') || (res && r.k !== 'kt');
-              r.row.classList.add('bd-now'); r.st.textContent = need ? 'running' : 'checking'; r.st.className = 'bd-st bd-busy';
-              await sleep(need ? 420 : 160); if (!el.isConnected) return;
-              r.row.classList.remove('bd-now');
-              r.st.textContent = need ? 'EXECUTED' : 'UP-TO-DATE'; r.st.className = 'bd-st ' + (need ? 'bd-ex' : 'bd-utd');
-              ran += need;
-            }
-            p3.classList.remove('bd-on'); p3.s.textContent = `Ran ${ran} of 6 tasks.`;
-            built = true; kt = false; res = false;
-            say(o, `<span class="good">BUILD SUCCESSFUL</span> · 6 actionable tasks: ${ran} executed, ${6 - ran} up-to-date${reuse ? ' · configuration cache reused' : ''}`);
-            busy = false;
-          }
-          const edit = (fn, msg) => () => { if (busy) return; fn(); say(o, msg); };
-          el.append(
-            h('div', { class: 'bd-phases' }, p1, p2, p3),
-            h('div', { class: 'bd-tasks', 'aria-label': 'Task graph' }, rows.map(r => r.row), life),
-            h('div', { class: 'controls' },
-              cmd('./gradlew assembleDebug', run),
-              act('Edit MainActivity.kt', edit(() => { kt = true; }, 'MainActivity.kt changed. Kotlin, dex and packaging tasks are now out of date.')),
-              act('Edit strings.xml', edit(() => { res = true; }, 'strings.xml changed. Resource and packaging tasks are now out of date.')),
-              cmd('./gradlew clean', edit(() => { built = false; }, 'build/ deleted. Every task has to run again.')),
-              cc.el),
-            o);
         },
       },
 
@@ -675,61 +643,26 @@ plugins {
           },
         ],
         visual(el) {
-          let typo = true, ver = '2.7.2', busy = false;
-          const nm = () => (typo ? 'runtme' : 'runtime');
-          const strLine = h('div', { class: 'bd-line' }), verLine = h('div', { class: 'bd-line' }), tomlLine = h('div', { class: 'bd-line' }), accLine = h('div', { class: 'bd-line' });
-          const repos = ['google()', 'mavenCentral()'].map(r => h('span', { class: 'bd-repo' }, r));
-          const MODS = [':app', ':core:data', ':feature:news'];
-          const mods = MODS.map(() => h('span', { class: 'bd-mod' }));
-          const o1 = out('Not synced yet.'), o2 = out('Not synced yet.');
-          const fix = act('', () => {
-            if (busy) return; typo = !typo; paint();
-            repos.forEach(r => { r.className = 'bd-repo'; });
-            say(o1, 'Edited. Sync again.'); say(o2, 'Edited. Sync again.');
+          const file = (name, code) => `<p class="muted">${name}</p><pre class="ui-out">${code}</pre>`;
+          const toml = 'gradle/libs.versions.toml';
+          const tomlSrc = '[versions]\nroom = "2.7.2"\n\n[libraries]\nandroidx-room-runtime = {\n  module = "androidx.room:room-runtime",\n  version.ref = "room" }';
+          Lab.ui.terminal(el, {
+            panelTitle: 'The file you edited',
+            predict: {
+              q: 'A plain string coordinate has a typo: <code>"androidx.room:room-runtme:2.7.2"</code>. When does Gradle tell you?',
+              options: ['As you type, in the IDE', 'Only when it resolves dependencies and has searched every repository', 'Never: it falls back to the closest name'],
+              a: 1,
+              why: 'A string is just text to Gradle. It learns the module does not exist only when no repository has it.',
+            },
+            frames: [
+              { panel: file('app/build.gradle.kts', 'implementation(\n  "androidx.room:room-runtme:2.7.2")'), say: 'First, a dependency written as a string, with a typo: <code>runtme</code>.' },
+              { cmd: './gradlew assembleDebug', out: '&gt; Task :app:checkDebugAarMetadata <span class="bad">FAILED</span>\n\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task \':app:checkDebugAarMetadata\'.\n&gt; Could not resolve all files for configuration \':app:debugRuntimeClasspath\'.\n   &gt; Could not find androidx.room:room-runtme:2.7.2.\n     Searched in the following locations:\n       - https://dl.google.com/dl/android/maven2/androidx/room/room-runtme/2.7.2/room-runtme-2.7.2.pom\n       - https://repo.maven.apache.org/maven2/androidx/room/room-runtme/2.7.2/room-runtme-2.7.2.pom\n\nBUILD FAILED in 18s', say: 'Configuration passes, tasks start, and only resolving the classpath fails, after Gradle has asked every repository.' },
+              { clear: true, panel: file(toml, tomlSrc), say: 'Now the catalog. Gradle reads this file and generates Kotlin accessors: <code>androidx-room-runtime</code> becomes <code>libs.androidx.room.runtime</code>.' },
+              { panel: file('app/build.gradle.kts', 'implementation(\n  libs.androidx.room.runtme)'), cmd: './gradlew assembleDebug', out: 'FAILURE: Build failed with an exception.\n\n* Where:\nBuild file \'app/build.gradle.kts\' line: 12\n\n* What went wrong:\nScript compilation error:\n  Unresolved reference <span class="bad">\'runtme\'</span>.\n\nBUILD FAILED in 3s', say: 'The same typo in an accessor is a compile error in the build script. No task runs, nothing downloads, and the IDE underlines it before you build.' },
+              { panel: file('app/build.gradle.kts', 'implementation(\n  libs.androidx.room.runtime)'), cmd: './gradlew assembleDebug', out: 'BUILD SUCCESSFUL in 24s\n41 actionable tasks: 41 executed', say: 'Fixed with autocomplete. Every module that uses the accessor gets the same coordinates.' },
+              { cmd: 'grep -n room gradle/libs.versions.toml', out: '2:room = "2.7.2"\n5:androidx-room-runtime = {\n6:  module = "androidx.room:room-runtime",\n7:  version.ref = "room" }', panel: file(toml, tomlSrc), say: 'To upgrade, change line 2. Every module that uses <code>libs.androidx.room.*</code> moves together.' },
+            ],
           });
-          function paint() {
-            strLine.innerHTML = hl(`implementation("androidx.room:room-${nm()}:2.7.2")`);
-            verLine.innerHTML = hl(`room = "${ver}"`);
-            tomlLine.innerHTML = hl('androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }');
-            accLine.innerHTML = hl(`implementation(libs.androidx.room.${nm()})`);
-            mods.forEach((m, i) => { m.textContent = `${MODS[i]} · room ${ver}`; });
-            fix.textContent = typo ? 'Fix the typo' : 'Bring the typo back';
-          }
-          async function syncStr() {
-            if (busy) return; busy = true;
-            repos.forEach(r => { r.className = 'bd-repo'; });
-            say(o1, 'Resolving dependencies...');
-            for (const r of repos) {
-              r.className = 'bd-repo bd-look';
-              await sleep(650); if (!el.isConnected) return;
-              if (!typo) { r.className = 'bd-repo bd-yes'; say(o1, '<span class="good">resolved</span> room-runtime:2.7.2 from google()'); busy = false; return; }
-              r.className = 'bd-repo bd-no';
-            }
-            say(o1, '<span class="bad">Failed to resolve:</span> androidx.room:room-runtme:2.7.2'); replay(o1, 'shake');
-            busy = false;
-          }
-          async function syncCat() {
-            if (busy) return; busy = true;
-            if (typo) { say(o2, '<span class="bad">Script compilation error:</span> Unresolved reference \'runtme\'.'); replay(accLine, 'shake'); busy = false; return; }
-            say(o2, 'Compiling build scripts...');
-            await sleep(500); if (!el.isConnected) return;
-            say(o2, `<span class="good">resolved</span> room-runtime:${ver} for ${MODS.length} modules`);
-            busy = false;
-          }
-          function bump() {
-            if (busy) return;
-            ver = ver === '2.7.2' ? '2.8.0' : '2.7.2'; paint();
-            replay(verLine, 'bd-flash'); mods.forEach(m => replay(m, 'bd-flash'));
-            say(o2, `One line changed. All ${MODS.length} modules now use room ${ver}. The string in the first card still says 2.7.2.`);
-          }
-          paint();
-          el.append(
-            h('div', { class: 'bd-grid' },
-              h('div', { class: 'bd-card' }, lbl('String coordinate'), strLine, h('div', { class: 'bd-repos' }, repos), o1, h('div', { class: 'controls' }, act('Sync', syncStr))),
-              h('div', { class: 'bd-card' }, lbl('libs.versions.toml'), verLine, tomlLine, lbl('app/build.gradle.kts'), accLine, h('div', { class: 'bd-mods' }, mods), o2,
-                h('div', { class: 'controls' }, act('Sync', syncCat), act('Bump room', bump)))),
-            h('div', { class: 'controls' }, fix),
-            h('p', { class: 'tip' }, 'Dashes become dots: androidx-room-runtime is libs.androidx.room.runtime.'));
         },
       },
 
@@ -887,6 +820,12 @@ targetSdk = 36   // changed, built, shipped`,
             why: '<code>RELEASE</code> is a display string such as <code>"8.1.0"</code>, so <code>toInt()</code> throws. <code>SDK_INT</code> is the integer API level, and lint understands checks against it.',
           },
         ],
+        predict: {
+          q: "No SDK_INT check, <code>minSdk = 24</code>, and the call needs API 26. You install on an API 24 phone. What happens?",
+          options: ["The build fails to compile", "Lint warns, it installs, then it crashes when that line runs", "The install is refused"],
+          a: 1,
+          why: "<code>compileSdk</code> knows the API, so it compiles. <code>minSdk</code> lets the old phone install it, and the missing class crashes at runtime.",
+        },
         visual(el) {
           const DEV = { 24: 'Android 7.0', 31: 'Android 12', 35: 'Android 15', 36: 'Android 16' };
           const s = { compile: 36, min: 24, target: 36, dev: 36, guard: true };
@@ -1225,6 +1164,12 @@ startActivity(Intent(this, cls))`,
             why: 'Since AGP 8, modules don’t generate <code>BuildConfig</code> unless you ask. Custom fields with the feature off fail the build with a message that the feature is disabled. Turn it on only in the modules that need it.',
           },
         ],
+        predict: {
+          q: "Flavors <code>free</code> and <code>paid</code>, build types <code>debug</code> and <code>release</code>. How many build variants does Gradle make?",
+          options: ["2", "4", "6"],
+          a: 1,
+          why: "Each flavor is crossed with each build type: freeDebug, freeRelease, paidDebug, paidRelease.",
+        },
         visual(el) {
           const TYPES = ['debug', 'release'], TIERS = ['free', 'paid'], ENVS = ['staging', 'prod'];
           const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -1508,6 +1453,12 @@ plugins { id("news.android.library") }   // convention plugin in build-logic`,
             why: 'Cross-project configuration couples every module to the root script and blocks Gradle’s isolated projects work. A convention plugin keeps each module’s setup in its own build file.',
           },
         ],
+        predict: {
+          q: "<code>:core:data</code> uses <code>implementation(:core:network)</code>. You change a public signature in <code>:core:network</code>. Which modules recompile?",
+          options: ["Only <code>:core:network</code> and <code>:core:data</code>", "Every module in the app", "Only <code>:core:network</code>"],
+          a: 0,
+          why: "With implementation, :core:network is private to :core:data. Modules above :core:data never compile against it.",
+        },
         visual(el) {
           const N = { app: [170, 20], 'feature:news': [92, 82], 'feature:settings': [248, 82], 'core:data': [110, 148], 'core:ui': [250, 148], 'core:network': [62, 214], 'core:model': [200, 214] };
           const E = [['app', 'feature:news', 'impl'], ['app', 'feature:settings', 'impl'], ['feature:news', 'core:data', 'impl'], ['feature:news', 'core:ui', 'impl'], ['feature:settings', 'core:data', 'impl'], ['feature:settings', 'core:ui', 'impl'], ['core:data', 'core:model', 'api'], ['core:data', 'core:network', 'impl'], ['core:ui', 'core:model', 'impl']];
@@ -1773,63 +1724,31 @@ echo "$UPLOAD_KEYSTORE_B64" | base64 --decode > upload.jks
           },
         ],
         visual(el) {
-          let busy = false, lost = false, leaked = false;
-          const stn = (t, d) => { const slot = h('div', { class: 'bd-pslot' }); return Object.assign(h('div', { class: 'bd-stn' }, h('b', {}, t), h('small', {}, d), slot), { well: slot }); };
-          const S = [stn('Your machine', 'Signs the .aab with the upload key'), stn('Play Console', 'Checks the upload signature'), stn('Play App Signing', 'Re-signs APKs with the app signing key'), stn('Phones', 'Check the app signing key')];
-          const upKey = h('span', { class: 'bd-key' }, 'upload key: you');
-          const appKey = h('span', { class: 'bd-key' }, 'app signing key: Google');
-          const o = out('Upload a release and follow the signatures.');
-          const pkg = (t, c = '') => h('span', { class: `bd-pkg pop ${c}` }, t);
-          async function upload(debug) {
-            if (busy) return;
-            S.forEach(s => { s.classList.remove('bd-on', 'bd-bad'); s.well.replaceChildren(); });
-            if (!debug && lost) { say(o, '<span class="bad">No upload key to sign with.</span> Request a reset first.'); replay(upKey, 'shake'); return; }
-            busy = true;
-            S[0].classList.add('bd-on'); S[0].well.append(pkg(debug ? 'debug key' : 'upload key'));
-            await sleep(700); if (!el.isConnected) return;
-            S[1].classList.add('bd-on'); S[1].well.append(pkg('checking'));
-            await sleep(700); if (!el.isConnected) return;
-            if (debug) {
-              S[1].classList.add('bd-bad'); S[1].well.replaceChildren(pkg('rejected', 'bd-r')); replay(S[1], 'shake');
-              say(o, '<span class="bad">Rejected:</span> You uploaded an APK or Android App Bundle that was signed in debug mode.');
-              busy = false; return;
-            }
-            S[1].well.replaceChildren(pkg('upload key ok', 'bd-g'));
-            await sleep(600); if (!el.isConnected) return;
-            S[2].classList.add('bd-on'); S[2].well.append(pkg('app key'));
-            await sleep(700); if (!el.isConnected) return;
-            S[3].classList.add('bd-on'); S[3].well.append(pkg('update ok', 'bd-g'));
-            say(o, `<span class="good">Released.</span> Phones only see the app signing key. ${leaked ? '<span class="bad">But the keystore is still in git.</span>' : 'Your upload key never left your machine.'}`);
-            busy = false;
-          }
-          const loseBtn = act('Lose the upload key', () => {
-            if (busy) return;
-            lost = !lost;
-            if (lost) {
-              upKey.className = 'bd-key bd-lost'; replay(upKey, 'shake'); loseBtn.textContent = 'Request upload key reset';
-              say(o, 'Upload key gone. New uploads can\u2019t be signed. The app signing key is safe at Google.');
-            } else {
-              upKey.className = 'bd-key pop'; upKey.textContent = 'new upload key: you'; loseBtn.textContent = 'Lose the upload key';
-              say(o, '<span class="good">Reset done</span> in Play Console. You registered a new upload certificate. Updates keep working because phones check the app signing key.');
-            }
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'dev', label: 'Your machine', sub: 'upload key' },
+              { id: 'console', label: 'Play Console', sub: 'checks uploads' },
+              { id: 'pas', label: 'Play App Signing', sub: 'app signing key' },
+              { id: 'phone', label: 'Phones', sub: 'check updates' },
+            ],
+            predict: {
+              q: 'A teammate builds the release on another laptop, signed with a different keystore, and uploads it. What happens?',
+              options: ['Accepted: Play re-signs everything anyway', 'Rejected: it is not signed with the registered upload key', 'Accepted, but phones refuse to install the update'],
+              a: 1,
+              why: 'Play Console checks every upload against the upload key it knows. That check is what proves the bundle comes from you.',
+            },
+            frames: [
+              { say: 'You build a release bundle with <code>./gradlew :app:bundleRelease</code>. Follow the signatures.' },
+              { at: 'dev', packet: '.aab · upload key', say: 'Gradle signs the bundle with your upload key from <code>signingConfigs</code>.' },
+              { at: 'console', packet: 'upload key ✓', tone: 'ok', mark: { console: 'ok' }, say: 'Play Console checks the upload signature: this bundle really comes from you.' },
+              { at: 'pas', packet: 'APKs · app key', say: 'Play builds the APKs and signs them with the app signing key. Google keeps that key; you never hold it.' },
+              { at: 'phone', packet: 'update', tone: 'ok', mark: { phone: 'ok' }, say: 'The phone installs the update because it is signed with the same app signing key as the installed app.' },
+              { at: 'dev', packet: '.aab · other key', tone: 'warm', mark: { dev: 'warm', console: null, phone: null }, say: 'A teammate builds on another laptop with a different keystore.' },
+              { at: 'console', packet: 'rejected', tone: 'err', mark: { console: 'err' }, say: 'Play Console rejects it: wrong upload key. A bundle signed with the debug key is rejected too.' },
+              { at: 'console', packet: 'key reset', tone: 'warm', mark: { console: 'warm' }, say: 'If the upload key is lost or leaks, request an upload key reset in Play Console and register a new one.' },
+              { at: 'phone', packet: 'update', tone: 'ok', mark: { dev: 'ok', console: 'ok', phone: 'ok' }, say: 'Phones never see the upload key. They check the app signing key, which did not change, so updates keep installing.' },
+            ],
           });
-          const leakBtn = cmd('git add upload.jks', () => {
-            if (busy) return;
-            leaked = !leaked;
-            upKey.classList.toggle('bd-leak', leaked); replay(upKey, leaked ? 'shake' : 'pop');
-            leakBtn.innerHTML = hl(leaked ? 'git rm --cached upload.jks' : 'git add upload.jks');
-            say(o, leaked
-              ? '<span class="bad">Leaked.</span> Anyone with the repo and the password can sign uploads as you. Purge it from history, add *.jks to .gitignore, reset the upload key.'
-              : '<span class="good">Removed</span> and ignored. Also rewrite history and reset the upload key, since old commits still hold it.');
-          });
-          el.append(
-            h('div', { class: 'bd-flow' }, S),
-            h('div', { class: 'bd-keys' }, upKey, appKey),
-            h('div', { class: 'controls' },
-              act('Upload signed with upload key', () => upload(false)),
-              act('Upload signed with debug key', () => upload(true)),
-              loseBtn, leakBtn),
-            o);
         },
       },
 
@@ -2104,6 +2023,12 @@ val scanner = Class.forName("com.example.scanner.ScannerEntry")
             why: 'A dynamic feature already depends on <code>:app</code>, so the reverse dependency is a cycle and Gradle fails. :app can’t see feature classes at compile time. Reach them by name, through an interface :app defines.',
           },
         ],
+        predict: {
+          q: "Play builds the APKs for one phone from your bundle. Compared with a universal APK, the download is…",
+          options: ["About the same size", "Much smaller: one ABI, one density and only the phone’s languages", "Bigger, because of the split overhead"],
+          a: 1,
+          why: "A universal APK carries every ABI, density and language. The splits carry only what this phone needs.",
+        },
         visual(el) {
           const ABI = { arm64_v8a: 5.6, x86_64: 6.0, armeabi_v7a: 4.1 };
           const DPI = { hdpi: 0.7, xxhdpi: 1.3 };
@@ -2363,6 +2288,12 @@ versionName = "$major.$minor.$patch"`,
             why: 'A flexible update downloads in the background, then waits. Play does not restart your app for it. Ask the user, then call <code>completeUpdate()</code> to install.',
           },
         ],
+        predict: {
+          q: "Version 251 is at 20% of production. You raise the rollout to 50%. Who gets 251 next?",
+          options: ["A new random half of all users, and some of the first 20% lose it", "The same 20% plus more users; nobody who has it loses it", "Only people who install the app for the first time"],
+          a: 1,
+          why: "A staged rollout only grows the group. Play never downgrades users who already updated.",
+        },
         visual(el) {
           const TR = ['Internal', 'Closed', 'Open', 'Production'];
           const MSG = [

@@ -400,6 +400,40 @@ Producer<Animal> shelter()            // no wildcard on return types`,
             h('div', { class: 'controls' }, TYPES.map(t => cmd(`b = Box<${t}>()`, () => assign(t)))),
             o);
         },
+        predict: {
+          "q": "With <code>class Box&lt;in T&gt;</code>, which boxes can you assign to <code>val b: Box&lt;Animal&gt;</code>?",
+          "options": [
+            "Only Box&lt;Animal&gt;",
+            "Box&lt;Animal&gt; and Box&lt;Cat&gt;",
+            "Box&lt;Any&gt; and Box&lt;Animal&gt;"
+          ],
+          "a": 2,
+          "why": "<code>in</code> makes Box contravariant. A box that accepts any <code>Any</code> can stand in for one that must accept Animals, but a Box&lt;Cat&gt; can’t take every Animal."
+        },
+        play: `open class Animal { override fun toString() = "Animal" }
+class Cat : Animal() { override fun toString() = "Cat" }
+
+interface Producer<out T> { fun get(): T }
+interface Consumer<in T> { fun put(item: T) }
+
+fun adopt(source: Producer<Animal>) = source.get()
+fun feed(sink: Consumer<Cat>) = sink.put(Cat())
+fun total(values: MutableList<out Number>): Double = values.sumOf { it.toDouble() }
+
+fun main() {
+    val shelter = object : Producer<Cat> { override fun get() = Cat() }
+    val bowl = object : Consumer<Animal> { override fun put(item: Animal) = println("bowl got a $item") }
+    println("adopted a \${adopt(shelter)}")   // out: Producer<Cat> is a Producer<Animal>
+    feed(bowl)                               // in: Consumer<Animal> is a Consumer<Cat>
+
+    val cats: List<Cat> = listOf(Cat())
+    val animals: List<Animal> = cats         // List<out E>, so this is fine
+    println(animals)
+
+    val ints = mutableListOf(1, 2, 3)
+    println(total(ints))                     // use-site out on an invariant MutableList
+    // val nums: MutableList<Number> = ints  // remove the //: type mismatch
+}`
       },
 
       // 2 ─────────────────────────────────────────────
@@ -592,76 +626,57 @@ class Screen {
           { title: 'Rejecting values with observable', bad: 'var volume by Delegates.observable(5) { _, _, new ->\n    if (new !in 0..10) volume = 5   // too late, and re-enters\n}', good: 'var volume by Delegates.vetoable(5) { _, _, new ->\n    new in 0..10                     // false keeps the old value\n}', why: '<code>observable</code> runs after the value is stored. <code>vetoable</code> runs before and can refuse the change.' },
         ],
         visual(el) {
-          const o = out('Read the lazy value twice, then set the filter.');
-          let busy = false;
-
-          // lazy
-          let made = null, runs = 0, reads = 0;
-          const lazyWell = h('div', { class: 'kd-slot' }, h('span', { class: 'chip kd-ghost' }, 'not created'));
-          const lazyCount = h('span', { class: 'kd-count' }, 'block ran 0 times · 0 reads');
-          async function readLazy() {
-            if (busy) return; busy = true; reads++;
-            if (!made) {
-              lazyWell.replaceChildren(h('span', { class: 'kd-spin' }));
-              say(o, '<span class="muted">first read:</span> lazy runs the block...');
-              await sleep(800); if (!el.isConnected) return;
-              made = 'Formatter@3f2a'; runs++;
-              lazyWell.replaceChildren(h('span', { class: 'chip drop-in' }, made));
-              say(o, '<span class="good">created:</span> the block ran once and the result is cached');
-            } else {
-              replay(lazyWell.firstElementChild, 'pop');
-              say(o, `<span class="good">read ${reads}:</span> same ${made}, block not run`);
-            }
-            lazyCount.textContent = `block ran ${runs} time${runs === 1 ? '' : 's'} · ${reads} read${reads === 1 ? '' : 's'}`;
-            busy = false;
-          }
-
-          // observable
-          let filter = '';
-          const obsWell = h('div', { class: 'kd-slot' }, h('span', { class: 'chip' }, '""'));
-          const log = h('div', { class: 'kd-log' });
-          function setFilter(v) {
-            const old = filter; filter = v; swap(obsWell, `"${v}"`);
-            const ran = old !== v;
-            log.prepend(h('div', { class: 'kd-log-line drop-in', html: `${hl(`"${old}" -> "${v}"`)} <span class="kd-pill ${ran ? 'kd-yes' : 'kd-no'}">${ran ? 'search' : 'same, skip'}</span>` }));
-            while (log.children.length > 3) log.lastElementChild.remove();
-            say(o, ran ? `<span class="good">callback:</span> old ${hl(`"${old}"`)}, new ${hl(`"${v}"`)}, so vm.search runs`
-              : '<span class="muted">callback still fires,</span> but old == new, so the guard skips the search');
-          }
-
-          // class delegation
-          let attempts = 0; const items = new Set(); let next = 0;
-          const outer = h('div', { class: 'kd-node' }, h('b', {}, 'CountingSet'), h('span', {}, 'attempts = 0'));
-          const inner = h('div', { class: 'kd-node' }, h('b', {}, 'inner'), h('span', {}, '{ }'));
-          const paintSet = () => { outer.lastChild.textContent = `attempts = ${attempts}`; inner.lastChild.textContent = `{ ${[...items].join(', ')} }`; };
-          const pulse = async node => { node.classList.add('kd-hit'); await sleep(380); node.classList.remove('kd-hit'); };
-          async function add() {
-            if (busy) return; busy = true;
-            const v = '"' + 'aba'[next++ % 3] + '"';
-            await pulse(outer); attempts++; paintSet();
-            if (!el.isConnected) return;
-            await pulse(inner); const added = !items.has(v); items.add(v); paintSet();
-            say(o, `<span class="good">add(${esc(v)}):</span> your override counted it, then inner.add returned ${added}`);
-            busy = false;
-          }
-          async function size() {
-            if (busy) return; busy = true;
-            await pulse(inner);
-            say(o, `<span class="good">size = ${items.size}:</span> no override, so the generated method forwards to inner.size`);
-            busy = false;
-          }
-
-          el.append(h('div', { class: 'kd-pair' },
-            h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'by lazy'), h('span', { class: 'kd-tag', html: hl('val formatter by lazy { build() }') }), lazyWell, lazyCount,
-              h('div', { class: 'controls' }, cmd('formatter.format(today)', readLazy))),
-            h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'Delegates.observable'), h('span', { class: 'kd-tag', html: hl('var filter by observable("")') }), obsWell, log,
-              h('div', { class: 'controls' }, ['kot', 'kotlin'].map(v => cmd(`filter = "${v}"`, () => setFilter(v))))),
-            h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'class delegation'), h('span', { class: 'kd-tag', html: hl('MutableSet<T> by inner') }),
-              h('div', { class: 'kd-fwd' }, outer, h('span', { class: 'arrow' }, '→'), inner),
-              h('div', { class: 'controls' }, cmd('set.add(...)', add), cmd('set.size', size)))),
-            h('p', { class: 'tip' }, 'Tap the same filter twice to see what observable does with an unchanged value.'),
-            o);
+          Lab.ui.codeStepper(el, {
+            code: 'class CountingSet<T>(\n    private val inner: MutableSet<T> = mutableSetOf(),\n) : MutableSet<T> by inner {\n    var attempts = 0\n    override fun add(element: T): Boolean {\n        attempts++\n        return inner.add(element)\n    }\n}\nval set = CountingSet<String>()\nset.add("a")\nset.add("a")\nprintln(set.size)\nprintln(set.contains("a"))',
+            predict: {
+              q: 'Line 12 adds <code>"a"</code> a second time. What are <code>attempts</code> and <code>set.size</code> afterwards?',
+              options: ['2 and 1', '1 and 1', '2 and 2'],
+              a: 0,
+              why: '<code>add</code> is your override, so it counts every call. It then forwards to <code>inner</code>, a real Set, which ignores the duplicate.',
+            },
+            frames: [
+              { say: '<code>by inner</code> makes the compiler write every <code>MutableSet</code> method for you. You override only <code>add</code>.' },
+              { line: 10, vars: { attempts: '0', inner: '{}' }, stack: ['main'], say: 'A CountingSet wraps a fresh, empty <code>mutableSetOf()</code>.' },
+              { line: [11, 5], stack: ['main', 'CountingSet.add("a")'], say: '<code>add</code> is overridden, so your code runs, not a generated forwarder.' },
+              { line: 6, vars: { attempts: '1' }, say: 'Your extra behaviour: count the attempt.' },
+              { line: 7, vars: { inner: '{a}' }, stack: ['main', 'CountingSet.add("a")', 'inner.add("a")'], say: 'Then hand the real work to <code>inner</code>. It stores "a" and returns <code>true</code>.' },
+              { line: [12, 5, 6, 7], vars: { attempts: '2' }, stack: ['main', 'CountingSet.add("a")', 'inner.add("a")'], say: 'Again: the attempt is counted, but <code>inner</code> already has "a", returns <code>false</code> and stays <code>{a}</code>.' },
+              { line: [13, 3], stack: ['main', 'size (generated)', 'inner.size'], out: '1', say: 'You never wrote <code>size</code>. The compiler generated it from <code>by inner</code>: it just returns <code>inner.size</code>.' },
+              { line: [14, 3], stack: ['main', 'contains (generated)', 'inner.contains("a")'], out: 'true', say: 'The same for <code>contains</code> and every other member you did not override.' },
+            ],
+          });
         },
+        play: `import kotlin.properties.Delegates
+
+class CountingSet<T>(
+    private val inner: MutableSet<T> = mutableSetOf(),
+) : MutableSet<T> by inner {
+    var attempts = 0
+        private set
+
+    override fun add(element: T): Boolean {
+        attempts++
+        return inner.add(element)
+    }
+}
+
+class Search {
+    val index by lazy { println("building index"); listOf("ada", "grace") }
+    var filter: String by Delegates.observable("") { _, old, new -> println("filter '$old' -> '$new'") }
+}
+
+fun main() {
+    val set = CountingSet<String>()
+    set.add("a"); set.add("a"); set.add("b")
+    // add set.addAll(listOf("c", "d")) here: does attempts change?
+    println("size=\${set.size} attempts=\${set.attempts}")
+
+    val s = Search()
+    println(s.index.size)
+    println(s.index.size)   // no second "building index"
+    s.filter = "k"
+    s.filter = "ko"
+}`,
       },
 
       // 3 ─────────────────────────────────────────────
@@ -893,6 +908,39 @@ for (element in users) { if (element.isAdmin) return true }`,
               cmd('decode<User>(json)', reified)),
             o);
         },
+        predict: {
+          "q": "Not inline: <code>repeat(5) { i -> measure(\"row\") { draw(i) } }</code>. How many lambda objects does the loop create?",
+          "options": [
+            "0",
+            "1, reused for every call",
+            "5, one per call, because it captures i"
+          ],
+          "a": 2,
+          "why": "A lambda that captures a local value needs a new object for each call. Mark <code>measure</code> inline and the body is pasted in place, with no object at all."
+        },
+        play: `inline fun <reified T> check(x: Any): String =
+    if (x is T) "$x is a \${T::class.simpleName}" else "$x is not a \${T::class.simpleName}"
+
+fun hasNegative(xs: List<Int>): Boolean {
+    xs.forEach { if (it < 0) return true }   // leaves hasNegative, not just the lambda
+    return false
+}
+
+fun f() {
+    listOf(1, 2, 3).forEach {
+        if (it == 2) return        // change return to return@forEach and run again
+        print(it)
+    }
+    print(" done")
+}
+
+fun main() {
+    println(check<String>("hi"))
+    println(check<Int>("hi"))
+    println(hasNegative(listOf(3, -1, 4)))
+    f()
+    println()
+}`
       },
 
       // 4 ─────────────────────────────────────────────
@@ -1110,71 +1158,63 @@ greet(sb)      // greet.invoke(sb), identical`,
           { title: 'A self-assignment hidden by shadowing', bad: 'class Header(var text: String = "")\n\nclass Screen(private val text: String) {\n    fun header() = Header().apply {\n        text = text   // Header.text = Header.text\n    }\n}', good: 'class Screen(private val text: String) {\n    fun header() = Header().apply {\n        text = this@Screen.text\n    }\n}', why: 'Inside <code>apply</code>, the receiver\'s members shadow the outer class. Both sides of <code>text = text</code> mean <code>Header.text</code>. Name the outer one with a label, or rename it.' },
         ],
         visual(el) {
-          const NAMES = ['Account', 'Alerts', 'Storage'];
-          const TOGS = ['Sync', 'Backup', 'Sound', 'Vibrate', 'Wi-Fi only', 'Badges'];
-          let secs, nt, marker = false, fresh = null;
-          const reset = () => { secs = [{ title: 'Account', rows: ['Sync'], leak: false, fromLeak: false }]; nt = 1; };
-          const codeEl = h('div', { class: 'kt' });
-          const phone = h('div', { class: 'phone kd-phone', 'aria-label': 'Settings screen preview' });
-          const sw = h('input', { type: 'checkbox', id: 'kd-marker' });
-          const o = out('Add rows. Then call section() from inside a section.');
-          const written = () => secs.filter(s => !s.fromLeak);
-          function paint() {
-            const rows = [{ src: 'settings {' }];
-            for (const s of written()) {
-              rows.push({ src: `    section("${s.title}") {`, cls: fresh === s ? 'kd-new' : '' });
-              s.rows.forEach((r, i) => rows.push({ src: `        toggle("${r}")`, cls: fresh === s.rows && i === s.rows.length - 1 ? 'kd-new' : '' }));
-              if (s.leak) rows.push({ src: '        section("Oops") { }', cls: 'kd-warn', note: 'outer this' });
-              rows.push({ src: '    }' });
-            }
-            rows.push({ src: '}' });
-            lines(codeEl, rows);
-            phone.replaceChildren(...secs.flatMap(s => [
-              h('div', { class: 'kd-sec' + (s.fromLeak ? ' kd-leak' : '') + (fresh === s ? ' drop-in' : '') }, s.title),
-              ...(s.rows.length ? s.rows.map((r, i) => h('div', { class: 'kd-tog' + (fresh === s.rows && i === s.rows.length - 1 ? ' drop-in' : '') }, r, h('i'))) : [h('div', { class: 'kd-none' }, 'empty section')]),
-            ]));
-            fresh = null;
-          }
-          const last = () => written()[written().length - 1];
-          function addSection() {
-            if (written().length >= NAMES.length) { say(o, 'That’s enough sections. Press Reset to start over.'); return; }
-            const s = { title: NAMES[written().length], rows: [], leak: false, fromLeak: false };
-            secs.push(s); fresh = s; paint();
-            say(o, `${hl(`section("${s.title}") { }`)} <span class="muted">resolves on</span> ${hl('this: SettingsBuilder')}`);
-          }
-          function addToggle() {
-            const s = last();
-            if (s.rows.length >= 3) { say(o, 'This section is full. Add a new section first.'); return; }
-            const t = TOGS[nt++ % TOGS.length];
-            s.rows.push(t); fresh = s.rows; paint();
-            say(o, `${hl(`toggle("${t}")`)} <span class="muted">resolves on</span> ${hl(`this: SectionBuilder("${s.title}")`)}`);
-          }
-          function leak() {
-            const s = last();
-            if (marker) {
-              replay(codeEl, 'shake');
-              say(o, `<span class="bad">compile error:</span> 'fun section(...)' cannot be called in this context with an implicit receiver. Use an explicit receiver if necessary.`);
-              return;
-            }
-            if (s.leak) { say(o, 'Already there. Turn on @DslMarker to see the compiler catch it.'); return; }
-            s.leak = true;
-            const leaked = { title: 'Oops', rows: [], leak: false, fromLeak: true };
-            secs.push(leaked); fresh = leaked; paint();
-            say(o, `<span class="bad">compiles, but wrong:</span> SectionBuilder has no section(), so Kotlin used the outer SettingsBuilder. "Oops" became a top-level section.`);
-          }
-          sw.addEventListener('change', () => {
-            marker = sw.checked;
-            const had = secs.some(s => s.fromLeak);
-            if (marker && had) { secs = secs.filter(s => !s.fromLeak); secs.forEach(s => { s.leak = false; }); paint(); }
-            say(o, marker ? `@DslMarker on: only the nearest receiver is implicit.${had ? ' The Oops line no longer compiles, so it is gone.' : ''}` : '@DslMarker off: every outer receiver is visible inside nested blocks.');
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'call', label: 'settings { }', x: 17, y: 12, tone: 'muted' },
+              { id: 'sb', label: 'SettingsBuilder<small>section()</small>', x: 83, y: 12, hidden: true },
+              { id: 'sec', label: 'section<small>"Account"</small>', x: 17, y: 50, tone: 'muted', hidden: true },
+              { id: 'secb', label: 'SectionBuilder<small>toggle()</small>', x: 83, y: 88, hidden: true },
+              { id: 'tog', label: 'toggle<small>"Sync"</small>', x: 17, y: 88, tone: 'muted', hidden: true },
+              { id: 'oops', label: 'section<small>"Oops"</small>', x: 50, y: 50, tone: 'muted', hidden: true },
+            ],
+            predict: {
+              q: 'Inside <code>section("Account") { }</code>, <code>toggle("Sync")</code> has no prefix. Which object receives that call?',
+              options: ['The SectionBuilder for Account', 'The SettingsBuilder', 'Both, since both are in scope'],
+              a: 0,
+              why: 'A call without a prefix resolves on the nearest implicit receiver. The innermost lambda’s <code>this</code> is the SectionBuilder.',
+            },
+            frames: [
+              { say: 'A DSL is nested lambdas with receivers. Follow which object each call lands on.' },
+              { show: ['sb'], add: [['call', 'sb', 'this']], say: '<code>settings { }</code> creates a SettingsBuilder and runs your lambda with it as <code>this</code>.' },
+              { show: ['sec'], add: [['sec', 'sb']], say: '<code>section(...)</code> has no prefix. The nearest receiver, SettingsBuilder, has that member.' },
+              { show: ['secb'], add: [['sec', 'secb', 'this']], say: '<code>section</code> builds a SectionBuilder and runs the inner lambda with that as <code>this</code>.' },
+              { show: ['tog'], add: [['tog', 'secb', 'nearest this', 'ok']], hl: ['tog', 'secb'], say: '<code>toggle("Sync")</code> resolves on the innermost receiver. That is what you meant.' },
+              { show: ['oops'], add: [['oops', 'sb', 'outer this', 'warm']], hl: ['oops', 'sb'], say: 'Call <code>section("Oops")</code> in the same block. SectionBuilder has no <code>section</code>, so the compiler looks outward and quietly finds SettingsBuilder. Oops becomes a top-level section.' },
+              { add: [['oops', 'sb', 'error', 'err']], hl: ['oops'], say: 'Mark both builders with your <code>@DslMarker</code> annotation and the outer receiver is no longer implicit. The mistake is now a compile error. Write <code>this@settings.section</code> if you really mean it.' },
+            ],
           });
-          reset(); paint();
-          el.append(
-            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'kd-marker' }, sw, '@DslMarker on both builders')),
-            h('div', { class: 'kd-split' }, codeEl, phone),
-            h('div', { class: 'controls' }, cmd('section("...") { }', addSection), cmd('toggle("...")', addToggle), cmd('section("Oops") { }  // inside a section', leak)),
-            o);
         },
+        play: `@DslMarker annotation class SettingsDsl
+
+@SettingsDsl class SectionBuilder(private val title: String) {
+    private val rows = mutableListOf<String>()
+    fun toggle(label: String) { rows += label }
+    fun build() = "$title: $rows"
+}
+
+@SettingsDsl class SettingsBuilder {
+    private val sections = mutableListOf<String>()
+    fun section(title: String, block: SectionBuilder.() -> Unit) {
+        sections += SectionBuilder(title).apply(block).build()
+    }
+    fun build(): List<String> = sections
+}
+
+fun settings(block: SettingsBuilder.() -> Unit) = SettingsBuilder().apply(block).build()
+
+fun main() {
+    val screen = settings {
+        section("Account") {
+            toggle("Sync")       // this is SectionBuilder here
+            toggle("Backup")
+        }
+        section("Alerts") { toggle("Sound") }
+        // put section("Oops") { } inside the Alerts block: @DslMarker rejects it
+    }
+    screen.forEach(::println)
+    println(buildString { append("built with "); append("a receiver") })
+}`,
       },
 
       // 5 ─────────────────────────────────────────────
@@ -1366,46 +1406,50 @@ Object a = Cents.box-impl(p);             // a real Cents object`,
           { title: 'Expecting no objects in a big collection', bad: 'val prices: List<Cents> =\n    List(100_000) { Cents(it.toLong()) }\n// 100,000 boxed Cents objects', good: 'val prices = LongArray(100_000) { it.toLong() }\n// one array, no object per item\nfun priceAt(i: Int) = Cents(prices[i])', why: 'Generics always box. For large numeric data, store a primitive array and wrap single values at the API boundary.' },
         ],
         visual(el) {
-          let kind = 'alias';
-          const decl = h('div', { class: 'kt' });
-          const o = out('');
-          const kinds = [act('typealias', () => { kind = 'alias'; paint(); }), act('value class', () => { kind = 'value'; paint(); })];
-          function paint() {
-            press(kinds, kinds[kind === 'alias' ? 0 : 1]);
-            lines(decl, kind === 'alias'
-              ? [{ src: 'typealias OrderId = String' }, { src: 'typealias UserId = String' }, { src: 'fun refund(order: OrderId, to: UserId)' }]
-              : [{ src: '@JvmInline value class OrderId(val raw: String)' }, { src: '@JvmInline value class UserId(val raw: String)' }, { src: 'fun refund(order: OrderId, to: UserId)' }]);
-            say(o, 'Call refund the right way, then swap the arguments.');
-          }
-          const call = swapped => {
-            if (!swapped) { say(o, `<span class="good">ok:</span> refunds order o_77 to user u_42`); return; }
-            if (kind === 'alias') say(o, `<span class="bad">compiles:</span> both are just String. It refunds order "u_42" to user "o_77". Wrong account.`);
-            else { replay(decl, 'shake'); say(o, `<span class="bad">compile error:</span> argument type mismatch: actual type is 'UserId', but 'OrderId' was expected`); }
-          };
-
-          const mem = h('div', { class: 'kd-mem' });
-          const o2 = out('');
-          const raw = (v, t) => h('div', { class: 'kd-raw drop-in' }, h('span', { class: 'chip' }, v), h('span', { class: 'kd-label' }, t));
-          const boxed = (name, v) => h('div', { class: 'kd-boxed drop-in' }, h('span', { class: 'kd-label' }, `${name} object (heap)`), h('span', { class: 'chip' }, v));
-          const CASES = [
-            { src: 'val p = Cents(1999)', show: () => raw('1999', 'long'), say: '<span class="good">bare long:</span> no object is allocated' },
-            { src: 'charge(id, p)', show: () => raw('1999', 'long parameter'), say: '<span class="good">bare long:</span> the JVM method takes a long (its name is mangled so Java can’t mix it up)' },
-            { src: 'val a: Any = p', show: () => boxed('Cents', '1999'), say: '<span class="bad">boxed:</span> Any needs an object reference' },
-            { src: 'listOf(p)', show: () => boxed('Cents', '1999'), say: '<span class="bad">boxed:</span> generic collections hold objects' },
-            { src: 'val n: Cents? = p', show: () => boxed('Cents', '1999'), say: '<span class="bad">boxed:</span> a long can’t be null, so the nullable needs a wrapper' },
-            { src: 'val u: UserId? = id', show: () => raw('"u_42"', 'String or null'), say: '<span class="good">bare String:</span> a String reference can already be null, so no wrapper' },
-          ];
-          const caseBtns = CASES.map(c => cmd(c.src, () => { press(caseBtns, caseBtns[CASES.indexOf(c)]); mem.replaceChildren(c.show()); say(o2, c.say); }));
-          paint();
-          mem.replaceChildren(CASES[0].show()); press(caseBtns, caseBtns[0]); say(o2, CASES[0].say);
-          el.append(
-            h('span', { class: 'kd-label' }, 'type safety'),
-            h('div', { class: 'controls' }, kinds), decl,
-            h('div', { class: 'controls' }, cmd('refund(orderId, userId)', () => call(false)), cmd('refund(userId, orderId)', () => call(true))),
-            o,
-            h('span', { class: 'kd-label' }, 'what sits in memory'),
-            h('div', { class: 'controls' }, caseBtns), mem, o2);
+          Lab.ui.codeStepper(el, {
+            code: '@JvmInline value class Cents(val value: Long)\nfun charge(amount: Cents) { /* ... */ }\nval p = Cents(1999)\ncharge(p)\nval a: Any = p\nval list = listOf(p)\nval n: Cents? = p\nval back = a as Cents',
+            varsTitle: 'What the JVM stores',
+            predict: {
+              q: 'Which of these lines makes the JVM allocate a <code>Cents</code> wrapper object?',
+              options: ['<code>val p = Cents(1999)</code>', '<code>charge(p)</code>', '<code>val a: Any = p</code>'],
+              a: 2,
+              why: 'Where the static type is <code>Cents</code>, the compiler uses the bare <code>long</code>. <code>Any</code> needs an object reference, so the value gets boxed there.',
+            },
+            frames: [
+              { say: 'For the compiler, <code>Cents</code> is its own type. Watch what actually sits in memory at each line.' },
+              { line: [3, 1], vars: { p: '1999 (bare long)' }, say: 'No object is created. <code>p</code> is compiled as a plain <code>long</code>.' },
+              { line: [4, 2], vars: { amount: '1999 (long parameter)' }, stack: ['main', 'charge(long)'], say: 'The JVM method takes a <code>long</code>. Its name is mangled, so Java can’t pass any random long by mistake.' },
+              { line: 5, vars: { amount: null, a: '→ Cents object {1999}' }, stack: ['main'], say: '<code>Any</code> needs a reference, so here the compiler allocates a wrapper. That is boxing.' },
+              { line: 6, vars: { list: '[→ Cents object {1999}]' }, say: 'Generic collections hold objects, so each element is boxed too.' },
+              { line: 7, vars: { n: '→ Cents object {1999}' }, say: 'A <code>long</code> can’t be null, so <code>Cents?</code> needs a wrapper as well.' },
+              { line: 8, vars: { back: '1999 (bare long again)' }, say: 'Cast back to <code>Cents</code> and the value is unboxed. Boxing happens only at these borders, never in the common case.' },
+            ],
+          });
         },
+        play: `@JvmInline
+value class UserId(val raw: String)
+
+@JvmInline
+value class Cents(val value: Long) {
+    init { require(value >= 0) { "negative amount" } }
+    operator fun plus(other: Cents) = Cents(value + other.value)
+    fun format(): String = "%d.%02d".format(value / 100, value % 100)
+}
+
+fun charge(user: UserId, amount: Cents) = println("charge \${user.raw} \${amount.format()}")
+
+fun main() {
+    val id = UserId("u_42")
+    val price = Cents(1999)
+    charge(id, price)
+    // charge(price, id)   // remove the //: argument type mismatch
+    println((price + Cents(1)).format())
+
+    val boxed: Any = price   // as Any, a wrapper object is needed
+    println(boxed)
+    println(listOf(price, Cents(5)))
+    println(runCatching { Cents(-5) }.exceptionOrNull()?.message)
+}`,
       },
 
       // 6 ─────────────────────────────────────────────
@@ -1652,6 +1696,33 @@ names.asSequence()              // a Sequence over the list's iterator
           paint();
           el.append(h('div', { class: 'controls' }, modes, h('button', { class: 'btn primary small', onclick: run }, 'Run')), chain, grid, h('div', { class: 'kd-stats' }, stat.map, stat.filter, stat.lists), o);
         },
+        predict: {
+          "q": "Lazy version: <code>(1..6).asSequence().map { it * 3 }.filter { it % 2 == 0 }.take(2).toList()</code>. How many times does map run?",
+          "options": [
+            "6",
+            "4",
+            "2"
+          ],
+          "a": 1,
+          "why": "Each element runs the whole chain on its own. 6 and 12 pass the filter, from elements 2 and 4, and then take(2) is satisfied, so 5 and 6 are never mapped."
+        },
+        play: `fun main() {
+    val names = listOf("ada", "grace", "linus", "barbara")
+
+    println("List (eager):")
+    val eager = names
+        .map { println("  map $it"); it.uppercase() }
+        .filter { println("  filter $it"); it.length > 4 }
+        .first()
+    println("  -> $eager")
+
+    println("Sequence (lazy):")
+    val lazy = names.asSequence()
+        .map { println("  map $it"); it.uppercase() }
+        .filter { println("  filter $it"); it.length > 4 }
+        .first()               // delete .first() and run again: nothing is mapped
+    println("  -> $lazy")
+}`
       },
 
       // + generators ──────────────────────────────────
@@ -1777,53 +1848,53 @@ abstract class SequenceScope<in T> {
           { title: 'Collecting an infinite sequence', bad: 'fibonacci.filter { it % 2 == 0L }.toList()', good: 'fibonacci.filter { it % 2 == 0L }.take(10).toList()', why: '<code>toList()</code>, <code>count()</code> and <code>sum()</code> read until the end, and an infinite sequence has none. Limit it first.' },
         ],
         visual(el) {
-          const SRC = ['val ids = sequence {', '    println("start")', '    yield(1)', '    println("after 1")', '    yield(2)', '    yieldAll(listOf(3, 4))', '}'];
-          const EV = [{ line: 1, print: 'start' }, { line: 2, y: 1 }, { line: 3, print: 'after 1' }, { line: 4, y: 2 }, { line: 5, y: 3 }, { line: 5, y: 4 }, { line: 6, end: true }];
-          let pos, ready, paused, busy = false;
-          const code = h('div', { class: 'kt' });
-          const log = h('div', { class: 'kd-log' });
-          const o = out('');
-          function paint(run) {
-            lines(code, SRC.map((s, i) => ({ src: s, cls: i === run ? 'kd-sqn-run' : (i === paused ? 'kd-new' : ''), note: i === paused && run == null ? (paused === 0 ? 'not started' : paused === 6 ? 'finished' : 'paused here') : '' })));
-          }
-          function reset() { pos = 0; ready = null; paused = 0; log.replaceChildren(h('span', { class: 'kd-empty' }, 'console is empty')); paint(); }
-          const print = t => { if (log.querySelector('.kd-empty')) log.replaceChildren(); log.append(h('div', { class: 'kd-log-line drop-in' }, t)); };
-          async function advance() {
-            while (pos < EV.length) {
-              const e = EV[pos++];
-              paint(e.line);
-              await sleep(380); if (!el.isConnected) return undefined;
-              if (e.print) print(e.print);
-              if (e.y != null) { paused = e.line; paint(); return e.y; }
-              if (e.end) { paused = 6; paint(); return null; }
-            }
-            return null;
-          }
-          async function hasNext() {
-            if (busy) return; busy = true;
-            if (ready == null) {
-              const v = await advance(); if (v === undefined) return;
-              ready = v;
-            }
-            say(o, ready != null ? `${hl('it.hasNext()')} = ${hl('true')} <span class="muted">value ${ready} is computed and waiting</span>` : `${hl('it.hasNext()')} = ${hl('false')} <span class="muted">the block has finished</span>`);
-            busy = false;
-          }
-          async function next() {
-            if (busy) return; busy = true;
-            let v = ready, ran = false;
-            if (v == null) { v = await advance(); ran = true; if (v === undefined) return; }
-            ready = null;
-            if (v == null) { replay(code, 'shake'); say(o, `${hl('it.next()')} <span class="bad">NoSuchElementException</span> <span class="muted">nothing left to yield</span>`); }
-            else say(o, `${hl('it.next()')} = ${hl(String(v))} <span class="muted">${ran ? 'ran the block up to the next yield' : 'returned the value hasNext() already computed'}</span>`);
-            busy = false;
-          }
-          reset();
-          say(o, 'Nothing has run yet. Building the sequence executes no line of the block.');
-          el.append(
-            h('div', { class: 'kd-pair' }, code, h('div', { class: 'kd-card' }, h('span', { class: 'kd-label' }, 'console'), log)),
-            h('div', { class: 'controls' }, cmd('it.hasNext()', hasNext), cmd('it.next()', next), act('Restart', () => { if (!busy) { reset(); say(o, 'New iterator. The block starts from the top on the first pull.'); } })),
-            o);
+          Lab.ui.codeStepper(el, {
+            code: 'val ids = sequence {\n    println("start")\n    yield(1)\n    println("after 1")\n    yield(2)\n}\nval iter = ids.iterator()\nprintln(iter.next())\nprintln(iter.next())\nprintln(iter.hasNext())',
+            predict: {
+              q: 'Line 8 calls <code>iter.next()</code> for the first time. What is printed by the end of that line?',
+              options: ['"start", then 1', 'Only 1', '"start", "after 1", then 1'],
+              a: 0,
+              why: '<code>next()</code> runs the block from where it stopped up to the next <code>yield</code>. That prints "start", and <code>yield(1)</code> pauses before "after 1".',
+            },
+            frames: [
+              { say: 'Two lines of code, separated by <code>yield</code>. Watch when the block actually runs.' },
+              { line: 1, vars: { block: 'not started' }, stack: ['main'], say: 'Building the sequence runs nothing. It only stores the block.' },
+              { line: 7, vars: { iter: 'ready' }, say: 'Getting an iterator does not run it either.' },
+              { line: [8, 2], vars: { block: 'running' }, stack: ['main', 'iter.next()', 'sequence block'], out: 'start', say: '<code>next()</code> starts the block. It runs line 2...' },
+              { line: 3, vars: { block: 'paused at yield(1)' }, say: '...until <code>yield(1)</code>. The value goes out and the block freezes right here, local state and all.' },
+              { line: 8, stack: ['main'], out: '1', say: 'Back in <code>main</code>, <code>next()</code> returns 1.' },
+              { line: [9, 4], vars: { block: 'running' }, stack: ['main', 'iter.next()', 'sequence block'], out: 'after 1', say: 'The second <code>next()</code> resumes on the line after the <code>yield</code>.' },
+              { line: 5, vars: { block: 'paused at yield(2)' }, say: 'It pauses again at <code>yield(2)</code>.' },
+              { line: 9, stack: ['main'], out: '2', say: '<code>next()</code> returns 2.' },
+              { line: [10, 6], vars: { block: 'finished' }, out: 'false', say: '<code>hasNext()</code> resumes the block to look for one more value. It reaches the end, so the answer is <code>false</code>.' },
+            ],
+          });
         },
+        play: `fun main() {
+    val fibonacci = sequence {
+        var a = 0L
+        var b = 1L
+        while (true) {
+            yield(a)              // hand out a, pause here
+            val next = a + b
+            a = b
+            b = next
+        }
+    }
+    println(fibonacci.take(8).toList())   // change take(8) to take(20)
+    println(fibonacci.first { it > 100 })
+
+    val ids = sequence {
+        println("  start")
+        yield(1)
+        println("  after 1")
+        yield(2)
+    }
+    val iter = ids.iterator()
+    println("built, nothing ran yet")
+    println(iter.next())
+    println(iter.next())
+}`,
       },
 
       // 7 ─────────────────────────────────────────────
@@ -2105,6 +2176,39 @@ suspend fun crunch(items: List<Item>) = withContext(Dispatchers.Default) {
             h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: run }, 'Launch'), job),
             o);
         },
+        predict: {
+          "q": "The screen closes while <code>fetchUser()</code> is suspended. Which handler lets the coroutine stop cleanly?",
+          "options": [
+            "runCatching { }",
+            "catch (e: Exception)",
+            "catch (e: IOException)"
+          ],
+          "a": 2,
+          "why": "Cancellation arrives as a CancellationException. runCatching and catch (e: Exception) swallow it; catching only IOException lets it pass."
+        },
+        play: `import kotlinx.coroutines.*
+
+fun parse(text: String): Result<Int> = runCatching { text.toInt() }
+
+fun main() = runBlocking {
+    println(parse("42").map { it * 2 }.getOrElse { -1 })
+    println(parse("4x").map { it * 2 }.getOrElse { -1 })
+
+    val job = launch {
+        repeat(3) { i ->
+            try {
+                delay(100)
+                println("tick $i")
+            } catch (e: Exception) {   // change Exception to java.io.IOException and run again
+                println("swallowed \${e::class.simpleName}, loop goes on")
+            }
+        }
+    }
+    delay(250)
+    job.cancel()
+    job.join()
+    println("job cancelled: \${job.isCancelled}")
+}`
       },
 
       // 8 ─────────────────────────────────────────────
@@ -2375,6 +2479,39 @@ int n = 2 + 3 * k;     // imul, iadd: no method calls`,
           say(o, 'Pick an expression to see which function it calls.');
           el.append(h('div', { class: 'stage' }, plot, parts), h('div', { class: 'controls' }, btns), o);
         },
+        predict: {
+          "q": "With <code>a = Vec(2, 1)</code>, what does <code>a * 2</code> call, and what does it give?",
+          "options": [
+            "a.times(2), giving Vec(x=4, y=2)",
+            "a.multiply(2), giving Vec(x=4, y=2)",
+            "a.times(2), giving Vec(x=4, y=1)"
+          ],
+          "a": 0,
+          "why": "The <code>*</code> operator is the function named <code>times</code>. Vec’s version multiplies both coordinates."
+        },
+        play: `data class Vec(val x: Int, val y: Int) {
+    operator fun plus(o: Vec) = Vec(x + o.x, y + o.y)
+    operator fun times(k: Int) = Vec(x * k, y * k)
+    operator fun unaryMinus() = Vec(-x, -y)
+    infix fun dot(o: Vec): Int = x * o.x + y * o.y
+}
+
+fun main() {
+    val a = Vec(2, 1)
+    val b = Vec(1, 2)
+    println(a + b)       // a.plus(b)
+    println(a * 2)       // a.times(2)
+    println(-a)          // a.unaryMinus()
+    println(a dot b)     // a.dot(b)
+
+    val (x, y) = a + b   // component1(), component2()
+    println("x=$x y=$y")
+
+    var c = a
+    c += b               // no plusAssign, so c = c + b
+    println(c)
+    // swap the properties to Vec(val y: Int, val x: Int) and run again
+}`
       },
       // + java-interop ────────────────────────────────
       {
@@ -2544,6 +2681,37 @@ public final class Toasts {
               act('Show Java’s view', () => { replay(java, 'pop-soft'); paint('all'); })),
             o);
         },
+        predict: {
+          "q": "You add only <code>@JvmOverloads</code>, not <code>@JvmStatic</code>. Which Java call starts to compile?",
+          "options": [
+            "<code>Toasts.make(\"Hi\");</code>",
+            "<code>Toasts.Companion.make(\"Hi\");</code>",
+            "<code>Toasts.make(\"Hi\", 2000);</code>"
+          ],
+          "a": 1,
+          "why": "@JvmOverloads generates the shorter overload. Without @JvmStatic it still lives on the Companion instance, not on the class."
+        },
+        play: `import java.io.File
+import java.util.Properties
+
+fun main() {
+    val file = File("notes.txt")
+    println(file.name)                 // Java getName() reads as a property
+
+    val task = Runnable { println("a lambda became a Java Runnable") }
+    task.run()
+
+    val sb = StringBuilder()
+    sb.append("Hi")
+    println(sb.length)
+
+    val props = Properties()
+    val safe: String? = props.getProperty("theme")    // platform type String!, you choose
+    println(safe ?: "theme not set")
+
+    val risky: String = props.getProperty("theme")    // compiles, but the value is null
+    println(risky.length)                             // add ?: "light" above and run again
+}`
       },
     ],
   });

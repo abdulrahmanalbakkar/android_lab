@@ -137,6 +137,12 @@
 .cq-tour li { padding: 4px 8px; border-radius: 7px; color: var(--muted); }
 .cq-tour li.on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .cq-tour li.done { color: var(--ink); }
+
+/* kit terminal panel: pull request gates */
+.cqk-gate { display: grid; grid-template-columns: 1.4em minmax(0, 1fr); gap: 6px; align-items: start; padding: 6px 8px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); margin-bottom: 6px; }
+.cqk-gate span { display: grid; min-width: 0; } .cqk-gate code { font-size: 0.72rem; overflow-wrap: anywhere; } .cqk-gate small { color: var(--muted); font-size: 0.74rem; }
+.cqk-gate.ok { border-color: var(--ok); background: var(--ok-soft); } .cqk-gate.ok b { color: var(--ok); }
+.cqk-gate.err { border-color: var(--err); background: var(--err-soft); } .cqk-gate.err b { color: var(--err); }
 `;
 
   // ---------- shared app data (the News Reader project's sample headlines) ----------
@@ -434,6 +440,12 @@ val vm = NewsViewModel(repo)`, why: 'The real repository needs a server and a da
           { q: 'A test reads <code>vm.uiState.value</code> and always gets the initial state. <code>uiState</code> uses <code>stateIn(viewModelScope, WhileSubscribed(5_000), …)</code>. What is missing?', options: ['A collector, for example in <code>backgroundScope</code>', 'A call to <code>advanceUntilIdle()</code> only', 'A <code>Thread.sleep</code>'], a: 0, why: 'With <code>WhileSubscribed</code> the upstream combine only runs while there is a subscriber. Start one before you read <code>value</code>.' },
           { q: 'In <code>refreshIsIgnoredWhileOneIsRunning</code>, how long does the test take in real time?', options: ['About one second', 'Milliseconds: runTest skips the 1 s delay on its virtual clock', 'It never finishes'], a: 1, why: '<code>delay</code> inside <code>runTest</code> advances virtual time, so <code>advanceUntilIdle()</code> runs the slow refresh instantly.' },
         ],
+        predict: {
+          q: 'You delete the <code>finally</code> block, so a failed refresh never resets <code>isRefreshing</code>. Which test goes red?',
+          options: ['<code>startsInLoadingState</code>', '<code>failedRefreshShowsMessage</code>', 'None: the code still compiles'],
+          a: 1,
+          why: 'That test makes the fake throw and then checks the end state. The spinner is still on, so its assertion fails on the JVM in seconds.',
+        },
         visual(el) {
           const live = () => el.isConnected;
           const ph = phone();
@@ -549,130 +561,26 @@ val vm = NewsViewModel(repo)`, why: 'The real repository needs a server and a da
           { q: 'Why does the fake’s <code>refresh()</code> call <code>delay(refreshDelay)</code>?', options: ['To slow the test down in real time', 'So “refreshing” is a separate state that lasts some virtual time and is not conflated away', 'Turbine requires every function to suspend'], a: 1, why: 'Without a suspension point, refreshing can flip true and back before the collector sees it. <code>runTest</code> skips the delay instantly.' },
         ],
         visual(el) {
-          const live = () => el.isConnected;
-          const ph = phone();
-          const LABEL = { loading: 'Loading', list: 'Articles(7)', refreshing: 'Refreshing', done: 'Articles(7) done', list2: 'Articles(8)' };
-          const LINES = [
-            'vm.uiState.test {',
-            '    assertTrue(awaitItem().isLoading)',
-            '    assertEquals(sampleArticles, awaitItem().articles)',
-            '    vm.refresh()',
-            '    assertTrue(awaitItem().isRefreshing)',
-            '    assertFalse(awaitItem().isRefreshing)',
-            '    cancelAndIgnoreRemainingEvents()',
-            '}',
-          ];
-          const EXPECT = { 1: 'loading', 2: 'list', 4: 'refreshing', 5: 'done' };
-          const BEFORE = ['vm.refresh()', 'advanceUntilIdle()', 'assertFalse(vm.uiState.value.isRefreshing)'];
-          const sc = script(LINES), scB = script(BEFORE);
-          const qCap = h('p', { class: 'cq-cap' }, 'Turbine queue');
-          const queue = h('div', { class: 'cq-queue', 'aria-label': 'Turbine event queue' });
-          const hist = h('div', { class: 'cq-hist', 'aria-label': 'States the screen went through' });
-          const o = out();
-          let after = false, busy = false, auto = false, line = 0, q = [], subscribed = false, failed = false;
-          const showOnPhone = k => {
-            if (k === 'loading') ph.screen('loading');
-            if (k === 'list' || k === 'list2') { ph.screen(null); ph.refreshing(false); }
-            if (k === 'refreshing') ph.refreshing(true);
-            if (k === 'done') ph.refreshing(false);
-          };
-          const histChips = {};
-          function emit(k) {
-            showOnPhone(k);
-            const hc = h('span', { class: 'cq-ev drop-in' + (k === 'list2' ? ' cq-odd' : '') }, LABEL[k]);
-            hist.append(hc); histChips[k] = hc;
-            if (subscribed) { const c = h('span', { class: 'cq-ev drop-in' + (k === 'list2' ? ' cq-odd' : '') }, LABEL[k]); c.k = k; q.push(c); queue.append(c); }
-          }
-          async function take(expect) {
-            const c = q.shift();
-            if (!c) return false;
-            c.classList.add('leave'); await sleep(300); c.remove();
-            if (c.k !== expect) { failed = true; return c.k; }
-            if (histChips[expect]) histChips[expect].classList.add('ok');
-            return true;
-          }
-          function restart() {
-            line = 0; q = []; subscribed = false; failed = false;
-            queue.replaceChildren(); hist.replaceChildren(); sc.clear(); scB.clear(); ph.reset();
-          }
-          const ACT = [
-            async () => { subscribed = true; emit('loading'); await sleep(250); emit('list'); return true; },
-            () => take('loading'),
-            () => take('list'),
-            async () => { emit('refreshing'); return true; },
-            () => take('refreshing'),
-            async () => {
-              if (!q.length) { say(o, '<span class="muted">awaitItem() suspends… runTest skips 1 000 ms of virtual time</span>'); await sleep(500); if (!live()) return true; emit('done'); await sleep(250); }
-              return take('done');
+          Lab.ui.codeStepper(el, {
+            code: 'vm.uiState.test {\n    assertTrue(awaitItem().isLoading)\n    assertEquals(sampleArticles, awaitItem().articles)\n    vm.refresh()\n    assertTrue(awaitItem().isRefreshing)\n    assertFalse(awaitItem().isRefreshing)\n    cancelAndIgnoreRemainingEvents()\n}',
+            varsTitle: 'Turbine',
+            outTitle: 'Test result',
+            predict: {
+              q: 'After <code>vm.refresh()</code>, the fake waits 1 s of virtual time and then succeeds. How many new states does Turbine receive from that refresh?',
+              options: ['One: the final list', 'Two: refreshing, then done', 'None: a StateFlow only gives the current value'],
+              a: 1,
+              why: 'The delay keeps <code>isRefreshing = true</code> in place for a while, so it is a real emission. When the fake returns, a second state turns it off.',
             },
-            async () => { q.forEach(c => c.remove()); q = []; subscribed = false; return true; },
-            async () => true,
-          ];
-          async function step() {
-            if (busy || !after) return;
-            if (failed || line >= LINES.length) restart();
-            busy = true;
-            try {
-              sc.mark(line);
-              const r = await ACT[line]();
-              if (!live()) return;
-              if (r === true) {
-                sc.set(line, 'ok');
-                say(o, line === LINES.length - 1 ? '<span class="good">PASSED</span> every state checked in order: Loading, Articles, Refreshing, done.' : `${hl(LINES[line].trim())} <span class="good">ok</span>`);
-                line++;
-              } else {
-                sc.set(line, 'bad');
-                say(o, `<span class="bad">FAILED</span> expected ${LABEL[EXPECT[line]] || 'an item'} but got ${r ? LABEL[r] : 'nothing'}. An extra state jumped the queue.`);
-              }
-            } finally { busy = false; }
-          }
-          async function runTest() {
-            if (busy || auto) return;
-            if (!after) {
-              busy = true;
-              try {
-                restart();
-                for (let i = 0; i < BEFORE.length; i++) {
-                  scB.mark(i);
-                  if (i === 0) { emit('loading'); await sleep(200); emit('list'); await sleep(200); emit('refreshing'); }
-                  if (i === 1) { await sleep(300); emit('done'); }
-                  await sleep(350); if (!live()) return;
-                  scB.set(i, 'ok');
-                }
-                Object.entries(histChips).forEach(([k, c]) => c.classList.add(k === 'done' ? 'ok' : 'miss'));
-                say(o, '<span class="good">PASSED</span>, but only the last state was checked. It would still pass if the spinner never showed.');
-              } finally { busy = false; }
-              return;
-            }
-            auto = true;
-            try {
-              restart();
-              while (after && line < LINES.length && !failed) { await step(); if (!live()) return; await sleep(200); }
-            } finally { auto = false; }
-          }
-          const sameBtn = cmd('repo.emit(sameList)', () => {
-            if (!after || busy) return;
-            if (!subscribed) { say(o, 'Nobody is collecting yet. Step into the test first.'); return; }
-            replay(queue, 'shake');
-            say(o, '<span class="muted">no event:</span> StateFlow ignores a value equal to the current one.');
-          });
-          const newBtn = cmd('repo.emit(eightArticles)', () => {
-            if (!after || busy) return;
-            if (!subscribed) { say(o, 'Nobody is collecting yet. The value just sits in the StateFlow.'); return; }
-            emit('list2');
-            say(o, '<span class="muted">new event queued:</span> Articles(8). The next awaitItem() gets it, ready or not.');
-          });
-          const afterOnly = [cmd('Step', () => { if (!auto) step(); }), sameBtn, newBtn];
-          frame(el, 2, ph, {
-            guard: () => !busy && !auto,
-            side: [h('p', { class: 'cq-cap' }, 'States the screen went through'), hist, qCap, queue],
-            below: [sc.el, scB.el, h('div', { class: 'controls' }, cmd('Run test', runTest), afterOnly), o],
-            onMode(a) {
-              after = a; restart();
-              sc.el.hidden = !a; scB.el.hidden = a; queue.hidden = !a; qCap.hidden = !a;
-              afterOnly.forEach(b => { b.hidden = !a; });
-              say(o, a ? 'Step through the Turbine test, or run it. Try emitting while it waits.' : 'The step-1 style test only reads uiState.value at the end. Run it.');
-            },
+            frames: [
+              { say: 'The fake already holds 7 articles and <code>refreshDelay = 1_000</code>. Turbine will collect <code>uiState</code> into a queue.' },
+              { line: 1, vars: { queue: '[Loading]', 'virtual time': '0 ms' }, say: '<code>test { }</code> starts collecting. A StateFlow gives a new collector its current value at once: the initial Loading state.' },
+              { line: 2, vars: { queue: '[]', took: 'Loading' }, say: '<code>awaitItem()</code> takes it off the queue. The assertion passes.' },
+              { line: 3, vars: { queue: '[]', took: 'Articles(7)' }, say: 'The ViewModel maps the fake’s list into a new state. The next <code>awaitItem()</code> gets it.' },
+              { line: 4, vars: { queue: '[Refreshing]' }, say: '<code>refresh()</code> sets <code>isRefreshing = true</code>, then the fake calls <code>delay(1_000)</code>.' },
+              { line: 5, vars: { queue: '[]', took: 'Refreshing' }, say: 'That state is its own emission, and the test sees it. A test that only checked <code>value</code> at the end never would.' },
+              { line: 6, vars: { 'virtual time': '1000 ms', queue: '[]', took: 'Articles(7), done' }, say: '<code>awaitItem()</code> suspends. <code>runTest</code> skips the 1 s of virtual time, the fake finishes, and the done state arrives.' },
+              { line: 7, out: 'refreshShowsSpinnerThenHidesIt PASSED', say: 'Four states, in order. Without the cancel, any event left in the queue would fail the test.' },
+            ],
           });
         },
       },
@@ -738,6 +646,12 @@ class ArticleListScreenTest {
           { q: 'A row is a <code>Card(onClick = …)</code> holding two Texts. What does <code>onNodeWithText("City council approves new bike lanes")</code> find by default?', options: ['The Text node only, which has no click action', 'The merged card node, which has the click action', 'Nothing, merged nodes can’t be found by text'], a: 1, why: 'A clickable card merges its children’s semantics. Finders use the merged tree by default, so the card node carries both texts and the click.' },
           { q: 'Where do these tests live and how do they run?', options: ['src/test, on the JVM', 'src/androidTest, on a device or emulator', 'In the release APK'], a: 1, why: 'Compose UI tests need the Android framework, so they are instrumented tests run with connectedAndroidTest.' },
         ],
+        predict: {
+          q: 'You switch the tree view to <code>useUnmergedTree = true</code>. What happens to each article card?',
+          options: ['Its Texts show up as separate child nodes', 'The card disappears from the tree', 'Nothing changes'],
+          a: 0,
+          why: 'A clickable card merges its children by default. The unmerged tree keeps every child node, which lets a test assert on one Text.',
+        },
         visual(el) {
           const live = () => el.isConnected;
           const ph = phone();
@@ -903,6 +817,12 @@ data class NewsUiState(val bookmarkedIds: MutableSet<String>)`, good: `data clas
           { q: 'With strong skipping on, how does Compose compare an unstable parameter?', options: ['With equals()', 'By instance (===)', 'It never skips'], a: 1, why: 'Strong skipping lets composables with unstable parameters skip, but only when the same instance is passed again.' },
           { q: 'Why does reading <code>listState.layoutInfo</code> in composition hurt while scrolling?', options: ['It throws while scrolling', 'It is a new value on every scroll frame, so the reader recomposes every frame', 'It disables keys'], a: 1, why: 'Read it inside <code>derivedStateOf</code> (or use <code>firstVisibleItemIndex</code> there) so composition only hears about the change you care about.' },
         ],
+        predict: {
+          q: 'Before the fix, each row gets the whole <code>bookmarkedIds</code> set. You bookmark one story. How many visible rows recompose?',
+          options: ['Only the tapped row', 'Every visible row', 'None: only the icon redraws'],
+          a: 1,
+          why: 'Each change makes a new set object. Every row gets a different instance, so none of them can skip.',
+        },
         visual(el) {
           const live = () => el.isConnected;
           const ph = phone();
@@ -1043,68 +963,31 @@ ImageCache.context = this`, good: `ImageCache.context = applicationContext`, why
           { q: 'After rotation, does the new screen register a second network callback?', options: ['Yes, every rotation adds one', 'No: the ViewModel survives rotation and WhileSubscribed(5_000) keeps the single upstream running', 'Only on tablets'], a: 1, why: 'The new screen collects the same StateFlow from the same ViewModel within 5 s, so the upstream never restarts.' },
         ],
         visual(el) {
-          const live = () => el.isConnected;
-          const ph = phone();
-          ph.el.classList.add('cq-bmk');
-          const heap = h('div', { class: 'cq-heap', 'aria-label': 'Heap' });
-          const o = out();
-          let after = false, busy = false, acts = [], next = 1, listeners = 0;
-          const mb = h('b', {}, '');
-          function paint() {
-            const mon = h('div', { class: 'cq-act mon' }, after ? 'NetworkMonitor' : 'NetworkMonitor (singleton)', h('small', {}, after ? 'isOnline: 1 collector (NewsViewModel)' : `listeners: ${listeners} lambda${listeners === 1 ? '' : 's'}`));
-            heap.replaceChildren(mon, ...acts.map(a => h('div', { class: 'cq-act' + (a.live ? '' : after ? ' dead' : ' leak') },
-              `MainActivity #${a.n}`, h('small', {}, a.live ? 'live' : after ? 'destroyed, unreachable' : 'destroyed, still referenced'))));
-            mb.textContent = `${36 + acts.length * 9} MB`;
-          }
-          function reset() { acts = [{ n: 1, live: true }]; next = 2; listeners = 1; paint(); }
-          async function rotate() {
-            if (busy) return;
-            if (acts.length >= 7) { say(o, 'That is enough to see the trend. Run a GC or LeakCanary.'); return; }
-            busy = true;
-            try {
-              replay(ph.el, 'cq-spin');
-              await sleep(350); if (!live()) return;
-              acts.forEach(a => { a.live = false; });
-              acts.push({ n: next++, live: true });
-              if (!after) listeners++;
-              paint();
-              say(o, after ? 'New Activity created. The old one is destroyed and nothing points at it.' : `New Activity created, and the new screen added listener #${listeners}. The old Activity is still in the list.`);
-              await sleep(350);
-            } finally { busy = false; }
-          }
-          async function gc() {
-            if (busy) return; busy = true;
-            try {
-              const before = acts.length;
-              acts = acts.filter(a => a.live || !after);
-              paint(); replay(heap, 'pop-soft');
-              const freed = before - acts.length, kept = acts.length - 1;
-              say(o, after ? `<span class="good">GC freed ${freed} Activit${freed === 1 ? 'y' : 'ies'}.</span> Heap back to ${mb.textContent}.` : `<span class="bad">GC freed nothing.</span> ${kept} destroyed Activit${kept === 1 ? 'y is' : 'ies are'} reachable from the singleton.`);
-              await sleep(300);
-            } finally { busy = false; }
-          }
-          function leakCanary() {
-            if (busy) return;
-            const retained = after ? 0 : acts.filter(a => !a.live).length;
-            if (!retained) { say(o, after ? '<span class="good">LeakCanary: 0 retained objects.</span>' : 'LeakCanary: nothing retained yet. Rotate first.'); return; }
-            o.innerHTML = `<span class="bad">LeakCanary: ${retained} retained MainActivity</span>`
-              + '<div class="line">NetworkMonitor instance (singleton in SingletonComponent)</div>'
-              + '<div class="line">↓ NetworkMonitor.listeners  ArrayList</div>'
-              + '<div class="line">↓ [0]  lambda in ArticleListScreen</div>'
-              + '<div class="line">↓ captured context  MainActivity</div>'
-              + '<div class="line"><span class="bad">╳ MainActivity received onDestroy() but is still reachable</span></div>';
-            replay(o, 'pop-soft');
-          }
-          const offBtn = cmd('go offline', () => {
-            const on = ph.banner.hidden;
-            ph.offline(on); offBtn.setAttribute('aria-pressed', String(on));
-            say(o, on ? 'onLost → trySend(false) → isOnline is false → the banner shows.' : 'onAvailable → trySend(true) → the banner hides.');
-          }, { 'aria-pressed': 'false' });
-          frame(el, 5, ph, {
-            guard: () => !busy,
-            side: [h('p', { class: 'cq-cap' }, 'Heap · ', mb), heap],
-            below: [h('div', { class: 'controls' }, cmd('rotate', rotate), cmd('force GC', gc), cmd('run LeakCanary', leakCanary), offBtn), o],
-            onMode(a) { after = a; reset(); say(o, a ? 'NetworkMonitor is now a callbackFlow collected by the ViewModel. Rotate, GC, check.' : 'The quick offline banner is in. Rotate a few times, force a GC, then run LeakCanary.'); },
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'app', label: 'Hilt<small>singletons</small>', x: 17, y: 12, tone: 'muted' },
+              { id: 'mon', label: 'NetworkMonitor<small>@Singleton</small>', x: 50, y: 12 },
+              { id: 'l1', label: 'lambda #1', x: 17, y: 50, hidden: true },
+              { id: 'l2', label: 'lambda #2', x: 50, y: 50, hidden: true },
+              { id: 'vm', label: 'NewsViewModel<small>survives rotation</small>', x: 83, y: 50, tone: 'ok', hidden: true },
+              { id: 'a1', label: 'MainActivity<small>#1</small>', x: 17, y: 88 },
+              { id: 'a2', label: 'MainActivity<small>#2</small>', x: 50, y: 88, hidden: true },
+            ],
+            predict: {
+              q: 'With the old listener code, you rotate the phone three times. How many destroyed <code>MainActivity</code> objects stay in memory?',
+              options: ['None: destroyed Activities are freed', 'One: only the last', 'Three: one per rotation'],
+              a: 2,
+              why: 'Each new screen adds a lambda to the singleton, and nothing removes them. Every lambda keeps its Activity reachable.',
+            },
+            frames: [
+              { add: [['app', 'mon']], say: 'Hilt keeps the <code>@Singleton</code> <code>NetworkMonitor</code> for the life of the app. <code>MainActivity #1</code> is on screen.' },
+              { show: ['l1'], add: [['mon', 'l1', 'listeners'], ['l1', 'a1', 'context']], say: '<code>ArticleListScreen</code> adds a lambda to show a Toast. The lambda captures the Activity’s context.' },
+              { show: ['a2'], say: 'Rotate. Android destroys #1 and creates #2. The system no longer needs #1.' },
+              { hl: ['app', 'mon', 'l1', 'a1'], add: [['app', 'mon', '', 'err'], ['mon', 'l1', 'listeners', 'err'], ['l1', 'a1', 'context', 'err']], say: 'But #1 is still reachable from the singleton, so the GC cannot free it. LeakCanary reports a retained <code>MainActivity</code>.' },
+              { show: ['l2'], add: [['app', 'mon'], ['mon', 'l2', 'listeners'], ['l2', 'a2', 'context']], say: '#2 adds its own lambda. Each rotation leaves one more dead Activity behind.' },
+              { show: ['vm'], gone: ['l1', 'l2', 'a1'], remove: [['mon', 'l1'], ['l1', 'a1'], ['mon', 'l2'], ['l2', 'a2']], add: [['a2', 'vm', 'viewModel()', 'ok'], ['vm', 'mon', 'collects isOnline', 'ok']], say: 'The fix: <code>isOnline</code> is a <code>callbackFlow</code> that the ViewModel collects. The singleton holds no UI object, so #1 can be freed.' },
+            ],
           });
         },
       },
@@ -1182,6 +1065,12 @@ class ArticleListA11yTest {
           { q: 'Why add a Refresh button when the list already has pull-to-refresh?', options: ['Pull gestures are hard or impossible for TalkBack and Switch Access users; a button is reachable by everyone', 'PullToRefreshBox is deprecated', 'Buttons refresh faster'], a: 0, why: 'Any action that only exists as a gesture needs an accessible alternative, such as a button or a custom accessibility action.' },
           { q: 'Why add <code>enableAccessibilityChecks()</code> to UI tests?', options: ['It fixes the issues for you', 'Regressions such as a new unlabeled button fail the build instead of reaching users', 'It turns on TalkBack on the emulator'], a: 1, why: 'The checks run on test actions and fail on Accessibility Test Framework issues, so the pass stays done.' },
         ],
+        predict: {
+          q: 'Before the fixes, the offline banner appears while TalkBack focus is on a story. What does the user hear?',
+          options: ['Nothing: the banner appears silently', '"You’re offline" right away', 'A short vibration'],
+          a: 0,
+          why: 'TalkBack reads what has focus. Only a live region, <code>liveRegion = LiveRegionMode.Polite</code>, makes it announce a change somewhere else.',
+        },
         visual(el) {
           const ph = phone();
           ph.el.classList.add('cq-bmk');
@@ -1316,6 +1205,12 @@ class ArticleViewModel @AssistedInject constructor(
           { q: 'Why does <code>ArticleViewModel</code> switch to an assisted factory?', options: ['Assisted injection is faster', 'In a pane there is no navigation route, so the id can’t come from SavedStateHandle; it is passed in when the ViewModel is created', 'Hilt no longer supports SavedStateHandle'], a: 1, why: 'The detail pane knows the id from <code>contentKey</code> and hands it to the factory. Keying by id gives each article its own ViewModel.' },
           { q: 'What happens to the selected article when a foldable unfolds from one pane to two?', options: ['It is lost, the user starts over', 'The navigator keeps it as contentKey, so the detail pane shows it next to the list', 'The app restarts'], a: 1, why: 'The navigator state survives configuration changes. The same destination is shown with a different pane layout.' },
         ],
+        predict: {
+          q: 'On the 1280 dp tablet, with the list-detail scaffold in place, the user taps a story. What happens to the list?',
+          options: ['The detail replaces it', 'It stays, and the detail pane beside it shows the story', 'The app opens a second Activity'],
+          a: 1,
+          why: 'At the Expanded width class two panes fit. The navigator only changes what the detail pane shows.',
+        },
         visual(el) {
           const ph = phone();
           ph.el.classList.add('cq-tap', 'cq-bmk', 'cq-big', 'cq-hasrf');
@@ -1420,6 +1315,12 @@ ReportDrawnWhen { !state.isLoading }
           { q: 'Why benchmark with <code>StartupMode.COLD</code> on a release build?', options: ['Debug builds are faster', 'Cold starts include process creation and are what new users feel; debug builds are not optimized and give misleading numbers', 'Warm starts can’t be measured'], a: 1, why: 'Release builds run R8 and are what users install. Cold start is the slowest and most visible case.' },
           { q: 'Why add <code>testTagsAsResourceId = true</code> at the root?', options: ['It speeds up composition', 'UiAutomator can find Compose nodes by their test tags as resource ids', 'It is required by Hilt'], a: 1, why: 'Macrobenchmark and the profile generator drive the app with UiAutomator, which sees resource ids, not Compose test tags, unless you expose them.' },
         ],
+        predict: {
+          q: 'You add a Baseline Profile and run the cold-start benchmark again. What happens to <code>timeToFullDisplayMs</code> in this app?',
+          options: ['It drops by about a third', 'It doubles, because the profile must load first', 'No change: profiles only help scrolling'],
+          a: 0,
+          why: 'ART compiles the startup methods ahead of time at install, so the first launch runs compiled code instead of starting interpreted.',
+        },
         visual(el) {
           const live = () => el.isConnected;
           const ph = phone();
@@ -1532,62 +1433,25 @@ dependencies {
           { q: 'Which of these runs on the JVM without a device?', options: ['The Turbine tests of NewsViewModel', 'The accessibility checks at 200% font', 'The startup benchmark'], a: 0, why: 'ViewModel and Flow tests with fakes are local unit tests. UI tests and Macrobenchmark need a device.' },
         ],
         visual(el) {
-          const live = () => el.isConnected;
-          const ph = phone();
-          ph.el.classList.add('cq-insp', 'cq-bmk');
-          const run = runner(['src/test  ·  NewsViewModelTest', 'src/androidTest  ·  ArticleListScreenTest, ArticleListA11yTest', ':baselineprofile  ·  StartupBenchmark']);
-          const STEPS = ['Cold start', 'Bookmark one story', 'Network drops', 'Rotate the phone', 'Unfold to a tablet', 'Fold back', 'Run every test'];
-          const tour = h('ol', { class: 'cq-tour' }, STEPS.map(s => h('li', {}, s)));
-          const o = out();
-          let after = false, busy = false;
-          const mark = i => [...tour.children].forEach((li, j) => { li.className = j < i ? 'done' : j === i ? 'on' : ''; });
-          function reset() {
-            ph.reset(); ph.resetCounts(); ph.layout('compact', false);
-            ph.el.classList.toggle('cq-big', after); ph.el.classList.toggle('cq-hasrf', after);
-            run.reset(); run.written(after); mark(-1);
-          }
-          async function play() {
-            if (busy) return; busy = true;
-            const ok = () => live();
-            try {
-              reset();
-              mark(0); ph.screen('splash'); say(o, after ? 'Cold start with the Baseline Profile…' : 'Cold start, no profile…');
-              await sleep(after ? 600 : 900); if (!ok()) return; ph.screen('loading');
-              await sleep(after ? 300 : 500); if (!ok()) return; ph.screen(null);
-              say(o, after ? '<span class="good">820 ms</span> to real articles.' : '<span class="bad">1,240 ms</span> to real articles.');
-              await sleep(700); if (!ok()) return;
-              mark(1); ph.setSaved('a4', !ph.saved.has('a4'));
-              if (after) ph.count('a4'); else ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].forEach(id => ph.count(id, true));
-              say(o, after ? '<span class="good">1 row recomposed.</span>' : '<span class="bad">6 rows recomposed</span> for one tap.');
-              await sleep(900); if (!ok()) return;
-              mark(2); ph.offline(true);
-              say(o, after ? 'Banner shown. TalkBack announces <span class="good">“You’re offline”</span>.' : 'Banner shown. <span class="bad">TalkBack says nothing.</span>');
-              await sleep(900); if (!ok()) return;
-              mark(3); replay(ph.el, 'cq-spin'); await sleep(700); if (!ok()) return;
-              say(o, after ? '<span class="good">Old Activity collected. 0 leaks.</span>' : '<span class="bad">Old Activity retained by NetworkMonitor.</span>');
-              await sleep(700); if (!ok()) return;
-              mark(4); ph.offline(false); ph.layout('expanded', after); ph.open('a4');
-              say(o, after ? '<span class="good">List and detail side by side.</span>' : '<span class="bad">One stretched pane; the list is gone.</span>');
-              await sleep(1100); if (!ok()) return;
-              mark(5); ph.layout('compact', false);
-              say(o, 'Back to one pane; the open article is kept.');
-              await sleep(900); if (!ok()) return;
-              mark(6);
-              if (!after) say(o, '<span class="bad">0 tests.</span> Every change was a gamble.');
-              else {
-                for (let i = 0; i < 3; i++) { run.set(i, 'run'); await sleep(450); if (!ok()) return; run.set(i, 'pass'); }
-                run.sum('8 + 5 + 1 = 14 checks, all green');
-                say(o, '<span class="good">All green.</span> Ship it.');
-              }
-              mark(7);
-            } finally { busy = false; }
-          }
-          frame(el, 9, ph, {
-            labels: ['Start of project', 'Finished'],
-            guard: () => !busy,
-            side: [h('p', { class: 'cq-cap' }, 'End-to-end tour'), tour, run.el],
-            below: [h('div', { class: 'controls' }, cmd('play the tour', play)), o],
-            onMode(a) { after = a; reset(); run.sum(a ? '14 checks in CI' : 'No tests'); say(o, a ? 'The finished app. Play the tour.' : 'Every problem this project found, measured at once. Play the tour, then switch to Finished.'); },
+          const gates = (u, i, b) => [['testDebugUnitTest', '8 JVM tests, no device', u], ['connectedDebugAndroidTest', '5 UI and accessibility tests', i], ['connectedBenchmarkReleaseAndroidTest', 'cold start numbers', b]]
+            .map(([t, s, st]) => `<div class="cqk-gate ${st || ''}"><b>${st === 'ok' ? '✓' : st === 'err' ? '✗' : '·'}</b><span><code>${t}</code><small>${s}</small></span></div>`).join('');
+          Lab.ui.terminal(el, {
+            panelTitle: 'Pull request checks',
+            predict: {
+              q: 'A pull request removes the bookmark icon’s <code>contentDescription</code>. Which command fails?',
+              options: ['<code>testDebugUnitTest</code>', '<code>connectedDebugAndroidTest</code>', 'The startup benchmark', 'None of them'],
+              a: 1,
+              why: 'The UI tests run with accessibility checks turned on, and a clickable icon with nothing to speak fails them.',
+            },
+            frames: [
+              { panel: gates(), say: 'Every pull request runs three Gradle commands, cheapest first. Each one guards something this project fixed.' },
+              { cmd: './gradlew testDebugUnitTest', out: '> Task :app:testDebugUnitTest\n\nBUILD SUCCESSFUL in 41s', panel: gates('ok'), say: 'The ViewModel tests with fakes and Turbine run on the JVM in seconds. No device needed.' },
+              { cmd: './gradlew connectedDebugAndroidTest', out: 'Starting 5 tests on Pixel_8_API_36(AVD) - 16\nArticleListA11yTest > passesChecksAtDoubleFontSize[Pixel_8_API_36(AVD) - 16] FAILED\nFinished 5 tests on Pixel_8_API_36(AVD) - 16\n\nBUILD FAILED in 1m 52s', panel: gates('ok', 'err'), say: 'This PR dropped the bookmark label. The accessibility checks in the UI tests catch it before anyone merges.' },
+              { cmd: 'git commit -am "Label the bookmark button" && git push', out: '', say: 'The author puts the label back and pushes. CI runs again.' },
+              { cmd: './gradlew connectedDebugAndroidTest', out: 'Starting 5 tests on Pixel_8_API_36(AVD) - 16\nFinished 5 tests on Pixel_8_API_36(AVD) - 16\n\nBUILD SUCCESSFUL in 1m 49s', panel: gates('ok', 'ok'), say: 'Green.' },
+              { cmd: './gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest', out: 'StartupBenchmark_coldStartNoProfile\ntimeToInitialDisplayMs   min 861.5,   median 890.2,   max 934.8\ntimeToFullDisplayMs      min 1201.3,   median 1240.6,   max 1302.1\nStartupBenchmark_coldStartWithProfile\ntimeToInitialDisplayMs   min 584.2,   median 600.1,   max 631.7\ntimeToFullDisplayMs      min 798.0,   median 820.4,   max 866.3', panel: gates('ok', 'ok', 'ok'), say: 'The benchmark prints startup with and without the Baseline Profile. A change that slows startup shows up as a number, not a feeling.' },
+              { say: 'Measure, change one thing, measure again, and leave a test behind. CI makes the last step stick.' },
+            ],
           });
         },
       },

@@ -229,6 +229,10 @@
 .gt-ver { font: 700 0.9rem var(--mono); padding: 6px 10px; border-radius: 8px; border: 2px solid var(--ink); background: var(--bg); color: var(--ink); justify-self: start; }
 .gt-ver.gt-lost { border-color: var(--err); background: var(--err-soft); text-decoration: line-through; }
 .gt-ver.gt-chg { animation: pop 0.4s ease-out; }
+
+/* kit terminal panels */
+.gtk-h { margin: 0 0 4px; font: 600 0.7rem var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.gtk-h ~ .gtk-h { margin-top: 10px; }
 `;
 
   Lab.addTrack({
@@ -248,6 +252,12 @@
 <p>The terminal is a program that runs commands you type. On macOS it is called Terminal, on Windows you can use PowerShell or Git Bash, and Android Studio has one built in at the bottom of the window. You type a command, press <kbd>Enter</kbd>, and it prints the result.</p>
 <p>The terminal is always "standing" in one folder, the <em>working directory</em>. <code>pwd</code> prints where you are, <code>ls</code> lists what is there, <code>cd</code> moves you, and <code>mkdir</code> makes a new folder. Git commands act on the folder you are standing in, so knowing where you are is step one.</p>
 <p>Why not just click? Commands are exact, you can repeat them, copy them from docs, and put them in scripts and CI. Every Git feature exists on the command line, while most apps only show some of them. Try the commands below and watch the highlight move in the folder tree.</p>`,
+        predict: {
+          q: 'You stand in <code>~/projects</code> and run <code>cd NewsApp</code>, then <code>ls</code>. What does <code>ls</code> list?',
+          options: ['What is in <code>~/projects</code>', 'What is in NewsApp: <code>app/</code> and the two Gradle files', 'Every file on the disk'],
+          a: 1,
+          why: '<code>cd</code> changes the working directory, and <code>ls</code> with no argument lists the folder you are standing in.',
+        },
         visual(el) {
           const FS = { projects: { NewsApp: { app: { src: {} }, 'build.gradle.kts': null, 'settings.gradle.kts': null }, 'notes.txt': null } };
           let cwd = ['projects'];
@@ -409,6 +419,12 @@ git init`, why: 'Git acts on the current folder. Running <code>git init</code> i
 <p><code>git init</code> turns a folder into a <em>repository</em>: Git adds a hidden <code>.git</code> folder where it keeps all history. Your files stay where they are. From now on, Git compares them with the last saved version.</p>
 <p>Saving takes two steps. <code>git add</code> copies a change into the <em>staging area</em>, a draft of your next commit. <code>git commit</code> saves everything in the staging area as a <em>commit</em>: a snapshot of the project with a message, an author and a unique id. The two steps let you edit five files but commit only the two that belong together.</p>
 <p><code>git status</code> tells you which files are changed, which are staged, and which Git has never seen (<em>untracked</em>). Run it often. Below, edit files, stage them and commit, and watch them move between the three areas.</p>`,
+        predict: {
+          q: 'You edited <code>MainActivity.kt</code> and <code>README.md</code>, but run <code>git add</code> only on MainActivity.kt before <code>git commit</code>. Where does the README edit end up?',
+          options: ['In the commit too', 'Still in your files, changed but not committed', 'Gone: Git discards edits that were not added'],
+          a: 1,
+          why: 'A commit saves exactly what is in the staging area. The README edit stays in the working tree for a later commit.',
+        },
         visual(el) {
           const F = [
             { n: 'MainActivity.kt', w: 1, i: 1, c: 1 },
@@ -581,6 +597,12 @@ git commit -m "Show source name on news cards"`, why: '<code>git add .</code> st
 <p>A good commit holds one logical change and builds on its own. Its message has a short summary line, 50 characters or less, that says what the change does, like <code>Fix crash when the feed is empty</code>. Small commits are easier to review, easier to revert, and make <code>git log</code> readable months later.</p>
 <p>Some files must never be committed. An Android project creates <code>build/</code> folders and a <code>.gradle/</code> cache on every build. <code>local.properties</code> holds the SDK path of your own machine. Keystores (<code>.jks</code>) sign your releases and are secret. Most of <code>.idea/</code> is your personal Android Studio state. A <code>.gitignore</code> file lists patterns, and Git stops showing matching untracked files.</p>
 <p>Be careful with broad patterns. <code>gradle/wrapper/gradle-wrapper.jar</code> must be committed, so that teammates and CI can run <code>./gradlew</code>. Turn the patterns on below and watch which files Git would still offer to commit.</p>`,
+        predict: {
+          q: 'You add the line <code>build/</code> to .gitignore. Which paths does it hide?',
+          options: ['Only a <code>build</code> folder at the project root', 'Every folder named <code>build</code> at any depth, like <code>app/build/</code>', 'Every file with build in its name, like <code>build.gradle.kts</code>'],
+          a: 1,
+          why: 'A pattern with no slash except at the end matches a folder with that name anywhere below the .gitignore. The trailing slash means folders only.',
+        },
         visual(el) {
           const FILES = [
             ['app/src/main/java/com/example/news/MainActivity.kt', 'keep'],
@@ -732,34 +754,24 @@ git commit -m "Initial commit"`, why: 'Ignore rules do not untrack files that ar
 <p><code>HEAD</code> is Git's "you are here". It normally points to a branch. <code>git branch feature</code> creates a new label on the current commit but does not move you. <code>git switch feature</code> moves HEAD to it and updates your files to match. <code>git switch -c feature</code> does both.</p>
 <p>Branches let you start a feature, park it, fix a crash on <code>main</code>, and come back, without the work getting mixed. Commit a few times below, create a branch, switch, and commit again. Watch which label moves.</p>`,
         visual(el) {
-          const g = graph({ lanes: 2, title: 'Commits and branch labels' });
-          const o = out('');
-          let cs, br, head, n;
-          const LANE = { main: 0, feature: 1 };
-          function reset() { cs = [{ id: 'C1', p: [] }, { id: 'C2', p: ['C1'] }]; br = { main: 'C2' }; head = 'main'; n = 2; }
-          const draw = () => g.set({ commits: cs.map(c => ({ ...c, hl: c.id === br[head] })), refs: Object.entries(br).map(([name, at]) => ({ name, at })), head });
-          function commit() {
-            if (n >= 8) { say(o, 'That is enough commits for this demo. Press Reset to start over.'); return; }
-            const id = 'C' + (++n);
-            cs.push({ id, p: [br[head]], lane: LANE[head] });
-            br[head] = id; draw();
-            say(o, `[${head} ${id}] New commit on <b>${head}</b>. ${head} moved forward and HEAD came along, because HEAD points to ${head}.${br.feature && head === 'main' && br.feature !== br.main ? ' feature stays where it was.' : ''}`);
-          }
-          function branch() {
-            if (br.feature) { say(o, `<span class="bad">fatal: a branch named 'feature' already exists</span>`); return; }
-            br.feature = br[head]; draw();
-            say(o, `feature now points at ${br.feature}, the same commit as ${head}. HEAD did not move: you are still on ${head}.`);
-          }
-          function sw(b) {
-            if (!br[b]) { say(o, `<span class="bad">fatal: invalid reference: ${b}</span>\n<span class="muted">Create it first with git branch ${b}, or use git switch -c ${b}.</span>`); return; }
-            if (head === b) { say(o, `Already on '${b}'`); return; }
-            head = b; draw();
-            say(o, `Switched to branch '${b}'. HEAD moved; your files now match ${br[b]}. The next commit will move ${b}.`);
-          }
-          reset(); draw();
-          say(o, 'main points at C2 and HEAD points at main. Commit, branch, switch.');
-          el.append(row(act('git commit', commit), act('git branch feature', branch), act('git switch feature', () => sw('feature')), act('git switch main', () => sw('main'))),
-            g.el, h('div', { class: 'gt-legend' }, h('span', {}, h('b', {}, 'HEAD'), ' you are here'), h('span', {}, h('b', {}, 'main / feature'), ' branch labels')), o);
+          const log = s => '<pre class="ui-out">' + s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+          Lab.ui.terminal(el, {
+            panelTitle: 'git log --oneline --graph --all',
+            predict: {
+              q: 'You are on <code>feature/search</code> and run <code>git commit</code>. Which label moves to the new commit?',
+              options: ['Both <code>main</code> and <code>feature/search</code>', 'Only <code>feature/search</code>', 'Only <code>main</code>', 'Neither, only HEAD moves'],
+              a: 1,
+              why: 'A commit moves the branch HEAD points to, and only that one.',
+            },
+            frames: [
+              { panel: log('* b2f41c9 (HEAD -> main) Add home screen\n* a19e0d3 Initial commit'), say: 'Two commits on <code>main</code>. HEAD points to <code>main</code>: that is where you are.' },
+              { cmd: 'git branch feature/search', panel: log('* b2f41c9 (HEAD -> main, feature/search) Add home screen\n* a19e0d3 Initial commit'), say: 'A new label on the same commit. Nothing is copied, and HEAD did not move.' },
+              { cmd: 'git switch feature/search', out: "Switched to branch 'feature/search'", panel: log('* b2f41c9 (HEAD -> feature/search, main) Add home screen\n* a19e0d3 Initial commit'), say: 'Now HEAD points to <code>feature/search</code>. Both labels are still on the same commit.' },
+              { cmd: 'git commit -am "Add search box"', out: '[feature/search 7c10a2e] Add search box\n 1 file changed, 12 insertions(+)', panel: log('* 7c10a2e (HEAD -> feature/search) Add search box\n* b2f41c9 (main) Add home screen\n* a19e0d3 Initial commit'), say: 'Only the branch HEAD points to moves forward. <code>main</code> stays where it was.' },
+              { cmd: 'git switch main', out: "Switched to branch 'main'", panel: log('* 7c10a2e (feature/search) Add search box\n* b2f41c9 (HEAD -> main) Add home screen\n* a19e0d3 Initial commit'), say: 'Your files go back to how they are on <code>main</code>. The search box is safe on its branch.' },
+              { cmd: 'git commit -am "Fix crash on launch"', out: '[main e45d8b1] Fix crash on launch\n 1 file changed, 2 insertions(+), 1 deletion(-)', panel: log('* e45d8b1 (HEAD -> main) Fix crash on launch\n| * 7c10a2e (feature/search) Add search box\n|/\n* b2f41c9 Add home screen\n* a19e0d3 Initial commit'), say: 'History forks. Each branch has its own new commit, and both share <code>b2f41c9</code>. Merging joins them again.' },
+            ],
+          });
         },
         code: `git branch                       # list branches, * marks the current one
 git switch -c feature/search     # create and switch in one step
@@ -862,31 +874,31 @@ git commit -am "Add search bar"`, why: '<code>git branch</code> only creates the
         body: `
 <p>To bring work from <code>feature</code> into <code>main</code>, switch to main and run <code>git merge feature</code>. If main has not moved since feature started, Git just slides the <code>main</code> label forward. This is a <em>fast-forward</em>: no new commit is needed.</p>
 <p>If both branches have new commits, Git makes a <em>merge commit</em> with two parents. It combines the changes from both sides since the commit where they split (the <em>merge base</em>). Most of the time this is automatic.</p>
-<p>When both sides changed the same lines of the same file, Git cannot pick for you. It stops with a <em>conflict</em> and writes both versions into the file between markers. You edit the file to the right result, delete the markers, <code>git add</code> it, and <code>git commit</code> to finish. Try both kinds of merge below.</p>`,
+<p>When both sides changed the same lines of the same file, Git cannot pick for you. It stops with a <em>conflict</em> and writes both versions into the file between markers. You edit the file to the right result, delete the markers, <code>git add</code> it, and <code>git commit</code> to finish. Step through both kinds of merge below.</p>`,
         visual(el) {
-          const g = graph({ lanes: 2, title: 'Merging feature into main' });
-          const o = out('');
-          let cs, br, mode, done;
-          const draw = () => g.set({ commits: cs, refs: Object.entries(br).map(([name, at]) => ({ name, at })), head: 'main', auto: br.main });
-          function scen(m) {
-            mode = m; done = false;
-            cs = m === 'ff'
-              ? [{ id: 'A', p: [] }, { id: 'B', p: ['A'] }, { id: 'C', p: ['B'] }, { id: 'D', p: ['C'] }]
-              : [{ id: 'A', p: [] }, { id: 'B', p: ['A'] }, { id: 'C', p: ['B'] }, { id: 'D', p: ['B'] }, { id: 'E', p: ['D'] }];
-            br = m === 'ff' ? { main: 'B', feature: 'D' } : { main: 'C', feature: 'E' };
-            press(sb, sb[m === 'ff' ? 0 : 1]);
-            draw();
-            say(o, m === 'ff' ? 'main has not moved since feature started at B. feature is simply ahead.' : 'Both sides moved: main has C, feature has D and E. They split at B.');
-          }
-          function merge() {
-            if (done) { say(o, 'Already up to date.'); return; }
-            done = true;
-            if (mode === 'ff') { br.main = 'D'; draw(); say(o, 'Updating B..D\n<span class="good">Fast-forward</span>\n<span class="muted">No new commit. The main label slid forward to D.</span>'); }
-            else { cs.push({ id: 'M', p: ['C', 'E'] }); br.main = 'M'; draw(); say(o, "Merge made by the 'ort' strategy.\n<span class=\"muted\">New merge commit M has two parents: C (main) and E (feature).</span>"); }
-          }
-          const sb = [act('scenario: fast-forward', () => scen('ff')), act('scenario: both moved', () => scen('3way'))];
-          scen('ff');
-          el.append(row(...sb), row(lab('on main'), act('git merge feature', merge)), g.el, o);
+          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const pane = (t, s) => `<p class="gtk-h">${t}</p><pre class="ui-out">${esc(s)}</pre>`;
+          const log = s => pane('git log --oneline --graph --all', s);
+          const file = s => pane('app/src/main/res/values/strings.xml', s);
+          const path = 'app/src/main/res/values/strings.xml';
+          Lab.ui.terminal(el, {
+            predict: {
+              q: 'Both <code>main</code> and <code>feature/title</code> changed the same line of <code>strings.xml</code>. What does <code>git merge feature/title</code> do?',
+              options: ['Keeps the newer change', 'Stops with a conflict and writes both versions into the file', 'Keeps main’s version, since you are on main'],
+              a: 1,
+              why: 'Git combines changes line by line from the merge base. When both sides changed the same lines, it cannot choose, so it marks the spot and waits for you.',
+            },
+            frames: [
+              { panel: log('* 9d2c4a1 (feature/search) Add search results\n* 5f1b7e3 Add search box\n* b2f41c9 (HEAD -> main) Add home screen\n* a19e0d3 Initial commit'), say: 'You are on <code>main</code>. It has not moved since <code>feature/search</code> started.' },
+              { cmd: 'git merge feature/search', out: 'Updating b2f41c9..9d2c4a1\nFast-forward\n .../example/news/SearchBar.kt | 40 ++++++++++++++++++++\n 1 file changed, 40 insertions(+)', panel: log('* 9d2c4a1 (HEAD -> main, feature/search) Add search results\n* 5f1b7e3 Add search box\n* b2f41c9 Add home screen\n* a19e0d3 Initial commit'), say: 'Fast-forward: Git slides the <code>main</code> label up to the feature’s tip. No new commit.' },
+              { clear: true, panel: log('* e45d8b1 (HEAD -> main) Rename app\n| * 7c10a2e (feature/title) Change title text\n|/\n* b2f41c9 Add home screen'), say: 'A new case. Both branches have a commit since they split at <code>b2f41c9</code>, and both edited the app name.' },
+              { cmd: 'git merge feature/title', out: `Auto-merging ${path}\nCONFLICT (content): Merge conflict in ${path}\nAutomatic merge failed; fix conflicts and then commit the result.`, panel: file('<<<<<<< HEAD\n<string name="app_name">Daily News</string>\n=======\n<string name="app_name">News Today</string>\n>>>>>>> feature/title'), say: 'Git merged what it could and stopped. Your side is above <code>=======</code>, theirs below.' },
+              { cmd: 'git status', out: `On branch main\nYou have unmerged paths.\n\nUnmerged paths:\n\tboth modified:   ${path}`, say: '<code>git status</code> lists every file that still needs you.' },
+              { panel: file('<string name="app_name">News Today</string>'), say: 'Edit the file to the result you want and delete all three marker lines.' },
+              { cmd: `git add ${path}`, out: '', say: '<code>git add</code> marks the conflict as resolved.' },
+              { cmd: 'git commit --no-edit', out: "[main 3a7f0c2] Merge branch 'feature/title'", panel: log("*   3a7f0c2 (HEAD -> main) Merge branch 'feature/title'\n|\\\n| * 7c10a2e (feature/title) Change title text\n* | e45d8b1 Rename app\n|/\n* b2f41c9 Add home screen"), say: 'The merge commit has two parents and joins both lines of history.' },
+            ],
+          });
         },
         code: `git switch main
 git pull                         # get the latest main first (lesson 7)
@@ -986,36 +998,27 @@ git commit`, why: '<code>git add</code> marks a file resolved without looking in
         body: `
 <p>Your feature branch started at B, and main has moved on to C. You can bring main's work in two ways. <code>git merge main</code> adds a merge commit that joins both lines. <code>git rebase main</code> takes your commits D and E, and replays them one by one on top of C, as if you had started there.</p>
 <p>The result of a rebase is a straight history, but the replayed commits are <em>new commits</em> (D′, E′) with new ids. The old D and E are left behind. That is fine for commits only you have. It is a problem for commits others already pulled: their copies still point at the old ones.</p>
-<p>The golden rule: <strong>do not rebase commits that exist outside your repository and that people may have based work on.</strong> Rebase your own feature branch to tidy it up; never rebase main. Compare both below.</p>`,
+<p>The golden rule: <strong>do not rebase commits that exist outside your repository and that people may have based work on.</strong> Rebase your own feature branch to tidy it up; never rebase main. The demo below does both, on the same branch.</p>`,
         visual(el) {
-          const g = graph({ lanes: 3, title: 'Merge versus rebase' });
-          const o = out('');
-          let cs, br, done;
-          const draw = () => g.set({ commits: cs, refs: Object.entries(br).map(([name, at]) => ({ name, at })), head: 'feature' });
-          function reset() {
-            cs = [{ id: 'A', p: [] }, { id: 'B', p: ['A'] }, { id: 'C', p: ['B'] }, { id: 'D', p: ['B'], lane: 1 }, { id: 'E', p: ['D'], lane: 1 }];
-            br = { main: 'C', feature: 'E' }; done = false; draw();
-            say(o, 'You are on feature (D, E). main moved on to C. Bring main in.');
-          }
-          function merge() {
-            if (done) { say(o, 'Press "start over" to compare the other way.'); return; }
-            done = true;
-            cs.push({ id: 'M', p: ['E', 'C'], lane: 1 }); br.feature = 'M'; draw();
-            say(o, '<span class="good">Merge commit M joins both lines.</span>\n<span class="muted">D and E keep their ids. History shows the real shape: a fork and a join. Safe on shared branches.</span>');
-          }
-          async function rebase() {
-            if (done) { say(o, 'Press "start over" to compare the other way.'); return; }
-            done = true;
-            say(o, 'Rewinding feature, then replaying D and E on top of C…');
-            cs = cs.map(c => (c.id === 'D' || c.id === 'E' ? { ...c, lane: 2, ghost: true } : c)); draw();
-            await sleep(500); if (!el.isConnected) return;
-            cs.push({ id: "D'", p: ['C'], lane: 1, col: 5 }); br.feature = "D'"; draw();
-            await sleep(500); if (!el.isConnected) return;
-            cs.push({ id: "E'", p: ["D'"], lane: 1, col: 6 }); br.feature = "E'"; draw();
-            say(o, "Successfully rebased and updated refs/heads/feature.\n<span class=\"muted\">D' and E' are new commits with new ids. The old D and E (dashed) are no longer on any branch. If you had pushed them, the next push needs --force-with-lease.</span>");
-          }
-          reset();
-          el.append(row(lab('on feature'), act('git merge main', merge), act('git rebase main', rebase), act('start over', reset)), g.el, o);
+          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const log = s => `<p class="gtk-h">git log --oneline --graph --all</p><pre class="ui-out">${esc(s)}</pre>`;
+          const start = log('* c81f2d0 (main) Fix crash on launch\n| * 4e9a1b7 (HEAD -> feature/search) Add search results\n| * 2d6c3f8 Add search box\n|/\n* b2f41c9 Add home screen');
+          Lab.ui.terminal(el, {
+            predict: {
+              q: 'You run <code>git merge main</code> on <code>feature/search</code>. How many new commits does that make?',
+              options: ['None: it only moves a label', 'One merge commit, with two parents', 'Two: one per feature commit'],
+              a: 1,
+              why: 'Both lines have commits the other lacks, so a fast-forward is impossible. Git records the join as one merge commit.',
+            },
+            frames: [
+              { panel: start, say: 'Your branch started at <code>b2f41c9</code>. Since then <code>main</code> got a crash fix. Bring it in, first with a merge.' },
+              { cmd: 'git merge main --no-edit', out: "Merge made by the 'ort' strategy.\n .../example/news/MainActivity.kt | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)", panel: log("*   f3e8d21 (HEAD -> feature/search) Merge branch 'main' into feature/search\n|\\\n| * c81f2d0 (main) Fix crash on launch\n* | 4e9a1b7 Add search results\n* | 2d6c3f8 Add search box\n|/\n* b2f41c9 Add home screen"), say: 'A merge commit joins both lines. Nothing is rewritten, so it is always safe.' },
+              { cmd: 'git reset --hard ORIG_HEAD', out: 'HEAD is now at 4e9a1b7 Add search results', panel: start, say: 'Undo that merge (it was never pushed) and try the other way.' },
+              { cmd: 'git rebase main', out: 'Successfully rebased and updated refs/heads/feature/search.', panel: log('* 9b0e5a4 (HEAD -> feature/search) Add search results\n* 6a3d7c1 Add search box\n* c81f2d0 (main) Fix crash on launch\n* b2f41c9 Add home screen'), say: 'Rebase replays your two commits on top of <code>c81f2d0</code>. A straight line, but look at the ids: these are new commits.' },
+              { cmd: 'git push', out: "To github.com:sam/news-app.git\n ! [rejected]        feature/search -> feature/search (non-fast-forward)\nerror: failed to push some refs to 'github.com:sam/news-app.git'", say: 'You had pushed the old <code>4e9a1b7</code> before. GitHub’s branch is not an ancestor of the new one, so a plain push is refused.' },
+              { cmd: 'git push --force-with-lease', out: 'To github.com:sam/news-app.git\n + 4e9a1b7...9b0e5a4 feature/search -> feature/search (forced update)', say: 'Fine for your own feature branch. On a branch others build on, like <code>main</code>, this would pull the ground from under them.' },
+            ],
+          });
         },
         code: `# bring the latest main into your own feature branch
 git switch feature/search
@@ -1120,61 +1123,31 @@ git push`, why: 'Everyone else’s main still has the old commits. After your fo
         body: `
 <p>A <em>remote</em> is another copy of the repository, usually on GitHub. <code>git clone</code> downloads a full copy, history included, and names the source <code>origin</code>. Git also keeps <em>remote-tracking branches</em> like <code>origin/main</code>: your last known position of main on GitHub. They only update when you talk to the server.</p>
 <p><code>git fetch</code> downloads new commits and moves <code>origin/main</code>, but leaves your own <code>main</code> and your files alone. <code>git pull</code> is fetch plus merge into your current branch. <code>git push</code> uploads your commits and moves the branch on GitHub.</p>
-<p>A push is rejected if GitHub has commits you do not have yet, so Git never overwrites a teammate's work silently. Pull first, then push. Play both sides below: let a teammate push, then try to push your own commit.</p>`,
+<p>A push is rejected if GitHub has commits you do not have yet, so Git never overwrites a teammate's work silently. Pull first, then push. Below, a teammate pushes first, then you try to push your own commit.</p>`,
         visual(el) {
-          const gR = graph({ lanes: 2, top: 40, title: 'GitHub copy' }), gL = graph({ lanes: 2, top: 84, title: 'Your laptop' });
-          const o = out('');
-          let all, R, L, t, y, m;
-          const C = (id, p) => (all[id] = { id, p });
-          function reset() {
-            all = {}; C('A', []); C('B', ['A']);
-            R = { ids: ['A', 'B'], main: 'B' }; L = { ids: ['A', 'B'], main: 'B', om: 'B' }; t = y = m = 0;
-            draw(); say(o, 'Cloned: both copies have A and B. origin/main is your memory of GitHub’s main.');
-          }
-          function draw() {
-            gR.set({ commits: R.ids.map(id => all[id]), refs: [{ name: 'main', at: R.main }], head: null, auto: R.main });
-            gL.set({ commits: L.ids.map(id => all[id]), refs: [{ name: 'main', at: L.main }, { name: 'origin/main', at: L.om, remote: true }], head: 'main', auto: L.main });
-          }
-          const full = () => L.ids.length >= 9 || R.ids.length >= 9;
-          function teammate() {
-            if (full()) { say(o, 'Enough commits for this demo. Press Reset.'); return; }
-            const id = 'T' + (++t); C(id, [R.main]); R.ids.push(id); R.main = id; draw();
-            say(o, `A teammate pushed ${id} to GitHub. Your laptop does not know yet: origin/main still says ${L.om}.`);
-          }
-          function fetch(quiet) {
-            const add = R.ids.filter(id => !L.ids.includes(id));
-            L.ids.push(...add); const before = L.om; L.om = R.main; draw();
-            if (!quiet) say(o, add.length ? `From github.com:sam/news-app\n   ${before}..${L.om}  main -> origin/main\n<span class="muted">Downloaded ${add.join(', ')}. origin/main moved. Your main and your files did not change.</span>` : '<span class="muted">Nothing new on GitHub.</span>');
-            return add;
-          }
-          function commit() {
-            if (full()) { say(o, 'Enough commits for this demo. Press Reset.'); return; }
-            const id = 'Y' + (++y); C(id, [L.main]); L.ids.push(id); L.main = id; draw();
-            say(o, `[main ${id}] Your commit. Only your laptop has it until you push.`);
-          }
-          function pull() {
-            const add = fetch(true);
-            if (isAnc(all, L.om, L.main)) { say(o, add.length ? 'Fetched, and your main already contains it.' : 'Already up to date.'); return; }
-            if (isAnc(all, L.main, L.om)) { L.main = L.om; draw(); say(o, `Fetched ${add.join(', ') || 'nothing new'}, then <span class="good">fast-forward</span>: main slid to ${L.om}.`); return; }
-            const id = 'M' + (++m); C(id, [L.main, L.om]); L.ids.push(id); L.main = id; draw();
-            say(o, `Fetched, then merged origin/main into main: merge commit ${id}.\n<span class="muted">Now your main contains both your work and your teammate's. Push it.</span>`);
-          }
-          function push() {
-            if (L.main === R.main) { say(o, 'Everything up-to-date'); return; }
-            if (!isAnc(all, R.main, L.main)) {
-              say(o, `<span class="bad"> ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:sam/news-app.git'</span>\n<span class="muted">GitHub has commits you do not have. Pull first, then push.</span>`);
-              return;
-            }
-            const add = L.ids.filter(id => !R.ids.includes(id) && isAnc(all, id, L.main));
-            R.ids.push(...add); const before = R.main; R.main = L.main; L.om = L.main; draw();
-            say(o, `To github.com:sam/news-app.git\n   ${before}..${R.main}  main -> main\n<span class="muted">Uploaded ${add.join(', ')}. GitHub's main and your origin/main moved.</span>`);
-          }
-          reset();
-          el.append(
-            row(lab('teammate'), act('push T to GitHub', teammate)),
-            h('div', { class: 'gt-place' }, lab('GitHub (origin)'), gR.el),
-            row(lab('you'), act('git commit', commit), act('git fetch', () => fetch(false)), act('git pull', pull), act('git push', push), act('reset', reset)),
-            h('div', { class: 'gt-place' }, lab('your laptop'), gL.el), o);
+          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const two = (gh, me) => `<p class="gtk-h">GitHub (origin)</p><pre class="ui-out">${esc(gh)}</pre><p class="gtk-h">Your laptop</p><pre class="ui-out">${esc(me)}</pre>`;
+          const GH1 = '* b2f41c9 (main) Add home screen', GH2 = '* 7d3e9f0 (main) Add dark theme\n* b2f41c9 Add home screen';
+          const R = 'github.com:sam/news-app';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Two copies of the repository',
+            predict: {
+              q: 'A teammate pushes a new commit to GitHub. Before you run any command, where does <code>origin/main</code> on your laptop point?',
+              options: ['Still at the old commit', 'At the teammate’s new commit', 'Nowhere: it is removed until you fetch'],
+              a: 0,
+              why: '<code>origin/main</code> is your last known position of GitHub’s main. Git only updates it when it talks to the server, with fetch, pull or push.',
+            },
+            frames: [
+              { panel: two(GH1, '* b2f41c9 (HEAD -> main, origin/main) Add home screen'), say: 'You cloned the repository. Both copies have the same commits, and <code>origin/main</code> marks where GitHub’s main was.' },
+              { panel: two(GH2, '* b2f41c9 (HEAD -> main, origin/main) Add home screen'), say: 'A teammate pushes <code>7d3e9f0</code>. Only GitHub has it.' },
+              { cmd: 'git status', out: "On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean", say: '“Up to date” compares with your last known <code>origin/main</code>, not with GitHub right now.' },
+              { cmd: 'git commit -am "Fix typo in title"', out: '[main 1c4b8a2] Fix typo in title\n 1 file changed, 1 insertion(+), 1 deletion(-)', panel: two(GH2, '* 1c4b8a2 (HEAD -> main) Fix typo in title\n* b2f41c9 (origin/main) Add home screen'), say: 'You commit locally. Now both copies have a commit the other lacks.' },
+              { cmd: 'git push', out: `To ${R}.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to '${R}.git'`, say: 'Rejected. GitHub has work you do not have, and Git never overwrites it silently.' },
+              { cmd: 'git fetch', out: `From ${R}\n   b2f41c9..7d3e9f0  main       -> origin/main`, panel: two(GH2, '* 1c4b8a2 (HEAD -> main) Fix typo in title\n| * 7d3e9f0 (origin/main) Add dark theme\n|/\n* b2f41c9 Add home screen'), say: '<code>fetch</code> downloads the commit and moves <code>origin/main</code>. Your <code>main</code> and your files are untouched.' },
+              { cmd: 'git pull --no-rebase', out: "Merge made by the 'ort' strategy.\n app/src/main/res/values/themes.xml | 12 ++++++++++++\n 1 file changed, 12 insertions(+)", panel: two(GH2, "*   5e2a9c3 (HEAD -> main) Merge branch 'main' of " + R + "\n|\\\n| * 7d3e9f0 (origin/main) Add dark theme\n* | 1c4b8a2 Fix typo in title\n|/\n* b2f41c9 Add home screen"), say: '<code>pull</code> is fetch plus merge. <code>--no-rebase</code> picks merge. Set <code>pull.rebase</code> once in your config and plain <code>git pull</code> works.' },
+              { cmd: 'git push', out: `To ${R}.git\n   7d3e9f0..5e2a9c3  main -> main`, panel: two("*   5e2a9c3 (main) Merge branch 'main' of " + R + "\n|\\\n| * 7d3e9f0 Add dark theme\n* | 1c4b8a2 Fix typo in title\n|/\n* b2f41c9 Add home screen", "*   5e2a9c3 (HEAD -> main, origin/main) Merge branch 'main' of " + R + "\n|\\\n| * 7d3e9f0 Add dark theme\n* | 1c4b8a2 Fix typo in title\n|/\n* b2f41c9 Add home screen"), say: 'Now GitHub already has everything below your commit, so the push is accepted and both copies match.' },
+            ],
+          });
         },
         code: `git clone git@github.com:sam/news-app.git   # SSH
 git clone https://github.com/sam/news-app.git   # or HTTPS
@@ -1263,6 +1236,12 @@ git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <c
 <p>On a team, nobody pushes straight to <code>main</code>. You work on a branch, push it, and open a <em>pull request</em> (PR) on GitHub: a page that asks to merge your branch into main. It shows the diff, a description, and a place for discussion.</p>
 <p>Two checks guard the merge. <em>CI</em> (for example GitHub Actions) builds the app and runs tests on every push, and reports status checks on the PR. A <em>reviewer</em> reads the diff and leaves a comment, approves, or requests changes. Repositories can require both before the merge button works. To address feedback, push more commits to the same branch; the PR updates itself.</p>
 <p>Keep PRs small: one fix or one feature slice. A 200-line PR gets a careful review; a 2,000-line PR gets a skim. Walk a PR through the flow below. The first CI run has a failing test.</p>`,
+        predict: {
+          q: 'The CI check on your PR fails. You fix the code and push a new commit to the same branch. What happens to the PR?',
+          options: ['You have to open a new PR', 'It picks up the commit and the checks run again', 'Nothing until a reviewer reruns it'],
+          a: 1,
+          why: 'A PR shows a branch, not a fixed set of commits. Every push to that branch updates it and triggers the checks.',
+        },
         visual(el) {
           const STEPS = ['branch', 'push', 'PR open', 'checks', 'review', 'merged'];
           const pipe = h('div', { class: 'gt-pipe' });
@@ -1425,6 +1404,12 @@ git push -u origin fix/quick-fix
 <p>Pick the tool by what you want to undo. To throw away edits to a file, <code>git restore</code> copies it back from the staging area; <code>git restore --staged</code> unstages it. To undo commits that are only on your machine, <code>git reset</code> moves your branch back to an older commit.</p>
 <p><code>reset</code> has three strengths. <code>--soft</code> only moves the branch: the undone changes stay staged. <code>--mixed</code> (the default) also resets the staging area: the changes stay in your files, unstaged. <code>--hard</code> also overwrites your files. It is the only one that destroys uncommitted work.</p>
 <p>For commits already pushed, use <code>git revert</code>: it adds a new commit that does the opposite, so nobody's history is rewritten. And if you lose a commit, <code>git reflog</code> lists everywhere HEAD has been, so you can go back. Try each below. Your working file has an unsaved edit, v4.</p>`,
+        predict: {
+          q: 'You run <code>git revert</code> on the last commit. What happens to the history?',
+          options: ['That commit is deleted', 'A new commit is added that undoes its changes', 'The branch moves back one commit'],
+          a: 1,
+          why: 'Revert never rewrites history. It records the opposite change as a new commit, which is why it is safe on shared branches.',
+        },
         visual(el) {
           const g = graph({ lanes: 1, top: 56, title: 'History with HEAD' });
           const vH = h('span', { class: 'gt-ver' }), vI = h('span', { class: 'gt-ver' }), vW = h('span', { class: 'gt-ver' }), vX = h('span', { class: 'gt-ver gt-lost', hidden: true }, 'v4');

@@ -355,6 +355,39 @@ public final class AppClock {
               act('Run testSyncIsTracked', () => test('testSyncIsTracked', 'sync'))),
             o);
         },
+        predict: {
+          q: 'Analytics is a global <code>object</code>. The app tracks “open”, then a test checks that only “sync” was tracked. What does the test see?',
+          options: ['Only sync: each test gets a fresh object', 'open and sync: state left over in the one shared instance', 'Nothing: objects reset between calls'],
+          a: 1,
+          why: 'An <code>object</code> has one instance per process, shared by app code and every test. Events recorded earlier are still in it.',
+        },
+        play: `object AppClock {
+    init { println("AppClock created") }
+    fun now() = System.currentTimeMillis()
+}
+
+class Feed {
+    val formatter by lazy { println("formatter built"); "d MMM" }
+}
+
+interface Analytics { val events: List<String>; fun track(e: String) }
+class RecordingAnalytics : Analytics {
+    override val events = mutableListOf<String>()
+    override fun track(e: String) { events += e }
+}
+
+fun main() {
+    println("main starts")
+    AppClock.now(); AppClock.now()          // created once, on first use
+    val feed = Feed()
+    println(feed.formatter); println(feed.formatter)
+    val app = RecordingAnalytics()          // the one instance the app shares
+    app.track("open")
+    val testFake = RecordingAnalytics()     // a test builds its own
+    testFake.track("sync")
+    println("app \${app.events}, test \${testFake.events}")
+    // Change testFake to \`= app\`, like a global object, and run again
+}`,
       },
 
       // 2 ─────────────────────────────────────────────
@@ -672,6 +705,37 @@ data class Temperature private constructor(val celsius: Double) {
               cmd('Logger(debug = false)', () => { swap(impl, 'NoOpLogger'); }),
               impl));
         },
+        predict: {
+          q: 'The user presses back, then opens the detail screen again. Does your factory run?',
+          options: ['No, the old ViewModel comes back', 'Yes: leaving cleared the ViewModelStore, so a new ViewModel is needed', 'Only if the app process was killed'],
+          a: 1,
+          why: 'Leaving a screen for good calls <code>onCleared()</code> and empties its store. The next visit finds nothing there, so Android asks your factory for a new one.',
+        },
+        play: `interface Logger {
+    fun log(msg: String)
+    companion object {
+        // Looks like a constructor, returns whichever implementation fits
+        operator fun invoke(debug: Boolean): Logger = if (debug) ConsoleLogger() else NoOpLogger
+    }
+}
+private class ConsoleLogger : Logger { override fun log(msg: String) = println("log: $msg") }
+private object NoOpLogger : Logger { override fun log(msg: String) {} }
+
+class Temperature private constructor(val celsius: Double) {
+    companion object {
+        fun of(text: String): Temperature =
+            if (text.endsWith("F")) Temperature((text.dropLast(1).toDouble() - 32) * 5 / 9)
+            else Temperature(text.removeSuffix("C").toDouble())
+    }
+}
+
+fun main() {
+    val logger = Logger(debug = true)
+    logger.log("using \${logger::class.simpleName}")
+    for (t in listOf("21C", "70F", "100C")) logger.log("$t = \${"%.1f".format(Temperature.of(t).celsius)} C")
+    println("done")
+    // Change debug = true to false: the logs stop, and no caller changed
+}`,
       },
 
       // 3 ─────────────────────────────────────────────
@@ -962,6 +1026,33 @@ val n = Notice(article.summary, article.title)   // swapped, still compiles`,
             h('div', { class: 'controls' }, cmd('notificationManager.notify(1, notification)', post)),
             o);
         },
+        predict: {
+          q: 'You turn off the title and text setters but keep <code>setSmallIcon</code>, then post the notification. What happens?',
+          options: ['<code>IllegalArgumentException</code>', 'It posts, with no title or text', 'It does not compile'],
+          a: 1,
+          why: 'The builder accepts any mix of setters. The one part the system insists on is a valid small icon, and it checks that only when the notification is posted.',
+        },
+        play: `data class Request(
+    val url: String,                      // required
+    val method: String = "GET",
+    val timeoutMs: Long = 10_000,
+    val headers: Map<String, String> = emptyMap(),
+)
+
+class Paint { var color = "black"; var strokeWidth = 1f }
+
+fun main() {
+    val feed = Request(url = "https://api.example.com/feed", timeoutMs = 3_000)
+    val post = feed.copy(method = "POST", headers = mapOf("Auth" to "token"))
+    println(feed)
+    println(post)
+    val paint = Paint().apply {           // configure, then get the object back
+        color = "red"
+        strokeWidth = 4f
+    }
+    println("paint \${paint.color} \${paint.strokeWidth}")
+    // Delete \`url = ...,\` from feed: the compiler stops you before anything runs
+}`,
       },
 
       // 4 ─────────────────────────────────────────────
@@ -973,7 +1064,7 @@ val n = Notice(article.summary, article.title)   // swapped, still compiles`,
         body: `
 <p>The observer pattern has one subject and many subscribers. When the subject changes, it notifies each subscriber. The classic form is a listener interface with <code>addListener</code> and <code>removeListener</code>.</p>
 <p>Listeners have a sharp edge on Android. If a destroyed Activity forgets to unregister, the subject still holds it. The Activity can’t be garbage collected, and it keeps receiving updates for a screen nobody sees.</p>
-<p>Modern Kotlin exposes a <code>StateFlow</code> instead and collects it with <code>repeatOnLifecycle</code> or <code>collectAsStateWithLifecycle</code>. The lifecycle cancels the collector for you, and a new collector gets the current value right away. Rotate the screen in both modes below.</p>`,
+<p>Modern Kotlin exposes a <code>StateFlow</code> instead and collects it with <code>repeatOnLifecycle</code> or <code>collectAsStateWithLifecycle</code>. The lifecycle cancels the collector for you, and a new collector gets the current value right away. Step through a rotation below and watch what the subject still holds.</p>`,
         code: `// Classic observer: you must remember to unregister
 interface CartListener { fun onCountChanged(count: Int) }
 
@@ -1183,76 +1274,58 @@ state.value = 1        // equal: ignored
           { title: 'Using the deprecated launchWhenStarted', bad: 'lifecycleScope.launchWhenStarted {\n    vm.location.collect { map.moveTo(it) }\n}', good: 'lifecycleScope.launch {\n    repeatOnLifecycle(Lifecycle.State.STARTED) {\n        vm.location.collect { map.moveTo(it) }\n    }\n}', why: '<code>launchWhenStarted</code> only pauses the collector in the background, so the upstream keeps producing. <code>repeatOnLifecycle</code> cancels it and starts again later.' },
         ],
         visual(el) {
-          let count = 0, flow = true, gen = 1, busy = false, leaked = 0;
-          const src = h('div', { class: 'pt-slot' }, h('span', { class: 'chip total' }, '0'));
-          const subject = h('div', { class: 'pt-card pt-on' }, h('span', { class: 'pt-title' }), src);
-          const list = h('div', { class: 'pt-col' });
-          const o = out('Add to the cart, then rotate.');
-          let subs = [];
-          const mkSub = (name, value, life) => {
-            const s = { name, life, ghost: false };
-            s.slot = h('div', { class: 'pt-slot' }, h('span', { class: 'chip' }, value));
-            s.status = tag(flow ? 'collecting' : 'listening', 'pt-good');
-            s.el = h('div', { class: 'pt-card' }, h('div', { class: 'pt-row' }, h('span', { class: 'pt-title' }, name), s.status), s.slot);
-            return s;
-          };
-          function reset() {
-            count = 0; gen = 1; leaked = 0;
-            subject.firstElementChild.textContent = flow ? 'cart.count: StateFlow<Int>' : 'CartManager listeners';
-            src.replaceChildren(h('span', { class: 'chip total' }, '0'));
-            subs = [mkSub('ToolbarBadge', '0', false), mkSub('CartActivity #1', '0', true)];
-            list.replaceChildren(...subs.map(s => s.el));
-          }
-          async function add() {
-            if (busy) return; busy = true;
-            count++; swap(src, String(count)); replay(subject, 'pt-flash');
-            for (const s of subs) {
-              await sleep(200);
-              if (!el.isConnected) return;
-              swap(s.slot, String(count));
-              if (s.ghost) { replay(s.el, 'shake'); }
-              else replay(s.el, 'pt-flash');
-            }
-            say(o, leaked
-              ? `count = ${count}. <span class="bad">${leaked} destroyed Activit${leaked > 1 ? 'ies' : 'y'} also got it</span> <span class="muted">// leaked, still registered</span>`
-              : `count = ${count} <span class="muted">// ${subs.length} live subscribers updated</span>`);
-            busy = false;
-          }
-          async function rotate() {
-            if (busy) return; busy = true;
-            const old = subs.find(s => s.life && !s.ghost);
-            if (flow) {
-              old.status.textContent = 'cancelled'; old.status.className = 'pt-tag';
-              old.el.classList.add('leave'); await sleep(450);
-              old.el.remove(); subs = subs.filter(s => s !== old);
-            } else {
-              old.ghost = true; leaked++;
-              old.name += ' (destroyed)'; old.el.querySelector('.pt-title').textContent = old.name;
-              old.status.textContent = 'still registered'; old.status.className = 'pt-tag pt-warn';
-              old.el.classList.add('pt-bad'); replay(old.el, 'shake');
-              await sleep(400);
-            }
-            gen++;
-            const s = mkSub(`CartActivity #${gen}`, flow ? String(count) : '-', true);
-            subs.push(s); list.append(s.el); replay(s.el, 'drop-in');
-            const ghosts = subs.filter(x => x.ghost);
-            if (ghosts.length > 2) { ghosts[0].el.remove(); subs = subs.filter(x => x !== ghosts[0]); }
-            say(o, flow
-              ? `Old collector cancelled. The new one got the current value <b>${count}</b> at once. <span class="muted">// StateFlow replays its value</span>`
-              : `<span class="bad">leak:</span> the old Activity is still in the list (${leaked} leaked). The new listener shows nothing until the next change.`);
-            busy = false;
-          }
-          const mode = toggle('pt-ob-flow', 'StateFlow + repeatOnLifecycle', true, () => {
-            if (busy) { mode.input.checked = flow; return; }
-            flow = mode.input.checked; reset(); replay(list, 'pop-soft');
-            say(o, flow ? 'Lifecycle-aware collectors. Rotate and watch the old one go away.' : 'Plain listeners that never unregister. Rotate and watch the old one stay.');
+          Lab.ui.graph(el, {
+            height: 240,
+            nodes: [
+              { id: 'cart', label: 'CartManager<small>listeners</small>', x: 50, y: 15 },
+              { id: 'a1', label: 'Activity #1', x: 17, y: 82 },
+              { id: 'a2', label: 'Activity #2', x: 83, y: 82, hidden: true },
+            ],
+            predict: {
+              q: 'After a rotation, both Activities are registered. The count changes once. How many <code>onCountChanged</code> calls happen?',
+              options: ['1, only for the visible screen', '2, one per registered listener', '0, rotation clears listeners'],
+              a: 1,
+              why: 'The subject calls every listener in its list. It has no idea which screen is still alive, so the destroyed one gets a call too.',
+            },
+            frames: [
+              { add: [['cart', 'a1', 'listener']], say: 'Activity #1 calls <code>addListener(this)</code>. The subject now holds a reference to it.' },
+              { add: [['cart', 'a1', 'count = 1', 'accent']], hl: ['a1'], say: '<code>add()</code>: the subject loops over its list and calls <code>onCountChanged(1)</code>. The badge shows 1.' },
+              { show: ['a2'], add: [['cart', 'a1', 'still held', 'err'], ['cart', 'a2', 'listener']], gone: ['a1'], say: 'Rotate. Android destroys #1 and creates #2, which registers too. #1 never called <code>removeListener</code>.' },
+              { add: [['cart', 'a1', 'count = 2', 'err'], ['cart', 'a2', 'count = 2', 'accent']], hl: ['a1', 'a2'], say: 'The next change reaches both. #1 updates a screen nobody sees, and the GC can’t free it while the subject points at it.' },
+              { remove: [['cart', 'a1']], add: [['cart', 'a2', 'listener']], say: 'The fix for listeners: <code>removeListener</code> in the matching lifecycle callback. Now nothing points at #1, so it can be collected.' },
+              { hl: ['cart', 'a2'], say: 'With a <code>StateFlow</code> collected in <code>repeatOnLifecycle</code>, the lifecycle cancels the old collector for you, and the new screen gets the current count at once.' },
+            ],
           });
-          reset();
-          el.append(
-            h('div', { class: 'pt-split' }, h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'subject'), subject), h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'subscribers'), list)),
-            h('div', { class: 'controls' }, mode, cmd('cart.add()', add), act('Rotate', rotate)),
-            o);
         },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+fun interface CartListener { fun onCountChanged(count: Int) }
+
+class CartManager {
+    private val listeners = mutableListOf<CartListener>()
+    private var count = 0
+    fun addListener(l: CartListener) { listeners += l }
+    fun removeListener(l: CartListener) { listeners -= l }
+    fun add() { count++; listeners.forEach { it.onCountChanged(count) } }
+}
+
+fun main() = runBlocking {
+    val cart = CartManager()
+    val screen1 = CartListener { println("screen 1 badge: $it") }
+    cart.addListener(screen1)
+    cart.add()
+    cart.removeListener(screen1)   // rotation: comment this out and the dead screen keeps listening
+    cart.addListener { println("screen 2 badge: $it") }
+    cart.add()
+
+    val count = MutableStateFlow(3)
+    val job = launch { count.collect { println("collector got $it") } }   // gets 3 right away
+    delay(10); count.value = 4; delay(10)
+    job.cancel()                   // what repeatOnLifecycle does when the screen stops
+    count.value = 5
+    println("done, nobody saw 5")
+}`,
       },
 
       // 5 ─────────────────────────────────────────────
@@ -1531,6 +1604,37 @@ cart += CartItem("Coffee", 450, 2)   // ignored: compares as equal`,
             h('div', { class: 'controls' }, h('span', { class: 'pt-label' }, 'order'), sBtns),
             o);
         },
+        predict: {
+          q: 'You swap <code>byName</code> for <code>byPriceDesc</code> in <code>cart.sortedWith(...)</code>. What changes?',
+          options: ['The sort algorithm', 'Only the rule for which of two items goes first', 'The items in the cart'],
+          a: 1,
+          why: '<code>sortedWith</code> keeps one sorting algorithm and asks the Comparator about two items at a time. The Comparator is the swappable strategy.',
+        },
+        play: `data class CartItem(val name: String, val priceCents: Long, val qty: Int)
+typealias Pricing = (List<CartItem>) -> Long
+
+val List<CartItem>.subtotal: Long get() = sumOf { it.priceCents * it.qty }
+val regular: Pricing = { it.subtotal }
+val sale20: Pricing = { it.subtotal * 80 / 100 }
+val threeForTwo: Pricing = { items ->
+    val units = items.flatMap { item -> List(item.qty) { item.priceCents } }
+    if (units.size >= 3) units.sum() - units.min() else units.sum()
+}
+
+class Checkout(var pricing: Pricing = regular) {
+    fun total(items: List<CartItem>) = pricing(items)
+}
+
+fun main() {
+    val cart = listOf(CartItem("Coffee", 450, 2), CartItem("Mug", 1200, 1))
+    val checkout = Checkout()
+    for ((name, p) in listOf("regular" to regular, "sale20" to sale20, "3 for 2" to threeForTwo)) {
+        checkout.pricing = p
+        println("$name: \${checkout.total(cart)} cents")
+    }
+    println(cart.sortedWith(compareByDescending { it.priceCents }).map { it.name })
+    // Write your own Pricing lambda and add it to the list. Checkout does not change.
+}`,
       },
 
       // 6 ─────────────────────────────────────────────
@@ -1904,6 +2008,35 @@ adapter.submitList(newItems)`,
               act('API renames a field', rename)),
             o);
         },
+        predict: {
+          q: 'The server sends one new article and you submit the new list. What does <code>ListAdapter</code> do to the rows already on screen?',
+          options: ['Rebinds all of them', 'Leaves them alone and inserts only the new row', 'Nothing changes until you call <code>notifyDataSetChanged()</code>'],
+          a: 1,
+          why: 'DiffUtil compares the old and new lists by id and content. Unchanged rows are left alone, and only the difference is applied.',
+        },
+        play: `import java.time.Instant
+
+// Server shape: you don't own it
+data class ArticleDto(val id: Long, val headline: String, val published_at: Long, val image_url: String? = null)
+// App shape: you do
+data class Article(val id: Long, val title: String, val published: Instant, val image: String?)
+
+fun ArticleDto.toDomain() = Article(
+    id = id,
+    title = headline.trim(),
+    published = Instant.ofEpochSecond(published_at),
+    image = image_url,
+)
+
+fun main() {
+    val fromServer = listOf(
+        ArticleDto(101, "  Rain expected all weekend ", 1792310400),
+        ArticleDto(102, "Ferry times change on Monday", 1792224000, "https://img.example.com/102.jpg"),
+    )
+    val articles = fromServer.map { it.toDomain() }
+    articles.forEach { println("\${it.id} [\${it.title}] \${it.published} image=\${it.image}") }
+    // Rename headline to title in ArticleDto: only the DTO and toDomain() need edits
+}`,
       },
 
       // 7 ─────────────────────────────────────────────
@@ -1915,7 +2048,7 @@ adapter.submitList(newItems)`,
         body: `
 <p>A decorator implements the same interface as the object it wraps. It does a little extra work, such as caching, logging or retrying, and passes the call on to the inner object. Callers can’t tell the difference, so you stack wrappers like layers.</p>
 <p>Kotlin makes this short with class delegation. <code>class LoggingRepo(inner: Repo) : Repo by inner</code> forwards every member to <code>inner</code>, and you override only the one you decorate.</p>
-<p>OkHttp interceptors are the same idea as a chain: each one can change the request, call <code>chain.proceed()</code> to pass it on, and inspect the response on the way back. Toggle the layers below and call the repository twice.</p>`,
+<p>OkHttp interceptors are the same idea as a chain: each one can change the request, call <code>chain.proceed()</code> to pass it on, and inspect the response on the way back. Follow two calls for the same user through the layers below.</p>`,
         code: `interface UserRepository { suspend fun user(id: Long): User }
 
 class NetworkUserRepository(private val api: UserApi) : UserRepository {
@@ -2201,69 +2334,61 @@ class LoggingUserRepository(inner: UserRepository) : UserRepository {
           },
         ],
         visual(el) {
-          const users = { 42: 'Ada', 7: 'Linus' };
-          const cache = new Map();
-          let busy = false;
-          const layer = (title, sub) => {
-            const c = h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, title), h('span', { class: 'pt-label' }, sub));
-            c.note = tag('idle'); c.append(c.note);
-            return c;
-          };
-          const L = { vm: layer('ViewModel', 'caller'), log: layer('Logging', 'times each call'), cache: layer('Caching', 'Map<Long, User>'), net: layer('Network', 'GET /users/{id}') };
-          const expr = h('div', { class: 'kt' });
-          const o = out('Call the repository. Call it again with the same id.');
-          const logT = toggle('pt-dec-log', 'Logging', true, () => paint());
-          const cacheT = toggle('pt-dec-cache', 'Caching', true, () => { if (!cacheT.input.checked) cache.clear(); paint(); });
-          function paint() {
-            if (busy) { logT.input.checked = !L.log.classList.contains('pt-dim'); cacheT.input.checked = !L.cache.classList.contains('pt-dim'); return; }
-            const lg = logT.input.checked, ch = cacheT.input.checked;
-            L.log.classList.toggle('pt-dim', !lg); L.cache.classList.toggle('pt-dim', !ch);
-            let e = 'NetworkUserRepository(api)';
-            if (ch) e = `CachingUserRepository(${e})`;
-            if (lg) e = `LoggingUserRepository(${e})`;
-            expr.innerHTML = hl(`val repo: UserRepository =\n    ${e}`); replay(expr, 'pop-soft');
-            L.cache.note.textContent = ch ? `${cache.size} cached` : 'off';
-          }
-          const mark = (c, cls, text, kind = '') => {
-            c.classList.remove('pt-on', 'pt-ok', 'pt-bad'); if (cls) c.classList.add(cls);
-            c.note.textContent = text; c.note.className = `pt-tag ${kind}`;
-          };
-          async function call(id) {
-            if (busy) return; busy = true;
-            const lg = logT.input.checked, ch = cacheT.input.checked;
-            const path = [L.vm, lg && L.log, ch && L.cache, L.net].filter(Boolean);
-            Object.values(L).forEach(c => { c.classList.remove('pt-on', 'pt-ok', 'pt-bad'); c.note.className = 'pt-tag'; c.note.textContent = c === L.cache && ch ? `${cache.size} cached` : c === L.cache ? 'off' : 'idle'; });
-            const t0 = performance.now();
-            let stopAt = path.length - 1;
-            for (let i = 0; i < path.length; i++) {
-              const c = path[i];
-              if (c === L.cache && cache.has(id)) { mark(c, 'pt-ok', 'hit', 'pt-good'); replay(c, 'pop'); stopAt = i; break; }
-              mark(c, 'pt-on', c === L.net ? 'waiting…' : c === L.cache ? 'miss' : 'passing on', c === L.cache ? 'pt-warn' : 'pt-acc');
-              replay(c, 'pt-flash');
-              await sleep(c === L.net ? 750 : 320);
-              if (!el.isConnected) return;
-            }
-            if (stopAt === path.length - 1) { mark(L.net, 'pt-ok', '200 OK', 'pt-good'); if (ch) cache.set(id, users[id]); }
-            for (let i = stopAt - 1; i >= 0; i--) {
-              await sleep(200);
-              if (!el.isConnected) return;
-              const c = path[i];
-              mark(c, 'pt-ok', c === L.cache ? `stored · ${cache.size} cached` : c === L.log ? 'logged' : 'got User', 'pt-good');
-            }
-            const ms = Math.round(performance.now() - t0);
-            const hit = stopAt < path.length - 1;
-            say(o, `User(${id}, "${users[id]}") ${hit ? '<span class="good">from cache</span>' : '<span class="muted">from network</span>'}` +
-              (lg ? `<div class="line muted">D/Repo: user(${id}) in ${ms} ms</div>` : '<div class="line muted">no logging layer, nothing printed</div>'));
-            busy = false;
-          }
-          paint();
-          el.append(
-            h('div', { class: 'pt-chain' }, L.vm, L.log, L.cache, L.net),
-            expr,
-            h('div', { class: 'controls' }, logT, cacheT),
-            h('div', { class: 'controls' }, cmd('repo.user(42)', () => call(42)), cmd('repo.user(7)', () => call(7))),
-            o);
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'log', label: 'Logging', sub: 'times the call' },
+              { id: 'cache', label: 'Caching', sub: 'map by id' },
+              { id: 'net', label: 'Network', sub: 'api.user(id)' },
+              { id: 'srv', label: 'Server', sub: '/users/42' },
+            ],
+            predict: {
+              q: 'A second <code>repo.user(42)</code> follows the first. Where does it turn back?',
+              options: ['At the server: decorators always reach the real object', 'At Caching', 'At Logging'],
+              a: 1,
+              why: 'Caching stored User 42 on the first call. It returns that copy without calling its inner layer, so Network and the server never see the second call.',
+            },
+            frames: [
+              { say: '<code>Logging(Caching(Network(api)))</code>: each layer holds the next. Follow <code>user(42)</code> twice.' },
+              { at: 'log', packet: 'user(42)', say: 'The call enters the outer layer. Logging notes the start time and calls its inner object.' },
+              { at: 'cache', packet: 'user(42)', say: 'Caching has nothing for 42 yet, so it passes the call on.' },
+              { at: 'net', packet: 'GET /users/42', say: 'Network turns it into an HTTP request.' },
+              { at: 'srv', packet: '200 OK', tone: 'ok', mark: { srv: 'ok' }, say: 'The server answers.' },
+              { at: 'cache', packet: 'User 42', tone: 'ok', mark: { cache: 'ok' }, say: 'On the way back, Caching stores User 42 in its map.' },
+              { at: 'log', packet: 'User 42', tone: 'ok', say: 'Logging prints how long the call took, then returns the user.' },
+              { at: 'log', packet: 'user(42)', say: 'Second call for the same user. It enters through Logging again.' },
+              { at: 'cache', packet: 'User 42', tone: 'ok', say: 'Caching finds 42 and returns it at once. The layers below never hear about it.' },
+              { at: 'log', packet: 'User 42', tone: 'ok', say: 'Logging still logs, a much shorter time now. Each layer only knows the interface of the one inside it.' },
+            ],
+          });
         },
+        play: `interface UserRepository { fun user(id: Long): String }
+
+class NetworkUserRepository : UserRepository {
+    var calls = 0
+    override fun user(id: Long): String { calls++; println("  network: GET /users/$id"); return "User $id" }
+}
+
+class CachingUserRepository(private val inner: UserRepository) : UserRepository {
+    private val cache = HashMap<Long, String>()
+    override fun user(id: Long) = cache.getOrPut(id) { inner.user(id) }
+}
+
+class LoggingUserRepository(private val inner: UserRepository) : UserRepository by inner {
+    override fun user(id: Long): String {
+        println("log: user($id) called")
+        return inner.user(id).also { println("log: user($id) -> $it") }
+    }
+}
+
+fun main() {
+    val network = NetworkUserRepository()
+    val repo: UserRepository = LoggingUserRepository(CachingUserRepository(network))
+    repo.user(42)
+    repo.user(42)
+    repo.user(7)
+    println("network calls: \${network.calls}")
+    // Remove the CachingUserRepository layer and count again
+}`,
       },
 
       // 8 ─────────────────────────────────────────────
@@ -2590,6 +2715,36 @@ val rows = repo.dao.observeAll()`,
             h('div', { class: 'controls' }, net),
             o);
         },
+        predict: {
+          q: 'Online, you call <code>repo.refresh()</code>. Why does the list on screen update?',
+          options: ['<code>refresh()</code> returns the new list to the ViewModel', '<code>refresh()</code> writes to Room, and the Room Flow the screen collects emits again', 'The ViewModel polls the API'],
+          a: 1,
+          why: 'The UI only reads from Room. The network writes into Room, and Room’s Flow sends the new rows to whoever collects them.',
+        },
+        play: `import java.io.IOException
+
+class Api(var online: Boolean) {
+    fun latest(): List<String> =
+        if (online) listOf("Bridge reopens", "Tram extended") else throw IOException("Unable to resolve host")
+}
+class Dao { val rows = mutableListOf("Market moves to Saturdays") }
+
+class ArticleRepository(private val dao: Dao, private val api: Api) {   // the facade
+    fun articles(): List<String> = dao.rows.toList()                   // the UI reads only local data
+    fun refresh() { val fresh = api.latest(); dao.rows.clear(); dao.rows += fresh }
+}
+
+fun main() {
+    val api = Api(online = false)
+    val repo = ArticleRepository(Dao(), api)
+    repeat(2) {
+        try { repo.refresh(); println("refresh ok") }
+        catch (e: IOException) { println("refresh failed: \${e.message}") }
+        println("screen shows \${repo.articles()}")
+        api.online = true
+    }
+    // Start with online = true and compare the first screen
+}`,
       },
 
       // 9 ─────────────────────────────────────────────
@@ -2601,7 +2756,7 @@ val rows = repo.dao.observeAll()`,
         body: `
 <p>A screen is always in exactly one state: idle, loading, showing data, or showing an error. Model that with a <code>sealed interface UiState</code>. Separate booleans like <code>isLoading</code> and <code>error</code> allow combinations that make no sense, like loading and failed at once.</p>
 <p>Inputs become events. A pure function <code>reduce(state, event)</code> returns the next state. It is a state machine: it lists which events each state accepts, and every other event leaves the state as it is. A late <code>Loaded</code> that arrives after the user went back to Idle simply does nothing.</p>
-<p>The ViewModel holds one <code>MutableStateFlow&lt;UiState&gt;</code> and applies the reducer with <code>update</code>. The reducer has no Android in it, so plain unit tests cover every transition. Send events below, including ones the current state does not accept.</p>`,
+<p>The ViewModel holds one <code>MutableStateFlow&lt;UiState&gt;</code> and applies the reducer with <code>update</code>. The reducer has no Android in it, so plain unit tests cover every transition. Step through a run below, including events the current state does not accept.</p>`,
         code: `sealed interface UiState {
     data object Idle : UiState
     data object Loading : UiState
@@ -2785,66 +2940,64 @@ public inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
           { title: 'Starting work for an event the machine ignored', bad: 'fun send(event: FeedEvent) {\n    _state.update { reduce(it, event) }\n    if (event is FeedEvent.Load) fetch()   // even while already Loading\n}', good: 'fun send(event: FeedEvent) {\n    var started = false\n    _state.update { old ->\n        reduce(old, event).also { started = it is UiState.Loading && old !is UiState.Loading }\n    }\n    if (started) fetch()\n}', why: 'The reducer refused the second <code>Load</code>, but the ViewModel fired a second request anyway. Trigger effects from the transition, not from the event.' },
         ],
         visual(el) {
-          const T = { Idle: { Load: 'Loading' }, Loading: { Loaded: 'Success', Failed: 'Error' }, Success: { Load: 'Loading' }, Error: { Retry: 'Loading' } };
-          const order = ['Idle', 'Loading', 'Success', 'Error'];
-          const events = ['Load', 'Loaded', 'Failed', 'Retry'];
-          let state = 'Idle', busy = false, trail = ['Idle'];
-          const nodes = Object.fromEntries(order.map(s => [s, h('div', { class: 'pt-state' }, s, h('small', {}, Object.entries(T[s]).map(([e, to]) => `${e} → ${to}`).join(', ')))]));
-          const src = {
-            Idle: 'UiState.Idle -> if (event is Load) Loading\n        else state',
-            Loading: 'UiState.Loading -> when (event) {\n        is Loaded -> Success(..)\n        is Failed -> Error(..)\n        else -> state }',
-            Success: 'is UiState.Success -> if (event is Load) Loading\n        else state',
-            Error: 'is UiState.Error -> if (event is Retry) Loading\n        else state',
-          };
-          const branches = Object.fromEntries(order.map(s => [s, h('div', { class: 'branch', html: '    ' + hl(src[s]) })]));
-          const reducer = h('div', { class: 'when' }, h('div', { class: 'branch head', html: hl('when (state) {') }), order.map(s => branches[s]), h('div', { class: 'branch head' }, '}'));
-          const phone = h('div', { class: 'phone' });
-          const path = h('div', { class: 'pt-row' });
-          const o = out('The screen is Idle. Send an event.');
-          const btns = events.map(e => cmd(`send(${e})`, () => send(e)));
-          function paint() {
-            order.forEach(s => {
-              nodes[s].classList.toggle('pt-on', s === state);
-              nodes[s].classList.toggle('pt-next', Object.values(T[state]).includes(s) && s !== state);
-            });
-            btns.forEach((b, i) => { const ok = !!T[state][events[i]]; b.setAttribute('aria-pressed', ok); b.classList.toggle('pt-off', !ok); });
-            const ui = {
-              Idle: [h('p', { class: 'phone-note' }, 'Pull to load the feed')],
-              Loading: [h('div', { class: 'spinner' }), h('p', { class: 'phone-note' }, 'Loading…')],
-              Success: ['Rain all weekend', 'Ferry times change', 'New park opens'].map(t => h('div', { class: 'item' }, t)),
-              Error: [h('div', { class: 'err-icon' }, '!'), h('p', { class: 'phone-note' }, 'No connection'), h('span', { class: 'pt-tag pt-acc' }, 'Retry')],
-            }[state];
-            phone.replaceChildren(...ui);
-            path.replaceChildren(h('span', { class: 'pt-label' }, 'path'), ...trail.map((s, i) => tag(s, i === trail.length - 1 ? 'pt-acc' : '')));
-          }
-          async function send(e) {
-            if (busy) return; busy = true;
-            order.forEach(s => branches[s].classList.remove('scan', 'hit', 'miss'));
-            const b = branches[state];
-            b.classList.add('scan');
-            await sleep(380);
-            if (!el.isConnected) return;
-            b.classList.remove('scan');
-            const to = T[state][e];
-            if (!to) {
-              b.classList.add('scan'); replay(nodes[state], 'shake');
-              say(o, `${hl(`reduce(${state}, ${e})`)} = ${hl(state)} <span class="muted">// ${state} does not accept ${e}: ignored</span>`);
-              busy = false; return;
-            }
-            b.classList.add('hit');
-            const from = state; state = to;
-            trail.push(to); if (trail.length > 6) trail.shift();
-            paint(); replay(nodes[to], 'pop'); replay(phone, 'pop-soft');
-            say(o, `${hl(`reduce(${from}, ${e})`)} = <span class="good">${to}</span>`);
-            busy = false;
-          }
-          paint();
-          el.append(
-            h('div', { class: 'pt-states' }, order.map(s => nodes[s])),
-            h('div', { class: 'pt-split pt-auto' }, h('div', { class: 'pt-col' }, reducer, path), phone),
-            h('div', { class: 'controls' }, btns),
-            o);
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'idle', label: 'Idle', x: 50, y: 12, tone: 'muted' },
+              { id: 'loading', label: 'Loading', x: 50, y: 48 },
+              { id: 'success', label: 'Success<small>items</small>', x: 17, y: 86, tone: 'ok' },
+              { id: 'error', label: 'Error<small>message</small>', x: 83, y: 86, tone: 'err' },
+            ],
+            predict: {
+              q: 'The screen is in <code>Error</code>. Which event is the only way out?',
+              options: ['<code>Load</code>', '<code>Retry</code>', '<code>Loaded</code>'],
+              a: 1,
+              why: 'The reducer’s Error branch accepts only <code>Retry</code>, which moves to Loading. Every other event returns the same Error state.',
+            },
+            frames: [
+              { add: [['idle', 'loading', 'Load', 'weak'], ['loading', 'success', 'Loaded', 'weak'], ['loading', 'error', 'Failed', 'weak']], hl: ['idle'], say: 'Dashed arrows are transitions the reducer allows. The screen starts in Idle.' },
+              { hl: ['idle'], say: 'A late <code>Loaded</code> arrives. Idle has no arrow for it, so <code>reduce</code> returns Idle unchanged.' },
+              { add: [['idle', 'loading', 'Load', 'accent']], hl: ['loading'], say: '<code>Load</code>: Idle → Loading. The ViewModel starts the request.' },
+              { add: [['loading', 'error', 'Failed', 'err']], hl: ['error'], say: 'The request times out. <code>Failed("timeout")</code>: Loading → Error.' },
+              { hl: ['error'], say: 'Taps on Load, or a late Loaded, do nothing here. Error has one way out.' },
+              { remove: [['loading', 'error']], add: [['error', 'loading', 'Retry', 'accent']], hl: ['loading'], say: '<code>Retry</code>: Error → Loading.' },
+              { add: [['loading', 'success', 'Loaded', 'ok']], hl: ['success'], say: '<code>Loaded(items)</code>: Loading → Success. From here, <code>Load</code> goes back to Loading for a refresh.' },
+            ],
+          });
         },
+        play: `sealed interface UiState {
+    data object Idle : UiState
+    data object Loading : UiState
+    data class Success(val items: List<String>) : UiState
+    data class Error(val message: String) : UiState
+}
+sealed interface FeedEvent {
+    data object Load : FeedEvent
+    data class Loaded(val items: List<String>) : FeedEvent
+    data class Failed(val message: String) : FeedEvent
+    data object Retry : FeedEvent
+}
+
+fun reduce(state: UiState, event: FeedEvent): UiState = when (state) {
+    UiState.Idle -> if (event is FeedEvent.Load) UiState.Loading else state
+    UiState.Loading -> when (event) {
+        is FeedEvent.Loaded -> UiState.Success(event.items)
+        is FeedEvent.Failed -> UiState.Error(event.message)
+        else -> state
+    }
+    is UiState.Success -> if (event is FeedEvent.Load) UiState.Loading else state
+    is UiState.Error -> if (event is FeedEvent.Retry) UiState.Loading else state
+}
+
+fun main() {
+    var state: UiState = UiState.Idle
+    for (e in listOf(FeedEvent.Loaded(listOf("late")), FeedEvent.Load, FeedEvent.Failed("timeout"), FeedEvent.Retry, FeedEvent.Loaded(listOf("A", "B")))) {
+        val next = reduce(state, e)
+        println("$state + $e -> $next\${if (next == state) "  (ignored)" else ""}")
+        state = next
+    }
+    // Add FeedEvent.Retry at the end of the list: what does Success do with it?
+}`,
       },
     ],
   });

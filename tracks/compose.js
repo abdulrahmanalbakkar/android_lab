@@ -817,6 +817,12 @@ fun Cart(items: List<Item>) {
             h('div', { class: 'controls' }, cmd('likes++', () => act('likes')), nameBtn, cmd('likes = likes', () => act('same'))),
             o);
         },
+        predict: {
+          q: 'You change <code>name</code> from "Ada" to "Grace". Which composables run again?',
+          options: ['All five', '<code>ProfileScreen</code> and <code>NameText</code>', 'Only <code>NameText</code>'],
+          a: 1,
+          why: '<code>ProfileScreen</code> reads <code>name</code>, so it runs again, and <code>NameText</code> gets a new parameter. The other three get equal inputs and are skipped.',
+        },
       },
 
       // 2 ─────────────────────────────────────────────
@@ -1043,6 +1049,12 @@ fun Note(title: String, body: String, modifier: Modifier = Modifier) {
               h('span', {}, h('i', { class: 'lg-pad' }), 'padding edge')),
             h('p', { class: 'tip' }, 'Tap a line in the chain to move it up one step. The first line jumps to the end.'),
             o);
+        },
+        predict: {
+          q: 'The chain is <code>.padding(16.dp)</code> first, then <code>.size(96.dp)</code> later. How big is the whole Box?',
+          options: ['96 × 96 dp', '128 × 128 dp', '64 × 64 dp'],
+          a: 1,
+          why: 'The first modifier is the outermost layer. Padding wraps the 96 dp box and adds 16 dp on every side: 96 + 32 = 128.',
         },
       },
 
@@ -1373,6 +1385,12 @@ for (child in weightedChildren) {
             switches,
             h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Container'), h('div', { class: 'controls' }, kindBtns)),
             code, o);
+        },
+        predict: {
+          q: 'A Row holds A, then a <code>Spacer(Modifier.weight(1f))</code>, then B and C. Where do B and C end up?',
+          options: ['Right next to A', 'Pushed to the far end of the Row', 'Spread evenly across the Row'],
+          a: 1,
+          why: 'The weighted Spacer takes all the leftover space, so everything after it is pushed to the end.',
         },
       },
 
@@ -1744,6 +1762,12 @@ fun FeedScreen(posts: List<Post>) {
             o);
           qLine.textContent = 'Queue empty';
         },
+        predict: {
+          q: 'The app draws edge to edge and the content ignores <code>innerPadding</code>. Where does the first list item land?',
+          options: ['Below the top bar, as usual', 'Under the status bar and top bar, partly hidden', 'Scaffold pads the content for you anyway'],
+          a: 1,
+          why: 'Scaffold only measures the bars and hands you <code>innerPadding</code>. If you drop it, the content starts at the very top of the window, behind the bars.',
+        },
       },
 
       // 5 ─────────────────────────────────────────────
@@ -1978,6 +2002,12 @@ fun Banner(text: String) {
             h('div', { class: 'controls' }, wallBtns),
             h('div', { class: 'controls' }, shapeBtns),
             o);
+        },
+        predict: {
+          q: 'Android 14 with <code>dynamicColor</code> on. The user picks another wallpaper. What happens to the app’s <code>primary</code>?',
+          options: ['It stays your brand color', 'It changes to a color built from the new wallpaper', 'It changes only in dark theme'],
+          a: 1,
+          why: '<code>dynamicLightColorScheme</code> and <code>dynamicDarkColorScheme</code> read the system palette, which is built from the wallpaper. Every role follows it.',
         },
       },
 
@@ -2272,6 +2302,12 @@ fun DayLabel(date: LocalDate) {
             h('div', { class: 'controls' }, act('Parent recomposes', both)),
             o);
         },
+        predict: {
+          q: 'In <code>Counter</code>, you tap <code>count++</code> and the composable runs again. Where does the new value live?',
+          options: ['In a new <code>MutableIntState</code> made by this run', 'In the same object as before: <code>remember</code> hands it back', 'In a local variable that is copied over'],
+          a: 1,
+          why: '<code>remember</code> stores the object in a slot of the composition. Every later run gets that same object, now holding the new value.',
+        },
       },
 
       // 7 ─────────────────────────────────────────────
@@ -2542,50 +2578,27 @@ val results by vm.results.collectAsStateWithLifecycle()   // loaded from query`,
           },
         ],
         visual(el) {
-          let plain = 3, saved = 3, land = false, busy = false;
-          const pslot = h('div', { class: 'cmp-vslot' }, h('span', { class: 'chip' }, '3'));
-          const sslot = h('div', { class: 'cmp-vslot' }, h('span', { class: 'chip' }, '3'));
-          const rows = [
-            h('div', { class: 'cmp-prow' }, h('span', { class: 'cmp-label' }, 'remember'), pslot),
-            h('div', { class: 'cmp-prow' }, h('span', { class: 'cmp-label' }, 'rememberSaveable'), sslot),
-          ];
-          const phone = h('div', { class: 'phone', role: 'img', 'aria-label': 'Phone with two counters' }, rows);
-          const bundleBody = h('div', { class: 'cmp-stack' }, h('span', { class: 'tip' }, 'Empty until the Activity is about to be destroyed.'));
-          const bundle = h('div', { class: 'cmp-bundle' }, h('span', { class: 'cmp-bundle-title' }, 'Saved state Bundle'), bundleBody);
-          const o = out('Bump the counters, then rotate.');
-          const rotateBtn = act('Rotate the device', rotate);
-          const bump = which => {
-            if (busy) return;
-            if (which === 'plain') { plain++; swap(pslot, String(plain)); } else { saved++; swap(sslot, String(saved)); }
-            say(o, hl(`${which}++`) + ` <span class="muted">// ${which} = ${which === 'plain' ? plain : saved}</span>`);
-          };
-          async function rotate() {
-            if (busy) return; busy = true;
-            say(o, 'Activity is about to be destroyed. rememberSaveable writes its value into the Bundle.');
-            bundleBody.replaceChildren(h('span', { class: 'cmp-entry drop-in' }, `saved = ${saved}`));
-            await sleep(900);
-            rows.forEach(r => r.classList.add('cmp-fade'));
-            phone.style.transform = `rotate(${land ? -90 : 90}deg)`;
-            await sleep(600);
-            phone.style.transition = 'none'; phone.style.transform = '';
-            land = !land; phone.classList.toggle('cmp-land', land);
-            void phone.offsetWidth; phone.style.transition = '';
-            plain = 0;
-            pslot.replaceChildren(h('span', { class: 'chip drop-in' }, '0'));
-            sslot.replaceChildren(h('span', { class: 'chip' }, '?'));
-            rows.forEach(r => r.classList.remove('cmp-fade'));
-            say(o, 'New Activity, new composition. remember has nothing to hand back, so plain starts at 0.');
-            await sleep(900);
-            replay(bundleBody.firstElementChild, 'pop');
-            swap(sslot, String(saved));
-            say(o, `<span class="good">restored:</span> rememberSaveable found ${hl(`saved = ${saved}`)} in the Bundle.`);
-            rotateBtn.textContent = `Rotate back to ${land ? 'portrait' : 'landscape'}`;
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'stage' }, h('div', { class: 'cmp-rot-slot' }, phone), bundle),
-            h('div', { class: 'controls' }, cmd('plain++', () => bump('plain')), cmd('saved++', () => bump('saved')), rotateBtn),
-            o);
+          const scr = (p, s) => `<div class="ui-m-bar">Counters</div><div class="ui-m-body"><div class="ui-m-row"><div>remember</div><b style="margin-left:auto">${p}</b></div><div class="ui-m-row"><div>rememberSaveable</div><b style="margin-left:auto">${s}</b></div><span class="ui-m-btn plus">+1 both</span></div>`;
+          const home = '<div class="ui-m-body" style="background:var(--sunk)"><div class="ui-m-center ui-m-muted">Home screen</div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'What runs',
+            predict: {
+              q: 'When does <code>rememberSaveable</code> put its value into the saved-state Bundle?',
+              options: ['On every change of the value', 'When the Activity saves its state, before it can be destroyed', 'Only when the process is killed'],
+              a: 1,
+              why: 'It registers with the saved-state registry. The registry asks for the value when the Activity saves its instance state, which happens before a rotation or a stop.',
+            },
+            frames: [
+              { screen: scr(3, 3), log: '// remember and rememberSaveable, both at 3', say: 'Two counters. One uses <code>remember</code>, the other <code>rememberSaveable</code>.' },
+              { tap: '.plus', screen: scr(4, 4), log: 'count++ on both', say: 'Both go to 4. While the Activity lives, they behave the same.' },
+              { log: 'onSaveInstanceState(): Bundle { saved = 4 }', say: 'The user rotates. Before the old Activity goes, <code>rememberSaveable</code> writes its value into the Bundle. <code>remember</code> writes nothing.' },
+              { screen: '<div class="ui-m-body"><div class="ui-m-center ui-m-muted">new Activity, new composition</div></div>', log: 'onDestroy() → new Activity: onCreate()', say: 'The old Activity and its whole composition are gone. A new one starts from scratch.' },
+              { screen: scr(0, 4), log: ['remember { 0 }  // nothing to hand back', 'rememberSaveable: reads saved = 4'], say: '<code>remember</code> has no slot from before, so it starts at 0. <code>rememberSaveable</code> finds 4 in the Bundle.' },
+              { screen: home, log: '// app in the background: the system kills the process', say: 'The user switches apps, and the system kills the process to free memory.' },
+              { screen: scr(0, 4), log: 'new process: Bundle restored, saved = 4', say: 'The user comes back. A new process, a new Activity, and the same Bundle: the saved value survives process death too.' },
+              { screen: scr(0, 0), log: '// swiped away from Recents, opened again: no Bundle', say: 'If the user swipes the app away, they closed it. The saved state is thrown away and both start fresh.' },
+            ],
+          });
         },
       },
 
@@ -2907,6 +2920,12 @@ fun OverflowMenu(onSignOut: () -> Unit) {
             h('div', { class: 'controls' }, act('Type “@”', () => type('@')), act('Type “lab.dev”', () => type('lab.dev')), act('Type “x”', () => type('x')), cmd('email = ""', clear)),
             o);
         },
+        predict: {
+          q: 'The state is hoisted. The user types “@” into <code>EmailField</code>. What changes the text shown in the field?',
+          options: ['The field updates its own text, then tells the parent', 'The parent sets <code>email</code>, and the new value comes back down as <code>value</code>', 'Both update at the same time'],
+          a: 1,
+          why: 'A stateless field only reports the edit through <code>onValueChange</code>. The owner updates the state, and the field shows whatever comes back down.',
+        },
       },
 
       // Overlays ─────────────────────────────────────────────
@@ -3190,6 +3209,12 @@ pendingDelete?.let { note ->
                   act('Reset notes', () => { notes.splice(0, notes.length, 'Shopping list', 'Meeting notes'); menuOpen = confirm = share = false; paintList(); paint(); say(o, 'Notes restored.'); })))),
             o);
         },
+        predict: {
+          q: 'The dialog is open and <code>onDismissRequest = { }</code> is empty. The user presses back. What happens?',
+          options: ['The dialog closes anyway', 'The dialog stays: only your code can set the flag to false', 'The whole screen is closed'],
+          a: 1,
+          why: 'Back calls <code>onDismissRequest</code>, nothing more. The dialog is on screen as long as your flag is true, so an empty lambda keeps it there.',
+        },
       },
 
       // 9 ─────────────────────────────────────────────
@@ -3468,6 +3493,12 @@ TextField(
           typeBtns[1].setAttribute('aria-pressed', 'true');
           typeBtns.forEach((b, i) => b.addEventListener('click', () => typeBtns.forEach((x, j) => x.setAttribute('aria-pressed', String(i === j)))));
         },
+        predict: {
+          q: 'The user types one letter in the email field. What happens before the new letter shows on screen?',
+          options: ['The field draws the letter itself, then calls <code>onValueChange</code>', '<code>onValueChange</code> runs, your state changes, and the field recomposes with the new value', 'Nothing: the keyboard writes straight into the field'],
+          a: 1,
+          why: 'With the value and callback overload, the field shows only what you pass in. Each edit is a request through <code>onValueChange</code>.',
+        },
       },
 
       // 9a ─────────────────────────────────────────────
@@ -3639,6 +3670,12 @@ LaunchedEffect(user.id) {
               act('Paste "+1 (555) 010-9999"', () => edit('+1 (555) 010-9999', 'the paste'))),
             h('label', { class: 'switch', for: 'cmp-d2i-fmt' }, sw, 'outputTransformation = PhoneFormat'),
             o);
+        },
+        predict: {
+          q: 'The field holds 555. The user pastes "+1 (555) 010-9999" into a field with <code>maxLength(10)</code> and a digits-only <code>InputTransformation</code>. What does <code>phone.text</code> hold after?',
+          options: ['"15550109999"', '"555": the edit is rejected', '"+1 (555) 010-9999"'],
+          a: 1,
+          why: 'The InputTransformation runs on the proposed edit before it is stored. This paste is too long and has non-digits, so it is rejected and the state keeps its old text.',
         },
       },
 
@@ -3951,6 +3988,12 @@ LazyColumn(state = listState) {
               cmd('animateScrollToItem(22)', () => scrollTo(22)), cmd('animateScrollToItem(0)', () => scrollTo(0))),
             code, o);
           requestAnimationFrame(() => update(true));
+        },
+        predict: {
+          q: 'A LazyColumn holds 30 names. You scroll down by a screen. What happens to the rows that left the top?',
+          options: ['They stay composed, just off screen', 'They are no longer composed. Only rows near the viewport are', 'All 30 were composed when the list first showed'],
+          a: 1,
+          why: 'Lazy layouts compose only what is visible plus a small margin. Rows that scroll away leave the composition, and new ones are composed as they come in.',
         },
       },
 
@@ -4268,6 +4311,12 @@ fun GroceryList(items: List<Grocery>) {
             h('p', { class: 'tip' }, 'Tap a row to check it. Red rows show a check that belongs to a different item.'),
             o);
         },
+        predict: {
+          q: '<code>key = { it.id }</code> is on. You check Milk, then reverse the list. Where is the check mark?',
+          options: ['On Milk, wherever it moved', 'On whatever row is now at index 0', 'Gone: reversing resets every row'],
+          a: 0,
+          why: 'With a stable key, Compose tracks each row by its id, so remembered state moves with its item.',
+        },
       },
 
       // Images ─────────────────────────────────────────────
@@ -4562,6 +4611,12 @@ implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")`,
               h('div', { class: 'cmp-im-left' }, row, stateLine),
               h('div', { class: 'cmp-im-pipe' }, sMem, h('span', { class: 'arrow' }, '↓'), sDisk, h('span', { class: 'arrow' }, '↓'), sNet)),
             read, o);
+        },
+        predict: {
+          q: 'You load the photo, then restart the app and load it again. Where does Coil get it this time?',
+          options: ['The memory cache', 'The disk cache', 'The network again'],
+          a: 1,
+          why: 'The memory cache dies with the process. The disk cache keeps the downloaded bytes, so after a restart Coil reads and decodes them from disk.',
         },
       },
 
@@ -5009,6 +5064,12 @@ Box(
             h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-gs-ripple' }, rippleIn, 'indication = ripple()'), act('Simulate a double tap', demoDouble)),
             log, o);
         },
+        predict: {
+          q: 'The card uses <code>Modifier.clickable</code> with <code>indication = null</code>. The user taps it. What happens?',
+          options: ['Nothing: no ripple means no click', '<code>onClick</code> runs, but nothing shows the press', 'A default ripple is drawn anyway'],
+          a: 1,
+          why: 'The indication only draws the press feedback. The click handling and its semantics stay the same.',
+        },
       },
 
       // 13 ─────────────────────────────────────────────
@@ -5289,6 +5350,12 @@ LaunchedEffect(SearchRequest(query, page)) {
             h('div', { class: 'controls' }, cmd('onClick = { scope.launch { ... } }', save), leaveBtn),
             o);
         },
+        predict: {
+          q: 'A <code>LaunchedEffect</code> load and a <code>scope.launch</code> save are both running. The user leaves the screen. What happens to them?',
+          options: ['Both keep running until they finish', 'Both are cancelled', 'Only the LaunchedEffect is cancelled'],
+          a: 1,
+          why: 'Both belong to the composable. The LaunchedEffect job and the <code>rememberCoroutineScope</code> scope are cancelled when it leaves the composition.',
+        },
       },
 
       // 13a ────────────────────────────────────────────
@@ -5455,71 +5522,24 @@ DisposableEffect(owner) {
           },
         ],
         visual(el) {
-          let good = false, sensor = 'Accelerometer', onScreen = true, n = 0, listeners = [];
-          const toggle = h('input', { type: 'checkbox', id: 'cmp-de-on' });
-          const pool = h('div', { class: 'cmp-jobs cmp-de-pool' });
-          const head = h('div', { class: 'kt' });
-          const count = h('span', { class: 'cmp-badge' }, '0');
-          const leaveBtn = act('Leave the screen', () => leave());
-          const o = out();
-          const paintHead = () => { head.innerHTML = hl(good ? 'DisposableEffect(sensor) {\n    register(listener)\n    onDispose { unregister(listener) }\n}' : 'LaunchedEffect(sensor) {\n    register(listener)   // no cleanup\n}'); };
-          function paint() {
-            pool.replaceChildren(...(listeners.length ? listeners.map(l => l.chip) : [h('span', { class: 'cmp-status' }, 'no listeners')]));
-            count.textContent = listeners.length; replay(count, 'pop');
-          }
-          function register() {
-            const chip = h('span', { class: 'cmp-job cmp-done drop-in' }, h('span', { class: 'cmp-job-label' }, `#${++n} ${sensor}`), h('span', { class: 'cmp-job-state' }, onScreen ? 'live' : ''));
-            listeners.push({ n, sensor, chip });
-          }
-          function dispose() {
-            listeners.forEach(l => { l.chip.classList.add('fly-out'); });
-            const gone = listeners.length; listeners = [];
-            return gone;
-          }
-          function markLeaks() {
-            listeners.forEach((l, i) => { if (i < listeners.length - 1 || !onScreen) { l.chip.classList.remove('cmp-done'); l.chip.classList.add('cmp-cancel'); l.chip.lastChild.textContent = 'leaked'; } });
-          }
-          async function setSensor(s) {
-            if (!onScreen) { replay(pool, 'shake'); say(o, 'The screen is gone. Come back first.'); return; }
-            if (s === sensor) { say(o, `${hl(`sensor = ${s}`)} <span class="muted">// same key: nothing restarts</span>`); return; }
-            if (listeners.length >= 6) { replay(pool, 'shake'); say(o, '<span class="bad">Six live listeners.</span> Reset by flipping the switch.'); return; }
-            sensor = s;
-            const removed = good ? dispose() : 0;
-            if (removed) await sleep(380);
-            if (!el.isConnected) return;
-            register(); if (!good) markLeaks(); paint();
-            say(o, good ? `Key changed. <span class="good">onDispose removed the old listener</span>, then the effect added one for ${s}.` : `Key changed. A new listener for ${s} was added. <span class="bad">The old one is still registered.</span>`);
-          }
-          async function leave() {
-            if (onScreen) {
-              onScreen = false; leaveBtn.textContent = 'Come back';
-              if (good) { dispose(); await sleep(380); if (!el.isConnected) return; } else markLeaks();
-              paint();
-              say(o, good ? '<span class="good">Left the composition. onDispose ran.</span> Nothing is registered.' : `<span class="bad">Left the composition. ${listeners.length} listener${listeners.length === 1 ? '' : 's'} still registered</span>, holding the old screen.`);
-            } else {
-              onScreen = true; leaveBtn.textContent = 'Leave the screen';
-              register(); if (!good) markLeaks(); paint();
-              say(o, 'Back on screen. The effect registered a listener again.');
-            }
-          }
-          function shake() {
-            if (!listeners.length) { replay(pool, 'shake'); say(o, 'Phone moved. No listener heard it.'); return; }
-            listeners.forEach(l => replay(l.chip, 'pop'));
-            say(o, `Phone moved: <span class="${listeners.length > 1 ? 'bad' : 'good'}">${listeners.length} callback${listeners.length === 1 ? '' : 's'}</span> for one event.`);
-          }
-          function reset() {
-            good = toggle.checked; sensor = 'Accelerometer'; onScreen = true; listeners = []; leaveBtn.textContent = 'Leave the screen';
-            paintHead(); register(); paint();
-            say(o, good ? 'DisposableEffect registered one listener.' : 'LaunchedEffect registered one listener. Now change the key a few times.');
-          }
-          toggle.addEventListener('change', reset);
-          el.append(
-            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-de-on' }, toggle, 'DisposableEffect with onDispose')),
-            head,
-            h('div', { class: 'cmp-fx' }, h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'registered listeners'), h('div', { class: 'cmp-jobs' }, count, pool))),
-            h('div', { class: 'controls' }, cmd('sensor = Gyroscope', () => setSensor('Gyroscope')), cmd('sensor = Accelerometer', () => setSensor('Accelerometer')), leaveBtn, act('Move the phone', shake)),
-            o);
-          reset();
+          Lab.ui.timeline(el, {
+            lanes: ['key', 'DE', 'LE 1', 'LE 2', 'LE 3'],
+            span: 10,
+            unit: 's',
+            predict: {
+              q: 'The listener is registered in <code>LaunchedEffect(sensor)</code> with no cleanup. The sensor key changes twice. How many listeners are registered now?',
+              options: ['1', '2', '3'],
+              a: 2,
+              why: 'Each key change cancels the coroutine and starts the block again. Cancelling a coroutine does not unregister a listener, so every restart adds one.',
+            },
+            frames: [
+              { now: 0, say: 'The same screen written two ways. <b>DE</b>: <code>DisposableEffect(sensor)</code> with <code>onDispose</code>. <b>LE 1 to 3</b>: listeners registered by <code>LaunchedEffect(sensor)</code> with no cleanup.' },
+              { bars: [{ lane: 0, from: 0, to: 3, label: 'acc', tone: 'muted' }, { lane: 1, from: 0, to: 3, label: 'acc', tone: 'ok' }, { lane: 2, from: 0, to: 3, label: 'acc' }], say: 'The screen enters the composition. Both versions register one accelerometer listener.' },
+              { bars: [{ lane: 0, from: 3, to: 6, label: 'gyro', tone: 'muted' }, { lane: 1, from: 3, to: 6, label: 'gyro', tone: 'ok' }, { lane: 2, from: 3, to: 6, label: 'leak', tone: 'err' }, { lane: 3, from: 3, to: 6, label: 'gyro' }], marks: [{ at: 3, label: 'key', tone: 'muted' }], say: 'The key changes. <code>onDispose</code> unregisters the old listener first, then the block registers the new one. The LaunchedEffect only adds: the old listener stays.' },
+              { bars: [{ lane: 0, from: 6, to: 8, label: 'acc', tone: 'muted' }, { lane: 1, from: 6, to: 8, label: 'acc', tone: 'ok' }, { lane: 2, from: 6, to: 8, label: 'leak', tone: 'err' }, { lane: 3, from: 6, to: 8, label: 'leak', tone: 'err' }, { lane: 4, from: 6, to: 8, label: 'acc' }], marks: [{ at: 6, label: 'key', tone: 'muted' }], say: 'Back to the accelerometer. Still one listener on the left. Three on the right, all firing for every event.' },
+              { bars: [{ lane: 2, from: 8, to: 10, label: 'leak', tone: 'err' }, { lane: 3, from: 8, to: 10, label: 'leak', tone: 'err' }, { lane: 4, from: 8, to: 10, label: 'leak', tone: 'err' }], marks: [{ at: 8, label: 'leave', tone: 'err' }], say: 'The screen leaves the composition. <code>onDispose</code> runs one last time: nothing is registered. The three other listeners live on and keep the old screen in memory.' },
+            ],
+          });
         },
       },
 
@@ -5660,71 +5680,25 @@ emit(last)
           },
         ],
         visual(el) {
-          let restart = false, index = 0, jobN = 0, launches = 0, logs = 0, last = null, job = null, busy = false;
-          const lane = h('div', { class: 'cmp-jobs' });
-          const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
-          const idx = h('span', { class: 'cmp-obj' });
-          const stats = h('span', { class: 'cmp-status' });
-          const head = h('div', { class: 'kt' });
-          const o = out();
-          const modeBtns = [[false, 'snapshotFlow { index }.map { it > 0 }'], [true, 'LaunchedEffect(index)']].map(([r, src]) => cmd(src, () => setMode(r)));
-          function addLog(html) { log.prepend(h('div', { class: 'drop-in', html })); while (log.children.length > 6) log.lastElementChild.remove(); }
-          function paint() {
-            idx.textContent = `firstVisibleItemIndex = ${index}`;
-            stats.textContent = `launches: ${launches} · analytics events: ${logs}`;
-            head.innerHTML = hl(restart ? 'LaunchedEffect(listState.firstVisibleItemIndex) {\n    if (index > 0) analytics.log("scrolled")\n}' : 'LaunchedEffect(listState) {\n    snapshotFlow { listState.firstVisibleItemIndex }\n        .map { it > 0 }.distinctUntilChanged()\n        .collect { if (it) analytics.log("scrolled") }\n}');
-            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String((i === 1) === restart)));
-          }
-          function launch(label) {
-            if (job) { job.classList.remove('cmp-done'); job.classList.add('cmp-cancel'); job.lastChild.textContent = 'cancelled'; }
-            launches++;
-            job = h('span', { class: 'cmp-job cmp-done drop-in' }, h('span', { class: 'cmp-job-label' }, `#${++jobN} ${label}`), h('span', { class: 'cmp-job-state' }, restart ? 'ran' : 'collecting'));
-            lane.append(job);
-            while (lane.children.length > 4) lane.firstElementChild.remove();
-          }
-          function setMode(r) {
-            if (busy) return;
-            restart = r; index = 0; launches = 0; logs = 0; last = null; job = null;
-            lane.replaceChildren(); log.replaceChildren();
-            launch(restart ? 'index = 0' : 'collect');
-            if (!restart) { last = false; addLog(hl('emit 0 → map → false')); }
-            paint();
-            say(o, restart ? 'The index is the key. Watch the launches.' : 'One collector. The block re-runs on each change.');
-          }
-          function change(to) {
-            if (to === index) { replay(idx, 'pop'); addLog(hl(`index = ${to}`) + ' <span class="muted">// same value, nothing happens</span>'); return; }
-            index = to;
-            if (restart) {
-              launch(`index = ${to}`);
-              if (to > 0) { logs++; addLog(hl('analytics.log("scrolled")') + ' <span class="bad">again</span>'); }
-              else addLog(hl(`relaunched with index = 0`));
-            } else {
-              const b = to > 0;
-              if (b === last) addLog(hl(`emit ${to} → map → ${b}`) + ' <span class="muted">// distinctUntilChanged drops it</span>');
-              else {
-                last = b;
-                addLog(hl(`emit ${to} → map → ${b}`) + (b ? ` → ${hl('analytics.log("scrolled")')}` : ''));
-                if (b) logs++;
-              }
-              replay(job, 'pop');
-            }
-            paint(); replay(idx, 'pop');
-          }
-          async function fling() {
-            if (busy) return; busy = true;
-            for (let i = 0; i < 5; i++) { change(index + 1); await sleep(180); if (!el.isConnected) return; }
-            say(o, restart ? `<span class="bad">${launches} launches</span> so far, and the event was logged each time.` : `<span class="good">Still one collector.</span> The event was logged once.`);
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            head,
-            h('div', { class: 'cmp-fx' },
-              h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'list'), h('div', { class: 'cmp-jobs' }, idx)),
-              h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'coroutines'), lane)),
-            h('div', { class: 'controls' }, cmd('scroll down one item', () => { if (!busy) change(index + 1); }), cmd('fling: five items', fling), cmd('scrollToItem(0)', () => { if (!busy) change(0); })),
-            stats, log, o);
-          setMode(false);
+          Lab.ui.timeline(el, {
+            lanes: ['index', 'keyed', 'flow'],
+            span: 10,
+            unit: 's',
+            predict: {
+              q: 'The user flings through several items. With <code>LaunchedEffect(listState.firstVisibleItemIndex)</code>, how many coroutines get launched?',
+              options: ['One for the whole screen', 'One for every index change', 'None until the fling stops'],
+              a: 1,
+              why: 'The key changes on every new index, and each change cancels the running coroutine and launches a new one.',
+            },
+            frames: [
+              { now: 0, say: 'Goal: log “scrolled” once when the user leaves the top. Lane 1: <code>firstVisibleItemIndex</code>. Lane 2: <code>LaunchedEffect(index)</code>, keyed on it. Lane 3: one <code>snapshotFlow</code> collector.' },
+              { bars: [{ lane: 0, from: 0, to: 2, label: '0', tone: 'muted' }, { lane: 1, from: 0, to: 2, label: '#1' }, { lane: 2, from: 0, to: 2, label: 'collect', tone: 'ok' }], say: 'Both start with the screen. The keyed effect runs coroutine #1. The other one starts a single <code>snapshotFlow</code> collector.' },
+              { bars: [{ lane: 0, from: 2, to: 4, label: '1', tone: 'muted' }, { lane: 1, from: 2, to: 4, label: '#2', tone: 'warm' }, { lane: 2, from: 2, to: 4, label: 'log', tone: 'ok' }], marks: [{ at: 2, label: 'index 1', tone: 'muted' }], say: 'Index becomes 1. The keyed effect cancels #1 and launches #2, which logs. The flow maps 1 to <code>true</code>, emits, and logs once.' },
+              { bars: [{ lane: 0, from: 4, to: 6, label: '2', tone: 'muted' }, { lane: 1, from: 4, to: 6, label: '#3', tone: 'warm' }, { lane: 2, from: 4, to: 6, label: 'collect', tone: 'ok' }], say: 'Index 2. The keyed effect restarts and logs again. The flow maps to <code>true</code> again, and <code>distinctUntilChanged</code> drops it.' },
+              { bars: [{ lane: 0, from: 6, to: 10, label: '3 4 5 6', tone: 'muted' }, { lane: 1, from: 6, to: 7, label: '#4', tone: 'warm' }, { lane: 1, from: 7, to: 8, label: '#5', tone: 'warm' }, { lane: 1, from: 8, to: 9, label: '#6', tone: 'warm' }, { lane: 1, from: 9, to: 10, label: '#7', tone: 'warm' }, { lane: 2, from: 6, to: 10, label: 'collect', tone: 'ok' }], say: 'A fling changes the index four more times: four more launches and four more log events. The collector just keeps running.' },
+              { now: 10, say: 'Keyed effect: 7 launches and 6 “scrolled” events. <code>snapshotFlow</code>: 1 collector and 1 event, which is what you wanted.' },
+            ],
+          });
         },
       },
     ],

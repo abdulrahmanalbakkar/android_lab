@@ -1214,61 +1214,24 @@ val title = findViewById<TextView>(R.id.title)`,
         underHood: xmlDepth.underHood,
         mistakes: xmlDepth.mistakes,
         visual(el) {
-          const xml = [
-            '<ConstraintLayout ...>',
-            '  <TextView android:id="@+id/title"',
-            '      app:layout_constraintTop_toTopOf="parent" />',
-            '  <Button android:id="@+id/follow"',
-            '      app:layout_constraintTop_toBottomOf="@id/title" />',
-            '</ConstraintLayout>',
-          ];
-          const lines = xml.map(t => h('div', { class: 'branch' }, t));
-          const code = h('div', { class: 'when' }, lines);
-          const screen = h('div', { class: 'vw-screen' });
-          const titleText = h('span', {}, 'Profile');
-          const title = h('div', { class: 'vw-v' }, titleText, h('span', { class: 'vw-idtag' }, 'binding.title'));
-          const btn = h('div', { class: 'vw-v vw-btn' }, 'Follow', h('span', { class: 'vw-idtag' }, 'binding.follow'));
-          const root = h('div', { class: 'vw-root' });
-          const o = out('Inflated. Try the binding, then findViewById.');
-          let busy = false, n = 0;
-          const names = ['Hi, Ada', 'Hi, Grace', 'Hi, Linus'];
-          const sw = toggle('vw-xml-constraint', 'Button has <code>constraintTop_toBottomOf</code>', true, () => {
-            const on = sw.input.checked;
-            btn.classList.toggle('vw-loose', !on);
-            lines[4].classList.toggle('cut', !on);
-            say(o, on ? '<span class="good">constrained:</span> follow sits below title'
-              : '<span class="bad">no vertical constraint:</span> follow jumps to the top left at runtime');
+          const scr = (title, loose) => `<div class="ui-m-bar">Profile</div><div class="ui-m-body" style="position:relative;min-height:150px"><b>${title}</b>${loose ? '<span class="ui-m-btn" style="position:absolute;left:12px;top:10px;opacity:0.85">Follow</span>' : '<span class="ui-m-btn">Follow</span>'}<div class="ui-m-line"></div><div class="ui-m-line short"></div></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'Code and result',
+            predict: {
+              q: 'You call <code>ActivityProfileBinding.inflate(layoutInflater)</code>. What do you get back?',
+              options: ['The XML as text, parsed later when views are used', 'Real View objects, plus a binding with one typed field per id', 'Only the root view. Children are created on first use'],
+              a: 1,
+              why: 'Inflation builds every View in the file right away, nested like the XML. The generated binding class holds a typed reference to each view that has an id.',
+            },
+            frames: [
+              { screen: '<div class="ui-m-body"><div class="ui-m-center ui-m-muted">nothing inflated yet</div></div>', log: '// activity_profile.xml: ConstraintLayout › TextView @+id/title, Button @+id/follow', say: 'The XML only describes the screen. No View exists yet.' },
+              { screen: scr('Profile'), log: ['binding = ActivityProfileBinding.inflate(layoutInflater)', 'setContentView(binding.root)'], say: 'Inflation builds a <code>ConstraintLayout</code>, a <code>TextView</code> and a <code>Button</code>. The binding gets <code>title</code> and <code>follow</code> fields.' },
+              { screen: scr('Hi, Ada'), log: 'binding.title.text = "Hi, Ada"', say: '<code>binding.title</code> is already a <code>TextView</code>: no cast and no null check.' },
+              { log: 'binding.subtitle.text = …  // compile error: Unresolved reference', say: 'There is no view with the id <code>subtitle</code>, so there is no field. The mistake fails before the app runs.' },
+              { log: 'findViewById&lt;Button&gt;(R.id.title)  // crash: ClassCastException', say: '<code>findViewById</code> trusts you at runtime. <code>title</code> is a TextView, so asking for a Button crashes.' },
+              { screen: scr('Hi, Ada', true), log: '// Button without layout_constraintTop_toBottomOf', say: 'Remove the Button’s vertical constraint. At runtime it jumps to the top of the parent and lands on the title.' },
+            ],
           });
-          screen.append(root, title, btn);
-          async function inflate() {
-            if (busy) return; busy = true;
-            screen.replaceChildren();
-            for (let i = 0; i < lines.length; i++) {
-              lines[i].classList.add('scan');
-              if (i === 0) screen.append(root);
-              if (i === 1) { title.classList.add('drop-in'); screen.append(title); }
-              if (i === 3) { btn.classList.add('drop-in'); screen.append(btn); }
-              await sleep(360);
-              lines[i].classList.remove('scan');
-              if (!el.isConnected) return;
-            }
-            title.classList.remove('drop-in'); btn.classList.remove('drop-in');
-            say(o, '<span class="good">inflated:</span> 3 View objects. The binding holds typed fields for the 2 with ids.');
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'vw-split' }, h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'activity_profile.xml'), code), screen),
-            sw.el,
-            h('div', { class: 'controls' },
-              cmd('ActivityProfileBinding.inflate(layoutInflater)', inflate),
-              cmd('binding.title.text = name', () => {
-                if (busy) return;
-                titleText.textContent = names[n++ % names.length]; replay(title, 'pop');
-                say(o, `<span class="good">ok:</span> binding.title is a TextView, no cast, no null check`);
-              }),
-              cmd('binding.subtitle.text = name', () => { if (busy) return; replay(code, 'shake'); say(o, '<span class="bad">compile error:</span> Unresolved reference \'subtitle\' <span class="muted">// caught before the app runs</span>'); }),
-              cmd('findViewById<Button>(R.id.title)', () => { if (busy) return; replay(title, 'shake'); say(o, '<span class="bad">crash:</span> ClassCastException: TextView cannot be cast to Button'); })),
-            o);
         },
       },
 
@@ -1406,6 +1369,12 @@ val title = findViewById<TextView>(R.id.title)`,
               cmd('badge.badgeColor = next', recolor)),
             h('div', { class: 'vw-stats' }, tally.measure, tally.layout, tally.draw),
             o);
+        },
+        predict: {
+          q: '<code>badge.count</code> jumps from 8 to 128, so the badge gets wider. Which views does the next frame measure?',
+          options: ['Only the badge', 'The badge’s parent and its children: the request goes up the tree and the parent measures again', 'None: only a redraw runs'],
+          a: 1,
+          why: '<code>requestLayout()</code> marks the view and its parents. The parent then measures its children again, because one child’s size can move the others.',
         },
       },
 
@@ -1653,6 +1622,12 @@ override fun onBindViewHolder(holder: RowHolder, position: Int) {
             h('div', { class: 'vw-stats' }, sCreate, sBind, sItems),
             o);
         },
+        predict: {
+          q: 'Five rows fill the screen. You scroll down and the top row leaves. What happens to its ViewHolder?',
+          options: ['It is destroyed', 'It waits in the RecycledViewPool, then gets rebound for a row that scrolls in', 'It stays attached off screen'],
+          a: 1,
+          why: 'RecyclerView keeps a handful of holders and recycles them. A holder that scrolls off goes to the pool, and <code>onBindViewHolder</code> fills it with a new item.',
+        },
       },
 
       // 3b ────────────────────────────────────────────
@@ -1834,6 +1809,12 @@ const val TYPE_PERSON = 1   // copy-paste: same number`,
             h('div', { class: 'vw-stats' }, sH, sP),
             o);
         },
+        predict: {
+          q: 'Which method tells RecyclerView which layout a position needs, before a holder is picked?',
+          options: ['<code>getItemViewType(position)</code>', '<code>onBindViewHolder</code>', '<code>getItemCount()</code>'],
+          a: 0,
+          why: 'RecyclerView asks <code>getItemViewType</code> first, then takes a holder from that type’s bin in the pool, or calls <code>onCreateViewHolder</code> with that type.',
+        },
       },
 
       // 4 ─────────────────────────────────────────────
@@ -1968,6 +1949,12 @@ viewLifecycleOwner.lifecycleScope.launch {
               })),
             h('div', { class: 'vw-stats' }, sBind),
             o);
+        },
+        predict: {
+          q: '<code>areItemsTheSame</code> compares whole objects. You star one contact. How does the list update that row?',
+          options: ['A change animation on that row', 'A removal plus an insertion', 'Nothing happens'],
+          a: 1,
+          why: 'The starred contact is a different object now, so DiffUtil thinks the old item left and a new one arrived. Comparing ids instead turns it into a change.',
         },
       },
 
@@ -2189,73 +2176,24 @@ replace<DetailFragment>(R.id.container, args = bundleOf("userId" to 42L))`,
           },
         ],
         visual(el) {
-          let useView = true, busy = false, onB = false, observers = 1, aViewGen = 1;
-          const log = h('div', { class: 'vw-log', 'aria-live': 'polite' });
-          const line = (txt, cls) => { log.append(h('div', { class: cls ? cls + ' drop-in' : 'drop-in' }, txt)); while (log.children.length > 7) log.firstElementChild.remove(); };
-          const chip = (txt, cls) => h('span', { class: 'vw-s' + (cls ? ' ' + cls : '') }, txt);
-          const stack = h('div', { class: 'vw-stack' });
-          const sObs = stat('observers on A', observers);
-          const sGen = stat('A views built', aViewGen);
-          const frag = (name, fState, vState, top, extra) => h('div', { class: 'vw-frag' + (top ? ' vw-top' : '') },
-            h('span', { class: 'vw-frag-name' }, name),
-            h('div', { class: 'vw-st' }, 'Fragment', chip(fState[0], fState[1])),
-            h('div', { class: 'vw-st' }, 'View', chip(vState[0], vState[1])),
-            extra || null);
-          function paint() {
-            const a = onB
-              ? frag('ProfileFragment (A)', ['CREATED', 'vw-mid'], ['destroyed', 'vw-dead'], false)
-              : frag('ProfileFragment (A)', ['RESUMED'], [`RESUMED #${aViewGen}`], true);
-            const kids = onB ? [frag('DetailFragment (B)', ['RESUMED'], ['RESUMED'], true, h('span', { class: 'vw-note' }, 'top of the back stack')), a] : [a];
-            stack.replaceChildren(...kids);
-            sObs.classList.toggle('vw-bad', observers > 1 || (onB && !useView && observers > 0));
-          }
-          paint();
-          line('A.onCreate', 'muted'); line('A.onCreateView, onViewCreated #1'); line('  observe(' + (useView ? 'viewLifecycleOwner' : 'this') + ')', 'good');
-          async function step(lines) {
-            for (const [t, c, fn] of lines) { line(t, c); if (fn) fn(); await sleep(330); if (!el.isConnected) return false; }
-            return true;
-          }
-          async function push() {
-            if (busy) return; if (onB) { replay(stack, 'shake'); line('B is already on top', 'muted'); return; }
-            busy = true; log.replaceChildren();
-            const ok = await step([
-              ['replace(B).addToBackStack("detail")', 'muted'],
-              ['B.onCreate, onCreateView, onViewCreated'],
-              ['A.onPause, onStop'],
-              ['A.onDestroyView', 'bad', () => { onB = true; if (useView) observers = 0; sObs.set(observers); paint(); }],
-              [useView ? '  observer removed with the view' : `  ${observers} observer${observers > 1 ? 's' : ''} still attached to a dead view`, useView ? 'good' : 'bad'],
-              ['B.onStart, onResume'],
-            ]);
-            if (ok) busy = false;
-          }
-          async function pop() {
-            if (busy) return; if (!onB) { replay(stack, 'shake'); line('back stack is empty: Back would finish the Activity', 'muted'); return; }
-            busy = true; log.replaceChildren();
-            const ok = await step([
-              ['popBackStack()', 'muted'],
-              ['B.onPause, onStop'],
-              [`A.onCreateView, onViewCreated #${aViewGen + 1}`, null, () => { aViewGen++; sGen.set(aViewGen); }],
-              [`  observe(${useView ? 'viewLifecycleOwner' : 'this'})`, useView ? 'good' : 'bad', () => { observers++; sObs.set(observers); }],
-              ['B.onDestroyView, onDestroy', null, () => { onB = false; paint(); }],
-              ['A.onStart, onResume'],
-              [useView ? `  1 observer, on view #${aViewGen}` : `  ${observers} observers: each update runs ${observers} times`, useView ? 'good' : 'bad'],
-            ]);
-            if (ok) busy = false;
-          }
-          const sw = toggle('vw-frag-owner', 'Observe with <code>viewLifecycleOwner</code>', true, () => {
-            useView = sw.input.checked;
-            line(`next observe uses ${useView ? 'viewLifecycleOwner' : 'this (the Fragment)'}`, useView ? 'good' : 'bad');
+          Lab.ui.timeline(el, {
+            lanes: ['A', 'A view', 'B', 'by this', 'by view'],
+            span: 10,
+            unit: 's',
+            predict: {
+              q: 'ProfileFragment A comes back from the back stack. What builds its screen again?',
+              options: ['<code>onCreate()</code> on a new Fragment object', '<code>onCreateView()</code> and <code>onViewCreated()</code> on the same Fragment object', 'Nothing: the old views are shown again'],
+              a: 1,
+              why: 'On the back stack only A’s view was destroyed. The Fragment object stayed in CREATED, so it builds a brand new view when it returns.',
+            },
+            frames: [
+              { now: 0, say: 'A is a ProfileFragment that observes LiveData in <code>onViewCreated</code>. The bottom lanes count observers: <b>by this</b> observes with the Fragment, <b>by view</b> with <code>viewLifecycleOwner</code>. In lane A, <b>on</b> means RESUMED and <b>kept</b> means CREATED on the back stack.' },
+              { bars: [{ lane: 0, from: 0, to: 2, label: 'on' }, { lane: 1, from: 0, to: 2, label: 'v1', tone: 'ok' }, { lane: 3, from: 0, to: 2, label: '1', tone: 'warm' }, { lane: 4, from: 0, to: 2, label: '1', tone: 'ok' }], say: 'A is on screen with its first view. Both versions have one observer.' },
+              { bars: [{ lane: 0, from: 2, to: 4, label: 'kept', tone: 'muted' }, { lane: 2, from: 2, to: 4, label: 'on' }, { lane: 3, from: 2, to: 4, label: '1', tone: 'err' }], marks: [{ at: 2, label: 'replace', tone: 'muted' }], say: '<code>replace&lt;B&gt;</code> with <code>addToBackStack</code>. A’s view runs <code>onDestroyView</code>, but the Fragment stays in CREATED. The view owner’s observer is removed with the view. The <code>this</code> observer stays, holding the dead view.' },
+              { bars: [{ lane: 0, from: 4, to: 6, label: 'on' }, { lane: 1, from: 4, to: 6, label: 'v2', tone: 'ok' }, { lane: 3, from: 4, to: 6, label: '2', tone: 'err' }, { lane: 4, from: 4, to: 6, label: '1', tone: 'ok' }], marks: [{ at: 4, label: 'Back', tone: 'muted' }], say: 'Back. B is destroyed. A builds view 2 and <code>onViewCreated</code> observes again: <code>this</code> now has 2 observers, the view owner still 1.' },
+              { bars: [{ lane: 0, from: 6, to: 8, label: 'kept', tone: 'muted' }, { lane: 2, from: 6, to: 8, label: 'on' }, { lane: 3, from: 6, to: 8, label: '2', tone: 'err' }, { lane: 0, from: 8, to: 10, label: 'on' }, { lane: 1, from: 8, to: 10, label: 'v3', tone: 'ok' }, { lane: 3, from: 8, to: 10, label: '3', tone: 'err' }, { lane: 4, from: 8, to: 10, label: '1', tone: 'ok' }], say: 'One more trip to B and back. Three <code>this</code> observers run on every change, two of them for views that are gone. With <code>viewLifecycleOwner</code> there is always exactly one.' },
+            ],
           });
-          el.append(
-            h('div', { class: 'vw-split' },
-              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'Back stack, top first'), stack),
-              h('div', { class: 'vw-col' }, h('span', { class: 'vw-label' }, 'Callbacks'), log)),
-            sw.el,
-            h('div', { class: 'controls' },
-              cmd('commit { replace<DetailFragment>(...) }', push),
-              cmd('popBackStack()', pop)),
-            h('div', { class: 'vw-stats' }, sObs, sGen),
-            h('p', { class: 'tip' }, 'Turn the switch off, then go to B and back a few times.'));
         },
       },
 
@@ -2432,6 +2370,12 @@ override fun createFragment(position: Int) = pages[position]`,
             log,
             o);
         },
+        predict: {
+          q: 'The page logs a page view in <code>onViewCreated</code>. The pager opens on page 0. How many page views are logged?',
+          options: ['1: page 0', '2: page 0 and its neighbour, page 1', '6: every page'],
+          a: 1,
+          why: 'ViewPager2 creates the neighbour page ahead of time, and its <code>onViewCreated</code> runs too. Only the page on screen reaches RESUMED.',
+        },
       },
 
       // 6 ─────────────────────────────────────────────
@@ -2571,6 +2515,12 @@ binding.rating.apply {
             h('div', { class: 'controls' }, migrate),
             o2);
         },
+        predict: {
+          q: 'With the default strategy, the ComposeView is detached from the window, then attached again. What happens to the count?',
+          options: ['It keeps its value', 'It starts over: the composition was disposed', 'The app crashes'],
+          a: 1,
+          why: 'The default, <code>DisposeOnDetachedFromWindowOrReleasedFromPool</code>, disposes the composition on detach, and <code>remember</code> state goes with it.',
+        },
       },
 
       // 7 ─────────────────────────────────────────────
@@ -2690,6 +2640,12 @@ fun LegacyBanner(title: String) {
               tgl),
             h('div', { class: 'vw-stats' }, sF, sU, sR),
             o);
+        },
+        predict: {
+          q: 'The View’s value is set only in <code>factory</code>. You change <code>speed</code> from 40 to 60. What does the GaugeView show?',
+          options: ['60', '40: factory ran once and nothing updates the View', 'An empty gauge'],
+          a: 1,
+          why: '<code>factory</code> runs once to create the View. Only <code>update</code> runs again when the state it reads changes.',
         },
       },
     ],

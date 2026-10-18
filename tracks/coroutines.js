@@ -554,6 +554,33 @@ fun onSaved() {
         h('div', { class: 'controls' }, cmd('fan-out: 3 workers, 6 jobs', act(fanOut)), cmd('send an event during rotation', act(rotation))),
         stage, o2);
     },
+        predict: {
+          q: 'The channel is <code>Channel&lt;Int&gt;(CONFLATED)</code>. The sender sends 1, 2 and 3 before the receiver is ready. What does the receiver get?',
+          options: ['1, 2 and 3, in order', 'Only 3', 'Only 1'],
+          a: 1,
+          why: 'A conflated channel holds one slot. Each <code>send</code> replaces the value waiting there, so the receiver gets the newest one and the rest are dropped.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.*
+
+fun main() = runBlocking {
+    val jobs = Channel<Int>()   // try Channel<Int>(3) or Channel<Int>(Channel.CONFLATED)
+    launch {
+        for (n in 1..5) {
+            println("send $n")
+            jobs.send(n)        // with no buffer, this waits for a receiver
+        }
+        jobs.close()
+    }
+    repeat(2) { id ->
+        launch {
+            for (n in jobs) {   // each value goes to exactly one worker
+                println("    worker $id got $n")
+                delay(100)
+            }
+        }
+    }
+}`,
   };
 
   // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
@@ -1225,6 +1252,38 @@ viewModelScope.async(handler) {         // not used: async keeps the exception
         h('div', { class: 'controls' }, cmd('posts() throws IOException', fail), cmd('posts.await()', awaitIt), cmd('reset', () => { if (busy) return; build(); say(o, '<span class="muted">reset:</span> three fresh children.'); })),
         dest, o);
     },
+        predict: {
+          q: 'The parent is <code>coroutineScope { }</code>, which has a plain Job. <code>posts()</code> throws. What happens to news and badges?',
+          options: ['They keep running', 'They are cancelled, and the scope rethrows the exception', 'They pause until someone catches the exception'],
+          a: 1,
+          why: 'A plain Job treats a failed child as its own failure: it cancels the other children and passes the exception up. Only a SupervisorJob lets siblings carry on.',
+        },
+        play: `import kotlinx.coroutines.*
+
+fun main() = runBlocking {
+    val handler = CoroutineExceptionHandler { _, e -> println("handler got: \${e.message}") }
+    val scope = CoroutineScope(SupervisorJob() + handler)   // try Job() instead of SupervisorJob()
+
+    scope.launch {
+        delay(100)
+        throw RuntimeException("posts failed")
+    }
+    scope.launch {
+        delay(300)
+        println("news finished")
+    }
+    scope.launch {
+        try {
+            delay(200)
+            throw IllegalArgumentException("badges failed")
+        } catch (e: IllegalArgumentException) {
+            println("caught inside: \${e.message}")       // the first tool: try/catch
+        }
+    }
+
+    delay(500)
+    println("scope still active = \${scope.isActive}")
+}`,
   };
 
   // ─── Cancellation and timeouts ─────────────────
@@ -1281,7 +1340,55 @@ val weather = [[withTimeoutOrNull]](2_000) { api.weather() } ?: cachedWeather`, 
       { q: 'A coroutine is waiting in <code>delay()</code> inside a try/finally. You call <code>job.cancel()</code>. Which order is right?', options: ['Job marked cancelled → delay throws CancellationException → finally runs → Job completes as cancelled', 'finally runs → Job marked cancelled → delay returns early → Job completes', 'delay finishes its wait → Job marked cancelled → finally runs'], a: 0, why: 'cancel() only marks the Job. The next suspension point, here the waiting delay, throws CancellationException, which unwinds the code and runs finally.' },
       { q: 'A coroutine is stuck in a blocking <code>BlockingQueue.take()</code> and ignores cancel(). Which fix lets cancel stop it?', options: ['Call ensureActive() before take()', 'Wrap the call in runInterruptible { }', 'Move it to Dispatchers.IO'], a: 1, why: 'runInterruptible interrupts the thread when the coroutine is cancelled, so the blocking call throws and the coroutine ends. ensureActive() only checks before the call starts.' },
     ],
-    visual: cancelChecksStep.visual,
+    visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: 'val job = launch(Dispatchers.Default) {\n    try {\n        repeat(1_000) { i ->\n            ensureActive()\n            crunch(i)   // CPU only, no suspend\n        }\n    } finally {\n        println("cleanup")\n    }\n}\ndelay(120)\njob.cancel()\njob.join()\nprintln("done")',
+            varsTitle: 'State',
+            predict: {
+              q: 'The caller cancels while <code>crunch(2)</code> is running. When does the coroutine actually stop?',
+              options: ['Right away, in the middle of <code>crunch(2)</code>', 'When <code>crunch(2)</code> returns and the loop reaches <code>ensureActive()</code>', 'Only after all 1,000 steps'],
+              a: 1,
+              why: '<code>cancel()</code> only marks the Job as cancelled. Plain CPU code never looks at that mark. <code>ensureActive()</code> does, and throws <code>CancellationException</code> when it sees it.',
+            },
+            frames: [
+              { say: 'A CPU loop runs on <code>Dispatchers.Default</code>. Each <code>crunch(i)</code> takes about 50 ms. The caller waits 120 ms, then cancels.' },
+              { line: 1, vars: { job: 'Active' }, say: '<code>launch</code> starts the loop on a Default thread. The caller goes on to line 11 at the same time.' },
+              { line: [4, 5], vars: { i: '0 → 1 → 2' }, say: 'Steps 0 and 1 finish. Each time, <code>ensureActive()</code> checks the Job: still active, so it returns.' },
+              { line: 12, vars: { job: 'Cancelling', i: '2' }, say: 'At 120 ms the caller runs <code>job.cancel()</code>. The Job is now marked cancelled, but the loop is busy inside <code>crunch(2)</code> and does not notice.' },
+              { line: 5, vars: { i: '2' }, say: '<code>crunch(2)</code> is plain CPU work with no check, so it runs to its end. Cancellation cannot interrupt it.' },
+              { line: 4, vars: { i: '3' }, say: 'Next step: <code>ensureActive()</code> sees the mark and throws <code>CancellationException</code>. <code>crunch(3)</code> never runs.' },
+              { line: 8, out: 'cleanup', say: 'The exception unwinds the code, so the <code>finally</code> block runs. Close files and release things here.' },
+              { line: [13, 14], vars: { job: 'Cancelled', i: null }, out: 'done', say: '<code>join()</code> returned only after the coroutine fully finished, <code>finally</code> included. Without <code>ensureActive()</code>, all 1,000 steps would have run first.' },
+            ],
+          });
+        },
+        play: `import kotlinx.coroutines.*
+
+// About 50 ms of pure CPU work. It never suspends and never checks for cancellation.
+fun crunch() {
+    val end = System.currentTimeMillis() + 50
+    while (System.currentTimeMillis() < end) { }
+}
+
+fun main() = runBlocking {
+    val job = launch(Dispatchers.Default) {
+        try {
+            repeat(10) { i ->
+                ensureActive()       // delete this line and run again
+                crunch()
+                println("step $i done")
+            }
+            println("loop finished")
+        } finally {
+            println("cleanup")
+        }
+    }
+    delay(120)
+    job.cancel()
+    println("cancel() called")
+    job.join()
+    println("done")
+}`,
     deeper: [
       {
         title: 'withTimeout throws, withTimeoutOrNull returns null',
@@ -1544,59 +1651,46 @@ launch(Dispatchers.IO) { download(url); finished.incrementAndGet() }`,
       },
     ],
     visual(el) {
-      const MODES = [
-        ['plain', 'var count', [['A', 'read 5', '', 5], ['B', 'read 5', '', 5], ['A', 'write 6', 'acc', 6], ['B', 'write 6', 'bad', 6]]],
-        ['mutex', 'mutex.withLock { }', [['A', 'lock', 'ok'], ['B', 'lock: suspends', 'warn'], ['A', 'read 5', '', 5], ['A', 'write 6', 'acc', 6], ['A', 'unlock', 'ok'], ['B', 'gets lock', 'ok'], ['B', 'read 6', '', 6], ['B', 'write 7', 'acc', 7], ['B', 'unlock', 'ok']]],
-        ['atomic', 'AtomicInteger', [['A', 'incrementAndGet → 6', 'acc', 6], ['B', 'incrementAndGet → 7', 'acc', 7]]],
-        ['confined', 'limitedParallelism(1)', [['B', 'queued', 'warn'], ['A', 'read 5', '', 5], ['A', 'write 6', 'acc', 6], ['B', 'read 6', '', 6], ['B', 'write 7', 'acc', 7]]],
-      ];
-      let mode = 'plain', busy = false;
-      const counter = h('span', { class: 'flw-badge' }, 'count = 5');
-      const lanes = { A: h('div', { class: 'flw-strip flw-wrap' }), B: h('div', { class: 'flw-strip flw-wrap' }) };
-      const o = out();
-      const o2 = out('Then run the big version: 3 coroutines, 1,000 increments each.');
-      const btns = MODES.map(([k, label]) => cmd(label, () => { if (busy) return; mode = k; clear(); pressed(btns, MODES.map(m => m[0]), k); say(o, `<span class="muted">mode:</span> ${hl(label)}. Run count++ on two threads.`); }));
-      function clear() {
-        counter.textContent = 'count = 5'; counter.className = 'flw-badge';
-        Object.values(lanes).forEach(l => l.replaceChildren(h('span', { class: 'flw-note' }, 'idle')));
-      }
-      async function race() {
-        if (busy) return; busy = true;
-        try {
-          clear(); Object.values(lanes).forEach(l => l.replaceChildren());
-          const steps = MODES.find(m => m[0] === mode)[2];
-          for (const [who, text, cls, val] of steps) {
-            lanes[who].append(h('span', { class: `flw-v drop-in ${cls}` }, text));
-            if (text.startsWith('write') || text.startsWith('increment')) { counter.textContent = `count = ${val}`; replay(counter, 'pop'); }
-            await sleep(620); if (!el.isConnected) return;
-          }
-          const final = steps.filter(s => s[3] != null).pop()[3];
-          counter.className = 'flw-badge';
-          if (final === 7) say(o, `<span class="good">7:</span> ${mode === 'mutex' ? 'B waited, suspended, until A unlocked, then read the new value.' : mode === 'atomic' ? 'each increment was one indivisible step, so neither could interleave.' : 'one thread ran A, then B. They could never overlap.'}`);
-          else { replay(counter, 'shake'); say(o, '<span class="bad">6, not 7:</span> both read 5 before either wrote. B’s write overwrote A’s, and one increment was lost.'); }
-        } finally { busy = false; }
-      }
-      async function big() {
-        if (busy) return; busy = true;
-        try {
-          say(o2, `${hl('repeat(3) { launch(Dispatchers.Default) { repeat(1_000) { count++ } } }')}`);
-          await sleep(700); if (!el.isConnected) return;
-          const res = mode === 'plain' ? 3000 - (150 + Math.floor(Math.random() * 900)) : 3000;
-          say(o2, res === 3000
-            ? `<span class="good">3000</span> every time with ${hl(MODES.find(m => m[0] === mode)[1])}.`
-            : `<span class="bad">${res}</span>, not 3000. Run it again and you get a different number. That is a race.`);
-        } finally { busy = false; }
-      }
-      clear(); pressed(btns, MODES.map(m => m[0]), mode);
-      o.innerHTML = 'Two coroutines on different threads both run count++. It starts at 5.';
-      el.append(h('div', { class: 'controls' }, btns),
-        h('div', { class: 'flw-search' },
-          h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'shared'), h('div', {}, counter)),
-          h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'thread A'), lanes.A),
-          h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'thread B'), lanes.B)),
-        h('div', { class: 'controls' }, cmd('both run count++ at once', race), cmd('3 × 1,000 increments', big)),
-        o, o2);
-    },
+          Lab.ui.timeline(el, {
+            lanes: ['thread A', 'thread B', 'A + lock', 'B + lock'],
+            span: 8,
+            unit: 'steps',
+            predict: {
+              q: '<code>count</code> is 5. Both threads run <code>count++</code>, and B reads <code>count</code> before A has written. What is <code>count</code> at the end?',
+              options: ['7', '6', '5'],
+              a: 1,
+              why: 'Both threads read 5, and both write 5 + 1. The second write overwrites the first, so one increment is lost.',
+            },
+            frames: [
+              { now: 0, say: '<code>count</code> is 5. Threads A and B both run <code>count++</code>, which is three steps: read, add 1, write.' },
+              { bars: [{ lane: 0, from: 0, to: 2, label: 'read 5' }], say: 'A reads <code>count</code> into a register: 5.' },
+              { bars: [{ lane: 1, from: 2, to: 4, label: 'read 5', tone: 'warm' }], say: 'Before A writes, the scheduler runs B. B reads the same old value, 5.' },
+              { bars: [{ lane: 0, from: 4, to: 6, label: 'set 6' }], say: 'A adds 1 and writes 6.' },
+              { bars: [{ lane: 1, from: 6, to: 8, label: 'set 6', tone: 'err' }], say: 'B adds 1 to <em>its</em> 5 and writes 6 over A’s 6. Two increments ran, but <code>count</code> is 6. One update is lost.' },
+              { bars: [{ lane: 2, from: 0, to: 4, label: '5 → 6', tone: 'ok' }, { lane: 3, from: 0, to: 4, label: 'suspended', tone: 'muted' }], now: 4, say: 'Now with <code>mutex.withLock { count++ }</code>. A takes the lock and does all three steps. B calls <code>lock()</code> and suspends: its thread is free for other coroutines.' },
+              { bars: [{ lane: 3, from: 4, to: 8, label: '6 → 7', tone: 'ok' }], say: 'A unlocks, B resumes with the lock and reads the <em>new</em> value, 6. <code>count</code> ends at 7: no update lost.' },
+            ],
+          });
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+var count = 0
+val mutex = Mutex()
+
+fun main() = runBlocking {
+    withContext(Dispatchers.Default) {       // several threads
+        repeat(4) {
+            launch {
+                repeat(100_000) {
+                    count++                   // change to: mutex.withLock { count++ }
+                }
+            }
+        }
+    }
+    println("count = $count, expected 400000")
+}`,
   };
 
   Lab.addTrack({
@@ -1836,6 +1930,22 @@ fun load(cont: Continuation<User>): Any? {
             h('div', { class: 'controls' }, buttons, h('button', { class: 'btn primary small', onclick: play }, 'Play'), clock),
             snippet, tl, legend, note, con);
         },
+        predict: {
+          q: 'With <code>delay()</code>, coroutine A waits 800 ms. What is the main thread doing during that wait?',
+          options: ['It is stuck inside <code>delay()</code> until A is done', 'It is free: it runs B and anything else that is ready', 'It sleeps, then wakes up every few milliseconds to check A'],
+          a: 1,
+          why: '<code>delay()</code> suspends the coroutine and gives the thread back. A timer resumes A later, so one thread can serve many waiting coroutines.',
+        },
+        play: `import kotlinx.coroutines.*
+
+fun main() = runBlocking {
+    val start = System.currentTimeMillis()
+    val a = launch { delay(800); println("A done") }   // try Thread.sleep(800)
+    val b = launch { delay(400); println("B done") }   // and Thread.sleep(400)
+    println("Started")
+    joinAll(a, b)
+    println("Took about \${System.currentTimeMillis() - start} ms")
+}`,
       },
 
       // 2 ─────────────────────────────────────────────
@@ -2006,6 +2116,42 @@ fun load(cont: Continuation<User>): Any? {
               }))),
             o);
         },
+        predict: {
+          q: 'You call <code>feedJob.cancel()</code>. What happens to <code>tick</code>, which was launched in the same <code>viewModelScope</code> but not inside feedJob?',
+          options: ['It is cancelled too: the whole scope stops', 'It keeps running: it is not a child of feedJob', 'It pauses until <code>refresh()</code> runs'],
+          a: 1,
+          why: 'Cancellation travels down the tree from the Job you cancel. news and weather are feedJob’s children; tick is its sibling.',
+        },
+        play: `import kotlinx.coroutines.*
+
+val weatherFails = true   // change to false and run again
+
+suspend fun loadFeed(): String = coroutineScope {
+    val news = async {
+        try {
+            delay(300)
+            println("news returned")
+            "news"
+        } catch (e: CancellationException) {
+            println("news was cancelled")
+            throw e
+        }
+    }
+    val weather = async {
+        delay(100)
+        if (weatherFails) throw IllegalStateException("weather failed")
+        "sunny"
+    }
+    "\${news.await()} + \${weather.await()}"
+}
+
+fun main() = runBlocking {
+    try {
+        println(loadFeed())
+    } catch (e: IllegalStateException) {
+        println("caught: \${e.message}")
+    }
+}`,
       },
 
       exceptions,
@@ -2055,78 +2201,45 @@ fun load(cont: Continuation<User>): Any? {
         underHood: dispatchersDepth.underHood,
         mistakes: dispatchersDepth.mistakes,
         visual(el) {
-          const lanes = {};
-          const tl = h('div', { class: 'timeline' }, [['main', 'Main (UI)'], ['io', 'IO'], ['def', 'Default']].map(([id, name]) => {
-            lanes[id] = h('div', { class: 'lane-track flw-dtrack' });
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), lanes[id]);
-          }));
-          const label = h('span', {}, 'load()'), bar = h('i');
-          const task = h('span', { class: 'flw-task' }, label, h('span', { class: 'flw-prog' }, bar));
-          lanes.main.append(task);
-          const dot = h('span', { class: 'flw-dot' }), fps = h('span', { class: 'flw-fps' }, 'smooth');
-          const ui = h('div', { class: 'flw-ui' }, h('span', { class: 'flw-ui-label' }, 'UI frames'), h('span', { class: 'flw-ui-track' }, dot), fps);
-          const MODES = {
-            good: {
-              label: 'load()',
-              lines: ['viewModelScope.launch {              // starts on Main', '    showSpinner()', '    val json = withContext(Dispatchers.IO) { api.fetch() }', '    val list = withContext(Dispatchers.Default) { parse(json) }', '    render(list)                     // back on Main', '}'],
-              steps: [[0, 'main', 'launch', 350], [1, 'main', 'showSpinner()', 450], [2, 'io', 'api.fetch()', 1700], [3, 'def', 'parse(json)', 1300], [4, 'main', 'render(list)', 450]],
+          Lab.ui.timeline(el, {
+            lanes: ['Main', 'IO', 'Default'],
+            span: 1200,
+            predict: {
+              q: '<code>withContext(Dispatchers.IO) { api.fetch() }</code> takes 500 ms. What does the Main thread do during those 500 ms?',
+              options: ['It is blocked, waiting for <code>fetch()</code> to return', 'It is free to draw frames and handle taps', 'It runs <code>render(list)</code> at once, before the data arrives'],
+              a: 1,
+              why: '<code>withContext</code> suspends the coroutine, not the thread. Main is released while the block runs elsewhere, and the coroutine comes back to Main with the result.',
             },
-            bad: {
-              label: 'loadBlocking()',
-              lines: ['viewModelScope.launch {              // starts on Main', '    showSpinner()', '    val json = api.fetchBlocking()   // blocks Main', '    val list = parse(json)           // still on Main', '    render(list)', '}'],
-              steps: [[0, 'main', 'launch', 350], [1, 'main', 'showSpinner()', 300], [2, 'main', 'api.fetchBlocking()', 1700, true], [3, 'main', 'parse(json)', 1300, true], [4, 'main', 'render(list)', 450]],
-            },
-          };
-          const codeBox = h('div', { class: 'when' });
-          const o = out('Run load() and watch the task change lanes while the UI dot keeps moving.');
-          let mode = 'good', rows = [], busy = false, blocked = false, phase = 0, frozenMs = 0;
-          const buttons = Object.keys(MODES).map(k => cmd(MODES[k].label, () => run(k)));
-          function paint() {
-            rows = MODES[mode].lines.map(l => h('div', { class: 'branch', html: hl(l) }));
-            codeBox.replaceChildren(...rows);
-            buttons.forEach((b, i) => b.setAttribute('aria-pressed', Object.keys(MODES)[i] === mode));
-          }
-          loop(ui, (now, dt) => {
-            if (blocked) { frozenMs += dt; fps.textContent = `frozen ${(frozenMs / 1000).toFixed(1)} s`; return; }
-            phase += dt;
-            const x = (Math.sin(phase / 450) + 1) / 2;
-            dot.style.left = `calc(${x * 100}% - ${x * 12}px)`;
+            frames: [
+              { now: 0, say: '<code>viewModelScope.launch { load() }</code> starts on Main. Watch which thread runs each line.' },
+              { bars: [{ lane: 0, from: 0, to: 100, label: 'spinner' }], say: '<code>showSpinner()</code> is quick UI work, so it runs on Main.' },
+              { bars: [{ lane: 1, from: 100, to: 600, label: 'api.fetch()' }, { lane: 0, from: 100, to: 600, label: 'free: frames', tone: 'muted' }], say: '<code>withContext(Dispatchers.IO)</code> moves the blocking call to an IO thread. The coroutine is suspended, and Main keeps drawing frames.' },
+              { bars: [{ lane: 2, from: 600, to: 1000, label: 'parse(json)', tone: 'warm' }, { lane: 0, from: 600, to: 1000, label: 'free: frames', tone: 'muted' }], say: '<code>withContext(Dispatchers.Default)</code> runs the CPU-heavy parsing on a thread meant for computation. Main is still free.' },
+              { bars: [{ lane: 0, from: 1000, to: 1100, label: 'render', tone: 'ok' }], say: 'Each <code>withContext</code> returned its result, and the coroutine resumed on Main to <code>render(list)</code>. The steps ran one after another, never in parallel.' },
+              { now: 1100, say: 'Main only ever ran short UI steps, so the screen never froze. Put <code>fetch()</code> and <code>parse()</code> on Main instead and the spinner would stop for 900 ms.' },
+            ],
           });
-          async function run(k) {
-            if (busy) return; busy = true; mode = k; paint();
-            frozenMs = 0; fps.textContent = 'smooth';
-            for (const [i, lane, text, ms, block] of MODES[k].steps) {
-              rows.forEach((r, j) => r.classList.toggle('scan', j === i));
-              label.textContent = text;
-              bar.style.transition = 'none'; bar.style.width = '0%';
-              if (task.parentElement !== lanes[lane]) {
-                moveTo(task, lanes[lane]);
-                say(o, `<span class="muted">withContext:</span> hopping to ${lane === 'main' ? 'Main' : lane === 'io' ? 'Dispatchers.IO' : 'Dispatchers.Default'}`);
-                await sleep(480); if (!task.isConnected) return;
-              }
-              label.textContent = text;
-              bar.style.transition = 'none'; bar.style.width = '0%'; void bar.offsetWidth;
-              bar.style.transition = `width ${ms}ms linear`; bar.style.width = '100%';
-              blocked = !!block; ui.classList.toggle('frozen', blocked);
-              if (blocked) say(o, `<span class="bad">blocking Main:</span> ${hl(text)} holds the UI thread, so no frames are drawn.`);
-              await sleep(ms); if (!task.isConnected) return;
-            }
-            blocked = false; ui.classList.remove('frozen');
-            rows.forEach(r => r.classList.remove('scan'));
-            label.textContent = 'done: 20 articles';
-            replay(task, 'pop');
-            if (k === 'bad') {
-              fps.textContent = `froze ${(frozenMs / 1000).toFixed(1)} s`;
-              say(o, `<span class="bad">jank:</span> Main was blocked for ${(frozenMs / 1000).toFixed(1)} s, about ${Math.round(frozenMs / 16.7)} dropped frames. Block it for 5 s and Android shows "App not responding".`);
-            } else {
-              fps.textContent = 'smooth the whole time';
-              say(o, '<span class="good">ok:</span> the slow parts ran on IO and Default. Main only did the quick UI steps, so the dot never stopped.');
-            }
-            busy = false;
-          }
-          paint();
-          el.append(h('div', { class: 'controls' }, buttons), codeBox, ui, tl, o);
         },
+        play: `import kotlinx.coroutines.*
+
+fun log(msg: String) = println("[\${Thread.currentThread().name}] $msg")
+
+fun main() = runBlocking {
+    log("start")
+    val json = withContext(Dispatchers.IO) {
+        log("fetching")
+        delay(100)               // stands in for a slow network call
+        "[3, 1, 2]"
+    }
+    log("got $json")             // back on the caller's thread
+    val sorted = withContext(Dispatchers.Default) {
+        log("parsing")
+        json.trim('[', ']').split(", ").map { it.toInt() }.sorted()
+    }
+    log("render $sorted")
+    // IO and Default share one pool, so both print DefaultDispatcher-worker-N.
+    // Change runBlocking { to runBlocking(Dispatchers.Default) { and see where "start" runs.
+}`,
       },
 
       sharedState,

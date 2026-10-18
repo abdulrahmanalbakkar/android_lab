@@ -1149,7 +1149,7 @@ PLcom/example/news/feed/FeedScreenKt;->FeedRow(Lcom/example/news/Article;Landroi
     body: `
 <p>Some logic needs Android classes but no real screen, like code that reads a <code>Uri</code>, a string resource or <code>SharedPreferences</code>. In <code>src/test</code> those calls throw, because the JVM only has a stub of the Android framework. Robolectric runs the same test on the JVM with a simulated framework. Google maintains it, and it supports Android versions back to API 21.</p>
 <p>It needs no device, but it boots a sandbox first, so the first test in a run takes a few seconds. After that each test is fast. It is not a full emulator: some things, like <code>WebView</code> or system UI such as edge-to-edge, still need a device test.</p>
-<p>Run one test on each runner, then run 50 and watch how the setup cost spreads out.</p>`,
+<p>Below, one test runs three ways, then 50 tests show how the setup cost spreads out.</p>`,
     code: `// app/build.gradle.kts
 android {
     testOptions { unitTests { isIncludeAndroidResources = true } }
@@ -1333,63 +1333,26 @@ assertTrue(banner.isShown)`,
       { q: 'A test is marked <code>@Config(sdk = [28, 34])</code>. How does it run?', options: ['Once, at API 34', 'Twice, once per listed level', 'Once, at the app’s targetSdk'], a: 1, why: 'With several levels listed, Robolectric runs the test once for each. It is a cheap way to cover code that branches on SDK_INT.' },
     ],
     visual(el) {
-          const MODES = {
-            jvm: { label: 'plain JVM', setup: 0, per: 4, setupName: 'nothing to start' },
-            robo: { label: 'Robolectric', setup: 3200, per: 45, setupName: 'boot the Android sandbox' },
-            dev: { label: 'device', setup: 38000, per: 650, setupName: 'build and install two APKs' },
-          };
-          const MAX = 38000 + 50 * 650;
-          let mode = 'robo', n = 1, busy = false;
-          const setupBar = h('span', { class: 'bar queued', style: 'left:0;width:0' });
-          const testBar = h('span', { class: 'bar run', style: 'left:0;width:0' });
-          const clock = h('span', { class: 'clock' }, '0 ms');
-          const verdict = h('span', { class: 'tst-res' }, 'not run');
-          const o = out();
-          const keys = Object.keys(MODES);
-          const modeBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; mode = k; paint(); say(o, `<span class="muted">runner:</span> ${MODES[k].label}. Setup: ${MODES[k].setupName}.`); } }, MODES[k].label));
-          const nBtns = [1, 50].map(v => h('button', { class: 'cmd', onclick() { if (busy) return; n = v; paint(); } }, v === 1 ? '1 test' : '50 tests'));
-          const paint = () => { pressed(modeBtns, keys, mode); pressed(nBtns, [1, 50], n); };
-          const draw = (setup, t) => {
-            setupBar.style.width = (Math.min(t, setup) / MAX) * 100 + '%';
-            testBar.style.left = (setup / MAX) * 100 + '%';
-            testBar.style.width = (Math.max(0, t - setup) / MAX) * 100 + '%';
-            clock.textContent = fmt(t);
-          };
-          async function run() {
-            if (busy) return; busy = true;
-            const m = MODES[mode], fail = mode === 'jvm';
-            const total = m.setup + (fail ? m.per : m.per * n);
-            verdict.textContent = 'running'; verdict.className = 'tst-res';
-            say(o, `<span class="muted">$</span> run ${fail ? 1 : n} test${!fail && n > 1 ? 's' : ''} on ${m.label}`);
-            const t0 = performance.now(), DUR = 400 + 1600 * (total / MAX);
-            try {
-              for (;;) {
-                const p = Math.min(1, (performance.now() - t0) / DUR);
-                draw(m.setup, p * total);
-                if (p >= 1) break;
-                await sleep(30); if (!el.isConnected) return;
-              }
-              if (fail) {
-                verdict.textContent = 'FAILED'; verdict.className = 'tst-res tst-bad drop-in';
-                o.append(h('div', { class: 'line drop-in', html: '<span class="bad">java.lang.RuntimeException: Method parse in android.net.Uri not mocked.</span>' }));
-                o.append(h('div', { class: 'line drop-in' }, 'Fast, but the stub framework throws. This test needs more than plain Kotlin.'));
-              } else {
-                verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
-                o.append(h('div', { class: 'line drop-in', html: `<span class="good">PASSED</span> in ${fmt(total)}: ${fmt(m.setup)} setup, then ${fmt(m.per)} per test.` }));
-              }
-            } finally { busy = false; }
-          }
-          paint(); draw(MODES.robo.setup, MODES.robo.setup + MODES.robo.per);
-          verdict.textContent = 'PASSED';
-          o.innerHTML = 'Last run: 1 test on Robolectric, 3.2 s of it was booting the sandbox. Pick a runner and a test count.';
-          el.append(
-            h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'runner'), modeBtns),
-            h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'tests'), nBtns, h('button', { class: 'btn primary small', onclick: run }, 'Run'), verdict, clock),
-            h('div', { class: 'timeline' },
-              h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'setup + tests'), h('div', { class: 'lane-track' }, setupBar, testBar))),
-            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar queued' }), 'setup'), h('span', {}, h('i', { class: 'bar run' }), 'running tests')),
-            h('p', { class: 'tip' }, 'Times are typical, not exact. The bar scale is the slowest case: 50 tests on a device.'),
-            o);
+          Lab.ui.timeline(el, {
+            lanes: ['plain JVM', 'Robo&shy;lectric', 'device'],
+            span: 6,
+            unit: 's',
+            predict: {
+              q: 'One Robolectric test takes about 3.3 s. Roughly how long do 50 of them take in one run?',
+              options: ['About 50 × 3.3 s, close to three minutes', 'About 5.5 s: the sandbox boots once, then each test is fast', 'The same as 50 tests on a device'],
+              a: 1,
+              why: 'Most of the first test’s time is booting the simulated framework. Later tests in the same run reuse it and take tens of milliseconds.',
+            },
+            frames: [
+              { now: 0, say: '<code>LinkParserTest</code> calls <code>Uri.parse</code>. Run it three ways and watch the clock from the moment you start. Times are typical, not exact.' },
+              { bars: [{ lane: 0, from: 0, to: 0.15, tone: 'err', label: '✗' }], say: 'Plain JVM: <code>android.jar</code> holds only stubs, so <code>Uri.parse</code> throws “Method parse in android.net.Uri not mocked”. It fails in milliseconds.' },
+              { bars: [{ lane: 1, from: 0, to: 3.2, tone: 'muted', label: 'boot sandbox' }], say: 'Robolectric first boots a simulated Android framework inside the JVM. That takes a few seconds.' },
+              { bars: [{ lane: 1, from: 3.2, to: 3.3, tone: 'ok' }], say: 'Then the test runs real Android code, <code>Uri</code> and resources included, in about 50 ms. It passes.' },
+              { bars: [{ lane: 2, from: 0, to: 6, tone: 'warm', label: 'build + install 2 APKs, ~38 s →' }], say: 'On a device, Gradle first builds and installs the app and the test APK. The first test starts after half a minute or more.' },
+              { bars: [{ lane: 1, from: 3.3, to: 5.5, tone: 'ok', label: '+49 tests' }], say: 'Now run 50 Robolectric tests. The sandbox boots once, and the other 49 take about 45 ms each.' },
+              { now: 5.5, say: 'Robolectric: Android APIs at near-JVM speed, no device. It is still not a full device: <code>WebView</code> or system UI need a real one.' },
+            ],
+          });
         },
   };
 
@@ -1504,55 +1467,29 @@ class FakeStrings : Strings { override fun breaking() = "Eilmeldung" }`,
       { q: 'An Analytics mock has many Unit functions you don’t care about, plus <code>sessionId(): String</code>. You want unscripted Unit calls to pass but data calls to fail loudly. Which mock?', options: ['mockk&lt;Analytics&gt;()', 'mockk&lt;Analytics&gt;(relaxed = true)', 'mockk&lt;Analytics&gt;(relaxUnitFun = true)'], a: 2, why: 'relaxUnitFun relaxes only Unit functions. A relaxed mock would quietly return an empty sessionId, and a strict one fails on every unscripted log call.' },
     ],
     visual(el) {
-      const S = { relax: false, stubbed: false, twice: false, calls: [], boom: false };
-      const calls = h('div', { class: 'tst-mk-calls', 'aria-live': 'polite' });
-      const o = out();
-      const modeBtns = [false, true].map(v => h('button', { class: 'cmd', html: hl(v ? 'mockk<Analytics>(relaxUnitFun = true)' : 'mockk<Analytics>()'), onclick() { S.relax = v; reset(); paint(); say(o, v ? 'Unit functions now just run, scripted or not.' : 'Strict: every call must be scripted.'); } }));
-      const stub = h('input', { type: 'checkbox', id: 'tst-mk-stub' });
-      const bug = h('input', { type: 'checkbox', id: 'tst-mk-bug' });
-      stub.addEventListener('change', () => { S.stubbed = stub.checked; reset(); say(o, S.stubbed ? 'Scripted: log() with any arguments just runs.' : 'No script for log().'); });
-      bug.addEventListener('change', () => { S.twice = bug.checked; reset(); say(o, S.twice ? 'Bug added: open() now logs twice.' : 'Bug removed.'); });
-      function paint() { modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String([false, true][i] === S.relax))); }
-      function reset() { S.calls = []; S.boom = false; calls.replaceChildren(h('span', { class: 'tst-label' }, 'calls recorded by the mock')); }
-      async function open() {
-        reset();
-        const n = S.twice ? 2 : 1;
-        for (let i = 0; i < n; i++) {
-          await sleep(250); if (!el.isConnected) return;
-          if (!S.relax && !S.stubbed) {
-            S.boom = true;
-            calls.append(h('span', { class: 'tst-mk-call tst-mk-boom drop-in' }, 'log("article_open", 7)  no answer'));
-            say(o, '<span class="bad">MockKException:</span> no answer found for Analytics(#1).log(article_open, 7)');
-            return;
-          }
-          S.calls.push(['article_open', 7]);
-          calls.append(h('span', { class: 'tst-mk-call drop-in' }, 'log("article_open", 7)'));
-        }
-        say(o, `vm.open(7) finished. The mock recorded ${S.calls.length} call${S.calls.length > 1 ? 's' : ''}.`);
-      }
-      function check(event, id, exactly) {
-        if (S.boom) { say(o, 'The test already failed at the call. Fix the mock first.'); return; }
-        const hits = S.calls.filter(c => c[0] === event && c[1] === id).length;
-        const ok = exactly ? hits === exactly : hits > 0;
-        const rec = S.calls.length ? S.calls.map(c => `log(${c[0]}, ${c[1]})`).join(', ') : 'none';
-        say(o, ok ? `<span class="good">verified</span> log("${event}", ${id})${exactly ? ` exactly ${exactly}×` : ''}`
-          : `<span class="bad">Verification failed:</span> expected log(${event}, ${id})${exactly ? ` ${exactly}×` : ''}, matched ${hits}. Recorded: ${rec}`);
-      }
-      reset(); paint();
-      o.innerHTML = 'Run the ViewModel with a strict mock first.';
-      el.append(
-        h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'create'), modeBtns),
-        h('div', { class: 'controls tst-wrap' },
-          h('label', { class: 'switch', for: 'tst-mk-stub' }, stub, h('span', { html: hl('every { analytics.log(any(), any()) } just Runs') })),
-          h('label', { class: 'switch', for: 'tst-mk-bug' }, bug, h('span', {}, 'bug: open() logs twice'))),
-        h('div', { class: 'tst-mk-grid' },
-          h('div', { class: 'tst-sub' }, h('span', { class: 'tst-label' }, 'when'), h('div', { class: 'controls tst-wrap' }, cmd('vm.open(articleId = 7)', open))),
-          h('div', { class: 'tst-sub' }, calls)),
-        h('div', { class: 'controls tst-wrap' },
-          cmd('verify(exactly = 1) { analytics.log("article_open", 7) }', () => check('article_open', 7, 1)),
-          cmd('verify { analytics.log("article_open", 8) }', () => check('article_open', 8, 0))),
-        o);
-    },
+          Lab.ui.codeStepper(el, {
+            code: 'val analytics = mockk<Analytics>()\n\n@Test fun openingAnArticleLogsOnce() {\n  every {\n    analytics.log(any(), any())\n  } just Runs\n  val vm = ArticleViewModel(analytics)\n  vm.open(articleId = 7)\n  verify(exactly = 1) {\n    analytics.log("article_open", 7)\n  }\n  confirmVerified(analytics)\n}',
+            varsTitle: 'Inside the mock',
+            outTitle: 'Test result',
+            predict: {
+              q: 'Say <code>open()</code> had a bug and logged the event twice. Which line would fail?',
+              options: ['<code>vm.open(7)</code>: the second call throws', '<code>verify(exactly = 1)</code>', '<code>confirmVerified</code>', 'None: the test passes'],
+              a: 1,
+              why: 'The scripted answer accepts any number of calls and records them all. <code>verify(exactly = 1)</code> counts the matching calls in that record and finds two.',
+            },
+            frames: [
+              { say: 'A mock records every call made on it. Step through the test and watch the record.' },
+              { line: 1, vars: { answers: 'none', recorded: 'none' }, say: '<code>mockk&lt;Analytics&gt;()</code> makes a strict mock: no answers yet, so any call would throw <code>MockKException</code>.' },
+              { line: [4, 5, 6], vars: { answers: 'log(any(), any()) → Unit' }, say: '<code>every { … } just Runs</code> scripts <code>log()</code> for any arguments. It returns <code>Unit</code>.' },
+              { line: 7, vars: { vm: 'ArticleViewModel(mock)' }, say: 'The ViewModel gets the mock through its constructor, like a fake.' },
+              { line: 8, stack: ['vm.open(7)', 'analytics.log("article_open", 7)'], vars: { recorded: 'log("article_open", 7)' }, say: '<code>open()</code> calls <code>log()</code>. The mock finds the scripted answer, returns, and records the call with its arguments.' },
+              { line: [9, 10, 11], stack: [], out: 'verify: 1 matching call ✓', say: '<code>verify</code> searches the record for <code>log("article_open", 7)</code> and finds exactly one.' },
+              { line: 12, out: 'confirmVerified: no unverified calls ✓\nPASSED', say: '<code>confirmVerified</code> checks that no other call was recorded. The test passes.' },
+              { line: 8, vars: { recorded: 'log("article_open", 7) × 2' }, out: '— with the bug: open() logs twice —', say: 'Now imagine the bug. Both calls match the script, so <code>open()</code> runs fine and the record holds two calls.' },
+              { line: [9, 10, 11], out: 'verify(exactly = 1): found 2 calls ✗\nFAILED', say: 'The <code>verify</code> check fails. The mock caught a side effect that left no state to read back.' },
+            ],
+          });
+        },
   };
 
   const screenshotsLesson = {
@@ -1674,6 +1611,12 @@ fun ArticleCardCases() { AppTheme { ArticleCard(sampleArticle) } }`,
       { q: 'Which change is a screenshot test most likely to catch that assertIsDisplayed() misses?', options: ['A button that opens the wrong screen', 'Padding that shrank and a title that now wraps', 'A ViewModel that never loads'], a: 1, why: 'A screenshot compares the whole picture: colors, sizes, spacing and fonts. Behavior tests check that nodes exist and act right.' },
       { q: 'You have 3 themes, 4 font scales, 5 widths and 6 languages. Which set of cases fits best?', options: ['All 360 combinations', 'Default theme only', 'A few that break differently: dark theme, largest font scale, narrowest width, longest language'], a: 2, why: 'Each extra case adds images to review on every change. Pick the ones that can fail in their own way.' },
     ],
+    predict: {
+          q: 'Tolerance is 1%. You remove a small unread dot and run verify. What happens?',
+          options: ['It fails: any change fails', 'It can pass: the dot is less than 1% of the pixels, so a real change slips through', 'Verify records a new reference'],
+          a: 1,
+          why: 'A tolerance accepts a share of changed pixels. A small but real change can stay under it, which is why high tolerances are risky.',
+        },
     visual(el) {
       const W = 20, H = 12;
       const CHANGES = [
@@ -1882,91 +1825,32 @@ class CheckoutErrorTest {
       { q: 'An instrumented @HiltAndroidTest crashes because the app runs your @HiltAndroidApp class. What fixes it?', options: ['A custom test runner that creates HiltTestApplication, set as testInstrumentationRunner', 'Add @AndroidEntryPoint to the test', 'Call hiltRule.inject() earlier'], a: 0, why: 'Hilt tests must run in HiltTestApplication. For instrumented tests a small runner creates it; for Robolectric you set it with @Config.' },
     ],
     visual(el) {
-      const CLASSES = ['NewsScreenTest', 'SettingsScreenTest', 'CheckoutErrorTest'];
-      const STRATS = [
-        { k: 'none', label: 'no test module' },
-        { k: 'tii', label: '@TestInstallIn' },
-        { k: 'each', label: '@UninstallModules in each class' },
-      ];
-      const NEEDS = [
-        { k: 'same', label: 'same fake' },
-        { k: 'uninstall', label: '@UninstallModules + @BindValue' },
-        { k: 'inject', label: 'inject the fake, set error' },
-      ];
-      const S = { strat: 'none', need: 'same' };
-      let busy = false;
-      const rows = CLASSES.map(name => {
-        const bind = h('span', { class: 'tst-hl-bind' }), comp = h('span', { class: 'tst-hl-comp' }), res = h('span', { class: 'tst-res' }, 'not run');
-        return { name, bind, comp, res, el: h('div', { class: 'tst-hl-row' }, h('b', {}, name), h('div', { class: 'controls tst-wrap' }, bind, comp), res) };
-      });
-      const buildBar = h('span', { class: 'bar run', style: 'left:0;width:0' });
-      const stat = h('span', { class: 'tst-stats' });
-      const o = out();
-      const pick = (list, key) => list.map(x => h('button', { class: 'cmd', onclick() { if (busy) return; S[key] = x.k; plan(); } }, x.label));
-      const sBtns = pick(STRATS, 'strat'), nBtns = pick(NEEDS, 'need');
-      function plan() {
-        sBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(STRATS[i].k === S.strat)));
-        nBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(NEEDS[i].k === S.need)));
-        let comps = 1, compileError = null;
-        const list = rows.map((r, i) => {
-          const checkout = i === 2;
-          let fake = S.strat !== 'none', own = S.strat === 'each', fail = false;
-          if (checkout && S.need === 'uninstall') {
-            if (S.strat === 'tii') compileError = '@UninstallModules can only uninstall @InstallIn modules, not FakeNetworkModule';
-            fake = true; fail = true; own = true;
-          }
-          if (checkout && S.need === 'inject') fail = fake;
-          if (own) comps++;
-          let result;
-          if (!fake) result = [false, i === 0 ? 'SocketTimeoutException' : checkout && S.need === 'inject' ? 'app used the real API' : 'real server data changed'];
-          else if (checkout && !fail) result = [false, 'expected the error text, saw the receipt'];
-          else result = [true, checkout ? 'error text shown' : 'headlines from the fake'];
-          return { r, fake, own, result, fail };
-        });
-        return { out: list, comps, compileError };
-      }
-      function paintPlan(p) {
-        p.out.forEach(({ r, fake, own, fail }) => {
-          r.bind.textContent = fake ? (fail ? 'NewsApi → failing fake' : 'NewsApi → FakeNewsApi') : 'NewsApi → real HTTPS';
-          r.bind.className = 'tst-hl-bind ' + (fake ? 'tst-hl-fake' : 'tst-hl-real');
-          r.comp.textContent = own ? 'own components' : 'shared components';
-          r.res.textContent = 'not run'; r.res.className = 'tst-res';
-        });
-        buildBar.style.width = (p.comps / 4) * 100 + '%';
-        stat.innerHTML = `Hilt component sets generated: <b>${p.comps}</b>`;
-      }
-      async function run() {
-        if (busy) return; busy = true;
-        const p = plan(); paintPlan(p);
-        say(o, '<span class="muted">$</span> ./gradlew connectedAndroidTest');
-        if (p.compileError) {
-          await sleep(400); busy = false; if (!el.isConnected) return;
-          o.append(h('div', { class: 'line drop-in', html: `<span class="bad">error:</span> ${p.compileError}` }));
-          return;
-        }
-        let failed = 0;
-        for (const { r, result } of p.out) {
-          r.res.textContent = 'running'; await sleep(450); if (!el.isConnected) return;
-          r.res.textContent = result[0] ? 'PASSED' : 'FAILED'; r.res.className = 'tst-res drop-in' + (result[0] ? '' : ' tst-bad');
-          o.append(h('div', { class: 'line drop-in', html: `${r.name}: ${result[0] ? '<span class="good">passed</span>' : '<span class="bad">failed</span>'}, ${result[1]}` }));
-          if (!result[0]) failed++;
-        }
-        o.append(h('div', { class: 'line drop-in' }, failed ? `${failed} failed.` : `All passed with ${p.comps} component set${p.comps > 1 ? 's' : ''}.`));
-        busy = false;
-      }
-      const repaint = () => paintPlan(plan());
-      sBtns.concat(nBtns).forEach(b => b.addEventListener('click', repaint));
-      repaint();
-      o.innerHTML = 'Pick how the tests get their NewsApi, then run them.';
-      el.append(
-        h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'all tests'), sBtns),
-        h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, 'CheckoutErrorTest needs a failing API'), nBtns),
-        h('div', { class: 'tst-hl-tests' }, rows.map(r => r.el)),
-        h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'test build time'), h('div', { class: 'lane-track' }, buildBar))),
-        stat,
-        h('div', { class: 'controls tst-wrap' }, h('button', { class: 'btn primary small', onclick: run }, 'Run tests')),
-        o);
-    },
+          Lab.ui.graph(el, {
+            height: 310,
+            nodes: [
+              { id: 'test', label: 'NewsScreenTest<small>@HiltAndroidTest</small>', x: 25, y: 10, hidden: true, tone: 'warm' },
+              { id: 'app', label: 'HiltTestApplication', x: 72, y: 10, hidden: true, tone: 'warm' },
+              { id: 'act', label: 'MainActivity', x: 25, y: 50 },
+              { id: 'comp', label: 'SingletonComponent', x: 72, y: 50, tone: 'muted' },
+              { id: 'net', label: 'NetworkModule<small>real NewsApi</small>', x: 25, y: 90 },
+              { id: 'fake', label: 'FakeNetworkModule<small>FakeNewsApi</small>', x: 72, y: 90, hidden: true, tone: 'ok' },
+            ],
+            predict: {
+              q: 'The test has <code>@Inject lateinit var api: FakeNewsApi</code>, and the Activity gets a <code>NewsApi</code>. Are they the same object?',
+              options: ['Yes: both come from the test’s SingletonComponent, and the binding is <code>@Singleton</code>', 'No: the test always gets its own copy', 'Only if the test builds the Activity by hand'],
+              a: 0,
+              why: 'Hilt builds one graph for the test. A <code>@Singleton</code> binding hands the same instance to the Activity and to <code>hiltRule.inject()</code>, so the test can set it up and read it back.',
+            },
+            frames: [
+              { add: [['act', 'comp', 'NewsApi'], ['comp', 'net', 'installs']], say: 'In the app, <code>MainActivity</code> gets its <code>NewsApi</code> from <code>SingletonComponent</code>, which installs <code>NetworkModule</code>: the real server.' },
+              { show: ['test'], add: [['test', 'act', 'launches']], say: 'A UI test launches <code>MainActivity</code>. Left like this, it would call the real server.' },
+              { show: ['app'], add: [['app', 'comp', 'builds', 'warm']], say: '<code>@HiltAndroidTest</code> and <code>HiltAndroidRule</code>: the test runs in <code>HiltTestApplication</code>, and Hilt generates components just for tests.' },
+              { show: ['fake'], gone: ['net'], remove: [['comp', 'net']], add: [['comp', 'fake', 'installs instead', 'ok']], say: '<code>@TestInstallIn(replaces = [NetworkModule::class])</code> swaps the module for every test in <code>androidTest</code>.' },
+              { hl: ['test', 'comp'], add: [['comp', 'test', 'inject()', 'accent']], say: '<code>hiltRule.inject()</code> fills the test’s <code>@Inject</code> fields from the same graph: the same <code>FakeNewsApi</code> the Activity uses.' },
+              { hl: ['act', 'fake'], add: [['act', 'comp', 'fake', 'ok']], say: 'The screen shows “Kotlin 2.3 released” from the fake, and the test checks <code>api.calls == 1</code>. No network involved.' },
+            ],
+          });
+        },
   };
 
   Lab.addTrack({
@@ -2025,6 +1909,12 @@ class CheckoutFlowTest {
         deeper: pyramidDepth.deeper,
         underHood: pyramidDepth.underHood,
         mistakes: pyramidDepth.mistakes,
+        predict: {
+          q: 'You run all 226 tests: 200 unit, 20 instrumented and 6 UI tests. Which group takes most of the time?',
+          options: ['The 200 unit tests, because there are the most of them', 'The 6 UI tests', 'All three take about the same'],
+          a: 1,
+          why: 'A unit test takes milliseconds on the JVM. A UI test drives a real screen on a device and takes seconds, plus the build and install before it.',
+        },
         visual(el) {
           const layers = [
             { id: 'ui', name: 'UI tests', w: '46%', n: 6, ms: 4000, where: 'Device. Drives whole screens.', speed: 1, cost: 3, conf: 3 },
@@ -2106,7 +1996,7 @@ class CheckoutFlowTest {
         body: `
 <p>A ViewModel usually depends on a repository that talks to the network or a database. Use the real one in a unit test and the test gets slow, needs a connection, and fails whenever the server data changes.</p>
 <p>The fix is a <em>fake</em>: a small, working implementation of the same interface that keeps data in memory. The ViewModel takes the interface in its constructor, so the test can hand it the fake. A fake behaves like the real thing, which makes it easier to read and less brittle than a mock that scripts every call.</p>
-<p>Write each test in three parts. <b>Given</b> sets up the fake. <b>When</b> does one thing. <b>Then</b> checks the result. Run the test below with the real repository, then flip to the fake.</p>`,
+<p>Write each test in three parts. <b>Given</b> sets up the fake. <b>When</b> does one thing. <b>Then</b> checks the result. Step through below: first the real repository, then the fake.</p>`,
         code: `interface NewsRepository {
     suspend fun latest(): List<Article>
 }
@@ -2161,69 +2051,31 @@ class NewsViewModelTest {
         underHood: fakesDepth.underHood,
         mistakes: fakesDepth.mistakes,
         visual(el) {
-          const runsReal = [
-            { ms: 1240, ok: true }, { ms: 3000, ok: false, msg: 'SocketTimeoutException: timeout' },
-            { ms: 860, ok: true }, { ms: 1530, ok: false, msg: 'expected 1 article but was 4. The server data changed.' }, { ms: 990, ok: true },
-          ];
-          let fake = false, busy = false, n = 0;
-          const lines = [
-            ['given', () => (fake ? 'val repo = FakeNewsRepository().apply { articles = listOf(a) }' : 'val repo = NewsRepositoryImpl(api)')],
-            ['given', () => 'val vm = NewsViewModel(repo)'],
-            ['when', () => 'vm.load()'],
-            ['then', () => 'assertEquals(Success(listOf(a)), vm.state.value)'],
-          ];
-          const rows = lines.map(() => h('div', { class: 'tst-gwt-line' }));
-          const paintLines = () => lines.forEach(([k, f], i) => { rows[i].innerHTML = `<span class="t-c">${k === 'given' && i ? '     ' : k.padEnd(5)}</span> ` + hl(f()); });
-          const depName = h('b'), depNote = h('small'), depStatus = h('span');
-          const dep = h('div', { class: 'tst-dep' }, depName, depNote, depStatus);
-          const link = h('span', { class: 'tst-link' }, '→');
-          const hist = h('div', { class: 'tst-hist', 'aria-label': 'Test run history' });
-          const toggle = h('input', { type: 'checkbox', id: 'tst-fake-toggle' });
-          const o = out();
-          function paint() {
-            paintLines();
-            dep.classList.toggle('tst-fake', fake);
-            depName.textContent = fake ? 'FakeNewsRepository' : 'NewsRepositoryImpl';
-            depNote.textContent = fake ? 'list in memory' : 'HTTPS to api.example.com';
-            depStatus.textContent = 'idle';
-          }
-          async function once() {
-            const r = fake ? { ms: 3 + (n % 3), ok: true } : runsReal[n % runsReal.length];
-            n++;
-            rows.forEach(x => { x.className = 'tst-gwt-line'; });
-            for (let i = 0; i < 3; i++) { rows[i].classList.add('tst-on'); await sleep(i === 2 ? 120 : 220); if (!el.isConnected) return; rows[i].classList.remove('tst-on'); }
-            rows[2].classList.add('tst-on'); link.classList.add('tst-busy');
-            depStatus.textContent = fake ? 'returns the list' : 'waiting for server…';
-            await sleep(fake ? 160 : r.ms * 0.6);
-            link.classList.remove('tst-busy'); rows[2].classList.remove('tst-on');
-            depStatus.textContent = r.ok ? 'returned 1 article' : 'failed';
-            rows[3].classList.add(r.ok ? 'tst-pass' : 'tst-fail');
-            hist.append(h('span', { class: `tst-res drop-in${r.ok ? '' : ' tst-bad'}` }, `${r.ok ? 'pass' : 'fail'} ${fmt(r.ms)}`));
-            say(o, r.ok ? `<span class="good">PASSED</span> in ${fmt(r.ms)}` : `<span class="bad">FAILED</span> after ${fmt(r.ms)}: ${r.msg}`);
-            if (!r.ok) replay(dep, 'shake');
-          }
-          async function runMany(k) {
-            if (busy) return; busy = true;
-            for (let i = 0; i < k && el.isConnected; i++) await once();
-            busy = false;
-          }
-          toggle.addEventListener('change', () => {
-            if (busy) { toggle.checked = fake; return; }
-            fake = toggle.checked; n = 0; hist.replaceChildren(); paint();
-            say(o, fake ? 'Same test, fake dependency. Run it a few times.' : 'Real network again. Run it a few times.');
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'test', label: 'NewsViewModelTest', x: 72, y: 50, hidden: true, tone: 'warm' },
+              { id: 'vm', label: 'NewsViewModel', x: 25, y: 10 },
+              { id: 'repo', label: 'NewsRepository<small>interface</small>', x: 25, y: 50, tone: 'muted' },
+              { id: 'real', label: 'Real repository<small>network</small>', x: 25, y: 90 },
+              { id: 'fake', label: 'FakeNewsRepository<small>a list in memory</small>', x: 70, y: 90, hidden: true, tone: 'ok' },
+            ],
+            predict: {
+              q: 'The test uses <code>FakeNewsRepository</code>. You run it 100 times in a row. What changes between runs?',
+              options: ['Nothing: same input, same result, a few milliseconds each', 'The timing, and now and then the result', 'It fails from the second run on'],
+              a: 0,
+              why: 'Each test builds a new fake that holds its data in memory. No network, no shared server data, so every run is the same.',
+            },
+            frames: [
+              { add: [['vm', 'repo', 'latest()'], ['repo', 'real', 'implements']], say: 'In the app, <code>NewsViewModel</code> only knows the <code>NewsRepository</code> interface. The real implementation calls the server.' },
+              { show: ['test'], hl: ['real'], add: [['test', 'vm', 'passes real'], ['repo', 'real', 'slow, flaky', 'err']], say: 'A test with the real one waits for the network, and fails when the server is down or its data changes.' },
+              { show: ['fake'], gone: ['real'], remove: [['repo', 'real']], add: [['repo', 'fake', '', 'ok'], ['test', 'vm', 'passes fake', 'ok']], say: 'Pass a fake instead. It has the same interface, so the ViewModel can’t tell the difference.' },
+              { hl: ['test', 'fake'], add: [['test', 'fake', 'articles = …', 'accent']], say: '<b>Given</b>: the test puts one article into the fake.' },
+              { hl: ['vm', 'fake'], add: [['vm', 'repo', 'latest()', 'ok']], say: '<b>When</b>: <code>vm.load()</code> calls <code>latest()</code>. The fake returns its list from memory at once.' },
+              { hl: ['test', 'vm'], say: '<b>Then</b>: <code>assertEquals(UiState.Success(repo.articles), vm.state.value)</code>. The test checks the result, not how the ViewModel got it.' },
+              { hl: ['fake'], add: [['test', 'fake', 'error = …', 'err']], say: 'The offline test sets <code>error</code> instead. The fake throws, and the ViewModel must show <code>UiState.Error("offline")</code>. No need to pull a cable.' },
+            ],
           });
-          paint();
-          runsReal.slice(0, 3).forEach(r => hist.append(h('span', { class: `tst-res${r.ok ? '' : ' tst-bad'}` }, `${r.ok ? 'pass' : 'fail'} ${fmt(r.ms)}`)));
-          n = 3;
-          o.innerHTML = 'Three earlier runs against the real server: slow, and one failed. Flip to the fake and run again.';
-          el.append(
-            h('label', { class: 'switch', for: 'tst-fake-toggle' }, toggle, 'Use FakeNewsRepository'),
-            h('div', { class: 'tst-wire' }, h('div', { class: 'tst-gwt' }, rows), link, dep),
-            h('div', { class: 'controls' },
-              h('button', { class: 'btn primary small', onclick: () => runMany(1) }, 'Run test'),
-              h('button', { class: 'btn small', onclick: () => runMany(5) }, 'Run 5 times')),
-            h('div', { class: 'tst-sub' }, h('span', { class: 'tst-label' }, 'Run history'), hist),
-            o);
         },
       },
 
@@ -2289,6 +2141,12 @@ class SyncViewModelTest {
         deeper: coroutinesDepth.deeper,
         underHood: coroutinesDepth.underHood,
         mistakes: coroutinesDepth.mistakes,
+        predict: {
+          q: 'Main is an <code>UnconfinedTestDispatcher</code>. You call <code>vm.sync()</code>, which launches a coroutine. When does that coroutine start?',
+          options: ['Right away, inside <code>sync()</code>, up to its first suspension', 'Only after <code>advanceUntilIdle()</code>', 'After a real delay'],
+          a: 0,
+          why: 'Unconfined starts a launched coroutine eagerly. A <code>StandardTestDispatcher</code> queues it until you advance the scheduler.',
+        },
         visual(el) {
           // Part A: real vs virtual time
           const steps = [[0, 'attempt 1 failed'], [1000, 'attempt 2 failed'], [3000, 'attempt 3 ok: Done']];
@@ -2460,6 +2318,12 @@ class SyncViewModelTest {
         deeper: flowsDepth.deeper,
         underHood: flowsDepth.underHood,
         mistakes: flowsDepth.mistakes,
+        predict: {
+          q: 'The repository emits a list equal to the current state. How many new items reach Turbine’s queue?',
+          options: ['One, like every emission', 'None: a StateFlow skips a value equal to its current one', 'Two: the old and the new value'],
+          a: 1,
+          why: '<code>StateFlow</code> compares with <code>equals</code> and only emits real changes, so the collector never sees the repeat.',
+        },
         visual(el) {
           const script = [
             { src: 'vm.uiState.test {', kind: 'start' },
@@ -2626,6 +2490,12 @@ class InboxScreenTest {
         deeper: composeUiDepth.deeper,
         underHood: composeUiDepth.underHood,
         mistakes: composeUiDepth.mistakes,
+        predict: {
+          q: 'No node on the screen shows the text “Archive”. What does <code>onNodeWithText("Archive").assertIsDisplayed()</code> do?',
+          options: ['Passes: there is nothing to check', 'Fails: a finder must match exactly one node, and it found none', 'Waits until a node with that text appears'],
+          a: 1,
+          why: 'An <code>onNodeWith…</code> finder expects exactly one match. Zero or two matches fail with an AssertionError that prints the matcher.',
+        },
         visual(el) {
           let msgs = ['Standup at 10', 'Invoice #2041', 'Lunch Friday?'], sel = null, toastT;
           const subjects = ['Release notes', 'Design review', 'Weekly digest', 'Build passed'];
@@ -2767,6 +2637,12 @@ class StartupBenchmark {
         deeper: baselineDepth.deeper,
         underHood: baselineDepth.underHood,
         mistakes: baselineDepth.mistakes,
+        predict: {
+          q: 'The app ships a Baseline Profile and is installed from Play. How do the startup methods run on the first launch?',
+          options: ['Interpreted, then JIT compiled as they get hot', 'As machine code from the start: they were compiled ahead of time at install', 'They are compiled during the first frame'],
+          a: 1,
+          why: 'The profile lists the startup methods, so the system compiles them at install. Without it they start in the interpreter.',
+        },
         visual(el) {
           const TOTAL = 1100;
           const modes = {

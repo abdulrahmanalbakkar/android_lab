@@ -141,7 +141,7 @@
         body: `
 <p>An object bundles three things. <em>State</em> is the data it holds right now, like an article's title and like count. <em>Behaviour</em> is what it can do, its methods, which read and change that state. <em>Identity</em> means it is one particular thing in memory, separate from every other object, even one with the same data.</p>
 <p>A class describes the shape. It holds no article data by itself. Each call like <code>Article("Final 2-2")</code> builds a new <em>instance</em> with its own copy of the state. Liking one article does not touch another.</p>
-<p>A variable does not contain the object. It holds a <em>reference</em> to it. <code>val c = a</code> copies the reference, so <code>a</code> and <code>c</code> are two names for one object. Build a few objects below and watch which ones change.</p>`,
+<p>A variable does not contain the object. It holds a <em>reference</em> to it. <code>val c = a</code> copies the reference, so <code>a</code> and <code>c</code> are two names for one object. Step through below and watch which object each name points at.</p>`,
         code: `class Article(val title: String) {      // the blueprint
     var likes = 0                         // state
         private set
@@ -238,62 +238,54 @@ ASTORE a                       // a now holds the reference`,
           { title: 'Data in one class, behaviour in a helper', bad: 'class Article(var likes: Int)\n\nobject ArticleUtils {\n    fun like(a: Article) { a.likes++ }\n    fun isPopular(a: Article) = a.likes >= 100\n}', good: 'class Article {\n    var likes = 0\n        private set\n    fun like() { likes++ }\n    fun isPopular() = likes >= 100\n}', why: 'Splitting state from the methods that use it forces the state to be public, and anyone can change it without going through the rules.' },
         ],
         visual(el) {
-          const ADDR = ['@1a2f', '@7c40'];
-          let objs = [], vars = {}, busy = false;
-          const cls = h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'the class: shape only, no data'),
-            kt('class Article(val title: String) {\n    var likes = 0\n    fun like() { likes++ }\n}'));
-          const heap = h('div', { class: 'oo-obj-heap' });
-          const o = out('');
-          function paint(hot) {
-            heap.replaceChildren();
-            if (!objs.length) { heap.append(h('span', { class: 'tip' }, 'No objects yet. The class alone holds no titles or likes.')); return; }
-            objs.forEach(ob => {
-              const refs = Object.keys(vars).filter(v => vars[v] === ob);
-              const box = h('div', { class: `oo-obj${hot === ob ? ' oo-flash' : ''}` },
-                h('div', { class: 'oo-obj-head' }, h('span', { class: 'oo-title' }, `Article ${ob.addr}`), h('span', { class: 'oo-row' }, refs.length ? refs.map(r => pill(r, 'oo-acc')) : pill('no refs', 'oo-ghost'))),
-                h('div', { class: 'oo-obj-field', html: hl(`title = "${ob.title}"`) }),
-                h('div', { class: 'oo-obj-field', html: hl(`likes = ${ob.likes}`) }));
-              heap.append(box);
-              if (hot === ob) replay(box, 'pop');
-            });
-          }
-          function declare(name, make) {
-            if (busy) return;
-            if (vars[name]) { replay(heap, 'shake'); say(o, `<span class="bad">compile error:</span> Conflicting declarations: val ${name}`); return; }
-            const r = make();
-            if (!r) return;
-            vars[name] = r.obj; paint(r.obj); say(o, r.msg);
-          }
-          const newObj = name => () => {
-            const ob = { addr: ADDR[objs.length], title: 'Final 2-2', likes: 0 };
-            objs.push(ob);
-            return { obj: ob, msg: `${hl(`val ${name} = Article("Final 2-2")`)} <span class="muted">→</span> <span class="good">new object ${ob.addr}</span> <span class="muted">with its own likes</span>` };
-          };
-          const alias = () => {
-            if (!vars.a) { replay(heap, 'shake'); say(o, `<span class="bad">compile error:</span> Unresolved reference 'a'. Declare it first.`); return null; }
-            return { obj: vars.a, msg: `${hl('val c = a')} <span class="muted">→ no new object. c points at</span> ${vars.a.addr}<span class="muted">, the same one as a.</span>` };
-          };
-          function like(name) {
-            if (busy) return;
-            const ob = vars[name];
-            if (!ob) { replay(heap, 'shake'); say(o, `<span class="bad">compile error:</span> Unresolved reference '${name}'.`); return; }
-            ob.likes++; paint(ob);
-            const others = Object.keys(vars).filter(v => v !== name && vars[v] === ob);
-            const diff = Object.keys(vars).filter(v => vars[v] !== ob);
-            say(o, `${hl(`${name}.like()`)} <span class="muted">→</span> ${ob.addr}.likes = ${ob.likes}` +
-              (others.length ? ` <span class="good">${others.join(', ')} see${others.length > 1 ? '' : 's'} it too: same object.</span>` : '') +
-              (diff.length ? ` <span class="muted">${diff.join(', ')} unchanged: another object.</span>` : ''));
-          }
-          paint();
-          say(o, 'Build objects, alias one, then like them through different names.');
-          el.append(
-            cls,
-            h('div', { class: 'controls' }, cmd('val a = Article("Final 2-2")', () => declare('a', newObj('a'))), cmd('val b = Article("Final 2-2")', () => declare('b', newObj('b'))), cmd('val c = a', () => declare('c', alias))),
-            h('span', { class: 'oo-label' }, 'objects in memory'),
-            heap,
-            h('div', { class: 'controls' }, ['a', 'b', 'c'].map(n => cmd(`${n}.like()`, () => like(n)))),
-            o);
+          Lab.ui.graph(el, {
+            height: 260,
+            nodes: [
+              { id: 'a', label: 'a<small>val</small>', x: 17, y: 15, hidden: true },
+              { id: 'c', label: 'c<small>val</small>', x: 17, y: 50, hidden: true },
+              { id: 'b', label: 'b<small>val</small>', x: 17, y: 85, hidden: true },
+              { id: 'o1', label: 'Article @1a2f<small>own likes</small>', x: 72, y: 28, hidden: true },
+              { id: 'o2', label: 'Article @7c40<small>own likes</small>', x: 72, y: 80, hidden: true },
+            ],
+            predict: {
+              q: 'After <code>c.like()</code>, what do <code>a.likes</code> and <code>b.likes</code> print?',
+              options: ['1 and 0', '0 and 0', '1 and 1', '0 and 1'],
+              a: 0,
+              why: '<code>val c = a</code> copies a reference, not the object. <code>a</code> and <code>c</code> reach the same object, and <code>b</code> is a separate one.',
+            },
+            frames: [
+              { say: 'The class <code>Article</code> is only a shape. No objects exist yet, so there is nothing to point at.' },
+              { show: ['a', 'o1'], add: [['a', 'o1']], say: '<code>val a = Article("Final 2-2")</code> builds object @1a2f on the heap. <code>a</code> holds a reference to it, not the object itself.' },
+              { show: ['b', 'o2'], add: [['b', 'o2']], say: '<code>val b = Article("Final 2-2")</code> runs the constructor again: a second object, @7c40, with the same title and its own likes.' },
+              { show: ['c'], add: [['c', 'o1', '', 'accent']], hl: ['c', 'o1'], say: '<code>val c = a</code> builds nothing. It copies the reference, so <code>c</code> points at @1a2f too.' },
+              { add: [['c', 'o1', 'like()', 'accent']], hl: ['o1'], say: '<code>c.like()</code> follows the arrow from <code>c</code> and changes @1a2f: its likes go from 0 to 1.' },
+              { add: [['a', 'o1', 'likes = 1', 'ok']], hl: ['a', 'o1'], say: '<code>a.likes</code> follows a different name to the same object, so it prints 1.' },
+              { add: [['b', 'o2', 'likes = 0', 'ok']], hl: ['b', 'o2'], say: '<code>b.likes</code> prints 0. Same data at the start, but a different object, so the like never reached it.' },
+            ],
+          });
         },
+        play: `class Article(val title: String) {
+    var likes = 0
+        private set
+
+    fun like() { likes++ }
+}
+
+fun main() {
+    val a = Article("Final 2-2")
+    val b = Article("Final 2-2")   // same data, a different object
+    val c = a                      // no new object: a second name for a
+
+    c.like()
+    c.like()
+    b.like()
+
+    println("a.likes = \${a.likes}")
+    println("b.likes = \${b.likes}")
+    println("c.likes = \${c.likes}")
+    println("a === c: \${a === c}, a === b: \${a === b}")
+    // Change \`val c = a\` to \`val c = Article("Final 2-2")\` and run again
+}`,
       },
 
       // 2 ─────────────────────────────────────────────
@@ -305,7 +297,7 @@ ASTORE a                       // a now holds the reference`,
         body: `
 <p>Two questions sound alike but are not. <em>Identity</em>: are these the same object in memory? Kotlin asks it with <code>===</code>. <em>Equality</em>: do these two objects mean the same thing? Kotlin asks it with <code>==</code>, which calls <code>equals()</code>.</p>
 <p>A plain class inherits <code>equals()</code> from <code>Any</code>, and that version only checks identity. Two <code>Tag("kotlin")</code> objects are then not equal. A <code>data class</code> generates <code>equals()</code> and <code>hashCode()</code> from its constructor properties, so the same two tags are equal.</p>
-<p>Hash-based collections ask <code>hashCode()</code> first to pick a bucket, then <code>equals()</code> inside it. So the rule is: equal objects must return the same hash code. Break it and a <code>HashSet</code> keeps “duplicates”. Switch the class below and run each check.</p>`,
+<p>Hash-based collections ask <code>hashCode()</code> first to pick a bucket, then <code>equals()</code> inside it. So the rule is: equal objects must return the same hash code. Break it and a <code>HashSet</code> keeps “duplicates”. Step through both classes below.</p>`,
         code: `class Tag(val name: String)                 // equals = identity
 data class Label(val name: String)          // equals = same name
 
@@ -461,71 +453,41 @@ override fun equals(other: Any?): Boolean {
           { title: 'Using the position as a list key', bad: 'items(articles.size, key = { index -> index }) { i ->\n    ArticleRow(articles[i])\n}', good: 'items(articles, key = { it.id }) { article ->\n    ArticleRow(article)\n}', why: 'An index names a slot, not an article. After an insert, every row’s key points at a different article and state lands on the wrong row.' },
         ],
         visual(el) {
-          const jhash = s => { let x = 0; for (const ch of s) x = (Math.imul(31, x) + ch.charCodeAt(0)) | 0; return x; };
-          const KINDS = {
-            plain: { src: 'class Tag(val name: String)', eq: false, sameHash: false },
-            data: { src: 'data class Tag(val name: String)', eq: true, sameHash: true },
-            half: { src: 'class Tag(val name: String) {\n    override fun equals(o: Any?) =\n        o is Tag && o.name == name\n    // no hashCode()\n}', eq: true, sameHash: false },
-          };
-          const IDH = { a: 0x1b6d3586, b: 0x4554617c };
-          let kind = 'plain', busy = false;
-          const decl = h('div', { class: 'kt oo-wrap' });
-          const card = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'the class'), decl,
-            kt('val a = Tag("kotlin")\nval b = Tag("kotlin")\nval c = a'));
-          const hashes = h('div', { class: 'oo-row' });
-          const buckets = h('div', { class: 'oo-id-buckets' });
-          const o = out('');
-          const kBtns = [['plain', 'class'], ['data', 'data class'], ['half', 'equals only']].map(([k, label]) => act(label, () => { if (busy) return; kind = k; paint(); say(o, k === 'half' ? 'equals() compares names, but hashCode() is still the identity hash. Try the set.' : 'Run the checks.'); }));
-          const hashOf = v => KINDS[kind].sameHash ? jhash('kotlin') : IDH[v];
-          function paint() {
-            press(kBtns, kBtns[Object.keys(KINDS).indexOf(kind)]);
-            decl.innerHTML = hl(KINDS[kind].src);
-            hashes.replaceChildren(pill(`a.hashCode() = ${hashOf('a')}`), pill(`b.hashCode() = ${hashOf('b')}`), pill('c is a', 'oo-ghost'));
-            card.className = `oo-card ${kind === 'half' ? 'oo-warn' : 'oo-on'}`;
-            buckets.replaceChildren(...[0, 1, 2, 3].map(i => h('div', { class: 'oo-id-bucket' }, h('span', { class: 'oo-label' }, `bucket ${i}`))));
-          }
-          const show = (expr, val, note, good) => say(o, `${hl(expr)} <span class="muted">→</span> <span class="${good ? 'good' : 'bad'}">${val}</span> <span class="muted">${note}</span>`);
-          function check(op) {
-            if (busy) return;
-            const k = KINDS[kind];
-            if (op === 'ac') show('a === c', 'true', 'c holds the same reference as a', true);
-            if (op === 'ab') show('a === b', 'false', 'two constructor calls, two objects. Always.', false);
-            if (op === 'eq') show('a == b', String(k.eq), k.eq ? 'equals() compares the names' : 'Any.equals() only checks identity', k.eq);
-          }
-          async function toSet() {
-            if (busy) return; busy = true;
-            paint();
-            const bs = buckets.children;
-            const place = async (v) => {
-              const i = hashOf(v) & 3;
-              await sleep(350); if (!el.isConnected) return null;
-              return i;
-            };
-            const ia = await place('a'); if (ia == null) return;
-            bs[ia].append(pill('a', 'oo-acc drop-in'));
-            say(o, `${hl('hashSetOf(a, b)')} <span class="muted">→ a.hashCode() picks bucket ${ia}</span>`);
-            const ib = await place('b'); if (ib == null) return;
-            if (ib === ia) {
-              const k = KINDS[kind];
-              await sleep(250); if (!el.isConnected) return;
-              if (k.eq) { const p = pill('b', 'oo-ghost drop-in'); bs[ib].append(p); replay(bs[ib], 'pop'); say(o, `${hl('hashSetOf(a, b).size')} <span class="muted">→</span> <span class="good">1</span> <span class="muted">same bucket, then a.equals(b) is true, so b is a duplicate and is dropped</span>`); }
-              else { bs[ib].append(pill('b', 'oo-acc drop-in')); say(o, `${hl('hashSetOf(a, b).size')} <span class="muted">→ 2</span>`); }
-            } else {
-              bs[ib].append(pill('b', `${kind === 'half' ? 'oo-err' : 'oo-acc'} drop-in`));
-              if (kind === 'half') { replay(buckets, 'shake'); say(o, `${hl('hashSetOf(a, b).size')} <span class="muted">→</span> <span class="bad">2, even though a == b</span> <span class="muted">b landed in bucket ${ib}, so equals() was never asked. The contract is broken.</span>`); }
-              else say(o, `${hl('hashSetOf(a, b).size')} <span class="muted">→</span> 2 <span class="muted">different buckets, and they aren’t equal anyway: two distinct tags</span>`);
-            }
-            busy = false;
-          }
-          paint();
-          say(o, 'Pick how Tag is declared, then compare a, b and c.');
-          el.append(
-            h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'Tag is a'), kBtns),
-            card, hashes,
-            h('div', { class: 'controls' }, cmd('a === c', () => check('ac')), cmd('a === b', () => check('ab')), cmd('a == b', () => check('eq')), cmd('hashSetOf(a, b).size', toSet)),
-            h('span', { class: 'oo-label' }, 'hashSetOf buckets, simplified to 4'),
-            buckets, o);
+          Lab.ui.codeStepper(el, {
+            code: 'class Tag(val name: String)\ndata class Label(val name: String)\n\nval a = Tag("kotlin")\nval b = Tag("kotlin")\nprintln(a == b)\nprintln(a === b)\nval x = Label("kotlin")\nval y = Label("kotlin")\nprintln(x == y)\nprintln(x === y)\nprintln(hashSetOf(a, b).size)\nprintln(hashSetOf(x, y).size)',
+            predict: {
+              q: 'For the two <code>Label("kotlin")</code> objects, what do <code>x == y</code> and <code>x === y</code> print?',
+              options: ['true and true', 'true and false', 'false and false'],
+              a: 1,
+              why: 'A data class generates <code>equals()</code> from its properties, so <code>==</code> is true. <code>===</code> still asks “same object?”, and there are two.',
+            },
+            frames: [
+              { say: 'Two classes with the same property. Only one is a <code>data class</code>. Step through and watch what each check compares.' },
+              { line: [4, 5], vars: { a: 'Tag @51c2', b: 'Tag @7e09' }, say: 'Two <code>Tag</code> objects with the same name. Two constructor calls, so two objects.' },
+              { line: 6, out: 'false', say: '<code>==</code> calls <code>equals()</code>. A plain class inherits it from <code>Any</code>, which only checks identity. Different objects, so false.' },
+              { line: 7, out: 'false', say: '<code>===</code> asks the same question directly: same object? No.' },
+              { line: [8, 9], vars: { x: 'Label @3b1a', y: 'Label @0f44' }, say: 'Two <code>Label</code> objects. The compiler generated <code>equals()</code> and <code>hashCode()</code> from <code>name</code>.' },
+              { line: 10, out: 'true', say: 'The generated <code>equals()</code> compares <code>name</code>, so the two labels are equal.' },
+              { line: 11, out: 'false', say: 'Equal, but still two objects in memory. <code>===</code> is false.' },
+              { line: 12, out: '2', say: 'A set asks <code>hashCode()</code> first. Tag’s hash comes from the object, so the two tags land in different buckets and both stay.' },
+              { line: 13, out: '1', say: 'Label’s hash comes from <code>name</code>: same bucket, then <code>equals()</code> says equal, so the set keeps one.' },
+            ],
+          });
         },
+        play: `class Tag(val name: String)
+data class Label(val name: String)
+
+fun main() {
+    val a = Tag("kotlin"); val b = Tag("kotlin")
+    println("Tag:   a == b \${a == b}, a === b \${a === b}")
+    println("Tag set size: \${hashSetOf(a, b).size}")
+
+    val x = Label("kotlin"); val y = Label("kotlin")
+    println("Label: x == y \${x == y}, x === y \${x === y}")
+    println("Label set size: \${hashSetOf(x, y).size}")
+    println("hash codes: \${x.hashCode()} and \${y.hashCode()}")
+    // Remove the word \`data\` from Label and run again
+}`,
       },
 
       // 3 ─────────────────────────────────────────────
@@ -717,6 +679,35 @@ public final class Cart {
             h('div', { class: 'controls' }, cmd('cart.add("Tea")', viaMethod), cmd('cart.items.add("Cake")', fromOutside), cmd('cart.clear()', clear)),
             o);
         },
+        predict: {
+          q: 'The cart allows at most 3 items, but its list is exposed as a public <code>MutableList</code>. Outside code calls <code>cart.items.add(...)</code> on a full cart. What happens?',
+          options: ['A compile error', '<code>add()</code> rejects it and the rule holds', 'It works, and the cart ends up with 4 items'],
+          a: 2,
+          why: 'The 3-item check lives in <code>Cart.add()</code>. Code that reaches the mutable list directly never runs it. A read-only <code>List</code> would stop that call at compile time.',
+        },
+        play: `class Cart {
+    private val _items = mutableListOf<String>()
+    val items: List<String> get() = _items     // read-only view of the same list
+
+    fun add(item: String): Boolean {
+        if (_items.size >= MAX) return false   // the rule lives here
+        _items += item
+        return true
+    }
+
+    companion object { const val MAX = 3 }
+}
+
+fun main() {
+    val cart = Cart()
+    cart.add("Milk"); cart.add("Tea")
+    val view = cart.items              // a view: follows the cart
+    val copy = cart.items.toList()     // a snapshot: never changes
+    for (item in listOf("Eggs", "Bread")) println("add($item) -> \${cart.add(item)}")
+    println("view: $view")
+    println("copy: $copy")
+    // cart.items.add("Cake")   // remove the // : it does not compile, List has no add()
+}`,
       },
 
       // 4 ─────────────────────────────────────────────
@@ -899,72 +890,53 @@ invokestatic  SendersKt.label(PushSender)    // fixed when compiled`,
           { title: 'Overriding equals without hashCode', bad: 'class Tag(val name: String) {\n    override fun equals(other: Any?) =\n        other is Tag && other.name == name\n}\nsetOf(Tag("kt"), Tag("kt")).size   // 2', good: 'data class Tag(val name: String)\n\nsetOf(Tag("kt"), Tag("kt")).size   // 1', why: '<code>HashSet</code> calls the overridden <code>hashCode</code> first. Equal objects with different hash codes land in different buckets. Override both, or use a data class.' },
         ],
         visual(el) {
-          const impls = [
-            { name: 'PushSender', out: m => `bell icon: "${m}"` },
-            { name: 'EmailSender', out: m => `inbox: Subject "${m}"` },
-            { name: 'SmsSender', out: m => `sms to +90 5xx: ${m}` },
-          ];
-          const extra = { name: 'ChatSender', out: m => `chat bubble: ${m}` };
-          let list = [0, 1, 2], busy = false;
-          const callLine = h('div', { class: 'oo-line', html: hl('senders.forEach { it.send("Hi") }') });
-          const declLine = h('div', { class: 'oo-line', html: hl('val senders: List<Sender> = listOf(...)') });
-          const objRow = h('div', { class: 'oo-row' });
-          const implBox = h('div', { class: 'oo-impls' });
-          const o = out('Send through one object, or run the whole list.');
-          const cards = [];
-          function implCard(x) {
-            const sent = h('span', { class: 'oo-sent' }, '');
-            const c = h('div', { class: 'oo-impl' }, h('b', { html: hl(`class ${x.name} : Sender`) }), h('span', { html: hl('override fun send(msg: String)') }), sent);
-            c.sent = sent; return c;
-          }
-          impls.forEach(x => { const c = implCard(x); cards.push(c); implBox.append(c); });
-          const chips = [];
-          function paintObjs() {
-            objRow.replaceChildren(...list.map(i => { const c = pill(`${impls[i].name}()`, 'oo-acc'); chips[i] = c; return c; }));
-          }
-          async function dispatch(i) {
-            const x = impls[i];
-            callLine.classList.add('oo-cur'); replay(chips[i], 'pop');
-            await sleep(350);
-            cards.forEach(c => c.classList.remove('oo-hit'));
-            cards[i].classList.add('oo-hit'); cards[i].sent.textContent = x.out('Hi'); replay(cards[i], 'pop');
-            await sleep(450);
-            callLine.classList.remove('oo-cur');
-          }
-          async function one(i) {
-            if (busy) return; busy = true;
-            say(o, `${hl(`val s: Sender = ${impls[i].name}()`)} <span class="muted">→ s.send("Hi") runs ${impls[i].name}.send</span>`);
-            await dispatch(i);
-            busy = false;
-          }
-          async function all() {
-            if (busy) return; busy = true;
-            cards.forEach(c => { c.sent.textContent = ''; c.classList.remove('oo-hit'); });
-            say(o, `One line of code, ${list.length} different bodies:`);
-            for (const i of list) { if (!el.isConnected) return; await dispatch(i); }
-            say(o, `<span class="good">done:</span> the same call ran ${list.map(i => impls[i].name).join(', ')}`);
-            busy = false;
-          }
-          const addBtn = cmd('senders += ChatSender()', async () => {
-            if (busy) return;
-            if (impls.includes(extra)) { replay(callLine, 'shake'); say(o, 'ChatSender is already in the list.'); return; }
-            busy = true;
-            impls.push(extra); const c = implCard(extra); c.classList.add('drop-in'); cards.push(c); implBox.append(c);
-            list = [...list, impls.length - 1]; paintObjs(); replay(chips[impls.length - 1], 'drop-in');
-            callLine.classList.add('oo-ln-ok');
-            say(o, `<span class="good">new class added.</span> The forEach line did not change at all.`);
-            await sleep(900); callLine.classList.remove('oo-ln-ok');
-            busy = false;
+          Lab.ui.codeStepper(el, {
+            code: 'interface Sender { fun send(m: String) }\nclass PushSender : Sender {\n    override fun send(m: String) =\n        println("push: $m")\n}\nclass EmailSender : Sender {\n    override fun send(m: String) =\n        println("email: $m")\n}\nfun broadcast(\n    to: List<Sender>, m: String,\n) = to.forEach { it.send(m) }\nval all: List<Sender> =\n    listOf(PushSender(), EmailSender())\nbroadcast(all, "Sale ends tonight")',
+            predict: {
+              q: 'What does <code>broadcast(all, "Sale ends tonight")</code> do?',
+              options: ['Prints a push line, then an email line', 'Nothing: <code>Sender.send</code> has no body', 'It does not compile: <code>it</code> is a Sender, not a PushSender'],
+              a: 0,
+              why: 'The compiler only checks that <code>Sender</code> has <code>send()</code>. At runtime each call runs the body of the object’s real class, in list order.',
+            },
+            frames: [
+              { say: 'One interface, two classes, and a function that only knows the interface.' },
+              { line: [13, 14], stack: ['main()'], vars: { all: '[PushSender, EmailSender]' }, say: 'The list is declared as <code>List&lt;Sender&gt;</code>. The objects inside are a PushSender and an EmailSender.' },
+              { line: 15, stack: ['main()', 'broadcast(all, msg)'], say: '<code>broadcast</code> takes Senders. It never names a concrete class.' },
+              { line: 12, stack: ['main()', 'broadcast(all, msg)'], vars: { it: 'PushSender', 'declared as': 'Sender' }, say: '<code>it</code> is declared as <code>Sender</code>, so the compiler allows <code>send()</code>. Which body runs is decided now, at runtime.' },
+              { line: [3, 4], stack: ['main()', 'broadcast(all, msg)', 'PushSender.send(msg)'], out: 'push: Sale ends tonight', say: 'The real class of this object is PushSender, so its override runs.' },
+              { line: 12, stack: ['main()', 'broadcast(all, msg)'], vars: { it: 'EmailSender' }, say: 'Same line, same call, next object.' },
+              { line: [7, 8], stack: ['main()', 'broadcast(all, msg)', 'EmailSender.send(msg)'], out: 'email: Sale ends tonight', say: 'This time the real class is EmailSender, so its body runs. One line of source, two different bodies: dynamic dispatch.' },
+              { line: 15, stack: ['main()'], vars: { it: null, 'declared as': null }, say: 'Back in <code>main</code>. <code>broadcast</code> worked with both classes while knowing only <code>Sender</code>.' },
+            ],
           });
-          paintObjs();
-          el.append(
-            h('div', { class: 'oo-pair' },
-              h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'Call site'), h('div', { class: 'oo-code' }, declLine, callLine), h('span', { class: 'oo-label' }, 'Objects in the list at runtime'), objRow),
-              h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'Implementations'), implBox)),
-            h('div', { class: 'controls' }, impls.slice(0, 3).map((x, i) => cmd(`${x.name}().send("Hi")`, () => one(i)))),
-            h('div', { class: 'controls' }, cmd('senders.forEach { it.send("Hi") }', all), addBtn),
-            o);
         },
+        play: `interface Sender {
+    fun send(msg: String)
+}
+
+class PushSender : Sender {
+    override fun send(msg: String) = println("push:  $msg")
+}
+
+class EmailSender : Sender {
+    override fun send(msg: String) = println("email: Subject \\"$msg\\"")
+}
+
+fun broadcast(senders: List<Sender>, msg: String) {
+    senders.forEach { it.send(msg) }   // which send()? decided at runtime
+}
+
+open class Animal { open fun sound() = "..." }
+class Cat : Animal() { override fun sound() = "meow" }
+fun Animal.kind() = "animal"           // extensions are picked by the declared type
+fun Cat.kind() = "cat"
+
+fun main() {
+    broadcast(listOf(PushSender(), EmailSender()), "Sale ends tonight")
+    val pet: Animal = Cat()
+    println("member: \${pet.sound()}, extension: \${pet.kind()}")
+    // Add a class SmsSender : Sender and put it in the list. broadcast() stays the same.
+}`,
       },
 
       // 5 ─────────────────────────────────────────────
@@ -1167,6 +1139,29 @@ class LoggingList<T>(private val inner: MutableList<T>) : MutableList<T> {
             h('div', { class: 'controls' }, act('Change the logging code', editLogging)),
             o);
         },
+        predict: {
+          q: 'The logging code changes. In the inheritance design it lives in <code>BaseScreen</code>. What needs retesting?',
+          options: ['Only the screens that log', 'Every class in the tree', 'Nothing, it is a small change'],
+          a: 1,
+          why: 'Every subclass inherits BaseScreen’s code, so a change there reaches all of them. In the composed design only <code>LoggerPart</code> changes.',
+        },
+        play: `fun interface ScreenPart { fun onShown(screen: String) }
+
+class Screen(private val name: String, private val parts: List<ScreenPart>) {
+    fun onShown() = parts.forEach { it.onShown(name) }
+}
+
+val logging = ScreenPart { name -> println("log: $name shown") }
+val analytics = ScreenPart { name -> println("track: screen_view $name") }
+val refresh = ScreenPart { name -> println("refresh: reload $name data") }
+
+fun main() {
+    val home = Screen("home", listOf(logging, analytics, refresh))
+    val settings = Screen("settings", listOf(analytics))
+    home.onShown()
+    settings.onShown()
+    // Give settings the logging part too. No new class needed.
+}`,
       },
 
       // 6 ─────────────────────────────────────────────
@@ -1341,6 +1336,34 @@ public final class CountingStore extends ArticleStore {
             h('div', { class: 'oo-row' }, cPill, sPill, verdict),
             trace, o);
         },
+        predict: {
+          q: 'Library v2 makes <code>addAll()</code> copy the list in bulk, without calling <code>add()</code>. Your subclass counts only in <code>add()</code>. What is <code>count</code> after <code>addAll</code> of 3 articles?',
+          options: ['3', '0', '6'],
+          a: 1,
+          why: 'Your count relied on a private detail of the parent: that <code>addAll()</code> calls <code>add()</code>. v2 changed that detail, so your override never runs.',
+        },
+        play: `// Library code you don't own
+open class Store {
+    protected val items = mutableListOf<String>()
+    val size get() = items.size
+    open fun add(a: String) { items += a }
+    open fun addAll(list: List<String>) { list.forEach { add(it) } }   // self-use: calls add()
+}
+
+// Your subclass relies on that detail
+class CountingStore : Store() {
+    var count = 0
+        private set
+    override fun add(a: String) { count++; super.add(a) }
+}
+
+fun main() {
+    val store = CountingStore()
+    store.addAll(listOf("a1", "a2", "a3"))
+    store.add("a4")
+    println("count = \${store.count}, size = \${store.size}")
+    // A new library version: change Store.addAll to \`{ items.addAll(list) }\` and run again
+}`,
       },
 
       // 7 ─────────────────────────────────────────────
@@ -1352,7 +1375,7 @@ public final class CountingStore extends ArticleStore {
         body: `
 <p>Delegation is composition with the same face. A wrapper implements an interface, holds another object of that interface, and forwards calls to it. Callers can't tell the difference, so a wrapper can go anywhere the original could.</p>
 <p>A <em>decorator</em> is a wrapper that adds one thing before or after forwarding: logging, caching, retrying. Each decorator is a small class with one job, and you stack them in any order. Kotlin's <code>by</code> writes the forwarding for every member you don't override.</p>
-<p>Unlike a subclass, a wrapper sees only the interface. It can't depend on the inner object's private call pattern, so the self-use trap from the inheritance lesson can't reach it. Turn layers on and off below and follow one call.</p>`,
+<p>Unlike a subclass, a wrapper sees only the interface. It can't depend on the inner object's private call pattern, so the self-use trap from the inheritance lesson can't reach it. Step through three calls below and watch the call stack.</p>`,
         code: `interface NewsRepository {
     suspend fun latest(): List<Article>
     suspend fun byId(id: ArticleId): Article?
@@ -1450,84 +1473,56 @@ public final class CachingNewsRepository implements NewsRepository {
           { title: 'Forwarding by hand and forgetting one', bad: 'class LoggingPrefs(private val inner: SharedPreferences) : SharedPreferences {\n    override fun getString(k: String?, d: String?) = inner.getString(k, d)\n    override fun getInt(k: String?, d: Int) = inner.getInt(k, d)\n    // ...12 more, one of them copied wrong\n}', good: 'class LoggingPrefs(private val inner: SharedPreferences) :\n    SharedPreferences by inner {\n    override fun edit(): SharedPreferences.Editor =\n        inner.edit().also { Log.d("Prefs", "edit") }\n}', why: 'Hand-written forwarders are noise where copy-paste bugs hide. With <code>by</code>, only the method you change is in the file.' },
         ],
         visual(el) {
-          const LAYERS = [{ k: 'Logging', on: true }, { k: 'Caching', on: true }, { k: 'Retry', on: false }];
-          let flaky = false, cache = null, busy = false;
-          const stackBox = h('div', { class: 'oo-dlg-stack' });
-          const expr = h('div', { class: 'kt oo-wrap' });
-          const log = h('div', { class: 'oo-code oo-dlg-log' });
-          const o = out('');
-          let boxes = {};
-          const chain = () => [...LAYERS.filter(l => l.on).map(l => l.k), 'Network'];
-          function paint() {
-            const c = chain();
-            expr.innerHTML = hl('val repo: NewsRepository =\n' + c.map((k, i) => ' '.repeat(2 * (i + 1)) + `${k}NewsRepository(` + (i === c.length - 1 ? 'api' + ')'.repeat(c.length) : '')).join('\n'));
-            boxes = {};
-            let inner = null;
-            for (let i = c.length - 1; i >= 0; i--) {
-              const k = c[i];
-              const note = { Logging: 'logs each call and its time', Caching: cache ? `holds ${cache} articles` : 'cache empty', Retry: 'retries once on IOException', Network: flaky ? 'first attempt fails' : 'calls the API' }[k];
-              const b = h('div', { class: `oo-dlg-layer${k === 'Network' ? ' oo-dlg-core' : ''}` }, h('div', { class: 'oo-dlg-head' }, h('span', { class: 'oo-title' }, `${k}NewsRepository`), h('span', { class: 'oo-stat' }, note)), inner);
-              boxes[k] = b; inner = b;
-            }
-            stackBox.replaceChildren(inner);
-          }
-          const line = (t, cls = '') => { log.append(h('div', { class: `oo-line ${cls} drop-in`, html: hl(t) })); log.scrollTop = log.scrollHeight; };
-          const hot = async (k, on) => { boxes[k].classList.toggle('oo-dlg-hot', on); if (on) await sleep(330); };
-          async function visit(c, i, attempt) {
-            const k = c[i];
-            await hot(k, true); if (!el.isConnected) throw new Error('gone');
-            try {
-              if (k === 'Network') {
-                if (flaky && attempt === 0) { line('Network: IOException', 'oo-ln-err'); throw new Error('io'); }
-                line('Network: GET /headlines → 3 articles'); return 3;
-              }
-              if (k === 'Logging') {
-                line('Logging: → latest()');
-                try { const n = await visit(c, i + 1, attempt); line(`Logging: ← ${n} articles`, 'oo-ln-ok'); return n; }
-                catch (e) { if (e.message === 'gone') throw e; line('Logging: ✗ IOException', 'oo-ln-err'); throw e; }
-              }
-              if (k === 'Caching') {
-                if (cache) { line(`Caching: hit, ${cache} articles, inner not called`, 'oo-ln-ok'); return cache; }
-                line('Caching: miss, ask inner');
-                const n = await visit(c, i + 1, attempt); cache = n; return n;
-              }
-              if (k === 'Retry') {
-                try { return await visit(c, i + 1, 0); }
-                catch (e) { if (e.message === 'gone') throw e; line('Retry: attempt 1 failed, trying again', 'oo-cur'); return await visit(c, i + 1, 1); }
-              }
-            } finally { if (boxes[k]) boxes[k].classList.remove('oo-dlg-hot'); }
-          }
-          async function call() {
-            if (busy) return; busy = true;
-            log.replaceChildren();
-            try {
-              const n = await visit(chain(), 0, 0);
-              paint();
-              say(o, `${hl('repo.latest()')} <span class="muted">→</span> <span class="good">${n} articles</span>`);
-            } catch (e) {
-              if (e.message === 'gone') return;
-              paint();
-              say(o, `${hl('repo.latest()')} <span class="muted">→</span> <span class="bad">IOException reached the ViewModel.</span> <span class="muted">Add the Retry layer.</span>`);
-            }
-            busy = false;
-          }
-          const toggles = LAYERS.map(l => {
-            const id = `oo-dlg-${l.k.toLowerCase()}`;
-            const inp = h('input', { type: 'checkbox', id, checked: l.on });
-            inp.addEventListener('change', () => { if (busy) { inp.checked = l.on; return; } l.on = inp.checked; if (l.k === 'Caching') cache = null; paint(); log.replaceChildren(); say(o, `${l.k} layer ${l.on ? 'added' : 'removed'}. Nothing else changed: each layer only knows the interface.`); });
-            return h('label', { class: 'switch', for: id }, inp, l.k);
+          Lab.ui.codeStepper(el, {
+            code: 'class Caching(val inner: Repo) :\n    Repo by inner {\n    var cache: List<Article>? = null\n    override fun latest() = cache\n        ?: inner.latest()\n            .also { cache = it }\n}\nclass Logging(val inner: Repo) :\n    Repo by inner {\n    override fun latest() =\n        inner.latest()\n            .also { log("${it.size} items") }\n}\nval repo: Repo =\n    Logging(Caching(Network()))\nrepo.latest()\nrepo.latest()\nrepo.byId(7)',
+            predict: {
+              q: 'The second <code>repo.latest()</code> runs. Which objects does that call reach?',
+              options: ['Logging, Caching and Network', 'Logging and Caching only', 'Caching only, because it holds the data'],
+              a: 1,
+              why: 'Every call enters through the outermost wrapper. Caching already holds the list, so it returns without calling its inner Network.',
+            },
+            frames: [
+              { say: 'Two wrappers around a network repository. Each one holds the next as <code>inner</code>.' },
+              { line: [14, 15], stack: ['main()'], vars: { repo: 'Logging → Caching → Network', cache: 'null' }, say: 'Callers see one <code>Repo</code>. They can’t tell how many layers are inside.' },
+              { line: [10, 11], stack: ['main()', 'Logging.latest()'], say: '<code>repo.latest()</code> enters Logging, the outer layer. It forwards to its inner object.' },
+              { line: 5, stack: ['main()', 'Logging.latest()', 'Caching.latest()'], say: 'Caching has nothing stored yet, so it calls its own inner.' },
+              { line: 5, stack: ['main()', 'Logging.latest()', 'Caching.latest()', 'Network.latest()'], out: 'GET /latest', say: 'Network does the real work.' },
+              { line: [6, 12], stack: ['main()', 'Logging.latest()'], vars: { cache: '[2 articles]' }, out: 'log: 2 items', say: 'On the way back, Caching stores the list and Logging writes its line.' },
+              { line: [17, 4], stack: ['main()', 'Logging.latest()', 'Caching.latest()'], say: 'Second call. Logging forwards again, and Caching finds the list. Network is not called.' },
+              { line: 12, stack: ['main()', 'Logging.latest()'], out: 'log: 2 items', say: 'Logging logs anyway. It only sees its inner object, not whether a cache answered.' },
+              { line: 18, stack: ['main()', 'Logging.byId(7)  by inner', 'Caching.byId(7)  by inner', 'Network.byId(7)'], out: 'GET /articles/7', say: 'Neither wrapper overrides <code>byId()</code>. <code>by inner</code> forwards it straight to Network: no log, no cache.' },
+            ],
           });
-          const fl = h('input', { type: 'checkbox', id: 'oo-dlg-flaky' });
-          fl.addEventListener('change', () => { if (busy) { fl.checked = flaky; return; } flaky = fl.checked; cache = null; paint(); say(o, flaky ? 'The network now fails on the first attempt of each call. Cache cleared.' : 'The network is healthy again.'); });
-          paint();
-          say(o, 'Call latest() twice. Then make the network flaky and try with and without Retry.');
-          el.append(
-            h('div', { class: 'oo-switches' }, toggles, h('label', { class: 'switch', for: 'oo-dlg-flaky' }, fl, 'Flaky network')),
-            expr,
-            h('div', { class: 'oo-pair' }, stackBox, log),
-            h('div', { class: 'controls' }, cmd('repo.latest()', call)),
-            o);
         },
+        play: `interface NewsRepository {
+    fun latest(): List<String>
+    fun byId(id: Int): String
+}
+
+class NetworkNewsRepository : NewsRepository {
+    override fun latest(): List<String> { println("  network: GET /latest"); return listOf("Bridge reopens", "Tram extended") }
+    override fun byId(id: Int): String { println("  network: GET /articles/$id"); return "Article $id" }
+}
+
+class CachingNewsRepository(private val inner: NewsRepository) : NewsRepository by inner {
+    private var cache: List<String>? = null
+    override fun latest() = cache ?: inner.latest().also { cache = it }
+}
+
+class LoggingNewsRepository(private val inner: NewsRepository) : NewsRepository by inner {
+    override fun latest(): List<String> {
+        println("log: latest() called")
+        return inner.latest().also { println("log: got \${it.size} items") }
+    }
+}
+
+fun main() {
+    val repo: NewsRepository = LoggingNewsRepository(CachingNewsRepository(NetworkNewsRepository()))
+    println(repo.latest())
+    println(repo.latest())   // the cache answers: no network line
+    println(repo.byId(7))    // forwarded by \`by inner\`: no log line
+    // Swap the layers: CachingNewsRepository(LoggingNewsRepository(...)) and compare the log
+}`,
       },
 
       // 8 ─────────────────────────────────────────────
@@ -1793,6 +1788,38 @@ public interface Cache {
             h('div', { class: 'controls' }, viewBtns),
             o);
         },
+        predict: {
+          q: '<code>abstract class BaseScreen</code> has <code>fun onShown()</code> with a body and <code>abstract fun render()</code>. Which must <code>HomeScreen</code> write itself?',
+          options: ['Both', 'Only <code>render()</code>', 'Neither: the abstract class supplies them'],
+          a: 1,
+          why: 'An abstract class can share finished code like <code>onShown()</code>. Abstract members have no body, so every subclass has to override them.',
+        },
+        play: `interface Refreshable { fun refresh(): String }
+
+abstract class BaseScreen(protected val name: String) {
+    private var shownCount = 0
+    fun onShown() { shownCount++; println("$name shown $shownCount times") }
+    abstract fun render()
+}
+
+class HomeScreen : BaseScreen("home"), Refreshable {
+    override fun render() = println("home: draw headlines")
+    override fun refresh() = "home: synced"
+}
+
+class CacheJob : Refreshable {
+    override fun refresh() = "cache: cleared"
+}
+
+fun onPull(target: Refreshable) = println(target.refresh())   // knows "what", never "how"
+
+fun main() {
+    val home = HomeScreen()
+    home.onShown(); home.onShown(); home.render()
+    onPull(home)
+    onPull(CacheJob())
+    // Make CacheJob extend BaseScreen("cache") too. What must it add before it compiles?
+}`,
       },
 
       // 9 ─────────────────────────────────────────────
@@ -1992,6 +2019,45 @@ public interface ArticleSource {
             h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'examples'), presets),
             card, o);
         },
+        predict: {
+          q: 'The shared code needs a stored cache, and one implementer is already a ViewModel. What fits?',
+          options: ['An abstract class', 'An interface', 'An interface, plus an abstract helper class that implements it'],
+          a: 2,
+          why: 'The ViewModel has used its one superclass slot, so the type everyone depends on must be an interface. The cache needs state, which an abstract helper can hold for the implementers that are free to extend it.',
+        },
+        play: `interface ArticleSource {
+    val name: String
+    fun latest(): List<String>
+}
+
+// Optional helper: shared state and a checked constructor
+abstract class CachedSource(final override val name: String, private val maxUses: Int) : ArticleSource {
+    init { require(maxUses > 0) { "maxUses must be positive" } }
+    private var cached: List<String> = emptyList()
+    private var uses = 0
+    final override fun latest(): List<String> {
+        if (cached.isEmpty() || uses >= maxUses) { cached = fetch(); uses = 0; println("  $name fetched") }
+        uses++
+        return cached
+    }
+    protected abstract fun fetch(): List<String>
+}
+
+class RssSource : CachedSource("RSS", maxUses = 2) {
+    override fun fetch() = listOf("rss item")
+}
+
+open class Holder                      // stands in for a superclass like ViewModel
+class PinnedSource : Holder(), ArticleSource {
+    override val name = "Pinned"
+    override fun latest() = listOf("pinned item")
+}
+
+fun main() {
+    val sources: List<ArticleSource> = listOf(RssSource(), PinnedSource())
+    repeat(3) { sources.forEach { println("\${it.name}: \${it.latest()}") } }
+    // Change maxUses = 2 to 0 and run again
+}`,
       },
 
       // 10 ─────────────────────────────────────────────
@@ -2190,6 +2256,35 @@ dependencies {
             h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'change request'), CHANGES.map(c => act(c.label, () => change(c)))),
             split, o);
         },
+        predict: {
+          q: 'Group the seven <code>NewsViewModel</code> methods so that methods sharing a field end up together. How many groups appear?',
+          options: ['1', '2', '4', '7'],
+          a: 2,
+          why: '<code>load</code>, <code>search</code> and <code>refresh</code> share <code>articles</code>. The two bookmark methods share <code>bookmarks</code>. <code>formatDate</code> and <code>trackScroll</code> each stand alone. Four groups is four classes in one file.',
+        },
+        play: `fun main() {
+    // Which fields each method of a grown NewsViewModel touches
+    val uses = mapOf(
+        "load()" to setOf("api", "articles"),
+        "search(q)" to setOf("articles", "query"),
+        "toggleBookmark(id)" to setOf("dao", "bookmarks"),
+        "isBookmarked(id)" to setOf("bookmarks"),
+        "formatDate(t)" to setOf("locale"),
+        "trackScroll(d)" to setOf("analytics"),
+    )
+    // Merge methods into one group when they share a field
+    val groups = mutableListOf<Pair<MutableSet<String>, MutableSet<String>>>()
+    for ((method, fields) in uses) {
+        val touching = groups.filter { (_, f) -> f.any { it in fields } }
+        val merged = mutableSetOf(method) to fields.toMutableSet()
+        touching.forEach { merged.first += it.first; merged.second += it.second }
+        groups.removeAll(touching)
+        groups += merged
+    }
+    groups.forEachIndexed { i, (methods, fields) -> println("class \${i + 1}: $methods uses $fields") }
+    println("\${groups.size} groups: \${if (groups.size > 1) "low cohesion, split it" else "cohesive"}")
+    // Make formatDate(t) also use "articles" and run again
+}`,
       },
 
       // 11 ─────────────────────────────────────────────
@@ -2383,6 +2478,32 @@ public static String constructor-impl(String raw) {
           say(o, 'Tap the highlighted words in the feature description.');
           el.append(h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'feature description'), spec, count), model, o);
         },
+        predict: {
+          q: 'Readers can “bookmark” an article. What should a <code>Bookmark</code> hold?',
+          options: ['The whole <code>Article</code> object', 'The <code>ArticleId</code> and when it was saved', 'Nothing: a Boolean on Article is enough'],
+          a: 1,
+          why: 'A bookmark points at an article by its id. It stays valid when the headline changes, and it can be stored offline on its own.',
+        },
+        play: `@JvmInline value class ArticleId(val raw: String) {
+    init { require(raw.isNotBlank()) { "ArticleId is blank" } }
+}
+@JvmInline value class UserId(val raw: String)
+
+data class Article(val id: ArticleId, val title: String) {      // entity: identified by id
+    init { require(title.isNotBlank()) { "Article \${id.raw} has a blank title" } }
+}
+
+fun bookmark(user: UserId, article: ArticleId) = println("\${user.raw} saved \${article.raw}")
+
+fun main() {
+    val a = Article(ArticleId("a-42"), "Bridge reopens")
+    val edited = a.copy(title = "Bridge reopens after repairs")
+    println("same entity: \${a.id == edited.id}, same value: \${a == edited}")
+    bookmark(UserId("u-1"), a.id)
+    // bookmark(a.id, UserId("u-1"))   // remove the //: the compiler rejects the swapped ids
+    val ids = setOf(ArticleId("a-42"), ArticleId("a-42"), ArticleId("a-7"))
+    println("distinct ids: \${ids.size}")          // value objects compare by value
+}`,
       },
     ],
   });

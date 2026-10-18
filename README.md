@@ -15,6 +15,9 @@ Live at https://abdulrahmanalbakkar.github.io/android_lab/
 - **Spaced review** (`#review`): quiz questions come back after 1, 3, 7, 21 and 60 days while you keep getting them right.
 - **Search** (`/`) across tracks, projects, lessons and glossary terms, and a **glossary** (`#glossary`).
 - **Keyboard**: `←` `→` lessons, `/` search, `m` map, `r` review, `p` test yourself, `g` glossary, `t` theme, `?` all shortcuts. In Test yourself, `1`–`4` answer and `Enter` moves on.
+- **Predict first**: before a demo plays, the lesson asks what you think will happen. The demo unlocks after an answer or Skip.
+- **Step-through demos**: many demos are step players (Back, Play/Pause, Next, Reset) built from the visual kit in `js/ui.js`.
+- **Run it**: Kotlin-language lessons have an editable program that runs on JetBrains' official [Kotlin Playground](https://github.com/JetBrains/kotlin-playground) (loaded on demand; needs a connection).
 - **Official docs**: each lesson links 1–3 official pages, listed in `js/docs.js` (keys are `track.lesson`).
 - Light and dark themes (System, Light, Dark), works offline once visited, installable as an app.
 
@@ -29,6 +32,16 @@ Progress lives in this browser's `localStorage` under `android-lab:v1`.
 **Run step 3 after every change to a track file**, then commit `js/catalog.js` with it. The page loads only the catalog (titles, terms and quizzes, about 140 KB gzipped) and fetches a track's full file the first time one of its lessons opens. If a track file and the catalog disagree, the browser console says so.
 
 The roadmap, search, glossary, level filters, review, Test yourself and the offline cache pick it up automatically.
+
+## Demos: the visual kit
+
+`js/ui.js` adds `Lab.ui`, a set of step players: `phone`, `timeline`, `graph`, `flow`, `codeStepper`, `terminal`, plus `player` for a custom stage. A demo is a list of frames; frame 0 is the start, each frame has a `say` caption. The header of `js/ui.js` documents every option, and these lessons are short examples of each: `kotlin.vals`, `git.branches`, `perf.leaks`, `data.net`, `push.messages`, `concurrency.concurrency-parallelism`.
+
+Optional lesson fields:
+- `predict: { q, options, a, why }`: asked before the demo. Kit components take it as an option instead.
+- `play`: a complete Kotlin program with `fun main()` (standard library and kotlinx.coroutines only), shown under **Run it**.
+
+Track CSS must not use the `ui-` class prefix.
 
 ## Add a capstone project
 

@@ -316,6 +316,12 @@ val headlines = api.headlines()`,
       { type: 'blank', prompt: 'Fill in the layer that adds each header.', code: '// ports and sequence numbers -> [[TCP|transport]]\n// source and destination address -> [[IP|internet]]\n// encryption of the HTTP bytes -> [[TLS]]', why: 'TCP (transport) adds ports and sequence numbers, IP (internet) adds addresses, and TLS encrypts what HTTP hands down.' },
       { type: 'bug', prompt: 'The comment says which layer failed. One comment is wrong. Tap it.', code: 'try { api.headlines() }\ncatch (e: UnknownHostException) { } // DNS could not resolve the name\ncatch (e: SSLHandshakeException) { } // TLS handshake failed\ncatch (e: HttpException) { } // the TCP connection was refused', bug: 3, fix: 'catch (e: HttpException) { } // the server answered with an HTTP error status', why: 'Retrofit throws <code>HttpException</code> when a full HTTP response came back with a non-2xx code. A refused TCP connection is a <code>ConnectException</code>.' },
     ],
+    predict: {
+      q: "At the first router, what happens to the Wi-Fi frame around your packet?",
+      options: ["It travels with the packet all the way to the server","It is thrown away, and a new frame is built for the next hop","TLS encrypts it"],
+      a: 1,
+      why: "A link-layer frame covers one hop only. The router strips it, lowers the IP TTL, and wraps the packet in a fresh frame for the next link.",
+    },
     quiz: [
       { q: 'A packet crosses three routers between your phone and the server. Which header do the routers read to forward it?', options: ['The HTTP request line', 'The IP header', 'The TLS record header', 'The TCP header'], a: 1, why: 'Routers work at the internet layer. They read the destination IP address and pick the next hop. Everything above IP is just payload to them.' },
       { q: 'Put the sending side in order for one HTTPS request.', options: ['HTTP → TLS → TCP → IP → link', 'IP → TCP → TLS → HTTP → link', 'HTTP → TCP → TLS → IP → link', 'link → IP → TCP → TLS → HTTP'], a: 0, why: 'Encapsulation goes down the stack. HTTP text is encrypted by TLS, TCP carries the TLS records, IP addresses the segments, and the link layer frames each packet.' },
@@ -333,7 +339,7 @@ val headlines = api.headlines()`,
     body: `
 <p>Every device on the internet is reached through an <b>IP address</b>. IPv4 addresses are 32 bits (<code>198.51.100.80</code>), which gives about 4 billion, too few for every phone. IPv6 addresses are 128 bits (<code>2001:db8::1</code>) and do not run out. Many mobile networks give phones an IPv6 address, often next to an IPv4 one.</p>
 <p>The IPv4 shortage is solved with <b>NAT</b>. Your home router gives the phone a <em>private</em> address such as <code>192.168.1.23</code> (RFC 1918 reserves 10/8, 172.16/12 and 192.168/16 for this). When a packet leaves, the router rewrites the source to its one <em>public</em> address and a free port, and remembers the mapping so replies find their way back. Mobile carriers do the same at a larger scale (carrier-grade NAT), often with addresses from <code>100.64.0.0/10</code>.</p>
-<p>A TCP connection is identified by four values: source IP, source port, destination IP, destination port. When you walk out of Wi-Fi onto cellular, your address changes, so the old connections stop matching and die. Android moves the <em>default network</em> and later closes connections on the old one. Your app has to open new ones; long-lived streams like the ones in <a href="#data.realtime">real-time updates</a> must reconnect themselves. Try it in the demo.</p>`,
+<p>A TCP connection is identified by four values: source IP, source port, destination IP, destination port. When you walk out of Wi-Fi onto cellular, your address changes, so the old connections stop matching and die. Android moves the <em>default network</em> and later closes connections on the old one. Your app has to open new ones; long-lived streams like the ones in <a href="#data.realtime">real-time updates</a> must reconnect themselves. Step through it in the demo.</p>`,
     code: `// Watch the default network instead of polling "am I online?"
 val cm = context.getSystemService(ConnectivityManager::class.java)
 
@@ -357,71 +363,32 @@ cm.registerDefaultNetworkCallback(callback)
 // ... and cm.unregisterNetworkCallback(callback) when you no longer need it`,
     remember: 'A connection is pinned to four values: two addresses, two ports. Change networks and you need new connections.',
     visual(el) {
-      const NETS = {
-        wifi: { name: 'Wi-Fi', phone: '192.168.1.23', natName: 'Home router (NAT)', pub: '203.0.113.7', sub: 'private range 192.168.0.0/16' },
-        cell: { name: 'Cellular', phone: '100.64.23.7', natName: 'Carrier NAT', pub: '192.0.2.44', sub: 'shared range 100.64.0.0/10' },
-      };
-      let net = 'wifi', conn = null, port = 40112, tok = 0;
-      const phoneIp = h('span', { class: 'nw-ip' }), phoneSub = h('span', { class: 'nw-sub' });
-      const natTitle = h('h4', {}), natIp = h('span', { class: 'nw-ip' });
-      const table = h('div', { class: 'nw-table' });
-      const phone = h('div', { class: 'nw-node' }, h('h4', {}, 'Phone'), phoneIp, phoneSub);
-      const nat = h('div', { class: 'nw-node' }, natTitle, natIp, table);
-      const server = h('div', { class: 'nw-node' }, h('h4', {}, 'api.example.com'), h('span', { class: 'nw-ip' }, '198.51.100.80:443'), h('span', { class: 'nw-sub' }, 'public address'));
-      const tuple = h('div', { class: 'nw-tuple' }, 'No connection yet.');
-      const netPill = pill('', 'nw-acc');
-      const msg = out('Open a connection to see how NAT rewrites your address.');
-      function paint() {
-        const n = NETS[net];
-        phoneIp.textContent = n.phone; phoneSub.textContent = `${n.name} · ${n.sub}`;
-        natTitle.textContent = n.natName; natIp.textContent = `public ${n.pub}`;
-        netPill.textContent = `default network: ${n.name}`;
-        table.replaceChildren(h('span', { class: 'nw-th' }, 'inside'), h('span', { class: 'nw-th' }, 'outside'),
-          ...(conn && conn.net === net ? [h('span', {}, `${n.phone}:51034`), h('span', {}, `${n.pub}:${conn.port}`)] : [h('span', {}, '—'), h('span', {}, '—')]));
-        if (!conn) tuple.textContent = 'No connection yet.';
-        else {
-          const c = NETS[conn.net];
-          tuple.innerHTML = `TCP connection (as the server sees it):<br>${c.pub}:${conn.port} → 198.51.100.80:443 ${conn.dead ? '<span class="bad">· dead</span>' : '<span class="good">· open</span>'}`;
-        }
-      }
-      const flash = (node, cls) => { node.classList.add(cls); setTimeout(() => node.classList.remove(cls), 900); };
-      async function open() {
-        const t = ++tok;
-        conn = { net, port: port++, dead: false };
-        flash(phone, 'nw-on'); paint();
-        say(msg, `Phone sends SYN from <b>${NETS[net].phone}:51034</b>. A private address can’t be routed on the internet…`);
-        await sleep(900); if (t !== tok || !el.isConnected) return;
-        flash(nat, 'nw-on');
-        say(msg, `…so the ${NETS[net].natName} rewrites the source to <b>${NETS[net].pub}:${conn.port}</b> and stores the mapping. Replies to that port go back to your phone.`);
-        await sleep(900); if (t !== tok || !el.isConnected) return;
-        flash(server, 'nw-good');
-        say(msg, `Connected. The server only ever sees the public address. Now press <b>Send request</b>, or walk outside.`);
-      }
-      async function send() {
-        if (!conn) return open();
-        const t = ++tok;
-        if (conn.dead) {
-          flash(phone, 'nw-bad');
-          say(msg, '<span class="bad">Request failed.</span> The connection belonged to the old network and was closed. OkHttp can retry on a <b>new</b> connection; an app that holds raw sockets (a WebSocket, a chat stream) must reconnect itself.');
-          return;
-        }
-        flash(phone, 'nw-on'); await sleep(500); if (t !== tok || !el.isConnected) return;
-        flash(server, 'nw-good');
-        say(msg, `<span class="good">200 OK</span> over the existing connection. No new handshake was needed.`);
-      }
-      function walk() {
-        tok++;
-        net = net === 'wifi' ? 'cell' : 'wifi';
-        if (conn && conn.net !== net) conn.dead = true;
-        flash(phone, 'nw-on'); paint();
-        say(msg, `New default network: <b>${NETS[net].name}</b>, new address <b>${NETS[net].phone}</b>. ${conn ? 'Packets from the new address don’t match the old connection’s four values, and Android closes connections on the old network. <span class="bad">The connection is dead.</span>' : 'Nothing was open, so nothing broke.'}`);
-      }
-      function reconnect() { conn = null; paint(); open(); }
-      el.append(
-        h('div', { class: 'nw-stage' }, h('div', { class: 'nw-row' }, netPill), h('div', { class: 'nw-net' }, phone, nat, server), tuple),
-        h('div', { class: 'controls' }, act('Open connection', open), act('Send request', send), act('Walk outside (switch network)', walk), act('Reconnect', reconnect)),
-        msg);
-      paint();
+      Lab.ui.graph(el, {
+        height: 300,
+        nodes: [
+          { id: 'ph', label: 'Phone<small>Wi-Fi 192.168.1.23</small>', x: 17, y: 12 },
+          { id: 'nat', label: 'Home router<small>203.0.113.7</small>', x: 17, y: 50, tone: 'warm' },
+          { id: 'srv', label: 'Server<small>198.51.100.80</small>', x: 83, y: 50, tone: 'muted' },
+          { id: 'map', label: 'NAT table<small>:51034 ↔ :40112</small>', x: 17, y: 88, tone: 'warm', hidden: true },
+          { id: 'cell', label: 'Phone<small>LTE 100.64.23.7</small>', x: 50, y: 12, hidden: true },
+          { id: 'cg', label: 'Carrier NAT<small>192.0.2.44</small>', x: 83, y: 88, tone: 'warm', hidden: true },
+        ],
+        predict: {
+          q: 'The phone opens a connection from <code>192.168.1.23:51034</code>. Which source address does the server see?',
+          options: ['<code>192.168.1.23:51034</code>, the phone’s own address', 'The router’s public address, with a port the router picked', 'None: NAT hides the source completely'],
+          a: 1,
+          why: 'A private address cannot be routed on the internet. The router rewrites the source to its public address and a free port, and remembers the mapping for the replies.',
+        },
+        frames: [
+          { say: 'The phone is on home Wi-Fi with a <em>private</em> address. Follow one TCP connection to the API.' },
+          { add: [['ph', 'nat', 'SYN :51034']], say: 'The phone sends SYN from <code>192.168.1.23:51034</code>. That address only means something inside the home network.' },
+          { show: ['map'], hl: ['nat', 'map'], add: [['nat', 'map', 'stores'], ['nat', 'srv', 'from .7:40112', 'warm']], say: 'The router rewrites the source to <code>203.0.113.7:40112</code> and stores the mapping in its NAT table.' },
+          { remove: [['nat', 'map']], add: [['ph', 'nat', '', 'ok'], ['nat', 'srv', 'open', 'ok']], hl: ['srv'], say: 'Replies to port 40112 are mapped back to the phone. The server sees the four values <code>203.0.113.7:40112 → 198.51.100.80:443</code>.' },
+          { show: ['cell', 'cg'], gone: ['ph', 'map'], remove: [['ph', 'nat']], add: [['cell', 'cg']], say: 'The user walks outside. Cellular becomes the default network: a new address behind the carrier’s NAT.' },
+          { hl: ['srv'], add: [['nat', 'srv', 'old 4-tuple', 'err']], say: 'Packets now come from <code>192.0.2.44</code>, which match none of the old four values. Android closes connections on the old network. <b>This connection is dead.</b>' },
+          { gone: ['nat'], remove: [['nat', 'srv']], add: [['cg', 'srv', 'new SYN', 'ok']], say: 'The app has to open a new connection: new handshake, new NAT mapping. OkHttp retries on a new one; a WebSocket must reconnect itself.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -479,7 +446,7 @@ val baseUrl = if (BuildConfig.DEBUG) "http://10.0.2.2:8080/" else "https://api.e
     body: `
 <p>Your code knows <code>api.example.com</code>. IP needs an address. <b>DNS</b> turns one into the other. It is a distributed, hierarchical database: the <em>root</em> servers know who runs <code>.com</code>, the <code>.com</code> servers know who runs <code>example.com</code>, and that domain's <em>authoritative</em> server knows the address of <code>api.example.com</code>.</p>
 <p>Your phone does not walk that tree itself. It asks a <b>recursive resolver</b> (your carrier's, your router's, or a Private DNS provider), which does the walking and returns the final answer. Every answer carries a <b>TTL</b>, in seconds, that says how long it may be cached. The OS and the resolver both cache, so most lookups are answered without leaving the phone or the resolver.</p>
-<p>That is why the first request after app start is slower: it may pay for a DNS lookup (one or more round trips) before TCP even starts. Look up once cold, then again, then let the TTL expire.</p>`,
+<p>That is why the first request after app start is slower: it may pay for a DNS lookup (one or more round trips) before TCP even starts. Step through one cold lookup, then a second one that the cache answers.</p>`,
     code: `// OkHttp asks a Dns for addresses. The default, Dns.SYSTEM, uses the OS resolver and its cache.
 class TimedDns(private val delegate: Dns = Dns.SYSTEM) : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
@@ -498,77 +465,34 @@ val client = OkHttpClient.Builder()
     .build()`,
     remember: 'DNS answers are cached for their TTL. The cold first lookup is the slow one.',
     visual(el) {
-      const NAME = 'api.example.com';
-      const TTL = 300;
-      let osCache = null, resCache = null, total = 0, tok = 0, busy = false;
-      const hop = (name, detail) => {
-        const msEl = h('span', { class: 'nw-ms' }, '');
-        const small = h('small', {}, detail);
-        const n = h('div', { class: 'nw-hop' }, h('b', {}, name), msEl, small);
-        n.set = (cls, d, t) => { n.className = `nw-hop ${cls || ''}`; if (d != null) small.innerHTML = d; if (t != null) msEl.textContent = t; };
-        return n;
-      };
-      const H = {
-        app: hop('App (OkHttp)', `needs an address for ${NAME}`),
-        os: hop('Phone OS resolver', 'checks its cache first'),
-        rec: hop('Recursive resolver', 'carrier, router or Private DNS'),
-        root: hop('Root server (.)', 'knows who runs .com'),
-        tld: hop('.com TLD server', 'knows who runs example.com'),
-        auth: hop('example.com authoritative', 'has the record itself'),
-      };
-      const totalEl = h('b', {}, '0 ms');
-      const osC = h('div', { class: 'nw-cache' }), resC = h('div', { class: 'nw-cache' });
-      const msg = out('Press <b>Look up</b> to resolve the name with empty caches.');
-      const paintCaches = () => {
-        osC.innerHTML = `<span class="nw-th">Phone cache</span>${osCache ? `${NAME} → 198.51.100.80 · TTL ${osCache.ttl}s` : 'empty'}`;
-        resC.innerHTML = `<span class="nw-th">Resolver cache</span>${resCache ? `${NAME} → 198.51.100.80 · TTL ${resCache.ttl}s<br>.com → TLD servers · TTL 2 days` : 'empty'}`;
-      };
-      const reset = () => { Object.values(H).forEach(x => x.set('', null, '')); totalEl.textContent = '0 ms'; total = 0; };
-      async function step(node, cls, d, add, wait = 650) {
-        total += add; node.set(cls, d, add ? `+${add} ms` : '0 ms'); totalEl.textContent = ms(total); replay(totalEl, 'pop-soft');
-        await sleep(wait);
-      }
-      async function lookup() {
-        if (busy) return;
-        busy = true; const t = ++tok; const alive = () => t === tok && el.isConnected;
-        reset();
-        await step(H.app, 'nw-on', `getaddrinfo("${NAME}")`, 0); if (!alive()) return;
-        if (osCache) {
-          await step(H.os, 'nw-hit', `cache hit · ${osCache.ttl}s of TTL left`, 0); if (!alive()) return;
-          Object.values(H).slice(2).forEach(x => x.set('nw-dim'));
-          say(msg, '<span class="good">Answered from the phone’s cache in well under a millisecond.</span> No packet left the device. This is why the second request is faster.');
-          busy = false; return;
-        }
-        await step(H.os, 'nw-on', 'cache miss → ask the recursive resolver', 0); if (!alive()) return;
-        if (resCache) {
-          await step(H.rec, 'nw-hit', `cache hit (another user asked recently) · TTL ${resCache.ttl}s`, 25); if (!alive()) return;
-          Object.values(H).slice(3).forEach(x => x.set('nw-dim'));
-          osCache = { ttl: resCache.ttl }; paintCaches();
-          say(msg, `One round trip to the resolver: <b>${ms(total)}</b>. The resolver had it cached, so it hands back the record with the TTL that is <em>left</em>, not a fresh ${TTL}s.`);
-          busy = false; return;
-        }
-        await step(H.rec, 'nw-on', 'cache miss → walk the tree from the top', 25); if (!alive()) return;
-        await step(H.root, 'nw-on', 'referral: “ask the .com servers”', 20); if (!alive()) return;
-        await step(H.tld, 'nw-on', 'referral: “ask ns1.example.com”', 30); if (!alive()) return;
-        await step(H.auth, 'nw-hit', `answer: A 198.51.100.80 · TTL ${TTL}`, 35); if (!alive()) return;
-        H.rec.set('nw-hit', 'caches the answer, returns it to the phone');
-        osCache = { ttl: TTL }; resCache = { ttl: TTL }; paintCaches();
-        say(msg, `Cold lookup: <b>${ms(total)}</b> before TCP can even start (example timings). Both the phone and the resolver now cache it for ${TTL}s. Press <b>Look up</b> again.`);
-        busy = false;
-      }
-      function wait(sec) {
-        tok++; busy = false;
-        const tick = c => { if (!c) return null; const ttl = c.ttl - sec; return ttl > 0 ? { ttl } : null; };
-        osCache = tick(osCache); resCache = tick(resCache);
-        paintCaches(); reset();
-        say(msg, `${sec / 60} minutes later. ${!osCache && !resCache ? 'Both entries expired. The next lookup is cold again.' : osCache ? 'Entries are still fresh.' : 'Expired on the phone. The resolver may still have it.'}`);
-      }
-      function clearPhone() { tok++; busy = false; osCache = null; paintCaches(); reset(); say(msg, 'Phone cache cleared (like a reboot or airplane-mode toggle). The resolver still remembers.'); }
-      el.append(
-        h('div', { class: 'nw-stage' }, h('div', { class: 'nw-hops' }, Object.values(H)), h('div', { class: 'nw-row' }, h('span', { class: 'nw-stat' }, 'DNS time: ', totalEl)), h('div', { class: 'nw-caches' }, osC, resC)),
-        h('div', { class: 'controls' }, act('Look up', lookup), act('Wait 2 min', () => wait(120)), act('Wait 5 min', () => wait(300)), act('Clear phone cache', clearPhone)),
-        msg);
-      paintCaches();
+      Lab.ui.flow(el, {
+        nodes: [
+          { id: 'app', label: 'App', sub: 'OkHttp' },
+          { id: 'os', label: 'Phone OS', sub: 'DNS cache' },
+          { id: 'rec', label: 'Resolver', sub: 'recursive' },
+          { id: 'root', label: 'Root', sub: 'knows .com' },
+          { id: 'tld', label: '.com TLD', sub: 'knows example.com' },
+          { id: 'auth', label: 'Name server', sub: 'authoritative' },
+        ],
+        predict: {
+          q: 'The phone looked up <code>api.example.com</code> 60 seconds ago, and the record has TTL 300. The app asks again. Who answers?',
+          options: ['The authoritative server for example.com', 'The recursive resolver', 'The phone’s own cache, without sending a packet'],
+          a: 2,
+          why: 'The answer may be cached for its TTL. 60 seconds is well inside 300, so the OS cache answers and nothing leaves the device.',
+        },
+        frames: [
+          { say: 'Cold start: the phone and the resolver have empty caches. The app needs an address for <code>api.example.com</code>.' },
+          { at: 'app', packet: 'api.example.com?', say: 'OkHttp asks the system resolver. No TCP connection can start until this returns.' },
+          { at: 'os', packet: 'miss', tone: 'warm', say: 'The phone’s cache is empty, so the query goes to the recursive resolver: one round trip.' },
+          { at: 'rec', packet: 'miss', tone: 'warm', say: 'The resolver has nothing cached either. It starts at the top of the tree.' },
+          { at: 'root', packet: 'ask .com', tone: 'warm', say: 'A root server does not know the address. It refers the resolver to the <code>.com</code> servers.' },
+          { at: 'tld', packet: 'ask ns1.example.com', tone: 'warm', say: 'The <code>.com</code> server refers it to example.com’s own name server.' },
+          { at: 'auth', packet: 'A 198.51.100.80 · TTL 300', tone: 'ok', mark: { auth: 'ok' }, say: 'The authoritative server has the record: the address, valid for 300 seconds.' },
+          { at: 'rec', packet: 'cached 300 s', tone: 'ok', mark: { rec: 'ok' }, say: 'The resolver caches the answer and returns it. The next user who asks gets it in one round trip.' },
+          { at: 'os', packet: '198.51.100.80', tone: 'ok', mark: { os: 'ok' }, say: 'The phone caches it too and hands it to OkHttp. Now TCP can start. That cold lookup cost several round trips.' },
+          { at: 'app', packet: 'cache hit', tone: 'ok', mark: { app: 'ok' }, say: 'A minute later the app asks again. The phone’s cache answers in well under a millisecond.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -747,6 +671,12 @@ repeat(4) { rtt ->
       { type: 'blank', prompt: 'Bound the whole call to 30 seconds, and the TCP connect to 10.', code: 'val client = OkHttpClient.Builder()\n    .[[connectTimeout]](10, TimeUnit.SECONDS)\n    .[[callTimeout]](30, TimeUnit.SECONDS)\n    .build()', why: '<code>connectTimeout</code> covers opening the TCP socket. <code>callTimeout</code> covers the entire call from DNS to the last byte.' },
       { type: 'bug', prompt: 'This sends a game position update. The comment states a wrong guarantee. Tap it.', code: 'DatagramSocket().use { socket ->\n    val data = encode(position)\n    socket.send(DatagramPacket(data, data.size, server, 7777))\n    // the server now has the position, in order with the previous ones\n}', bug: 3, fix: '    // the datagram may be lost, duplicated or reordered; the next update replaces it', why: 'UDP guarantees neither delivery nor order (RFC 768). Game protocols accept that and send fresh state often.' },
     ],
+    predict: {
+      q: "Over UDP, datagram 2 of 5 is lost. What reaches the receiving app?",
+      options: ["Nothing until datagram 2 is resent","Datagrams 1, 3, 4 and 5, right away; 2 never arrives","All five, because UDP resends lost data"],
+      a: 1,
+      why: "UDP has no ACKs and no retransmission. Each datagram is independent, so the others are delivered at once and the lost one is simply gone.",
+    },
     quiz: [
       { q: 'Packet 2 of 5 is lost on a TCP connection. What does the receiving app see first?', options: ['Packets 1, 3, 4, 5, then 2', 'Packet 1, then nothing until 2 is resent, then 2–5 together', 'All five at once, after a timeout', 'An exception in the app'], a: 1, why: 'TCP hands bytes up in order. 3–5 are buffered until the retransmitted 2 arrives. That wait is head-of-line blocking.' },
       { q: 'How many round trips does a TCP handshake cost before the client can send its first data byte?', options: ['0', '1', '2', '3'], a: 1, why: 'SYN goes out, SYN-ACK comes back. The client can send its ACK together with the first data, so one round trip.' },
@@ -898,6 +828,12 @@ val client = OkHttpClient.Builder()
       { type: 'blank', prompt: 'Point the manifest at the security config, then allow a debugging proxy in debug builds only.', code: '<application android:[[networkSecurityConfig]]="@xml/network_security_config">\n\n<network-security-config>\n    <[[debug-overrides]]>\n        <trust-anchors><certificates src="user" /></trust-anchors>\n    </debug-overrides>\n</network-security-config>', why: 'The manifest attribute is <code>android:networkSecurityConfig</code>. <code>debug-overrides</code> is ignored unless the app is debuggable, so release builds stay strict.' },
       { type: 'bug', prompt: 'This pinning setup locks every user out the day the server rotates its key. Tap the line to change.', code: 'val pinner = CertificatePinner.Builder()\n    .add("api.example.com", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")\n    .build()\nval client = OkHttpClient.Builder().certificatePinner(pinner).build()', bug: 1, fix: '    .add("api.example.com", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=")', why: 'A single pin has no plan B. Add a backup key the server team holds, so they can switch to it without breaking installed apps.' },
     ],
+    predict: {
+      q: "In a TLS 1.3 handshake, from which point on is everything encrypted?",
+      options: ["From the ClientHello","Right after the ServerHello","Only after both Finished messages"],
+      a: 1,
+      why: "The ClientHello and ServerHello carry the two key shares. As soon as both sides have them they derive keys, so the certificate and everything after it travel encrypted.",
+    },
     quiz: [
       { q: 'You install a debugging proxy’s CA on your phone, but your app (target API 35) fails with SSLHandshakeException. Why?', options: ['The proxy uses UDP', 'Apps targeting API 24+ do not trust user-installed CAs by default', 'TLS 1.3 forbids proxies', 'The app needs the INTERNET permission'], a: 1, why: 'Since Android 7.0, user CAs are opt-in. Trust them in <code>debug-overrides</code> so only debuggable builds accept the proxy.' },
       { q: 'Put the TLS 1.3 server flight in order.', options: ['ServerHello → Certificate → CertificateVerify → Finished', 'Certificate → ServerHello → Finished → CertificateVerify', 'Finished → ServerHello → Certificate', 'CertificateVerify → Certificate → ServerHello'], a: 0, why: 'ServerHello carries the key share. Then, encrypted: EncryptedExtensions, Certificate, CertificateVerify (proof of the private key) and Finished.' },
@@ -1050,6 +986,12 @@ val uploads = client.newBuilder()
       { type: 'blank', prompt: 'Make a client with a longer write timeout that still shares the app’s connection pool.', code: 'val uploads = client.[[newBuilder]]()\n    .writeTimeout(2, TimeUnit.MINUTES)\n    .[[build]]()', why: '<code>newBuilder()</code> copies the client’s settings and shares its connection pool and dispatcher, so warm connections are reused.' },
       { type: 'bug', prompt: 'Every image request opens a new connection. Tap the line that causes it.', code: 'class ImageLoader {\n    suspend fun load(url: String): ByteArray = withContext(Dispatchers.IO) {\n        val client = OkHttpClient()\n        client.newCall(Request.Builder().url(url).build()).execute().use { it.body.bytes() }\n    }\n}', bug: 2, fix: '        val client = sharedClient   // one OkHttpClient for the whole app', why: 'A client built inside the function has an empty pool each time, so nothing is reused. Inject or share one client.' },
     ],
+    predict: {
+      q: "HTTP/1.1 keep-alive, one warm connection, RTT 100 ms. Six small requests. About how long until all six are done?",
+      options: ["About 100 ms","About 600 ms: one request at a time","About 1,200 ms"],
+      a: 1,
+      why: "HTTP/1.1 has one request in flight per connection. Each waits for the one before, so six requests cost six round trips.",
+    },
     quiz: [
       { q: 'An app loads six small resources from one host on a warm HTTP/2 connection. Roughly how long does it take with RTT 100 ms?', options: ['About 100 ms', 'About 600 ms', 'About 300 ms', 'About 1800 ms'], a: 0, why: 'All six streams go out together on the existing connection, so they finish after about one round trip. On HTTP/1.1 keep-alive they would queue: about 600 ms.' },
       { q: 'On a lossy network, why can HTTP/3 beat HTTP/2?', options: ['It compresses more', 'QUIC recovers loss per stream, so one lost packet does not stall the others', 'It skips encryption', 'It uses more TCP connections'], a: 1, why: 'HTTP/2 shares one TCP byte stream, so a loss blocks all streams until the retransmit. QUIC streams are independent.' },
@@ -1191,6 +1133,12 @@ WorkManager.getInstance(context)
       { type: 'blank', prompt: 'Load two independent things in parallel.', code: 'suspend fun load() = coroutineScope {\n    val a = [[async]] { api.feed() }\n    val b = async { api.me() }\n    Home(a.[[await]](), b.await())\n}', why: '<code>async</code> starts each call immediately; <code>await</code> waits for the result. Both requests are in flight at once.' },
       { type: 'bug', prompt: 'This screen waits for three round trips although the calls don’t depend on each other. Tap the line that serializes them.', code: 'suspend fun loadHome() = coroutineScope {\n    val feed = async { api.feed() }.await()\n    val weather = async { api.weather() }\n    Home(feed, weather.await())\n}', bug: 1, fix: '    val feed = async { api.feed() }', why: 'Calling <code>await()</code> right after <code>async</code> waits for the feed before the weather call even starts. Start both, then await.' },
     ],
+    predict: {
+      q: "RTT 100 ms, five small calls that each wait for the one before, on a warm connection. Bandwidth doubles. What happens to the load time?",
+      options: ["It roughly halves","It barely changes: the round trips dominate","It doubles"],
+      a: 1,
+      why: "Five dependent calls cost five round trips. Small responses take almost no transfer time, so more bandwidth hardly helps; fewer round trips would.",
+    },
     quiz: [
       { q: 'RTT is 200 ms, bandwidth 50 Mbps. A screen makes 4 dependent calls with 5 KB responses each. What dominates the load time?', options: ['Bandwidth', 'Round trips (about 800 ms)', 'JSON parsing', 'DNS only'], a: 1, why: '20 KB at 50 Mbps is about 3 ms. Four sequential round trips at 200 ms are 800 ms. Cut round trips, not bytes.' },
       { q: 'Why does batching small background requests save battery on cellular?', options: ['Batched data is compressed better', 'Each wake-up keeps the radio in high-power states for seconds after the transfer; fewer wake-ups mean less tail time', 'The radio uses less power for big packets', 'Batches skip TLS'], a: 1, why: 'The tail after each transfer costs more than the transfer itself for small requests. One wake-up instead of ten removes nine tails.' },
@@ -1207,7 +1155,7 @@ WorkManager.getInstance(context)
     body: `
 <p>"The app is slow" is never one problem. A call's time splits into phases: <b>DNS</b> lookup, TCP <b>connect</b>, <b>TLS</b> handshake, sending the request, waiting for the first response byte (<b>TTFB</b>, mostly server work plus one round trip), and downloading the body. Each phase points at a different fix: DNS and connect point at the network or at missing connection reuse, a long TTFB points at the server, a long download points at payload size or bandwidth.</p>
 <p>Android Studio's <b>Network Inspector</b> (View › Tool Windows › App Inspection) shows each request your app makes through <code>HttpsURLConnection</code> or OkHttp, including Retrofit, with headers, bodies and timing, and lets you set rules that rewrite responses for testing. OkHttp's <code>EventListener</code> gives exact per-phase timestamps in code. A proxy like mitmproxy or Charles shows raw traffic (with a debug-only trust config), and <code>curl</code> reproduces a call outside the app.</p>
-<p>Pick a scenario in the demo. The bar and the event log show where the time went, and the verdict says what to fix.</p>`,
+<p>Step through the demo. Each lane is one call, and the longest bar says what to fix.</p>`,
     code: `// Log per-phase timings for every call. Use a factory: one listener per call.
 class TimingListener : EventListener() {
     private var start = 0L
@@ -1232,45 +1180,24 @@ val client = OkHttpClient.Builder()
     .build()`,
     remember: 'Measure the phases first: DNS, connect, TLS, TTFB, download. Each one has a different owner and fix.',
     visual(el) {
-      const PH = [['dns', 'DNS', 'var(--warm-soft)'], ['conn', 'connect', 'var(--warm)'], ['tls', 'TLS', 'var(--err-soft)'], ['ttfb', 'wait (TTFB)', 'var(--accent)'], ['dl', 'download', 'var(--ok)']];
-      const SC = [
-        { label: 'Cold call', p: { dns: 45, conn: 60, tls: 65, ttfb: 140, dl: 30 }, verdict: 'Half the time is setup (DNS + connect + TLS). Normal for the first call; make sure later calls reuse the connection.' },
-        { label: 'Warm call', p: { dns: 0, conn: 0, tls: 0, ttfb: 140, dl: 30 }, pooled: true, verdict: '<span class="good">No setup at all</span>: connectionAcquired came straight from the pool. This is what shared clients buy you.' },
-        { label: 'Slow DNS', p: { dns: 1300, conn: 60, tls: 65, ttfb: 140, dl: 30 }, verdict: '<span class="bad">DNS took over a second.</span> A broken or distant resolver, or an IPv6 path timing out. Check on another network; it is not your server.' },
-        { label: 'Slow server', p: { dns: 0, conn: 0, tls: 0, ttfb: 1600, dl: 30 }, pooled: true, verdict: '<span class="bad">Waiting for the first byte dominates.</span> The network is fine; the server is slow to answer. Send the server team this endpoint and timing.' },
-        { label: 'Big response', p: { dns: 0, conn: 0, tls: 0, ttfb: 140, dl: 1900 }, pooled: true, verdict: '<span class="bad">The download dominates.</span> Too many bytes for this link: page the list, request smaller images, check gzip is on.' },
-      ];
-      let tok = 0;
-      const bar = h('div', { class: 'nw-bar', role: 'img', 'aria-label': 'Call phases' });
-      const total = h('b', { class: 'nw-big' }, '');
-      const log = h('div', { class: 'nw-log', 'aria-live': 'polite' });
-      const msg = out('');
-      async function show(s) {
-        const t = ++tok;
-        const p = s.p, sum = PH.reduce((a, [k]) => a + p[k], 0);
-        bar.replaceChildren(...PH.filter(([k]) => p[k] > 0).map(([k, name, c]) => h('span', { style: `flex-grow:${p[k]};--c:${c}`, title: `${name}: ${ms(p[k])}` }, p[k] / sum > 0.12 ? name : '')));
-        total.textContent = ms(sum);
-        log.replaceChildren();
-        let at = 0;
-        const ev = [['callStart', 0]];
-        if (s.pooled) ev.push(['connectionAcquired (pooled)', 0]);
-        else {
-          ev.push(['dnsStart', 0], ['dnsEnd', p.dns], ['connectStart', 0], ['secureConnectStart', p.conn], ['secureConnectEnd', p.tls], ['connectEnd', 0], ['connectionAcquired', 0]);
-        }
-        ev.push(['requestHeadersEnd', 0], ['responseHeadersStart', p.ttfb], ['responseBodyEnd', p.dl], ['callEnd', 0]);
-        msg.innerHTML = '';
-        for (const [name, add] of ev) {
-          at += add;
-          log.append(h('div', {}, h('span', { class: 'nw-t' }, `+${Math.round(at)} ms`), h('span', { class: 'nw-e' }, name)));
-          await sleep(160); if (t !== tok || !el.isConnected) return;
-        }
-        say(msg, s.verdict);
-      }
-      el.append(picker('scenario', SC, s => show(s)),
-        h('div', { class: 'nw-stage' }, h('div', { class: 'nw-row' }, total, label('total')), bar,
-          h('div', { class: 'nw-legend' }, PH.map(([, n, c]) => h('span', { style: `--c:${c}` }, n))), log),
-        msg);
-      show(SC[0]);
+      Lab.ui.timeline(el, {
+        lanes: ['Cold call', 'Warm call', 'Slow DNS', 'Slow server', 'Big body'],
+        span: 2100,
+        predict: {
+          q: 'The app makes the same request twice in a row through one shared <code>OkHttpClient</code>. What does the second call skip?',
+          options: ['Nothing: every call does DNS, connect and TLS', 'DNS, connect and TLS: it reuses the pooled connection', 'Only the DNS lookup'],
+          a: 1,
+          why: 'OkHttp keeps the connection in its pool. The second call gets <code>connectionAcquired</code> straight away and only pays for the request and response.',
+        },
+        frames: [
+          { say: 'Each lane is one call. OkHttp’s <code>EventListener</code> timestamps every phase. Each bar is a phase: setup (DNS, connect, TLS), waiting for the server, then the body (example timings).' },
+          { bars: [{ lane: 0, from: 0, to: 170, tone: 'warm' }, { lane: 0, from: 170, to: 310, tone: 'accent' }, { lane: 0, from: 310, to: 340, tone: 'ok' }], say: 'Cold call: DNS, connect and TLS take 170 ms before the request is sent. Normal for the first call.' },
+          { bars: [{ lane: 1, from: 0, to: 140, tone: 'accent' }, { lane: 1, from: 140, to: 170, tone: 'ok' }], say: 'Warm call: the connection came from the pool, so there is no setup at all.' },
+          { bars: [{ lane: 2, from: 0, to: 1300, label: 'DNS', tone: 'warm' }, { lane: 2, from: 1300, to: 1425, tone: 'warm' }, { lane: 2, from: 1425, to: 1565, tone: 'accent' }, { lane: 2, from: 1565, to: 1595, tone: 'ok' }], say: '<code>dnsStart</code> to <code>dnsEnd</code> took 1.3 s. A slow resolver or network, not your server.' },
+          { bars: [{ lane: 3, from: 0, to: 1600, label: 'waiting for the first byte', tone: 'accent' }, { lane: 3, from: 1600, to: 1630, tone: 'ok' }], say: 'No setup, but 1.6 s until <code>responseHeadersStart</code>. The network is fine; the server is slow to answer.' },
+          { bars: [{ lane: 4, from: 0, to: 140, tone: 'accent' }, { lane: 4, from: 140, to: 2040, label: 'downloading the body', tone: 'ok' }], say: 'The body takes 1.9 s to arrive. Too many bytes for this link: page the list, shrink images, check gzip.' },
+        ],
+      });
     },
     deeper: [
       {

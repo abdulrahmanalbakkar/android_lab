@@ -148,7 +148,7 @@
     body: `
 <p>An operating system shares one machine between many programs and keeps them from hurting each other. The core part is the <em>kernel</em>. It runs with full control of the CPU, memory and devices. Everything else, including your app, runs in <em>user space</em> with fewer rights: it cannot touch hardware or another program's memory directly.</p>
 <p>When user code needs something only the kernel can do, like reading a file, opening a socket or starting a thread, it makes a <em>system call</em>. The CPU switches into kernel mode, the kernel checks that the request is allowed, does the work and switches back. Most of your code never does this: sorting a list or building a <code>String</code> stays in user space.</p>
-<p>Android is a stack on top of a Linux kernel. From the bottom: the Linux kernel, the hardware abstraction layer (HAL), the Android Runtime (ART) with native C/C++ libraries, the Java API framework, and apps. Each app runs in its own process with its own instance of the runtime (ART since Android 5.0, Dalvik before that). Pick an action in the demo and follow it down the stack.</p>`,
+<p>Android is a stack on top of a Linux kernel. From the bottom: the Linux kernel, the hardware abstraction layer (HAL), the Android Runtime (ART) with native C/C++ libraries, the Java API framework, and apps. Each app runs in its own process with its own instance of the runtime (ART since Android 5.0, Dalvik before that). Step through the demo and follow one file read down the stack.</p>`,
     code: `// Pure user space: no system call at all
 val titles = headlines.map { it.title.uppercase() }
 
@@ -160,68 +160,31 @@ Thread.sleep(100)                                            // the kernel parks
 Log.d("OS", "pid=\${Process.myPid()} tid=\${Process.myTid()} uid=\${Process.myUid()}")`,
     remember: 'The kernel owns the hardware. Your app gets anything real (files, network, threads, memory) only by asking through a system call.',
     visual(el) {
-      const LAYERS = [
-        ['app', 'Your app', 'Kotlin compiled to DEX, in its own process'],
-        ['fw', 'Java API framework', 'Activity, CameraManager, java.io'],
-        ['rt', 'ART and native libraries', 'runtime, garbage collector, libc'],
-        ['hal', 'Hardware abstraction layer', 'camera, audio, sensor modules'],
-        ['kernel', 'Linux kernel', 'scheduler, memory, file systems, drivers, Binder'],
-        ['hw', 'Hardware', 'CPU, RAM, flash storage, camera sensor'],
-      ];
-      const rows = {};
-      const stack = h('div', { class: 'osy-stack' }, LAYERS.map(([id, name, sub]) => {
-        const r = h('div', { class: `osy-layer ${id === 'kernel' || id === 'hw' ? 'osy-kern' : ''}` }, h('b', {}, name), h('small', {}, sub));
-        rows[id] = r;
-        return id === 'kernel' ? [h('div', { class: 'osy-gap' }, 'system call boundary · user space above, kernel below'), r] : r;
-      }));
-      const mode = pill('user', 'osy-acc');
-      const st = stats(['system calls']);
-      st.set('system calls', 0);
-      const msg = out('Pick an action. Each one lights the layers it passes through.');
-      const R = runner(el);
-      const PATHS = {
-        file: [
-          ['app', '<code>File(path).readText()</code> runs in your process, in user mode.'],
-          ['fw', 'java.io opens a <code>FileInputStream</code> and asks for bytes.'],
-          ['rt', 'libc turns that into the system calls <code>openat()</code> and <code>read()</code>.'],
-          ['kernel', 'Trap into kernel mode. The kernel checks your UID may read the file, finds it in the file system and asks the storage driver for the blocks.', 1],
-          ['hw', 'Flash storage returns the blocks. If the file was read recently, the kernel already had it in RAM (the page cache) and skips this.'],
-          ['kernel', 'The kernel copies the bytes into your buffer and returns to user mode.'],
-          ['app', '<code>readText()</code> returns a String. Two layers were never involved: the HAL and the framework’s system services.'],
+      Lab.ui.flow(el, {
+        nodes: [
+          { id: 'app', label: 'Your app', sub: 'user mode' },
+          { id: 'fw', label: 'Framework', sub: 'java.io' },
+          { id: 'rt', label: 'libc', sub: 'ART + native' },
+          { id: 'kernel', label: 'Linux kernel', sub: 'kernel mode' },
+          { id: 'hw', label: 'Storage', sub: 'flash + driver' },
         ],
-        camera: [
-          ['app', 'CameraX asks for a picture.'],
-          ['fw', 'The Camera2 framework API sends the request to the camera service, another process.'],
-          ['kernel', 'The request crosses processes through the Binder driver in the kernel.', 1],
-          ['hal', 'The camera service calls the camera HAL module, the vendor’s code behind a standard interface.'],
-          ['kernel', 'The HAL talks to the vendor’s camera driver in the kernel.', 1],
-          ['hw', 'The driver programs the sensor and the image data flows back up.'],
-          ['app', 'Your callback gets the image. Your app never touched the camera hardware itself.'],
+        predict: {
+          q: '<code>File(path).readText()</code> needs bytes from flash storage. Which layer is allowed to talk to the storage hardware?',
+          options: ['Your app, through java.io', 'ART, because it runs your code', 'Only the kernel, after a system call'],
+          a: 2,
+          why: 'Code in user mode cannot touch hardware. A system call traps into kernel mode, and the kernel’s driver does the I/O for you.',
+        },
+        frames: [
+          { say: 'Your code calls <code>File(path).readText()</code>. Follow it down the stack.' },
+          { at: 'app', packet: 'readText()', say: 'It starts in your process, in user mode. This code may not touch the disk directly.' },
+          { at: 'fw', packet: 'FileInputStream', say: 'java.io opens a <code>FileInputStream</code> and asks for bytes. Still user mode.' },
+          { at: 'rt', packet: 'openat() · read()', say: 'libc turns that into system calls. A system call is the only door into the kernel.' },
+          { at: 'kernel', packet: 'trap', tone: 'warm', mark: { kernel: 'warm' }, say: 'The CPU switches to kernel mode. The kernel checks that your UID may read the file and finds its blocks.' },
+          { at: 'hw', packet: 'blocks', tone: 'warm', mark: { hw: 'warm' }, say: 'The driver reads the blocks from flash. If the file was read recently, the page cache in RAM skips this step.' },
+          { at: 'kernel', packet: 'bytes', tone: 'ok', say: 'The kernel copies the bytes into your buffer and switches back to user mode.' },
+          { at: 'app', packet: 'String', tone: 'ok', mark: { app: 'ok' }, say: '<code>readText()</code> returns. Sorting a list, by contrast, never leaves user mode: no system call at all.' },
         ],
-        list: [
-          ['app', '<code>listOf(1, 2, 3).sum()</code> runs in your process.'],
-          ['rt', 'ART allocates the list on heap memory the process already owns. No system call.'],
-          ['app', 'Done in well under a microsecond, all in user mode. Most of your code works like this.'],
-        ],
-      };
-      let calls = 0;
-      async function go(name) {
-        const t = R.start();
-        Object.values(rows).forEach(r => r.classList.remove('osy-on', 'osy-kon', 'osy-seen'));
-        for (const [id, text, sys] of PATHS[name]) {
-          Object.values(rows).forEach(r => { if (r.classList.contains('osy-on') || r.classList.contains('osy-kon')) { r.classList.remove('osy-on', 'osy-kon'); r.classList.add('osy-seen'); } });
-          const kern = id === 'kernel' || id === 'hw';
-          rows[id].classList.add(kern ? 'osy-kon' : 'osy-on');
-          mode.textContent = kern ? 'kernel' : 'user';
-          mode.className = `osy-pill ${kern ? 'osy-warm' : 'osy-acc'}`;
-          if (sys) st.set('system calls', ++calls);
-          say(msg, text);
-          await sleep(1300);
-          if (!R.live(t)) return;
-        }
-      }
-      el.append(h('div', { class: 'osy-stage' }, h('div', { class: 'osy-row' }, label('CPU mode'), mode, st), stack),
-        h('div', { class: 'controls' }, act('Read a file', () => go('file')), act('Take a photo', () => go('camera')), act('Sum a list', () => go('list'))), msg);
+      });
     },
     deeper: [
       {
@@ -280,7 +243,7 @@ file.inputStream().buffered().use { input ->
     body: `
 <p>A <em>process</em> is a program while it runs. The kernel gives each one a process id (PID), its own virtual address space, a table of open files, one or more threads, and the user id (UID) whose rights it has. Two processes cannot see each other's memory.</p>
 <p>On Unix, new processes come from <code>fork()</code>: the kernel copies the parent, and the child usually calls <code>exec()</code> to load a different program. Android does it differently for apps. At boot, <code>init</code> starts the <em>zygote</em>, which loads the framework code and resources once. When an app needs a process, system_server asks the zygote over a socket, the zygote forks, and the child becomes your app. Most framework pages stay shared between all apps.</p>
-<p>Then the child drops its rights to a UID that belongs only to your app. That is the <em>app sandbox</em>: each app has its own Linux user, and the kernel's normal file permissions plus SELinux keep apps out of each other's data. Launch two apps in the demo and try to cross the line.</p>`,
+<p>Then the child drops its rights to a UID that belongs only to your app. That is the <em>app sandbox</em>: each app has its own Linux user, and the kernel's normal file permissions plus SELinux keep apps out of each other's data. Step through the demo: two apps launch, then one tries to cross the line.</p>`,
     code: `// Every process has kernel-assigned ids
 val pid = Process.myPid()
 val uid = Process.myUid()            // 10145 is shown as u0_a145: app UIDs start at 10000
@@ -293,76 +256,32 @@ val db = File(context.filesDir, "news.db")   // /data/user/0/com.example.news/fi
 // <service android:name=".PlayerService" android:process=":player" />`,
     remember: 'Each app is its own Linux process with its own UID, forked from the zygote. Separate processes means separate memory: nothing is shared unless the OS carries it.',
     visual(el) {
-      const procs = [
-        { id: 'init', name: 'init', pid: 1, uid: 'root', d: 0, state: 'native' },
-        { id: 'lmkd', name: 'lmkd', pid: 288, uid: 'lmkd', d: 1, state: 'native' },
-        { id: 'zygote', name: 'zygote64', pid: 612, uid: 'root', d: 1, state: 'waiting for fork requests' },
-        { id: 'system', name: 'system_server', pid: 1405, uid: 'system', d: 2, state: 'system' },
-        { id: 'launcher', name: 'launcher', pid: 2210, uid: 'u0_a62', d: 2, state: 'foreground' },
-      ];
-      const APPS = {
-        news: { name: 'com.example.news', pid: 4821, uid: 'u0_a145' },
-        maps: { name: 'com.example.maps', pid: 5307, uid: 'u0_a146' },
-      };
-      const tree = h('div', { class: 'osy-tree' });
-      const st = stats(['processes']);
-      const msg = out('Launch an app. Watch the zygote fork a child and the child take on its own UID.');
-      const R = runner(el);
-      const cards = {};
-      function paint(hot) {
-        tree.replaceChildren(...procs.map(p => {
-          const stCls = p.state === 'foreground' ? 'osy-acc' : p.state === 'cached' ? 'osy-warm' : p.state === 'denied' ? 'osy-err' : 'osy-ghost';
-          const c = h('div', { class: `osy-proc ${p.cls || ''} ${hot === p.id ? 'osy-hot' : ''}`, style: `--d:${p.d}` },
-            h('div', { class: 'osy-ptop' }, h('span', { class: 'osy-pname' }, p.name), pill(p.state, stCls)),
-            h('span', { class: 'osy-pmeta' }, `pid ${p.pid} · ppid ${p.ppid ?? (p.d === 0 ? 0 : p.d === 1 ? 1 : 612)} · uid ${p.uid}`));
-          cards[p.id] = c;
-          return c;
-        }));
-        st.set('processes', procs.length);
-      }
-      const find = id => procs.find(p => p.id === id);
-      async function launch(key) {
-        const t = R.start();
-        const a = APPS[key];
-        procs.filter(p => p.state === 'foreground').forEach(p => { p.state = p.id === 'launcher' ? 'home' : 'cached'; });
-        const have = find(key);
-        if (have) {
-          have.state = 'foreground'; have.cls = '';
-          paint(key);
-          say(msg, `${a.name} is still alive, so this is a warm start: no fork needed. The other app moved to the background (cached).`);
-          return;
-        }
-        paint('zygote');
-        say(msg, 'system_server asks the zygote, over a Unix socket, for a new app process. The zygote calls <code>fork()</code>.');
-        await sleep(1300); if (!R.live(t)) return;
-        const p = { id: key, name: 'zygote64 (child)', pid: a.pid, ppid: 612, uid: 'root', d: 2, state: 'forked', cls: 'osy-new' };
-        procs.push(p); paint(key);
-        say(msg, `The child, pid ${a.pid}, starts as a copy of the zygote. ART and the framework are already loaded, and those memory pages are shared with every other app.`);
-        await sleep(1700); if (!R.live(t)) return;
-        p.uid = a.uid; p.name = a.name; p.state = 'specializing'; paint(key);
-        say(msg, `The child drops root and becomes UID ${a.uid}, enters the app’s SELinux domain, then loads the app’s own code. It does not exec a new program.`);
-        await sleep(1700); if (!R.live(t)) return;
-        p.state = 'foreground'; p.cls = ''; paint(key);
-        say(msg, `<span class="good">${a.name}</span> is running as pid ${a.pid}, uid ${a.uid}. <code>Application.onCreate()</code> runs now, once for this process.`);
-      }
-      function home() {
-        R.stop();
-        procs.forEach(p => { if (p.state === 'foreground' && p.id !== 'launcher') p.state = 'cached'; p.cls = ''; });
-        find('launcher').state = 'foreground';
-        paint('launcher');
-        say(msg, 'The apps keep running as cached processes. Their memory stays, so coming back is fast, until the system needs that memory.');
-      }
-      function peek() {
-        R.stop();
-        const me = find('news');
-        if (!me) { say(msg, 'Launch News first.'); return; }
-        const them = find('maps');
-        me.cls = 'osy-deny'; paint(); me.cls = '';
-        say(msg, `<code>open("/data/data/com.example.maps/files/home.db")</code> from uid ${me.uid}: <span class="bad">EACCES, permission denied</span>. That directory belongs to ${them ? them.uid : 'u0_a146'} with mode 700, and SELinux blocks it too. To share data, Maps has to offer it through a ContentProvider, a service or an Intent.`);
-      }
-      paint();
-      el.append(h('div', { class: 'osy-stage' }, st, tree),
-        h('div', { class: 'controls' }, act('Launch News', () => launch('news')), act('Launch Maps', () => launch('maps')), act('Press Home', home), act('News reads Maps’ files', peek)), msg);
+      Lab.ui.graph(el, {
+        height: 300,
+        nodes: [
+          { id: 'init', label: 'init<small>pid 1</small>', x: 50, y: 10, tone: 'muted' },
+          { id: 'sys', label: 'system_server', x: 17, y: 10 },
+          { id: 'zy', label: 'zygote<small>root</small>', x: 50, y: 42, tone: 'warm' },
+          { id: 'fw', label: 'Framework<small>shared pages</small>', x: 83, y: 42, tone: 'ok' },
+          { id: 'news', label: 'News<small>pid 4821</small>', x: 25, y: 84, hidden: true },
+          { id: 'maps', label: 'Maps<small>pid 5307</small>', x: 75, y: 84, hidden: true },
+        ],
+        predict: {
+          q: 'Right after <code>fork()</code>, which user does the new News process run as?',
+          options: ['root, the same as the zygote', 'u0_a145, its own app UID', 'system, like system_server'],
+          a: 0,
+          why: '<code>fork()</code> copies the parent, user included. The child then drops root and switches to the app’s own UID before it loads any app code.',
+        },
+        frames: [
+          { add: [['init', 'zy', 'starts'], ['zy', 'fw']], say: 'At boot, init starts the zygote. It loads ART, the framework classes and resources once. (system_server was forked from it too.)' },
+          { show: ['news'], add: [['sys', 'zy', 'request']], hl: ['sys'], say: 'You tap News. system_server asks the zygote, over a socket, for a new app process.' },
+          { add: [['zy', 'news', 'fork()', 'warm']], hl: ['zy', 'news'], say: 'The zygote calls <code>fork()</code>. The child starts as a copy: still root, with everything already loaded. No new program is exec’d.' },
+          { add: [['news', 'fw', 'shares', 'weak']], say: 'The child does not copy the framework pages. It shares them with the zygote, so starting is fast and cheap.' },
+          { add: [['zy', 'news', 'fork()']], hl: ['news'], say: 'The child drops root, becomes uid <code>u0_a145</code> and enters the app’s SELinux domain. Then <code>Application.onCreate()</code> runs.' },
+          { show: ['maps'], add: [['zy', 'maps', 'fork()'], ['maps', 'fw', 'shares', 'weak']], hl: ['maps'], say: 'Maps gets its own fork and its own UID, <code>u0_a146</code>. Two processes, one copy of the framework.' },
+          { add: [['news', 'maps', 'open files?', 'err']], hl: ['news', 'maps'], say: 'News tries to open a file in Maps’ data directory: <b>EACCES</b>. Different UIDs, private directories and SELinux keep apps apart.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -547,6 +466,12 @@ while (true) {
       { type: 'blank', prompt: 'Move the blocking database read off the main thread.', code: 'viewModelScope.launch {\n    val rows = withContext(Dispatchers.[[IO]]) { dao.loadAll() }\n    _state.value = UiState.Ready(rows)\n}', why: '<code>Dispatchers.IO</code> runs blocking calls on a shared pool so the main thread stays free. The assignment after <code>withContext</code> runs back on main.' },
       { type: 'bug', prompt: 'This crashes with <code>NetworkOnMainThreadException</code> on startup. Tap the line that runs on the wrong thread.', code: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    val json = URL("https://api.example.com/manset").readText()\n    adapter.submit(parse(json))\n}', bug: 2, fix: '    lifecycleScope.launch { val json = withContext(Dispatchers.IO) { URL("https://api.example.com/manset").readText() }; adapter.submit(parse(json)) }', why: '<code>onCreate</code> runs on the main thread. A network read there would block drawing and input, so Android throws <code>NetworkOnMainThreadException</code>. Do the read on an I/O thread and come back to main.' },
     ],
+    predict: {
+      q: "The main thread blocks on a slow disk read for 96 ms. A frame is due every 16 ms. How many frames are missed?",
+      options: ["None: the CPU is idle anyway","About six","Only one"],
+      a: 1,
+      why: "A blocked main thread cannot produce frames, even with the CPU idle. 96 ms is six 16 ms frame slots.",
+    },
     quiz: [
       { q: 'The main thread is blocked on a slow disk read. What is the CPU doing?', options: ['Spinning at 100% on the main thread', 'Running other threads, or idle; the blocked thread uses no CPU', 'Waiting for the main thread to finish its slice', 'Reading the disk byte by byte'], a: 1, why: 'A blocked thread is off the CPU until the I/O completes. The UI freezes because the thread that draws is waiting, not because the CPU is busy.' },
       { q: 'At 60 Hz, roughly how long does the main thread have to produce each frame?', options: ['1 ms', '16 ms', '100 ms', '5 s'], a: 1, why: '1000 ms / 60 ≈ 16.7 ms. At 120 Hz it is about 8 ms. 5 seconds is the input timeout for an ANR, a far worse failure.' },
@@ -719,6 +644,12 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
       { type: 'blank', prompt: 'Pages are 4 KB (0x1000 bytes). Split the virtual address 0x3A10.', code: '// virtual 0x3A10\nval page = [[3|0x3]]\nval offset = [[0xA10|A10|0xa10]]', why: 'The low 12 bits (three hex digits) are the offset, 0xA10. What remains, 0x3, is the page number.' },
       { type: 'bug', prompt: 'Opening a long comment thread crashes with <code>StackOverflowError</code>. Tap the line that recurses forever.', code: 'fun depth(c: Comment): Int {\n    var max = 0\n    for (reply in c.replies) max = maxOf(max, depth(reply))\n    return depth(c) + 1\n}', bug: 3, fix: '    return max + 1', why: '<code>depth(c)</code> calls itself with the same argument, so each call pushes another stack frame until the thread’s stack runs out. Return the computed <code>max + 1</code> instead.' },
     ],
+    predict: {
+      q: "News already read page 4 of <code>articles.db</code>. Now Maps touches the same page of the same file. What does the kernel do?",
+      options: ["Reads it from storage again","Maps the frame that is already in RAM into Maps too","Copies News’ frame into a new one"],
+      a: 1,
+      why: "File pages live in the page cache. The kernel just points Maps’ page table at the frame that is already there: one copy, two processes.",
+    },
     quiz: [
       { q: 'News and Maps both use the framework classes the zygote preloaded. How many copies of those pages are in RAM?', options: ['One per app', 'One, mapped into both page tables', 'None, they are read from flash every time', 'Two, one per CPU core'], a: 1, why: 'The pages came from the zygote and nobody wrote to them, so both page tables point at the same physical frames.' },
       { q: 'An app allocates a 50 MB array but never touches most of it. What happens to physical RAM?', options: ['50 MB is used at once', 'Pages get frames only as they are first written; untouched pages may cost nothing yet', 'The array goes to flash', 'The kernel refuses the allocation'], a: 1, why: 'The kernel assigns frames lazily, on the first touch, through page faults. Do not count on this for Java objects: the app’s heap limit counts the full 50 MB the moment you allocate it.' },
@@ -887,6 +818,12 @@ $ adb shell am kill com.example.news
       { type: 'blank', prompt: 'Read the saved query as a flow that survives process death.', code: 'class SearchViewModel(private val handle: SavedStateHandle) : ViewModel() {\n    val query = handle.[[getStateFlow]]("query", "")\n    fun onQuery(q: String) { handle.[[set]]("query", q) }\n}', why: '<code>getStateFlow</code> reads the restored value, or the default, and emits on every write. <code>set</code> (or <code>handle["query"] = q</code>) stores it in saved state.' },
       { type: 'bug', prompt: 'After the system kills the app in the background, the search box comes back empty. Tap the line that ignores the restored value.', code: 'class SearchViewModel(private val handle: SavedStateHandle) : ViewModel() {\n    val query = MutableStateFlow("")\n    fun onQuery(q: String) {\n        query.value = q\n        handle["query"] = q\n    }\n}', bug: 1, fix: '    val query = MutableStateFlow(handle.get<String>("query") ?: "")', why: 'The query is saved, but the new ViewModel starts from an empty string and never reads it back. Start from the saved value, or use <code>getStateFlow</code>.' },
     ],
+    predict: {
+      q: "A music app plays through a foreground service while you open more and more apps. Compared with a cached app, when does lmkd kill it?",
+      options: ["First, because it uses the most memory","Much later: it is perceptible, with a low oom_score_adj","At the same time as cached apps"],
+      a: 1,
+      why: "lmkd kills the highest oom_score_adj first. Cached apps sit at 900 and above; a perceptible foreground service is around 200.",
+    },
     quiz: [
       { q: 'Memory is short. Which process does lmkd kill first?', options: ['The foreground app (adj 0)', 'A music app with a foreground service (adj 200)', 'The previous app (adj 700)', 'A cached app the user hasn’t opened for an hour (adj 950)'], a: 3, why: 'lmkd picks the highest oom_score_adj first. The cached app is cheapest to lose, and the user may never come back to it.' },
       { q: 'Put what happens in order when the user returns to an app that was killed in the background.', options: ['zygote forks a new process → Application.onCreate → Activity recreated with saved Bundle → new ViewModel reloads data', 'Old process resumes → ViewModel restored → onResume', 'Activity recreated → zygote forks → Application.onCreate', 'onRestart → onStart → onResume in the old process'], a: 0, why: 'The old process is gone, so a new one starts from the zygote. The framework passes the saved Bundle to the recreated Activity; the ViewModel is brand new.' },
@@ -925,63 +862,30 @@ private val connection = object : ServiceConnection {
 }`,
     remember: 'A Binder call looks local but crosses processes: arguments are copied, the caller waits for the reply, and everything in flight shares a 1 MB buffer.',
     visual(el) {
-      const mk = (title, kern) => { const slot = h('div', { class: 'osy-slot' }); const note = h('p', { class: 'osy-note' }); const box = h('div', { class: `osy-box ${kern ? 'osy-kbox' : ''}` }, h('h4', {}, title), slot, note); return { box, slot, note }; };
-      const app = mk('Your app process'), drv = mk('Kernel: Binder driver', true), srv = mk('system_server');
-      const thread = pill('main thread: running', 'osy-acc');
-      const fill = h('i');
-      const meter = h('div', { class: 'osy-meter', role: 'img', 'aria-label': 'Binder buffer use' }, fill);
-      const used = h('span', { class: 'osy-stat' }, 'Binder buffer: 0 KB of 1 MB');
-      const msg = out('Pick a call. The colored chip is the Parcel moving between processes.');
-      const R = runner(el);
-      const boxes = [app, drv, srv];
-      function at(b, text, cls = '') {
-        boxes.forEach(x => { x.slot.replaceChildren(); x.box.classList.remove('osy-on', 'osy-kon'); });
-        if (b) { b.slot.append(h('span', { class: `osy-parcel ${cls}` }, text)); b.box.classList.add(b === drv ? 'osy-kon' : 'osy-on'); }
-      }
-      function buf(kb) {
-        fill.style.width = `${Math.min(100, kb / 10.24)}%`;
-        fill.className = kb > 1024 ? 'osy-over' : kb > 0 ? '' : 'osy-low';
-        used.textContent = `Binder buffer: ${kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB'} of 1 MB`;
-      }
-      const setThread = (text, cls) => { thread.textContent = text; thread.className = `osy-pill ${cls}`; };
-      async function call(kind) {
-        const t = R.start();
-        boxes.forEach(b => { b.note.textContent = ''; });
-        const big = kind === 'big', one = kind === 'oneway';
-        const size = big ? 2048 : 3;
-        const label = one ? 'markRead(42)' : big ? 'Intent + 2 MB bitmap' : 'startActivity(Intent)';
-        at(app, label, big ? 'osy-big' : '');
-        app.note.innerHTML = 'The proxy writes the arguments into a Parcel.';
-        say(msg, `The proxy in your process <b>marshals</b> the call: method id plus a flat copy of the arguments (${big ? '2 MB' : 'about 3 KB'}).`);
-        await sleep(1300); if (!R.live(t)) return;
-        at(drv, label, big ? 'osy-big' : ''); buf(size);
-        if (big) {
-          drv.note.textContent = 'Too big for the buffer.';
-          await sleep(900); if (!R.live(t)) return;
-          at(app, 'TransactionTooLargeException', 'osy-big'); buf(0);
-          app.note.textContent = 'The call fails in your process.';
-          say(msg, '<span class="bad">TransactionTooLargeException</span>. The Binder buffer is about 1 MB per process and is shared by every call in flight. Send a URI or an ID, not the bitmap.');
-          return;
-        }
-        drv.note.textContent = 'Copies the Parcel into the target and stamps the caller’s UID 10145.';
-        setThread(one ? 'main thread: running' : 'main thread: blocked, waiting', one ? 'osy-acc' : 'osy-err');
-        say(msg, one ? 'A <code>oneway</code> call: the driver queues the transaction and your thread <b>returns immediately</b>. No reply will come.' : 'The driver copies the Parcel once, into system_server’s memory, and records who sent it. <b>Your calling thread now blocks</b> until the reply.');
-        await sleep(1500); if (!R.live(t)) return;
-        at(srv, label); buf(0);
-        srv.note.textContent = one ? 'A Binder pool thread runs it later.' : 'A Binder pool thread checks Binder.getCallingUid(), resolves the Intent.';
-        say(msg, one ? 'Later, a Binder thread in the target runs <code>markRead</code>. Your app has moved on.' : 'A thread from system_server’s Binder pool runs the activity manager: it checks the caller’s identity and permissions and resolves which Activity the Intent means.');
-        await sleep(1700); if (!R.live(t)) return;
-        if (one) { at(null); say(msg, 'Done. One-way calls are good for notifications, but you get no result and no exception from the other side.'); return; }
-        at(drv, 'reply', 'osy-reply');
-        drv.note.textContent = 'Copies the reply back.';
-        await sleep(1100); if (!R.live(t)) return;
-        at(app, 'reply', 'osy-reply'); setThread('main thread: running', 'osy-acc');
-        app.note.textContent = 'startActivity() returns.';
-        say(msg, '<span class="good">The reply arrives</span> and <code>startActivity</code> returns. system_server then makes its own Binder call into the target app’s process to create the Activity.');
-      }
-      buf(0);
-      el.append(h('div', { class: 'osy-stage' }, h('div', { class: 'osy-row' }, thread), h('div', { class: 'osy-ipc' }, app.box, drv.box, srv.box), h('div', { class: 'osy-tlrow' }, used, meter)),
-        h('div', { class: 'controls' }, act('startActivity(intent)', () => call('sync')), act('oneway call', () => call('oneway')), act('Intent with a 2 MB bitmap', () => call('big'))), msg);
+      Lab.ui.flow(el, {
+        nodes: [
+          { id: 'app', label: 'Your app', sub: 'proxy, main thread' },
+          { id: 'drv', label: 'Binder driver', sub: 'in the kernel' },
+          { id: 'srv', label: 'system_server', sub: 'Binder thread pool' },
+        ],
+        predict: {
+          q: 'You put a 2 MB bitmap into an Intent extra and call <code>startActivity</code>. What happens?',
+          options: ['It works, just a little slower', 'It fails with <code>TransactionTooLargeException</code>', 'Android compresses the bitmap so it fits'],
+          a: 1,
+          why: 'The Intent travels as a Binder transaction. Its buffer is about 1 MB per process, shared by every call in flight, so the call fails in your process.',
+        },
+        frames: [
+          { say: 'Your code calls <code>startActivity(intent)</code>. The activity manager lives in another process: system_server.' },
+          { at: 'app', packet: 'Parcel · 3 KB', say: 'The proxy marshals the call: a method code plus a flat copy of the arguments in a <code>Parcel</code>.' },
+          { at: 'drv', packet: 'Parcel + uid 10145', tone: 'warm', mark: { app: 'warm' }, say: 'The driver copies the Parcel once, into system_server, and stamps the caller’s UID and PID. Your thread now blocks.' },
+          { at: 'srv', packet: 'startActivity()', say: 'A thread from system_server’s Binder pool runs the method. It checks <code>Binder.getCallingUid()</code> and resolves the Intent.' },
+          { at: 'drv', packet: 'reply', tone: 'ok', say: 'The reply Parcel goes back through the driver.' },
+          { at: 'app', packet: 'returns', tone: 'ok', mark: { app: 'ok' }, say: 'Your thread wakes up and <code>startActivity()</code> returns. One round trip between processes.' },
+          { at: 'app', packet: 'Intent + 2 MB bitmap', tone: 'err', mark: { app: null }, say: 'Now the same call with a 2 MB bitmap in the extras.' },
+          { at: 'drv', packet: 'too big', tone: 'err', mark: { drv: 'err' }, say: 'The transaction buffer is about 1 MB per process. The driver cannot fit this one.' },
+          { at: 'app', packet: 'TransactionTooLargeException', tone: 'err', mark: { app: 'err' }, say: 'The call fails in your process. Send a URI or an ID across, never the bitmap itself.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -1157,6 +1061,12 @@ try {
       { type: 'blank', prompt: 'Read the file and make sure the descriptor is closed even on an exception.', code: 'val text = File(context.[[filesDir]], "articles.json")\n    .bufferedReader()\n    .[[use]] { it.readText() }', why: '<code>filesDir</code> is your private app directory. <code>use</code> calls <code>close()</code> in a finally block.' },
       { type: 'bug', prompt: 'This saves a report to a hardcoded shared-storage path, which scoped storage does not support. Tap the line to replace.', code: 'fun saveReport(context: Context, bytes: ByteArray) {\n    val out = File("/sdcard/Download/news-report.pdf")\n    out.writeBytes(bytes)\n}', bug: 1, fix: '    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, "news-report.pdf") })', why: 'Under scoped storage, the <code>File</code> API is only guaranteed for your app-specific directory and media your app created, and <code>/sdcard</code> is not the same path on every device or user. Insert into <code>MediaStore.Downloads</code> and write through the returned URI.' },
     ],
+    predict: {
+      q: "News calls <code>open()</code> on a file inside Maps’ data directory. What does it get back?",
+      options: ["A read-only file descriptor","EACCES, and no file descriptor at all","An empty file"],
+      a: 1,
+      why: "The kernel checks permissions on every open. The directory belongs to Maps’ UID with no rights for others, so the open fails before any descriptor is created.",
+    },
     quiz: [
       { q: 'A new process has descriptors 0, 1 and 2 open. You open a file, then a socket, then close the file and open another file. What number does the last file get?', options: ['3', '4', '5', '6'], a: 0, why: 'The file got 3, the socket 4. Closing frees 3, and <code>open</code> returns the lowest free number, so the new file gets 3 again.' },
       { q: 'A crash log shows "Too many open files" in an HTTP call. What is the likely cause?', options: ['The disk is full', 'Something leaks descriptors, such as unclosed streams or responses; sockets share the same table', 'The network is down', 'The heap limit was hit'], a: 1, why: 'Sockets are descriptors too. A leak anywhere in the process fills the table and makes every new open fail.' },
@@ -1275,6 +1185,12 @@ $ adb shell dumpsys power | grep -i wake_lock   # who is holding wakelocks now`,
       { type: 'blank', prompt: 'Keep only the CPU awake, for at most one minute.', code: 'val lock = pm.newWakeLock(PowerManager.[[PARTIAL_WAKE_LOCK]], "news:export")\nlock.[[acquire]](60_000L)\ntry { export() } finally { if (lock.isHeld) lock.release() }', why: 'A partial wakelock keeps the CPU on while the screen can turn off. <code>acquire(timeout)</code> releases it automatically if your code never does.' },
       { type: 'bug', prompt: 'Battery stats show this app keeping the phone awake for hours after a failed export. Tap the line that causes it.', code: 'fun export() {\n    lock.acquire()\n    writeAllArticles()   // can throw IOException\n    lock.release()\n}', bug: 1, fix: '    lock.acquire(60_000L)   // and release it in a finally block', why: 'With no timeout, an exception in <code>writeAllArticles</code> skips <code>release()</code> and the lock is held forever. Add a timeout and release in <code>finally</code>.' },
     ],
+    predict: {
+      q: "The screen is off, nothing is running, and no app holds a wakelock. What does the system do?",
+      options: ["Keeps the CPU awake but idle","Suspends the whole system until an interrupt wakes it","Powers the phone off"],
+      a: 1,
+      why: "With no work and no wakelock, Android suspends. An interrupt, such as a network packet or an alarm, wakes it again.",
+    },
     quiz: [
       { q: 'The phone is in Doze and your app holds a partial wakelock. What happens?', options: ['The wakelock keeps the CPU on as usual', 'Doze ignores the wakelock; the work waits for a maintenance window', 'The app is killed', 'The screen turns on'], a: 1, why: 'Doze ignores app wakelocks, cuts network access and defers jobs and alarms until the next maintenance window.' },
       { q: 'Why is waking the phone every minute worse than one sync every hour, even if each wakeup is short?', options: ['It isn’t; total CPU time is the same', 'Each wakeup costs fixed energy to exit idle states and power up the radio, and the CPU never reaches deep sleep', 'Short wakeups are blocked by Android', 'It uses more RAM'], a: 1, why: 'Waking has a fixed cost, and deep idle states need long quiet stretches to pay off. Batching saves both.' },

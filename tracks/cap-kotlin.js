@@ -316,7 +316,7 @@
         body: `
 <p>We start with the data. An expense has an amount, a category, a note and a date. Each one gets a type that makes wrong values hard to write.</p>
 <p><code>Money</code> is a value class around a <code>Long</code> of cents. A <code>Double</code> can’t store 0.10 exactly, so sums of doubles drift. Cents stay exact. The value class costs nothing at runtime, and its <code>init</code> block rejects negative amounts. <code>Category</code> is an enum because the set is small and fixed. <code>Expense</code> is a data class, so <code>equals</code>, <code>toString</code> and <code>copy</code> come for free.</p>
-<p>This is a plain Kotlin JVM project with no Android in it. Every step runs from a <code>main</code> function or a unit test. Run the lines in the demo and watch the first boxes of the class diagram appear.</p>`,
+<p>This is a plain Kotlin JVM project with no Android in it. Every step runs from a <code>main</code> function or a unit test. Step through a scratch run of the model below.</p>`,
         code: `// src/main/kotlin/tracker/Model.kt
 package tracker
 
@@ -357,36 +357,54 @@ data class Expense(
           { q: 'At runtime, a parameter of type <code>Money</code> is usually stored as', options: ['A plain <code>long</code>', 'A Money object on the heap', 'A String'], a: 0, why: 'The compiler unwraps value classes to their single property. It boxes them only where it must, for example when used as a nullable or generic type.' },
         ],
         visual(el) {
-          const term = terminal('Model.kt · scratch run');
-          const dia = diagram(1);
-          const base = { id: 1, cents: 1250, cat: 'FOOD', note: 'lunch', date: TODAY };
-          const stage = h('div', { class: 'stage ck-stage' });
-          const card = (x, title, changed) => h('div', { class: 'obj drop-in' },
-            h('span', { class: 'obj-name' }, title),
-            ['id', 'amount', 'category', 'note', 'date'].map(k => h('span', { class: 'field' + (k === changed ? ' changed' : '') },
-              `${k} = ${k === 'amount' ? fmt(x.cents) : k === 'category' ? 'Category.' + x.cat : k === 'note' ? `"${x.note}"` : k === 'id' ? x.id : x.date}`)));
-          let eCard = card(base, 'val e'), copyCard = null;
-          stage.append(eCard);
-          const run = (src, fn) => cmd(src, () => { term.in(src); fn(); });
-          el.append(
-            stage,
-            h('div', { class: 'controls' },
-              run('println(Money(1250))', () => { term.ok('12.50'); dia.flash('money'); }),
-              run('Money(1250) + Money(830)', () => { term.ok('20.80'); dia.flash('money'); }),
-              run('Money(-5)', () => { term.err("IllegalArgumentException: Money can't be negative: -5"); replay(stage, 'shake'); dia.flash('money'); }),
-              run('Category.entries', () => { term.ok(`[${CATS.join(', ')}]`); dia.flash('category'); }),
-              run('println(e)', () => { term.ok(expStr(base)); replay(eCard, 'pop'); dia.flash('expense', 'money', 'category'); }),
-              run('val c = e.copy(note = "team lunch")', () => {
-                if (copyCard) copyCard.remove();
-                copyCard = card({ ...base, note: 'team lunch' }, 'val c', 'note');
-                stage.append(copyCard);
-                term.ok(expStr({ ...base, note: 'team lunch' }));
-                dia.flash('expense');
-              }),
-              run('e == e.copy()', () => { term.ok('true  // data classes compare fields'); replay(eCard, 'pop'); dia.flash('expense'); })),
-            term.el, dia.el);
-          term.dim('// Tap a line above to run it.');
+          Lab.ui.codeStepper(el, {
+            code: 'val today = LocalDate.of(2026, 3, 14)\nval e = Expense(1, Money(1250), Category.FOOD, "lunch", today)\nprintln(e)\nval c = e.copy(note = "team lunch")\nprintln(e == c)\nprintln(Money(1250) + Money(830))\nprintln(0.10 + 0.20)\nMoney(-5)',
+            predict: {
+              q: 'The last line calls <code>Money(-5)</code>. When is the problem caught?',
+              options: ['At compile time: the type forbids negative numbers', 'At run time: the <code>init</code> block’s <code>require</code> throws', 'Never: -5 is stored and reports go wrong later'],
+              a: 1,
+              why: 'The compiler only knows <code>cents</code> is a <code>Long</code>. The <code>init</code> block runs on every construction, and <code>require</code> throws <code>IllegalArgumentException</code> right there.',
+            },
+            frames: [
+              { say: 'A scratch run of the model: one <code>Expense</code>, a copy, and some <code>Money</code> sums.' },
+              { line: 1, vars: { today: '2026-03-14' }, say: 'A fixed date, so the output is the same every run.' },
+              { line: 2, vars: { e: 'Expense(#1, 12.50, FOOD, "lunch")' }, say: '<code>Money(1250)</code> is 12.50 stored as whole cents. <code>Category.FOOD</code> is one of five fixed entries.' },
+              { line: 3, out: 'Expense(id=1, amount=12.50, category=FOOD, note=lunch, date=2026-03-14)', say: 'The data class writes <code>toString()</code>. <code>Money</code>’s own <code>toString()</code> formats the cents.' },
+              { line: 4, vars: { c: 'Expense(#1, 12.50, FOOD, "team lunch")' }, say: '<code>copy</code> builds a new Expense with one field changed. <code>e</code> stays as it was.' },
+              { line: 5, out: 'false', say: 'The generated <code>equals()</code> compares every field. The notes differ.' },
+              { line: 6, out: '20.80', say: '<code>operator fun plus</code> adds the cents: 1250 + 830 = 2080. Exact, every time.' },
+              { line: 7, out: '0.30000000000000004', say: 'The same sum in <code>Double</code> drifts, because 0.10 has no exact binary form. That is why <code>Money</code> holds a <code>Long</code>.' },
+              { line: 8, out: "IllegalArgumentException: Money can't be negative: -5", say: 'The <code>init</code> block rejects the value as the object is built. A bad amount can never exist.' },
+            ],
+          });
         },
+        play: `import java.time.LocalDate
+
+@JvmInline
+value class Money(val cents: Long) {
+    init { require(cents >= 0) { "Money can't be negative: $cents" } }
+    operator fun plus(other: Money) = Money(cents + other.cents)
+    override fun toString() = "%d.%02d".format(cents / 100, cents % 100)
+}
+
+enum class Category(val label: String) { FOOD("Food"), RENT("Rent"), FUN("Fun") }
+
+data class Expense(
+    val id: Long,
+    val amount: Money,
+    val category: Category,
+    val note: String = "",
+    val date: LocalDate,
+)
+
+fun main() {
+    val e = Expense(1, Money(1250), Category.FOOD, "lunch", LocalDate.of(2026, 3, 14))
+    println(e)
+    println(e.copy(note = "team lunch"))
+    println(Money(1250) + Money(830))   // change Money(830) to Money(-830) and run again
+    println(0.10 + 0.20)                // why Money keeps whole cents instead of a Double
+    println(Category.entries.map { it.label })
+}`,
       },
 
       // 2 ─────────────────────────────────────────────
@@ -399,7 +417,7 @@ data class Expense(
         body: `
 <p>Users type expenses as text: an amount, a category and an optional note. Text can be anything, so parsing must handle bad input without crashing.</p>
 <p>Two tools do the work. Small helpers return <code>null</code> when they can’t parse: <code>parseMoney</code> uses <code>toBigDecimalOrNull()</code>, and <code>Category.from</code> uses <code>firstOrNull</code>. The elvis operator <code>?:</code> turns each null into a <code>ParseException</code> with a helpful message. <code>runCatching</code> wraps the whole thing into a <code>Result&lt;Expense&gt;</code>, so the caller sees in the type that parsing can fail.</p>
-<p>Type a line in the demo, or pick one, and watch it pass through each check. The first check that fails decides the error.</p>`,
+<p>Follow two lines through the checks below. The first check that fails decides the error.</p>`,
         code: `// Model.kt: Category gets a lookup
 enum class Category(val label: String) {
     FOOD("Food"), RENT("Rent"), TRAVEL("Travel"), FUN("Fun"), OTHER("Other");
@@ -449,54 +467,65 @@ parseExpense("12.50 food lunch", id = 1, date = LocalDate.now())
           { title: 'Splitting on a single space', bad: 'val parts = line.split(" ")\n// "12.50  food" -> ["12.50", "", "food"]', good: 'val parts = line.trim().split(Regex("\\\\s+"), limit = 3)\n// "12.50  food lunch" -> ["12.50", "food", "lunch"]', why: 'Users type double spaces and trailing spaces. A whitespace regex absorbs them, and <code>limit = 3</code> keeps the note in one piece even when it has spaces.' },
         ],
         visual(el) {
-          const term = terminal('Parser.kt · parseExpense(line, id, today)');
-          const dia = diagram(2);
-          const input = h('input', { id: 'ck-parse-in', value: '12.50 food lunch', spellcheck: 'false', autocomplete: 'off', maxlength: '40' });
-          const st = ['split(Regex("\\\\s+"), limit = 3)', 'parseMoney(parts[0])', 'Category.from(parts[1])', 'Expense(...)'].map(name => {
-            const val = h('span', { class: 'ck-st-val' }, ' ');
-            const box = h('div', { class: 'ck-st' }, h('span', { class: 'ck-st-name' }, name), val);
-            box.val = val;
-            return box;
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'in', label: 'line', sub: 'String' },
+              { id: 'split', label: 'split', sub: 'limit = 3' },
+              { id: 'money', label: 'parseMoney', sub: 'Money?' },
+              { id: 'cat', label: 'Category.from', sub: 'Category?' },
+              { id: 'res', label: 'Result', sub: 'runCatching' },
+            ],
+            predict: {
+              q: 'Second input: <code>"12.50 drinks"</code>. There is no such category. What does the caller get?',
+              options: ['A crash with <code>NoSuchElementException</code>', '<code>Result.failure</code> with a ParseException that lists the categories', 'An Expense with category OTHER'],
+              a: 1,
+              why: '<code>Category.from</code> uses <code>firstOrNull</code>, so it returns null. The elvis operator turns that null into a ParseException, and <code>runCatching</code> wraps it in a failure.',
+            },
+            frames: [
+              { say: 'Two lines of user input go through <code>parseExpense</code>. The first check that fails decides the error.' },
+              { at: 'in', packet: '"12.50 food lunch"', say: 'A line of text, exactly as the user typed it.' },
+              { at: 'split', packet: '[12.50, food, lunch]', say: '<code>trim().split(Regex("\\\\s+"), limit = 3)</code>: at most three parts, so the note may contain spaces.' },
+              { at: 'money', packet: 'Money(1250)', tone: 'ok', mark: { money: 'ok' }, say: '<code>toBigDecimalOrNull()</code> reads 12.50: positive, two decimals, so 1250 cents.' },
+              { at: 'cat', packet: 'FOOD', tone: 'ok', mark: { cat: 'ok' }, say: '<code>firstOrNull</code> finds FOOD, ignoring case.' },
+              { at: 'res', packet: 'Success(Expense)', tone: 'ok', mark: { res: 'ok' }, say: 'Every check passed. <code>runCatching</code> returns <code>Result.success</code>.' },
+              { at: 'in', packet: '"12.50 drinks"', mark: { money: '', cat: '', res: '' }, say: 'Second line.' },
+              { at: 'split', packet: '[12.50, drinks]', say: 'Two parts. <code>parts.getOrNull(2)</code> will give null, so the note becomes empty.' },
+              { at: 'money', packet: 'Money(1250)', tone: 'ok', mark: { money: 'ok' }, say: 'The amount is fine.' },
+              { at: 'cat', packet: 'null', tone: 'err', mark: { cat: 'err' }, say: 'No entry is called DRINKS, so <code>Category.from</code> returns null and <code>?: throw ParseException(...)</code> fires.' },
+              { at: 'res', packet: 'Failure(ParseException)', tone: 'err', mark: { res: 'err' }, say: '<code>runCatching</code> catches it. The caller gets a failure whose message lists the categories, and nothing crashed.' },
+            ],
           });
-          let busy = false, nextId = 1;
-          async function run(line) {
-            if (busy) return; busy = true;
-            if (line != null) input.value = line;
-            const text = input.value;
-            st.forEach(s => { s.className = 'ck-st'; s.val.textContent = ' '; });
-            term.in(`parseExpense("${text}")`);
-            const r = parseExpense(text, nextId);
-            const shown = [
-              `[${r.parts.map(p => `"${p}"`).join(', ')}]`,
-              r.stage === 1 ? 'null' : fmt(r.ok ? r.e.cents : r.cents),
-              r.stage === 2 ? 'null' : r.ok ? 'Category.' + r.e.cat : '',
-              r.ok ? `#${r.e.id}` : '',
-            ];
-            const stop = r.ok ? 4 : r.stage + 1;
-            for (let i = 0; i < stop; i++) {
-              st[i].classList.add('ck-on');
-              dia.flash(['parse', 'money', 'category', 'expense'][i]);
-              await sleep(380);
-              if (!el.isConnected) return;
-              st[i].val.textContent = shown[i];
-              st[i].classList.remove('ck-on');
-              const failed = !r.ok && i === r.stage;
-              st[i].classList.add(failed ? 'ck-fail' : 'ck-pass');
-              replay(st[i], failed ? 'shake' : 'pop-soft');
-            }
-            if (r.ok) { term.ok(resultStr(r)); nextId++; } else term.err(resultStr(r));
-            busy = false;
-          }
-          input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
-          const presets = ['12.50 food lunch', '8 travel', '4.999 fun', 'abc food', '20 pizza', '  42.5   FUN  movie night '];
-          el.append(
-            h('div', { class: 'ck-input' }, h('label', { for: 'ck-parse-in' }, 'line ='), input, h('button', { class: 'btn primary small', onclick: () => run() }, 'parseExpense')),
-            h('div', { class: 'controls' }, presets.map(p => cmd(`"${p}"`, () => run(p)))),
-            h('div', { class: 'ck-pipe' }, st),
-            term.el, dia.el);
-          term.dim('// Each check returns null on bad input; ?: turns that into a ParseException.');
-          run();
         },
+        play: `class ParseException(message: String) : IllegalArgumentException(message)
+
+enum class Category { FOOD, RENT, TRAVEL, FUN;
+    companion object {
+        fun from(text: String) = entries.firstOrNull { it.name.equals(text, ignoreCase = true) }
+    }
+}
+
+fun parseMoney(text: String): Long? =
+    text.toBigDecimalOrNull()
+        ?.takeIf { it.signum() > 0 && it.scale() <= 2 }
+        ?.movePointRight(2)?.longValueExact()
+
+fun parseExpense(line: String): Result<String> = runCatching {
+    val parts = line.trim().split(Regex("\\\\s+"), limit = 3)
+    val cents = parseMoney(parts[0])
+        ?: throw ParseException("'\${parts[0]}' is not an amount like 12.50")
+    val category = parts.getOrNull(1)?.let { Category.from(it) }
+        ?: throw ParseException("Pick a category: \${Category.entries.joinToString { it.name.lowercase() }}")
+    "$cents cents, $category, note '\${parts.getOrNull(2).orEmpty()}'"
+}
+
+fun main() {
+    val lines = listOf("12.50 food lunch", "4.999 food", "12", "7 Travel  bus to work")   // add your own line
+    for (line in lines) {
+        parseExpense(line)
+            .onSuccess { println("ok:    $it") }
+            .onFailure { println("error: \${it.message}") }
+    }
+}`,
       },
 
       // 3 ─────────────────────────────────────────────
@@ -601,6 +630,41 @@ println(march.topCategories())      // [(RENT, 950.00), (FUN, 45.99), (TRAVEL, 2
           el.append(code, h('div', { class: 'controls' }, btns, h('button', { class: 'btn primary small', onclick: all }, 'Run the whole chain')), view, term.el, dia.el);
           paint(0);
         },
+        predict: {
+          "q": "March has 5 expenses in 4 categories. How many entries does <code>groupBy { it.category }</code> produce?",
+          "options": [
+            "5",
+            "4",
+            "7"
+          ],
+          "a": 1,
+          "why": "groupBy makes one key per distinct category. The two FOOD expenses share one list."
+        },
+        play: `import java.time.LocalDate
+import java.time.YearMonth
+
+enum class Category { FOOD, RENT, TRAVEL, FUN }
+data class Expense(val cents: Long, val category: Category, val date: LocalDate)
+
+fun List<Expense>.inMonth(month: YearMonth) = filter { YearMonth.from(it.date) == month }
+
+fun List<Expense>.totalsByCategory(): Map<Category, Long> =
+    groupBy { it.category }.mapValues { (_, items) -> items.sumOf { it.cents } }
+
+fun main() {
+    fun day(m: Int, d: Int) = LocalDate.of(2026, m, d)
+    val expenses = listOf(
+        Expense(1250, Category.FOOD, day(3, 2)), Expense(95000, Category.RENT, day(3, 1)),
+        Expense(2400, Category.TRAVEL, day(3, 5)), Expense(4599, Category.FUN, day(3, 7)),
+        Expense(830, Category.FOOD, day(3, 9)), Expense(3100, Category.FOOD, day(2, 27)),
+    )
+    val march = expenses.inMonth(YearMonth.of(2026, 3))
+    println("\${march.size} of \${expenses.size} expenses are in March")
+    val totals = march.totalsByCategory()
+    println(totals)
+    val top = totals.toList().sortedByDescending { it.second }.take(3)   // change take(3) to take(10)
+    println(top)
+}`
       },
 
       // 4 ─────────────────────────────────────────────
@@ -613,7 +677,7 @@ println(march.topCategories())      // [(RENT, 950.00), (FUN, 45.99), (TRAVEL, 2
         body: `
 <p>Now the pieces need a home. <code>ExpenseTracker</code> is the class the app talks to: it parses a line, stores the expense and builds reports. Where should it store things? Today, in memory. Later, in a file or a database.</p>
 <p>So the tracker depends on an <code>ExpenseRepository</code> interface and receives it through its constructor. This is dependency inversion from the OOP track: the high-level class owns the interface, and storage details plug into it. <code>InMemoryExpenseRepository</code> is the first implementation. It keeps its list private and hands out copies, so no caller can change it behind its back.</p>
-<p>The date comes in as a function too. Tests will pass a fixed date, so their results never depend on the day they run. Swap the storage in the demo: the tracker code doesn’t change.</p>`,
+<p>The date comes in as a function too. Tests will pass a fixed date, so their results never depend on the day they run. Swap the storage in the demo below: the tracker code doesn’t change.</p>`,
         code: `// src/main/kotlin/tracker/Storage.kt
 interface ExpenseRepository {
     fun add(expense: Expense)
@@ -655,50 +719,61 @@ val tracker = ExpenseTracker(InMemoryExpenseRepository()) { LocalDate.now() }`,
           { q: 'Why is the date a <code>() -&gt; LocalDate</code> instead of a call to <code>LocalDate.now()</code> inside the tracker?', options: ['Tests can pass a fixed date and get the same result every day', 'LocalDate.now() is deprecated', 'Lambdas are faster than function calls'], a: 0, why: 'The current date is hidden input. Passing it in makes the class predictable and testable.' },
         ],
         visual(el) {
-          const term = terminal('ExpenseTracker.kt · tracker.add(line)');
-          const dia = diagram(4);
-          let impl = 'mem', items = [];
-          const trackerCard = h('div', { class: 'ck-card ck-on' }, h('span', { class: 'ck-card-title' }, 'ExpenseTracker'), kt('private val repo:\n    ExpenseRepository'), h('span', { class: 'ck-tag ck-good' }, 'code unchanged'));
-          const socket = h('div', { class: 'ck-socket' }, h('span', { class: 'ck-tag' }, 'interface'), 'ExpenseRepository');
-          const implTitle = h('span', { class: 'ck-card-title' });
-          const implBody = h('div');
-          const implCard = h('div', { class: 'ck-card' }, implTitle, implBody);
-          function paintImpl() {
-            implTitle.textContent = impl === 'mem' ? 'InMemoryExpenseRepository' : 'CsvExpenseRepository (sketch)';
-            if (impl === 'mem') implBody.replaceChildren(h('div', { class: 'ck-items' }, items.length ? items.map(e => h('span', { class: 'ck-exp' }, `#${e.id} ${e.cat} ${fmt(e.cents)}`)) : h('small', { class: 'muted-text' }, 'items: []')));
-            else implBody.replaceChildren(h('div', { class: 'ck-file' }, items.length ? items.map(e => `${e.id},${e.cents},${e.cat},${e.note},${e.date}`).join('\n') : '# expenses.csv is empty'));
-          }
-          const swapBtns = [];
-          const choose = (which, b) => {
-            impl = which; items = []; press(swapBtns, b);
-            term.in(which === 'mem' ? 'ExpenseTracker(InMemoryExpenseRepository()) { today }' : 'ExpenseTracker(CsvExpenseRepository(file)) { today }');
-            term.dim('// a new store starts empty; ExpenseTracker is the same class');
-            paintImpl(); replay(implCard, 'pop-soft'); replay(trackerCard.lastChild, 'pop');
-            dia.flash('repo', which === 'mem' ? 'mem' : 'repo');
-          };
-          swapBtns.push(cmd('InMemoryExpenseRepository()', function () { choose('mem', this); }), cmd('CsvExpenseRepository(file)', function () { choose('csv', this); }));
-          press(swapBtns, swapBtns[0]);
-          const add = line => cmd(`tracker.add("${line}")`, () => {
-            const r = parseExpense(line, items.length + 1);
-            term.in(`tracker.add("${line}")`);
-            dia.flash('tracker', 'parse');
-            if (r.ok) { items.push(r.e); term.ok(resultStr(r)); setTimeout(() => dia.flash(impl === 'mem' ? 'mem' : 'repo'), 250); paintImpl(); replay(implCard, 'pop-soft'); }
-            else { term.err(resultStr(r)); term.dim('// onSuccess never ran, so nothing was stored'); replay(implCard, 'shake'); }
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'main', label: 'main()<small>wiring</small>', x: 15, y: 50, tone: 'muted' },
+              { id: 'tracker', label: 'ExpenseTracker', x: 50, y: 12 },
+              { id: 'clock', label: '{ today }', x: 87, y: 50, tone: 'muted', hidden: true },
+              { id: 'repo', label: 'ExpenseRepository<small>interface</small>', x: 50, y: 50, tone: 'warm' },
+              { id: 'mem', label: 'InMemory…<small>private list</small>', x: 25, y: 88, hidden: true },
+              { id: 'csv', label: 'Csv…<small>a file</small>', x: 75, y: 88, hidden: true },
+            ],
+            predict: {
+              q: 'Later you store expenses in a CSV file instead of memory. Which code has to change?',
+              options: ['ExpenseTracker and main()', 'Only main(), plus the new CsvExpenseRepository', 'Every place that calls <code>tracker.add</code>'],
+              a: 1,
+              why: 'ExpenseTracker only knows the interface it receives in its constructor. The one place that picks a concrete class is <code>main()</code>.',
+            },
+            frames: [
+              { add: [['tracker', 'repo', 'depends on']], say: 'ExpenseTracker holds an <code>ExpenseRepository</code>. It never names a concrete storage class.' },
+              { show: ['mem'], add: [['mem', 'repo', 'implements'], ['main', 'tracker']], say: '<code>main()</code> builds <code>ExpenseTracker(InMemoryExpenseRepository()) { LocalDate.now() }</code>.' },
+              { add: [['tracker', 'repo', 'add()', 'accent']], hl: ['tracker', 'repo', 'mem'], say: '<code>tracker.add("12.50 food")</code> parses the line and calls <code>repo.add</code>. At run time that lands in InMemory’s private list.' },
+              { show: ['clock'], add: [['tracker', 'clock', 'today()']], say: 'The date comes in the same way, as a function. A test passes <code>{ LocalDate.of(2026, 3, 14) }</code> and gets the same answer every day.' },
+              { show: ['csv'], gone: ['mem'], remove: [['mem', 'repo']], add: [['csv', 'repo', 'implements', 'ok']], hl: ['csv', 'main'], say: 'Swap the storage: only the line in <code>main()</code> changes, to <code>CsvExpenseRepository(file)</code>.' },
+              { hl: ['tracker'], say: 'ExpenseTracker’s code is untouched. That is dependency inversion: the tracker owns the interface and storage plugs into it.' },
+            ],
           });
-          paintImpl();
-          el.append(
-            h('div', { class: 'ck-dip' }, trackerCard, h('span', { class: 'ck-link', 'aria-hidden': 'true' }, '→'), socket, h('span', { class: 'ck-link', 'aria-hidden': 'true' }, '←'), implCard),
-            h('div', { class: 'controls' }, h('span', { class: 'tip' }, 'Plug in:'), swapBtns),
-            h('div', { class: 'controls' },
-              add('12.50 food lunch'), add('30 fun cinema'), add('lunch'),
-              cmd('tracker.report()', () => {
-                term.in('tracker.report()');
-                term.ok(mapStr(totals(items)));
-                dia.flash('tracker', 'repo', 'reports');
-              })),
-            term.el, dia.el);
-          term.dim('// Add a few expenses, then swap the storage.');
         },
+        play: `interface ExpenseRepository {
+    fun add(note: String)
+    fun all(): List<String>
+}
+
+class InMemoryExpenseRepository : ExpenseRepository {
+    private val items = mutableListOf<String>()
+    override fun add(note: String) { items += note }
+    override fun all(): List<String> = items.toList()   // a copy, not the list itself
+}
+
+class LoggingRepository(private val inner: ExpenseRepository) : ExpenseRepository by inner {
+    override fun add(note: String) { println("saving '$note'"); inner.add(note) }
+}
+
+class ExpenseTracker(private val repo: ExpenseRepository, private val today: () -> String) {
+    fun add(note: String) = repo.add("\${today()} $note")
+    fun count() = repo.all().size
+}
+
+fun main() {
+    val repo: ExpenseRepository = InMemoryExpenseRepository()   // wrap it: LoggingRepository(InMemoryExpenseRepository())
+    val tracker = ExpenseTracker(repo) { "2026-03-14" }        // a fixed clock
+    tracker.add("lunch")
+    val snapshot = repo.all()
+    tracker.add("taxi")
+    println("tracker has \${tracker.count()}, the old snapshot still has \${snapshot.size}")
+    println(repo.all())
+}`,
       },
 
       // 5 ─────────────────────────────────────────────
@@ -838,6 +913,50 @@ monthly.check(tracker.report())   // [Near(category=FUN, spent=64.00, limit=80.0
             term.el, dia.el);
           report();
         },
+        predict: {
+          "q": "The <code>budget { }</code> block sets no limit for TRAVEL. What does <code>check</code> report for travel?",
+          "options": [
+            "Over, since there is no limit",
+            "Nothing: check only looks at categories with a limit",
+            "A crash: the totals have no matching limit"
+          ],
+          "a": 1,
+          "why": "<code>check</code> walks over <code>limits</code> with <code>mapNotNull</code>, so a category without a limit can never produce an alert."
+        },
+        play: `enum class Category { FOOD, FUN, TRAVEL }
+
+sealed interface BudgetAlert {
+    data class Near(val category: Category, val spent: Int, val limit: Int) : BudgetAlert
+    data class Over(val category: Category, val spent: Int, val limit: Int) : BudgetAlert
+}
+
+@DslMarker annotation class BudgetDsl
+
+@BudgetDsl class BudgetBuilder {
+    val limits = mutableMapOf<Category, Int>()
+    var warnAt = 0.8
+    infix fun Category.limit(amount: Int) { limits[this] = amount }
+}
+
+fun budget(block: BudgetBuilder.() -> Unit) = BudgetBuilder().apply(block)
+
+fun main() {
+    val monthly = budget {
+        warnAt = 0.75                      // change to 0.9 and run again
+        Category.FOOD limit 300
+        Category.FUN limit 80
+    }
+    val spent = mapOf(Category.FOOD to 240, Category.FUN to 95, Category.TRAVEL to 500)
+    val alerts = monthly.limits.mapNotNull { (category, limit) ->
+        val s = spent[category] ?: 0
+        when {
+            s > limit -> BudgetAlert.Over(category, s, limit)
+            s >= limit * monthly.warnAt -> BudgetAlert.Near(category, s, limit)
+            else -> null
+        }
+    }
+    alerts.forEach(::println)
+}`
       },
 
       // 6 ─────────────────────────────────────────────
@@ -1043,6 +1162,51 @@ fun main() = runBlocking {
             term.el, dia.el);
           term.dim('// Pick a network, then sync. Sync twice to see that synced items are skipped.');
         },
+        predict: {
+          "q": "Five pending expenses with <code>batchSize = 2</code>. How many uploads are in flight at the same time?",
+          "options": [
+            "1: the batches run one after another",
+            "3: each batch has its own async",
+            "5: one per expense"
+          ],
+          "a": 1,
+          "why": "<code>chunked(2)</code> makes three batches, and each one starts its own <code>async</code> inside coroutineScope. awaitAll then waits for all three."
+        },
+        play: `import kotlinx.coroutines.*
+import java.io.IOException
+
+class FakeSyncApi(var failuresLeft: Int) {
+    suspend fun upload(batch: List<Int>) {
+        delay(300)
+        if (failuresLeft > 0) { failuresLeft--; throw IOException("network down") }
+        println("uploaded $batch")
+    }
+}
+
+suspend fun uploadWithRetry(api: FakeSyncApi, batch: List<Int>, maxAttempts: Int = 3): List<Int> {
+    repeat(maxAttempts - 1) { attempt ->
+        try {
+            api.upload(batch)
+            return batch
+        } catch (e: IOException) {
+            println("retry \${attempt + 1} for $batch: \${e.message}")
+            delay(200L * (attempt + 1))
+        }
+    }
+    api.upload(batch)   // last attempt: the error escapes
+    return batch
+}
+
+fun main() = runBlocking {
+    val api = FakeSyncApi(failuresLeft = 2)   // change 2 to 9 and run again
+    val done = coroutineScope {
+        listOf(1, 2, 3, 4, 5).chunked(2)
+            .map { batch -> async { uploadWithRetry(api, batch) } }
+            .awaitAll()
+            .flatten()
+    }
+    println("Synced \${done.size} expenses")
+}`
       },
 
       // 7 ─────────────────────────────────────────────
@@ -1185,6 +1349,40 @@ class ExpenseTrackerTest {
             term.el, dia.el);
           run();
         },
+        predict: {
+          "q": "You delete <code>syncedIds += done.map { it.id }</code>. Which test fails?",
+          "options": [
+            "syncRetriesAndUploadsOnce()",
+            "parsesAValidLine()",
+            "All five"
+          ],
+          "a": 0,
+          "why": "Only that test calls <code>syncPending()</code> twice. Without the line, the second call uploads the same 3 expenses again."
+        },
+        play: `import java.time.LocalDate
+
+fun parseMoney(text: String): Long? =
+    text.toBigDecimalOrNull()
+        ?.takeIf { it.signum() > 0 && it.scale() <= 2 }   // delete \`&& it.scale() <= 2\` and run again
+        ?.movePointRight(2)?.longValueExact()
+
+class Tracker(private val today: () -> LocalDate) {
+    fun stamp(note: String) = "\${today()} $note"
+}
+
+fun assertEquals(expected: Any?, actual: Any?, name: String) {
+    if (expected == actual) println("PASS $name")
+    else println("FAIL $name: expected <$expected> but was <$actual>")
+}
+
+fun main() {
+    assertEquals(1250L, parseMoney("12.50"), "parsesAValidAmount")
+    assertEquals(null, parseMoney("12.505"), "rejectsThreeDecimals")
+    assertEquals(null, parseMoney("-3"), "rejectsNegative")
+
+    val tracker = Tracker { LocalDate.of(2026, 3, 14) }   // a fixed clock: same answer every day
+    assertEquals("2026-03-14 lunch", tracker.stamp("lunch"), "usesTheInjectedDate")
+}`
       },
 
       // 8 ─────────────────────────────────────────────
@@ -1308,6 +1506,41 @@ fun main() = runBlocking {
             stats, term.el, dia.el);
           term.line("Type an expense like '12.50 food lunch', or: report, sync, quit");
         },
+        predict: {
+          "q": "You type <code>report</code> before adding any expense. What does the program print?",
+          "options": [
+            "Nothing: the totals map is empty",
+            "An error message",
+            "0.00 for every category"
+          ],
+          "a": 0,
+          "why": "The report loops over the totals map, and an empty map has nothing to print. Budget alerts need totals too."
+        },
+        play: `fun main() {
+    val totals = mutableMapOf<String, Long>()
+    // The Playground has no keyboard input, so a list stands in for the lines a user types.
+    val typed = listOf("12.50 food lunch", "30 fun cinema", "abc food", "8 food", "report", "quit", "5 fun")
+
+    for (raw in typed) {
+        val line = raw.trim()
+        when (line) {
+            "quit" -> break
+            "report" -> totals.forEach { (category, cents) ->
+                println("$category: " + "%d.%02d".format(cents / 100, cents % 100))
+            }
+            else -> {
+                val parts = line.split(Regex("\\\\s+"), limit = 3)
+                val cents = parts[0].toBigDecimalOrNull()?.movePointRight(2)?.toLong()
+                val category = parts.getOrNull(1)
+                if (cents == null || category == null) println("Error: '$line' is not like '12.50 food'")
+                else {
+                    totals[category] = (totals[category] ?: 0) + cents
+                    println("Added $category")
+                }
+            }
+        }
+    }   // move "quit" to the end of the list and run again
+}`
       },
     ],
   });

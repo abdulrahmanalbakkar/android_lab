@@ -139,44 +139,29 @@
     body: `
 <p>A relational database stores data in <strong>tables</strong> (relations). Each row is one fact, each column has one type. A <strong>primary key</strong> names each row uniquely, like <code>users.id</code>. A <strong>foreign key</strong> is a column that points at another table’s primary key, like <code>posts.user_id</code>.</p>
 <p>Why not keep a JSON file? A file works until you need to change one fact that is copied in many places, find a few items without reading everything, or stop two writers from clobbering each other. A database stores each fact once, answers queries without loading the whole file, and refuses bad data: a duplicate id or a post by a user that does not exist.</p>
-<p>On Android the database is SQLite, and <a href="#data.room">Room</a> sits on top of it. On the backend it is usually PostgreSQL or MySQL. The model is the same everywhere. Try the demo: break the rules and watch SQLite push back. Note that SQLite only checks foreign keys when the connection turns them on.</p>`,
+<p>On Android the database is SQLite, and <a href="#data.room">Room</a> sits on top of it. On the backend it is usually PostgreSQL or MySQL. The model is the same everywhere. In the demo, SQLite pushes back when you break the rules. Note that SQLite only checks foreign keys when the connection turns them on.</p>`,
     visual(el) {
-      let users = USERS.map(r => r.slice()), posts = POSTS.map(r => r.slice()), fk = false, mark = null;
-      const tables = h('div', { class: 'dbx-row' });
-      const json = h('pre', { class: 'dbx-doc' });
-      const msg = out('Two tables. posts.user_id points at users.id. Pick an action.');
-      const fkB = act('PRAGMA foreign_keys = ON', () => {
-        fk = !fk;
-        fkB.textContent = fk ? 'PRAGMA foreign_keys = OFF' : 'PRAGMA foreign_keys = ON';
-        say(msg, fk ? 'Foreign key checks are on for this connection. Now try the orphan insert.' : 'Checks are off again, the SQLite default. SQLite stores whatever you give it.');
+      const panel = '<pre class="ui-out">users(id PK, name, city)\n  1 Alice · 2 Bob · 3 Maya · 4 Sam\n\nposts(id PK, user_id → users.id, title)\n  10, 11 by 1 · 12 by 2 · 13, 14 by 3</pre>';
+      Lab.ui.terminal(el, {
+        prompt: 'sqlite>',
+        panelTitle: 'Schema',
+        predict: {
+          q: 'Foreign key checks are on. You insert a post with <code>id</code> 10, and post 10 already exists. What does SQLite answer?',
+          options: ['Nothing: it overwrites post 10', '<code>UNIQUE constraint failed: posts.id</code>', '<code>FOREIGN KEY constraint failed</code>'],
+          a: 1,
+          why: 'A primary key names one row. A second row with the same key is refused, whatever the other columns say.',
+        },
+        frames: [
+          { panel, say: 'A fresh <code>sqlite3</code> shell with two tables. <code>posts.user_id</code> points at <code>users.id</code>.' },
+          { cmd: 'PRAGMA foreign_keys;', out: '0', say: 'Foreign key checks are off. That is SQLite’s default, per connection.' },
+          { cmd: "INSERT INTO posts(id, user_id, title) VALUES (15, 9, 'Orphan post');", say: 'User 9 does not exist, but with checks off SQLite stores the row without a word.' },
+          { cmd: 'SELECT p.id, p.user_id, u.name FROM posts p LEFT JOIN users u ON u.id = p.user_id WHERE p.id = 15;', out: '15|9|', say: 'An orphan: the post points at nobody, so the author name is empty.' },
+          { cmd: 'PRAGMA foreign_keys = ON;', say: 'Turn the checks on for this connection.' },
+          { cmd: "INSERT INTO posts(id, user_id, title) VALUES (16, 9, 'Orphan post');", out: '<span style="color:var(--err)">Runtime error: FOREIGN KEY constraint failed (19)</span>', say: 'Now SQLite refuses the bad reference.' },
+          { cmd: "INSERT INTO posts(id, user_id, title) VALUES (10, 1, 'Again');", out: '<span style="color:var(--err)">Runtime error: UNIQUE constraint failed: posts.id (19)</span>', say: 'And a duplicate primary key. A JSON array would happily hold two objects with id 10.' },
+          { cmd: "UPDATE users SET name = 'Alice K.' WHERE id = 1;", say: 'Renaming Alice changes one row. Her posts only hold her id, so every query that joins them shows the new name.' },
+        ],
       });
-      function paint() {
-        tables.replaceChildren(
-          tbl('users', ['id', 'name', 'city'], users, { keys: { id: 'PK' }, cls: (r) => mark && mark.t === 'users' && mark.ids.includes(r[0]) ? mark.c : null }),
-          tbl('posts', ['id', 'user_id', 'title'], posts.map(p => p.slice(0, 3)), { keys: { id: 'PK', user_id: 'FK' }, cls: (r) => mark && mark.t === 'posts' && mark.ids.includes(r[0]) ? mark.c : null }));
-        const name = users[0][1];
-        json.textContent = `posts.json (author copied into each post)\n[\n  { "id": 10, "author": "${name}", ... },\n  { "id": 11, "author": "${name}", ... },\n  { "id": 12, "author": "Bob", ... }, ...\n]`;
-      }
-      el.append(h('div', { class: 'dbx-stage' },
-        h('div', { class: 'controls' },
-          act('Rename Alice', () => {
-            users[0][1] = users[0][1] === 'Alice' ? 'Alice K.' : 'Alice';
-            mark = { t: 'users', ids: [1], c: 'dbx-hit' }; paint();
-            say(msg, `${c("UPDATE users SET name = '" + users[0][1] + "' WHERE id = 1")}: one row changed. In the JSON file the name is copied into every post, so you rewrite the whole file and must not miss a copy.`);
-          }),
-          act('Insert post by user 9', () => {
-            if (fk) { mark = null; paint(); say(msg, `<span class="bad">FOREIGN KEY constraint failed</span>. User 9 does not exist, so SQLite rejects the row.`); return; }
-            if (!posts.some(p => p[0] === 15)) posts.push([15, 9, 'Orphan post', 0]);
-            mark = { t: 'posts', ids: [15], c: 'dbx-bad' }; paint();
-            say(msg, `Accepted. Post 15 points at user 9, who does not exist: an <span class="bad">orphan row</span>. Foreign key checks are off by default in SQLite. Turn them on and try again.`);
-          }),
-          act('Insert post id 10 again', () => {
-            mark = { t: 'posts', ids: [10], c: 'dbx-bad' }; paint();
-            say(msg, `<span class="bad">UNIQUE constraint failed: posts.id</span>. The primary key already exists. A JSON array would happily hold two objects with id 10.`);
-          }),
-          fkB),
-        tables, json, msg));
-      paint();
     },
     code: `@Entity(tableName = "users")
 data class User(
@@ -272,6 +257,12 @@ data class Order(@PrimaryKey val id: Long, @ColumnInfo(name = "user_id") val use
 <p>SQL is declarative: you describe the result, not the loop. <code>SELECT</code> picks columns, <code>FROM</code> picks the table, <code>WHERE</code> filters rows, <code>ORDER BY</code> sorts, <code>LIMIT</code> keeps the first few.</p>
 <p><code>GROUP BY</code> folds rows that share a value into one row, and aggregate functions like <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code> and <code>MAX</code> compute one value per group. <code>HAVING</code> filters those groups.</p>
 <p>The clauses are written in one order but run in another: FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT. That explains most beginner errors, like using an aggregate in <code>WHERE</code>. Run each query and watch the clauses light up in the order they run. In <a href="#data.room">Room</a> these same queries go in <code>@Query</code>, and Room checks them against your schema at compile time.</p>`,
+    predict: {
+      q: "The <code>GROUP BY user_id</code> query runs on 5 posts written by users 1, 2 and 3. How many rows come out?",
+      options: ["5, one per post", "3, one per user_id", "1, the grand total"],
+      a: 1,
+      why: "GROUP BY folds the rows that share a value into one output row, and COUNT and SUM run once per group.",
+    },
     visual(el) {
       const sql = h('pre', { class: 'dbx-sql' });
       const chips = CLAUSES.map(n => h('span', { class: 'dbx-chip dbx-off' }, n));
@@ -410,25 +401,36 @@ suspend fun inCity(key: String): List<User>`,
 <p><code>INNER JOIN</code> keeps only pairs that match. <code>LEFT JOIN</code> keeps every row of the left table and fills the right side with NULL when nothing matches. A <strong>many-to-many</strong> link (posts and tags) needs a third table, a <strong>join table</strong>, with one row per pair.</p>
 <p>The classic performance bug is the <strong>N+1 query problem</strong>: load 20 posts in one query, then run one more query per post to load its author. That is 21 round trips where 1 or 2 would do. Room’s <a href="#data.relations">@Relation</a> avoids it by loading children with one batched <code>IN (...)</code> query.</p>`,
     visual(el) {
-      const sql = h('pre', { class: 'dbx-sql' });
-      const srcs = h('div', { class: 'dbx-row' },
-        tbl('users', ['id', 'name'], USERS.map(u => u.slice(0, 2)), { keys: { id: 'PK' } }),
-        tbl('posts', ['id', 'user_id', 'title'], POSTS.map(p => p.slice(0, 3)), { keys: { id: 'PK', user_id: 'FK' } }));
-      const tags = h('div', { class: 'dbx-row' },
-        tbl('post_tags', ['post_id', 'tag_id'], POST_TAGS, { keys: { post_id: 'FK', tag_id: 'FK' } }),
-        tbl('tags', ['id', 'name'], TAGS, { keys: { id: 'PK' } }));
-      const res = h('div', {});
-      const msg = out('Pick a join.');
-      const btns = JOINS.map((j, k) => act(j.label, () => {
-        press(btns, btns[k]);
-        sql.textContent = j.sql;
-        res.replaceChildren(tbl('result', j.cols, j.rows(), { cls: j.cls }));
-        replay(res, 'pop-soft');
-        say(msg, j.msg);
-      }));
-      press(btns, null);
-      sql.textContent = '-- pick a join';
-      el.append(h('div', { class: 'dbx-stage' }, h('div', { class: 'controls' }, btns), sql, srcs, tags, res, msg));
+      Lab.ui.codeStepper(el, {
+        code: `// users u LEFT JOIN posts p
+for (u in users) {
+  var hit = false
+  for (p in posts) {
+    if (p.userId == u.id) {
+      emit(u.name, p.title)
+      hit = true
+    }
+  }
+  if (!hit) emit(u.name, null)
+}`,
+        outTitle: 'Result rows',
+        predict: {
+          q: 'Alice wrote two posts. How many result rows mention Alice?',
+          options: ['1, with both titles in it', '2, one per matching pair', '5, one per post in the table'],
+          a: 1,
+          why: 'A join emits one row for each pair of rows that matches the condition. Two posts match Alice, so she appears twice.',
+        },
+        frames: [
+          { say: '<code>SELECT u.name, p.title FROM users u LEFT JOIN posts p ON p.user_id = u.id</code>, written as the loop it means. A real engine uses an index to find matches, but the result is the same.' },
+          { line: 2, vars: { u: '1 Alice', hit: 'false' }, say: 'Take the first user.' },
+          { line: [5, 6], vars: { p: '10 → user 1', hit: 'true' }, out: 'Alice | Sandwich recipe', say: 'Post 10 has <code>user_id</code> 1. The condition holds, so one row comes out.' },
+          { line: [5, 6], vars: { p: '11 → user 1' }, out: 'Alice | Seaside walk', say: 'Post 11 also matches. A second row for Alice. Posts 12 to 14 belong to others and are skipped.' },
+          { line: [5, 6], vars: { u: '2 Bob', p: '12 → user 2' }, out: 'Bob | Museum notes', say: 'Bob: every post is checked again, and only post 12 matches.' },
+          { line: [5, 6], vars: { u: '3 Maya', p: '14 → user 3' }, out: 'Maya | Kotlin tips\nMaya | Caching with Room', say: 'Maya has two posts, so two more rows.' },
+          { line: 2, vars: { u: '4 Sam', p: null, hit: 'false' }, say: 'Sam. No post has <code>user_id</code> 4.' },
+          { line: 10, out: 'Sam | NULL', say: 'LEFT JOIN keeps Sam with NULL for the post columns. An INNER JOIN has no such line, so Sam would be missing from its result.' },
+        ],
+      });
     },
     code: `// One-to-many with Room: parents first, then all children in one IN (...) query
 data class UserWithPosts(
@@ -575,6 +577,12 @@ FROM users u;`,
 <p>Normalization is a recipe for removing duplicated facts. Duplicates cause <strong>anomalies</strong>: update one copy and forget another (update anomaly), cannot store a product until someone orders it (insert anomaly), delete the last order and lose the customer (delete anomaly).</p>
 <p><strong>1NF</strong>: one value per cell, no lists or repeating groups. <strong>2NF</strong>: every non-key column depends on the whole key, not part of it. <strong>3NF</strong>: no non-key column depends on another non-key column. The old mnemonic: every column depends on “the key, the whole key, and nothing but the key”.</p>
 <p>Normalize first, then <strong>denormalize on purpose</strong> where reads dominate. A feed that shows like counts can store <code>like_count</code> on the post instead of counting rows every time. A local <a href="#data.caching">cache</a> of API responses can be a flat copy. Each copy is a promise to keep it in sync. Press the steps to split the table and watch the cost of renaming Alice’s city fall.</p>`,
+    predict: {
+      q: "Alice moves to another city. How many rows must change in the 1NF table, and how many in 3NF?",
+      options: ["1 and 1", "3 and 1", "3 and 3"],
+      a: 1,
+      why: "In 1NF her city is copied into every order line. In 3NF it lives once, in her customer row.",
+    },
     visual(el) {
       const area = h('div', { class: 'dbx-row' });
       const st = stats(['rows to update when Alice moves', 'tables']);
@@ -597,7 +605,7 @@ FROM users u;`,
     },
     code: `// 3NF in Room
 @Entity data class Customer(@PrimaryKey val id: Long, val name: String, val city: String)
-@Entity data class Product(@PrimaryKey val sku: String, val name: String, val priceKurus: Long)
+@Entity data class Product(@PrimaryKey val sku: String, val name: String, val priceCents: Long)
 
 @Entity(foreignKeys = [ForeignKey(entity = Customer::class, parentColumns = ["id"], childColumns = ["customerId"])],
         indices = [Index("customerId")])
@@ -608,7 +616,7 @@ data class OrderLine(
     val orderId: Long,
     val sku: String,
     val qty: Int,
-    val unitPriceKurus: Long,   // copied on purpose: the price at the time of sale
+    val unitPriceCents: Long,   // copied on purpose: the price at the time of sale
 )`,
     remember: 'Each fact in one place. Denormalize only for a measured read need, and own the code that keeps copies in sync.',
     deeper: [
@@ -671,6 +679,12 @@ abstract class LikeDao {
 <p>Without an index, <code>WHERE email = ?</code> reads every row: a <strong>full scan</strong>, O(n). An <strong>index</strong> is a separate B-tree holding the column’s values in sorted order, each with a pointer (the rowid) back to the table row. A lookup walks from the root to a leaf: O(log n), a handful of pages even for millions of rows. See <a href="#cs.trees">trees</a> and <a href="#cs.binary-search">binary search</a> for the idea underneath.</p>
 <p>A B-tree is wide, not tall. Each node is a disk page holding many keys, so a tree with hundreds of keys per node reaches millions of rows in 3 or 4 levels. That matters because reading a page is the expensive part.</p>
 <p>Indexes are not free. Each one takes disk space and every <code>INSERT</code>, <code>UPDATE</code> of an indexed column, and <code>DELETE</code> must update it too. Add indexes for the queries you actually run, check them with <code>EXPLAIN QUERY PLAN</code>, and drop ones nothing uses. Try both lookups below.</p>`,
+    predict: {
+      q: "The B-tree has a root, one inner level and leaves. How many index pages does one lookup read?",
+      options: ["1", "3: one per level, root to leaf", "All of them, like a scan"],
+      a: 1,
+      why: "A lookup walks one path from the root down to a single leaf, so it reads one page per level.",
+    },
     visual(el) {
       let target = 47, tok = 0;
       const cells = HEAP.map(v => h('div', { class: 'dbx-cell' }, String(v)));
@@ -901,6 +915,12 @@ db.query("EXPLAIN QUERY PLAN SELECT * FROM messages WHERE chat_id = 7 ORDER BY s
 <p>A <strong>transaction</strong> groups statements into one unit. <strong>ACID</strong> names its promises. <strong>Atomicity</strong>: all of it commits, or none of it. <strong>Consistency</strong>: constraints hold before and after. <strong>Isolation</strong>: concurrent transactions do not see each other’s half-done work. <strong>Durability</strong>: once committed, it survives a crash.</p>
 <p>Isolation comes in levels, trading safety for concurrency. The SQL standard defines read uncommitted, read committed, repeatable read and serializable by which anomalies they allow: <strong>dirty reads</strong> (seeing uncommitted data), non-repeatable reads, phantoms. The <strong>lost update</strong> (two read-modify-write cycles where one overwrites the other) bites at read committed, which is PostgreSQL’s default.</p>
 <p>SQLite is simpler: transactions are serializable and only one writer runs at a time. In WAL mode readers keep reading a snapshot while the writer works. On Android, wrap related writes in a Room <code>@Transaction</code> or <code>withTransaction { }</code>; see <a href="#data.room">Room</a> and, for in-memory races, <a href="#coroutines.shared-state">shared state</a>. Step through each level below.</p>`,
+    predict: {
+      q: "At read uncommitted, T1 sets the balance to 150 and then rolls back. T2 read the 150 and adds 30. The balance started at 100. What is the final balance?",
+      options: ["130", "180", "150"],
+      a: 1,
+      why: "T2 read a value that was never committed and built on it. The right answer is 130; the dirty read gives 180.",
+    },
     visual(el) {
       const log = h('div', { class: 'dbx-log' });
       const st = stats(['committed balance', 'uncommitted']);
@@ -921,12 +941,12 @@ db.query("EXPLAIN QUERY PLAN SELECT * FROM messages WHERE chat_id = 7 ORDER BY s
       });
     },
     code: `// Room: both writes commit together, or neither does
-suspend fun transfer(db: AppDatabase, from: Long, to: Long, kurus: Long) {
+suspend fun transfer(db: AppDatabase, from: Long, to: Long, cents: Long) {
     db.withTransaction {
         val dao = db.walletDao()
-        check(dao.balance(from) >= kurus) { "insufficient funds" }
-        dao.add(from, -kurus)
-        dao.add(to, kurus)
+        check(dao.balance(from) >= cents) { "insufficient funds" }
+        dao.add(from, -cents)
+        dao.add(to, cents)
     }
 }
 
@@ -1001,35 +1021,25 @@ db.withTransaction { dao.clear(); dao.insertAll(page) }`,
     body: `
 <p>“NoSQL” covers several shapes. <strong>Key-value</strong> stores (Redis, <a href="#data.datastore">DataStore</a> on the device) get and set a value by key and little else. <strong>Document</strong> stores (Firestore, MongoDB) keep JSON-like documents with nested fields. <strong>Wide-column</strong> stores (Cassandra, Bigtable) group rows by a partition key and spread them across many machines. <strong>Graph</strong> databases (Neo4j) store nodes and edges for “friends of friends” queries.</p>
 <p>The big mental shift: in a relational database you normalize and join at read time. Document stores have limited or no joins, so you shape documents around your screens and copy data where reads need it. Firestore bills and limits by documents read and written, so a feed that needs 1 read per post plus 1 per author costs twice what a copied author name would.</p>
-<p>The trade is writes. Copied data has to be updated everywhere when it changes. Toggle the model below and compare reads for the feed against writes for a rename.</p>`,
+<p>The trade is writes. Copied data has to be updated everywhere when it changes. The demo compares both shapes: reads to show the feed, writes for a rename.</p>`,
     visual(el) {
-      let denorm = false;
-      const doc = h('pre', { class: 'dbx-doc' });
-      const st = stats(['reads', 'writes']);
-      const msg = out('Feed: 10 posts by 6 authors. Alice wrote 4 of them.');
-      const modeB = [act('Normalized: authorId only', () => set(false)), act('Denormalized: copy authorName', () => set(true))];
-      function set(d) {
-        denorm = d; press(modeB, modeB[d ? 1 : 0]);
-        st.set('reads', '-'); st.set('writes', '-');
-        doc.textContent = d
-          ? 'users/alice   { name: "Alice", city: "Paris" }\nposts/p10    { authorId: "alice",\n               authorName: "Alice",\n               title: "Sandwich recipe", likes: 42 }\nposts/p11    { authorId: "alice", authorName: "Alice", … }'
-          : 'users/alice   { name: "Alice", city: "Paris" }\nposts/p10    { authorId: "alice",\n               title: "Sandwich recipe", likes: 42 }\nposts/p11    { authorId: "alice", … }';
-        replay(doc, 'pop-soft');
-        say(msg, d ? 'Each post carries the author name it shows on screen.' : 'Posts point at users by id, like a foreign key. There is no server-side join.');
-      }
-      el.append(h('div', { class: 'dbx-stage' },
-        h('div', { class: 'controls' }, modeB),
-        h('div', { class: 'controls' },
-          act('Load feed', () => {
-            st.set('reads', denorm ? 10 : 16); st.set('writes', 0);
-            say(msg, denorm ? '<b>10 reads</b>: one query, the name is already in each post.' : '<b>16 reads</b>: 10 posts, then 6 user documents fetched by id to show the names. The client does the join.');
-          }),
-          act('Rename Alice', () => {
-            st.set('reads', denorm ? 4 : 0); st.set('writes', denorm ? 5 : 1);
-            say(msg, denorm ? '<b>5 writes</b>: her user document plus 4 posts, ideally in one batched write or a Cloud Function. Miss one and the feed shows the old name.' : '<b>1 write</b>: the user document. Every feed shows the new name at once.');
-          })),
-        st, doc, msg));
-      set(false);
+      Lab.ui.timeline(el, {
+        lanes: ['By id', 'Copied'],
+        span: 320, unit: 'ms',
+        predict: {
+          q: 'Alice wrote 4 of the 10 posts and changes her name. When each post carries a copy of the author name, how many documents must be written?',
+          options: ['1: her user document', '5: her user document and her 4 posts', '10: every post in the feed'],
+          a: 1,
+          why: 'Each copy is a promise to keep it in sync. The rename has to reach every document that holds the old name.',
+        },
+        frames: [
+          { now: 0, say: 'The feed shows 10 posts by 6 authors. Firestore has no server-side join, so the document shape decides the cost. Times are illustrative.' },
+          { bars: [{ lane: 0, from: 0, to: 80, label: '10 reads' }, { lane: 1, from: 0, to: 80, label: '10 reads', tone: 'ok' }], marks: [{ at: 80, label: 'copied', tone: 'ok' }], say: 'Both start with one query for the posts. With the name copied in, the feed can draw now: 10 reads.' },
+          { bars: [{ lane: 0, from: 80, to: 160, label: '+6 reads', tone: 'warm' }], marks: [{ at: 160, label: 'by id', tone: 'warm' }], say: 'Posts that only hold <code>authorId</code> need the 6 user documents too. The client does the join: a second round trip and 16 reads.' },
+          { bars: [{ lane: 0, from: 220, to: 250, label: '1 write', tone: 'ok' }], say: 'Alice renames herself. With ids only, one write to her user document, and every feed shows the new name.' },
+          { bars: [{ lane: 1, from: 220, to: 310, label: '5 writes', tone: 'err' }], say: 'With copies: her user document plus her 4 posts, ideally in one batched write. Miss one and the feed shows the old name.' },
+        ],
+      });
     },
     code: `// Firestore (Android, Kotlin): shape documents around the screen
 data class FeedPost(
@@ -1150,6 +1160,12 @@ follows/alice_sam { from: "alice", to: "sam", at: <timestamp> }`,
 <p>A schema changes for the whole life of a product. A <strong>migration</strong> is a versioned script that moves the database from one shape to the next, kept in source control and run in order. On the device, Room runs it when the app opens a database with an older version; see <a href="#data.migrations">Room migrations</a>.</p>
 <p>The device is the easy case: one app version talks to its own database file. A backend is harder. Old app versions stay installed for months, and during a deploy old and new server code run side by side. A change is <strong>backwards-compatible</strong> when the old code keeps working: adding a nullable column or a new table is safe; renaming, dropping or changing a column’s type is not.</p>
 <p>The safe pattern is <strong>expand and contract</strong> (also called parallel change): add the new shape, write to both, backfill, move readers over, and only then remove the old shape. Compare it with the one-step rename below.</p>`,
+    predict: {
+      q: "You run <code>ALTER TABLE users RENAME COLUMN name TO display_name</code> on the live backend in one step. What happens to installed app v1?",
+      options: ["It keeps working: the database remembers the old name", "Its requests start failing: there is no column called name", "It updates itself to v2"],
+      a: 1,
+      why: "The rename is instant for everyone. Code that still asks for <code>name</code> breaks until every client has moved, which on phones takes months.",
+    },
     visual(el) {
       const sql = h('pre', { class: 'dbx-sql' });
       const area = h('div', {});

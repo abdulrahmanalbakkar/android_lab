@@ -418,6 +418,12 @@ data class Photo(@PrimaryKey val id: Long, val fileName: String)
             why: 'Android reads query results through a cursor window of about 2 MB. A large row fails with <code>SQLiteBlobTooBigException</code>, and even smaller BLOBs make every query slow. Keep the file on disk and its name in the table.',
           },
         ],
+        predict: {
+          q: 'Settings that an old version kept in <code>SharedPreferences</code>: where should they live now?',
+          options: ['Leave them in SharedPreferences', 'Preferences DataStore, moved over with <code>SharedPreferencesMigration</code>', 'A Room table', 'A JSON file in <code>filesDir</code>'],
+          a: 1,
+          why: 'They are still a few keys and values. <code>SharedPreferencesMigration</code> copies them into DataStore on the first read, so users keep their settings.',
+        },
         visual(el) {
           const Q = [
             { id: 'blob', text: 'Is it a blob, like an image, PDF or download?' },
@@ -746,6 +752,12 @@ abstract class AppDatabase : RoomDatabase()`,
             why: 'The build fails with “Cannot figure out how to save this field into database”. A <code>@TypeConverter</code> maps it to a column type. If you need to query by tag, use a separate table instead.',
           },
         ],
+        predict: {
+          q: 'Two observers collect <code>observeAll()</code> and <code>observeUnreadCount()</code>. You mark one row as read. Which of them emit again?',
+          options: ['Only <code>observeAll()</code>, because it shows the read flag', 'Both: Room re-runs every Flow query that reads the changed table', 'Neither, until you query again'],
+          a: 1,
+          why: 'Room tracks writes per table. Any write to <code>articles</code> re-runs every observable query on that table.',
+        },
         visual(el) {
           const pool = ['Hilt', 'Retrofit', 'Paging', 'DataStore', 'WorkManager', 'Compose', 'Coil'];
           let rows = [{ id: 1, title: 'Room', read: false }, { id: 2, title: 'Flow', read: true }, { id: 3, title: 'KSP', read: false }];
@@ -1115,6 +1127,12 @@ data class BookTagCrossRef(val bookId: Long, val tagId: Long)`,
             why: 'SQLite sees one text value. You can’t index it, join on it or ask “which books have tag 7” without scanning and parsing every row, and nothing stops ids of deleted tags.',
           },
         ],
+        predict: {
+          q: '<code>observeAuthorsWithBooks()</code> loads 2 authors and their 3 books. How many SQL queries does Room run?',
+          options: ['1, with a JOIN', '2: the authors, then the books <code>WHERE authorId IN (1, 2)</code>', '3: one for the authors and one per author'],
+          a: 1,
+          why: 'Room reads the parents first, then all their children in one <code>IN (...)</code> query, and groups them in Kotlin.',
+        },
         visual(el) {
           const authors = [[1, 'Le Guin'], [2, 'Herbert']];
           const books = [[10, 1, 'Earthsea'], [11, 1, 'The Dispossessed'], [12, 2, 'Dune']];
@@ -1467,6 +1485,12 @@ class MigrationTest {
             why: 'DAOs and entities describe the newest schema, not the one being migrated, and the database isn’t open yet. Migrations should be plain SQL on the <code>db</code> they receive, so they keep working after later schema changes.',
           },
         ],
+        predict: {
+          q: 'The new build adds a column. You pick <code>fallbackToDestructiveMigration(dropAllTables = true)</code> and no migration. What happens to the 3 rows on the device?',
+          options: ['They are kept, and the new column gets a default value', 'They are deleted: Room drops the tables and creates them again', 'The app crashes on launch'],
+          a: 1,
+          why: 'With no migration path, the fallback trades the crash for an empty database. Fine for a cache, a disaster for user data.',
+        },
         visual(el) {
           const START = [[1, 'Room 2.8 notes'], [2, 'Paging tips'], [3, 'KSP setup']];
           let rows, cols, ver, crashed, busy = false, strategy = 'none';
@@ -1791,6 +1815,12 @@ val FONT_SCALE = floatPreferencesKey("font_scale")`,
             why: 'The file still holds an Int under "font_size". Reading it through a Float key fails with a <code>ClassCastException</code> on every launch for users who upgrade.',
           },
         ],
+        predict: {
+          q: 'You read a setting with <code>runBlocking { dataStore.data.first() }</code> on the main thread. What happens on screen?',
+          options: ['Nothing: DataStore keeps everything in memory', 'The main thread waits for the disk, and frames are skipped', 'DataStore throws, because main-thread reads are forbidden'],
+          a: 1,
+          why: 'The first read has to load the file. <code>runBlocking</code> makes the main thread wait for it, so no frames are drawn meanwhile.',
+        },
         visual(el) {
           const st = { theme: 'dark', font: 16 };
           let typed = false, emissions = 1, running = false, blocking = false;
@@ -2173,94 +2203,33 @@ fun newsApi(client: OkHttpClient): NewsApi = Retrofit.Builder()
           },
         ],
         visual(el) {
-          const ok = [['{', null], ['  "id": 42,', ['id', '42']], ['  "title": "Room with KSP",', ['title', '"Room with KSP"']], ['  "published_at": "2026-10-01",', ['publishedAt', '"2026-10-01"']], ['  "views": 1280', 'ign'], ['}', null]];
-          const missing = [['{', null], ['  "id": 42,', ['id', '42']], ['  "published_at": "2026-10-01"', ['publishedAt', '"2026-10-01"']], ['}', null]];
-          let busy = false;
-          const app = h('div', { class: 'arc-end' }, 'App');
-          const server = h('div', { class: 'arc-end' }, 'api.example.com');
-          const wire = h('div', { class: 'arc-wire' });
-          const jsonBox = h('div', { class: 'arc-json' });
-          const objSlot = h('div', { class: 'arc-objslot' });
-          const req = h('div', { class: 'kt' });
-          const o = out();
-          const packet = async (text, cls, to) => {
-            wire.querySelectorAll('.arc-packet').forEach(p => p.remove());
-            const p = h('span', { class: `arc-packet ${cls}${to === 'back' ? ' far' : ''}` }, text);
-            wire.append(p); void p.offsetWidth;
-            p.classList.remove('far');
-            if (to === 'far') p.classList.add('far');
-            else if (to === 'mid') p.classList.add('mid');
-            await sleep(900);
-            return el.isConnected;
-          };
-          const showObj = (fields, anim) => {
-            const card = h('div', { class: 'obj' + (anim ? ' drop-in' : '') }, h('span', { class: 'obj-name' }, 'ArticleDto'));
-            fields.forEach(([k, v]) => card.append(h('span', { class: 'field' }, `${k} = ${v}`)));
-            objSlot.replaceChildren(card);
-            return card;
-          };
-          const reset = () => { [app, server].forEach(x => x.classList.remove('bad')); jsonBox.replaceChildren(); objSlot.replaceChildren(h('span', { class: 'tip' }, 'waiting for a response')); };
-          async function run(kind) {
-            if (busy) return; busy = true;
-            reset();
-            req.innerHTML = hl('api.getArticle(42)') + '  <span class="muted">→ GET /articles/42</span>';
-            say(o, '<span class="muted">request sent…</span>');
-            if (kind === 'offline') {
-              if (!await packet('GET /articles/42', '', 'mid')) return;
-              const p = wire.querySelector('.arc-packet'); p.classList.add('errp'); replay(p, 'shake'); app.classList.add('bad');
-              objSlot.replaceChildren(h('span', { class: 'build-fail' }, 'no object'));
-              say(o, `<span class="bad">UnknownHostException</span> <span class="muted">is an IOException →</span> ${hl('Result.failure(e)')} <span class="muted">→ UiState.Error("No connection")</span>`);
-              busy = false; return;
-            }
-            if (!await packet('GET /articles/42', '', 'far')) return;
-            replay(server, 'pop');
-            const status = kind === 'notfound' ? '404 Not Found' : '200 OK';
-            if (!await packet(status, kind === 'notfound' ? 'errp' : 'okp', 'back')) return;
-            const lines = kind === 'notfound' ? [['{ "error": "not found" }', null]] : kind === 'missing' ? missing : ok;
-            const rowsEls = lines.map(([t]) => h('div', { class: 'branch', html: hl(t) }));
-            for (const r of rowsEls) { jsonBox.append(r); replay(r, 'drop-in'); await sleep(120); }
-            if (!el.isConnected) return;
-            if (kind === 'notfound') {
-              server.classList.add('bad');
-              objSlot.replaceChildren(h('span', { class: 'build-fail' }, 'no object'));
-              say(o, `<span class="bad">HttpException: HTTP 404</span> <span class="muted">Retrofit throws for any non-2xx →</span> ${hl('Result.failure(e)')}`);
-              busy = false; return;
-            }
-            const card = showObj([], true);
-            for (let i = 0; i < lines.length; i++) {
-              const m = lines[i][1]; if (!m) continue;
-              rowsEls[i].classList.add('scan'); await sleep(380); if (!el.isConnected) return;
-              rowsEls[i].classList.remove('scan');
-              if (m === 'ign') { rowsEls[i].classList.add('ign'); continue; }
-              rowsEls[i].classList.add('hit');
-              card.append(h('span', { class: 'field changed drop-in' }, `${m[0]} = ${m[1]}`));
-            }
-            if (kind === 'missing') {
-              card.classList.add('shake'); card.style.borderColor = 'var(--err)';
-              say(o, `<span class="bad">MissingFieldException:</span> Field 'title' is required for type with serial name 'com.example.ArticleDto', but it was missing. <span class="muted">A SerializationException: catch it too, or the app crashes.</span>`);
-            } else {
-              say(o, `${hl('Result.success(ArticleDto(id=42, title="Room with KSP", publishedAt="2026-10-01"))')} <span class="muted">// "views" was ignored</span>`);
-            }
-            busy = false;
-          }
-          // Open on a finished successful call.
-          req.innerHTML = hl('api.getArticle(42)') + '  <span class="muted">→ GET /articles/42</span>';
-          ok.forEach(([t, m]) => jsonBox.append(h('div', { class: 'branch' + (m === 'ign' ? ' ign' : m ? ' hit' : ''), html: hl(t) })));
-          showObj(ok.filter(x => Array.isArray(x[1])).map(x => x[1]));
-          wire.append(h('span', { class: 'arc-packet okp' }, '200 OK'));
-          say(o, `${hl('Result.success(ArticleDto(id=42, …))')} <span class="muted">Replay it, or try a failure.</span>`);
-          el.append(
-            h('div', { class: 'controls arc-fit' },
-              cmd('200 OK', () => run('ok')),
-              cmd('404 Not Found', () => run('notfound')),
-              cmd('no network', () => run('offline')),
-              cmd('JSON without "title"', () => run('missing'))),
-            req,
-            h('div', { class: 'arc-wire-row' }, app, wire, server),
-            h('div', { class: 'arc-map' },
-              h('div', {}, h('div', { class: 'arc-cap' }, 'response body (JSON)'), jsonBox),
-              h('div', {}, h('div', { class: 'arc-cap' }, 'Kotlin object'), objSlot)),
-            o);
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'vm', label: 'ViewModel', sub: 'viewModelScope' },
+              { id: 'repo', label: 'Repository', sub: 'loadArticle()' },
+              { id: 'rf', label: 'Retrofit', sub: '+ JSON converter' },
+              { id: 'ok', label: 'OkHttp', sub: 'connection' },
+              { id: 'srv', label: 'Server', sub: 'api.example.com' },
+            ],
+            predict: {
+              q: 'The server answers with JSON text. Which piece turns it into an <code>ArticleDto</code>?',
+              options: ['OkHttp', 'The converter that Retrofit was built with', 'The ViewModel', 'The server'],
+              a: 1,
+              why: 'OkHttp only moves bytes. Retrofit hands the body to the converter you added with <code>addConverterFactory</code>.',
+            },
+            frames: [
+              { say: 'The user opens article 42. Follow one request out and back.' },
+              { at: 'vm', packet: 'load(42)', say: '<code>viewModelScope.launch</code> calls the repository. The call suspends, so the main thread stays free.' },
+              { at: 'repo', packet: 'getArticle(42)', say: 'The repository calls the <code>NewsApi</code> interface, inside a <code>try</code>.' },
+              { at: 'rf', packet: 'GET /articles/42', say: 'Retrofit reads <code>@GET("articles/{id}")</code> and builds the HTTP request.' },
+              { at: 'ok', packet: 'GET /articles/42', say: 'OkHttp sends it on a background thread, reusing an open connection if it has one.' },
+              { at: 'srv', packet: '200 OK', tone: 'ok', mark: { srv: 'ok' }, say: 'The server answers <code>200 OK</code> with a JSON body.' },
+              { at: 'ok', packet: 'JSON bytes', tone: 'ok', say: 'OkHttp hands the raw body back. It does not know what an article is.' },
+              { at: 'rf', packet: 'ArticleDto', tone: 'ok', mark: { rf: 'ok' }, say: 'The converter parses JSON into <code>ArticleDto</code>. With <code>ignoreUnknownKeys</code>, extra keys are skipped.' },
+              { at: 'repo', packet: 'Result.success', tone: 'ok', say: 'The repository wraps it in a <code>Result</code>. On <code>IOException</code> or <code>HttpException</code> it would return <code>Result.failure</code> instead.' },
+              { at: 'vm', packet: 'UiState', tone: 'ok', mark: { vm: 'ok' }, say: 'The ViewModel resumes on the main thread, updates its state, and the screen redraws.' },
+            ],
+          });
         },
       },
 
@@ -2530,6 +2499,12 @@ val client = baseClient.newBuilder()
             why: 'If the server rejects even fresh tokens, OkHttp follows up to 20 times and then throws ProtocolException, after 21 refresh calls.',
           },
         ],
+        predict: {
+          q: 'The Mutex is off. Three calls get <code>401</code> at once, and the server rotates refresh tokens. What happens?',
+          options: ['One refresh, and all three calls retry', 'Three refreshes: the later ones send a used refresh token and the user is logged out', 'OkHttp merges the three refreshes into one'],
+          a: 1,
+          why: 'Each Authenticator call refreshes on its own. The first one uses up the refresh token, so the others are rejected and the tokens get cleared.',
+        },
         visual(el) {
           const CALLS = ['GET /feed', 'GET /profile', 'GET /notifications'];
           let useMutex = true, busy = false, seq = 1;
@@ -2783,109 +2758,27 @@ repository.score("a-vs-b").collect { … }   // two sockets to one match`,
           },
         ],
         visual(el) {
-          const TEAMS = ['Team A', 'Team B'];
-          let collecting = false, open = false, leaked = 0, attempt = 0, epoch = 0, closeOn = true, busy = false;
-          const goals = [0, 0];
-          let minute = 12;
-          const big = h('div', { class: 'dt-ws-big' }, '0 – 0');
-          const minuteEl = h('span', { class: 'dt-pill' }, "12'");
-          const status = h('span', { class: 'dt-pill' }, 'not collecting');
-          const count = h('span', { class: 'dt-pill' }, 'open sockets: 0');
-          const wire = h('div', { class: 'arc-wire' });
-          const o = h('div', { class: 'dt-d2-log dt-ws-log', 'aria-live': 'polite' });
-          const log = html => { o.append(h('div', { class: 'drop-in', html })); while (o.children.length > 7) o.firstChild.remove(); };
-          const sockets = () => (open ? 1 : 0) + leaked;
-          function paint() {
-            const n = sockets();
-            count.textContent = `open sockets: ${n}`;
-            count.className = 'dt-pill ' + (n > (collecting ? 1 : 0) ? 'dt-bad' : n ? 'dt-ok' : '');
-            status.textContent = collecting ? (open ? 'collecting · onOpen' : 'collecting · connecting…') : 'not collecting';
-            status.className = 'dt-pill ' + (collecting ? (open ? 'dt-ok' : 'dt-warn') : '');
-            big.textContent = `${goals[0]} – ${goals[1]}`;
-            minuteEl.textContent = `${minute}'`;
-          }
-          async function packet(text, cls, back) {
-            const p = h('span', { class: `arc-packet ${cls}${back ? ' far' : ''}` }, text);
-            wire.append(p); void p.offsetWidth;
-            p.classList.toggle('far', !back);
-            await sleep(900); p.remove();
-          }
-          async function connect(my) {
-            paint();
-            log(`<span class="muted">newWebSocket(wss://live.example.com/matches/a-vs-b)</span>`);
-            await packet('GET  Upgrade: websocket', '', true);
-            if (!el.isConnected || my !== epoch || !collecting) return;
-            await packet('101 Switching Protocols', 'okp', false);
-            if (!el.isConnected || my !== epoch || !collecting) return;
-            open = true; paint();
-            log('<span class="good">onOpen</span> the socket is live');
-          }
-          async function collect() {
-            if (collecting) { log('<span class="muted">Already collecting.</span>'); return; }
-            collecting = true; attempt = 0; epoch++;
-            await connect(epoch);
-          }
-          async function goal() {
-            if (busy) return;
-            if (!sockets()) { log('<span class="muted">server: nobody is connected, the goal is not sent anywhere</span>'); return; }
-            busy = true;
-            const t = Math.random() < 0.55 ? 0 : 1;
-            minute = Math.min(90, minute + 3 + Math.floor(Math.random() * 9));
-            await packet(`{"goal":"${TEAMS[t]}","min":${minute}}`, '', false);
-            if (!el.isConnected) return;
-            if (open && collecting) {
-              goals[t]++; paint(); replay(big, 'pop');
-              log(`<span class="good">onMessage → trySend</span> GOL! ${TEAMS[t]} ${minute}'`);
-            } else {
-              paint();
-              log('<span class="bad">onMessage on a leaked socket:</span> trySend fails, the channel is closed. The bytes still cost data and battery.');
-            }
-            busy = false;
-          }
-          async function drop() {
-            if (!open) { log('<span class="muted">No live socket to drop.</span>'); return; }
-            open = false; paint(); replay(wire, 'shake');
-            log('<span class="bad">onFailure(SocketException)</span> → channel.close(t)');
-            const my = epoch;
-            while (collecting && my === epoch) {
-              const wait = 1 << Math.min(attempt, 5);
-              attempt++;
-              status.textContent = `retryWhen: delay(${wait} s)`; status.className = 'dt-pill dt-warn';
-              log(`<span class="muted">retryWhen: IOException, attempt ${attempt}, waiting ${wait} s (sped up here)</span>`);
-              await sleep(500 + wait * 250);
-              if (!el.isConnected || my !== epoch || !collecting) return;
-              await connect(my);
-              return;
-            }
-          }
-          async function leave() {
-            if (!collecting) { log('<span class="muted">Nothing is collecting.</span>'); return; }
-            collecting = false; epoch++;
-            if (!open) { paint(); log('Collector cancelled while reconnecting. The pending retry is cancelled too.'); return; }
-            if (closeOn) {
-              open = false; paint();
-              log('<span class="good">awaitClose ran:</span> socket.close(1000, "collector left")');
-              packet('close 1000', 'errp', true);
-            } else {
-              open = false; leaked++; paint(); replay(count, 'shake');
-              log('<span class="bad">awaitClose { } is empty:</span> the flow ended, but the socket is still open.');
-            }
-          }
-          const sw = toggle('dt-ws-close', 'awaitClose closes the socket', function () {
-            closeOn = this.checked;
-            log(closeOn ? 'awaitClose { socket.close(1000, null) } is back.' : '<span class="bad">bug mode:</span> awaitClose { } does nothing now. Collect, leave, collect again.');
+          Lab.ui.codeStepper(el, {
+            code: 'fun messages(id: String) = callbackFlow {\n  val socket = client.newWebSocket(\n    request(id),\n    object : WebSocketListener() {\n      override fun onMessage(\n          ws: WebSocket, text: String) {\n        trySend(text)\n      }\n      override fun onFailure(ws: WebSocket,\n          t: Throwable, r: Response?) {\n        channel.close(t)\n      }\n    })\n  awaitClose {\n    socket.close(1000, "collector left")\n  }\n}',
+            varsTitle: 'State',
+            outTitle: 'Collector got',
+            predict: {
+              q: 'The screen starts collecting. Right after <code>newWebSocket(...)</code> returns, what does the <code>callbackFlow</code> block do?',
+              options: ['It ends, so the flow completes', 'It suspends in <code>awaitClose</code> and keeps the flow open', 'It blocks the thread until the first message', 'It polls the socket in a loop'],
+              a: 1,
+              why: '<code>newWebSocket</code> returns at once and OkHttp connects on its own thread. <code>awaitClose</code> suspends the block, so the flow stays open until the collector leaves or the channel is closed.',
+            },
+            frames: [
+              { vars: { socket: 'none', collector: 'none' }, say: 'A score screen is about to collect <code>messages("m1")</code>. Nothing has run yet: the flow is cold.' },
+              { line: 1, stack: ['score.collect { }', 'callbackFlow { }'], vars: { collector: 'collecting' }, say: '<code>collect</code> starts the block. Each collector gets its own run, so its own socket.' },
+              { line: [2, 3, 4], vars: { socket: 'connecting' }, say: '<code>newWebSocket</code> returns at once. OkHttp connects in the background and will call the listener on its own thread.' },
+              { line: 14, stack: ['score.collect { }', 'awaitClose (suspended)'], say: 'The block reaches <code>awaitClose</code> and suspends there. The flow stays open and waits.' },
+              { line: [5, 6, 7], stack: ['OkHttp reader thread', 'onMessage()'], vars: { socket: 'open' }, out: '"1-0"', say: 'A goal. OkHttp calls <code>onMessage</code> on its thread. <code>trySend</code> puts the text into the channel without suspending, and the collector receives it.' },
+              { line: [5, 6, 7], out: '"2-0"', say: 'Every message takes the same path: OkHttp thread → channel → collector.' },
+              { line: [14, 15], stack: ['collector cancelled', 'awaitClose { }'], vars: { collector: 'cancelled', socket: 'closing (1000)' }, say: 'The user leaves. The collecting scope is cancelled, so <code>awaitClose</code> runs its block and closes the socket with code 1000.' },
+              { line: [9, 10, 11], stack: ['OkHttp reader thread', 'onFailure()'], vars: { collector: 'collecting again', socket: 'failed' }, out: 'IOException: connection reset', say: 'A later run: the network drops. OkHttp calls <code>onFailure</code>, and <code>close(t)</code> ends the flow with that error, so <code>retryWhen</code> can reconnect.' },
+            ],
           });
-          sw.input.checked = true;
-          paint();
-          log('Collect to open the socket. Score goals, drop the network, then leave the screen.');
-          el.append(
-            h('div', { class: 'controls' }, cmd('scores.collect { }', collect), act('server: goal!', goal), act('drop the network', drop), act('leave the screen', leave)),
-            h('div', { class: 'controls' }, sw),
-            h('div', { class: 'arc-wire-row' }, h('span', { class: 'arc-end' }, 'server'), wire, h('span', { class: 'arc-end' }, 'app')),
-            h('div', { class: 'dt-ws-board' },
-              h('div', { class: 'dt-ws-score' }, h('div', { class: 'dt-ws-teams' }, h('span', {}, 'Team A'), minuteEl, h('span', {}, 'Team B')), big),
-              h('div', { class: 'dt-side' }, status, count)),
-            o);
         },
       },
 
@@ -3128,6 +3021,12 @@ suspend fun refreshIfStale() {
             why: 'A plain map only grows, until the app runs out of memory. <code>LruCache</code> has a size budget and drops the least recently used entries first.',
           },
         ],
+        predict: {
+          q: 'Cache then network, and the device is online. What does the screen show first when it opens?',
+          options: ['A spinner until the server answers', 'The stored copy at once, then the fresh data when it arrives', 'Only the stored copy: the network is skipped'],
+          a: 1,
+          why: 'This strategy always fetches, but never makes the user wait for it. The cached copy fills the screen while the request runs.',
+        },
         visual(el) {
           const STRATS = {
             net: 'network only',
@@ -3552,6 +3451,12 @@ val items = vm.articles().collectAsLazyPagingItems()`,
             why: 'Every recomposition gets a new Pager and loads from page 1 again. Keep one cached flow in the ViewModel as a property.',
           },
         ],
+        predict: {
+          q: 'Failures are on and you scroll down. The next page fails to load. What happens to the items already in the list?',
+          options: ['They stay, <code>loadState.append</code> becomes <code>Error</code>, and a retry row appears', 'The list clears and shows a full-screen error', 'Paging retries on its own until it works'],
+          a: 0,
+          why: 'Each load direction has its own state. An append error leaves the loaded pages alone and waits for <code>retry()</code>.',
+        },
         visual(el) {
           const PAGE = 8, PREFETCH = 4, MAX = 6, ROW = 40;
           const TITLES = ['Derby tonight', 'Compose tips', 'Transfer news', 'Kotlin 2.3 notes', 'Weather alert', 'Market close', 'Paging deep dive', 'Room 2.8'];
@@ -3893,96 +3798,35 @@ bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)`,
           },
         ],
         visual(el) {
-          let busy = false;
-          const mkZone = (title, path, note) => {
-            const files = h('div', { class: 'dt-files' });
-            const e = h('div', { class: 'dt-zone' }, h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, title), h('span', { class: 'dt-pill' + (note === 'shared' ? ' dt-warn' : '') }, note)), h('span', { class: 'dt-path' }, path), files);
-            return { el: e, files };
-          };
-          const zin = mkZone('filesDir', '/data/data/com.example.news/files', 'only your app');
-          const zext = mkZone('getExternalFilesDir()', 'Android/data/com.example.news/files', 'only your app');
-          const zpic = mkZone('Pictures (MediaStore)', 'Pictures/ and DCIM/', 'shared');
-          const sheetSlot = h('div');
-          const o = out();
-          const file = (zone, name, extra = '') => { const f = h('span', { class: 'dt-fileic drop-in' + extra }, name); zone.files.append(f); return f; };
-          const glow = z => { [zin, zext, zpic].forEach(x => x.el.classList.toggle('dt-on', x === z)); };
-          const has = (z, name) => [...z.files.children].some(c => c.textContent === name);
-          function init() {
-            [zin, zext, zpic].forEach(z => z.files.replaceChildren());
-            file(zin, 'datastore/settings.preferences_pb');
-            file(zpic, 'DCIM/Camera/IMG_2041.jpg'); file(zpic, 'DCIM/Camera/IMG_2042.jpg');
-            sheetSlot.replaceChildren(); glow(null);
-          }
-          const writeFile = cmd('File(filesDir, "draft.md").writeText(md)', () => {
-            if (busy) return;
-            glow(zin);
-            if (has(zin, 'draft.md')) { say(o, 'draft.md is already there. writeText() overwrites it in place.'); replay(zin.el, 'pop-soft'); return; }
-            file(zin, 'draft.md', ' dt-ours');
-            say(o, '<span class="good">ok:</span> no permission needed. Other apps cannot read it. Deleted on uninstall.');
+          Lab.ui.graph(el, {
+            height: 320,
+            nodes: [
+              { id: 'app', label: 'News app<small>your app</small>', x: 25, y: 10 },
+              { id: 'other', label: 'Other app', x: 75, y: 10, tone: 'warm' },
+              { id: 'fdir', label: 'filesDir<small>draft.md</small>', x: 17, y: 50 },
+              { id: 'pics', label: 'Pictures/News<small>news-card.jpg</small>', x: 50, y: 50, hidden: true, tone: 'ok' },
+              { id: 'theirs', label: 'DCIM/Camera<small>beach.jpg</small>', x: 83, y: 50, tone: 'warm' },
+              { id: 'gal', label: 'Gallery', x: 50, y: 90, hidden: true, tone: 'muted' },
+              { id: 'pick', label: 'Photo Picker<small>system</small>', x: 83, y: 90, hidden: true, tone: 'muted' },
+            ],
+            predict: {
+              q: 'Another app tries to open <code>draft.md</code> in your <code>filesDir</code>. What happens?',
+              options: ['It reads the file: storage is shared', 'It fails: filesDir belongs to your app alone', 'It works once the user grants a storage permission'],
+              a: 1,
+              why: 'App-specific storage is private to your app. No permission opens it for other apps.',
+            },
+            frames: [
+              { say: 'Your app, another app, and a photo the user took with the camera app.' },
+              { add: [['app', 'fdir', 'writeText()', 'ok']], say: 'Your app writes <code>draft.md</code> to <code>filesDir</code>. No permission needed.' },
+              { add: [['other', 'fdir', 'denied', 'err']], say: 'The other app can’t open it. <code>filesDir</code> is yours alone.' },
+              { show: ['pics'], remove: [['other', 'fdir']], add: [['app', 'pics', 'IS_PENDING = 1', 'warm']], say: 'To keep a photo for the user, insert it through MediaStore. While <code>IS_PENDING</code> is 1, other apps don’t see it.' },
+              { show: ['gal'], add: [['app', 'pics', 'IS_PENDING = 0', 'ok'], ['gal', 'pics', 'sees it', 'ok']], say: 'Clear <code>IS_PENDING</code> when the bytes are written. Now Gallery shows it.' },
+              { remove: [['app', 'pics']], add: [['app', 'theirs', 'File(path)', 'err']], say: 'Reading the camera app’s photo by its path fails. Scoped storage keeps apps out of each other’s files.' },
+              { show: ['pick'], remove: [['app', 'theirs']], add: [['pick', 'theirs', 'user picks']], say: 'Use the Photo Picker instead. The system shows it, and the user chooses one photo.' },
+              { add: [['app', 'theirs', 'content:// Uri', 'ok']], say: 'Your app gets a <code>content://</code> Uri for that one photo and can read it, with no storage permission.' },
+              { gone: ['app', 'fdir'], remove: [['app', 'fdir'], ['app', 'theirs'], ['pick', 'theirs']], say: 'Uninstall. <code>filesDir</code> goes with the app. <code>news-card.jpg</code> stays in Pictures: MediaStore items belong to the user.' },
+            ],
           });
-          const writeExt = cmd('File(getExternalFilesDir(DIRECTORY_PICTURES), "thumb.jpg")', () => {
-            if (busy) return;
-            glow(zext);
-            if (has(zext, 'Pictures/thumb.jpg')) { say(o, 'thumb.jpg already exists here.'); replay(zext.el, 'pop-soft'); return; }
-            file(zext, 'Pictures/thumb.jpg', ' dt-ours');
-            say(o, '<span class="good">ok:</span> still app-specific, just on the big volume. Gallery does not index it.');
-          });
-          const insert = cmd('resolver.insert(images, values)', async () => {
-            if (busy) return;
-            glow(zpic);
-            if (has(zpic, 'Pictures/News/news-card.jpg')) { say(o, 'news-card.jpg is already in MediaStore.'); replay(zpic.el, 'pop-soft'); return; }
-            busy = true;
-            const f = file(zpic, 'Pictures/News/news-card.jpg', ' dt-ours dt-pending');
-            say(o, `insert → ${hl('content://media/external_primary/images/media/1000000057')} <span class="muted">IS_PENDING = 1, hidden from others</span>`);
-            await sleep(700); if (!o.isConnected) return;
-            line(o, '<span class="muted">openOutputStream(uri): writing 182 KB...</span>');
-            await sleep(700); if (!o.isConnected) return;
-            f.classList.remove('dt-pending'); replay(f, 'pop');
-            line(o, '<span class="good">update IS_PENDING = 0:</span> Gallery shows it now. No permission was needed.');
-            busy = false;
-          });
-          const readPath = cmd('File("/sdcard/DCIM/Camera/IMG_2041.jpg").readBytes()', () => {
-            if (busy) return;
-            glow(zpic); replay(zpic.el, 'shake');
-            say(o, '<span class="bad">FileNotFoundException:</span> /sdcard/DCIM/Camera/IMG_2041.jpg: open failed: EACCES (Permission denied) <span class="muted">// scoped storage: not your file</span>');
-          });
-          const picker = cmd('pickMedia.launch(PickVisualMediaRequest(ImageOnly))', () => {
-            if (busy) return; busy = true;
-            glow(zpic);
-            const photos = [...zpic.files.children].map(c => c.textContent).filter(n => /\.jpg$/.test(n));
-            const sheet = h('div', { class: 'dt-sheet drop-in', role: 'dialog', 'aria-label': 'Photo picker' },
-              h('div', { class: 'dt-head' }, h('b', {}, 'Photo Picker (system UI)'), h('span', { class: 'dt-pill dt-ok' }, 'no permission')),
-              h('div', { class: 'dt-thumbs' }, photos.map((n, i) => h('button', { class: 'dt-thumb', 'aria-label': `Pick ${n}`, onclick: () => choose(n, 1000000041 + i, sheet) }, n.split('/').pop()))),
-              h('span', { class: 'dt-sub' }, 'Tap a photo. Your app sees only what the user picks.'));
-            sheetSlot.replaceChildren(sheet);
-            say(o, 'The system shows the picker. Your app cannot see this grid.');
-          });
-          async function choose(name, id, sheet) {
-            sheet.classList.add('leave');
-            await sleep(420); if (!o.isConnected) return;
-            sheetSlot.replaceChildren();
-            say(o, `<span class="good">uri =</span> ${hl(`content://media/picker/0/com.android.providers.media.photopicker/media/${id}`)} <span class="muted">// read access to ${name.split('/').pop()} only</span>`);
-            busy = false;
-          }
-          const uninstall = act('uninstall the app', async () => {
-            if (busy) return; busy = true; glow(null);
-            const mine = [...zin.files.children, ...zext.files.children];
-            mine.forEach(f => f.classList.add('leave'));
-            say(o, 'Uninstalling com.example.news...');
-            await sleep(450); if (!o.isConnected) return;
-            zin.files.replaceChildren(); zext.files.replaceChildren();
-            const card = [...zpic.files.children].find(c => c.textContent === 'Pictures/News/news-card.jpg');
-            if (card) { card.classList.remove('dt-ours'); card.classList.add('dt-orphan'); replay(card, 'pop'); }
-            line(o, card ? 'App-specific files are gone. <span class="good">news-card.jpg stays in Pictures:</span> MediaStore items belong to the user.' : 'App-specific files are gone. Nothing of yours was in shared storage.');
-            busy = false;
-          });
-          init();
-          say(o, 'Three places. Write to each, try to read someone else\'s photo, then uninstall.');
-          el.append(
-            h('div', { class: 'dt-zones' }, zin.el, zext.el, zpic.el),
-            sheetSlot,
-            h('div', { class: 'controls' }, writeFile, writeExt, insert, readPath, picker, uninstall),
-            o);
         },
       },
       // share-files ──────────────────────────────────
@@ -4119,91 +3963,32 @@ addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)`,
           },
         ],
         visual(el) {
-          const PATH = 'files/exports/issue-42.pdf';
-          const URI = 'content://com.example.news.fileprovider/exports/issue-42.pdf';
-          let uri = null, flag = false, granted = false, busy = false;
-          const uriBox = h('div', { class: 'dt-sh-uri' }, 'uri = (none yet)');
-          const grantPill = h('span', { class: 'dt-pill' }, 'no grant');
-          const recv = h('div', { class: 'dt-files' });
-          const sheetSlot = h('div');
-          const o = out();
-          const mine = h('div', { class: 'dt-zone' },
-            h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'com.example.news'), h('span', { class: 'dt-pill' }, 'your app')),
-            h('span', { class: 'dt-path' }, '/data/data/com.example.news/'),
-            h('div', { class: 'dt-files' }, h('span', { class: 'dt-fileic dt-ours' }, PATH), h('span', { class: 'dt-fileic' }, 'databases/news.db')),
-            uriBox);
-          const them = h('div', { class: 'dt-zone' },
-            h('div', { class: 'dt-head' }, h('span', { class: 'dt-title' }, 'com.mail.app'), grantPill),
-            h('span', { class: 'dt-path' }, 'receiving app'),
-            recv);
-          function paintGrant() {
-            grantPill.className = 'dt-pill ' + (granted ? 'dt-ok' : '');
-            grantPill.textContent = granted ? 'read grant: issue-42.pdf' : 'no grant';
-          }
-          const fileUri = cmd('Uri.fromFile(pdf)', () => {
-            if (busy) return;
-            uri = 'file'; uriBox.textContent = 'uri = file:///data/data/com.example.news/files/exports/issue-42.pdf'; replay(uriBox, 'pop');
-            say(o, 'A file:// Uri. Now try to share it.');
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'file', label: 'issue-42.pdf', sub: 'filesDir/exports/' },
+              { id: 'fp', label: 'FileProvider', sub: 'in your app' },
+              { id: 'intent', label: 'Intent', sub: 'ACTION_SEND' },
+              { id: 'sys', label: 'System', sub: 'URI grants' },
+              { id: 'mail', label: 'Mail app', sub: 'another app' },
+            ],
+            predict: {
+              q: 'The mail app calls <code>openInputStream(uri)</code> on your <code>content://</code> Uri. Whose code opens the PDF file?',
+              options: ['The mail app, with the real path', 'Your app’s FileProvider', 'The system copies the file to the mail app first'],
+              a: 1,
+              why: 'A <code>content://</code> Uri names your provider, not a path. The system checks the grant and calls your FileProvider, which opens the file and streams the bytes.',
+            },
+            frames: [
+              { say: 'You want to mail <code>issue-42.pdf</code> from <code>filesDir</code>. Other apps can’t read that folder.' },
+              { at: 'file', packet: 'File', say: 'Start with the <code>File</code> object in <code>filesDir/exports/</code>.' },
+              { at: 'fp', packet: 'content://…fileprovider/exports/issue-42.pdf', say: '<code>getUriForFile</code> finds the folder in <code>file_paths.xml</code> and swaps it for the name <code>exports</code>. The real path stays hidden.' },
+              { at: 'intent', packet: 'Uri + FLAG_GRANT_READ', say: 'The Uri goes in <code>EXTRA_STREAM</code>, with <code>FLAG_GRANT_READ_URI_PERMISSION</code> on the Intent.' },
+              { at: 'sys', packet: 'grant: Mail may read this Uri', mark: { sys: 'ok' }, say: '<code>startActivity</code>. The system records a temporary grant: this app, this one Uri, read only.' },
+              { at: 'mail', packet: 'openInputStream(uri)', say: 'The mail app asks its <code>ContentResolver</code> to open the Uri.' },
+              { at: 'fp', packet: 'openFile()', tone: 'ok', mark: { fp: 'ok' }, say: 'The system checks the grant and calls your FileProvider, which opens the real file.' },
+              { at: 'mail', packet: 'PDF bytes', tone: 'ok', mark: { mail: 'ok' }, say: 'The bytes stream to the mail app. It never learns the path and can’t see any other file.' },
+              { at: 'mail', packet: 'SecurityException', tone: 'err', mark: { mail: 'err', sys: 'err' }, say: 'Without the flag, or after the mail app’s task has finished, the same call throws <code>SecurityException</code>.' },
+            ],
           });
-          const getUri = cmd('FileProvider.getUriForFile(…)', () => {
-            if (busy) return;
-            uri = 'content'; uriBox.textContent = `uri = ${URI}`; replay(uriBox, 'pop');
-            say(o, '<span class="good">ok:</span> "exports" is the name from file_paths.xml. The real folder stays hidden.');
-          });
-          const badPath = cmd('getUriForFile(…, dbFile)', () => {
-            if (busy) return;
-            replay(mine, 'shake');
-            say(o, `${hl('val dbFile = getDatabasePath("news.db")')}<br><span class="bad">IllegalArgumentException:</span> Failed to find configured root that contains /data/data/com.example.news/databases/news.db <span class="muted">// only exports/ is listed</span>`);
-          });
-          const flagSw = toggle('dt-sh-flag', 'FLAG_GRANT_READ_URI_PERMISSION', function () { if (busy) { this.checked = flag; return; } flag = this.checked; say(o, flag ? 'The Intent will carry a read grant for its Uri.' : 'The Intent will carry the Uri but no grant.'); });
-          const share = cmd('startActivity(chooser)', () => {
-            if (busy) return;
-            if (!uri) { say(o, 'Make a Uri first.'); return; }
-            if (uri === 'file') {
-              replay(mine, 'shake');
-              say(o, '<span class="bad">FileUriExposedException:</span> file:///data/data/com.example.news/files/exports/issue-42.pdf exposed beyond app <span class="muted">// targetSdk ≥ 24</span>');
-              return;
-            }
-            busy = true;
-            const sheet = h('div', { class: 'dt-sheet drop-in', role: 'dialog', 'aria-label': 'Share sheet' },
-              h('div', { class: 'dt-head' }, h('b', {}, 'Share sheet (system UI)'), h('span', { class: 'dt-pill' }, 'application/pdf')),
-              h('div', { class: 'controls' }, act('Mail', () => pick(sheet)), act('Drive', () => pick(sheet))),
-              h('span', { class: 'dt-sub' }, 'Pick the app that receives the file.'));
-            sheetSlot.replaceChildren(sheet);
-            say(o, 'startActivity() returned. The user is choosing an app.');
-          });
-          async function pick(sheet) {
-            sheet.classList.add('leave');
-            await sleep(400); if (!el.isConnected) return;
-            sheetSlot.replaceChildren();
-            granted = flag; paintGrant(); replay(grantPill, 'pop');
-            line(o, `${hl('contentResolver.openInputStream(uri)')} <span class="muted">in the receiving app</span>`);
-            await sleep(600); if (!el.isConnected) return;
-            if (granted) {
-              recv.replaceChildren(h('span', { class: 'dt-fileic dt-ours drop-in' }, 'issue-42.pdf · 84 KB'));
-              line(o, '<span class="good">read 84 KB.</span> The receiver sees this one file and nothing else in your app.');
-            } else {
-              replay(them, 'shake');
-              line(o, '<span class="bad">SecurityException: Permission Denial</span> <span class="muted">// the provider is not exported and no grant was given</span>');
-            }
-            busy = false;
-          }
-          const finish = act('receiver finishes its task', async () => {
-            if (busy) return;
-            if (!granted) { say(o, 'There is no grant to end.'); return; }
-            busy = true;
-            granted = false; paintGrant(); recv.replaceChildren();
-            say(o, 'The mail app sent the message and its task finished. <span class="muted">The grant expired with it.</span>');
-            await sleep(500); if (!el.isConnected) return;
-            line(o, `<span class="bad">openInputStream(uri) later → SecurityException</span>`);
-            busy = false;
-          });
-          say(o, 'Make a Uri, choose whether to grant, share, and pick an app.');
-          el.append(
-            h('div', { class: 'controls' }, fileUri, getUri, badPath),
-            h('div', { class: 'controls' }, flagSw, share, finish),
-            h('div', { class: 'dt-sh-wrap' }, mine, them),
-            sheetSlot, o);
         },
       },
     ],

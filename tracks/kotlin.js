@@ -238,21 +238,36 @@ public final class Rect {
           { title: 'Mutating a var inside screen state', bad: 'data class CartState(var count: Int)\n\n_state.value.count += 1   // screen never updates', good: 'data class CartState(val count: Int)\n\n_state.update { it.copy(count = it.count + 1) }', why: 'Changing a field inside the current object never sets a new value, so <code>StateFlow</code> has nothing to emit. With <code>val</code> fields the only way to change state is a new object, which observers see.' },
         ],
         visual(el) {
-          const box = (kw, name, value, note) => {
-            const slot = h('div', { class: 'slot' }, h('span', { class: 'chip' }, value));
-            return Object.assign(h('div', { class: `box ${kw}` }, h('span', { class: 'box-tag', html: hl(`${kw} ${name}`) }), slot, h('small', {}, note)), { well: slot });
-          };
-          const name = box('val', 'name', '"Ada"', 'read-only');
-          const score = box('var', 'score', '10', 'mutable');
-          const o = out('Try giving each one a new value.');
-          let n = 10;
-          el.append(
-            h('div', { class: 'stage' }, name, score),
-            h('div', { class: 'controls' },
-              cmd('name = "Grace"', () => { replay(name, 'shake'); say(o, '<span class="bad">error:</span> \'val\' cannot be reassigned'); }),
-              cmd('score += 5', () => { n += 5; swap(score.well, String(n)); say(o, `<span class="good">ok:</span> score is now ${n}`); })),
-            o);
-        },
+          Lab.ui.codeStepper(el, {
+            code: 'val name = "Ada"\nvar score = 10\nscore += 5\nname = "Grace"\nval items = mutableListOf(1)\nitems.add(2)',
+            predict: {
+              q: 'Line 4 tries <code>name = "Grace"</code>. What happens?',
+              options: ['<code>name</code> becomes "Grace"', 'The code does not compile', 'It compiles, then crashes when line 4 runs', 'Kotlin quietly makes a copy called <code>name</code>'],
+              a: 1,
+              why: 'A <code>val</code> is assigned once. The compiler checks that, so the program never builds.',
+            },
+            frames: [
+              { say: 'Six lines. Step through them and watch the names on the right.' },
+              { line: 1, vars: { 'val name': '"Ada"' }, say: '<code>val</code> creates a read-only name and points it at <code>"Ada"</code>.' },
+              { line: 2, vars: { 'var score': '10' }, say: '<code>var</code> creates a name that can point at a new value later.' },
+              { line: 3, vars: { 'var score': '15' }, say: '<code>score += 5</code> points <code>score</code> at a new value, <code>15</code>. Allowed, because it is a <code>var</code>.' },
+              { line: 4, out: "error: 'val' cannot be reassigned", say: 'The compiler rejects line 4 before anything runs. <code>name</code> is a <code>val</code>, so it can never point at <code>"Grace"</code>.' },
+              { line: 5, vars: { 'val items': '[1]' }, out: '(line 4 deleted, build OK)', say: 'Delete line 4 and it builds. <code>items</code> is a <code>val</code> that points at a mutable list.' },
+              { line: 6, vars: { 'val items': '[1, 2]' }, say: 'The list grew, and that is fine. <code>val</code> locks the <em>name</em>, not the object behind it.' },
+            ],
+          });
+        }
+,
+        play: `fun main() {
+    val name = "Ada"
+    var score = 10
+    score += 5
+    // name = "Grace"   // remove the // and run: it will not compile
+
+    val items = mutableListOf(1)
+    items.add(2)
+    println("$name has $score points and items $items")
+}`,
       },
 
       // + lateinit ────────────────────────────────────
@@ -346,66 +361,44 @@ FeedAdapter getAdapter() {
           { title: 'lazy that reads something not ready yet', bad: 'class ProfileFragment : Fragment() {\n    private val userId by lazy { requireArguments().getString("id")!! }\n    init { log(userId) }   // arguments not set yet\n}', good: 'class ProfileFragment : Fragment() {\n    private val userId by lazy { requireArguments().getString("id")!! }\n    override fun onViewCreated(view: View, s: Bundle?) { log(userId) }\n}', why: '<code>lazy</code> runs on the first read, wherever that is. Read it only once the things it depends on exist.' },
         ],
         visual(el) {
-          let set = false, loaded = false, loads = 0, busy = false;
-          const field = h('span', { class: 'field kt-unset' }, 'adapter = (not set)');
-          const lazyField = h('span', { class: 'field kt-unset' }, 'dateFormat = (not computed)');
-          const count = h('span', { class: 'kt-li-count' }, 'block ran 0 times');
-          const gear = h('div', { class: 'machine kt-li-machine' }, h('div', { class: 'gear' }), h('div', { class: 'kt', html: hl('lazy { SimpleDateFormat(…) }') }));
-          const left = h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'lateinit var'),
-            h('div', { class: 'obj kt-li-obj' }, h('span', { class: 'field', html: hl('adapter: FeedAdapter') }), field));
-          const right = h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, 'val … by lazy'),
-            h('div', { class: 'obj kt-li-obj' }, h('span', { class: 'field', html: hl('dateFormat: SimpleDateFormat') }), lazyField), gear, count);
-          const o = out();
-          const paint = () => {
-            field.textContent = set ? 'adapter = FeedAdapter@3b9a' : 'adapter = (not set)';
-            field.className = 'field ' + (set ? 'kt-ptr' : 'kt-unset');
-            lazyField.textContent = loaded ? 'dateFormat = SimpleDateFormat@7c21' : 'dateFormat = (not computed)';
-            lazyField.className = 'field ' + (loaded ? 'kt-ptr' : 'kt-unset');
-            count.textContent = `block ran ${loads} time${loads === 1 ? '' : 's'}`;
-          };
-          async function readLazy() {
-            if (busy) return; busy = true;
-            if (!loaded) {
-              gear.classList.add('busy');
-              say(o, '<span class="muted">First read: running the lazy block…</span>');
-              await sleep(700);
-              gear.classList.remove('busy');
-              if (!el.isConnected) return;
-              loaded = true; loads += 1; paint(); replay(lazyField, 'pop');
-              say(o, `${hl('dateFormat.format(today)')} <span class="good">ok:</span> <span class="muted">built it now, kept it for next time</span>`);
-            } else {
-              replay(lazyField, 'pop');
-              say(o, `${hl('dateFormat.format(today)')} <span class="good">ok:</span> <span class="muted">same object, the block did not run again</span>`);
-            }
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'kt-li-pair' }, left, right),
-            h('div', { class: 'controls' },
-              cmd('adapter.submitList(items)', () => {
-                if (busy) return;
-                if (!set) {
-                  field.className = 'field kt-stale'; replay(left, 'shake');
-                  say(o, '<span class="bad">crash:</span> UninitializedPropertyAccessException: lateinit property adapter has not been initialized');
-                  return;
-                }
-                replay(field, 'pop');
-                say(o, `<span class="good">ok:</span> ${hl('adapter.submitList(items)')} <span class="muted">// assigned in onViewCreated</span>`);
-              }),
-              cmd('adapter = FeedAdapter()', () => {
-                if (busy) return;
-                set = true; paint(); replay(field, 'pop');
-                say(o, `${hl('adapter = FeedAdapter()')} <span class="muted">// you assigned it</span>`);
-              }),
-              cmd('dateFormat.format(today)', readLazy),
-              cmd('FeedFragment()', () => {
-                if (busy) return;
-                set = false; loaded = false; loads = 0; paint(); replay(left, 'pop-soft'); replay(right, 'pop-soft');
-                say(o, '<span class="muted">A new instance: nothing assigned, nothing computed.</span>');
-              })),
-            o);
-          say(o, 'Read each property before and after it has a value.');
+          Lab.ui.codeStepper(el, {
+            code: 'class FeedFragment {\n    lateinit var adapter: FeedAdapter\n    val dateFormat by lazy { SimpleDateFormat("d MMM") }\n}\nval f = FeedFragment()\nf.dateFormat.format(today)\nf.dateFormat.format(today)\nf.adapter = FeedAdapter()\nf.adapter.submitList(items)\nval g = FeedFragment()\ng.adapter.submitList(items)',
+            varsTitle: 'Fields',
+            predict: {
+              q: 'Line 8 assigns <code>f.adapter</code>. Line 11 then uses <code>g.adapter</code> on a second, new <code>FeedFragment</code>. What happens?',
+              options: ['It works: f already assigned the adapter', 'It throws <code>UninitializedPropertyAccessException</code>', 'It returns null and nothing is shown'],
+              a: 1,
+              why: 'A <code>lateinit</code> property is a field of each object. Assigning <code>f.adapter</code> fills only f’s field, so g’s getter still finds it empty and throws.',
+            },
+            frames: [
+              { say: 'One <code>lateinit</code> property and one <code>lazy</code> property. Watch when each one gets its value.' },
+              { line: 5, vars: { 'f.adapter': '(not set)', 'f.dateFormat': '(not computed)', 'lazy block ran': '0 times' }, say: 'The constructor runs. Neither property has a value yet, and nothing is null-checked.' },
+              { line: [6, 3], vars: { 'f.dateFormat': 'SimpleDateFormat@7c21', 'lazy block ran': '1 time' }, out: '14 Mar', say: 'The first read of <code>dateFormat</code> runs the <code>lazy</code> block and keeps the result.' },
+              { line: 7, out: '14 Mar', say: 'The second read returns the kept object. The block does not run again.' },
+              { line: 8, vars: { 'f.adapter': 'FeedAdapter@3b9a' }, say: 'Nobody computes a <code>lateinit</code> value for you. You assign it, here as <code>onViewCreated</code> would.' },
+              { line: 9, say: 'Now the read is fine. The getter finds a value and returns it.' },
+              { line: 10, vars: { 'g.adapter': '(not set)' }, say: 'A second object gets its own empty field.' },
+              { line: 11, out: 'UninitializedPropertyAccessException: lateinit property adapter has not been initialized', say: 'The getter finds g’s field empty and throws, naming the property. A broken promise fails loudly, right where it was broken.' },
+            ],
+          });
         },
+        play: `class Screen {
+    lateinit var title: String
+
+    val formatter by lazy {
+        println("building the formatter")
+        "[%s]"
+    }
+}
+
+fun main() {
+    val s = Screen()
+    println(s.formatter.format("one"))
+    println(s.formatter.format("two"))   // the lazy block does not run again
+
+    s.title = "Home"                      // put // in front of this line and run again
+    println(s.title)
+}`,
       },
 
       // + types ─────────────────────────────────────
@@ -634,6 +627,35 @@ boxedB == anotherBoxedB    // true: same value`,
             h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: evaluate }, 'Run println')),
             o2);
         },
+        predict: {
+          "q": "Kotlin works out each type from the value. What type does <code>val c = 9.99</code> get?",
+          "options": [
+            "Float",
+            "Double",
+            "Decimal"
+          ],
+          "a": 1,
+          "why": "A decimal literal is a <code>Double</code> unless it ends in <code>f</code>, which makes it a <code>Float</code>."
+        },
+        play: `fun main() {
+    val count = 42
+    val big = 3_000_000_000
+    val price = 9.99
+    val name = "Ada"
+
+    println("count is an \${count::class.simpleName}")
+    println("big is a \${big::class.simpleName}")
+    println("price is a \${price::class.simpleName}")
+    println("$name has \${count + 1} points")
+
+    val total: Long = count.toLong()     // no automatic widening
+    println(total + big)
+    println("4x".toIntOrNull())          // null instead of a crash
+    println(0.1 + 0.2)                   // Doubles are not exact
+
+    val text = "42"                      // change "42" to "4x" and run again
+    println(text.toInt() * 2)
+}`
       },
 
       // + control ─────────────────────────────────────
@@ -812,6 +834,35 @@ for (int i = 0; i < n; i++) {
             h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: walk }, 'Run loop')),
             o);
         },
+        predict: {
+          "q": "How many numbers does <code>for (i in 0..10 step 3)</code> visit?",
+          "options": [
+            "3: 0, 3, 6",
+            "4: 0, 3, 6, 9",
+            "4: 0, 3, 6, 9 and then 10"
+          ],
+          "a": 1,
+          "why": "The range starts at 0 and jumps by 3. The next value, 12, would pass the end, so the loop stops after 9."
+        },
+        play: `fun main() {
+    for (i in 1..5) print("$i ")
+    println("  <- 1..5")
+    for (i in 0 until 5) print("$i ")
+    println("  <- 0 until 5")
+    for (i in 10 downTo 0 step 3) print("$i ")   // change step 3 to step 4
+    println("  <- 10 downTo 0 step 3")
+
+    val n = 7
+    val kind = if (n % 2 == 0) "even" else "odd"   // if hands back a value
+    println("$n is $kind")
+
+    var tries = 3
+    while (tries > 0) {
+        println("try $tries")
+        tries--
+    }
+    repeat(2) { println("Hi #$it") }
+}`
       },
 
       // 2 ─────────────────────────────────────────────
@@ -1029,6 +1080,34 @@ public static final int greet(@NotNull String name) {
           paint();
           el.append(h('div', { class: 'controls' }, toggle), track, h('div', { class: 'controls' }, exprs.map(x => cmd(x.src, () => run(x)))), o);
         },
+        predict: {
+          "q": "With <code>name = null</code>, what does <code>name!!.length</code> do?",
+          "options": [
+            "It gives null",
+            "It throws NullPointerException",
+            "It does not compile"
+          ],
+          "a": 1,
+          "why": "<code>!!</code> tells the compiler the value is not null. When it is, the program throws at that point."
+        },
+        play: `fun describe(name: String?): String {
+    val length = name?.length ?: 0
+    return if (name != null) {
+        "$name has $length letters"   // smart cast: name is a String here
+    } else {
+        "no name, length $length"
+    }
+}
+
+fun main() {
+    println(describe("Kotlin"))
+    println(describe(null))
+
+    val maybe: String? = "Ada"   // change "Ada" to null and run again
+    println(maybe?.uppercase())
+    println(maybe?.length ?: -1)
+    println(maybe!!.length)       // !! crashes when maybe is null
+}`
       },
 
       // 3 ─────────────────────────────────────────────
@@ -1251,6 +1330,37 @@ fun makeCounter(): Function0<Int> {
             h('div', { class: 'controls' }, buttons, h('button', { class: 'btn primary small', onclick: call }, 'Call f(x)')),
             o);
         },
+        predict: {
+          "q": "<code>val f: (Int) -> Boolean = { it % 2 == 0 }</code>. What comes out of <code>f(3)</code>?",
+          "options": [
+            "false",
+            "1",
+            "3"
+          ],
+          "a": 0,
+          "why": "A lambda returns its last expression. <code>3 % 2 == 0</code> is <code>false</code>."
+        },
+        play: `fun twice(f: (Int) -> Int): (Int) -> Int = { x -> f(f(x)) }
+
+fun makeCounter(): () -> Int {
+    var count = 0
+    return { count += 1; count }
+}
+
+fun main() {
+    val double: (Int) -> Int = { it * 2 }
+    val isEven: (Int) -> Boolean = { it % 2 == 0 }
+    println(double(4))
+    println(isEven(7))
+    println(twice(double)(5))                 // double(double(5))
+    println(listOf(1, 2, 3).map { it * 10 })
+
+    val a = makeCounter()
+    a(); a()
+    println("a: \${a()}")   // the lambda keeps its own count
+    val b = makeCounter()
+    println("b: \${b()}")   // a new counter starts again. Call b() twice more first and run again
+}`
       },
 
       // 4 ─────────────────────────────────────────────
@@ -1493,6 +1603,33 @@ public inline fun <T, R, C : MutableCollection<in R>>
             }))),
             chain, o);
         },
+        predict: {
+          "q": "Start from <code>listOf(1, 2, 3, 4, 5, 6, 7, 8)</code>, then <code>.filter { it % 2 == 0 }</code>, then <code>.map { it * it }</code>. What is the list now?",
+          "options": [
+            "[4, 16, 36, 64]",
+            "[1, 4, 9, 16, 25, 36, 49, 64]",
+            "[2, 4, 6, 8]"
+          ],
+          "a": 0,
+          "why": "filter keeps 2, 4, 6 and 8, then map squares each of them. Each step builds a new list."
+        },
+        play: `fun main() {
+    val numbers = listOf(1, 2, 3, 4, 5, 6, 7, 8)
+
+    val evens = numbers.filter { it % 2 == 0 }
+    println("filter: $evens")
+    val squares = evens.map { it * it }
+    println("map:    $squares")
+    val firstThree = squares.take(3)      // change take(3) to take(1)
+    println("take:   $firstThree")
+    println("sum:    \${firstThree.sum()}")
+
+    println("numbers is still $numbers")  // nothing changed the original
+
+    val words = listOf("ab", "ac", "b")
+    println(words.groupBy { it.first() })
+    println(words.associateBy { it.first() })   // a later key wins
+}`
       },
 
       // + maps-sets ───────────────────────────────────
@@ -1514,10 +1651,10 @@ fun add(fruit: String) {
     counts[fruit] = (counts[fruit] ?: 0) + 1   // key -> value
 }
 
-add("elma"); add("armut"); add("elma")
-// basket = [elma, armut, elma]
-// kinds  = [elma, armut]
-// counts = {elma=2, armut=1}`,
+add("apple"); add("pear"); add("apple")
+// basket = [apple, pear, apple]
+// kinds  = [apple, pear]
+// counts = {apple=2, pear=1}`,
         remember: 'List for order and duplicates, Set for uniqueness, Map for lookup by key. map[key] can be null.',
         level: 'beginner',
         terms: [
@@ -1643,40 +1780,46 @@ println(m.javaClass)  // class java.util.LinkedHashMap`,
           { title: 'Expecting order from hashSetOf', bad: 'val tags = hashSetOf("kotlin", "android", "compose")\ntags.first()   // which one?', good: 'val tags = setOf("kotlin", "android", "compose")\ntags.first()   // "kotlin"', why: '<code>HashSet</code> makes no promise about order. <code>setOf</code> and <code>mutableSetOf</code> keep insertion order. Use <code>sortedSetOf</code> when you want sorted order.' },
         ],
         visual(el) {
-          let basket = [], kinds = [], counts = {};
-          const listPile = h('div', { class: 'kt-pile kt-ms-col' });
-          const setPile = h('div', { class: 'kt-pile kt-ms-col' });
-          const mapPile = h('div', { class: 'kt-ms-map' });
-          const zone = (title, pile) => h('div', { class: 'kt-zone kt-ms-zone' }, h('span', { class: 'kt-zone-title' }, title), pile);
-          const zSet = zone('kinds: Set', setPile);
-          const o = out();
-          const empty = () => h('span', { class: 'muted kt-ms-empty' }, 'empty');
-          function paint(fresh) {
-            listPile.replaceChildren(...(basket.length ? basket.map((x, i) => h('span', { class: 'chip kt-sm' + (i === basket.length - 1 && fresh ? ' drop-in' : '') }, x)) : [empty()]));
-            setPile.replaceChildren(...(kinds.length ? kinds.map(x => h('span', { class: 'chip kt-sm' + (x === fresh && kinds.indexOf(x) === kinds.length - 1 && counts[x] === 1 ? ' drop-in' : '') }, x)) : [empty()]));
-            const keys = Object.keys(counts);
-            mapPile.replaceChildren(...(keys.length ? keys.map(k => h('span', { class: 'field kt-ms-entry' + (k === fresh ? ' changed' : '') }, `"${k}" → ${counts[k]}`)) : [empty()]));
-          }
-          function add(f) {
-            basket.push(f);
-            const isNew = !kinds.includes(f);
-            if (isNew) kinds.push(f); else replay(zSet, 'shake');
-            counts[f] = (counts[f] || 0) + 1;
-            paint(f);
-            say(o, `${hl(`add("${f}")`)} <span class="muted">list.add → true, set.add → ${isNew}${isNew ? '' : ' (already there)'}, counts["${f}"] = ${counts[f]}</span>`);
-          }
-          el.append(
-            h('div', { class: 'kt-ms-three' }, zone('basket: List', listPile), zSet, zone('counts: Map', mapPile)),
-            h('div', { class: 'controls' },
-              cmd('add("elma")', () => add('elma')),
-              cmd('add("armut")', () => add('armut')),
-              cmd('add("kiraz")', () => add('kiraz')),
-              cmd('counts["muz"]', () => say(o, `${hl('counts["muz"]')} = ${hl('null')} <span class="muted">// no such key</span>`)),
-              h('button', { class: 'cmd', onclick: () => { basket = []; kinds = []; counts = {}; paint(); say(o, 'All three are empty again.'); } }, 'Clear')),
-            o);
-          paint();
-          say(o, 'Add the same fruit twice and compare the three collections.');
+          Lab.ui.codeStepper(el, {
+            code: 'val basket = mutableListOf<String>()\nval kinds = mutableSetOf<String>()\nval counts = mutableMapOf<String, Int>()\nfor (fruit in listOf("apple", "pear", "apple")) {\n    basket.add(fruit)\n    kinds.add(fruit)\n    counts[fruit] = (counts[fruit] ?: 0) + 1\n}\nprintln(counts["banana"])',
+            predict: {
+              q: 'Third time round the loop, <code>"apple"</code> is added again. What does the Set <code>kinds</code> hold afterwards?',
+              options: ['[apple, pear]', '[pear, apple]: the apple moves to the end', '[apple, pear, apple]'],
+              a: 0,
+              why: 'A Set keeps each item once. The second <code>add("apple")</code> returns false and changes nothing, so the first apple keeps its place.',
+            },
+            frames: [
+              { say: 'The same three fruits go into a List, a Set and a Map. Watch how each one stores them.' },
+              { line: [1, 2, 3], vars: { basket: '[]', kinds: '[]', counts: '{}' }, say: 'Three empty mutable collections.' },
+              { line: 4, vars: { fruit: '"apple"' }, say: 'First pass: <code>fruit</code> is <code>"apple"</code>.' },
+              { line: [5, 6, 7], vars: { basket: '[apple]', kinds: '[apple]', counts: '{apple=1}' }, say: 'All three take it. <code>counts["apple"]</code> was null, so <code>?: 0</code> starts the count at 0, plus 1.' },
+              { line: [4, 5, 6, 7], vars: { fruit: '"pear"', basket: '[apple, pear]', kinds: '[apple, pear]', counts: '{apple=1, pear=1}' }, say: 'Second pass, <code>"pear"</code>: new everywhere.' },
+              { line: 4, vars: { fruit: '"apple"' }, say: 'Third pass: <code>"apple"</code> again.' },
+              { line: 5, vars: { basket: '[apple, pear, apple]' }, say: 'A List keeps every item, duplicates included, in order.' },
+              { line: 6, say: 'The Set already has it. <code>add</code> returns <code>false</code> and <code>kinds</code> stays <code>[apple, pear]</code>.' },
+              { line: 7, vars: { counts: '{apple=2, pear=1}' }, say: 'A Map key is also unique. The same key gets a new value, 2.' },
+              { line: 9, vars: { fruit: null }, out: 'null', say: '<code>map[key]</code> is nullable: there is no <code>"banana"</code> key, so you get <code>null</code>, not a crash.' },
+            ],
+          });
         },
+        play: `fun main() {
+    val basket = mutableListOf<String>()
+    val kinds = mutableSetOf<String>()
+    val counts = mutableMapOf<String, Int>()
+
+    for (fruit in listOf("apple", "pear", "apple")) {   // add "pear" again and run
+        basket.add(fruit)
+        val isNew = kinds.add(fruit)
+        counts[fruit] = (counts[fruit] ?: 0) + 1
+        println("add($fruit): set.add returned $isNew")
+    }
+
+    println("List: $basket")
+    println("Set:  $kinds")
+    println("Map:  $counts")
+    println(counts["banana"])      // null: no such key
+    println("apple" in kinds)
+}`,
       },
 
       // 5 ─────────────────────────────────────────────
@@ -1886,6 +2029,31 @@ switch (code) {
             h('div', { class: 'when' }, head, rows, h('div', { class: 'branch head' }, '}')),
             o);
         },
+        predict: {
+          "q": "Which branch does <code>describe(-7)</code> stop at?",
+          "options": [
+            "<code>0 -> \"zero\"</code>",
+            "<code>is Int</code>, giving \"negative\"",
+            "<code>else</code>"
+          ],
+          "a": 1,
+          "why": "Branches are checked top to bottom. -7 is not 0, but it is an Int, so the second branch wins and the rest are skipped."
+        },
+        play: `fun describe(x: Any): String = when (x) {
+    0 -> "zero"
+    is Int -> if (x > 0) "positive" else "negative"
+    is String -> "text, \${x.length} chars"   // smart cast to String
+    in listOf(true, false) -> "a Boolean"
+    else -> "something else"
+}
+
+fun main() {
+    val values = listOf<Any>(0, 42, -7, "Kotlin", true, 3.14)
+    for (x in values) {
+        println("$x -> \${describe(x)}")
+    }
+    // move the \`is Int\` line above \`0 -> "zero"\` and run again: what does 0 give?
+}`
       },
 
       // + classes ───────────────────────────────────
@@ -2121,6 +2289,36 @@ public final class User {
             h('div', { class: 'controls' }, calls.map(c => cmd(c.src, () => create(c)))),
             o, stage, con);
         },
+        predict: {
+          "q": "When <code>User(\"Ada\", 36)</code> is built, which runs first: the <code>isAdult</code> initializer or the <code>init</code> block?",
+          "options": [
+            "isAdult, because it is written above init",
+            "init, because init blocks always run first",
+            "They run at the same time"
+          ],
+          "a": 0,
+          "why": "Property initializers and init blocks run top to bottom, in the order they appear in the class."
+        },
+        play: `class User(val name: String, val age: Int = 18) {
+    val isAdult = age >= 18
+
+    init {
+        println("init: $name, age $age, adult $isAdult")
+    }
+
+    constructor(name: String, born: Int, year: Int) : this(name, year - born) {
+        println("secondary constructor body")
+    }
+}
+
+fun main() {
+    val a = User("Ada", 36)
+    val b = User("Bo")                     // change to User("Bo", age = 12)
+    val c = User(age = 20, name = "Cy")
+    val d = User("Dee", 1990, 2026)
+    println("\${b.name} is \${b.age}")
+    println(listOf(a, b, c, d).map { it.name })
+}`
       },
 
       // + properties ──────────────────────────────────
@@ -2232,46 +2430,48 @@ public final void setHealth(int value) { health = RangesKt.coerceIn(value, 0, 10
           { title: 'Java-style getter functions', bad: 'private var count = 0\nfun getCount(): Int = count', good: 'var count = 0\n    private set', why: 'A Kotlin property already has a getter. A hand-written <code>getCount()</code> is extra code, and callers have to remember to use the function instead of the property.' },
         ],
         visual(el) {
-          let health = 100, score = 0, busy = false;
-          const fH = h('span', { class: 'field' }, `health = ${health}`);
-          const fS = h('span', { class: 'field' }, `score = ${score}`);
-          const obj = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'player: Player'), fH, fS,
-            h('span', { class: 'obj-addr' }, 'score: private set'));
-          const calc = h('div', { class: 'kt', html: hl('set(value) { field = value.coerceIn(0, 100) }') });
-          const setter = h('div', { class: 'machine kt-pr-machine' }, h('div', { class: 'gear' }), calc);
-          const o = out();
-          async function setHealth(v) {
-            if (busy) return; busy = true;
-            calc.innerHTML = hl(`field = (${v}).coerceIn(0, 100)`);
-            setter.classList.add('busy');
-            await sleep(600);
-            setter.classList.remove('busy');
-            if (!el.isConnected) return;
-            health = Math.min(100, Math.max(0, v));
-            fH.textContent = `health = ${health}`; fH.className = 'field changed'; replay(fH, 'pop');
-            calc.innerHTML = hl('set(value) { field = value.coerceIn(0, 100) }');
-            say(o, `${hl(`player.health = ${v}`)} <span class="muted">// stored ${health}${health !== v ? ', the setter clamped it' : ''}</span>`);
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'stage' }, obj, setter),
-            h('div', { class: 'controls' },
-              cmd('player.health = 140', () => setHealth(140)),
-              cmd('player.health = -5', () => setHealth(-5)),
-              cmd('player.health = 60', () => setHealth(60)),
-              cmd('player.score = 999', () => {
-                if (busy) return;
-                replay(obj, 'shake'); fS.className = 'field kt-stale';
-                say(o, '<span class="bad">error:</span> the setter of score is private, so code outside Player can’t assign it');
-              }),
-              cmd('player.hit(10)', () => {
-                if (busy) return;
-                score += 10; fS.textContent = `score = ${score}`; fS.className = 'field changed'; replay(fS, 'pop');
-                say(o, `${hl('player.hit(10)')} <span class="good">ok:</span> <span class="muted">code inside Player may use the private setter</span>`);
-              })),
-            o);
-          say(o, 'Assign values from outside the class and watch the setter decide what gets stored.');
+          Lab.ui.codeStepper(el, {
+            code: 'class Player {\n    var health = 100\n        set(value) { field = value.coerceIn(0, 100) }\n    var score = 0\n        private set\n    fun hit(points: Int) { score += points }\n}\nval p = Player()\np.health = 140\np.health = -5\np.hit(10)\np.score = 999',
+            predict: {
+              q: 'Line 9 runs <code>p.health = 140</code>. What does <code>p.health</code> hold afterwards?',
+              options: ['140', '100', 'It does not compile: 140 is out of range'],
+              a: 1,
+              why: 'An assignment calls the setter. This one stores <code>value.coerceIn(0, 100)</code> in <code>field</code>, so 140 becomes 100.',
+            },
+            frames: [
+              { say: 'An assignment to a property is a call to its setter. Watch the call stack.' },
+              { line: 8, vars: { 'p.health': '100', 'p.score': '0' }, stack: ['main'], say: 'A new Player. Both properties start with their initial values.' },
+              { line: [9, 3], vars: { value: '140', 'p.health': '100' }, stack: ['main', 'health.set(140)'], say: '<code>p.health = 140</code> calls the custom setter with <code>value = 140</code>. It clamps the number and writes it to <code>field</code>, the stored value.' },
+              { line: [10, 3], vars: { value: '-5', 'p.health': '0' }, stack: ['main', 'health.set(-5)'], say: '-5 goes through the same setter and is stored as 0. Callers can never put a bad value in.' },
+              { line: [11, 6], vars: { value: null, 'p.score': '10' }, stack: ['main', 'Player.hit(10)'], say: '<code>hit</code> is inside the class, so it may use the private setter of <code>score</code>.' },
+              { line: 12, stack: ['main'], out: "error: Cannot assign to 'score': the setter is private in 'Player'", say: 'From outside, the getter is public but the setter is not. The compiler rejects the line.' },
+            ],
+          });
         },
+        play: `class Player {
+    var health = 100
+        set(value) {
+            field = value.coerceIn(0, 100)
+        }
+
+    var score = 0
+        private set
+
+    fun hit(points: Int) {
+        score += points
+    }
+}
+
+fun main() {
+    val p = Player()
+    p.health = 140
+    println("health = \${p.health}")   // the setter clamped it
+    p.health = -5
+    println("health = \${p.health}")
+    p.hit(10)
+    println("score = \${p.score}")
+    // p.score = 999   // remove the // and run: the setter is private
+}`,
       },
 
       // + inheritance ─────────────────────────────────
@@ -2282,7 +2482,7 @@ public final void setHealth(int value) { health = RangesKt.coerceIn(value, 0, 10
         body: `
 <p>In Kotlin, classes and their functions are <em>final</em> by default: nobody can extend or override them. Mark a class <code>open</code> to allow subclasses, and mark each function <code>open</code> that may be replaced. The subclass writes <code>override</code>.</p>
 <p>A subclass header calls the parent’s constructor: <code>class Dog : Animal()</code>. An <code>abstract</code> class can’t be created on its own, and its <code>abstract</code> members have no body, so every subclass must provide one. An <code>interface</code> has no constructor and holds no state, but it can give functions a default body. A class extends at most one class and can implement many interfaces.</p>
-<p>This lesson covers the syntax. When to use each one is in the OOP track. Switch the kind of <code>Animal</code> below and try the same three lines.</p>`,
+<p>This lesson covers the syntax. When to use each one is in the OOP track. Step through the class tree below and watch which body each call finds.</p>`,
         code: `interface Named {
     val name: String
     fun describe() = "I am $name"     // default body
@@ -2416,60 +2616,59 @@ public class Base { }`,
           { title: 'Giving an interface property a value', bad: 'interface Screen {\n    val title: String = "Home"\n}', good: 'interface Screen {\n    val title: String get() = "Home"\n}', why: 'Interfaces can’t store state, so property initializers are not allowed. A getter computes the default value on each read instead.' },
         ],
         visual(el) {
-          const dogOpen = 'class Dog : Animal() {\n    override fun sound() = "Woof"\n}';
-          const modes = {
-            final: { label: 'class Animal', tag: 'final', base: 'class Animal {\n    fun sound() = "..."\n}', dog: dogOpen, dogErr: 'This type is final, so it cannot be extended.' },
-            open: { label: 'open class Animal', tag: 'open', base: 'open class Animal {\n    open fun sound() = "..."\n}', dog: dogOpen },
-            abstract: { label: 'abstract class Animal', tag: 'abstract', base: 'abstract class Animal {\n    abstract fun sound(): String\n}', dog: dogOpen, makeErr: 'Cannot create an instance of an abstract class.' },
-            iface: { label: 'interface Animal', tag: 'interface', base: 'interface Animal {\n    fun sound() = "..."  // default\n}', dog: 'class Dog : Animal {\n    override fun sound() = "Woof"\n}', makeErr: 'Interface \'Animal\' does not have constructors.' },
-          };
-          let mode = 'open', dogOk = false;
-          const baseTag = h('span', { class: 'kt-tag' });
-          const baseCode = h('div', { class: 'kt' });
-          const base = h('div', { class: 'kt-card' }, baseTag, baseCode);
-          const dogTag = h('span', { class: 'kt-tag' }, 'subclass');
-          const dogCode = h('div', { class: 'kt' });
-          const dog = h('div', { class: 'kt-card' }, dogTag, dogCode);
-          const link = h('span', { class: 'kt-up' });
-          const stage = h('div', { class: 'stage kt-tree' }, base);
-          const o = out();
-          const modeBtns = Object.keys(modes).map(k => cmd(modes[k].label, () => { mode = k; paint(); say(o, `Animal is now ${modes[k].tag}. Declare Dog again.`); }));
-          function paint() {
-            const m = modes[mode];
-            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', Object.keys(modes)[i] === mode));
-            baseTag.textContent = m.tag; baseTag.className = 'kt-tag ' + m.tag;
-            baseCode.innerHTML = hl(m.base); replay(base, 'pop-soft');
-            dogOk = false; dog.remove(); link.remove();
-          }
-          function declare() {
-            const m = modes[mode];
-            dogCode.innerHTML = hl(m.dog);
-            link.textContent = mode === 'iface' ? '▲ implements' : '▲ extends';
-            stage.append(link, dog);
-            if (m.dogErr) {
-              dog.className = 'kt-card broken'; replay(dog, 'shake'); dogOk = false;
-              say(o, `<span class="bad">compile error:</span> ${m.dogErr} Mark Animal open.`);
-              return;
-            }
-            dog.className = 'kt-card drop-in'; dogOk = true;
-            say(o, `<span class="good">ok:</span> Dog ${mode === 'iface' ? 'implements' : 'extends'} Animal and overrides sound()`);
-          }
-          function makeBase() {
-            const m = modes[mode];
-            if (m.makeErr) { replay(base, 'shake'); say(o, `<span class="bad">compile error:</span> ${m.makeErr}`); return; }
-            replay(base, 'pop'); say(o, `${hl('Animal().sound()')} <span class="muted">returns</span> ${hl('"..."')}`);
-          }
-          function makeDog() {
-            if (!dogOk) { replay(stage, 'shake'); say(o, '<span class="bad">error:</span> Unresolved reference \'Dog\'. Declare it first.'); return; }
-            replay(dog, 'pop'); say(o, `${hl('Dog().sound()')} <span class="muted">returns</span> ${hl('"Woof"')}`);
-          }
-          paint(); declare();
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            stage,
-            h('div', { class: 'controls' }, cmd('class Dog : Animal…', declare), cmd('Animal().sound()', makeBase), cmd('Dog().sound()', makeDog)),
-            o);
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'named', label: 'Named<small>interface</small>', x: 50, y: 12, tone: 'warm' },
+              { id: 'animal', label: 'Animal<small>abstract class</small>', x: 50, y: 50, tone: 'warm', hidden: true },
+              { id: 'bird', label: 'Bird<small>2 overrides</small>', x: 17, y: 88, hidden: true },
+              { id: 'dog', label: 'Dog<small>1 override</small>', x: 83, y: 88, hidden: true },
+              { id: 'ghost', label: 'Animal(…)<small>error</small>', x: 50, y: 88, tone: 'err', hidden: true },
+            ],
+            predict: {
+              q: '<code>Dog</code> overrides only <code>sound()</code>. What does <code>Dog("Rex").move()</code> return?',
+              options: ['"walks", from Animal', 'Compile error: Dog must override <code>move()</code>', '"flies", like Bird'],
+              a: 0,
+              why: 'Only <code>abstract</code> members must be overridden. <code>move()</code> is <code>open</code> with a body, so Dog inherits Animal’s version.',
+            },
+            frames: [
+              { say: '<code>Named</code> is an interface: no constructor, no state, and <code>describe()</code> has a default body.' },
+              { show: ['animal'], add: [['animal', 'named', 'implements']], say: '<code>abstract class Animal</code> implements it. <code>sound()</code> has no body, <code>move()</code> is <code>open</code>, everything else is final.' },
+              { show: ['bird'], add: [['bird', 'animal', 'extends']], say: '<code>class Bird : Animal(name)</code> calls the parent constructor and overrides both functions.' },
+              { show: ['dog'], add: [['dog', 'animal', 'extends']], say: '<code>Dog</code> overrides only <code>sound()</code>, the one it must.' },
+              { hl: ['bird'], say: '<code>bird.move()</code>: Bird has its own override, so the answer is <code>"flies"</code>.' },
+              { hl: ['dog', 'animal'], add: [['dog', 'animal', 'move()', 'accent']], say: '<code>dog.move()</code>: Dog has none, so the call uses Animal’s <code>open</code> body: <code>"walks"</code>.' },
+              { hl: ['dog', 'animal', 'named'], add: [['animal', 'named', 'describe()', 'accent']], say: '<code>dog.describe()</code> goes all the way up to the interface default: <code>"I am Rex"</code>.' },
+              { show: ['ghost'], add: [['ghost', 'animal', '', 'err']], hl: ['ghost'], say: '<code>Animal("Ghost")</code> fails: an abstract class can’t be created on its own. Without <code>open</code> or <code>abstract</code>, <code>class Dog : Animal</code> would fail too.' },
+            ],
+          });
         },
+        play: `interface Named {
+    val name: String
+    fun describe() = "I am $name"          // default body
+}
+
+abstract class Animal(override val name: String) : Named {
+    abstract fun sound(): String
+    open fun move() = "walks"
+}
+
+class Bird(name: String) : Animal(name) {
+    override fun sound() = "Tweet"
+    override fun move() = "flies"
+}
+
+class Dog(name: String) : Animal(name) {
+    override fun sound() = "Woof"            // move() is inherited
+}
+
+fun main() {
+    val animals: List<Animal> = listOf(Bird("Robin"), Dog("Rex"))
+    for (a in animals) {
+        println("\${a.describe()}. \${a.name} says \${a.sound()} and \${a.move()}.")
+    }
+    // add: val ghost = Animal("Ghost")  -> an abstract class can't be created
+}`,
       },
 
       // + objects ─────────────────────────────────────
@@ -2635,49 +2834,60 @@ public final class Analytics {
           { title: 'Companion functions Java can’t see nicely', bad: 'class DetailFragment : Fragment() {\n    companion object {\n        fun newInstance(id: String) = DetailFragment().apply {\n            arguments = bundleOf("id" to id)\n        }\n    }\n}\n// Java: DetailFragment.Companion.newInstance(id)', good: 'class DetailFragment : Fragment() {\n    companion object {\n        @JvmStatic\n        fun newInstance(id: String) = DetailFragment().apply {\n            arguments = bundleOf("id" to id)\n        }\n    }\n}\n// Java: DetailFragment.newInstance(id)', why: 'Companion members are instance methods of the hidden <code>Companion</code> object. <code>@JvmStatic</code> also generates a real static method, so Java callers use the same short form as Kotlin.' },
         ],
         visual(el) {
-          let events = 0;
-          const trackers = [];
-          const count = h('span', { class: 'field changed' }, 'events = 0');
-          const caller = h('span', { class: 'obj-addr' }, 'not used yet');
-          const hub = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'object Analytics'), count, caller);
-          const pile = h('div', { class: 'kt-pile' });
-          const users = h('div', { class: 'kt-pile' });
-          const zone = (title, ...kids) => h('div', { class: 'kt-zone' }, h('span', { class: 'kt-zone-title' }, title), ...kids);
-          const o = out();
-          function log(screen, name) {
-            events++;
-            count.textContent = `events = ${events}`; replay(count, 'pop');
-            caller.textContent = `last call from ${screen}`;
-            replay(hub, 'cmp');
-            say(o, `${hl(`Analytics.log("${name}")`)} <span class="muted">from ${screen}:</span> ${name} (#${events})  <span class="muted">// one shared object</span>`);
-          }
-          function tracker() {
-            const t = h('div', { class: 'obj drop-in' }, h('span', { class: 'obj-name' }, 'Tracker()'), h('span', { class: 'field' }, 'events = 1'));
-            pile.append(t); trackers.push(t);
-            if (trackers.length > 3) trackers.shift().remove();
-            say(o, `${hl('Tracker().log()')} <span class="muted">// a new instance each time, so its count is always 1</span>`);
-          }
-          let guests = 0;
-          function guest() {
-            guests++;
-            users.append(h('span', { class: 'chip drop-in' }, 'User("guest")'));
-            if (users.children.length > 3) users.firstElementChild.remove();
-            say(o, `${hl('User.guest()')} <span class="muted">// factory on the class name; User(...) itself is private</span>`);
-          }
-          el.append(
-            h('div', { class: 'stage' },
-              zone('object: one instance', hub),
-              zone('class: new instance per call', pile),
-              zone('companion object', h('div', { class: 'kt', html: hl('User.guest()') }), users)),
-            h('div', { class: 'controls' },
-              cmd('HomeScreen: Analytics.log("open")', () => log('HomeScreen', 'open')),
-              cmd('CartScreen: Analytics.log("buy")', () => log('CartScreen', 'buy')),
-              cmd('Tracker().log()', tracker),
-              cmd('User.guest()', guest),
-              cmd('Analytics === Analytics', () => { replay(hub, 'cmp'); say(o, `${hl('Analytics === Analytics')} <span class="muted">is</span> ${hl('true')}  <span class="muted">// the very same instance</span>`); })),
-            o);
-          log('HomeScreen', 'open');
+          Lab.ui.graph(el, {
+            height: 290,
+            nodes: [
+              { id: 'home', label: 'HomeScreen', x: 17, y: 14, tone: 'muted' },
+              { id: 'cart', label: 'CartScreen', x: 83, y: 14, tone: 'muted' },
+              { id: 'an', label: 'Analytics<small>object, one instance</small>', x: 50, y: 50, tone: 'ok', hidden: true },
+              { id: 't1', label: 'Tracker #1<small>events = 1</small>', x: 17, y: 86, hidden: true },
+              { id: 't2', label: 'Tracker #2<small>events = 1</small>', x: 83, y: 86, hidden: true },
+            ],
+            predict: {
+              q: 'HomeScreen calls <code>Analytics.log("open")</code>, then CartScreen calls <code>Analytics.log("buy")</code>. What does the second call print?',
+              options: ['<code>buy (#1)</code>: each screen has its own Analytics', '<code>buy (#2)</code>: both screens reach the same object', 'Nothing: Analytics has to be created with <code>Analytics()</code> first'],
+              a: 1,
+              why: 'An <code>object</code> declaration is a class with exactly one instance. Every use of the name refers to it, so its counter is shared.',
+            },
+            frames: [
+              { say: 'Two screens, and nothing has used <code>Analytics</code> yet. It does not exist so far.' },
+              { show: ['an'], add: [['home', 'an', 'log("open") #1', 'ok']], hl: ['an'], say: 'The first use creates the instance, safely across threads. It prints <code>open (#1)</code>.' },
+              { add: [['cart', 'an', 'log("buy") #2', 'ok']], hl: ['an'], say: 'CartScreen names <code>Analytics</code> too and gets the same instance. Its counter is now 2: <code>buy (#2)</code>.' },
+              { show: ['t1'], add: [['home', 't1', 'Tracker()']], say: 'Compare a normal class. <code>Tracker()</code> builds a new object every time it is called.' },
+              { show: ['t2'], add: [['cart', 't2', 'Tracker()']], say: 'A second <code>Tracker()</code> is another object with its own counter, so it says #1 again.' },
+              { hl: ['an'], say: '<code>Analytics === Analytics</code> is always <code>true</code>. That shared state is why a singleton must never hold a <code>Context</code> or a screen.' },
+            ],
+          });
         },
+        play: `object Analytics {
+    private var events = 0
+    init { println("Analytics created") }
+
+    fun log(name: String) {
+        events++
+        println("Analytics: $name (#$events)")
+    }
+}
+
+class Tracker {
+    private var events = 0
+    fun log(name: String) { events++; println("Tracker: $name (#$events)") }
+}
+
+class User private constructor(val name: String) {
+    companion object {
+        fun guest() = User("guest")
+    }
+}
+
+fun main() {
+    println("main starts")
+    Analytics.log("open")
+    Analytics.log("buy")         // the same object, so #2
+    Tracker().log("open")
+    Tracker().log("buy")         // a new object, so #1 again
+    println(User.guest().name)   // try User("x"): the constructor is private
+}`,
       },
 
       // + enums ───────────────────────────────────────
@@ -2899,6 +3109,35 @@ public final class Light extends Enum<Light> {
             chips, o);
           say(o, `light = ${hl('Light.RED')}  <span class="muted">// seconds = 30, ordinal = 0</span>`);
         },
+        predict: {
+          "q": "What does <code>Light.valueOf(\"BLUE\")</code> do?",
+          "options": [
+            "Returns null",
+            "Throws IllegalArgumentException",
+            "Does not compile"
+          ],
+          "a": 1,
+          "why": "<code>valueOf</code> looks an entry up by name at run time. With no match it throws, so use <code>entries.firstOrNull</code> when the name may be wrong."
+        },
+        play: `enum class Light(val seconds: Int) {
+    RED(30), YELLOW(5), GREEN(25);
+
+    fun next(): Light = when (this) {
+        RED -> GREEN
+        GREEN -> YELLOW
+        YELLOW -> RED
+    }
+}
+
+fun main() {
+    println(Light.entries)
+    var light = Light.RED
+    repeat(4) {
+        println("\${light.name} (ordinal \${light.ordinal}) for \${light.seconds} s")
+        light = light.next()
+    }
+    println(Light.valueOf("GREEN"))   // change "GREEN" to "BLUE" and run again
+}`
       },
 
       // 6 ─────────────────────────────────────────────
@@ -2908,7 +3147,7 @@ public final class Light extends Enum<Light> {
         tagline: 'Classes that compare by their values.',
         body: `
 <p>Put <code>data</code> in front of a class whose job is to hold values, and Kotlin writes the boring parts for you: <code>equals()</code> compares the fields, <code>toString()</code> prints them, and <code>copy()</code> makes a new object with some fields changed.</p>
-<p>A plain class compares by identity: two objects are equal only when they are the very same object in memory. Switch <code>data</code> off below to see the difference.</p>
+<p>A plain class compares by identity: two objects are equal only when they are the very same object in memory. The demo below compares two equal-looking objects both ways.</p>
 <p>On Android you will use data classes for screen state and API responses. Because <code>copy()</code> makes a new object instead of editing the old one, Compose can tell that something changed.</p>`,
         code: `data class User(val name: String, val age: Int)
 
@@ -3063,52 +3302,52 @@ override fun toString() = "User(name=$name, age=$age)"`,
           { title: 'Secrets in toString', bad: 'data class Login(val user: String, val password: String)\n\nLog.d("Auth", "Sending $login")', good: 'data class Login(val user: String, val password: String) {\n    override fun toString() = "Login(user=$user, password=***)"\n}', why: 'The generated <code>toString</code> prints every constructor property, so passwords and tokens end up in logs and crash reports. Override it for sensitive data.' },
         ],
         visual(el) {
-          let isData = true, addr = 0x1b6d3586, objs;
-          const decl = h('div', { class: 'kt' });
-          const stage = h('div', { class: 'stage' });
-          const o = out();
-          const toggle = h('input', { type: 'checkbox', id: 'data-toggle', checked: true });
-          const card = (name, u, changed, anim) => (u.el = h('div', { class: 'obj' + (anim ? ' drop-in' : '') },
-            h('span', { class: 'obj-name' }, `val ${name}`),
-            h('span', { class: 'field' }, `name = "${u.name}"`),
-            h('span', { class: changed ? 'field changed' : 'field' }, `age = ${u.age}`),
-            h('span', { class: 'obj-addr' }, '@' + u.addr.toString(16))));
-          const reset = () => {
-            objs = { a: { name: 'Ada', age: 36, addr } };
-            stage.replaceChildren(card('a', objs.a));
-            decl.innerHTML = hl(`${isData ? 'data ' : ''}class User(val name: String, val age: Int)`);
-            say(o, 'Create b and c, then compare them with a.');
-          };
-          const make = (k, u, src, changed) => {
-            if (objs[k]) { replay(objs[k].el, 'shake'); return; }
-            objs[k] = { name: u.name, age: u.age, addr: addr + (k === 'b' ? 0x2f0 : 0x5e0) };
-            stage.append(card(k, objs[k], changed, true));
-            say(o, hl(src));
-          };
-          const cmp = k => {
-            const a = objs.a, x = objs[k];
-            if (!x) { say(o, `<span class="bad">error:</span> Unresolved reference '${k}'. Create it first.`); return; }
-            replay(a.el, 'cmp'); replay(x.el, 'cmp');
-            const eq = isData ? a.name === x.name && a.age === x.age : a === x;
-            const why = isData ? (eq ? 'every field matches' : 'age is different') : 'different objects in memory, and a plain class compares identity';
-            say(o, `${hl(`a == ${k}`)} <span class="muted">is</span> ${hl(String(eq))}  <span class="muted">// ${why}</span>`);
-          };
-          toggle.addEventListener('change', () => { isData = toggle.checked; reset(); });
-          reset();
-          el.append(
-            h('label', { class: 'switch', for: 'data-toggle' }, toggle, 'data keyword'), decl,
-            stage,
-            h('div', { class: 'controls' },
-              cmd('val b = User("Ada", 36)', () => make('b', { name: 'Ada', age: 36 }, 'val b = User("Ada", 36)')),
-              cmd('val c = a.copy(age = 37)', () => {
-                if (!isData) { say(o, '<span class="bad">compile error:</span> Unresolved reference \'copy\'. Only data classes get copy().'); return; }
-                make('c', { name: objs.a.name, age: 37 }, 'val c = a.copy(age = 37)', true);
-              }),
-              cmd('a == b', () => cmp('b')),
-              cmd('a == c', () => cmp('c')),
-              cmd('println(a)', () => say(o, isData ? 'User(name=Ada, age=36)' : `User@${objs.a.addr.toString(16)}  <span class="muted">// class name + hash, not very useful</span>`))),
-            o);
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'a', label: 'val a', x: 17, y: 12, tone: 'muted' },
+              { id: 'b', label: 'val b', x: 83, y: 12, tone: 'muted', hidden: true },
+              { id: 'c', label: 'val c', x: 50, y: 12, tone: 'muted', hidden: true },
+              { id: 'oa', label: 'User@1b6d<small>Ada, 36</small>', x: 17, y: 52 },
+              { id: 'ob', label: 'User@2f0a<small>Ada, 36</small>', x: 83, y: 52, hidden: true },
+              { id: 'oc', label: 'User@5e01<small>Ada, 37</small>', x: 17, y: 88, hidden: true },
+            ],
+            predict: {
+              q: '<code>a</code> and <code>b</code> are two separate <code>User("Ada", 36)</code> objects of a <code>data class</code>. What are <code>a == b</code> and <code>a === b</code>?',
+              options: ['true and true', 'true and false', 'false and false'],
+              a: 1,
+              why: '<code>==</code> calls <code>equals()</code>, which a data class generates to compare the fields. <code>===</code> asks whether both names point at the very same object.',
+            },
+            frames: [
+              { add: [['a', 'oa']], say: '<code>data class User(val name: String, val age: Int)</code>. <code>val a = User("Ada", 36)</code> points at one object.' },
+              { show: ['b', 'ob'], add: [['b', 'ob']], say: '<code>val b = User("Ada", 36)</code> builds a second object with the same values. Two boxes in memory.' },
+              { add: [['oa', 'ob', '== true', 'ok']], hl: ['oa', 'ob'], say: '<code>a == b</code> calls the generated <code>equals()</code>. Every field matches, so it is <code>true</code>.' },
+              { add: [['oa', 'ob', '=== false', 'err']], hl: ['oa', 'ob'], say: '<code>a === b</code> compares identity. They are different objects, so it is <code>false</code>.' },
+              { remove: [['oa', 'ob']], show: ['c', 'oc'], add: [['c', 'oc'], ['oa', 'oc', 'copy(age = 37)', 'accent']], say: '<code>val c = a.copy(age = 37)</code> builds a new object with one field changed. <code>a</code> itself is untouched.' },
+              { add: [['oa', 'oc', '== false', 'err']], hl: ['oa', 'oc'], say: '<code>a == c</code> is <code>false</code>: the ages differ. <code>println(c)</code> prints <code>User(name=Ada, age=37)</code>.' },
+              { remove: [['oa', 'oc']], add: [['oa', 'ob', '== false', 'err']], hl: ['oa', 'ob'], say: 'Remove <code>data</code> and <code>==</code> falls back to identity, so even a and b are not equal, <code>copy()</code> no longer exists and <code>println(a)</code> shows <code>User@1b6d</code>.' },
+            ],
+          });
         },
+        play: `data class User(val name: String, val age: Int)
+
+class Plain(val name: String, val age: Int)
+
+fun main() {
+    val a = User("Ada", 36)
+    val b = User("Ada", 36)
+    val c = a.copy(age = 37)
+
+    println(a == b)    // same field values
+    println(a === b)   // but two different objects
+    println(a == c)
+    println(a)
+    println(c)
+
+    println(Plain("Ada", 36) == Plain("Ada", 36))   // plain classes compare identity
+    println(Plain("Ada", 36))
+    // remove \`data\` from User: copy() stops compiling. Delete that line and run again
+}`,
       },
 
       // 7 ─────────────────────────────────────────────
@@ -3290,6 +3529,36 @@ public final class StringExtKt {
             h('div', { class: 'controls' }, exts.map(x => cmd(x.name, () => use(x)))),
             o);
         },
+        predict: {
+          "q": "You declare <code>fun String.shout()</code>. What happens to the String class itself?",
+          "options": [
+            "It gains a new method",
+            "Nothing: shout is a static function that takes the string",
+            "Kotlin makes a hidden subclass of String"
+          ],
+          "a": 1,
+          "why": "An extension compiles to a static function whose first parameter is the receiver. The class is never changed."
+        },
+        play: `fun String.shout(): String = uppercase() + "!"
+fun String.isPalindrome(): Boolean = this == reversed()
+fun String.initials(): String = split(" ").map { it.first() }.joinToString("")
+
+open class Shape
+class Circle : Shape()
+
+fun Shape.label() = "a shape"
+fun Circle.label() = "a circle"
+
+fun main() {
+    val word = "level"            // change "level" to "Kotlin"
+    println(word.shout())
+    println(word.isPalindrome())
+    println("Ada Lovelace".initials())
+
+    val s: Shape = Circle()
+    println(s.label())            // chosen by the declared type, not the object
+    println(Circle().label())
+}`
       },
 
       // 8 ─────────────────────────────────────────────
@@ -3493,6 +3762,36 @@ public inline fun <T, R> T.let(block: (T) -> R): R {
           el.append(grid, tip, o);
           pick('let');
         },
+        predict: {
+          "q": "Which scope function refers to the object as <code>it</code> and returns the object itself?",
+          "options": [
+            "let",
+            "run",
+            "apply",
+            "also"
+          ],
+          "a": 3,
+          "why": "<code>also</code> passes the object as <code>it</code> and hands the same object back, so it fits side effects like logging."
+        },
+        play: `class Person {
+    var age = 0
+    override fun toString() = "Person(age=$age)"
+}
+
+fun main() {
+    val name = "Kotlin"
+    println(name.let { it.length })        // it, returns the block result
+    println(name.run { length })           // this, returns the block result
+    println(with(name) { uppercase() })
+
+    val p = Person().apply { age = 30 }    // this, returns the object
+    println(p)
+    val q = p.also { println("log: \${it.age}") }   // it, returns the object
+    println(q === p)
+
+    val r = 5.let { it * 2 }.also { it + 1 }.run { this + 3 }
+    println(r)   // change .also to .let and run again
+}`
       },
 
       // 9 ─────────────────────────────────────────────
@@ -3769,6 +4068,36 @@ throw new NoWhenBranchMatchedException();`,
             o);
           render(states[1]);
         },
+        predict: {
+          "q": "You delete the <code>is UiState.Error</code> branch and there is no <code>else</code>. When do you find out?",
+          "options": [
+            "When an Error reaches the screen and the app crashes",
+            "At build time: the when is no longer exhaustive",
+            "Never: the screen just stays empty"
+          ],
+          "a": 1,
+          "why": "The compiler knows every subtype of a sealed type, so it checks that a <code>when</code> used as an expression covers all of them."
+        },
+        play: `sealed interface UiState {
+    data object Loading : UiState
+    data class Success(val items: List<String>) : UiState
+    data class Error(val message: String) : UiState
+}
+
+fun render(state: UiState): String = when (state) {
+    UiState.Loading -> "spinner"
+    is UiState.Success -> "list with \${state.items.size} items"
+    is UiState.Error -> "error: \${state.message}"   // delete this line: the when stops compiling
+}
+
+fun main() {
+    val states = listOf(
+        UiState.Loading,
+        UiState.Success(listOf("Kotlin", "Compose")),
+        UiState.Error("No connection"),
+    )
+    for (s in states) println("$s -> \${render(s)}")
+}`
       },
 
       // + exceptions ──────────────────────────────────
@@ -4009,6 +4338,37 @@ try {
               h('div', { class: 'box val' }, h('span', { class: 'box-tag', html: hl('age') }), well)),
             o, con);
         },
+        predict: {
+          "q": "The input is <code>\"abc\"</code>. Which blocks run?",
+          "options": [
+            "try, then catch, then finally, and then require fails",
+            "try, then finally: catch is skipped",
+            "try, then catch: finally is skipped after a throw"
+          ],
+          "a": 0,
+          "why": "<code>toInt()</code> throws, so catch gives -1. finally always runs. Then <code>require(age >= 0)</code> throws IllegalArgumentException."
+        },
+        play: `fun parseAge(input: String): Int {
+    val age = try {
+        input.trim().toInt()
+    } catch (e: NumberFormatException) {
+        -1
+    } finally {
+        println("parsed '$input'")
+    }
+    require(age >= 0) { "Age must be a number, got '$input'" }
+    return age
+}
+
+fun main() {
+    for (input in listOf("42", " 7 ", "abc")) {   // add "-3" to the list
+        try {
+            println("age = \${parseAge(input)}")
+        } catch (e: IllegalArgumentException) {
+            println("caught: \${e.message}")
+        }
+    }
+}`
       },
     ],
   });

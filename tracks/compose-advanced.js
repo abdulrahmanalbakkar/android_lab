@@ -494,54 +494,26 @@ PriceLabel(state.product.price.formatted)`,
           },
         ],
         visual(el) {
-          let strong = true, busy = false, parentRuns = 1;
-          const rows = [
-            { sig: 'Title(title: String)', arg: 'title = "Inbox"', stable: true, fresh: false },
-            { sig: 'Tags(tags: List<String>)', arg: 'listOf("kotlin", "ui"), new list each run', stable: false, fresh: true },
-            { sig: 'Tags(tags: ImmutableList<String>)', arg: 'persistentListOf("kotlin", "ui"), new but equal', stable: true, fresh: true },
-            { sig: 'Profile(user: User)', arg: 'class User(var name), remembered, same instance', stable: false, fresh: false },
-          ];
-          for (const r of rows) {
-            r.runs = 1;
-            r.badge = h('span', { class: 'cx-badge', title: 'Times this composable has run' }, '1');
-            r.status = h('span', { class: 'cx-status' }, 'composed');
-            r.el = h('div', { class: 'cx-row' }, h('span', { class: 'cx-sig' }, r.sig), r.badge,
-              h('div', { class: 'cx-meta' }, h('span', { class: `cx-tag ${r.stable ? 'cx-stable' : 'cx-unstable'}` }, r.stable ? 'stable' : 'unstable'), h('span', { class: 'cx-arg' }, r.arg)),
-              r.status);
-          }
-          const decide = r => {
-            if (r.stable) return [false, 'equals() is true, skipped'];
-            if (!strong) return [true, 'unstable and not skippable, ran again'];
-            return r.fresh ? [true, '=== is false (new instance), ran again'] : [false, '=== is true (same instance), skipped'];
-          };
-          const pBadge = h('span', { class: 'cx-badge' }, '1');
-          const parent = h('div', { class: 'cx-parent' }, h('span', {}, 'Feed()  reads refresh'), pBadge);
-          const o = out('Make the parent recompose and see which children skip.');
-          const sw = h('input', { type: 'checkbox', id: 'cx-strong', checked: true, onchange() {
-            strong = this.checked;
-            say(o, strong ? 'Strong skipping on: unstable params are compared with ===.' : 'Strong skipping off (the pre-2.0.20 default): any unstable param makes the composable run every time.');
-          } });
-          async function run() {
-            if (busy) return; busy = true;
-            rows.forEach(r => { r.el.classList.remove('cx-ran', 'cx-skipped'); r.status.textContent = ''; });
-            bump(pBadge, ++parentRuns); replay(parent, 'cx-flash');
-            say(o, `${hl('refresh++')} <span class="muted">// Feed read it, so Feed runs and calls each child</span>`);
-            let ran = 0;
-            for (const r of rows) {
-              await sleep(380);
-              if (!el.isConnected) return;
-              const [rerun, why] = decide(r);
-              r.status.textContent = why;
-              if (rerun) { ran++; r.el.classList.add('cx-ran'); bump(r.badge, ++r.runs); replay(r.el, 'cx-flash'); }
-              else r.el.classList.add('cx-skipped');
-            }
-            say(o, `Feed ran. <span class="good">${4 - ran} of 4</span> children skipped, <span class="bad">${ran}</span> ran again${strong ? '' : '. Turn strong skipping back on and compare'}.`);
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'cx-tree' }, parent, h('div', { class: 'cx-kids' }, rows.map(r => r.el))),
-            h('div', { class: 'controls cx-ctl' }, cmd('refresh++', run), h('label', { class: 'switch', for: 'cx-strong' }, sw, 'Strong skipping')),
-            o);
+          Lab.ui.codeStepper(el, {
+            code: '// class User(var name: String), remembered once\n@Composable\nfun Inbox(count: Int, user: User) {\n    Title(title = "Inbox")\n    TagRow(tags = listOf("kotlin", "ui"))\n    TagChips(tags = persistentListOf("kotlin", "ui"))\n    Profile(user = user)\n    Badge(count = count)\n}',
+            varsTitle: 'Children this run',
+            predict: {
+              q: '<code>count</code> goes from 3 to 4, so <code>Inbox</code> runs again. Does <code>TagRow(tags = listOf("kotlin", "ui"))</code> skip?',
+              options: ['Yes, the new list has the same contents', 'No: <code>List</code> is unstable, so it is compared by instance, and <code>listOf</code> built a new one', 'No: a child never skips when its parent runs'],
+              a: 1,
+              why: 'Under strong skipping an unstable parameter is compared with <code>===</code>. A fresh list is a different object, even when it holds the same strings.',
+            },
+            frames: [
+              { say: 'Strong skipping is on. <code>Inbox</code> ran once with <code>count = 3</code>. Now <code>count</code> becomes 4.' },
+              { line: 3, vars: { count: '3 → 4' }, say: 'A parameter changed, so <code>Inbox</code> runs again. Each child call now compares its arguments with last time’s.' },
+              { line: 4, vars: { Title: 'skipped' }, say: '<code>String</code> is stable, so it is compared with <code>equals()</code>. <code>"Inbox" == "Inbox"</code>: skip.' },
+              { line: 5, vars: { TagRow: 'runs' }, say: '<code>List</code> is unstable, so it is compared by instance. <code>listOf</code> built a new list, so <code>===</code> is false and <code>TagRow</code> runs.' },
+              { line: 6, vars: { TagChips: 'skipped' }, say: '<code>ImmutableList</code> is stable, so <code>equals()</code> decides. A new list, but equal contents: skip.' },
+              { line: 7, vars: { Profile: 'skipped' }, say: '<code>User</code> has a <code>var</code>, so it is unstable. It is the same remembered object, so <code>===</code> is true: skip.' },
+              { line: 8, vars: { Badge: 'runs' }, say: '<code>Int</code> is stable and 3 is not 4, so <code>Badge</code> runs. This is the one that should.' },
+              { line: 9, out: 'ran: Inbox, TagRow, Badge\nskipped: Title, TagChips, Profile', say: '<code>TagRow</code> ran for nothing. Pass an <code>ImmutableList</code>, or <code>remember</code> the list so it stays the same instance.' },
+            ],
+          });
         },
       },
 
@@ -740,6 +712,12 @@ fun SubmitButton(form: SignUpFormState, onSubmit: () -> Unit) {
             why: 'The result changes every time an input does, so there is no recomposition to save. You only add bookkeeping. Save <code>derivedStateOf</code> for answers that change less often than their inputs.',
           },
         ],
+        predict: {
+          q: 'You scroll from item 0 to item 6. Which card counts more recompositions?',
+          options: ['The one that reads <code>firstVisibleItemIndex</code> directly', 'The one that reads <code>derivedStateOf { index > 0 }</code>', 'Both count the same'],
+          a: 0,
+          why: 'The direct reader hears every index change. The derived state only tells its reader when <code>index > 0</code> flips, which happens once.',
+        },
         visual(el) {
           const ITEM = 40, MAX = 14;
           let index = 0, direct = 1, derived = 1, shown = false, busy = false;
@@ -926,6 +904,12 @@ TopBar(showTitle = showTitle)`,
             why: 'The direct read recomposes on every pixel even though the answer flips once. <code>derivedStateOf</code> keeps the busy read out of composition.',
           },
         ],
+        predict: {
+          q: 'The ball moves with <code>Modifier.offset { IntOffset(0, offsetY) }</code>, the lambda form. Which phases run on every frame?',
+          options: ['Composition, layout and drawing', 'Layout and drawing', 'Only drawing'],
+          a: 1,
+          why: 'The lambda reads the state during layout. Compose reruns the phase where the read happened and the ones after it, so composition is skipped.',
+        },
         visual(el) {
           const FRAMES = 14;
           const modes = [
@@ -1190,6 +1174,12 @@ Card(
             why: 'All DrawScope sizes are pixels. On a high-density phone 8 px is about 3 dp. Convert with <code>toPx()</code>, or use fractions of <code>size</code>.',
           },
         ],
+        predict: {
+          q: '<code>drawRect</code> runs first and <code>drawCircle</code> second, over the same spot. Which one ends up on top?',
+          options: ['The rectangle, because it was drawn first', 'The circle: each call paints over what came before', 'Whichever shape is smaller'],
+          a: 1,
+          why: 'A <code>DrawScope</code> paints in call order, like layers of paint. The last call is on top.',
+        },
         visual(el) {
           const OPS = [
             { src: 'drawRect(primary, size = size / 2f)', svg: '<rect x="0" y="0" width="100" height="100" style="fill:var(--accent)"/>', note: 'starts at the origin, top-left, and covers a quarter' },
@@ -1461,63 +1451,32 @@ fun AvatarBadge(initials: String) {
           },
         ],
         visual(el) {
-          const nodes = [
-            { id: 'root', label: 'compositionLocalOf { Color.Black }  // default', kind: 'def', depth: 0, color: 'var(--ink)', name: 'the default' },
-            { id: 'col', label: 'Column {', depth: 1, up: 'root' },
-            { id: 'r1', label: 'Text("Title")', kind: 'reader', depth: 2, up: 'col', pv: 'Title' },
-            { id: 'p1', label: 'CompositionLocalProvider(LocalContentColor provides Purple) {', kind: 'prov', depth: 2, up: 'col', color: 'var(--accent)', name: 'Purple', on: true },
-            { id: 'r2', label: 'Text("Subtitle")', kind: 'reader', depth: 3, up: 'p1', pv: 'Subtitle' },
-            { id: 'box', label: 'Box {', depth: 3, up: 'p1' },
-            { id: 'p2', label: 'CompositionLocalProvider(LocalContentColor provides Orange) {', kind: 'prov', depth: 4, up: 'box', color: 'var(--warm)', name: 'Orange', on: true },
-            { id: 'r3', label: 'Icon(Icons.Filled.Star)', kind: 'reader', depth: 5, up: 'p2', pv: 'Star' },
-            { id: 'r4', label: 'Text("Body")', kind: 'reader', depth: 4, up: 'box', pv: 'Body' },
-          ];
-          const by = Object.fromEntries(nodes.map(n => [n.id, n]));
-          let busy = false;
-          const o = out('Tap a Text or Icon to watch its LocalContentColor.current lookup.');
-          const resolve = n => { let p = by[n.up]; while (p && !(p.kind === 'def' || (p.kind === 'prov' && p.on))) p = by[p.up]; return p; };
-          const pv = {
-            r1: h('p', {}, 'Title'), r2: h('p', {}, 'Subtitle'),
-            r3: h('span', { class: 'cx-star', 'aria-label': 'Star icon' }, '★'), r4: h('p', {}, 'Body'),
-          };
-          const mini = h('div', { class: 'cx-mini', role: 'img', 'aria-label': 'Rendered preview' }, h('span', { class: 'cx-label' }, 'Preview'), pv.r1, pv.r2, h('div', { class: 'cx-mini-box' }, pv.r3, pv.r4));
-          for (const n of nodes) {
-            const pad = `margin-left:${Math.min(n.depth, 5) * 12}px;width:calc(100% - ${Math.min(n.depth, 5) * 12}px)`;
-            const label = h('span', { class: 'cx-tn-label' }, n.label);
-            if (n.kind === 'reader') {
-              n.sw = h('span', { class: 'cx-sw' }); n.res = h('span', { class: 'cx-res' }, n.sw, '');
-              n.el = h('button', { class: 'cx-tn', style: pad, onclick: () => lookup(n) }, label, n.res);
-            } else if (n.kind === 'prov') {
-              const box = h('input', { type: 'checkbox', id: `cx-${n.id}`, checked: true, onchange() { if (busy) { this.checked = n.on; return; } n.on = this.checked; n.el.classList.toggle('cx-off', !n.on); nodes.forEach(x => x.el.classList.remove('cx-walk', 'cx-found')); paint(); say(o, `${n.name} provider ${n.on ? 'restored' : 'removed'}. Readers below it now fall back to the next provider up.`); } });
-              n.el = h('div', { class: 'cx-tn cx-prov', style: pad }, label, h('label', { class: 'switch', for: `cx-${n.id}` }, box, 'on'));
-            } else n.el = h('div', { class: `cx-tn${n.kind === 'def' ? ' cx-def' : ''}`, style: pad }, label);
-          }
-          function paint() {
-            for (const n of nodes) if (n.kind === 'reader') {
-              const p = resolve(n);
-              n.sw.style.background = p.color; n.res.lastChild.textContent = p.name;
-              pv[n.id].style.color = p.color;
-            }
-          }
-          async function lookup(n) {
-            if (busy) return; busy = true;
-            nodes.forEach(x => x.el.classList.remove('cx-walk', 'cx-found'));
-            const target = resolve(n);
-            n.el.classList.add('cx-walk');
-            let p = by[n.up], hops = 0;
-            while (p) {
-              await sleep(330);
-              if (!el.isConnected) return;
-              if (p === target) { p.el.classList.add('cx-found'); replay(p.el, 'pop-soft'); break; }
-              p.el.classList.add('cx-walk'); hops++;
-              p = by[p.up];
-            }
-            replay(pv[n.id], 'pop');
-            say(o, `${hl(n.label)} <span class="muted">reads LocalContentColor.current, walks up ${hops + 1} level${hops ? 's' : ''} and gets</span> <span class="good">${target.name}</span>`);
-            busy = false;
-          }
-          paint();
-          el.append(h('div', { class: 'cx-split' }, h('div', { class: 'cx-tree' }, nodes.map(n => n.el)), mini), o);
+          Lab.ui.graph(el, {
+            height: 320,
+            nodes: [
+              { id: 'def', label: 'factory default<small>Color.Black</small>', x: 17, y: 10, tone: 'muted' },
+              { id: 'col', label: 'Column', x: 50, y: 10 },
+              { id: 't1', label: 'Text<small>"Title"</small>', x: 17, y: 38 },
+              { id: 'pp', label: 'Provider<small>Purple</small>', x: 83, y: 38, tone: 'accent' },
+              { id: 't2', label: 'Text<small>"Subtitle"</small>', x: 83, y: 66 },
+              { id: 'po', label: 'Provider<small>Orange</small>', x: 50, y: 66, tone: 'warm' },
+              { id: 'ic', label: 'Icon', x: 50, y: 92 },
+            ],
+            predict: {
+              q: '<code>Text("Title")</code> sits above both providers. What does <code>LocalContentColor.current</code> give it?',
+              options: ['Purple', 'Orange', 'The default from the factory, Black'],
+              a: 2,
+              why: 'A read looks up the tree for the nearest provider. With none above it, it gets the default from <code>compositionLocalOf { }</code>.',
+            },
+            frames: [
+              { add: [['col', 't1'], ['col', 'pp'], ['pp', 't2'], ['pp', 'po'], ['po', 'ic']], say: 'A small tree. Two <code>CompositionLocalProvider</code>s set <code>LocalContentColor</code> on the way down.' },
+              { hl: ['t1'], add: [['t1', 'def', '.current', 'muted']], say: '<code>Text("Title")</code> reads <code>LocalContentColor.current</code>. No provider above it, so it gets the factory default.' },
+              { hl: ['t2'], remove: [['pp', 't2']], add: [['t2', 'pp', '.current', 'accent']], say: '<code>Text("Subtitle")</code> is inside the Purple provider. Purple.' },
+              { hl: ['ic'], remove: [['po', 'ic']], add: [['ic', 'po', '.current', 'warm']], say: 'The <code>Icon</code> is inside both. The nearest provider wins: Orange.' },
+              { gone: ['po'], remove: [['pp', 'po'], ['ic', 'po']], add: [['ic', 'pp', '', 'accent']], hl: ['ic'], say: 'Remove the inner provider. The <code>Icon</code> now finds Purple, the next one up.' },
+              { hl: ['t2', 'ic'], say: 'Change Purple to green. With <code>compositionLocalOf</code>, only the two readers recompose. <code>staticCompositionLocalOf</code> would recompose everything inside the provider.' },
+            ],
+          });
         },
       },
 
@@ -1788,6 +1747,12 @@ Box(Modifier.offset { IntOffset(x.roundToPx(), 0) })`,
             why: '<code>offset(x = x)</code> reads the value during composition, so the box recomposes on every frame. The lambda version reads it during layout and skips composition entirely.',
           },
         ],
+        predict: {
+          q: 'One spec is <code>tween(300)</code>, the other is a <code>spring</code>. Which one has no fixed duration?',
+          options: ['<code>tween(300)</code>', 'The <code>spring</code>', 'Neither: both last 300 ms'],
+          a: 1,
+          why: 'A spring is physics. It runs until the value settles, so stiffness and damping set how long that takes.',
+        },
         visual(el) {
           const specs = [
             { key: 'tween(300)', src: 'tween(durationMillis = 300, easing = FastOutSlowInEasing)', ms: 300, ease: 'cubic-bezier(0.4, 0, 0.2, 1)' },
@@ -1976,6 +1941,12 @@ Log.d("Shared", "match for \${dish.id}: \${imageState.isMatchFound}")`,
             why: '<code>sharedElement</code> draws only the target during the move, so the small text jumps to the large style at once. <code>sharedBounds</code> shows both and fades between them.',
           },
         ],
+        predict: {
+          q: 'With <code>sharedElement</code> on, you tap a photo in the grid. What does the user see while the screens switch?',
+          options: ['The photo moves and grows from its grid cell into the detail header', 'The grid fades out, the detail fades in, and the photo jumps', 'The photo shows twice, once on each screen'],
+          a: 0,
+          why: 'Both screens use the same key, so <code>SharedTransitionLayout</code> animates one element between the two bounds while the rest of the content switches.',
+        },
         visual(el) {
           const DISHES = [
             { id: 1, name: 'Bagel', tone: 'var(--warm)', blurb: 'Chewy ring bread, best with coffee.' },
@@ -2247,6 +2218,12 @@ HorizontalDivider(
             why: 'The width arrives after the first frame, so the divider starts at 0 and then jumps, and each change costs an extra recomposition. Let layout answer it with intrinsics or a custom <code>Layout</code>.',
           },
         ],
+        predict: {
+          q: 'The space for the tag row gets narrower. What does this custom flow layout do with the tags?',
+          options: ['It shrinks each tag to keep one line', 'It keeps their sizes and places more of them on new rows', 'The tags run off the right edge'],
+          a: 1,
+          why: 'Each child is measured once, then the layout picks positions from the new <code>maxWidth</code>. A tag that does not fit starts a new row.',
+        },
         visual(el) {
           const tags = [['Kotlin', 70], ['UI', 44], ['Compose', 92], ['Flow', 56], ['KMP', 50], ['Room', 62]];
           const GAP = 8, H = 32;
@@ -2592,63 +2569,27 @@ composable<Results> { /* ... */ }`,
           },
         ],
         visual(el) {
-          const ids = [42, 7, 108];
-          let next = 0, busy = false;
-          const mk = {
-            home: () => ({ type: 'Home', route: 'Home', args: 'data object, no arguments', title: 'Home', read: 'composable<Home>' }),
-            product: id => ({ type: 'Product', route: `Product(id = ${id})`, args: `toRoute<Product>().id == ${id}`, title: `Product #${id}`, read: `entry.toRoute<Product>().id = ${id}` }),
-            cart: () => ({ type: 'Cart', route: 'Cart', args: 'data object, no arguments', title: 'Cart', read: 'composable<Cart>' }),
-          };
-          const stack = [];
-          const stackEl = h('div', { class: 'cx-stack', 'aria-label': 'Back stack, bottom first' });
-          const sTitle = h('p', { class: 'cx-scr-title' }), sCode = h('p', { class: 'cx-scr-code' });
-          const phone = h('div', { class: 'phone', role: 'img', 'aria-label': 'Current screen' }, sTitle, sCode);
-          const o = out('');
-          const entryEl = e => h('div', { class: 'cx-entry drop-in' }, h('span', { class: 'cx-entry-route' }, e.route), h('span', { class: 'cx-entry-args' }, e.args));
-          function paintTop() {
-            stack.forEach((e, i) => e.el.classList.toggle('cx-top', i === stack.length - 1));
-            const top = stack[stack.length - 1];
-            sTitle.textContent = top.title; sCode.textContent = top.read;
-            replay(phone, 'pop-soft');
-            productBtn.innerHTML = hl(`navigate(Product(id = ${ids[next]}))`);
-          }
-          function push(e) { e.el = entryEl(e); stack.push(e); stackEl.append(e.el); paintTop(); }
-          async function pop() {
-            const e = stack.pop();
-            e.el.classList.remove('drop-in'); e.el.classList.add('leave');
-            await sleep(430);
-            e.el.remove();
-          }
-          const guard = fn => async () => { if (busy) return; busy = true; await fn(); busy = false; };
-          const productBtn = cmd('', guard(async () => {
-            const id = ids[next]; next = (next + 1) % ids.length;
-            push(mk.product(id));
-            say(o, `${hl(`navigate(Product(id = ${id}))`)} <span class="muted">pushes a typed entry. The compiler checked id is an Int.</span>`);
-          }));
-          const cartBtn = cmd('navigate(Cart) { launchSingleTop = true }', guard(async () => {
-            if (stack[stack.length - 1].type === 'Cart') { replay(stack[stack.length - 1].el, 'shake'); say(o, 'Cart is already on top. launchSingleTop reuses it, no duplicate.'); return; }
-            push(mk.cart());
-            say(o, `${hl('navigate(Cart)')} <span class="muted">pushed. Tap it again to see launchSingleTop.</span>`);
-          }));
-          const popBtn = cmd('popBackStack()', guard(async () => {
-            if (stack.length === 1) { replay(stack[0].el, 'shake'); say(o, 'Only Home is left. Here system back would finish the activity instead.'); return; }
-            const gone = stack[stack.length - 1].route;
-            await pop(); if (!el.isConnected) return; paintTop();
-            say(o, `${hl('popBackStack()')} <span class="muted">removed ${gone}. The screen below comes back with its state.</span>`);
-          }));
-          const homeBtn = cmd('navigate(Home) { popUpTo<Home> { inclusive = true } }', guard(async () => {
-            const n = stack.length;
-            while (stack.length) { await pop(); if (!el.isConnected) return; }
-            push(mk.home());
-            say(o, `Popped ${n} entr${n > 1 ? 'ies' : 'y'} up to and including Home, then pushed a fresh Home.`);
-          }));
-          push(mk.home()); push(mk.product(ids[next])); next = 1;
-          paintTop();
-          say(o, 'Start: Home, then Product(id = 42). Push, pop and clear the stack.');
-          el.append(
-            h('div', { class: 'cx-nav' }, h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Back stack (top is current)'), stackEl), phone),
-            h('div', { class: 'controls cx-ctl' }, productBtn, cartBtn, popBtn, homeBtn),
-            o);
+          const home = '<div class="ui-m-bar">Home</div><div class="ui-m-body"><div class="ui-m-row p42"><span class="ui-m-av"></span><div>Desk lamp</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Notebook</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Pencil set</div></div></div>';
+          const product = '<div class="ui-m-bar">← Product #42</div><div class="ui-m-body"><div class="ui-m-img"></div><b>Desk lamp</b><div class="ui-m-line"></div><div class="ui-m-line short"></div><span class="ui-m-btn cart">Open cart</span></div>';
+          const cart = '<div class="ui-m-bar">← Cart</div><div class="ui-m-body"><div class="ui-m-row"><span class="ui-m-av"></span><div>Desk lamp × 1</div></div><span class="ui-m-btn done">Checkout</span></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'Back stack',
+            predict: {
+              q: 'On Cart, checkout calls <code>navigate(Home) { popUpTo&lt;Home&gt; { inclusive = true } }</code>. What is on the back stack after it?',
+              options: ['Only <code>Home</code>', '<code>Home, Product(42), Cart, Home</code>', '<code>Home, Home</code>'],
+              a: 0,
+              why: '<code>popUpTo&lt;Home&gt;</code> pops every entry above Home, <code>inclusive</code> pops the old Home too, then the new Home is pushed. One entry, so Back leaves the app.',
+            },
+            frames: [
+              { screen: home, log: '[Home]', say: '<code>NavHost</code> starts at <code>Home</code>, a <code>@Serializable data object</code>. The back stack holds one entry.' },
+              { tap: '.p42', screen: product, log: ['navigate(Product(id = 42))', '[Home, Product(42)]'], say: 'Tapping a row navigates with a typed route. A new entry goes on top of the stack.' },
+              { log: 'entry.toRoute&lt;Product&gt;().id == 42', say: 'The destination gets the route back as a typed object. No string keys, no casts.' },
+              { tap: '.cart', screen: cart, log: ['navigate(Cart) { launchSingleTop = true }', '[Home, Product(42), Cart]'], say: 'Cart goes on top. <code>launchSingleTop</code> only matters if Cart is already the top entry.' },
+              { screen: product, log: ['popBackStack()', '[Home, Product(42)]'], say: 'Back pops the top entry. Product 42 is shown again, with its state.' },
+              { tap: '.cart', screen: cart, log: ['navigate(Cart) { launchSingleTop = true }', '[Home, Product(42), Cart]'], say: 'Open the cart again and press Checkout.' },
+              { tap: '.done', screen: home, log: ['navigate(Home) { popUpTo&lt;Home&gt; { inclusive = true } }', '[Home]'], say: 'Everything above Home is popped, the old Home too, and a fresh Home is pushed. Back now leaves the app.' },
+            ],
+          });
         },
       },
       // 8 ─────────────────────────────────────────────
@@ -2827,54 +2768,27 @@ val backStack = rememberNavBackStack(Home)`,
           },
         ],
         visual(el) {
-          const ids = ['42', '7', '108'];
-          let next = 0, busy = false;
-          const stack = [];
-          const stackEl = h('div', { class: 'cx-stack cx-n3-stack', 'aria-label': 'Back stack list, first item at the bottom' });
-          const listCode = h('div', { class: 'cx-n3-code' });
-          const sTitle = h('p', { class: 'cx-scr-title' }), sCode = h('p', { class: 'cx-scr-code' });
-          const phone = h('div', { class: 'phone', role: 'img', 'aria-label': 'What NavDisplay shows' }, h('span', { class: 'cx-label' }, 'NavDisplay'), sTitle, sCode);
-          const o = out('');
-          const TITLE = k => k === 'Home' ? 'Home' : k === 'Cart' ? 'Cart' : `Product #${k.match(/\d+/)[0]}`;
-          function paint() {
-            listCode.textContent = `backStack = [${stack.map(e => e.key).join(', ')}]`;
-            stack.forEach((e, i) => e.el.classList.toggle('cx-top', i === stack.length - 1));
-            const top = stack[stack.length - 1];
-            sTitle.textContent = top ? TITLE(top.key) : '(empty)';
-            sCode.textContent = top ? `entry<${top.key.split('(')[0]}>` : 'nothing to show';
-            replay(phone, 'pop-soft');
-            prodBtn.innerHTML = hl(`backStack.add(Product("${ids[next]}"))`);
-          }
-          function push(key) { const e = { key, el: h('div', { class: 'cx-entry drop-in' }, h('span', { class: 'cx-entry-route' }, key)) }; stack.push(e); stackEl.append(e.el); }
-          async function drop(e) { e.el.classList.remove('drop-in'); e.el.classList.add('leave'); await sleep(420); e.el.remove(); }
-          const guard = fn => async () => { if (busy) return; busy = true; await fn(); busy = false; };
-          const prodBtn = cmd('', guard(async () => {
-            const id = ids[next]; next = (next + 1) % ids.length;
-            push(`Product("${id}")`); paint();
-            say(o, `<span class="muted">// one key appended. NavDisplay saw the list change and shows the new top.</span>`);
-          }));
-          const cartBtn = cmd('backStack.add(Cart)', guard(async () => { push('Cart'); paint(); say(o, '<span class="muted">// nothing stops a second Cart. Check the top yourself if you want single-top.</span>'); }));
-          const popBtn = cmd('backStack.removeLastOrNull()', guard(async () => {
-            if (stack.length === 1) { replay(stack[0].el, 'shake'); say(o, 'Only Home is left. Let system back finish the Activity instead of emptying the list.'); return; }
-            const e = stack.pop(); await drop(e); if (!el.isConnected) return; paint();
-            say(o, `<span class="muted">// removed ${e.key}. The entry below comes back.</span>`);
-          }));
-          const prunBtn = cmd('backStack.removeAll { it is Product }', guard(async () => {
-            const gone = stack.filter(e => e.key.startsWith('Product'));
-            if (!gone.length) { say(o, '<span class="muted">// no Product keys in the list</span>'); return; }
-            for (const e of gone) stack.splice(stack.indexOf(e), 1);
-            await Promise.all(gone.map(drop)); if (!el.isConnected) return; paint();
-            say(o, `<span class="good">removed ${gone.length} from the middle</span> <span class="muted">// a plain list operation, no special API</span>`);
-          }));
-          push('Home'); push('Product("42")'); next = 1;
-          const ctl = h('div', { class: 'controls cx-ctl' }, prodBtn, cartBtn, popBtn, prunBtn);
-          paint();
-          say(o, 'You own the list. Change it and watch NavDisplay follow.');
-          el.append(
-            listCode,
-            h('div', { class: 'cx-nav' }, h('div', { class: 'cx-tree' }, h('span', { class: 'cx-label' }, 'Your back stack (last is shown)'), stackEl), phone),
-            ctl,
-            o);
+          const home = '<div class="ui-m-bar">Home</div><div class="ui-m-body"><div class="ui-m-row p42"><span class="ui-m-av"></span><div>Desk lamp</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Notebook</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Pencil set</div></div></div>';
+          const product = (id, name) => `<div class="ui-m-bar">← Product #${id}</div><div class="ui-m-body"><div class="ui-m-img"></div><b>${name}</b><span class="ui-m-muted">Related</span><div class="ui-m-row p7"><span class="ui-m-av"></span><div>Notebook</div></div><span class="ui-m-btn cart">Cart</span></div>`;
+          const cart = '<div class="ui-m-bar">← Cart</div><div class="ui-m-body"><div class="ui-m-row"><span class="ui-m-av"></span><div>Notebook × 1</div></div><span class="ui-m-btn done">Done</span></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'Your backStack list',
+            predict: {
+              q: 'The list is <code>[Home, Product("42")]</code>. The user taps a related item and your code runs <code>backStack.add(Product("7"))</code>. What happens to the Product 42 screen?',
+              options: ['Product 7 replaces it', 'It stays in the list below Product 7, so Back returns to it', 'Nothing: a second <code>Product</code> key is rejected'],
+              a: 1,
+              why: '<code>add</code> appends a key. <code>NavDisplay</code> shows the last one, and every key below it is still there for Back.',
+            },
+            frames: [
+              { screen: home, log: 'rememberNavBackStack(Home) → [Home]', say: 'The back stack is a list you own. <code>NavDisplay</code> shows the content for its last key.' },
+              { tap: '.p42', screen: product(42, 'Desk lamp'), log: ['backStack.add(Product("42"))', '[Home, Product(42)]'], say: 'Opening a screen is a plain <code>add</code>. The list changed, so <code>NavDisplay</code> shows the new last key.' },
+              { tap: '.p7', screen: product(7, 'Notebook'), log: ['backStack.add(Product("7"))', '[Home, Product(42), Product(7)]'], say: 'Another <code>Product</code> key on top. Each key gets its own <code>NavEntry</code>.' },
+              { tap: '.cart', screen: cart, log: ['backStack.add(Cart)', '[Home, Product(42), Product(7), Cart]'], say: 'Cart goes on top.' },
+              { screen: product(7, 'Notebook'), log: ['onBack → backStack.removeLastOrNull()', '[Home, Product(42), Product(7)]'], say: 'The user presses Back. <code>NavDisplay</code> calls your <code>onBack</code>, which removes the last key.' },
+              { tap: '.cart', screen: cart, log: ['backStack.add(Cart)', '[Home, Product(42), Product(7), Cart]'], say: 'Back to the cart. Now press Done.' },
+              { tap: '.done', screen: home, log: ['backStack.removeAll { it != Home }', '[Home]'], say: 'Any list operation works. One <code>removeAll</code> drops three screens, and Home is shown.' },
+            ],
+          });
         },
       },
     ],

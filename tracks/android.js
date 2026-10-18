@@ -262,7 +262,7 @@
         body: `
 <p>An Android app has no single <code>main()</code>. It is a set of <em>components</em> the system starts for you: activities (screens), services (work without a screen), broadcast receivers (react to events) and content providers (share data). You list them in <code>AndroidManifest.xml</code>, and the system reads that list to know what your app can do.</p>
 <p>A <code>Context</code> is the handle a component uses to talk to the system. It loads resources, opens files and databases, starts activities and gets system services. Two kinds come up every day. The <em>Application</em> context lives as long as the app's process. An <em>Activity</em> context is the Activity itself: it lives only as long as that one screen, and it carries the screen's theme and window.</p>
-<p>That difference causes the classic leak. Hand an Activity to something that lives longer, like a singleton, and the old screen can never be freed after a rotation. Try both versions below, rotate a few times, then run the garbage collector.</p>`,
+<p>That difference causes the classic leak. Hand an Activity to something that lives longer, like a singleton, and the old screen can never be freed after a rotation. Below, a singleton holds the first Activity while the phone rotates twice, and you can see what each object points at.</p>`,
         code: `// A singleton lives as long as the process
 object ImageCache {
     private lateinit var appContext: Context
@@ -489,83 +489,32 @@ class NewsRepository @Inject constructor(
           },
         ],
         visual(el) {
-          el.classList.add('and-viz');
-          let acts = [], held = null, seq = 0, busy = false;
-          const heap = h('div', { class: 'and-cx-heap' });
-          const single = h('div', { class: 'and-cx-single' });
-          const fill = h('span', { class: 'and-d2-fill' });
-          const memTxt = h('span', {});
-          const o = out();
-          const { dev, view } = device();
-          const mk = () => ({ no: ++seq, at: addr(), state: 'live' });
-          const cur = () => acts.find(a => a.state === 'live');
-          function paint() {
-            const rows = [h('div', { class: 'and-cx-obj and-cx-app' }, h('span', {}, 'NewsApp (Application)'), h('small', {}, 'whole process'))];
-            for (const a of acts) {
-              const leak = a.state === 'dead' && held === a;
-              rows.push(h('div', { class: 'and-cx-obj ' + (a.state === 'live' ? 'and-cx-live' : leak ? 'and-cx-leak' : 'and-cx-dead') },
-                h('span', {}, `MainActivity #${a.no} ${a.at}`),
-                h('small', {}, a.state === 'live' ? 'on screen' : leak ? 'destroyed, held: leak' : 'destroyed, unreachable')));
-            }
-            heap.replaceChildren(h('span', { class: 'and-lbl' }, 'heap'), ...rows);
-            single.className = 'and-cx-single' + (held ? '' : ' and-cx-none');
-            single.replaceChildren(h('span', {}, 'object ImageCache'), h('span', {}, held ? (held === 'app' ? 'context → NewsApp' : `context → MainActivity #${held.no}`) : 'not created yet'));
-            const mb = 14 + acts.length * 6;
-            fill.style.width = Math.min(100, mb) + '%';
-            fill.classList.toggle('and-cx-hot', acts.some(a => a.state === 'dead' && held === a));
-            memTxt.textContent = `used heap ≈ ${mb} MB`;
-            const c = cur();
-            view.replaceChildren(h('div', { class: 'and-scr' }, appbar(c ? `MainActivity #${c.no}` : '…'), bars(85, 60, 75, 50)));
-          }
-          function init(kind) {
-            if (busy) return;
-            if (held) { replay(single, 'shake'); say(o, `${hl(kind === 'app' ? 'ImageCache.init(applicationContext)' : 'ImageCache.init(this)')}  ${note('already initialized: it keeps its first context. Reset to try again.')}`); return; }
-            held = kind === 'app' ? 'app' : cur();
-            paint(); replay(single, 'pop');
-            say(o, `${hl(kind === 'app' ? 'ImageCache.init(applicationContext)' : 'ImageCache.init(this)')}  ${note(kind === 'app' ? 'holds the Application: lives as long as the process anyway' : `holds MainActivity #${held.no}`)}`);
-          }
-          async function rot() {
-            if (busy) return;
-            if (acts.length >= 6) { replay(heap, 'shake'); say(o, note('run GC or reset first')); return; }
-            busy = true;
-            const old = cur();
-            say(o, note('rotate the phone'));
-            await rotate(dev); if (!el.isConnected) return;
-            old.state = 'dead';
-            line(o, `${hl(`MainActivity #${old.no}.onDestroy()`)}`);
-            const n = mk(); acts.push(n);
-            line(o, `${hl(`MainActivity #${n.no}.onCreate()`)}  ${note('a new object')}`);
-            paint(); busy = false;
-          }
-          async function gc() {
-            if (busy) return; busy = true;
-            say(o, `${hl('System.gc()')}  ${note('free what nothing points to')}`);
-            const dead = acts.filter(a => a.state === 'dead');
-            if (!dead.length) line(o, note('no destroyed screens to free'));
-            for (const a of dead) {
-              if (held === a) { line(o, `<span class="bad">kept:</span> MainActivity #${a.no} ${note('ImageCache still points to it, with its whole view tree')}`); continue; }
-              const idx = acts.indexOf(a);
-              const node = heap.children[idx + 2];
-              if (node) node.classList.add('leave');
-              line(o, `<span class="good">freed:</span> MainActivity #${a.no}`);
-              await sleep(300); if (!el.isConnected) return;
-              acts = acts.filter(x => x !== a);
-            }
-            paint(); busy = false;
-          }
-          function reset() {
-            if (busy) return;
-            seq = 0; held = null; acts = [mk()]; paint();
-            say(o, note('fresh process: one MainActivity, ImageCache not created'));
-          }
-          reset();
-          say(o, note('Initialize the cache with one of the two contexts, rotate twice, then run GC.'));
-          el.append(
-            h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev),
-              h('div', { class: 'and-cx-heap' }, single, heap, h('div', { class: 'and-cx-mem' }, memTxt, h('span', { class: 'and-d2-bar' }, fill)))),
-            h('div', { class: 'controls' }, cmd('ImageCache.init(this)', () => init('act')), cmd('ImageCache.init(applicationContext)', () => init('app'))),
-            h('div', { class: 'controls' }, cmd('rotate', rot), cmd('System.gc()', gc), cmd('reset', reset)),
-            o);
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'root', label: 'GC root<small>static field</small>', x: 17, y: 12, tone: 'muted' },
+              { id: 'cache', label: 'ImageCache<small>object</small>', x: 50, y: 12 },
+              { id: 'app', label: 'NewsApp<small>Application</small>', x: 83, y: 12, tone: 'ok', hidden: true },
+              { id: 'a1', label: 'Activity #1<small>views, theme</small>', x: 17, y: 55 },
+              { id: 'a2', label: 'Activity #2', x: 50, y: 55, hidden: true },
+              { id: 'a3', label: 'Activity #3', x: 83, y: 55, hidden: true },
+              { id: 'sys', label: 'GC root<small>system</small>', x: 50, y: 90, tone: 'muted' },
+            ],
+            predict: {
+              q: '<code>ImageCache.init(this)</code> stores the first Activity. The phone rotates twice, then the GC runs. How many destroyed <code>MainActivity</code> objects stay in memory?',
+              options: ['None: destroyed screens are always freed', 'One: #1, the one the cache holds', 'Two: #1 and #2'],
+              a: 1,
+              why: 'The GC frees what nothing reachable points to. The cache keeps its first context, so #1 stays. Nobody points at #2 after the second rotation, so it is freed.',
+            },
+            frames: [
+              { add: [['root', 'cache'], ['sys', 'a1']], say: 'MainActivity #1 is on screen, held by the system. <code>ImageCache</code> is an <code>object</code>: a static field keeps it alive as long as the process.' },
+              { add: [['cache', 'a1', 'context']], say: '<code>ImageCache.init(this)</code>. The cache stores the Activity as its context.' },
+              { show: ['a2'], remove: [['sys', 'a1']], add: [['sys', 'a2']], say: 'Rotate. Android destroys #1 and creates #2. The system lets go of #1.' },
+              { show: ['a3'], remove: [['sys', 'a2']], add: [['sys', 'a3']], gone: ['a2'], say: 'Rotate again. #2 is destroyed too, and nothing points at it, so the GC frees it.' },
+              { hl: ['root', 'cache', 'a1'], add: [['root', 'cache', '', 'err'], ['cache', 'a1', 'context', 'err']], say: 'But #1 is still reachable: root → <code>ImageCache</code> → #1. The GC cannot free it or its whole view tree. That is a leak.' },
+              { show: ['app'], remove: [['cache', 'a1']], add: [['root', 'cache'], ['cache', 'app', 'context', 'ok']], gone: ['a1'], say: 'The fix: <code>ImageCache.init(applicationContext)</code>. The Application lives as long as the process anyway, and no destroyed screen is held.' },
+            ],
+          });
         },
       },
 
@@ -1058,6 +1007,12 @@ override fun onStop() {
             h('div', { class: 'controls' }, actions.map(([label, f]) => cmd(label, f))),
             o);
         },
+        predict: {
+          q: 'The app is in front and the user rotates the phone. What happens to the Activity?',
+          options: ['Only <code>onPause</code> and <code>onResume</code> run', 'It steps all the way down to <code>onDestroy</code>, then a new instance runs <code>onCreate</code>, <code>onStart</code>, <code>onResume</code>', 'Nothing runs: the window just redraws'],
+          a: 1,
+          why: 'By default a configuration change destroys the Activity and builds a new one for the new screen shape, with every step down and back up in order.',
+        },
       },
 
       // 2 ─────────────────────────────────────────────
@@ -1444,6 +1399,12 @@ fun FeedRoute(vm: FeedViewModel = viewModel()) {
               cmd('activityCount++', bumpAct), cmd('viewModel.increment()', bump), cmd('rotate', rot), cmd('finish()', finish)),
             o);
         },
+        predict: {
+          q: 'You rotate the phone. The new <code>MainActivity</code> calls <code>by viewModels()</code>. What does it get?',
+          options: ['The same <code>CounterViewModel</code> object, at the same address', 'A copy of the old ViewModel with the same values', 'A fresh ViewModel with count = 0'],
+          a: 0,
+          why: 'The ViewModel lives in a <code>ViewModelStore</code> that Android keeps across the configuration change, so the new Activity is handed the very same object.',
+        },
       },
 
       // 2b ────────────────────────────────────────────
@@ -1686,6 +1647,12 @@ Text(text, Modifier.padding(start = 16.dp))`,
             h('div', { class: 'controls' }, lBtns),
             h('div', { class: 'controls' }, nBtn, wBtn, cBtn),
             o);
+        },
+        predict: {
+          q: 'The phone is set to Arabic and the count is 2. Which <code>&lt;plurals&gt;</code> quantity does Android pick?',
+          options: ['<code>other</code>', '<code>two</code>', '<code>few</code>'],
+          a: 1,
+          why: 'Arabic has six plural categories: zero, one, two, few, many and other. The number 2 has its own form, so <code>values-ar</code> must supply it.',
         },
       },
 
@@ -1994,6 +1961,12 @@ fun onQuery(text: String) { state["query"] = text }`,
             h('div', { class: 'controls' }, cmd('count++', inc), cmd('rotate', () => event('rot')), cmd('process death', () => event('death'))),
             o);
         },
+        predict: {
+          q: 'Your app is in the background and the system kills its process to free memory. Which callback does your code get at that moment?',
+          options: ['<code>onDestroy()</code>', '<code>onCleared()</code> in the ViewModel', 'None: the process just ends'],
+          a: 2,
+          why: 'Process death sends no callback. What survives is the saved-state Bundle that was written earlier, when the Activity stopped.',
+        },
       },
 
       // 4 ─────────────────────────────────────────────
@@ -2268,6 +2241,12 @@ startActivity(Intent("com.example.OPEN_EDITOR"))`,
           requestAnimationFrame(() => place(mainT, false));
           el.append(sys, h('div', { class: 'controls' }, intents.map(it => cmd(it.src, () => send(it)))), o);
         },
+        predict: {
+          q: 'You start <code>ACTION_DIAL</code> with a <code>tel:</code> number, and exactly one installed app has a matching filter. What happens?',
+          options: ['A chooser with a single entry', 'That app opens directly', '<code>ActivityNotFoundException</code>'],
+          a: 1,
+          why: 'Android matches the intent against every app’s filters. With exactly one match and no chooser, it starts that Activity straight away.',
+        },
       },
 
       // 4a ────────────────────────────────────────────
@@ -2414,50 +2393,27 @@ if (canNavigate) NavigateButton()`,
           },
         ],
         visual(el) {
-          el.classList.add('and-viz');
-          let target30 = true, queries = false, busy = false, checked = null;
-          const { dev, view } = device();
-          const mapsTile = h('div', { class: 'and-tile' }, 'Maps', h('small', {}, 'VIEW · geo:'));
-          const youTile = h('div', { class: 'and-tile and-open' }, 'Your app', h('small', {}, 'always visible to itself'));
-          const o = out();
-          const visible = () => !target30 || queries;
-          function paintApps() {
-            mapsTile.classList.toggle('and-miss', !visible());
-            mapsTile.lastChild.textContent = visible() ? 'VIEW · geo: · visible' : 'VIEW · geo: · hidden from queries';
-          }
-          function cafe(anim) {
-            const btn = checked === null ? h('span', { class: 'and-user' }, 'Map button: not checked') : checked ? h('span', { class: 'and-ui drop-in' }, 'Open in Maps') : h('span', { class: 'and-user drop-in' }, 'Map button hidden');
-            view.replaceChildren(h('div', { class: 'and-scr' + (anim ? ' drop-in' : '') }, appbar('Café Lumen'), bars(80, 60), btn));
-          }
-          function resolve() {
-            if (busy) return;
-            checked = visible(); cafe(); replay(mapsTile, checked ? 'pop' : 'shake');
-            say(o, `${hl('intent.resolveActivity(packageManager)')} = ${checked ? '<span class="good">ComponentInfo{com.maps/.MapActivity}</span>' : '<span class="bad">null</span>'}  ${note(checked ? (target30 ? '&lt;queries&gt; makes Maps visible' : 'targetSdk 29: every app is visible') : 'Maps is installed, you just can’t see it')}`);
-          }
-          async function start() {
-            if (busy) return; busy = true;
-            say(o, `${hl('startActivity(Intent(ACTION_VIEW, "geo:0,0?q=cafe".toUri()))')}`);
-            mapsTile.classList.add('and-scan'); await sleep(400); if (!el.isConnected) return;
-            mapsTile.classList.remove('and-scan'); mapsTile.classList.add('and-open'); replay(mapsTile, 'pop');
-            view.replaceChildren(h('div', { class: 'and-scr drop-in' }, appbar('Maps'), h('div', { class: 'and-d2-map' }), bars(60)));
-            line(o, `<span class="good">opened Maps</span> ${note('startActivity is not filtered by package visibility')}`);
-            await sleep(1300); if (!el.isConnected) return;
-            mapsTile.classList.remove('and-open'); cafe(true);
-            line(o, note('back to the café screen'));
-            busy = false;
-          }
-          const sw = (id, label, on, set) => h('label', { class: 'switch', for: id }, h('input', { type: 'checkbox', id, checked: on, onchange(e) {
-            if (busy) { e.target.checked = !e.target.checked; return; }
-            set(e.target.checked); checked = null; paintApps(); cafe(); replay(mapsTile, 'pop-soft');
-            say(o, note(`targetSdk ${target30 ? '30+' : '29'}, ${queries ? 'with' : 'no'} <queries> entry for geo`.replace('<', '&lt;').replace('>', '&gt;')));
-          } }), label);
-          paintApps(); cafe();
-          say(o, 'Maps is installed. Ask about it, then just start it.');
-          el.append(
-            h('div', { class: 'stage' }, h('div', { class: 'and-hold' }, dev), h('div', { class: 'and-d2-col' }, h('span', { class: 'and-lbl' }, 'what your app can see'), youTile, mapsTile)),
-            h('div', { class: 'controls' }, sw('and-d2-pv-target', 'targetSdk 30 or higher', true, v => { target30 = v; }), sw('and-d2-pv-queries', '<queries> for geo', false, v => { queries = v; })),
-            h('div', { class: 'controls' }, cmd('intent.resolveActivity(packageManager)', resolve), cmd('startActivity(intent)', start)),
-            o);
+          const cafe = btn => `<div class="ui-m-bar">Café Lumen</div><div class="ui-m-body"><div class="ui-m-img"></div><b>Open daily, 8 to 18</b><div class="ui-m-line"></div><div class="ui-m-line short"></div>${btn}</div>`;
+          const maps = '<div class="ui-m-bar">Maps</div><div class="ui-m-body"><div class="ui-m-img" style="aspect-ratio:1"></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Café Lumen</div></div></div>';
+          const btn = '<span class="ui-m-btn mp">Open in Maps</span>';
+          Lab.ui.phone(el, {
+            logTitle: 'What your code sees',
+            predict: {
+              q: 'You add a <code>&lt;queries&gt;</code> entry for <code>VIEW geo:</code> and call <code>resolveActivity</code> again. What comes back?',
+              options: ['Still <code>null</code>', 'The Maps component', 'A list of every installed app'],
+              a: 1,
+              why: 'A <code>&lt;queries&gt;</code> entry makes apps that handle that intent visible to your package manager calls. It does not reveal anything else.',
+            },
+            frames: [
+              { screen: cafe('<span class="ui-m-muted">Map button: not checked yet</span>'), log: '// targetSdk 34, no &lt;queries&gt;. Maps is installed.', say: 'The café screen wants a map button, but only if some app can show a map. Maps is installed.' },
+              { screen: cafe('<span class="ui-m-muted">Map button hidden</span>'), log: 'intent.resolveActivity(packageManager) = null', say: 'The check answers <code>null</code>. Maps is installed, but since Android 11 your app cannot see it, so the button is hidden by mistake.' },
+              { screen: cafe(btn), log: '// show the button and start the intent anyway', say: 'The usual answer: always show the button and just start the intent.' },
+              { tap: '.mp', screen: maps, log: ['startActivity(Intent(ACTION_VIEW, geoUri))', '→ Maps opens'], say: 'It works. Starting an Activity is not filtered by package visibility. Catch <code>ActivityNotFoundException</code> for phones with no map app.' },
+              { screen: cafe('<span class="ui-m-muted">Map button: not checked yet</span>'), log: '// manifest: &lt;queries&gt;&lt;intent&gt; VIEW, scheme geo &lt;/intent&gt;&lt;/queries&gt;', say: 'When you must know in advance, declare the smallest set you need: here, apps that handle <code>VIEW</code> with a <code>geo:</code> URI.' },
+              { screen: cafe(btn), log: 'intent.resolveActivity(packageManager) = ComponentInfo{com.example.maps/.MapActivity}', say: 'Now the same check finds Maps, so the button shows for the right reason.' },
+              { log: '// targetSdk 29 or lower: every app is visible, no &lt;queries&gt; needed', say: 'Apps that target Android 10 or lower still see every installed app. The filtering starts at targetSdk 30.' },
+            ],
+          });
         },
       },
 
@@ -2715,6 +2671,12 @@ navController.navigate(Detail(article.id))
               detailBtn, cmd('navigate(Search)', () => push('Search')), cmd('popBackStack()  // Back', back),
               cmd('navigate(Search) { launchSingleTop = true }', single), cmd('navigate(Settings) { popUpTo<Home>() }', clearTo)),
             o);
+        },
+        predict: {
+          q: 'The stack is Home, Search, Detail(id=1). You call <code>navigate(Detail(id = 2))</code> with no options. How many entries are on the stack?',
+          options: ['3: Detail(2) replaces Detail(1)', '4: a new entry is pushed on top', '2: Search is popped first'],
+          a: 1,
+          why: 'A plain <code>navigate</code> always pushes, even to the same destination with new arguments. Only options like <code>launchSingleTop</code> or <code>popUpTo</code> change that.',
         },
       },
 
@@ -3019,6 +2981,12 @@ adb shell dumpsys activity activities`,
             h('div', { class: 'stage and-nav' }, h('div', { class: 'and-stackbox' }, col, h('span', { class: 'and-lbl' }, 'task: newest on top'))),
             h('div', { class: 'controls' }, artBtn, cmd('startActivity(Settings)', openSettings), cmd('press Back', back)),
             o);
+        },
+        predict: {
+          q: 'ArticleActivity is <code>standard</code> and already on top of the task. You start it again. What runs?',
+          options: ['<code>onNewIntent()</code> on the same instance', '<code>onCreate()</code> on a second ArticleActivity', 'Nothing: it is already on screen'],
+          a: 1,
+          why: '<code>standard</code> always creates a new instance on top of the caller, even when one is already on top. Reuse needs <code>singleTop</code> or a flag.',
         },
       },
 
@@ -3361,6 +3329,12 @@ cb.isEnabled = hasUnsavedChanges`,
             h('div', { class: 'controls' }, cmd('start back swipe', swipe), cmd('let go', release), cmd('swipe back to the edge', cancel)),
             o);
         },
+        predict: {
+          q: 'targetSdk 36. The draft is unsaved, so the back callback is enabled. The user starts a back swipe. What do they see?',
+          options: ['The system preview of the article behind', 'No preview: the app has claimed Back', 'The app closes at once'],
+          a: 1,
+          why: 'The system can preview going back only when no enabled callback will intercept Back. An enabled callback means your code decides, so there is no preview.',
+        },
       },
 
       // 6 ─────────────────────────────────────────────
@@ -3689,6 +3663,12 @@ Button(onClick = { cameraLauncher.launch(CAMERA) }) { Text("Scan receipt") }`,
             h('div', { class: 'stage' }, h('div', { class: 'and-col' }, dev, permEl), list),
             h('div', { class: 'controls' }, cmd('onClick: Take photo', tap)),
             o);
+        },
+        predict: {
+          q: 'The user granted the camera last week. They tap Take photo again. What happens?',
+          options: ['The system dialog asks again', '<code>checkSelfPermission</code> returns GRANTED and the camera opens with no dialog', 'Your rationale UI shows first'],
+          a: 1,
+          why: 'Always check first. A granted permission stays granted until the user revokes it, so there is nothing to request.',
         },
       },
     ],

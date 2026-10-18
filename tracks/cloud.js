@@ -145,6 +145,12 @@
 <p>"The cloud" is a provider's data centers that you rent instead of buying servers. You pick a <b>region</b> (a geographic area, such as Belgium or Frankfurt), and inside it the provider runs several <b>zones</b>: separate groups of machines, so one fire or power cut does not take everything down.</p>
 <p>You can rent at different levels. A <b>virtual machine (VM)</b> is a whole computer you patch and run yourself. A <b>container service</b> runs your packaged app and adds copies when traffic grows. <b>Serverless</b> runs your code only while a request is being handled, and can drop to zero copies when nobody calls it. Higher levels mean less work for you and less control.</p>
 <p>A <b>managed service</b> is something the provider runs for you, like a database with backups and upgrades included. The price model is <b>pay per use</b>: you pay for what is switched on, so a server sized for the 09:00 push burst also costs money at 03:00. Try the three models on one day of traffic for a news app.</p>`,
+        predict: {
+          q: "A VM sized for 6 instances serves one day of news-app traffic. When does it fall short?",
+          options: ["During the quiet night", "At the 09:00 push burst and the evening peak", "Never: 6 covers the whole day"],
+          a: 1,
+          why: "A fixed size is too big most of the day and too small at the peaks. It does exactly what you sized it for.",
+        },
         visual(el) {
           // Instances needed per hour for a news app: quiet night, push burst at 09:00, evening peak.
           const NEED = [1, 0, 0, 0, 0, 0, 1, 3, 5, 9, 4, 3, 3, 4, 3, 3, 4, 5, 6, 7, 8, 5, 3, 2];
@@ -256,6 +262,12 @@ fun main() {
 <p>An <b>image</b> is a read-only package: an OS base, a runtime such as a JDK, your app and its settings. A <b>container</b> is a running process started from an image, isolated from other processes. One image can start many containers, the same way one APK installs on many phones.</p>
 <p>A <b>Dockerfile</b> builds the image step by step. Each instruction makes a <b>layer</b>, and Docker caches layers. If a layer's input changes, that layer and <b>every layer after it</b> rebuild, even if their output would be the same. So put things that rarely change (base image, dependency list) first and your source code last.</p>
 <p>This is why "works on my machine" goes away: the machine is part of the image. CI, staging and production all run the exact same image. Edit files below and watch which layers come from cache.</p>`,
+        predict: {
+          q: "With the <code>COPY . .</code> Dockerfile, you build once, edit one source file and build again. What happens to the Gradle dependency step?",
+          options: ["It comes from cache", "It runs again, because <code>COPY . .</code> changed and every later layer rebuilds", "Docker recompiles only the changed file"],
+          a: 1,
+          why: "A layer is reused only when its instruction and inputs are unchanged. <code>COPY . .</code> includes <code>src</code>, so any edit invalidates it and everything after it.",
+        },
         visual(el) {
           const GOOD = [
             { src: 'FROM gradle:jdk21 AS build', deps: [], sec: 0, note: 'pulled' },
@@ -398,63 +410,36 @@ CMD ["./bin/api"]
         body: `
 <p><b>CI</b> (continuous integration) builds and tests every change; you met it in <a href="#tools.ci">CI on every pull request</a>. <b>CD</b> (continuous delivery) goes further: after the tests pass, the pipeline signs the build and ships it somewhere real. A failed stage stops everything after it, so a broken test never reaches users.</p>
 <p>Ship through <b>environments</b>: <b>dev</b> for daily builds, <b>staging</b> that mirrors production with test data, and <b>prod</b>. In GitHub Actions an environment can hold its own secrets and require a reviewer before a job that uses it runs. That approval is your "are we sure?" button.</p>
-<p>For the app, a pipeline can upload the signed bundle to the Play <b>internal testing</b> track (see <a href="#build.tracks">Play testing tracks</a>). For the backend, it builds a container image and deploys it to a host. Try a clean push, a failing test and a missing secret.</p>`,
+<p>For the app, a pipeline can upload the signed bundle to the Play <b>internal testing</b> track (see <a href="#build.tracks">Play testing tracks</a>). For the backend, it builds a container image and deploys it to a host. Follow a push that fails a test, then a clean one that waits for approval.</p>`,
         visual(el) {
-          const ST = [
-            { id: 'build', name: 'Build: bundleRelease + API image', t: '2m 10s' },
-            { id: 'test', name: 'Test: unit tests (app + API)', t: '1m 40s' },
-            { id: 'sign', name: 'Sign AAB with upload key', t: '8s' },
-            { id: 'stg', name: 'Deploy: API → staging, AAB → Play internal', env: 'staging', t: '1m 05s' },
-            { id: 'smoke', name: 'Smoke test: GET staging /health', env: 'staging', t: '4s' },
-            { id: 'prod', name: 'API → production', env: 'prod', t: '58s', gate: true },
-          ];
-          const rows = ST.map(s => {
-            const t = h('small', {}, '');
-            const r = h('div', { class: 'cl-stage' }, h('span', { class: 'cl-dot' }), h('span', {}, s.name, s.env ? h('span', { class: 'cl-env' }, s.env) : null), t); r.t = t; return r;
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'push', label: 'git push', sub: 'main' },
+              { id: 'build', label: 'Build', sub: 'AAB + API image' },
+              { id: 'test', label: 'Test', sub: 'unit tests' },
+              { id: 'sign', label: 'Sign', sub: 'upload key' },
+              { id: 'stg', label: 'Staging', sub: 'API + Play internal' },
+              { id: 'prod', label: 'Production', sub: 'needs a reviewer' },
+            ],
+            predict: {
+              q: 'A clean commit passes every stage up to staging. The <code>production</code> environment has a required reviewer. What happens next?',
+              options: ['It deploys to production at once', 'The job waits until a reviewer approves it', 'The pipeline rebuilds the image from source first'],
+              a: 1,
+              why: 'A job that uses a protected environment pauses until a required reviewer approves it. That is the "are we sure?" button.',
+            },
+            frames: [
+              { say: 'Every push runs the same stages, in order. First push: a commit that breaks a unit test.' },
+              { at: 'push', packet: 'commit 4e1f', say: 'A push to <code>main</code> starts the workflow.' },
+              { at: 'build', packet: 'commit 4e1f', mark: { build: 'ok' }, say: 'Build: <code>bundleRelease</code> for the app and a container image for the API.' },
+              { at: 'test', packet: '1 test failed', tone: 'err', mark: { test: 'err', sign: 'muted', stg: 'muted', prod: 'muted' }, say: '<code>HeadlineParserTest</code> fails. Every later stage is skipped: nothing is signed, nobody gets the build.' },
+              { at: 'push', packet: 'commit 9b07', mark: { build: '', test: '', sign: '', stg: '', prod: '' }, say: 'The fix is pushed. The pipeline starts again from the first stage.' },
+              { at: 'test', packet: 'all passed', tone: 'ok', mark: { build: 'ok', test: 'ok' }, say: 'Build and tests pass this time.' },
+              { at: 'sign', packet: 'signed AAB', tone: 'ok', mark: { sign: 'ok' }, say: 'The upload key comes from a secret. If that secret did not exist, the step would get an empty string and fail here.' },
+              { at: 'stg', packet: 'GET /health 200', tone: 'ok', mark: { stg: 'ok' }, say: 'The API goes to staging and the bundle to the Play internal track. A smoke test checks <code>/health</code>.' },
+              { at: 'prod', packet: 'waiting', tone: 'warm', mark: { prod: 'warm' }, say: 'The production job pauses. It needs a reviewer to approve it.' },
+              { at: 'prod', packet: 'deployed', tone: 'ok', mark: { prod: 'ok' }, say: 'Approved. The same image that passed staging goes to production.' },
+            ],
           });
-          const status = pill('idle', 'ghost');
-          const o = out('');
-          let busy = false, token = 0, waiting = null;
-          const approve = act('Approve production', () => { if (waiting) { const w = waiting; waiting = null; approve.disabled = true; w(); } }, { disabled: true });
-          async function step(i, my) {
-            const r = rows[i]; r.className = 'cl-stage cl-on'; r.t.textContent = 'running';
-            await sleep(520); return el.isConnected && my === token;
-          }
-          async function go(kind) {
-            if (busy) return; busy = true; const my = ++token;
-            rows.forEach(r => { r.className = 'cl-stage'; r.t.textContent = ''; });
-            status.className = 'cl-pill cl-warn'; status.textContent = 'running';
-            const failAt = kind === 'test' ? 'test' : kind === 'secret' ? 'sign' : null;
-            for (let i = 0; i < ST.length; i++) {
-              const s = ST[i], r = rows[i];
-              if (s.gate) {
-                r.className = 'cl-stage cl-wait'; r.t.textContent = 'waiting';
-                say(o, '<span class="good">Staging is green and testers have the build.</span> <span class="muted">The production environment needs a reviewer. Click Approve.</span>');
-                approve.disabled = false;
-                await new Promise(res => { waiting = res; });
-                if (!el.isConnected || my !== token) return;
-              }
-              if (!(await step(i, my))) return;
-              if (s.id === failAt) {
-                r.className = 'cl-stage cl-fail'; r.t.textContent = 'failed'; replay(r, 'shake');
-                for (let j = i + 1; j < ST.length; j++) { rows[j].className = 'cl-stage cl-skip'; rows[j].t.textContent = 'skipped'; }
-                status.className = 'cl-pill cl-err'; status.textContent = 'failed';
-                say(o, failAt === 'test'
-                  ? '<span class="bad">HeadlineParserTest > skips items without title FAILED.</span> <span class="muted">Nothing was signed or deployed. Users and testers never saw it.</span>'
-                  : '<span class="bad">Keystore file not found: KEYSTORE_BASE64 is empty.</span> <span class="muted">An unset secret is an empty string. Add it to the repository or environment secrets.</span>');
-                busy = false; return;
-              }
-              r.className = 'cl-stage cl-pass'; r.t.textContent = s.t;
-            }
-            status.className = 'cl-pill cl-ok'; status.textContent = 'deployed';
-            say(o, '<span class="good">Production updated.</span> <span class="muted">The same commit, image and bundle went through every stage. Promote the app from internal to production in Play when testers are happy.</span>');
-            busy = false;
-          }
-          say(o, 'Push a commit to main.');
-          el.append(
-            h('div', { class: 'controls' }, act('Push to main', () => go('ok')), act('Push with a failing test', () => go('test')), act('Push with keystore secret missing', () => go('secret')), approve),
-            h('div', { class: 'cl-row' }, label('workflow: release'), status),
-            h('div', { class: 'cl-pipe' }, rows), o);
         },
         code: `# .github/workflows/release.yml (shortened)
 on:
@@ -538,78 +523,26 @@ jobs:
         body: `
 <p>The same build runs in dev, staging and prod, so anything that differs between them (database URL, API base URL, log level) comes from <b>configuration</b>, usually <b>environment variables</b>. The code reads <code>System.getenv("DATABASE_URL")</code> and does not care where it runs.</p>
 <p>A <b>secret</b> is config that grants access: passwords, private keys, server API keys. Keep secrets in a <b>secret manager</b> (GitHub Actions secrets, Google Cloud Secret Manager and similar) and inject them at run time. Once a secret is in a git commit, deleting it in the next commit is not enough: it is still in history and in every clone. <b>Rotate it.</b></p>
-<p>Not every key is a secret. Firebase says its API keys in <code>google-services.json</code> only identify your project, and access is controlled by Security Rules and App Check. They are fine in the app, as long as they are restricted to Firebase APIs. A server key, a database password or a Play service account file is a real secret. Scan this commit before pushing it. For the app side, see <a href="#security.secrets">secrets in the app</a>.</p>`,
+<p>Not every key is a secret. Firebase says its API keys in <code>google-services.json</code> only identify your project, and access is controlled by Security Rules and App Check. They are fine in the app, as long as they are restricted to Firebase APIs. A server key, a database password or a Play service account file is a real secret. The demo follows one leaked password from commit to rotation. For the app side, see <a href="#security.secrets">secrets in the app</a>.</p>`,
         visual(el) {
-          const FILES = [
-            { name: 'app/build.gradle.kts', lines: [
-              { src: 'signingConfigs { create("release") {' },
-              { src: '    storePassword = "Secret2026!"', kind: 'flag', why: 'Keystore password in source.', fix: '    storePassword = System.getenv("KEYSTORE_PASSWORD")' },
-              { src: '    keyAlias = "upload"' },
-            ] },
-            { name: 'api/src/main/kotlin/Payments.kt', lines: [
-              { src: 'private const val PAYMENT_SECRET = "sk_live_51Hx9TrQ2vYb7"', kind: 'flag', why: 'Live server-side payment key.', fix: 'private val PAYMENT_SECRET = System.getenv("PAYMENT_SECRET")' },
-            ] },
-            { name: 'play-service-account.json', lines: [
-              { src: '"private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEv..."', kind: 'flag', why: 'Service account private key: can publish your app.', fix: '(file removed, added to .gitignore, stored as a CI secret)' },
-            ] },
-            { name: 'app/google-services.json', lines: [
-              { src: '"current_key": "AIzaSyB2kX9fQwz4Lr8tVn1mPq7sYc3Ud0eHj5o"', kind: 'info', why: 'Firebase API key: identifies the project, OK in the app if restricted to Firebase APIs.' },
-            ] },
-            { name: '.env', lines: [
-              { src: 'DATABASE_URL=postgres://admin:s3cr3t@10.0.0.4/news', kind: 'flag', why: 'Password inside a connection URL.', fix: '(file removed, .env added to .gitignore)' },
-            ] },
-          ];
-          let scanned = false, pushed = false;
-          const all = [];
-          const repo = h('div', { class: 'cl-file cl-repo' });
-          for (const f of FILES) {
-            const box = h('div', {}, h('div', { class: 'cl-fname' }, f.name));
-            for (const l of f.lines) {
-              const code = h('code', {}, l.src);
-              const r = h('div', { class: 'cl-line' }, code); r.l = l; r.code = code; r.open = l.kind === 'flag';
-              all.push(r); box.append(r);
-            }
-            repo.append(box);
-          }
-          const status = pill('not scanned', 'ghost');
-          const o = out('');
-          const left = () => all.filter(r => r.l.kind === 'flag' && r.open).length;
-          function paintStatus() {
-            const n = left();
-            status.className = 'cl-pill ' + (!scanned ? 'cl-ghost' : n ? 'cl-err' : 'cl-ok');
-            status.textContent = !scanned ? 'not scanned' : n ? `${n} secret${n > 1 ? 's' : ''} found` : 'clean';
-          }
-          function scan() {
-            scanned = true;
-            for (const r of all) {
-              r.querySelectorAll('.cl-why, .cl-fix').forEach(x => x.remove());
-              if (r.l.kind === 'info') { r.classList.add('cl-info'); r.append(h('span', { class: 'cl-why' }, 'note: ' + r.l.why)); }
-              if (r.l.kind === 'flag' && r.open) {
-                r.classList.add('cl-flag'); replay(r, 'pop-soft');
-                r.append(h('button', { class: 'cl-fix', onclick() {
-                  r.open = false; r.code.textContent = r.l.fix; r.className = 'cl-line cl-fixed';
-                  r.querySelectorAll('.cl-why, .cl-fix').forEach(x => x.remove());
-                  paintStatus();
-                  say(o, left() ? `<span class="good">Moved out of the code.</span> <span class="muted">${left()} left.</span>` : '<span class="good">No secrets left in this commit.</span> <span class="muted">Now push.</span>');
-                } }, 'fix'), h('span', { class: 'cl-why' }, r.l.why));
-              }
-            }
-            paintStatus();
-            say(o, left() ? `<span class="bad">${left()} secrets in this commit.</span> <span class="muted">Tap fix on each. The Firebase key is flagged as a note, not a leak.</span>` : '<span class="good">Clean.</span>');
-          }
-          function push() {
-            if (pushed) { say(o, '<span class="muted">Already pushed.</span>'); return; }
-            if (!scanned) scan();
-            if (left()) {
-              replay(repo, 'shake');
-              say(o, '<span class="bad">Push blocked: secret scanning found credentials.</span> <span class="muted">GitHub push protection is on by default for your account when pushing to public repos. Do not rely on it alone: private repos and other hosts may not check.</span>');
-              return;
-            }
-            pushed = true;
-            say(o, '<span class="good">Pushed a clean commit.</span> <span class="muted">If the old values were ever pushed before, they are still in history: rotate the passwords and keys, then reset the Play upload key if it leaked.</span>');
-          }
-          say(o, 'Scan the commit before you push it.');
-          el.append(h('div', { class: 'controls' }, act('Scan commit', scan), act('git push', push)), h('div', { class: 'cl-row' }, label('staged changes'), status), repo, o);
+          Lab.ui.terminal(el, {
+            predict: {
+              q: 'A <code>.env</code> file with the database password was pushed. You delete it with <code>git rm</code> and commit again. Can someone with a clone still read the password?',
+              options: ['No, the file is deleted', 'Yes, it is still in the earlier commit', 'Only if the repository is public'],
+              a: 1,
+              why: 'A commit removes the file from the newest snapshot only. Every earlier commit, in every clone, still holds it. The real fix is to rotate the password.',
+            },
+            frames: [
+              { say: 'Yesterday someone committed <code>.env</code> with the database URL, password included, and pushed it.' },
+              { cmd: 'git rm --cached .env', out: "rm '.env'", say: 'Stop tracking the file. <code>--cached</code> keeps your local copy.' },
+              { cmd: 'echo ".env" >> .gitignore', say: 'Ignore it from now on, so it can’t be added again by accident.' },
+              { cmd: 'git commit -am "Stop tracking .env"', out: '[main 5c2e9a1] Stop tracking .env\n 2 files changed, 1 insertion(+), 1 deletion(-)\n delete mode 100644 .env', say: 'The newest commit no longer has the file. That only fixes the future.' },
+              { cmd: 'git log --oneline -- .env', out: '5c2e9a1 Stop tracking .env\n8d41b07 Add local config', say: 'History still has the commit that added it.' },
+              { cmd: 'git show 8d41b07:.env', out: '<span style="color:var(--err)">DATABASE_URL=postgres://admin:s3cr3t@10.0.0.4/news</span>', say: 'Anyone with a clone, a fork or a CI cache can print it. Treat the password as leaked.' },
+              { cmd: 'gcloud secrets versions add db-password --data-file=new-password.txt', out: 'Created version [2] of the secret [db-password].', say: 'Rotate it: set a new password on the database and store it in the secret manager. The old value in history is now useless.' },
+              { say: 'The app reads <code>System.getenv("DATABASE_URL")</code>, and the platform injects the new value at run time. No secret is in git.' },
+            ],
+          });
         },
         code: `// app/build.gradle.kts: signing values come from the environment (CI secrets) or local, ignored files.
 android {
@@ -681,54 +614,31 @@ val databaseUrl = System.getenv("DATABASE_URL")
         body: `
 <p>A <b>backend-as-a-service (BaaS)</b> gives you auth, a database, file storage and server functions behind an SDK, with no servers to run. It is the fastest way to a working app. The cost is <b>lock-in</b>: your data model and code start to depend on one vendor.</p>
 <p><b>Firebase</b> (Google) centers on Cloud Firestore, a document database with offline persistence on by default on Android, plus Auth, Storage and Cloud Functions. Cloud Functions and Cloud Storage need the pay-as-you-go Blaze plan. <b>Supabase</b> gives every project a full Postgres database, with Auth, Row Level Security policies, Storage, Realtime and Edge Functions (TypeScript on Deno). It can be self-hosted with Docker. <b>Your own server</b> (for example Ktor plus Postgres in a container) gives full control and the most work.</p>
-<p>Push notifications do not decide this: FCM works with any backend that can call its API (see <a href="#push.fcm">FCM</a>). Pick your requirements and see how the options move.</p>`,
+<p>Push notifications do not decide this: FCM works with any backend that can call its API (see <a href="#push.fcm">FCM</a>). The demo follows one app as its requirements change.</p>`,
         visual(el) {
-          const OPTS = [['fb', 'Firebase'], ['sb', 'Supabase'], ['own', 'Own server']];
-          const REQS = [
-            { id: 'sql', label: 'Relational data with joins', s: { fb: [-2, 'Firestore is a document database; joins mean extra reads or duplicated data'], sb: [2, 'Every project is a full Postgres database'], own: [2, 'Any database you like'] } },
-            { id: 'off', label: 'Offline cache with no extra code', s: { fb: [2, 'Firestore offline persistence is on by default on Android'], sb: [-1, 'You build the cache yourself, for example with Room'], own: [-1, 'You build the cache yourself, for example with Room'] } },
-            { id: 'fast', label: 'Two people, ship in weeks', s: { fb: [2, 'Auth, database and SDKs on day one'], sb: [2, 'Auth, database and APIs on day one'], own: [-2, 'You write and run auth, APIs, backups'] } },
-            { id: 'self', label: 'Data must stay on servers we run', s: { fb: [-3, 'Runs only on Google\'s infrastructure'], sb: [2, 'Can be self-hosted with Docker'], own: [3, 'It is your server'] } },
-            { id: 'logic', label: 'Heavy server logic, long jobs', s: { fb: [0, 'Cloud Functions work, but need the Blaze plan'], sb: [0, 'Edge Functions suit short TypeScript tasks'], own: [2, 'Any code, any runtime, any duration'] } },
-            { id: 'free', label: 'Hobby project, zero budget', s: { fb: [1, 'Spark plan is free, without Cloud Functions or Storage'], sb: [1, 'Free plan, but projects pause after 7 days of low activity'], own: [-1, 'A server costs money even when idle, unless it scales to zero'] } },
-            { id: 'exit', label: 'Easy to move away later', s: { fb: [-2, 'Firestore data and rules do not map directly to other databases'], sb: [1, 'Standard Postgres you can dump and restore elsewhere'], own: [2, 'Nothing to migrate away from'] } },
-            { id: 'push', label: 'Push notifications', s: { fb: [0, 'FCM works with any backend'], sb: [0, 'FCM works with any backend'], own: [0, 'FCM works with any backend'] } },
-          ];
-          const on = new Set(['fast']);
-          const bars = OPTS.map(([id, name]) => {
-            const fill = h('div', { class: 'cl-fill' }); const num = h('b', {}, '0');
-            const r = h('div', { class: 'cl-bar' }, h('span', {}, name), h('div', { class: 'cl-track' }, fill), num); r.fill = fill; r.num = num; r.id = id; return r;
+          Lab.ui.graph(el, {
+            height: 290,
+            nodes: [
+              { id: 'app', label: 'Android app<small>screens, ViewModels</small>', x: 50, y: 12 },
+              { id: 'src', label: 'HeadlineSource<small>your interface</small>', x: 50, y: 48, hidden: true },
+              { id: 'fb', label: 'Firestore<small>Firebase SDK</small>', x: 17, y: 86, tone: 'warm' },
+              { id: 'sb', label: 'Supabase<small>Postgres</small>', x: 50, y: 86, tone: 'ok', hidden: true },
+              { id: 'own', label: 'Your Ktor API<small>+ Postgres</small>', x: 83, y: 86, hidden: true },
+            ],
+            predict: {
+              q: 'The screens call Firestore directly in dozens of places. A new rule says the data must live on servers your company runs. What has to change?',
+              options: ['Only the Gradle dependency', 'Every place that calls Firestore, and the data itself', 'Nothing: point the Firebase SDK at your own server'],
+              a: 1,
+              why: 'Firestore runs only on Google’s infrastructure. Its queries and document shapes are spread through the code, and its data does not map directly to tables.',
+            },
+            frames: [
+              { add: [['app', 'fb', 'SDK calls', 'warm']], say: 'Day one with Firebase: the app talks to Firestore through its SDK. Auth, the database and an offline cache come with it, and you run no servers.' },
+              { hl: ['app', 'fb'], say: 'Fast, but Firestore queries, listeners and document shapes end up in many screens. That is what lock-in looks like in code.' },
+              { show: ['src'], remove: [['app', 'fb']], add: [['app', 'src', 'calls'], ['src', 'fb', 'one class', 'warm']], say: 'Wrap it. Screens depend on your own <code>HeadlineSource</code> interface, and only one implementation knows Firestore.' },
+              { show: ['sb', 'own'], say: 'Now the requirements change: data must stay on servers you run. Supabase can be self-hosted with Docker. Your own server gives full control and the most work.' },
+              { remove: [['src', 'fb']], add: [['src', 'own', 'new impl', 'ok']], gone: ['fb'], say: 'You write one new implementation. The screens do not change. Moving the data is still real work.' },
+            ],
           });
-          const notes = h('ul', { class: 'cl-notes' });
-          const head = h('div', { class: 'cl-row' });
-          const o = out('');
-          function paint() {
-            const score = Object.fromEntries(OPTS.map(([id]) => [id, 0]));
-            for (const r of REQS) if (on.has(r.id)) for (const [id] of OPTS) score[id] += r.s[id][0];
-            const vals = Object.values(score), lo = Math.min(0, ...vals), hi = Math.max(1, ...vals);
-            const best = Math.max(...vals);
-            const tops = OPTS.filter(([id]) => score[id] === best).map(([id]) => id);
-            bars.forEach(b => {
-              b.fill.style.width = `${Math.max(4, ((score[b.id] - lo) / (hi - lo || 1)) * 100)}%`;
-              b.num.textContent = (score[b.id] > 0 ? '+' : '') + score[b.id];
-              b.classList.toggle('cl-top', on.size > 0 && tops.includes(b.id));
-            });
-            const pick = tops[0], name = OPTS.find(x => x[0] === pick)[1];
-            head.replaceChildren(label('why'), pill(tops.length > 1 ? 'tie: ' + tops.map(t => OPTS.find(x => x[0] === t)[1]).join(' / ') : name, 'ok'));
-            notes.replaceChildren(...REQS.filter(r => on.has(r.id)).map(r => {
-              const [v, why] = r.s[pick];
-              return h('li', { class: v > 0 ? 'cl-plus' : v < 0 ? 'cl-minus' : 'cl-zero' }, h('b', {}, r.label + ': '), why);
-            }));
-            say(o, !on.size ? '<span class="muted">Pick at least one requirement.</span>'
-              : tops.length > 1 ? '<span class="good">A tie.</span> <span class="muted">Add the requirement that matters most to break it. Real choices usually hinge on one or two.</span>'
-                : `<span class="good">${name} fits these requirements best.</span> <span class="muted">Scores are a teaching aid, not a verdict: weigh the minus points.</span>`);
-          }
-          const reqBtns = REQS.map(r => h('button', { class: 'cl-req', 'aria-pressed': String(on.has(r.id)), onclick(e) {
-            on.has(r.id) ? on.delete(r.id) : on.add(r.id);
-            e.currentTarget.setAttribute('aria-pressed', String(on.has(r.id))); paint();
-          } }, r.label));
-          el.append(label('your requirements'), h('div', { class: 'cl-reqs' }, reqBtns), h('div', { class: 'cl-box' }, h('div', { class: 'cl-bars' }, bars), head, notes), o);
-          paint();
         },
         code: `// Keep the BaaS behind your own interface, so the rest of the app does not know which one you chose.
 interface HeadlineSource {
@@ -795,6 +705,12 @@ class FirestoreHeadlines(private val db: FirebaseFirestore) : HeadlineSource {
 <p><b>Observability</b> is being able to answer "what is going wrong, and where?" from the data your system sends out. OpenTelemetry groups that data into signals. <b>Logs</b> are timestamped events ("payment failed for order 812"). <b>Metrics</b> are numbers over time (requests per second, error rate, p95 latency). <b>Traces</b> follow one request through every service it touches, as a tree of timed <b>spans</b>.</p>
 <p><b>Dashboards</b> show metrics at a glance. <b>Alerts</b> page someone when a metric stays bad, such as "error rate above 2% for 5 minutes". Alert on what users feel (errors, latency), not on every CPU blip.</p>
 <p>The glue is an id. The app sends a request id (or a W3C <code>traceparent</code> header) with each call, and records it in the crash report (see <a href="#launch.crashes">Crash reporting</a>). On the server every log line carries the same id. Try it: make a request fail, then follow the id.</p>`,
+        predict: {
+          q: "A crash report carries the request id the app sent. You filter the server logs by that id. Whose lines show up?",
+          options: ["Only the gateway’s", "Lines from every service that request touched", "Every request from that minute"],
+          a: 1,
+          why: "Each service logs the id it received with the request, so one filter pulls one request’s story out of everyone else’s traffic.",
+        },
         visual(el) {
           const ID = 'a91f-3c7e';
           const LOGS = [
@@ -904,6 +820,12 @@ install(CallLogging) { callIdMdc("req") }       // log pattern: ... req=%X{req}`
 <p><b>Vertical scaling</b> is a bigger machine: more CPU and memory. It is simple and has a ceiling, and the machine is still one point of failure. <b>Horizontal scaling</b> is more machines doing the same job, with a <b>load balancer</b> in front spreading requests across them and sending traffic only to healthy ones.</p>
 <p>Horizontal scaling only works if servers are <b>stateless</b>: any instance can answer any request, because sessions, carts and uploads live in a shared database, cache or bucket, not in one server\'s memory. Then an <b>autoscaler</b> can add instances when load rises and remove them when it falls.</p>
 <p>A <b>CDN</b> (content delivery network) caches responses at edge locations near users: images, app config, the headline list for 60 seconds. A cache hit never reaches your servers. Every instance and every gigabyte costs money, so watch the cost counter while you send a breaking-news push.</p>`,
+        predict: {
+          q: "After the push, traffic falls back to normal. Autoscaling is on. What does the cost counter do?",
+          options: ["Keeps rising at the peak rate: the extra instances stay", "Rises more slowly as the autoscaler removes idle instances", "Stops completely"],
+          a: 1,
+          why: "You pay for every running instance. When load stays low, the autoscaler removes instances, but the minimum it keeps running still bills.",
+        },
         visual(el) {
           const CAP = 10;
           let traffic = 12, auto = true, cdn = false, stateful = false;

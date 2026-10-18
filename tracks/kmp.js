@@ -385,49 +385,32 @@ fun newId(): String = Uuid.random().toString()`,
           },
         ],
         visual(el) {
-          const SETS = [
-            { id: 'common', name: 'commonMain', note: 'every target', d: 0, files: ['Greeting.kt', 'ArticleRepository.kt'] },
-            { id: 'android', name: 'androidMain', note: 'Android', d: 1, files: ['Platform.android.kt'] },
-            { id: 'apple', name: 'appleMain', note: 'all Apple targets', d: 1, files: [] },
-            { id: 'ios', name: 'iosMain', note: 'all iOS targets', d: 2, files: ['Platform.ios.kt'] },
-            { id: 'arm', name: 'iosArm64Main', note: 'iPhone', d: 3, files: [] },
-            { id: 'sim', name: 'iosSimulatorArm64Main', note: 'Simulator on Apple silicon', d: 3, files: [] },
-          ];
-          const TARGETS = [
-            { label: 'Build Android', task: ':androidApp:assembleDebug', sets: ['common', 'android'], steps: ['Kotlin/JVM compiler', 'JVM bytecode (.class)', 'D8: bytecode to DEX'], art: 'app-debug.apk', note: 'commonMain + androidMain became JVM bytecode, then DEX inside the APK.' },
-            { label: 'Build iPhone', task: ':shared:linkDebugFrameworkIosArm64', sets: ['common', 'apple', 'ios', 'arm'], steps: ['Kotlin/Native compiler', 'LLVM IR', 'arm64 machine code'], art: 'Shared.framework (iosArm64)', note: 'No JVM here. Kotlin/Native compiled four source sets to machine code for the device.' },
-            { label: 'Build Simulator', task: ':shared:linkDebugFrameworkIosSimulatorArm64', sets: ['common', 'apple', 'ios', 'sim'], steps: ['Kotlin/Native compiler', 'LLVM IR', 'arm64 simulator code'], art: 'Shared.framework (simulator)', note: 'Same commonMain and iosMain code. Only the leaf source set and the binary differ.' },
-          ];
-          const nodes = {};
-          const tree = h('div', { class: 'kmp-tree' }, SETS.map(s => (nodes[s.id] = h('div', { class: 'kmp-ss', style: `--d:${s.d}` },
-            h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, s.name), h('span', { class: 'kmp-ss-note' }, s.note)),
-            s.files.length ? h('div', { class: 'kmp-files' }, s.files.map(f => h('span', { class: `kmp-file${s.id === 'common' ? ' kmp-common' : ''}` }, f))) : null))));
-          const inbox = h('div', { class: 'kmp-inbox', 'aria-label': 'Files going into the compiler' });
-          const steps = h('div', { class: 'kmp-steps' });
-          const art = h('div', { class: 'kmp-art' }, 'no output yet');
-          const o = out('Pick a target. Watch which source sets it compiles.');
-          let busy = false;
-          const btns = TARGETS.map((t, i) => act(t.label, () => run(t, i)));
-          async function run(t, i) {
-            if (busy) return; busy = true; pick(btns, i);
-            inbox.replaceChildren(); art.className = 'kmp-art'; art.textContent = 'compiling...';
-            steps.replaceChildren(...t.steps.map(s => h('div', { class: 'kmp-step' }, s)));
-            say(o, `<span class="muted">$ ./gradlew ${t.task}</span>`);
-            SETS.forEach(s => { nodes[s.id].className = 'kmp-ss' + (t.sets.includes(s.id) ? '' : ' kmp-dim'); });
-            for (const s of SETS) {
-              if (!t.sets.includes(s.id)) continue;
-              nodes[s.id].classList.add('kmp-on'); await sleep(260); if (!el.isConnected) return;
-              for (const f of s.files) { inbox.append(h('span', { class: `kmp-file drop-in${s.id === 'common' ? ' kmp-common' : ''}` }, f)); await sleep(180); }
-            }
-            for (const st of steps.children) { st.classList.add('kmp-on'); replay(st, 'pop-soft'); await sleep(420); if (!el.isConnected) return; }
-            art.className = 'kmp-art kmp-ready pop'; art.textContent = t.art;
-            say(o, `<span class="good">BUILD SUCCESSFUL</span> ${t.note}`);
-            busy = false;
-          }
-          el.append(h('div', { class: 'kmp-grid2' },
-            h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'shared/src'), tree),
-            h('div', { class: 'kmp-pipe' }, h('span', { class: 'kmp-label' }, 'Into the compiler'), inbox, steps, h('span', { class: 'kmp-label' }, 'Output'), art)),
-          h('div', { class: 'controls' }, btns), o);
+          Lab.ui.graph(el, {
+            height: 320,
+            nodes: [
+              { id: 'common', label: 'commonMain<small>every target</small>', x: 50, y: 9 },
+              { id: 'and', label: 'androidMain', x: 17, y: 37 },
+              { id: 'apple', label: 'appleMain', x: 83, y: 37 },
+              { id: 'apk', label: 'APK<small>DEX</small>', x: 17, y: 65, tone: 'ok', hidden: true },
+              { id: 'ios', label: 'iosMain', x: 83, y: 65 },
+              { id: 'fw', label: 'Shared.framework<small>machine code</small>', x: 50, y: 65, tone: 'ok', hidden: true },
+              { id: 'arm', label: 'iosArm64Main', x: 50, y: 92 },
+              { id: 'sim', label: 'iosSimulator<wbr>Arm64Main', x: 83, y: 92 },
+            ],
+            predict: {
+              q: 'You build the framework for a real iPhone. Which source sets are compiled?',
+              options: ['Only <code>iosArm64Main</code>', '<code>commonMain</code>, <code>appleMain</code>, <code>iosMain</code> and <code>iosArm64Main</code>', 'All of them, <code>androidMain</code> included'],
+              a: 1,
+              why: 'A target compiles its own leaf source set plus every parent above it in the tree. <code>androidMain</code> is on another branch.',
+            },
+            frames: [
+              { add: [['common', 'and'], ['common', 'apple'], ['apple', 'ios'], ['ios', 'arm'], ['ios', 'sim']], say: 'The default hierarchy template builds this tree from the targets you declare. Each source set sees itself and everything above it.' },
+              { show: ['apk'], hl: ['common', 'and'], add: [['common', 'and', '', 'accent'], ['and', 'apk', 'JVM → D8', 'ok']], say: '<code>assembleDebug</code>: commonMain and androidMain become JVM bytecode, then D8 turns it into DEX inside the APK.' },
+              { show: ['fw'], hl: ['common', 'apple', 'ios', 'arm'], add: [['common', 'and'], ['and', 'apk'], ['common', 'apple', '', 'accent'], ['apple', 'ios', '', 'accent'], ['ios', 'arm', '', 'accent'], ['arm', 'fw', 'Kotlin/Native', 'ok']], say: 'Build for iPhone: four source sets go to Kotlin/Native, which compiles them through LLVM to arm64 machine code. No JVM on the phone.' },
+              { hl: ['common', 'apple', 'ios', 'sim'], remove: [['arm', 'fw']], add: [['ios', 'arm'], ['ios', 'sim', '', 'accent'], ['sim', 'fw', '', 'ok']], say: 'For the Simulator only the leaf changes. commonMain, appleMain and iosMain are the same code.' },
+              { hl: ['common'], add: [['common', 'apple'], ['apple', 'ios'], ['ios', 'sim']], say: 'So code in commonMain reaches every binary. That is also why it may only use APIs that exist on every target.' },
+            ],
+          });
         },
       },
 
@@ -474,7 +457,13 @@ class AndroidClipboard(private val context: Context) : Clipboard {
           { type: 'blank', prompt: 'Declare a random ID function in common and implement it on Android.', code: '// commonMain\n[[expect]] fun randomId(): String\n\n// androidMain\n[[actual]] fun randomId(): String = UUID.randomUUID().toString()\n\n// iosMain\nactual fun randomId(): String = NSUUID().UUIDString', why: 'The common file promises the function with <code>expect</code>. Each platform file keeps the promise with <code>actual</code>.' },
           { type: 'bug', prompt: 'Android builds. iOS reports that the actual does not match its expect. Tap the line.', code: '// commonMain\nexpect fun currentTimeMillis(): Long\n\n// androidMain\nactual fun currentTimeMillis(): Long = System.currentTimeMillis()\n\n// iosMain\nactual fun currentTimeMillis(): Int = (NSDate().timeIntervalSince1970 * 1000).toInt()', bug: 7, fix: 'actual fun currentTimeMillis(): Long = (NSDate().timeIntervalSince1970 * 1000).toLong()', why: 'An <code>actual</code> must match the <code>expect</code> signature exactly. <code>Int</code> also overflows for milliseconds since 1970.' },
         ],
-        quiz: [
+        predict: {
+      q: "You build the desktop app and call <code>greet()</code>. Which <code>actual</code> functions are in the desktop binary?",
+      options: ["All three","Only the one from <code>jvmMain</code>","None: <code>expect</code> is resolved at run time"],
+      a: 1,
+      why: "Each target is compiled from its own source sets. The compiler links the matching <code>actual</code>; the others are not in that binary at all.",
+    },
+    quiz: [
           { q: 'An <code>expect fun</code> has an <code>actual</code> in <code>androidMain</code> only. The module targets Android and iOS. What happens?', options: ['iOS uses the Android version', 'The iOS compilation fails', 'It returns null on iOS'], a: 1, why: 'Every target needs its own <code>actual</code>. Android still compiles. iOS does not.' },
           { q: 'Your Android implementation needs a <code>Context</code>. What fits best?', options: ['An <code>expect fun</code> that reads a global static Context', 'An interface in <code>commonMain</code>, an Android class that takes Context in its constructor, wired with DI', 'Pass Context through <code>commonMain</code> function parameters'], a: 1, why: 'An interface keeps common code free of Android types, and the platform class gets its dependencies the normal way.' },
           { q: 'An expect fun has one actual in iosMain and another in iosArm64Main. What happens to the iosArm64 target?', options: ['The iosArm64Main actual wins because it is more specific', 'The iosMain actual wins because it is higher', 'The build fails: walking up from the target finds two actuals'], a: 2, why: 'For each target the compiler must find exactly one actual on the path to commonMain. None fails, and two fail too.' },
@@ -1004,55 +993,33 @@ data class Author(val name: String)`,
           },
         ],
         visual(el) {
-          const SEED = ['Room 2.8 is out', 'Ktor 3.3 notes'];
-          const NEWS = ['Compose for iOS: what changed', 'SKIE vs NativeCoroutines', 'DataStore on iOS', 'Kotlin 2.3 roundup', 'Swift export preview', 'SQLDelight tips'];
-          let n = 0, busy = false, offline = false;
-          const apps = ['Android', 'iOS'].map((name, i) => {
-            const list = h('div', { class: 'kmp-list' });
-            const foot = h('span', { class: 'kmp-foot' });
-            const dev = h('div', { class: `kmp-dev ${i ? 'kmp-ios' : 'kmp-and'}`, role: 'img', 'aria-label': `${name} app` }, h('span', { class: 'kmp-scr-title' }, 'News'), list, foot);
-            return { name, list, foot, dev, db: i ? [] : SEED.slice(), sync: i ? null : '09:40' };
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'ui', label: 'Screen', sub: 'Android or iOS' },
+              { id: 'repo', label: 'Repository', sub: 'commonMain' },
+              { id: 'room', label: 'Room', sub: 'bundled SQLite' },
+              { id: 'ktor', label: 'Ktor', sub: 'engine per platform' },
+              { id: 'api', label: 'Server', sub: 'GET /articles' },
+            ],
+            predict: {
+              q: 'The iPhone is offline and the user pulls to refresh. What does the screen show?',
+              options: ['An empty list with an error', 'The rows already stored in Room', 'A crash: Kotlin exceptions always crash iOS'],
+              a: 1,
+              why: 'The repository reads Room first and catches the <code>IOException</code> from Ktor inside shared code, so the cached rows stay on screen.',
+            },
+            frames: [
+              { say: 'The Android app and the iOS app each run their own copy of the same <code>ArticleRepository</code>. Follow one refresh on iOS.' },
+              { at: 'ui', packet: 'refresh()', say: 'The iOS screen asks the shared ViewModel, which calls the repository.' },
+              { at: 'room', packet: '2 cached rows', tone: 'ok', say: 'First the repository emits what Room already has, so the screen is never empty.' },
+              { at: 'ktor', packet: 'GET /articles', say: 'Then Ktor fetches fresh data. On iOS it uses the Darwin engine, on Android OkHttp. The calling code is the same.' },
+              { at: 'api', packet: '200 JSON', tone: 'ok', mark: { api: 'ok' }, say: 'The server answers with JSON.' },
+              { at: 'ktor', packet: 'List<Article>', tone: 'ok', mark: { ktor: 'ok' }, say: 'kotlinx.serialization decodes it with serializers generated at compile time. No reflection, so it works on Kotlin/Native.' },
+              { at: 'room', packet: 'upsertAll(2 new)', tone: 'ok', mark: { room: 'ok' }, say: 'The repository writes the new rows into Room in one transaction.' },
+              { at: 'ui', packet: '4 rows', tone: 'ok', mark: { ui: 'ok' }, say: 'Room’s Flow emits again and the screen shows the new list.' },
+              { at: 'ktor', packet: 'IOException', tone: 'err', mark: { ktor: 'err', api: null }, say: 'Later, in a tunnel: Ktor throws <code>IOException</code>. The repository catches it.' },
+              { at: 'ui', packet: '4 cached rows', tone: 'warm', mark: { ui: 'warm' }, say: 'The screen keeps the rows from Room and shows a quiet “offline” note.' },
+            ],
           });
-          const layerDefs = [['cache', 'Room', 'dao.observeAll()'], ['net', 'Ktor', 'client.get(...)'], ['json', 'serialization', '.body<List<Article>>()'], ['save', 'Room', 'dao.upsertAll()'], ['prefs', 'DataStore', 'LAST_SYNC']];
-          const layers = Object.fromEntries(layerDefs.map(([k, b, s]) => [k, h('div', { class: 'kmp-layer' }, h('b', {}, b), h('small', {}, s))]));
-          const caller = h('span', { class: 'kmp-label' }, 'idle');
-          const repo = h('div', { class: 'kmp-repo' }, h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, 'ArticleRepository (commonMain)'), caller), h('div', { class: 'kmp-layers' }, Object.values(layers)));
-          const o = out('Two apps, one repository. Refresh either one.');
-          const paint = (a, fresh = 0) => {
-            a.list.replaceChildren(...(a.db.length ? a.db.slice(0, 4).map((t, i) => h('div', { class: `kmp-li${i < fresh ? ' kmp-new' : ''}` }, t)) : [h('p', { class: 'kmp-empty' }, 'Empty. Pull to refresh.')]));
-            a.foot.textContent = a.sync ? `rows: ${a.db.length} · synced ${a.sync}` : `rows: ${a.db.length}`;
-          };
-          apps.forEach(a => paint(a));
-          async function refresh(a) {
-            if (busy) return; busy = true;
-            Object.values(layers).forEach(l => { l.className = 'kmp-layer'; });
-            a.dev.classList.add('kmp-ask'); caller.textContent = `called by ${a.name}`;
-            const step = async (k, cls, msg) => { layers[k].classList.add('kmp-on'); say(o, msg); await sleep(520); if (!el.isConnected) return false; layers[k].className = 'kmp-layer ' + cls; return true; };
-            if (!await step('cache', 'kmp-ok', `<span class="muted">${a.name}: emit ${a.db.length} cached rows from the database</span>`)) return;
-            if (offline) {
-              await step('net', 'kmp-fail', `<span class="muted">${a.name}: GET /articles</span>`); if (!el.isConnected) return;
-              replay(layers.net, 'shake');
-              say(o, `<span class="bad">IOException:</span> no network. ${a.name} keeps showing its ${a.db.length} cached rows.`);
-            } else {
-              if (!await step('net', 'kmp-ok', `<span class="muted">${a.name}: GET /articles via ${a.name === 'iOS' ? 'Darwin' : 'OkHttp'} engine</span>`)) return;
-              if (!await step('json', 'kmp-ok', '<span class="muted">decode JSON into List&lt;Article&gt;</span>')) return;
-              const fresh = [NEWS[n % NEWS.length], NEWS[(n + 1) % NEWS.length]]; n += 2;
-              a.db = [...fresh, ...a.db.filter(t => !fresh.includes(t))];
-              if (!await step('save', 'kmp-ok', '<span class="muted">upsert rows. The Flow emits again.</span>')) return;
-              paint(a, 2);
-              const d = new Date(); a.sync = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-              if (!await step('prefs', 'kmp-ok', '<span class="muted">save LAST_SYNC</span>')) return;
-              paint(a);
-              say(o, `<span class="good">ok:</span> ${a.name} got 2 new rows. Same Kotlin code ran, with a different engine and database file.`);
-            }
-            a.dev.classList.remove('kmp-ask'); caller.textContent = 'idle';
-            busy = false;
-          }
-          const sw = h('input', { type: 'checkbox', id: 'kmp-offline', onchange() { offline = this.checked; say(o, offline ? 'Network off. Refresh to see the cache take over.' : 'Network back on.'); } });
-          el.append(h('div', { class: 'kmp-devs' }, apps.map(a => h('div', { class: 'kmp-dev-wrap' }, a.dev, h('span', { class: 'kmp-label' }, a.name)))),
-            repo,
-            h('div', { class: 'controls' }, apps.map(a => act(`Refresh ${a.name}`, () => refresh(a))), h('label', { class: 'switch', for: 'kmp-offline' }, sw, 'offline')),
-            o);
         },
       },
 
@@ -1105,7 +1072,13 @@ val uiState: StateFlow<UiState> = _state.asStateFlow()
           { type: 'blank', prompt: 'Keep the mutable flow private and launch work that is cancelled with the ViewModel.', code: 'class TimerViewModel : ViewModel() {\n    private val _seconds = [[MutableStateFlow]](0)\n    val seconds: StateFlow<Int> = _seconds.[[asStateFlow]]()\n\n    fun start() {\n        [[viewModelScope]].launch {\n            while (true) { delay(1000); _seconds.value += 1 }\n        }\n    }\n}', why: 'Only the ViewModel can write. <code>viewModelScope</code> stops the loop when the ViewModel is cleared, on Android and iOS alike.' },
           { type: 'bug', prompt: 'After the iOS screen closes, the network call keeps running and writes to a dead ViewModel. Tap the line.', code: 'class ProfileViewModel(private val repo: UserRepository) : ViewModel() {\n    private val _user = MutableStateFlow<User?>(null)\n    val user: StateFlow<User?> = _user.asStateFlow()\n\n    fun load(id: String) {\n        GlobalScope.launch {\n            _user.value = repo.user(id)\n        }\n    }\n}', bug: 5, fix: '        viewModelScope.launch {', why: '<code>GlobalScope</code> is not tied to anything, so clearing the ViewModel cancels nothing. <code>viewModelScope</code> is cancelled in <code>onCleared</code>.' },
         ],
-        quiz: [
+        predict: {
+      q: "Swift collects the state through SKIE, and the shared ViewModel emits a new state. Which screens update?",
+      options: ["Only the Android screen","Both the Android and the iOS screen","Only the iOS screen"],
+      a: 1,
+      why: "SKIE turns the <code>StateFlow</code> into a Swift <code>AsyncSequence</code>, so SwiftUI receives every new value just as Compose does.",
+    },
+    quiz: [
           { q: 'What happens to coroutines in <code>viewModelScope</code> when the ViewModel is cleared on iOS?', options: ['They keep running until the app exits', 'They are cancelled, same as on Android', 'viewModelScope does not exist on iOS'], a: 1, why: 'The KMP lifecycle library cancels the scope on every platform when the ViewModel is cleared.' },
           { q: 'With no bridge library, what can Swift easily do with a Kotlin <code>StateFlow</code>?', options: ['<code>for await</code> over it', 'Read its current <code>value</code>; collecting needs a hand-written collector', 'Bind it with <code>@Published</code> automatically'], a: 1, why: 'Swift sees an Objective-C protocol. Reading <code>value</code> works; observing changes needs a <code>FlowCollector</code> or a tool like SKIE.' },
           { q: 'With SKIE, how does SwiftUI observe <code>viewModel.state</code>?', options: ['<code>for await state in viewModel.state</code>', '<code>viewModel.state.observe(owner)</code>', '<code>viewModel.state.sink { }</code> only'], a: 0, why: 'SKIE exposes Kotlin flows as Swift <code>AsyncSequence</code>s, and cancels the Kotlin collection when the Swift task is cancelled.' },
@@ -1417,7 +1390,13 @@ fun main() = application {
           { type: 'blank', prompt: 'Load the shared logo and title, and expose the screen to iOS.', code: 'Image([[painterResource]](Res.drawable.logo), contentDescription = null)\nText([[stringResource]](Res.string.title))\n\n// iosMain\nfun MainViewController() = [[ComposeUIViewController]] { App() }', why: 'The generated <code>Res</code> accessors go through <code>painterResource</code> and <code>stringResource</code>. iOS gets a <code>UIViewController</code> from <code>ComposeUIViewController</code>.' },
           { type: 'bug', prompt: 'This compiles in an Android-only app but not in <code>commonMain</code>. Tap the line.', code: '@Composable\nfun Header() {\n    Column(Modifier.padding(16.dp)) {\n        Image(painterResource(Res.drawable.logo), contentDescription = null)\n        Text(stringResource(R.string.title))\n    }\n}', bug: 4, fix: '        Text(stringResource(Res.string.title))', why: '<code>R</code> is generated by the Android build only. Shared code uses the Compose Multiplatform <code>Res</code> class.' },
         ],
-        quiz: [
+        predict: {
+      q: "You tap the button in the iOS frame twice. What does the Android frame’s counter show?",
+      options: ["2 as well","Its own value: each app keeps its own state","0, because it resets"],
+      a: 1,
+      why: "The code is shared, but each app runs its own copy with its own <code>remember</code> state.",
+    },
+    quiz: [
           { q: 'Where does a shared <code>strings.xml</code> go?', options: ['<code>androidMain/res/values</code>', '<code>commonMain/composeResources/values</code>', 'In the Xcode project'], a: 1, why: 'Files under <code>composeResources</code> are packaged for every target and exposed through <code>Res</code>.' },
           { q: 'How does an iOS app show a shared composable?', options: ['It wraps it with <code>ComposeUIViewController</code> and shows the UIViewController', 'It converts it to SwiftUI views at build time', 'It runs Android inside the iOS app'], a: 0, why: 'Compose draws into a UIViewController. SwiftUI hosts it with <code>UIViewControllerRepresentable</code>.' },
           { q: 'On iOS, what draws a Compose Multiplatform <code>Button</code>?', options: ['A UIKit <code>UIButton</code>', 'Compose itself, rendering with Skia', 'WebKit'], a: 1, why: 'Compose renders its own pixels with Skia. Use <code>UIKitView</code> when you need a real native view.' },
@@ -1731,7 +1710,13 @@ sealed class UiState {
           { type: 'blank', prompt: 'Make the Kotlin singleton and exception usable from Swift.', code: '// Kotlin\n[[object]] Analytics {\n    fun track(event: String) { /* ... */ }\n}\n\n@[[Throws]](IOException::class)\nfun readConfig(): String = loadFile("config.json")\n\n// Swift\nAnalytics.[[shared]].track(event: "open")\nlet config = try ConfigKt.readConfig()', why: 'A Kotlin <code>object</code> is reached through <code>.shared</code>. <code>@Throws</code> turns the IOException into a Swift error you can <code>try</code>.' },
           { type: 'bug', prompt: 'This Swift file does not compile. Tap the line.', code: 'import Shared\n\nfunc summary(repo: UserRepository) -> String {\n    let total: Int = repo.count()\n    let names = repo.names()\n    return "\\(total) users: " + names.joined(separator: ", ")\n}', bug: 3, fix: '    let total = Int(repo.count())   // Kotlin Int arrives as Int32', why: 'Kotlin <code>Int</code> is 32-bit, so Swift sees <code>Int32</code>. Swift does not convert number types for you.' },
         ],
-        quiz: [
+        predict: {
+      q: "Without SKIE, what does Swift get for <code>enum class Theme { LIGHT, DARK }</code>?",
+      options: ["A Swift enum with an exhaustive switch","A class with static members; a switch needs a default case","Nothing: enums are not exported"],
+      a: 1,
+      why: "Plain Objective-C export turns Kotlin enums into classes. SKIE can generate a real Swift enum instead.",
+    },
+    quiz: [
           { q: 'Kotlin has <code>fun count(): Int</code>. What does Swift get?', options: ['<code>Int</code>', '<code>Int32</code>', '<code>NSNumber</code>'], a: 1, why: 'Kotlin <code>Int</code> is always 32-bit, so the header uses <code>int32_t</code>, which Swift imports as <code>Int32</code>.' },
           { q: 'A Kotlin function throws an exception it did not declare with <code>@Throws</code>, and Swift called it. What happens?', options: ['Swift receives an <code>Error</code>', 'The app crashes', 'It returns nil'], a: 1, why: 'Only declared exceptions become Swift errors. Undeclared ones terminate the program.' },
           { q: 'Without SKIE, how does Swift check which <code>UiState</code> it has?', options: ['An exhaustive <code>switch</code> over enum cases', '<code>as?</code> casts or <code>is</code> checks, with a fallback case', 'It cannot see sealed classes'], a: 1, why: 'Swift sees a class hierarchy, so the compiler cannot prove every case is handled. SKIE adds <code>onEnum(of:)</code> for that.' },

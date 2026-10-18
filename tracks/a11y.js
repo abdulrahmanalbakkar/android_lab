@@ -284,6 +284,15 @@
 .ay-rz-fixed .ay-rz-form { max-width: 150px; }
 .ay-rz-field { display: block; padding: 4px 8px; border-radius: 6px; border: 1.5px solid var(--line); font: 500 0.72rem var(--body); color: var(--muted); }
 .ay-rz-btn { justify-self: stretch; text-align: center; }
+
+/* kit phone screens: TalkBack focus and parts */
+.ayk-f { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.ayk-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: none; }
+.ayk-ico svg { width: 20px; height: 20px; }
+.ayk-stars { display: inline-flex; gap: 2px; justify-self: start; color: var(--muted); font-size: 0.95rem; }
+.ayk-stars i { font-style: normal; } .ayk-stars i.on { color: var(--warm); }
+.ayk-act { display: flex; align-items: center; gap: 10px; }
+.ayk-menu { padding: 6px 8px; border-radius: 8px; background: var(--sunk); font-size: 0.82rem; }
 `;
 
   Lab.addTrack({
@@ -447,79 +456,30 @@ fun productCard_isAccessible() {
           },
         ],
         visual(el) {
-          const fix = sw('ay-why-fix', 'Add labels and merge the stars');
-          const curtain = sw('ay-why-curtain', 'Screen curtain');
-          const back = h('span', { class: 'ay-ico', html: ICON.back });
-          const title = h('span', { class: 'ay-title' }, 'Trail shoes');
-          const img = h('div', { class: 'ay-img' });
-          const price = h('span', { class: 'ay-price' }, '$89');
-          const stars = [0, 1, 2, 3, 4].map(i => h('span', { class: 'ay-star' + (i < 4 ? '' : ' off') }));
-          const starRow = h('span', { class: 'ay-stars' }, stars);
-          const heart = h('span', { class: 'ay-ico', html: ICON.heart });
-          const add = h('span', { class: 'ay-pill' }, 'Add to cart');
-          const phone = h('div', { class: 'ay-phone', role: 'img', 'aria-label': 'Product screen with TalkBack focus' },
-            h('div', { class: 'ay-bar' }, back, title), img,
-            h('div', { class: 'ay-bar ay-between' }, price, starRow),
-            h('div', { class: 'ay-bar' }, heart, add));
-          const BAD = [
-            { el: back, text: 'Button', note: 'no label', act: 'Went back.' },
-            { el: title, text: 'Trail shoes', note: 'not marked as a heading' },
-            { el: img, text: 'image', note: 'describes nothing' },
-            { el: price, text: '$89' },
-            ...stars.map(s => ({ el: s, text: 'Star', note: 'one of five stops' })),
-            { el: heart, text: 'Button', note: 'no label', act: 'Saved to favorites, but you could not know.' },
-            { el: add, text: 'Add to cart, Button', act: 'Added to cart.' },
-          ];
-          const GOOD = [
-            { el: back, text: 'Navigate up, Button', act: 'Went back.' },
-            { el: title, text: 'Trail shoes, Heading' },
-            { el: price, text: '$89' },
-            { el: starRow, text: 'Rated 4 out of 5' },
-            { el: heart, text: 'Add to favorites, Button', act: 'Added to favorites.' },
-            { el: add, text: 'Add to cart, Button', act: 'Added to cart.' },
-          ];
-          const list = h('ol', { class: 'ay-order', 'aria-label': 'Focus order' });
-          const o = out();
-          let stops = BAD, at = 0, run = 0;
-          function paintList() {
-            list.replaceChildren(...stops.map((s, i) => h('li', { class: [i === at && 'on', s.note && 'ay-bad'].filter(Boolean).join(' ') || null },
-              h('span', { class: 'ay-num' }, String(i + 1)), h('span', {}, `"${s.text}"`, s.note ? h('small', {}, `  ${s.note}`) : null))));
-          }
-          function focus(i) {
-            at = (i + stops.length) % stops.length;
-            [...BAD, ...GOOD].forEach(s => s.el.classList.remove('ay-focus'));
-            const s = stops[at];
-            s.el.classList.add('ay-focus');
-            paintList();
-            say(o, `TalkBack: <span class="good">"${esc(s.text)}"</span>${s.note ? `  <span class="bad">// ${esc(s.note)}</span>` : ''}`);
-          }
-          fix.input.addEventListener('change', () => { run++; stops = fix.input.checked ? GOOD : BAD; focus(0); replay(list, 'pop-soft'); });
-          curtain.input.addEventListener('change', () => phone.classList.toggle('ay-curtain', curtain.input.checked));
-          async function readAll() {
-            const me = ++run;
-            for (let i = 0; i < stops.length; i++) {
-              if (me !== run || !el.isConnected) return;
-              focus(i);
-              await sleep(850);
-            }
-            if (me === run) say(o, `<span class="muted">// ${stops.length} stops to hear one product card.</span>`);
-          }
-          focus(0);
-          el.append(
-            h('div', { class: 'ay-split' }, phone,
-              h('div', { class: 'ay-col' }, h('span', { class: 'ay-label' }, 'What TalkBack walks through'), list)),
-            h('div', { class: 'controls' },
-              act('Swipe left', () => { run++; focus(at - 1); }),
-              act('Swipe right', () => { run++; focus(at + 1); }),
-              act('Double-tap', () => {
-                run++;
-                const s = stops[at];
-                if (s.act) { replay(s.el, 'pop'); say(o, `<span class="good">ok:</span> ${esc(s.act)}`); }
-                else { replay(s.el, 'shake'); say(o, '<span class="muted">// nothing to activate here</span>'); }
-              }),
-              act('Read from top', readAll)),
-            h('div', { class: 'controls' }, fix.el, curtain.el),
-            o);
+          const f = (k, at) => (k === at ? ' ayk-f' : '');
+          const card = at => `<div class="ui-m-bar"><span class="ayk-ico${f('back', at)}">${ICON.back}</span>Trail shoes</div><div class="ui-m-body">` +
+            `<div class="ui-m-img"></div><b class="ayk-t${f('title', at)}">Trail shoes</b><span class="${f('price', at)}">$89</span>` +
+            `<span class="ayk-stars${f('stars', at)}">${[0, 1, 2, 3, 4].map(i => `<i class="${i < 4 ? 'on' : ''}${f('s' + i, at)}">★</i>`).join('')}</span>` +
+            `<div class="ayk-act"><span class="ayk-ico${f('heart', at)}">${ICON.heart}</span><span class="ui-m-btn${f('add', at)}">Add to cart</span></div></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'TalkBack says',
+            predict: {
+              q: 'The rating is five star icons, each with <code>contentDescription = "Star"</code>. What does a TalkBack user get?',
+              options: ['One stop: "Rated 4 out of 5"', 'Five stops, each saying "Star"', 'Nothing: TalkBack skips icons'],
+              a: 1,
+              why: 'Each labeled icon is its own stop, and the label is all TalkBack can read. Nothing says how many are filled.',
+            },
+            frames: [
+              { screen: card(null), say: 'TalkBack is on. Each swipe right moves focus to the next element and reads it aloud, top to bottom.' },
+              { screen: card('back'), log: '"Button"', say: 'The back arrow is an icon with no label. TalkBack can only say its role.' },
+              { screen: card('title'), log: '"Trail shoes"', say: 'The photo has <code>contentDescription = null</code>, so it is skipped. The title is read as written.' },
+              { screen: card('price'), log: '"$89"', say: 'The price is its own stop.' },
+              { screen: card('s0'), log: ['"Star"', '"Star"', '"Star"', '"Star"', '"Star"'], say: 'Five swipes for the rating, and not one says that four of the five are filled.' },
+              { screen: card('heart'), log: '"Button"', say: 'The heart has no label either. Favorite, share, delete? The user has to guess.' },
+              { screen: card('add'), log: '"Add to cart, Button"', say: 'A button with text gets its label for free. Ten stops for one card, and seven of them tell the user little.' },
+              { screen: card('stars'), log: ['// labels added, stars merged:', '"Navigate up, Button"', '"Trail shoes"', '"$89"', '"Rated 4 out of 5"', '"Add to favorites, Button"', '"Add to cart, Button"'], say: 'With labels and the stars merged into one stop: six stops, and each one says something useful.' },
+            ],
+          });
         },
       },
 
@@ -680,85 +640,29 @@ BatteryGauge(
           },
         ],
         visual(el) {
-          const MODES = {
-            none: { src: 'Row { Column { Text; Text }; Switch(checked, onCheckedChange) }', label: 'No merging' },
-            merge: { src: 'Row(Modifier.semantics(mergeDescendants = true)) { ... }', label: 'mergeDescendants' },
-            toggle: { src: 'Row(Modifier.toggleable(role = Role.Switch)) { ...; Switch(onCheckedChange = null) }', label: 'toggleable row' },
-          };
-          let mode = 'none', on = true, at = 0;
-          const head = sw('ay-sem-head', 'heading() on "Network"');
-          const hEl = h('div', { class: 'ay-set-h' }, 'Network');
-          const tWifi = h('span', {}, 'Wi-Fi');
-          const tSub = h('small', {}, 'Connected');
-          const txt = h('div', { class: 'ay-set-txt' }, tWifi, tSub);
-          const swEl = h('button', { class: 'ay-sw on', 'aria-label': 'Wi-Fi switch in the preview' });
-          const row = h('div', { class: 'ay-set-row' }, txt, swEl);
-          const ui = h('div', { class: 'ay-set' }, hEl, row);
-          const tree = h('div', { class: 'ay-tree', 'aria-label': 'Semantics tree' });
-          const code = h('div', { class: 'kt' });
-          const o = out();
-          const state = () => (on ? 'On' : 'Off');
-          const sub = () => (on ? 'Connected' : 'Off');
-          function model() {
-            const heading = head.input.checked;
-            const n = [{ name: 'Text', d: 0, props: [`Text="Network"`, heading && 'Heading'], stop: heading ? 'Network, Heading' : 'Network', el: hEl }];
-            const swProps = ['Role=Switch', `ToggleableState=${state()}`, 'OnClick'];
-            if (mode === 'none') {
-              n.push({ name: 'Row', d: 0, props: [], note: 'no semantics of its own' },
-                { name: 'Text', d: 1, props: ['Text="Wi-Fi"'], stop: 'Wi-Fi', el: tWifi },
-                { name: 'Text', d: 1, props: [`Text="${sub()}"`], stop: sub(), el: tSub },
-                { name: 'Switch', d: 1, props: swProps, stop: `Switch, ${state()}`, el: swEl, action: true });
-            } else if (mode === 'merge') {
-              n.push({ name: 'Row', d: 0, props: ['mergeDescendants'], stop: `Wi-Fi, ${sub()}`, el: txt },
-                { name: 'Text', d: 1, props: ['Text="Wi-Fi"'], merged: true },
-                { name: 'Text', d: 1, props: [`Text="${sub()}"`], merged: true },
-                { name: 'Switch', d: 1, props: swProps, stop: `Switch, ${state()}`, el: swEl, action: true, note: 'has its own action, so not merged' });
-            } else {
-              n.push({ name: 'Row', d: 0, props: ['mergeDescendants', 'Role=Switch', `ToggleableState=${state()}`, 'OnClick'], stop: `Wi-Fi, ${sub()}, Switch, ${state()}`, el: row, action: true },
-                { name: 'Text', d: 1, props: ['Text="Wi-Fi"'], merged: true },
-                { name: 'Text', d: 1, props: [`Text="${sub()}"`], merged: true },
-                { name: 'Switch', d: 1, props: [], merged: true, note: 'onCheckedChange = null: no action' });
-            }
-            return n;
-          }
-          let nodes = [], stops = [];
-          function paint() {
-            nodes = model(); stops = nodes.filter(x => x.stop);
-            at = Math.min(at, stops.length - 1);
-            swEl.classList.toggle('on', on); tSub.textContent = sub();
-            code.innerHTML = hl(MODES[mode].src);
-            [hEl, tWifi, tSub, txt, swEl, row].forEach(x => x.classList.remove('ay-focus'));
-            const cur = stops[at];
-            cur.el.classList.add('ay-focus');
-            tree.replaceChildren(...nodes.map(x => {
-              const k = stops.indexOf(x);
-              return h('div', { class: ['ay-node', x.stop && 'ay-stop', x.merged && 'ay-merged', x === cur && 'ay-now'].filter(Boolean).join(' '), style: `--d:${x.d}` },
-                h('div', { class: 'ay-node-h' }, k >= 0 ? h('span', { class: 'ay-stopn' }, String(k + 1)) : null, h('b', {}, x.name),
-                  x.merged ? h('span', { class: 'ay-tag' }, 'merged into parent') : null, x.note ? h('span', { class: 'ay-tag' }, x.note) : null),
-                x.props.filter(Boolean).length ? h('div', { class: 'ay-props' }, x.props.filter(Boolean).map(p => h('span', { class: 'ay-prop' }, p))) : null);
-            }));
-          }
-          const speak = () => say(o, `Stop ${at + 1} of ${stops.length}: <span class="good">"${esc(stops[at].stop)}"</span>`);
-          const modeBtns = Object.entries(MODES).map(([k, m]) => act(m.label, () => { mode = k; at = 0; press(modeBtns, modeBtns[Object.keys(MODES).indexOf(k)]); paint(); replay(tree, 'pop-soft'); speak(); }));
-          head.input.addEventListener('change', () => { paint(); speak(); });
-          const toggle = () => { on = !on; paint(); replay(swEl, 'pop'); speak(); };
-          swEl.addEventListener('click', toggle);
-          row.addEventListener('click', e => { if (mode === 'toggle' && e.target !== swEl) toggle(); });
-          press(modeBtns, modeBtns[0]);
-          paint(); speak();
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            code,
-            h('div', { class: 'ay-split' }, ui, tree),
-            h('div', { class: 'controls' },
-              act('Swipe right', () => { at = (at + 1) % stops.length; paint(); speak(); }),
-              act('Double-tap', () => {
-                if (stops[at].action) toggle();
-                else { replay(stops[at].el, 'shake'); say(o, `<span class="bad">// "${esc(stops[at].stop)}" has no action. Double-tap does nothing.</span>`); }
-              }),
-              head.el),
-            o,
-            h('p', { class: 'tip' }, 'TalkBack’s exact wording varies by version. The number of stops and what each contains is what you control.'));
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'row', label: 'Row', x: 50, y: 12 },
+              { id: 't1', label: 'Text<small>"Wi-Fi"</small>', x: 17, y: 50, tone: 'muted' },
+              { id: 't2', label: 'Text<small>"Connected"</small>', x: 50, y: 50, tone: 'muted' },
+              { id: 'sw', label: 'Switch<small>onCheckedChange</small>', x: 83, y: 50 },
+              { id: 'one', label: 'one stop<small>"Wi-Fi, Connected, On, Switch"</small>', x: 50, y: 88, tone: 'ok', hidden: true },
+            ],
+            predict: {
+              q: 'With no merging, how many TalkBack stops does this Wi-Fi row make?',
+              options: ['One: the whole row', 'Two: each Text', 'Three: two Texts and the Switch'],
+              a: 2,
+              why: 'Every Text and every node with an action is its own stop until something merges them.',
+            },
+            frames: [
+              { add: [['row', 't1'], ['row', 't2'], ['row', 'sw']], say: 'The semantics tree of a settings row: two <code>Text</code>s and a <code>Switch</code> with its own click.' },
+              { hl: ['t1', 't2', 'sw'], say: 'No merging: TalkBack visits "Wi-Fi", then "Connected", then "On, Switch". Three stops for one setting.' },
+              { hl: ['row', 't1', 't2'], add: [['row', 't1', 'merged', 'accent'], ['row', 't2', 'merged', 'accent']], say: '<code>Modifier.semantics(mergeDescendants = true)</code> on the Row pulls the Texts into it: "Wi-Fi, Connected".' },
+              { hl: ['sw'], say: 'But the Switch still has its own <code>onCheckedChange</code>, so it stays a separate stop. Two stops.' },
+              { hl: ['row'], add: [['row', 'sw', 'merged', 'accent']], show: ['one'], say: 'Use <code>toggleable(role = Role.Switch)</code> on the Row and pass <code>onCheckedChange = null</code>. The Row owns the action, merges everything, and is one stop.' },
+            ],
+          });
         },
       },
 
@@ -872,59 +776,26 @@ Modifier.semantics {
         ],
         visual(el) {
           const MAIL = [['Rami', 'Trail map for Saturday'], ['Ines', 'Invoice 1042'], ['Kai', 'Photos from the ridge']];
-          let mails, at = 0, busy = false;
-          const s = sw('ay-ca-on', 'customActions');
-          const box = h('div', { class: 'ay-set ay-ca-list' });
-          const menu = h('div', { class: 'ay-ca-menu', hidden: true });
-          const o = out();
-          function paint() {
-            box.replaceChildren(...(mails.length ? mails.map((m, i) => h('div', { class: 'ay-ca-row' + (i === at ? ' ay-focus' : '') + (m.read ? ' ay-ca-read' : '') }, h('b', {}, m.from), h('small', {}, m.subject)))
-              : [h('p', { class: 'ay-empty' }, 'Inbox empty.')]));
-          }
-          const label = m => `${m.from}, ${m.subject}${m.read ? '' : ', unread'}`;
-          function reset() { mails = MAIL.map(([from, subject]) => ({ from, subject, read: false })); at = 0; menu.hidden = true; paint(); }
-          function next() {
-            if (busy || !mails.length) return;
-            menu.hidden = true; at = (at + 1) % mails.length; paint();
-            say(o, `TalkBack: <span class="good">"${esc(label(mails[at]))}"</span>`);
-          }
-          function swipeLeft() {
-            if (busy || !mails.length) return;
-            menu.hidden = true; at = (at - 1 + mails.length) % mails.length; paint();
-            say(o, `<span class="bad">No archive.</span> With TalkBack on, a swipe left moves focus back: "${esc(label(mails[at]))}".`);
-          }
-          async function run(name) {
-            if (busy) return; busy = true;
-            menu.hidden = true;
-            const row = box.children[at], m = mails[at];
-            if (name === 'Archive') {
-              row.classList.add('leave'); await sleep(420);
-              if (!el.isConnected) return;
-              mails.splice(at, 1); at = Math.min(at, Math.max(0, mails.length - 1)); paint();
-              say(o, `<span class="good">Archived "${esc(m.subject)}".</span>${mails.length ? ` Focus moves to "${esc(label(mails[at]))}".` : ''}`);
-            } else {
-              m.read = true; paint(); replay(box.children[at], 'pop');
-              say(o, `<span class="good">Marked as read.</span> TalkBack: "${esc(label(m))}"`);
-            }
-            busy = false;
-          }
-          function openMenu() {
-            if (busy) return;
-            if (!mails.length) { say(o, 'Nothing focused.'); return; }
-            const acts = s.input.checked ? ['Archive', 'Mark as read'] : [];
-            menu.replaceChildren(h('span', { class: 'ay-label' }, 'Actions'),
-              ...(acts.length ? acts.map(a => act(a, () => run(a))) : [h('p', { class: 'ay-empty' }, 'No actions available')]));
-            menu.hidden = false; replay(menu, 'drop-in');
-            say(o, acts.length ? 'TalkBack’s actions menu lists your custom actions. Pick one.' : '<span class="bad">// the only way to archive is a swipe, which TalkBack takes for itself</span>');
-          }
-          s.input.addEventListener('change', () => { if (!busy) { reset(); say(o, s.input.checked ? 'Each row now carries Archive and Mark as read.' : 'Rows have only the swipe gesture.'); } });
-          reset();
-          say(o, 'Focus is on the first mail. Try to archive it with TalkBack on.');
-          el.append(
-            h('div', { class: 'ay-split' }, box, h('div', { class: 'ay-col' },
-              h('div', { class: 'controls' }, act('Swipe right', next), act('Swipe left', swipeLeft), act('Open actions menu', openMenu)),
-              menu, s.el)),
-            o);
+          const inbox = (focus, gone = [], menu = false) => '<div class="ui-m-bar">Inbox</div><div class="ui-m-body">' +
+            MAIL.map((m, i) => gone.includes(i) ? '' : `<div class="ui-m-row m${i}${i === focus ? ' ayk-f' : ''}"><span class="ui-m-av"></span><div><b>${m[0]}</b> · ${m[1]}</div></div>`).join('') + '</div>' +
+            (menu ? '<div class="ui-m-sheet"><b>Actions</b><span class="ayk-menu ayk-f arc">Archive</span><span class="ayk-menu">Mark as read</span></div>' : '');
+          Lab.ui.phone(el, {
+            logTitle: 'TalkBack',
+            predict: {
+              q: 'The row has <code>customActions</code> for Archive and Mark as read. How does a TalkBack user archive the mail?',
+              options: ['Swipe left on the row, like everyone else', 'Open TalkBack’s actions menu on the row and pick Archive', 'They can’t: archive needs a swipe'],
+              a: 1,
+              why: 'TalkBack keeps swipes for moving focus. It reads that more actions are available and lists the custom actions in its menu.',
+            },
+            frames: [
+              { screen: inbox(null), say: 'Touch users swipe a mail row left to archive it. TalkBack is on now.' },
+              { screen: inbox(1), log: '"Ines, Invoice 1042"', say: 'Focus is on the second mail.' },
+              { screen: inbox(0), log: ['// swipe left', '"Rami, Trail map for Saturday"'], say: 'The user swipes left to archive. TalkBack takes the swipe and moves focus back to the previous row. Nothing is archived.' },
+              { screen: inbox(1), log: '"Ines, Invoice 1042. Actions available"', say: 'Now the row has <code>customActions</code>. TalkBack tells the user there are actions.' },
+              { tap: '.arc', screen: inbox(1, [], true), log: '// actions menu: Archive, Mark as read', say: 'The actions menu lists each <code>CustomAccessibilityAction</code> by its label.' },
+              { screen: inbox(1, [1]), log: ['// Archive picked: lambda runs, returns true', 'onArchive(mail.id)'], say: 'Picking Archive runs the same <code>onArchive</code> as the swipe. The swipe still works for touch users.' },
+            ],
+          });
         },
       },
 
@@ -1077,6 +948,12 @@ LaunchedEffect(Unit) { searchFocus.requestFocus() }`,
             why: 'The indication draws the pressed and focused states. Without it, keyboard and D-pad users cannot see which element has focus.',
           },
         ],
+        predict: {
+          q: 'Three 24 dp icons sit 8 dp apart. You add <code>minimumInteractiveComponentSize()</code> to each. What changes?',
+          options: ['The icons are drawn at 48 dp', 'The icons look the same, but each tap area grows to 48 by 48 dp', 'Nothing until TalkBack is on'],
+          a: 1,
+          why: 'The modifier grows the layout to 48 dp and keeps the visual size. Taps that used to land in the gaps now hit an icon.',
+        },
         visual(el) {
           // part 1: thumb taps on a toolbar
           const S = 1.8; // px per dp
@@ -1261,6 +1138,12 @@ Box(
             why: '<code>indication = null</code> also removes the focused look. A keyboard user can no longer tell which element Enter will press.',
           },
         ],
+        predict: {
+          q: 'Focus is on Name. Email is to its right, Message below it. The user presses Tab. Where does focus go?',
+          options: ['Email, the next element in screen order', 'Message, the closest element below', 'Send, the main button'],
+          a: 0,
+          why: 'Tab is one-dimensional: it follows the order of elements on screen, start to end and top to bottom. Arrow keys are the ones that look at positions.',
+        },
         visual(el) {
           const IT = [
             { id: 'name', label: 'Name', x: 0, y: 0, w: 40, h: 20 },
@@ -1510,6 +1393,12 @@ Text("Total", fontSize = (16 / fontScale).sp)   // stays 16 at any setting`,
             why: 'On Android 14 and later scaling is nonlinear, so <code>sp × fontScale</code> overshoots for text above about 12sp: 16sp at 200% is drawn at 28 dp, not 32. <code>toDp()</code> uses the same converter as the text itself.',
           },
         ],
+        predict: {
+          q: 'The font scale goes to 200%. How large is a 30sp headline drawn?',
+          options: ['60 dp, twice its size', 'About 38 dp', '30 dp: headlines do not scale'],
+          a: 1,
+          why: 'Since Android 14 the scaling is nonlinear. Large text is already readable, so it grows less than small text.',
+        },
         visual(el) {
           // Android 14 FontScaleConverterFactory tables (fromSp -> toSp) per font scale step.
           const FROM = [8, 10, 12, 14, 18, 20, 24, 30, 100];
@@ -1764,6 +1653,12 @@ else OnePane(selected, onSelect = { selected = it })`,
             why: 'Each branch has its own place in the composition. Crossing the breakpoint leaves one branch and enters the other, so the selection starts over. Hoist state above the branch.',
           },
         ],
+        predict: {
+          q: 'You widen the window, starting at 500 dp. At which width does the mail app first show the list and the detail side by side?',
+          options: ['600 dp, where Medium starts', '840 dp, where Expanded starts', '1200 dp, where Large starts'],
+          a: 1,
+          why: 'By default the list-detail scaffold shows two panes from the Expanded width class up. Medium still gets one pane, with a rail.',
+        },
         visual(el) {
           const MAILS = [
             { id: 1, from: 'Ada', subj: 'Standup notes', body: 3 },
@@ -2022,6 +1917,12 @@ val photos by viewModel.photos.collectAsStateWithLifecycle()`,
             why: 'Saved state travels to the system in a Bundle, which has a small size limit. Too much data crashes with <code>TransactionTooLargeException</code> when the app goes to the background. Save ids and small UI state, and reload the data.',
           },
         ],
+        predict: {
+          q: 'The user folds the phone half open into tabletop posture while a video plays. Where should the picture go?',
+          options: ['Above the fold, with the controls below it', 'Across both halves, over the hinge', 'Below the fold, on the table'],
+          a: 0,
+          why: 'In tabletop the top half stands up like a screen and the bottom half lies flat. Content goes up, controls go where the hands are.',
+        },
         visual(el) {
           const lock = sw('ay-fd-lock', 'screenOrientation="portrait"');
           const t36 = sw('ay-fd-36', 'targetSdk 36 on Android 16');
@@ -2203,48 +2104,32 @@ adb shell am compat reset UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.news`,
           },
         ],
         visual(el) {
-          let dev = 'tablet', sdk = 37;
-          const opt = sw('ay-rz-opt', 'opt-out property = true');
-          const game = sw('ay-rz-game', 'android:appCategory="game"');
-          const screen = h('div', { class: 'ay-rz-dev' });
-          const mani = h('pre', { class: 'ay-rz-mani' });
-          const o = out();
-          const devBtns = [act('Phone, sw 411dp', () => { dev = 'phone'; paint(true); }), act('Tablet, sw 800dp', () => { dev = 'tablet'; paint(true); })];
-          const sdkBtns = [35, 36, 37].map(v => act(`targetSdk ${v}`, () => { sdk = v; paint(true); }));
-          function rule() {
-            const o2 = opt.input.checked, g = game.input.checked;
-            if (dev === 'phone') return { honored: true, why: 'sw 411dp is below 600dp, so the lock is honored. The app is portrait, as asked.' };
-            if (g) return { honored: true, why: 'Games are exempt. The lock is honored: portrait with bars on the sides.' };
-            if (sdk < 36) return { honored: true, why: 'Below API 36 the old rules apply: the lock is honored and the app is pillarboxed.' };
-            if (sdk === 36 && o2) return { honored: true, why: 'API 36 with the opt-out property: the lock still holds. This only works until you target API 37.' };
-            if (sdk === 36) return { honored: false, why: 'API 36 on sw600dp+: orientation and resizability limits are ignored. The app fills the screen.' };
-            return { honored: false, why: o2 ? 'API 37: the opt-out property has no effect. The app fills the screen in landscape.' : 'API 37 on sw600dp+: the portrait lock is ignored. The app fills the screen in landscape.' };
-          }
-          function paint(anim) {
-            press(devBtns, devBtns[dev === 'phone' ? 0 : 1]);
-            press(sdkBtns, sdkBtns[[35, 36, 37].indexOf(sdk)]);
-            const r = rule();
-            screen.className = `ay-rz-dev ay-rz-${dev}`;
-            const app = h('div', { class: 'ay-rz-app' + (r.honored ? '' : ' ay-rz-fill') },
-              h('div', { class: 'ay-rz-bar' }, 'News'),
-              h('div', { class: 'ay-rz-feed' }, h('i'), h('i'), h('i'), h('i')));
-            screen.replaceChildren(app);
-            if (anim) replay(app, 'pop-soft');
-            mani.innerHTML = `targetSdk = ${sdk}\n&lt;activity android:screenOrientation="portrait" /&gt;`
-              + (opt.input.checked ? '\n&lt;property ...ALLOW_RESTRICTED_RESIZABILITY = true /&gt;' : '')
-              + (game.input.checked ? '\n&lt;application android:appCategory="game" /&gt;' : '');
-            say(o, `${r.honored ? '<span class="muted">lock honored</span>' : '<span class="good">lock ignored</span>'}: ${esc(r.why)}`);
-          }
-          opt.input.addEventListener('change', () => paint(true));
-          game.input.addEventListener('change', () => paint(true));
-          paint(false);
-          el.append(
-            h('div', { class: 'ay-split' }, h('div', { class: 'stage' }, screen), h('div', { class: 'ay-col' }, h('span', { class: 'ay-label' }, 'The app asks for'), mani)),
-            h('div', { class: 'controls' }, devBtns),
-            h('div', { class: 'controls' }, sdkBtns),
-            h('div', { class: 'controls' }, opt.el, game.el),
-            h('p', { class: 'tip' }, 'The device runs Android 17. Users can still choose the app’s default in the aspect ratio settings.'),
-            o);
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'man', label: 'Manifest', sub: 'screenOrientation= "portrait"' },
+              { id: 'sw', label: 'Display', sub: 'smallest width ≥ 600dp?' },
+              { id: 'game', label: 'Category', sub: 'appCategory="game"?' },
+              { id: 'sdk', label: 'targetSdk', sub: '37: opt-out ignored' },
+              { id: 'win', label: 'Result', sub: 'what the user sees' },
+            ],
+            predict: {
+              q: 'The app targets API 37, locks to portrait, and still has the Android 16 opt-out property. A user opens it on an 800dp tablet held in landscape. What happens?',
+              options: ['It stays portrait, letterboxed in the middle', 'The lock is ignored: the app fills the landscape window', 'The app refuses to start'],
+              a: 1,
+              why: 'From API 37 the opt-out property has no effect. On sw600dp and up, a non-game app gets the whole window whatever the manifest asks.',
+            },
+            frames: [
+              { say: 'Follow one request, "portrait only", through the checks Android 17 makes. First on a tablet.' },
+              { at: 'man', packet: 'portrait', say: 'The manifest asks for portrait. The app also keeps the old opt-out property.' },
+              { at: 'sw', packet: 'portrait', mark: { sw: 'warm' }, say: 'The tablet’s smallest width is 800dp. That is a large screen, so the rule applies.' },
+              { at: 'game', packet: 'portrait', mark: { game: 'muted' }, say: 'It is not a game. Games are exempt and would keep the lock.' },
+              { at: 'sdk', packet: 'ignored', tone: 'err', mark: { sdk: 'err' }, say: 'It targets API 37, so the opt-out property does nothing. The lock is ignored.' },
+              { at: 'win', packet: 'fills window', tone: 'warm', mark: { win: 'warm' }, say: 'The app fills the landscape window. Its layout has to work at that size.' },
+              { at: 'man', packet: 'portrait', mark: { sw: '', game: '', sdk: '', win: '' }, say: 'Same app, now on a phone.' },
+              { at: 'sw', packet: 'honored', tone: 'ok', mark: { sw: 'ok' }, say: 'The phone’s smallest width is 411dp, below 600dp. The checks stop here.' },
+              { at: 'win', packet: 'portrait', tone: 'ok', mark: { win: 'ok' }, say: 'The lock is honored. The app is portrait, as before.' },
+            ],
+          });
         },
       },
 
@@ -2450,6 +2335,12 @@ fun ChatScreen(messages: List<Message>, onSend: (String) -> Unit) {
             why: 'Modifiers apply in order. Padding first shrinks the area the background paints, so the bars show the window color instead of yours. Paint full bleed, then pad the content.',
           },
         ],
+        predict: {
+          q: 'The chat column uses only <code>.statusBarsPadding()</code>. The keyboard opens. What happens to the message field at the bottom?',
+          options: ['It moves up above the keyboard', 'The keyboard covers it', 'The app shrinks the text to fit'],
+          a: 1,
+          why: 'Status bar padding only protects the top. The keyboard is the <code>ime</code> inset, so the field needs <code>imePadding()</code> or <code>safeDrawingPadding()</code>.',
+        },
         visual(el) {
           const SB = 24, NB = 18, KB = 150;
           const MODES = [

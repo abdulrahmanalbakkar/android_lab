@@ -137,6 +137,12 @@ git push -u origin feature/save-article     # review: open a pull request, CI ru
 ./gradlew bundleRelease                     # release: build the signed App Bundle
 git tag v5.12.0 && git push origin v5.12.0  # mark what shipped, so you can maintain it later`,
     remember: 'The phases never disappear. Iterative work just runs all of them on a small slice, so you learn before the big money is spent.',
+    predict: {
+      q: "No requirement changes this time. Which plan gets a first working slice to users first?",
+      options: ["Waterfall, in month 11", "Iterative, in month 3", "Both in month 11"],
+      a: 1,
+      why: "Iterative work runs every phase on a small slice, so the first slice ships after one short cycle. Waterfall ships nothing until all phases are done.",
+    },
     visual(el) {
       const W = 'RRDDBBBBTTS'.split(''), WC = 'RRDDBBBDBBBTTS'.split('');
       const I = 'DBSDBSDBSDBS'.split('');
@@ -252,6 +258,12 @@ class SaveArticleTest {
     }
 }`,
     remember: 'Stop starting, start finishing. A story is done when its acceptance criteria pass, not when the code is written.',
+    predict: {
+      q: "WIP limits off: you start all six cards on day 1 and work on them a little each day. Compared with WIP limits on, what happens to the average cycle time?",
+      options: ["It drops: more work started means more finished", "It rises: every started card keeps aging while it waits", "It stays the same"],
+      a: 1,
+      why: "Cycle time counts from start to finish. Starting everything at once makes every card wait longer for attention, so each one takes longer.",
+    },
     visual(el) {
       const COLS = ['To do', 'Doing', 'Review', 'Done'], LIMIT = [0, 2, 1, 0];
       const NAMES = ['Login screen', 'Save article', 'Dark theme', 'Push opt-in', 'Search bar', 'Share button'];
@@ -369,6 +381,12 @@ fun main() {
     println("Offline reading: ${'$'}{range.first} to ${'$'}{range.last} sprints")   // 3 to 5 sprints
 }`,
     remember: 'Give a range, say what would narrow it, and re-estimate when you learn something. A single early number is a guess wearing a suit.',
+    predict: {
+      q: "Decisions are on. The team has split the stories and agreed on the design. What does a \"10 day\" estimate mean now?",
+      options: ["2.5 to 40 days", "About 6.7 to 15 days", "Exactly 10 days"],
+      a: 1,
+      why: "Each decision removes unknowns, so the cone narrows. At the design stage it is about 1.5× either way, not 4×.",
+    },
     visual(el) {
       const STAGES = ['Idea', 'Stories split', 'Design agreed', 'Half built', 'Nearly done'];
       const HI = [4, 2, 1.5, 1.25, 1.1];
@@ -477,7 +495,7 @@ fun main() {
     body: `
 <p>A design doc (some teams call it an RFC, a "request for comments") is a short document you write before building something big or hard to undo. It makes the team agree on the problem and the approach while changing your mind costs a comment, not a rewrite.</p>
 <p>A useful doc has six parts. <b>Problem</b>: what hurts, for whom. <b>Goals</b>: what success looks like, measurably. <b>Non-goals</b>: what you are deliberately not doing. <b>Options</b>: two or three real alternatives, including "do nothing". <b>Decision</b>: which one, and why it beat the others. <b>Risks</b>: what could go wrong and what you need from other teams.</p>
-<p>Keep it to a few pages and share it early, while it is still a draft. Build the doc in the demo, then send it to a reviewer and see which questions come back for every missing part. Kotlin itself uses a public process like this: changes to the language are proposed and discussed as documents in the <a href="https://github.com/Kotlin/KEEP" target="_blank" rel="noopener">KEEP</a> repository.</p>`,
+<p>Keep it to a few pages and share it early, while it is still a draft. The demo follows one feature built doc-first and code-first. Kotlin itself uses a public process like this: changes to the language are proposed and discussed as documents in the <a href="https://github.com/Kotlin/KEEP" target="_blank" rel="noopener">KEEP</a> repository.</p>`,
     code: `# Design: Offline saved articles            Status: In review
 Author: Maya   Reviewers: Android, Backend, Product   Updated: 2026-10-18
 
@@ -508,27 +526,24 @@ C does not work offline.
 - Do saved articles count as "read" in analytics?`,
     remember: 'Problem, goals, non-goals, options, decision, risks. If you can\'t write the non-goals and the rejected options, you haven\'t designed it yet.',
     visual(el) {
-      const have = new Set();
-      const doc = h('div', { class: 'swe-doc' });
-      const msg = out('');
-      const btns = DOC.map((s, k) => act(`+ ${s.k}`, () => { have.has(k) ? have.delete(k) : have.add(k); btns[k].setAttribute('aria-pressed', String(have.has(k))); paint(); }, { 'aria-pressed': 'false' }));
-      function paint(review) {
-        const secs = DOC.map((s, k) => have.has(k)
-          ? h('div', { class: 'swe-sec drop-in' }, h('b', {}, s.k), h('span', {}, s.t))
-          : review ? h('div', { class: 'swe-sec swe-miss' }, h('b', {}, `Reviewer on missing ${s.k}`), h('span', {}, s.ask)) : null).filter(Boolean);
-        doc.classList.toggle('swe-ok', !!review && have.size === DOC.length);
-        doc.replaceChildren(h('h4', {}, 'Design: Offline saved articles'), ...(secs.length ? secs : [h('span', { class: 'swe-empty' }, 'Empty draft. Add sections with the buttons below.')]));
-      }
-      function review() {
-        paint(true);
-        const miss = DOC.length - have.size;
-        if (!miss) say(msg, '<b>Approved.</b> Every reviewer can see what is in, what is out, what you rejected and why. The decision is now on record for whoever touches this code next year.');
-        else if (!have.has(2) && !have.has(3) && have.size) say(msg, `${miss} sections missing, and they are the ones that save the most time: without non-goals and options, the review turns into "why not sync too?" and "why not just use the cache?"`);
-        else say(msg, `${miss} section${miss === 1 ? '' : 's'} missing. Each gap comes back as a reviewer question, in red. Add them and send it again.`);
-      }
-      el.append(h('div', { class: 'swe-stage' }, doc), h('div', { class: 'controls' }, btns), h('div', { class: 'controls' }, act('Send for review', review), act('Fill all', () => { DOC.forEach((_, k) => { have.add(k); btns[k].setAttribute('aria-pressed', 'true'); }); paint(); say(msg, 'All six sections are in. Send it for review.'); })), msg);
-      paint();
-      say(msg, 'Add sections, in any order, then press "Send for review".');
+      Lab.ui.timeline(el, {
+        lanes: ['Doc first', 'Code first'],
+        span: 26, unit: 'days',
+        predict: {
+          q: 'Both teams will hit the same surprise: the backend has no article-by-id endpoint yet. Which team pays more to deal with it?',
+          options: ['The doc-first team: they have to rewrite the doc', 'The code-first team: they find out after the code is built', 'Both pay the same'],
+          a: 1,
+          why: 'In a draft, changing the plan costs a comment. After three weeks of code, it costs the code, the tests and the review.',
+        },
+        frames: [
+          { now: 0, say: 'One feature, offline saved articles, built by two teams. The numbers are illustrative.' },
+          { bars: [{ lane: 0, from: 0, to: 1, label: 'draft', tone: 'warm' }, { lane: 1, from: 0, to: 1, label: 'build' }], say: 'The first team writes a two-page draft: problem, goals, non-goals, options, decision, risks. The second starts coding.' },
+          { bars: [{ lane: 0, from: 1, to: 3, label: 'review', tone: 'warm' }, { lane: 1, from: 1, to: 3, label: 'build' }], marks: [{ at: 2, label: 'found', tone: 'warm' }], say: 'In review, backend reads the Risks section and says the endpoint does not exist. The plan changes. It costs a few comments.' },
+          { bars: [{ lane: 0, from: 3, to: 18, label: 'build agreed option', tone: 'ok' }, { lane: 1, from: 3, to: 15, label: 'build' }], say: 'The first team builds what everyone agreed on. The second team is still building on a guess.' },
+          { bars: [{ lane: 1, from: 15, to: 17, label: 'PR review', tone: 'warm' }], marks: [{ at: 16, label: 'found', tone: 'err' }], say: 'The pull request reaches backend. Same surprise, found 14 days later, with the code already written.' },
+          { bars: [{ lane: 1, from: 17, to: 25, label: 'rework', tone: 'err' }], now: 25, say: 'The second team reworks code, tests and review. The doc-first team shipped at day 18.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -621,6 +636,12 @@ class ArticleViewModel(
     }
 }`,
     remember: 'Design first, style last. Label nits as nits. Approve when the change makes the code healthier, not when it is perfect.',
+    predict: {
+      q: "Which line in this diff needs the most urgent comment?",
+      options: ["<code>fun save(a: Article)</code>: the parameter name", "<code>Log.d(\"Save\", \"token=\" + session.token)</code>: it logs the auth token", "<code>_message.value = \"Saved\"</code>: hard-coded text"],
+      a: 1,
+      why: "A leaked session token is a security bug and must be fixed before merge. The name is a Nit and the text is a should-fix.",
+    },
     visual(el) {
       const flagged = new Set();
       let submitted = false;
@@ -715,7 +736,7 @@ Worth a shared function in a follow-up?`,
     body: `
 <p>Technical debt is Martin Fowler's metaphor for internal quality problems, which he calls cruft. The <b>interest</b> is the extra time every change costs because of the cruft. The <b>principal</b> is what it costs to clean it up. In his example, a feature takes 6 days instead of 4 because of messy code, and cleaning up first would take 5 days.</p>
 <p>Fowler sorts debt on two axes: <b>deliberate</b> or <b>inadvertent</b>, and <b>prudent</b> or <b>reckless</b>. "Ship now, clean up after the launch" with a plan is prudent and deliberate. "We have no time for design" is reckless. "Now we know how it should have been built" is prudent and inadvertent, and every good team makes some.</p>
-<p>The key point: interest is only charged when you work in that code. Cruft in a module nobody touches costs almost nothing. Ship features in the demo and see when paying down first wins, and when it doesn't.</p>`,
+<p>The key point: interest is only charged when you work in that code. Cruft in a module nobody touches costs almost nothing. The demo ships the same four features with and without paying down first.</p>`,
     code: `// Strangler fig: grow the new code next to the old, move callers one at a time.
 interface ArticleSource {
     suspend fun article(id: String): Article
@@ -738,43 +759,24 @@ fun articleSource(flags: Flags, legacy: LegacyArticleSource, repo: ArticleReposi
     if (flags.isOn("new_article_repository")) repo else legacy`,
     remember: 'Pay down debt in code you change often, a little with every change. Replace big messes piece by piece, never in one rewrite.',
     visual(el) {
-      const W = 320, H = 200, X0 = 34, X1 = 306, Y0 = 176, Y1 = 14, N = 8, MAXY = 52;
-      const X = n => X0 + (X1 - X0) * n / N, Y = d => Y0 - (Y0 - Y1) * d / MAXY;
-      let n = 0, hot = true;
-      const svg = svgEl('svg', { class: 'swe-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Total days spent versus features shipped, with and without paying down the debt first' });
-      [0, 10, 20, 30, 40, 50].forEach(d => { svg.append(svgEl('line', { class: 'swe-axis', x1: X0, x2: X1, y1: Y(d), y2: Y(d), 'stroke-opacity': d ? 0.35 : 1 })); const t = svgEl('text', { x: 4, y: Y(d) + 3 }); t.textContent = String(d); svg.append(t); });
-      for (let k = 0; k <= N; k++) { const t = svgEl('text', { x: X(k), y: H - 4, 'text-anchor': 'middle' }); t.textContent = String(k); svg.append(t); }
-      const cross = svgEl('line', { class: 'swe-x', y1: Y1, y2: Y0, x1: X0, x2: X0 });
-      const l1 = svgEl('polyline', { class: 'swe-l1' }), l2 = svgEl('polyline', { class: 'swe-l2' }), pts = svgEl('g', {});
-      svg.append(cross, l1, l2, pts);
-      const keep = k => { let d = 0; for (let i = 1; i <= k; i++) d += 4 + (hot || i % 4 === 0 ? 2 : 0); return d; };
-      const pay = k => 5 + 4 * k;
-      const st = { keep: h('b', {}, '0'), pay: h('b', {}, '5') };
-      const msg = out('');
-      function draw() {
-        const ks = Array.from({ length: n + 1 }, (_, k) => k);
-        l1.setAttribute('points', ks.map(k => `${X(k)},${Y(keep(k))}`).join(' '));
-        l2.setAttribute('points', ks.map(k => `${X(k)},${Y(pay(k))}`).join(' '));
-        pts.replaceChildren(svgEl('circle', { class: 'swe-p1', cx: X(n), cy: Y(keep(n)), r: 4 }), svgEl('circle', { class: 'swe-p2', cx: X(n), cy: Y(pay(n)), r: 4 }));
-        const c = ks.find(k => k > 0 && pay(k) < keep(k));
-        cross.setAttribute('x1', c ? X(c) : X0); cross.setAttribute('x2', c ? X(c) : X0); cross.style.opacity = c ? '1' : '0';
-        st.keep.textContent = String(keep(n)); st.pay.textContent = String(pay(n));
-      }
-      function ship() {
-        if (n >= N) { say(msg, 'That is 8 features. Reset, or switch how often the code changes.'); return; }
-        n++; draw();
-        const a = keep(n), b = pay(n);
-        say(msg, a < b ? `Feature ${n}: living with the cruft is still cheaper (${a} vs ${b} days).${hot ? '' : ' Most features don\'t touch this module, so the interest rarely gets charged.'}`
-          : a === b ? `Feature ${n}: dead even at ${a} days.`
-            : `Feature ${n}: paying down first is now ahead, ${b} vs ${a} days${hot ? ', and the gap grows by 2 days with every feature' : ''}. The dashed line marks where it took the lead.`);
-      }
-      const hotP = picker('This code changes', ['Every feature', '1 in 4 features'], k => { hot = k === 0; n = 0; draw(); say(msg, hot ? 'Every feature touches the messy module: 6 days each with cruft, or 5 days of cleanup and then 4 each.' : 'Only every 4th feature touches the messy module. Interest is charged only then. Ship 8 and compare.'); });
-      el.append(h('div', { class: 'swe-stage' }, svg,
-        h('div', { class: 'swe-key' }, h('span', {}, h('i', { style: 'background:var(--err)' }), 'live with it: ', st.keep, ' days'), h('span', {}, h('i', { style: 'background:var(--ok)' }), 'clean up first: ', st.pay, ' days')),
-        h('p', { class: 'swe-note' }, 'x: features shipped, y: total days. Numbers from Fowler\'s example: 4 days clean, 6 with cruft, 5 to clean up.')),
-        hotP, h('div', { class: 'controls' }, act('Ship a feature', ship)), msg);
-      draw();
-      say(msg, 'Press "Ship a feature" a few times. Cleaning up costs 5 days before feature 1.');
+      Lab.ui.timeline(el, {
+        lanes: ['Keep cruft', 'Clean first'],
+        span: 24, unit: 'days',
+        predict: {
+          q: 'One team works around the messy code, the other spends 5 days cleaning first. Which team ships <b>feature 1</b> first?',
+          options: ['Keep cruft: 6 days', 'Clean first: 9 days', 'Both on the same day'],
+          a: 0,
+          why: 'Paying down the principal costs time up front. It only pays back through cheaper features later, and only if those features touch this code.',
+        },
+        frames: [
+          { now: 0, say: 'Fowler’s numbers: a feature takes 4 days in clean code, 6 with the cruft, and the clean-up takes 5. Every feature here touches the messy module.' },
+          { bars: [{ lane: 0, from: 0, to: 6, label: 'F1', tone: 'warm' }, { lane: 1, from: 0, to: 5, label: 'clean up', tone: 'muted' }], say: 'The first team starts feature 1 at once. The second team cleans first.' },
+          { bars: [{ lane: 1, from: 5, to: 9, label: 'F1', tone: 'ok' }], now: 9, say: 'Feature 1 ships at day 6 for the first team and day 9 for the second. Cleaning looks like a loss so far.' },
+          { bars: [{ lane: 0, from: 6, to: 12, label: 'F2', tone: 'warm' }, { lane: 1, from: 9, to: 13, label: 'F2', tone: 'ok' }], now: 13, say: 'Each feature costs the first team 2 days of interest. The gap is shrinking.' },
+          { bars: [{ lane: 0, from: 12, to: 18, label: 'F3', tone: 'warm' }, { lane: 1, from: 13, to: 17, label: 'F3', tone: 'ok' }], now: 17, say: 'After three features the clean team is ahead: day 17 against day 18.' },
+          { bars: [{ lane: 0, from: 18, to: 24, label: 'F4', tone: 'warm' }, { lane: 1, from: 17, to: 21, label: 'F4', tone: 'ok' }], now: 21, say: 'From here every feature saves 2 more days. If the module were touched once a year, the 5 days would never come back.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -843,7 +845,7 @@ fun articleSource(flags: Flags, legacy: LegacyArticleSource, repo: ArticleReposi
     body: `
 <p>Sooner or later a release breaks something for real users. Teams that handle it well decide the rules in advance: who is <b>on call</b>, what counts as an incident, and who does what. Google's SRE book suggests declaring an incident early and splitting roles: an <b>incident commander</b> who coordinates, people who work on the fix, and someone who keeps stakeholders updated. On mobile, your fastest lever is often to <a href="#build.tracks">halt a staged rollout</a> or turn off a <a href="#launch.flags">flag</a>: halting stops new users getting the version, but people who already have it keep it.</p>
 <p>Afterwards, write a <b>postmortem</b>: what happened, the impact, what you did, the root causes and follow-up actions. Make it <b>blameless</b>. The SRE book describes this as assuming everyone acted with good intentions and the information they had, and fixing the systems that let the mistake through. People who fear blame hide problems; people who don't, report them early.</p>
-<p>The same habits apply every day: agree on API contracts with backend before building, ask design about edge cases (empty, error, long German words), and keep docs short and current. Build the incident timeline in the demo by tapping events in order.</p>`,
+<p>The same habits apply every day: agree on API contracts with backend before building, ask design about edge cases (empty, error, long German words), and keep docs short and current. The demo follows one incident from the first alert to resolution.</p>`,
     code: `// Postmortem action item #1: "The parser must accept a missing image."
 // The fix ships with the test that would have caught it.
 @Serializable
@@ -864,45 +866,25 @@ class ArticleDtoTest {
 }`,
     remember: 'Mitigate first, debug second. Then write a blameless postmortem whose action items have owners.',
     visual(el) {
-      let next = 0, blame = true;
-      const order = EVENTS.map((_, i) => i).sort(() => Math.random() - 0.5);
-      const pool = h('div', { class: 'swe-pool' });
-      const list = h('ol', { class: 'swe-tlist', 'aria-live': 'polite' });
-      const msg = out('The events are shuffled. Tap them in the order they happened.');
-      const quote = h('p', { class: 'swe-quote' });
-      const qBtn = act('Rewrite blamelessly', () => { blame = !blame; paintQuote(); }, { hidden: true });
-      const stats = h('div', { class: 'swe-stats', hidden: true },
-        h('span', { class: 'swe-stat' }, 'time to detect ', h('b', {}, '38 min')), h('span', { class: 'swe-stat' }, 'time to mitigate ', h('b', {}, '12 min')), h('span', { class: 'swe-stat' }, 'time to fix ', h('b', {}, '4 h 20 min')));
-      function paintQuote() {
-        quote.className = `swe-quote ${blame ? 'swe-blame' : 'swe-fair'}`;
-        quote.textContent = blame
-          ? 'Root cause: Omar forgot to make imageUrl nullable.'
-          : 'Root causes: the API contract did not say imageUrl can be null; no test covered a missing image; the crash alert fired 38 minutes after the rollout began. Actions: document nullability in the contract (backend), add parser tests for optional fields (Android), alert on 5.12.x crash rate at 1% rollout (on-call).';
-        qBtn.textContent = blame ? 'Rewrite blamelessly' : 'Show the blame version';
-      }
-      function paintPool() {
-        pool.replaceChildren(...order.filter(i => i >= next).map(i => h('button', { class: 'swe-ev', onclick: e => pick(i, e.currentTarget) }, EVENTS[i].s)));
-      }
-      function pick(i, btn) {
-        if (i !== next) {
-          btn.classList.add('swe-wrong'); replay(btn, 'shake');
-          say(msg, next === 0 ? 'Not yet. What has to happen before anything can break?' : `Not yet. Something else happened right after "${EVENTS[next - 1].s}"`);
-          return;
-        }
-        const e = EVENTS[i];
-        list.append(h('li', { class: `drop-in ${e.c}` }, h('b', {}, e.t), h('span', {}, e.s)));
-        next++;
-        paintPool();
-        if (i === 3) say(msg, 'Mitigation came before the cause was known. Stop the damage first; debugging can take hours.');
-        else if (i === 2) say(msg, 'Declaring early is cheap. One person coordinates, so others can focus on the fix.');
-        else if (next === EVENTS.length) {
-          stats.hidden = false; qBtn.hidden = false; paintQuote();
-          pool.replaceChildren(h('span', { class: 'swe-label' }, 'Postmortem: root cause section'), quote);
-          say(msg, 'Timeline complete. The numbers show where to improve: 38 minutes to detect is the slowest part. Now compare the two root-cause write-ups.');
-        } else say(msg, `${next} of ${EVENTS.length} placed.`);
-      }
-      el.append(h('div', { class: 'swe-stage' }, list, stats, pool), h('div', { class: 'controls' }, qBtn), msg);
-      paintPool();
+      Lab.ui.timeline(el, {
+        lanes: ['Alerts', 'Commander', 'Fix', 'Updates'],
+        span: 120, unit: 'min',
+        predict: {
+          q: 'An incident is declared. Who should write the code fix?',
+          options: ['The incident commander, because they know the most', 'Someone else, so the commander can keep coordinating', 'Nobody until the postmortem'],
+          a: 1,
+          why: 'The SRE book splits the roles. The commander coordinates and decides, others work on the fix, and one person keeps stakeholders updated.',
+        },
+        frames: [
+          { now: 0, say: 'Version 5.12 is at 10% of a staged rollout. It is a normal morning.' },
+          { bars: [{ lane: 0, from: 4, to: 14, label: 'crash rate up', tone: 'err' }], marks: [{ at: 4, label: 'page', tone: 'err' }], say: 'The crash-free rate drops on 5.12 and the on-call developer is paged.' },
+          { bars: [{ lane: 1, from: 8, to: 12, label: 'declare', tone: 'warm' }], say: 'They declare an incident early and assign roles: a commander, people on the fix, one person on updates.' },
+          { bars: [{ lane: 2, from: 12, to: 20, label: 'halt', tone: 'ok' }], say: 'Mitigate first: halt the rollout. New users stop getting 5.12. People who have it keep it.' },
+          { bars: [{ lane: 3, from: 16, to: 22, label: 'update' }, { lane: 3, from: 46, to: 52, label: 'update' }, { lane: 3, from: 76, to: 82, label: 'update' }], say: 'Support and product get short updates on a fixed rhythm, so nobody interrupts the people fixing it.' },
+          { bars: [{ lane: 2, from: 16, to: 90, label: 'find + fix', tone: 'accent' }, { lane: 2, from: 90, to: 110, label: '5.12.1', tone: 'ok' }], say: 'The fix ships as 5.12.1, with a higher <code>versionCode</code>, on a new staged rollout.' },
+          { bars: [{ lane: 1, from: 110, to: 120, label: 'resolved', tone: 'ok' }], now: 120, say: 'The commander closes the incident. Next comes a blameless postmortem: impact, timeline, root causes, follow-up actions.' },
+        ],
+      });
     },
     deeper: [
       {

@@ -132,6 +132,25 @@
 .tl-check.tl-ok { border-color: var(--ok); }
 .tl-check.tl-err { border-color: var(--err); }
 .tl-check span { overflow-wrap: anywhere; min-width: 0; }
+
+/* kit terminal panels: device and lint report */
+.tlk-dev { display: grid; gap: 8px; min-width: 0; }
+.tlk-pill { justify-self: start; font: 600 0.74rem var(--mono); padding: 3px 9px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); }
+.tlk-pill.ok { border-color: var(--ok); background: var(--ok-soft); } .tlk-pill.warm { border-color: var(--warm); background: var(--warm-soft); }
+.tlk-pill.err { border-color: var(--err); background: var(--err-soft); } .tlk-pill.ghost { border-style: dashed; color: var(--muted); }
+.tlk-scr { display: grid; gap: 6px; align-content: start; min-height: 130px; padding: 10px; border-radius: 16px; border: 5px solid var(--code-bg); background: var(--bg); }
+.tlk-bar { font-weight: 700; font-size: 0.82rem; padding: 4px 6px; border-radius: 6px; background: var(--accent-soft); }
+.tlk-line { height: 7px; border-radius: 4px; background: var(--sunk); } .tlk-line.short { width: 60%; }
+.tlk-field { border: 2px solid var(--accent); border-radius: 6px; padding: 6px 8px; font-size: 0.8rem; color: var(--ink); }
+.tlk-field.empty { border: 1px solid var(--muted); color: var(--muted); }
+.tlk-home { display: grid; place-items: center; min-height: 100px; color: var(--muted); font: 600 0.78rem var(--mono); }
+.tlk-note { margin: 0 0 6px; color: var(--muted); font-size: 0.8rem; }
+.tlk-issue { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 8px; margin-bottom: 6px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); font-size: 0.78rem; }
+.tlk-issue b { font: 700 0.66rem var(--mono); text-transform: uppercase; padding: 2px 5px; border-radius: 5px; background: var(--sunk); }
+.tlk-issue span { display: grid; min-width: 0; overflow-wrap: anywhere; } .tlk-issue small { color: var(--muted); font-family: var(--mono); }
+.tlk-issue.error { border-color: var(--err); } .tlk-issue.error b { background: var(--err-soft); color: var(--err); }
+.tlk-issue.warning { border-color: var(--warm); } .tlk-issue.warning b { background: var(--warm-soft); color: var(--warm); }
+.tlk-issue.base { opacity: 0.55; } .tlk-issue.base span { text-decoration: line-through; }
 `;
 
   // ───────────── shared data for the Logcat lesson ─────────────
@@ -200,6 +219,12 @@
 <p>The <b>Project</b> window has two useful modes. The <b>Android</b> view (the default) groups files by module and type: <code>manifests</code>, the source folder, <code>res</code> and one <b>Gradle Scripts</b> group. The <b>Project</b> view shows the real folders on disk, including <code>build/</code>, <code>src/test</code> and <code>src/androidTest</code>.</p>
 <p>The IDE learns about your dependencies from Gradle. When you edit a <code>build.gradle.kts</code> or <code>libs.versions.toml</code> file, the editor does not know about the change until you run <b>Sync Project with Gradle Files</b>. Before that, a new import shows as an unresolved reference even though the build itself would work.</p>
 <p>To run, you pick a <b>run configuration</b> (usually <code>app</code>) and a <b>target device</b>, then press <b>Run</b>. Behind that button Studio builds a debug APK with Gradle, installs it with adb and starts the launcher activity. Try the flow below.</p>`,
+        predict: {
+          q: 'You add a library to <code>libs.versions.toml</code> and import it in a file, but do not sync. What does the editor show?',
+          options: ['Nothing unusual: the editor reads the file as you type', 'An unresolved reference until you run Sync Project with Gradle Files', 'An error on the device'],
+          a: 1,
+          why: 'The IDE learns about dependencies from Gradle. Until a sync, it does not know the new library exists, even though a build would work.',
+        },
         visual(el) {
           const DEVICES = [
             { name: 'Pixel 8 API 36', kind: 'emulator', serial: 'emulator-5554' },
@@ -389,6 +414,12 @@ adb shell am start -n com.example.news/.MainActivity`,
 <p>Every log line has a <b>level</b> (Verbose, Debug, Info, Warn, Error, Assert), a <b>tag</b>, the <b>package</b> that wrote it and a message. The device mixes lines from every app and the system into one stream, so the skill is filtering, not reading.</p>
 <p>Studio's Logcat window takes a query. <code>package:mine</code> keeps only packages from your open project. <code>level:WARN</code> keeps warnings and anything more severe. <code>tag:</code>, <code>message:</code> and <code>package:</code> match text, a leading <code>-</code> excludes, and <code>~:</code> switches to a regex. <code>is:crash</code> finds crashes.</p>
 <p>Terms with the same key are ORed, and everything else is ANDed. So <code>tag:Auth tag:Feed package:mine</code> means (Auth or Feed) and mine. Type your own query below or pick one.</p>`,
+        predict: {
+          q: 'You filter with <code>package:mine level:WARN</code>. Which lines stay?',
+          options: ['Only your app’s warnings', 'Your app’s warnings, errors and asserts', 'Warnings from every app on the device'],
+          a: 1,
+          why: '<code>level:</code> keeps that level and everything more severe. The two terms have different keys, so they are ANDed with <code>package:mine</code>.',
+        },
         visual(el) {
           const PRESETS = ['package:mine', 'package:mine level:WARN', 'package:mine -tag:OkHttp', 'tag:Auth tag:Feed package:mine', 'tag~:^Feed', 'is:crash'];
           const input = h('input', { type: 'text', value: 'package:mine', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Logcat query' });
@@ -519,6 +550,12 @@ Timber.d("token refreshed for user #%s (expires in %ds)", user.id, ttl)`,
 <p>Logs show what you guessed you would need. The debugger shows everything at the moment the app pauses. Click the gutter to set a <b>breakpoint</b>, start with <b>Debug</b> instead of Run, and the app freezes when it reaches that line. The Variables pane shows every local in scope.</p>
 <p>From there: <b>Step Over</b> (<kbd>F8</kbd>) runs the current line, including any calls inside it. <b>Step Into</b> (<kbd>F7</kbd>) enters the function called on this line. <b>Step Out</b> (<kbd>Shift</kbd>+<kbd>F8</kbd>) finishes the current function and returns to the caller. <b>Resume Program</b> runs to the next breakpoint.</p>
 <p>A <b>conditional breakpoint</b> only pauses when an expression is true. It saves you from pressing Resume twenty times to reach the one item that matters. Below, the total is wrong for one item. Set breakpoints, add the condition and step until you see why.</p>`,
+        predict: {
+          q: 'The app is paused on <code>val price = priceOf(item)</code>. You press Step Over (F8). Where does it pause next?',
+          options: ['On the first line inside <code>priceOf</code>', 'On <code>sum += price</code>, with <code>price</code> already set', 'At the end of <code>total</code>'],
+          a: 1,
+          why: 'Step Over runs the whole line, including the call inside it, and stops on the next line. Step Into is the one that enters <code>priceOf</code>.',
+        },
         visual(el) {
           const SRC = [
             'fun total(cart: List<Item>): Int {',
@@ -708,6 +745,12 @@ kotlin {
 <p>Layout Inspector shows the live UI hierarchy of your running debug app. Open it from the <b>Running Devices</b> window with <b>Toggle Layout Inspector</b>. The <b>Component Tree</b> shows the hierarchy and <b>Attributes</b> shows the parameters of the selected composable or view.</p>
 <p>For Compose it adds two columns next to each node: how many times it was <b>recomposed</b> and how many times it was <b>skipped</b>. If they are missing, open <b>View Options</b> and select <b>Show Recomposition Counts</b>. Press <b>Reset</b>, do one interaction, then read the numbers. Recompositions also flash as a fading highlight on the screen image.</p>
 <p>Below, tapping the button changes a counter. Watch which rows recompose. Then switch the list parameter to a remembered value and tap again.</p>`,
+        predict: {
+          q: 'The list is now passed as <code>remember(all) { all.filter { it.visible } }</code>. You tap Read +1. What happens to NewsList’s counts?',
+          options: ['Its recomposition count goes up', 'Its skip count goes up', 'Neither changes: Compose does not visit it'],
+          a: 1,
+          why: 'The parent recomposes and calls NewsList again, but <code>remember</code> hands back the same List instance. The parameter did not change, so NewsList skips.',
+        },
         visual(el) {
           const NODES = [
             { id: 'screen', name: 'NewsScreen', d: 0 },
@@ -846,70 +889,32 @@ NewsList(items = visible)`,
         body: `
 <p><code>adb</code> (Android Debug Bridge) is the command line link between your computer and a device. Studio uses it behind the scenes. Using it yourself is faster for repeat tasks and lets you test things the UI cannot, like opening a deep link exactly as a notification would.</p>
 <p>The commands you will use most: <code>adb devices -l</code> to list devices, <code>adb install</code>, <code>adb shell am start</code> to start activities or send a VIEW intent with a URL, <code>adb shell pm clear</code> to wipe app data, <code>adb shell dumpsys</code> to inspect system services and <code>adb shell screenrecord</code> for a video of a bug.</p>
-<p>One test everyone should run: <b>process death</b>. Put the app in the background, kill its process with <code>adb shell am kill</code>, then reopen it from Recents. A well-built screen comes back with its state. Try it below with and without saved state.</p>`,
+<p>One test everyone should run: <b>process death</b>. Put the app in the background, kill its process with <code>adb shell am kill</code>, then reopen it from Recents. A well-built screen comes back with its state. Step through it below, once with state in <code>remember</code> and once with <code>rememberSaveable</code>.</p>`,
         visual(el) {
-          const PKG = MINE;
-          let installed = false, proc = 'none', screen = 'home', draft = '', saved = true, busy = false, rec = false;
-          const term = h('div', { class: 'tl-panel tl-term', 'aria-live': 'polite' }, h('div', { class: 'tl-panel-h' }, h('span', {}, 'Terminal')));
-          const scr = h('div', { class: 'tl-panel tl-scr' });
-          const recDot = h('span', { class: 'tl-rec', hidden: true }, 'REC');
-          const procPill = h('span', { class: 'tl-pill' });
-          const o = out('');
-          const print = (t, cls = '') => { term.append(h('div', { class: `tl-ln ${cls}` }, t)); term.scrollTop = term.scrollHeight; };
-          function paint() {
-            procPill.className = 'tl-pill ' + ({ fg: 'tl-ok', bg: 'tl-warn', dead: 'tl-err', none: 'tl-ghost' }[proc]);
-            procPill.textContent = { fg: 'process: foreground', bg: 'process: cached (background)', dead: 'process: killed', none: 'process: not running' }[proc];
-            if (proc !== 'fg') { scr.className = 'tl-panel tl-scr tl-off'; scr.replaceChildren(h('div', {}, installed ? 'Launcher' : 'Launcher (News not installed)')); return; }
-            scr.className = 'tl-panel tl-scr';
-            scr.replaceChildren(recDot,
-              h('div', { class: 'tl-panel-h' }, h('span', {}, 'News'), h('span', {}, screen === 'article' ? 'article/42' : 'feed')),
-              ...(screen === 'article'
-                ? [h('div', { class: 'tl-ln tl-wrap' }, 'Article #42: Earthquake report'), h('div', { class: 'tl-ln tl-wrap', style: 'color:var(--t-s)' }, `Comment draft: ${draft ? '"' + draft + '"' : '(empty)'}`)]
-                : [h('div', { class: 'tl-ln' }, '• Top stories'), h('div', { class: 'tl-ln' }, '• Business'), h('div', { class: 'tl-ln' }, '• Sports')]));
-            recDot.hidden = !rec;
-          }
-          async function runCmd(c, fn) {
-            if (busy) return; busy = true;
-            print('$ ' + c, 'tl-ps');
-            await sleep(250);
-            if (!el.isConnected) return;
-            fn();
-            paint(); busy = false;
-          }
-          const notInstalled = () => { print(`Error: Activity class {${PKG}/${PKG}.MainActivity} does not exist.`, 'tl-er'); say(o, 'Install the app first.'); };
-          const CMDS = [
-            ['adb devices -l', () => { print('List of devices attached'); print('emulator-5554  device product:sdk_gphone64_x86_64 model:Pixel_8 transport_id:1'); say(o, 'One emulator. With several devices, pick one with <span class="muted">adb -s emulator-5554 ...</span>'); }],
-            ['adb install app-debug.apk', () => { print('Performing Streamed Install'); print('Success'); installed = true; say(o, 'Installed. Nothing is running yet.'); }],
-            [`adb shell am start -n ${PKG}/.MainActivity`, () => { if (!installed) return notInstalled(); print(`Starting: Intent { cmp=${PKG}/.MainActivity }`); proc = 'fg'; screen = 'feed'; say(o, 'Started the activity by component name.'); }],
-            ['adb shell am start -a android.intent.action.VIEW -d "https://news.example.com/article/42"', () => { if (!installed) return notInstalled(); print('Starting: Intent { act=android.intent.action.VIEW dat=https://news.example.com/... }'); proc = 'fg'; screen = 'article'; say(o, 'The same intent a notification or a browser link would send. Your intent filter routed it to article 42.'); }],
-            [`adb shell pm clear ${PKG}`, () => { if (!installed) { print('Error: package not found', 'tl-er'); return; } print('Success'); proc = 'none'; draft = ''; screen = 'feed'; say(o, 'All app data deleted and the app stopped: like a fresh install, without reinstalling. Good for onboarding and login tests.'); }],
-            [`adb shell dumpsys meminfo ${PKG}`, () => { if (proc === 'fg' || proc === 'bg') { print(`** MEMINFO in pid 12345 [${PKG}] **`); print('                 Pss Total  Private Dirty'); print('  Native Heap        14210          14120'); print('  Dalvik Heap         9832           9744'); print('        TOTAL        61048          41230'); say(o, 'Watch Pss Total and Private Dirty. Numbers here are made up for the demo.'); } else { print(`No process found for: ${PKG}`, 'tl-er'); } }],
-            ['adb shell screenrecord --time-limit 10 /sdcard/bug.mp4', async () => { if (proc !== 'fg') { say(o, 'Open the app first so there is something to record.'); } rec = true; paint(); say(o, 'Recording (max 180 s, no audio). Then: <span class="muted">adb pull /sdcard/bug.mp4</span>'); await sleep(1600); rec = false; if (el.isConnected) { paint(); print('(recording saved to /sdcard/bug.mp4)', 'tl-nt'); } }],
-            [`adb shell am kill ${PKG}`, () => {
-              if (proc === 'fg') { say(o, '<span class="bad">Nothing happened.</span> <span class="muted">am kill only kills processes that are safe to kill. A foreground app is not. Press Home first.</span>'); return; }
-              if (proc === 'bg') { proc = 'dead'; say(o, 'The cached process is gone, just as if the system reclaimed memory. Now reopen from Recents.'); return; }
-              say(o, 'No process to kill.');
-            }],
-          ];
-          const btns = CMDS.map(([c, fn]) => cmdk(c, () => runCmd(c, fn)));
-          const savedBtn = act('State in SavedStateHandle', () => { saved = !saved; savedBtn.setAttribute('aria-pressed', String(saved)); say(o, saved ? 'The draft is saved in SavedStateHandle.' : 'The draft lives only in a ViewModel field.'); });
-          const phoneBtns = [
-            act('Type a comment draft', () => { if (proc !== 'fg' || screen !== 'article') { say(o, 'Open article 42 with the deep link command first.'); return; } draft = 'Get well soon'; paint(); }),
-            act('Home', () => { if (proc === 'fg') { proc = 'bg'; paint(); say(o, 'App in the background. Its process is now cached and killable.'); } }),
-            act('Open from Recents', () => {
-              if (proc === 'bg') { proc = 'fg'; paint(); say(o, 'Same process, nothing was lost. That is not the interesting case.'); return; }
-              if (proc === 'dead') { proc = 'fg'; if (!saved) draft = ''; paint(); say(o, saved ? '<span class="good">New process, same screen and draft.</span> <span class="muted">The system restored the back stack and saved state.</span>' : '<span class="bad">New process, the screen is back but the draft is gone.</span> <span class="muted">A ViewModel field dies with the process.</span>'); return; }
-              say(o, 'Nothing in Recents yet.');
-            }),
-          ];
-          savedBtn.setAttribute('aria-pressed', 'true');
-          paint();
-          say(o, 'Run the commands top to bottom. For process death: deep link, type a draft, Home, am kill, Open from Recents.');
-          el.append(
-            h('div', { class: 'tl-grid' },
-              h('div', { class: 'tl-cmds' }, btns),
-              h('div', { class: 'tl-dev' }, h('div', { class: 'tl-row' }, procPill), scr, h('div', { class: 'controls' }, phoneBtns, savedBtn))),
-            term, o);
+          const dev = (proc, tone, screen) => `<div class="tlk-dev"><span class="tlk-pill ${tone}">process: ${proc}</span><div class="tlk-scr">${screen}</div></div>`;
+          const app = draft => `<div class="tlk-bar">News · Article 42</div><div class="tlk-line"></div><div class="tlk-line short"></div><div class="tlk-field${draft ? '' : ' empty'}">${draft || 'Write a comment…'}</div>`;
+          const home = '<div class="tlk-home">Home screen</div>';
+          const kill = 'adb shell am kill com.example.news';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Device',
+            predict: {
+              q: 'The comment draft lives in <code>remember { mutableStateOf("") }</code>. You press Home, run <code>am kill</code>, and reopen the app from Recents. What does the field show?',
+              options: ['The draft, as typed', 'An empty field', 'The app crashes on start'],
+              a: 1,
+              why: 'Reopening starts a new process and recreates the Activity. <code>remember</code> lived in the old process. Only saved state, like <code>rememberSaveable</code>, comes back.',
+            },
+            frames: [
+              { panel: dev('none', 'ghost', '<div class="tlk-home">Not installed</div>'), say: 'An emulator is running. Start by checking that adb can see it.' },
+              { cmd: 'adb devices -l', out: 'List of devices attached\nemulator-5554  device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 transport_id:1', say: 'One device. With several, add <code>-s emulator-5554</code> to every command.' },
+              { cmd: 'adb install app/build/outputs/apk/debug/app-debug.apk', out: 'Performing Streamed Install\nSuccess', panel: dev('none', 'ghost', home), say: 'The APK is on the device. Nothing runs yet.' },
+              { cmd: 'adb shell am start -n com.example.news/.MainActivity', out: 'Starting: Intent { cmp=com.example.news/.MainActivity }', panel: dev('foreground', 'ok', app('')), say: 'The app starts. The user opens an article and starts a comment.' },
+              { panel: dev('cached', 'warm', home), say: 'They type “Great piece”, then press Home. The process stays alive in the background, for now.' },
+              { cmd: kill, out: '', panel: dev('dead', 'err', home), say: 'This is what the system does when it needs memory. <code>am kill</code> only kills a process that is safe to kill, so this works in the background.' },
+              { panel: dev('foreground', 'ok', app('')), say: 'Reopen from Recents. A new process recreates the Activity, and the draft in <code>remember</code> is gone.' },
+              { cmd: kill, out: '', panel: dev('dead', 'err', home), say: 'Change the draft to <code>rememberSaveable</code>, type again, press Home and kill once more.' },
+              { panel: dev('foreground', 'ok', app('Great piece')), say: 'Reopened from Recents: the draft comes back from saved state. The screen survives process death.' },
+            ],
+          });
         },
         code: `# which devices are connected (use -s <serial> when there are several)
 adb devices -l
@@ -995,64 +1000,37 @@ adb shell dumpsys gfxinfo com.example.news framestats`,
         body: `
 <p>Android Lint reads your source, resources and manifest and reports likely bugs: calling an API newer than your <code>minSdk</code>, text that ignores locale, unused resources, accessibility gaps. Each issue has an id and a severity: informational, warning, error or fatal. Lint is not part of a normal build. You run it with <code>./gradlew lint</code> or <code>lintDebug</code>, and it writes an HTML report under <code>app/build/reports/</code>.</p>
 <p>An old project may start with hundreds of issues. A <b>baseline</b> records today's issues in <code>lint-baseline.xml</code>, and later runs report only new ones. You stop the bleeding now and pay down the old debt over time.</p>
-<p>Run lint below, create the baseline, then add new code and raise a severity.</p>`,
+<p>Step through it below: run lint, create the baseline, then add new code and raise a severity.</p>`,
         visual(el) {
-          const BASE_CODE = [
-            ['if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {', 'ObsoleteSdkInt'],
-            ['    window.insetsController?.hide(statusBars())', 'NewApi'],
-            ['}', null],
-            ['binding.count.text = "Read: " + read', 'SetTextI18n'],
-          ];
-          const NEW_LINE = ['val label = String.format("%.1f MB", size)', 'DefaultLocale'];
-          const ISSUES = {
-            ObsoleteSdkInt: { sev: 'warning', msg: 'Unnecessary; SDK_INT is always >= 24' },
-            NewApi: { sev: 'error', msg: 'Call requires API level 30 (current min is 24)' },
-            SetTextI18n: { sev: 'warning', msg: 'Do not concatenate text displayed with setText. Use resource string with placeholders.' },
-            DefaultLocale: { sev: 'warning', msg: 'Implicitly using the default locale is a common source of bugs' },
+          const I = {
+            api: ['error', 'MainActivity.kt:31', 'Call requires API level 30 (current min is 24) [NewApi]'],
+            sdk: ['warning', 'MainActivity.kt:30', 'Unnecessary; SDK_INT is always >= 24 [ObsoleteSdkInt]'],
+            i18n: ['warning', 'MainActivity.kt:34', 'Do not concatenate text displayed with setText [SetTextI18n]'],
+            loc: ['warning', 'SizeLabel.kt:12', 'Implicitly using the default locale [DefaultLocale]'],
+            locE: ['error', 'SizeLabel.kt:12', 'Implicitly using the default locale [DefaultLocale]'],
           };
-          let added = false, baseline = null, raised = false, ran = false;
-          const codeP = h('div', { class: 'tl-panel' });
-          const list = h('div', { class: 'tl-issues', 'aria-live': 'polite' });
-          const cfg = h('div', { class: 'kt' });
-          const o = out('');
-          const lines = () => added ? [...BASE_CODE, NEW_LINE] : BASE_CODE;
-          const sevOf = id => id === 'DefaultLocale' && raised ? 'error' : ISSUES[id].sev;
-          function paint() {
-            codeP.replaceChildren(h('div', { class: 'tl-panel-h' }, h('span', {}, 'HeaderBinder.kt'), h('span', {}, 'minSdk 24')),
-              ...lines().map(([t, id]) => h('div', { class: 'tl-ln' + (id && ran && !(baseline && baseline.has(id)) ? ' tl-errl' : '') + (t === NEW_LINE[0] ? ' tl-new' : ''), html: hl(t) })));
-            cfg.innerHTML = hl(`android {\n    lint {\n${baseline ? '        baseline = file("lint-baseline.xml")\n' : ''}        abortOnError = true   // default\n    }\n}`) +
-              (raised ? '\n' + esc('<!-- lint.xml -->\n<issue id="DefaultLocale" severity="error" />') : '');
-          }
-          function run() {
-            ran = true;
-            const found = lines().filter(l => l[1]).map(l => l[1]);
-            const fresh = found.filter(id => !(baseline && baseline.has(id)));
-            list.replaceChildren(...found.map(id => {
-              const inBase = baseline && baseline.has(id); const sev = sevOf(id);
-              return h('div', { class: 'tl-issue' + (inBase ? ' tl-base' : '') },
-                h('span', { class: `tl-pill ${inBase ? 'tl-ghost' : sev === 'error' ? 'tl-err' : 'tl-warn'}` }, inBase ? 'baseline' : sev),
-                h('span', { class: 'tl-msg' }, h('b', {}, id), ': ', ISSUES[id].msg));
-            }));
-            replay(list, 'pop-soft');
-            const errs = fresh.filter(id => sevOf(id) === 'error').length;
-            const warns = fresh.length - errs;
-            paint();
-            say(o, `$ ./gradlew lintDebug  <span class="muted">${errs} errors, ${warns} warnings${baseline ? `, ${found.length - fresh.length} filtered by baseline` : ''}</span><br>` +
-              (errs ? '<span class="bad">BUILD FAILED</span> <span class="muted">Lint found errors. abortOnError is true by default.</span>' : '<span class="good">BUILD SUCCESSFUL</span>'));
-          }
-          function makeBaseline() {
-            baseline = new Set(lines().filter(l => l[1]).map(l => l[1]));
-            paint(); list.replaceChildren();
-            say(o, `Wrote lint-baseline.xml with ${baseline.size} issues. <span class="muted">Commit it. Run lint again: these no longer fail the build.</span>`);
-          }
-          const addBtn = act('Add new code', () => { if (added) return; added = true; paint(); say(o, 'A new line that formats a number with the default locale. Run lint.'); });
-          const raiseBtn = act('lint.xml: DefaultLocale = error', () => { raised = !raised; raiseBtn.setAttribute('aria-pressed', String(raised)); paint(); say(o, raised ? 'DefaultLocale is now an error for this project. Run lint.' : 'Back to the default severity.'); });
-          paint();
-          say(o, 'Run lint on this legacy file first.');
-          el.append(
-            h('div', { class: 'controls' }, cmdk('./gradlew lintDebug', run), act('Create baseline', makeBaseline), addBtn, raiseBtn),
-            h('div', { class: 'tl-grid' }, codeP, h('div', { class: 'tl-issues' }, label('issues'), list)),
-            cfg, o);
+          const report = (keys, based, note) => (note ? `<p class="tlk-note">${note}</p>` : '') + keys.map(k => {
+            const [sev, at, msg] = I[k], old = based && ['api', 'sdk', 'i18n'].includes(k);
+            return `<div class="tlk-issue ${old ? 'base' : sev}"><b>${old ? 'baseline' : sev}</b><span><small>${at}</small>${msg}</span></div>`;
+          }).join('');
+          const fail = '> Task :app:lintDebug FAILED\nWrote HTML report to file:///…/app/build/reports/lint-results-debug.html\n\nFAILURE: Build failed with an exception.\n> Lint found errors in the project; aborting build.';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Lint report',
+            predict: {
+              q: 'The baseline holds the three old issues. New code adds a <code>DefaultLocale</code> warning. What does the next <code>lintDebug</code> do?',
+              options: ['Fails: any new issue fails the build', 'Passes, and the report shows the new warning', 'Passes and hides it: the baseline covers the whole file'],
+              a: 1,
+              why: 'The baseline filters only the issues it recorded. The new one is reported, but by default only errors fail the task.',
+            },
+            frames: [
+              { panel: report([], false, 'No report yet.'), say: 'A legacy screen with three old issues. <code>assembleDebug</code> never runs lint, so run it yourself.' },
+              { cmd: './gradlew lintDebug', out: fail, panel: report(['api', 'sdk', 'i18n']), say: 'One error and two warnings. <code>abortOnError</code> is true by default, so the error fails the task.' },
+              { cmd: './gradlew lintDebug -Dlint.baselines.continue=true', out: 'Created baseline file /…/app/lint-baseline.xml\n\nBUILD SUCCESSFUL in 9s', panel: report(['api', 'sdk', 'i18n'], true), say: 'With <code>baseline = file("lint-baseline.xml")</code> in the lint block, the first run records today’s issues. Commit that file.' },
+              { cmd: './gradlew lintDebug', out: 'BUILD SUCCESSFUL in 6s', panel: report(['api', 'sdk', 'i18n'], true, '3 issues filtered by the baseline'), say: 'The old issues are filtered out. The build is green, and the debt is written down.' },
+              { cmd: './gradlew lintDebug', out: 'BUILD SUCCESSFUL in 7s', panel: report(['loc', 'api', 'sdk', 'i18n'], true), say: 'New code formats a number with the default locale. Lint reports it as new, but a warning does not fail the build.' },
+              { cmd: './gradlew lintDebug', out: fail, panel: report(['locE', 'api', 'sdk', 'i18n'], true), say: '<code>lint.xml</code> raises <code>DefaultLocale</code> to error. Now the new code fails the build, and the old issues stay quiet.' },
+            ],
+          });
         },
         code: `// app/build.gradle.kts
 android {
@@ -1143,60 +1121,31 @@ ktlint --format "app/src/**/*.kt"`,
         body: `
 <p>Continuous integration (CI) means a clean machine builds and checks every change before it is merged. "Works on my machine" stops being an argument, and lint finally runs, because nobody has to remember it.</p>
 <p>A workflow file in <code>.github/workflows/</code> triggers on <code>pull_request</code>. It checks out the code, installs a JDK with <code>actions/setup-java</code>, sets up Gradle with <code>gradle/actions/setup-gradle</code>, then runs <code>lintDebug</code>, <code>testDebugUnitTest</code> and <code>assembleDebug</code>. Branch protection can then require the check to pass before merging.</p>
-<p><code>setup-gradle</code> caches Gradle's downloads and build outputs by default. Only runs on the default branch write the cache. Pull requests read it. So the first PR in a repo runs cold, and after a merge to main the next PR is fast. Try the order below.</p>`,
+<p><code>setup-gradle</code> caches Gradle's downloads and build outputs by default. Only runs on the default branch write the cache. Pull requests read it. So the first PR in a repo runs cold, and after a merge to main the next PR is fast. The demo below puts a cold run and a warm run side by side.</p>`,
         visual(el) {
-          const STEPS = [
-            { id: 'co', name: 'actions/checkout', cold: 3, warm: 3 },
-            { id: 'jdk', name: 'actions/setup-java (temurin 17)', cold: 9, warm: 6 },
-            { id: 'gr', name: 'gradle/actions/setup-gradle', cold: 4, warm: 22 },
-            { id: 'lint', name: './gradlew lintDebug', cold: 150, warm: 48 },
-            { id: 'test', name: './gradlew testDebugUnitTest', cold: 95, warm: 34 },
-            { id: 'asm', name: './gradlew assembleDebug', cold: 70, warm: 24 },
-          ];
-          let cacheOnMain = false, busy = false, token = 0;
-          const rows = STEPS.map(s => { const r = h('div', { class: 'tl-step' }, h('span', { class: 'tl-dot' }), h('span', {}, s.name), h('span', { class: 'tl-t' }, '')); r.t = r.lastChild; return r; });
-          const check = h('div', { class: 'tl-check' }, h('span', {}, 'No runs yet'));
-          const cachePill = h('span', { class: 'tl-pill tl-ghost' });
-          const o = out('');
-          const mmss = s => `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
-          const paintCache = () => { cachePill.className = 'tl-pill ' + (cacheOnMain ? 'tl-ok' : 'tl-ghost'); cachePill.textContent = cacheOnMain ? 'cache: saved from main' : 'cache: empty'; };
-          async function go(kind) {
-            if (busy) return; busy = true; const my = ++token;
-            const onMain = kind === 'merge';
-            const warm = cacheOnMain;
-            const failTest = kind === 'fail';
-            rows.forEach(r => { r.className = 'tl-step'; r.t.textContent = ''; });
-            check.className = 'tl-check'; check.replaceChildren(h('span', {}, onMain ? 'push to main: CI running…' : 'PR #128: checks running…'));
-            let total = 0, failed = false;
-            for (let i = 0; i < STEPS.length; i++) {
-              const s = STEPS[i], r = rows[i];
-              if (failed) { r.classList.add('tl-skip'); r.t.textContent = 'skipped'; continue; }
-              r.classList.add('tl-run');
-              await sleep(warm ? 260 : 520); if (!el.isConnected || my !== token) return;
-              const sec = warm ? s.warm : s.cold; total += sec;
-              r.classList.remove('tl-run');
-              if (failTest && s.id === 'test') { r.classList.add('tl-fail'); r.t.textContent = mmss(sec); failed = true; replay(r, 'shake'); continue; }
-              r.classList.add('tl-pass');
-              r.t.textContent = s.id === 'gr' ? (warm ? 'cache restored' : 'cache miss') : mmss(sec);
-            }
-            if (onMain) { cacheOnMain = true; paintCache(); }
-            check.className = 'tl-check ' + (failed ? 'tl-err' : 'tl-ok');
-            check.replaceChildren(h('span', { class: `tl-pill ${failed ? 'tl-err' : 'tl-ok'}` }, failed ? 'failing' : 'passed'),
-              h('span', {}, `${onMain ? 'main' : 'PR #128'} · build · ${mmss(total)}`),
-              ...(failed ? [h('span', { class: 'muted-text' }, 'Merge blocked by branch protection')] : []));
-            say(o, failed
-              ? '<span class="bad">FeedViewModelTest > parse skips items without title FAILED.</span> <span class="muted">assembleDebug was skipped. Fix the test and push again.</span>'
-              : onMain ? '<span class="good">Main is green and the cache is saved.</span> <span class="muted">Pull requests will now restore it.</span>'
-                : warm ? '<span class="good">Fast run.</span> <span class="muted">The PR restored the cache that main wrote, but it does not write its own.</span>'
-                  : '<span class="good">Passed, but slow.</span> <span class="muted">Cold cache: Gradle downloaded everything. PRs do not save the cache, so the next PR is cold too, until main runs.</span>');
-            busy = false;
-          }
-          paintCache();
-          say(o, 'Open a PR first, then merge to main, then push to a PR again.');
-          el.append(
-            h('div', { class: 'controls' }, act('Open PR', () => go('pr')), act('Merge to main', () => go('merge')), act('Push PR with a failing test', () => go('fail'))),
-            h('div', { class: 'tl-row' }, label('job: build · ubuntu-latest'), cachePill),
-            h('div', { class: 'tl-pipe' }, rows), check, o);
+          const C = [['checkout', 3, 3], ['java', 9, 6], ['gradle', 4, 22], ['lint', 150, 48], ['test', 95, 34], ['assemble', 70, 24]];
+          let a = 0, b = 0;
+          const step = k => { const [name, cold, warm] = C[k]; const bars = [{ lane: 0, from: a, to: a + cold, label: cold > 20 ? name : '', tone: k === 2 ? 'muted' : 'accent' }, { lane: 1, from: b, to: b + warm, label: warm > 20 ? name : '', tone: k === 2 ? 'warm' : 'ok' }]; a += cold; b += warm; return bars; };
+          const f1 = step(0).concat(step(1)), f2 = step(2), f3 = step(3), f4 = step(4), f5 = step(5);
+          Lab.ui.timeline(el, {
+            lanes: ['PR, cold', 'PR, warm'],
+            span: 340,
+            unit: 's',
+            predict: {
+              q: 'The second run reads the Gradle cache that a run on main saved. Which step gets <em>slower</em> than in the cold run?',
+              options: ['<code>actions/checkout</code>', '<code>setup-gradle</code>, because it restores the cache', '<code>lintDebug</code>', 'None: every step gets faster'],
+              a: 1,
+              why: 'Restoring the cache is a download, so <code>setup-gradle</code> takes longer. It pays off many times over in the Gradle tasks after it.',
+            },
+            frames: [
+              { now: 0, say: 'The same workflow, twice. The top run comes before main ever saved a cache. The bottom one comes after a merge to main.' },
+              { bars: f1, say: 'Checkout and the JDK take a few seconds either way.' },
+              { bars: f2, say: '<code>setup-gradle</code>: the cold run has nothing to restore. The warm run downloads the cache, about 20 seconds.' },
+              { bars: f3, say: '<code>lintDebug</code>: the warm run reuses downloaded dependencies and cached outputs. 150 s becomes 48 s.' },
+              { bars: f4, say: 'Unit tests: 95 s becomes 34 s.' },
+              { bars: f5, marks: [{ at: 137, label: 'warm: 2m 17s', tone: 'ok' }], say: 'The cold run takes 5m 31s, the warm one 2m 17s. Only runs on the default branch write the cache, so run CI on <code>push</code> to main too.' },
+            ],
+          });
         },
         code: `# .github/workflows/android.yml
 name: Android CI

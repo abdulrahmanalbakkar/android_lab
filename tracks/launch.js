@@ -332,7 +332,13 @@ Firebase.crashlytics.setCustomKey("plan", user.plan.name)`,
           { type: 'blank', prompt: 'Leave a breadcrumb, then report a caught exception without crashing.', code: 'Firebase.crashlytics.[[log]]("open article $id")\ntry {\n    api.article(id)\n} catch (e: IOException) {\n    Firebase.crashlytics.[[recordException]](e)\n}', why: '<code>log()</code> adds a line to the report’s log. <code>recordException()</code> sends a non-fatal event with the stack trace of the exception you caught.' },
           { type: 'bug', prompt: 'Crashes from the Play release show names like <code>a.b.c.a</code>. Tap the line that causes it.', code: 'android {\n    buildTypes {\n        getByName("release") {\n            isMinifyEnabled = true\n            configure<CrashlyticsExtension> {\n                mappingFileUploadEnabled = false\n            }\n        }\n    }\n}', bug: 5, fix: '                mappingFileUploadEnabled = true', why: 'R8 renames classes in the release build. Without the uploaded mapping file Crashlytics cannot turn <code>a.b.c</code> back into your class names.' },
         ],
-        quiz: [
+        predict: {
+      q: "The app freezes on a slow disk read for several seconds, but never crashes. Which meter moves?",
+      options: ["User-perceived crash rate","User-perceived ANR rate","Neither"],
+      a: 1,
+      why: "A frozen main thread that does not answer input in time is an ANR, which has its own meter and a lower bad-behaviour line.",
+    },
+    quiz: [
           { q: 'A crash happens inside a BroadcastReceiver while no activity is on screen. Which number goes up?', options: ['Only the user-perceived crash rate', 'Only the crash rate (all crashes)', 'Both'], a: 1, why: 'User-perceived crashes need a visible activity or a running foreground service. A background crash raises the plain crash rate only.' },
           { q: 'Your overall user-perceived crash rate is 0.9%, but one phone model is at 10%. Is that a problem for Play?', options: ['No, the overall rate is under 1.09%', 'Yes, the per-model threshold is 8%', 'Only if the model is a Pixel'], a: 1, why: 'Android vitals also has a per-phone-model threshold of 8%. Play can act for that model even when the average looks fine.' },
           { q: 'Why does a test crash only show up in Crashlytics after you open the app again?', options: ['The report is written to disk and sent on the next launch', 'Crashlytics waits 24 hours', 'Debug builds never send reports'], a: 0, why: 'A dying process is a bad place for network calls. The report is saved locally and uploaded when the app starts again.' },
@@ -495,7 +501,13 @@ analytics.logEvent("open_" + screenName) { }`,
           { type: 'blank', prompt: 'Log a share with the share target as a parameter.', code: 'analytics.logEvent(FirebaseAnalytics.Event.[[SHARE]]) {\n    param(FirebaseAnalytics.Param.ITEM_ID, article.id)\n    param(FirebaseAnalytics.Param.[[METHOD]], "whatsapp")\n}', why: '<code>SHARE</code> is a recommended event, and <code>METHOD</code> records how the content was shared.' },
           { type: 'bug', prompt: 'After a week the console says the app hit its event type limit. Tap the line responsible.', code: 'fun onShare(article: Article, method: String) {\n    analytics.logEvent("share_${article.id}") {\n        param(FirebaseAnalytics.Param.METHOD, method)\n    }\n}', bug: 1, fix: '    analytics.logEvent(FirebaseAnalytics.Event.SHARE) {', why: 'Every article id creates a new event name. Use one <code>SHARE</code> event and put the id in <code>ITEM_ID</code>.' },
         ],
-        quiz: [
+        predict: {
+      q: "Every tap in the app logs one event, <code>button_click</code>. Can you tell where readers drop off before sharing?",
+      options: ["Yes, by counting the taps","No: one generic event cannot tell which tap it was","Yes, Analytics groups them by screen for you"],
+      a: 1,
+      why: "A funnel needs a named event per step. A single generic event counts taps but cannot separate opening an article from sharing it.",
+    },
+    quiz: [
           { q: 'You want to know which share target is popular. Where does "whatsapp" go?', options: ['In the event name: share_whatsapp', 'In a parameter: method = whatsapp', 'In a user property'], a: 1, why: 'One <code>share</code> event with a <code>method</code> parameter can be split by target in reports, and it costs one event type.' },
           { q: 'Why route all events through one class such as ArticleAnalytics?', options: ['It makes events send faster', 'Names and parameters stay consistent across screens', 'Firebase requires it'], a: 1, why: 'Event names are case-sensitive. One place that logs them stops two screens from inventing two spellings for the same action.' },
           { q: 'Where do you set the default consent state before the user has chosen?', options: ['In AndroidManifest.xml meta-data', 'In Remote Config', 'In the Play Console'], a: 0, why: 'Keys such as <code>google_analytics_default_allow_analytics_storage</code> set the defaults. <code>setConsent()</code> updates them later.' },
@@ -658,7 +670,13 @@ val limit = rc.getLong("max_articles_offline")   // 0: offline mode saves nothin
           { type: 'blank', prompt: 'Download new values and make them active in one call, after setting defaults.', code: 'rc.setDefaultsAsync(R.xml.[[remote_config_defaults]])\nrc.[[fetchAndActivate]]().addOnCompleteListener { task ->\n    if (task.isSuccessful) applyFlags()\n}', why: '<code>fetchAndActivate()</code> downloads and activates in one step. The defaults XML covers the time before that succeeds.' },
           { type: 'bug', prompt: 'The server says <code>new_reader_ui = true</code> and the fetch succeeds, but the app still shows the old reader. Tap the line that is wrong.', code: 'fun refresh() {\n    rc.fetch().addOnCompleteListener {\n        showReader(rc.getBoolean("new_reader_ui"))\n    }\n}', bug: 1, fix: '    rc.fetchAndActivate().addOnCompleteListener {', why: '<code>fetch()</code> only downloads. Until <code>activate()</code> runs, <code>getBoolean()</code> returns the old active value or the default.' },
         ],
-        quiz: [
+        predict: {
+      q: "You set the flag back to false in the console. Without real-time listeners, when does a phone that already has <code>true</code> switch back?",
+      options: ["Instantly","After its next fetch and activate, which can be hours later","Only after the user updates the app"],
+      a: 1,
+      why: "By default Remote Config fetches at most every 12 hours, and fetched values only take effect when activated. Real-time listeners shorten the wait.",
+    },
+    quiz: [
           { q: 'A feature behind a flag crashes for 20% of the users who have it. What is the fastest safe fix?', options: ['Publish a hotfix to Play', 'Set the flag to false in Remote Config', 'Ask users to clear app data'], a: 1, why: 'The kill switch turns the code path off for everyone on their next fetch, or right away with real-time updates, without a release.' },
           { q: 'What is the default minimum fetch interval for Remote Config?', options: ['1 minute', '1 hour', '12 hours'], a: 2, why: 'The default is 12 hours. You can lower it for development, but frequent fetches in production can get throttled.' },
           { q: 'Why ship in-app defaults for every parameter?', options: ['Remote Config refuses to fetch without them', 'The app must behave sensibly before any fetch succeeds', 'They make fetches faster'], a: 1, why: 'First launch and offline launches have no fetched values. The defaults are what the app runs with until a fetch is activated.' },
@@ -676,71 +694,34 @@ val limit = rc.getLong("max_articles_offline")   // 0: offline mode saves nothin
         body: `
 <p>Many users never open the Play Store to update. The Play in-app updates library lets your app check whether a newer version is on Play and start the update itself. It works on Android 5.0 (API 21) and newer, on phones, tablets and ChromeOS devices.</p>
 <p>There are two flows. A <b>flexible</b> update downloads in the background while the user keeps reading; when it is done, you show a "Restart" prompt and call <code>completeUpdate()</code>. An <b>immediate</b> update takes over the screen, and Play installs the update and restarts the app. Use immediate only when the app cannot work without the new version, for example after a breaking API change.</p>
-<p>Pick a flow below and run it. Watch which calls your code makes and which parts Play draws.</p>`,
+<p>Step through a flexible update below. Watch which calls your code makes and which parts Play draws.</p>`,
         visual(el) {
-          let mode = 'FLEXIBLE', busy = false, ver = '2.3';
-          const ph = phone('');
-          const log = h('div', { class: 'al-log', 'aria-live': 'polite' });
-          const o = out('');
-          const line = (t, c) => { log.append(h('div', { class: c }, t)); while (log.children.length > 7) log.firstChild.remove(); };
-          const reset = () => {
-            ph.el.firstChild.textContent = `Daily News ${ver}`;
-            ph.body.replaceChildren(...articles(5)); ph.layer.replaceChildren();
-          };
-          const ask = (full) => new Promise(res => {
-            const yes = h('button', { class: 'cmd', onclick: () => res(true) }, 'Update');
-            const no = h('button', { class: 'cmd', onclick: () => res(false) }, full ? 'Cancel' : 'No thanks');
-            const box = full
-              ? h('div', { class: 'al-full drop-in' }, h('b', {}, 'Update required'), h('span', {}, 'Play UI: the app can’t be used until it updates.'), h('div', { class: 'al-row', style: 'justify-content:center' }, no, yes))
-              : h('div', { class: 'al-sheet drop-in' }, h('b', {}, 'Update available'), h('span', {}, 'Play UI: Daily News 2.4 is ready to download.'), h('div', { class: 'al-row' }, no, yes));
-            ph.layer.replaceChildren(box);
+          const list = '<div class="ui-m-row"><span class="ui-m-av"></span><div>Morning briefing</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Weather this week</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Final score: 2–1</div></div>';
+          const app = (v, extra = '', top = '') => `<div class="ui-m-bar">Daily News ${v}</div><div class="ui-m-body">${top}${list}</div>${extra}`;
+          const sheet = '<div class="ui-m-sheet"><b>Update available</b><span class="ui-m-muted">Drawn by Google Play: Daily News 2.4 is ready to download.</span><div><span class="ui-m-btn ghost">No thanks</span> <span class="ui-m-btn up-yes">Update</span></div></div>';
+          const prog = '<div class="ui-m-card"><span class="ui-m-muted">Downloading update… keep reading</span><div class="ui-m-line short" style="background:var(--accent)"></div></div>';
+          const snack = '<div class="ui-m-snack">An update has just been downloaded. <b class="up-restart">RESTART</b></div>';
+          const installing = '<div class="ui-m-center"><span class="ui-m-spin"></span><span class="ui-m-muted">Installing…</span></div>';
+          const required = '<div class="ui-m-center"><b>Update required</b><span class="ui-m-muted">Drawn by Google Play. The app can’t be used until it updates.</span><span class="ui-m-btn">Update</span></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'What your code sees',
+            predict: {
+              q: 'Your app finds an update and starts a flexible update. Who draws the “Update available” prompt?',
+              options: ['Your app, with your own layout', 'Google Play, after your code starts the flow', 'The system notification shade'],
+              a: 1,
+              why: 'Your code only calls <code>startUpdateFlowForResult</code>. The prompt, the download and the install screens all belong to Play.',
+            },
+            frames: [
+              { screen: app('2.3'), log: '// Daily News 2.3 starts', say: 'The app starts and asks Play whether a newer version is available.' },
+              { log: ['appUpdateManager.appUpdateInfo', '→ UPDATE_AVAILABLE, isUpdateTypeAllowed(FLEXIBLE) = true'], say: 'Play answers: 2.4 is available and a flexible update is allowed.' },
+              { screen: app('2.3', sheet), log: 'startUpdateFlowForResult(info, launcher, AppUpdateOptions.newBuilder(FLEXIBLE).build())', say: 'Your code starts the flow. Play draws this prompt over your app.' },
+              { tap: '.up-yes', screen: app('2.3', '', prog), log: ['launcher → RESULT_OK', 'InstallStateUpdatedListener: DOWNLOADING'], say: 'The user accepts. The download runs in the background while they keep reading.' },
+              { screen: app('2.3', snack), log: 'InstallStateUpdatedListener: DOWNLOADED', say: 'Downloaded. Play does not restart the app by itself, so you show a prompt.' },
+              { tap: '.up-restart', screen: `<div class="ui-m-bar">Daily News 2.3</div>${installing}`, log: 'appUpdateManager.completeUpdate()', say: 'The user taps Restart. Your code calls <code>completeUpdate()</code> and Play installs the update.' },
+              { screen: app('2.4'), log: '// app restarted on 2.4', say: 'The app comes back on 2.4. The user read the whole time and chose when to restart.' },
+              { screen: required, log: 'AppUpdateOptions.newBuilder(IMMEDIATE).build()', say: 'An <em>immediate</em> update would instead cover the whole app until Play has installed it and restarted. Keep that for versions the app cannot work without.' },
+            ],
           });
-          const alive = () => el.isConnected;
-          async function run() {
-            if (busy) return; busy = true; log.replaceChildren(); reset();
-            if (ver === '2.4') { line('appUpdateInfo → UPDATE_NOT_AVAILABLE', 'al-c'); say(o, 'Already on the latest version. Press Reset to start over.'); busy = false; return; }
-            line('appUpdateManager.appUpdateInfo');
-            await sleep(500); if (!alive()) return;
-            line(`→ UPDATE_AVAILABLE, isUpdateTypeAllowed(${mode}) = true`, 'al-c');
-            line(`startUpdateFlowForResult(info, launcher, AppUpdateOptions.newBuilder(${mode}).build())`);
-            say(o, 'Play draws the prompt. Your app only started the flow.');
-            const ok = await ask(mode === 'IMMEDIATE'); if (!alive()) return;
-            ph.layer.replaceChildren();
-            if (!ok) {
-              line('launcher → RESULT_CANCELED', 'al-c');
-              say(o, mode === 'IMMEDIATE' ? 'The user said no. If the app can still work, let them continue and ask again later.' : 'The user said no. Do not ask again on every launch.');
-              busy = false; return;
-            }
-            line('launcher → RESULT_OK', 'al-c');
-            const bar = h('div', {});
-            const prog = h('div', { class: 'al-prog' }, bar);
-            if (mode === 'FLEXIBLE') {
-              const note = h('span', { class: 'al-note' }, 'Downloading… keep reading');
-              ph.body.prepend(h('div', { class: 'al-card drop-in' }, note, prog));
-              line('InstallStateUpdatedListener: DOWNLOADING', 'al-c');
-              for (let p = 0; p <= 100; p += 5) { bar.style.width = `${p}%`; await sleep(70); if (!alive()) return; }
-              line('InstallStateUpdatedListener: DOWNLOADED', 'al-c');
-              say(o, 'Downloaded. Play does not restart the app by itself, so you show a prompt.');
-              await new Promise(res => ph.layer.replaceChildren(h('div', { class: 'al-snack drop-in' }, h('span', {}, 'An update has just been downloaded.'), h('button', { class: 'cmd', onclick: res }, 'RESTART'))));
-              if (!alive()) return;
-              line('appUpdateManager.completeUpdate()');
-            } else {
-              ph.layer.replaceChildren(h('div', { class: 'al-full' }, h('b', {}, 'Downloading update'), prog));
-              for (let p = 0; p <= 100; p += 5) { bar.style.width = `${p}%`; await sleep(60); if (!alive()) return; }
-            }
-            ph.layer.replaceChildren(h('div', { class: 'al-full' }, h('span', { class: 'al-spin' }), h('span', {}, 'Installing…')));
-            await sleep(900); if (!alive()) return;
-            ver = '2.4'; reset(); replay(ph.el, 'pop-soft');
-            line('app restarted on 2.4', 'al-c');
-            say(o, mode === 'FLEXIBLE' ? '<span class="good">Updated.</span> The user read the whole time and chose when to restart.' : '<span class="good">Updated.</span> Play installed and restarted the app. The user waited, but no one is left on the old version.');
-            busy = false;
-          }
-          const bF = act('flexible', () => { if (busy) return; mode = 'FLEXIBLE'; press([bF, bI], bF); });
-          const bI = act('immediate', () => { if (busy) return; mode = 'IMMEDIATE'; press([bF, bI], bI); });
-          el.append(h('div', { class: 'controls' }, bF, bI, act('check for update ▶', run)),
-            h('div', { class: 'al-grid' }, ph.el, h('div', { class: 'al-card' }, lbl('what your code sees'), log)), o);
-          press([bF, bI], bF); reset();
-          say(o, 'Choose a flow, then check for an update.');
         },
         code: `// app/build.gradle.kts
 implementation("com.google.android.play:app-update:2.1.0")
@@ -862,45 +843,29 @@ class MainActivity : ComponentActivity() {
 <p>Play enforces a quota on how often a user sees the card, and it does not publish the number. If you call the API again within a short time, often nothing appears. The API also never tells you whether the card showed or whether the user rated. The callback means only "the flow is over, carry on".</p>
 <p>So ask after the user got value, such as finishing their fifth article, never behind a "Rate us" button, and never with a question like "Do you like the app?" first. A button may do nothing if the quota is used; for a button, open the Play Store listing instead.</p>`,
         visual(el) {
-          // ponytail: the real quota is an undocumented Play detail; 30 days here is only for the demo
-          const QUOTA = 30;
-          let day = 1, lastShown = -999, busy = false;
-          const ph = phone('Daily News');
-          const log = h('div', { class: 'al-log', 'aria-live': 'polite' });
-          const dayEl = h('b', {}, 'day 1');
-          const o = out('');
-          const line = (t, c) => { log.append(h('div', { class: c }, t)); while (log.children.length > 6) log.firstChild.remove(); };
-          ph.body.append(...articles(5));
-          async function flow(fromButton) {
-            if (busy) return; busy = true;
-            line('requestReviewFlow() → ReviewInfo');
-            await sleep(350); if (!el.isConnected) return;
-            line('launchReviewFlow(activity, info)');
-            const shows = day - lastShown >= QUOTA;
-            if (shows) {
-              lastShown = day;
-              await new Promise(res => ph.layer.replaceChildren(h('div', { class: 'al-sheet drop-in' },
-                h('b', {}, 'Rate Daily News'), h('span', { class: 'al-stars', 'aria-hidden': 'true' }, '★★★★★'), h('span', { class: 'al-note' }, 'Play UI, not yours'),
-                h('div', { class: 'al-row' }, h('button', { class: 'cmd', onclick: res }, 'Submit'), h('button', { class: 'cmd', onclick: res }, 'Not now')))));
-              if (!el.isConnected) return;
-              ph.layer.replaceChildren();
-            } else {
-              await sleep(400); if (!el.isConnected) return;
-            }
-            line('onComplete', 'al-c');
-            say(o, fromButton && !shows
-              ? '<span class="bad">The user tapped "Rate us" and nothing happened.</span> Your code got the same onComplete as always. For a button, link to the Play Store listing.'
-              : shows ? 'The card showed. Your code got <b>onComplete</b> and cannot tell whether the user rated.'
-                : 'Quota used, so Play showed nothing. Your code got the same <b>onComplete</b>. Continue the normal flow.');
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'controls' },
-              act('reader finishes 5th article', () => flow(false)),
-              act('+20 days', () => { day += 20; dayEl.textContent = `day ${day}`; replay(dayEl, 'pop'); }),
-              act('“Rate us” button', () => flow(true))),
-            h('div', { class: 'al-grid' }, ph.el, h('div', { class: 'al-card' }, h('div', { class: 'al-row' }, lbl('what your code sees'), dayEl), log)), o);
-          say(o, 'Trigger the review at a good moment, then try again right away.');
+          const list = '<div class="ui-m-row"><span class="ui-m-av"></span><div>Morning briefing</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Weather this week</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Final score: 2–1</div></div>';
+          const app = (extra = '') => `<div class="ui-m-bar">Daily News</div><div class="ui-m-body">${list}</div>${extra}`;
+          const card = '<div class="ui-m-sheet"><b>Rate Daily News</b><span style="color:var(--warm);font-size:1.3rem;letter-spacing:2px">★★★★★</span><span class="ui-m-muted">Drawn by Google Play, not your app</span><div><span class="ui-m-btn ghost">Not now</span> <span class="ui-m-btn rv-submit">Submit</span></div></div>';
+          const settings = '<div class="ui-m-bar">← Settings</div><div class="ui-m-body"><div class="ui-m-row"><div>Notifications</div></div><div class="ui-m-row"><div>Text size</div></div><div class="ui-m-row rv-rate"><div><b>Rate us</b></div></div></div>';
+          const store = '<div class="ui-m-bar">Google Play</div><div class="ui-m-body"><b>Daily News</b><span class="ui-m-muted">Store listing</span><div class="ui-m-img"></div><span class="ui-m-btn">Write a review</span></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'What your code sees',
+            predict: {
+              q: 'The review card showed yesterday. Today you call <code>launchReviewFlow</code> again. What does the user see?',
+              options: ['The card again', 'Most likely nothing: Play applies a quota', 'An error dialog from Play'],
+              a: 1,
+              why: 'Play limits how often the card can appear and does not publish the limit. Your code gets the same <code>onComplete</code> whether the card showed or not.',
+            },
+            frames: [
+              { screen: app(), log: '// reader finished their 5th article', say: 'The reader just finished their fifth article: a moment when they got value from the app.' },
+              { log: 'reviewManager.requestReviewFlow() → ReviewInfo', say: 'Ask Play for a <code>ReviewInfo</code> a little ahead of time, so the card can appear without delay.' },
+              { screen: app(card), log: 'reviewManager.launchReviewFlow(activity, info)', say: 'Play shows the review card over your app. You cannot style it or see what the user picks.' },
+              { tap: '.rv-submit', screen: app(), log: 'onComplete', say: 'The user submits or closes it. Either way your code gets the same <code>onComplete</code>, then carries on.' },
+              { log: ['// next day, another article', 'requestReviewFlow() → ReviewInfo', 'launchReviewFlow(activity, info)', 'onComplete'], say: 'The next day you try again. Play’s quota is used, so it shows nothing. Your code cannot tell the difference.' },
+              { screen: settings, log: '// user opens Settings', say: 'Now a “Rate us” item in Settings. If it called the review API, it would often do nothing.' },
+              { tap: '.rv-rate', screen: store, log: 'startActivity(Intent(ACTION_VIEW, storeListingUri))', say: 'So a button opens the app’s Play Store listing instead, where a review always works.' },
+            ],
+          });
         },
         code: `// app/build.gradle.kts
 implementation("com.google.android.play:review:2.0.2")
@@ -990,58 +955,33 @@ fun onNextTapped() {
         body: `
 <p>Digital goods sold in a Play app go through Google Play Billing. The current library is version 9 (9.1.0), and new apps and updates must use version 8 or later since August 31, 2026 (with an extension possible to November 1, 2026). There are two kinds of products: <b>one-time products</b> (consumable like coins, or permanent like "remove ads") and <b>subscriptions</b> with base plans and offers.</p>
 <p>The flow: a <code>BillingClient</code> connects to Play, you query <code>ProductDetails</code>, and <code>launchBillingFlow()</code> opens Play's purchase sheet. The result arrives in <code>onPurchasesUpdated()</code>. A purchase can be <code>PURCHASED</code> or <code>PENDING</code>, for example when the user pays with cash at a store. Grant nothing while it is pending.</p>
-<p>Then send the purchase token to your server, verify it with the Play Developer API, grant the content, and <b>acknowledge</b>. A purchase not acknowledged within three days is refunded automatically and the entitlement is revoked. Walk through it, and try forgetting the last step.</p>`,
+<p>Then send the purchase token to your server, verify it with the Play Developer API, grant the content, and <b>acknowledge</b>. A purchase not acknowledged within three days is refunded automatically and the entitlement is revoked. Step through it below.</p>`,
         visual(el) {
-          const NAMES = ['disconnected', 'connected', 'products loaded', 'purchase sheet', 'PENDING', 'PURCHASED', 'verified + granted', 'acknowledged'];
-          const IDX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
-          let s = 'disconnected', pending = false, day = -1, busy = false, refunded = false;
-          const chips = NAMES.map(n => h('span', { class: 'al-state' }, n));
-          const sm = h('div', { class: 'al-sm' }, chips.flatMap((c, i) => i ? [h('span', { class: 'al-arrow', 'aria-hidden': 'true' }, '→'), c] : [c]));
-          const days = [0, 1, 2, 3].map(d => h('span', { class: 'al-day' }, `day ${d}`));
-          const o = out('');
-          const paint = () => {
-            const cur = IDX[s];
-            chips.forEach((c, i) => {
-              c.className = 'al-state';
-              if (i === IDX.PENDING && !pending) return;
-              if (i < cur) c.classList.add('al-done');
-              if (i === cur) c.classList.add(s === 'PENDING' ? 'al-wait' : 'al-now');
-            });
-            if (refunded) { chips[IDX.acknowledged].classList.add('al-bad'); chips[IDX.acknowledged].textContent = 'refunded'; }
-            days.forEach((d, i) => { d.className = 'al-day'; if (day >= 0 && i <= day) d.classList.add(i === 3 && refunded ? 'al-dead' : 'al-past'); });
-            replay(chips[cur], 'pop');
-          };
-          const go = (to, html) => { s = to; paint(); say(o, html); };
-          const need = (st, msg) => { if (s !== st || busy || refunded) { if (!busy && !refunded) say(o, msg); return false; } return true; };
-          const steps = [
-            act('startConnection()', () => { if (need('disconnected', 'Already connected.')) go('connected', 'Connected to Play. With <b>enableAutoServiceReconnection()</b> the library reconnects for you if the service drops.'); }),
-            act('queryProductDetails', () => { if (need('connected', 'Connect first.')) go('products loaded', 'Got <b>reklamsiz_aylik</b> (ad-free, monthly) with its price and offer token, formatted by Play for the user’s country.'); }),
-            act('buy: card', async () => {
-              if (!need('products loaded', 'Load the product first.')) return; busy = true;
-              go('purchase sheet', 'Play shows its purchase sheet. Your app waits.'); await sleep(900); if (!el.isConnected) return;
-              busy = false; day = 0; go('PURCHASED', 'onPurchasesUpdated: OK, state <b>PURCHASED</b>. The three-day acknowledge clock starts now.');
-            }),
-            act('buy: cash at a store', async () => {
-              if (!need('products loaded', 'Load the product first.')) return; busy = true; pending = true;
-              go('purchase sheet', 'Play shows its purchase sheet. The user picks a cash payment.'); await sleep(900); if (!el.isConnected) return;
-              busy = false; go('PENDING', 'State <b>PENDING</b>: no money yet. Grant nothing and do not acknowledge.');
-            }),
-            act('cash paid', () => { if (need('PENDING', 'Nothing is pending.')) { day = 0; go('PURCHASED', 'The payment cleared, the purchase is <b>PURCHASED</b>. The three-day clock starts now.'); } }),
-            act('server: verify, grant, acknowledge', async () => {
-              if (!need('PURCHASED', s === 'PENDING' ? 'Still pending: wait for PURCHASED.' : 'There is no purchased item to process.')) return; busy = true;
-              go('verified + granted', 'Your server checked the token with <b>purchases.subscriptionsv2.get</b>, saw it was never used before, and unlocked ad-free reading.'); await sleep(900); if (!el.isConnected) return;
-              busy = false; go('acknowledged', '<span class="good">Acknowledged.</span> The purchase is final. Renewals of this subscription don’t need acknowledging.');
-            }),
-            act('forget to acknowledge: +1 day', () => {
-              if (refunded || busy) return;
-              if (s !== 'PURCHASED' && s !== 'verified + granted') { say(o, 'The clock only runs for a PURCHASED item that is not acknowledged.'); return; }
-              day = Math.min(3, day + 1);
-              if (day === 3) { refunded = true; s = 'acknowledged'; paint(); say(o, '<span class="bad">Day 3, never acknowledged:</span> Play refunds the user and revokes the entitlement.'); return; }
-              paint(); say(o, `Day ${day}. Still not acknowledged.`);
-            }),
-          ];
-          el.append(h('div', { class: 'controls' }, steps), sm, h('div', { class: 'al-row' }, lbl('acknowledge window')), h('div', { class: 'al-days' }, days), o);
-          paint(); say(o, 'Start with the connection.');
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'app', label: 'App', sub: 'BillingClient' },
+              { id: 'play', label: 'Google Play', sub: 'purchase sheet' },
+              { id: 'srv', label: 'Your server', sub: 'verify + grant' },
+              { id: 'api', label: 'Play Developer API', sub: 'source of truth' },
+            ],
+            predict: {
+              q: '<code>onPurchasesUpdated</code> reports a <code>PURCHASED</code> subscription. Where should the decision to unlock it be made?',
+              options: ['In the app, right away', 'On your server, after it checks the token with Play', 'Nowhere: Play unlocks it automatically'],
+              a: 1,
+              why: 'Anything on the device can be faked. Your server checks the purchase token with the Play Developer API, then grants the content and acknowledges.',
+            },
+            frames: [
+              { say: 'The user taps “Go ad-free”. The app is connected to Play and has loaded <code>ad_free_monthly</code> with its offer.' },
+              { at: 'app', packet: 'launchBillingFlow', say: 'The app launches the billing flow with the product’s offer token. Then it waits.' },
+              { at: 'play', packet: 'pay', tone: 'warm', say: 'Play shows its own purchase sheet and takes the payment. Your app never sees card details.' },
+              { at: 'app', packet: 'PURCHASED + token', tone: 'ok', say: '<code>onPurchasesUpdated</code> delivers the purchase: state <code>PURCHASED</code> and a purchase token. The three-day acknowledge clock starts.' },
+              { at: 'srv', packet: 'purchase token', say: 'The app sends the token to your server. It grants nothing on its own.' },
+              { at: 'api', packet: 'subscriptionsv2.get', say: 'The server asks the Play Developer API whether the token is real and active, and checks it was not used before.' },
+              { at: 'srv', packet: 'valid', tone: 'ok', mark: { srv: 'ok' }, say: 'It is. The server records the purchase and unlocks ad-free reading for this account.' },
+              { at: 'api', packet: 'acknowledge', tone: 'ok', mark: { api: 'ok' }, say: 'The server acknowledges the purchase. Now it is final.' },
+              { at: 'app', packet: 'ad-free', tone: 'ok', mark: { app: 'ok' }, say: 'The app refreshes the entitlement. Skip the acknowledge step and Play refunds the user after three days.' },
+            ],
+          });
         },
         code: `// app/build.gradle.kts
 implementation("com.android.billingclient:billing-ktx:9.1.0")
@@ -1068,7 +1008,7 @@ class BillingRepository(
     fun loadAdFree(onLoaded: (ProductDetails) -> Unit) {
         val params = QueryProductDetailsParams.newBuilder().setProductList(listOf(
             QueryProductDetailsParams.Product.newBuilder()
-                .setProductId("reklamsiz_aylik")
+                .setProductId("ad_free_monthly")
                 .setProductType(ProductType.SUBS)
                 .build()
         )).build()
@@ -1300,7 +1240,13 @@ implementation("com.google.firebase:firebase-analytics")`,
           { type: 'blank', prompt: 'Make this phone app ready for an update submitted in late 2026.', code: 'defaultConfig {\n    minSdk = 24\n    targetSdk = [[36]]\n}', why: 'Since August 31, 2026, new apps and updates for phones must target Android 16, API 36 (with an extension possible to November 1).' },
           { type: 'bug', prompt: 'Play blocks this update in October 2026 (no extension). Tap the line that causes it.', code: 'android {\n    compileSdk = 36\n    defaultConfig {\n        minSdk = 24\n        targetSdk = 35\n    }\n}', bug: 4, fix: '        targetSdk = 36', why: 'Updates submitted after August 31, 2026 must target API 36 unless an extension to November 1 was granted.' },
         ],
-        quiz: [
+        predict: {
+      q: "The update targets the required API level, but the Data safety form says “no data collected” while Analytics sends events. What should you do?",
+      options: ["Submit it: the form is optional","Fix the form first: it must cover what the app and its SDKs send","Nothing: Play fills in the form for you"],
+      a: 1,
+      why: "You are responsible for the form, including data your SDKs collect. A wrong form can block updates.",
+    },
+    quiz: [
           { q: 'Your app collects no user data at all. Do you need to fill in the Data safety form?', options: ['No', 'Yes, every app on Play does', 'Only if it has ads'], a: 1, why: 'All apps published on Google Play must complete the form, even when the answer is "no data collected".' },
           { q: 'Crashlytics sends crash logs from your app. Whose data is that in the Data safety form?', options: ['Google’s, so you skip it', 'Your app’s, so you declare it', 'Nobody’s, crash logs are exempt'], a: 1, why: 'Data collected through third-party SDKs in your app counts as your app’s data.' },
           { q: 'Since August 31, 2026, which Play Billing Library versions can new apps and updates use?', options: ['Any version', 'Version 8 or later', 'Only version 9.1.0'], a: 1, why: 'Version 8 or later is required (extension possible to November 1, 2026). 9.1.0 is simply the latest.' },

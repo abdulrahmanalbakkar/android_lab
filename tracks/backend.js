@@ -138,97 +138,6 @@
 .be-phone-msg { font-family: inherit; font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere; }
 `;
 
-  // ---------- 1: request pipeline ----------
-  function pipelineDemo(el) {
-    const STAGES = [['Client', 'The app builds the request'], ['Routing', 'Which handler owns this path?'], ['Handler', 'Your code runs'], ['Database', 'Read or write rows'], ['Response', 'Status, headers, body']];
-    const SCEN = [
-      { req: 'GET /api/articles?limit=2', notes: ['Android app sends GET, Accept: application/json', 'Matches get("/api/articles")', 'Reads limit = 2, calls the repository', 'SELECT … ORDER BY published_at DESC LIMIT 2 → 2 rows', '200 OK with a JSON list'], status: 200, body: '[{"id":12,"title":"Match ends 2-2"},{"id":11,"title":"Markets hit a record"}]' },
-      { req: 'POST /api/comments', notes: ['Sends JSON {"articleId":12,"text":"Great game"}', 'Matches post("/api/comments")', 'receive<NewComment>(), checks the text is not blank', 'INSERT INTO comments … → new id 58', '201 Created, Location: /api/comments/58'], status: 201, body: '{"id":58,"articleId":12,"text":"Great game"}' },
-      { req: 'GET /api/articles/999', notes: ['Asks for article 999', 'Matches get("/api/articles/{id}"), id = 999', 'Parses id, asks the repository', 'SELECT … WHERE id = 999 → 0 rows', '404 Not Found with an error body'], status: 404, body: '{"code":"article_not_found","message":"No article with id 999."}' },
-      { req: 'GET /api/yok', notes: ['Asks for a path nobody wrote', 'No route matches /api/yok', '', '', '404 Not Found, no handler ran'], status: 404, body: '', stopAt: 1 },
-    ];
-    const cards = STAGES.map(([t, d]) => h('div', { class: 'be-stage' }, h('b', {}, t), h('span', {}, d)));
-    const res = httpBox();
-    const r = runner();
-    const btns = SCEN.map(s => cmd(s.req, () => go(s)));
-    async function go(s) {
-      const id = r.next(); press(btns, btns[SCEN.indexOf(s)]);
-      cards.forEach((c, i) => { c.className = 'be-stage'; c.lastChild.textContent = STAGES[i][1]; });
-      res.replaceChildren(h('span', { class: 'be-muted' }, 'Waiting…'));
-      for (let i = 0; i < cards.length; i++) {
-        if (!r.live(id)) return;
-        const skipped = s.stopAt != null && i > s.stopAt && i < cards.length - 1;
-        if (skipped) { cards[i].classList.add('be-skip'); cards[i].lastChild.textContent = 'Skipped'; continue; }
-        cards[i].classList.add('be-on'); cards[i].lastChild.textContent = s.notes[i];
-        await sleep(520);
-        if (!r.live(id)) return;
-        cards[i].classList.remove('be-on');
-        cards[i].classList.add(s.stopAt === i || (i === cards.length - 1 && s.status >= 400) ? 'be-fail' : 'be-done');
-      }
-      httpOut(res, s.status, [['Content-Type', 'application/json']], s.body);
-    }
-    el.append(label('Pick a request'), h('div', { class: 'be-row' }, btns), h('div', { class: 'be-stages' }, cards), res);
-  }
-
-  // ---------- 2: HTTP simulator ----------
-  function httpDemo(el) {
-    let store = { 41: 'Match recap' }, nextId = 43, sent = 0;
-    let method = 'GET', accept = 'application/json';
-    const preview = h('div', { class: 'be-req' });
-    const res = httpBox();
-    const state = h('div', { class: 'be-row' });
-    const note = out('Pick a method, then send it. Send the same request twice and watch the server state.');
-    const counter = h('span', { class: 'be-stat' });
-    const path = () => method === 'POST' ? '/api/bookmarks' : '/api/bookmarks/42';
-    function drawPreview() {
-      const body = method === 'POST' || method === 'PUT' ? '\nContent-Type: application/json\n\n{"title":"Transfer news"}' : '';
-      preview.textContent = `${method} ${path()} HTTP/1.1\nHost: api.example.com\nAccept: ${accept}${body}`;
-    }
-    function drawState(changed) {
-      state.replaceChildren(...Object.entries(store).map(([k, v]) => pill(`#${k} ${v}`, 'be-acc')));
-      if (!Object.keys(store).length) state.append(pill('empty', 'be-ghost'));
-      counter.innerHTML = `requests sent: <b>${sent}</b>`;
-      if (changed != null) replay(state, 'pop-soft');
-    }
-    function send() {
-      sent++;
-      const before = JSON.stringify(store);
-      let st, hd = [], body = '';
-      if (accept === 'application/xml' && method !== 'DELETE') {
-        st = 406; body = 'This API only speaks application/json.';
-      } else if (method === 'GET') {
-        if (store[42]) { st = 200; hd = [['Content-Type', 'application/json'], ['Cache-Control', 'max-age=60']]; body = J({ id: 42, title: store[42] }); }
-        else { st = 404; hd = [['Content-Type', 'application/json']]; body = '{"code":"not_found","message":"No bookmark 42."}'; }
-      } else if (method === 'POST') {
-        const id = nextId++; store[id] = 'Transfer news';
-        st = 201; hd = [['Location', `/api/bookmarks/${id}`], ['Content-Type', 'application/json']]; body = J({ id, title: 'Transfer news' });
-      } else if (method === 'PUT') {
-        st = store[42] ? 200 : 201; store[42] = 'Transfer news';
-        hd = [['Content-Type', 'application/json']]; body = J({ id: 42, title: 'Transfer news' });
-      } else {
-        if (store[42]) { delete store[42]; st = 204; } else { st = 404; body = '{"code":"not_found","message":"No bookmark 42."}'; }
-      }
-      httpOut(res, st, hd, body);
-      const changed = before !== JSON.stringify(store);
-      drawState(changed);
-      const kind = { GET: 'safe and idempotent', PUT: 'idempotent', DELETE: 'idempotent', POST: 'neither safe nor idempotent' }[method];
-      say(note, `${method} is ${kind}. This send <b>${changed ? 'changed' : 'did not change'}</b> the server state.` +
-        (method === 'DELETE' && st === 404 ? ' The second DELETE got 404, but the state is the same as after the first: that is what idempotent means.' : '') +
-        (method === 'POST' && changed ? ' Send it again: every POST adds another bookmark.' : '') +
-        (st === 406 ? ' Content negotiation failed: the server has no XML version.' : ''));
-    }
-    const mBtns = ['GET', 'POST', 'PUT', 'DELETE'].map(m => act(m, () => { method = m; press(mBtns, mBtns[['GET', 'POST', 'PUT', 'DELETE'].indexOf(m)]); drawPreview(); }));
-    const aBtns = ['application/json', 'application/xml'].map(a => act('Accept: ' + a.split('/')[1], () => { accept = a; press(aBtns, aBtns[a === 'application/json' ? 0 : 1]); drawPreview(); }));
-    press(mBtns, mBtns[0]); press(aBtns, aBtns[0]);
-    drawPreview(); drawState();
-    el.append(
-      h('div', { class: 'be-pair' },
-        h('div', { class: 'be-col' }, label('Method'), h('div', { class: 'be-row' }, mBtns), label('Header'), h('div', { class: 'be-row' }, aBtns), preview,
-          h('div', { class: 'be-row' }, h('button', { class: 'btn primary small', onclick: send }, 'Send'), counter)),
-        h('div', { class: 'be-col' }, label('Response'), res, label('Server state: bookmarks'), state)),
-      note);
-  }
-
   // ---------- 3: routing tree ----------
   function routingDemo(el) {
     const NODES = [
@@ -523,50 +432,6 @@
       h('div', { class: 'be-tests' }, rows), summary);
   }
 
-  // ---------- 8: deploy pipeline ----------
-  function deployDemo(el) {
-    const STEPS = ['git push', 'tests', 'buildFatJar', 'docker build', 'push image', 'deploy v2', 'health check', 'traffic → v2'];
-    const opts = { tests: true, secret: true };
-    const cells = STEPS.map(s => h('div', { class: 'be-step' }, s));
-    const log = h('div', { class: 'be-log', 'aria-live': 'polite' });
-    const live = h('span', { class: 'be-pill be-okp' }, 'live: v1');
-    const add = (t, c = '') => { log.append(h('div', { class: c }, t)); log.scrollTop = log.scrollHeight; };
-    const LOG = [
-      ['CI: commit 3f2a9c1 on main', ''],
-      ['CI: ./gradlew test → 42 tests passed', 'be-l-ok'],
-      ['CI: ./gradlew buildFatJar → build/libs/server-all.jar', 'be-l-ok'],
-      ['CI: docker build -t news-api:3f2a9c1 .', 'be-l-ok'],
-      ['CI: push registry/news-api:3f2a9c1', 'be-l-ok'],
-      ['host: start container with env DATABASE_URL, JWT_SECRET', ''],
-      ['host: GET /health → 200 {"db":"up"}', 'be-l-ok'],
-      ['host: v2 takes traffic, v1 drains and stops', 'be-l-ok'],
-    ];
-    const r = runner();
-    async function go() {
-      const id = r.next();
-      cells.forEach(c => { c.className = 'be-step'; }); log.replaceChildren();
-      for (let i = 0; i < STEPS.length; i++) {
-        cells[i].classList.add('be-on'); await sleep(420); if (!r.live(id)) return;
-        let fail = null;
-        if (i === 1 && !opts.tests) fail = ['CI: ./gradlew test → 1 failed: blank title returns 400. Pipeline stops; nothing is deployed.'];
-        if (i === 5 && !opts.secret) { add('host: start container with env DATABASE_URL', ''); }
-        if (i === 6 && !opts.secret) fail = ['host: v2 exits at startup: Could not resolve substitution to a value: ${JWT_SECRET}', 'host: GET /health → no answer. v2 never becomes healthy, so it gets no traffic. v1 keeps serving.'];
-        cells[i].classList.remove('be-on');
-        if (fail) {
-          cells[i].classList.add('be-fail'); fail.forEach(f => add(f, 'be-l-err'));
-          cells.slice(i + 1).forEach(c => c.classList.add('be-skip')); return;
-        }
-        if (!(i === 5 && !opts.secret)) add(...LOG[i]);
-        cells[i].classList.add('be-done');
-      }
-      live.textContent = 'live: v2'; replay(live, 'pop-soft');
-    }
-    const box = (k, text) => h('label', {}, h('input', { type: 'checkbox', checked: true, onchange(e) { opts[k] = e.target.checked; } }), text);
-    el.append(h('div', { class: 'be-toggles' }, box('tests', 'All tests pass'), box('secret', 'JWT_SECRET is set on the host')),
-      h('div', { class: 'be-row' }, h('button', { class: 'btn primary small', onclick: go }, 'Deploy'), live, h('button', { class: 'cmd', onclick() { live.textContent = 'live: v1'; cells.forEach(c => { c.className = 'be-step'; }); log.replaceChildren(); } }, 'Reset to v1')),
-      h('div', { class: 'be-steps' }, cells), log);
-  }
-
   // ---------- 9: end-to-end error mapping ----------
   function e2eDemo(el) {
     const CASES = [
@@ -615,8 +480,36 @@
 <p>Your app already talks to servers (see <a href="#data.net">Networking</a>). A backend is the other end of that call: a program that waits for HTTP requests, does the work only a central place can do, and answers.</p>
 <p>Every request takes the same trip. <em>Routing</em> reads the method and path and picks a <em>handler</em>. The handler is your code: it checks the input, applies the rules and usually reads or writes a <em>database</em>. Then it builds a <em>response</em> with a status code, headers and a body.</p>
 <p>What belongs on the server? Anything shared between users (comments, likes), anything secret (API keys, payment logic), and anything you must be able to trust. The phone is in the user's hands, so the server re-checks everything the app sends.</p>
-<p>Pick a request below and follow it through each stage.</p>`,
-        visual: pipelineDemo,
+<p>Follow two requests through each stage below.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'app', label: 'App', sub: 'builds the request' },
+              { id: 'route', label: 'Routing', sub: 'method + path' },
+              { id: 'handler', label: 'Handler', sub: 'your code' },
+              { id: 'db', label: 'Database', sub: 'rows' },
+              { id: 'res', label: 'Response', sub: 'status, headers, body' },
+            ],
+            predict: {
+              q: 'The app sends <code>GET /api/articles?limit=2</code>. Which stage checks that <code>limit=2</code> is a sensible value?',
+              options: ['Routing', 'Your handler', 'The database'],
+              a: 1,
+              why: 'Routing only matches the method and the path. Reading and checking parameters is the handler’s job, because the server can’t trust what the phone sends.',
+            },
+            frames: [
+              { say: 'Every request takes the same trip. First, the app asks for the two newest articles.' },
+              { at: 'app', packet: 'GET /api/articles?limit=2', say: 'The Android app sends the request with <code>Accept: application/json</code>.' },
+              { at: 'route', packet: 'get("/api/articles")', mark: { route: 'ok' }, say: 'Routing compares the method and path with the routes you wrote, and finds one.' },
+              { at: 'handler', packet: 'limit = 2', mark: { handler: 'ok' }, say: 'Your handler reads <code>limit</code>, checks it, and calls the repository.' },
+              { at: 'db', packet: 'SELECT … LIMIT 2', say: 'The repository runs one query, newest first.' },
+              { at: 'handler', packet: '2 rows', tone: 'ok', mark: { db: 'ok' }, say: 'Two rows come back. The handler turns them into response objects.' },
+              { at: 'res', packet: '200 OK + JSON', tone: 'ok', mark: { res: 'ok' }, say: 'The response: status <code>200</code>, a <code>Content-Type</code> header and a JSON list.' },
+              { at: 'app', packet: 'GET /api/nope', mark: { route: '', handler: '', db: '', res: '' }, say: 'Second request: a path nobody wrote.' },
+              { at: 'route', packet: 'no match', tone: 'err', mark: { route: 'err' }, say: 'No route matches <code>/api/nope</code>.' },
+              { at: 'res', packet: '404 Not Found', tone: 'err', mark: { handler: 'muted', db: 'muted', res: 'err' }, say: 'The server answers <code>404</code> straight away. No handler ran and the database was never touched.' },
+            ],
+          });
+        },
         code: `// One request, start to finish, in Ktor
 routing {
     get("/api/articles/{id}") {                                   // 1. routing matched
@@ -690,7 +583,7 @@ delete("/comments/{id}") {
           { type: 'bug', prompt: 'This server counts page views for all users. Under load the number comes out too low. Tap the line that causes it.', code: 'var views = 0\n\nfun Application.module() {\n    routing {\n        get("/view") {\n            views++\n            call.respond(views)\n        }\n    }\n}', bug: 5, fix: '            call.respond(viewRepository.increment())  // atomic UPDATE in the database', why: 'Requests run concurrently. <code>views++</code> is a read and a write, so two requests can read the same value and one increment is lost. Let the database do the increment atomically.' },
         ],
         quiz: [
-          { q: 'The app sends <code>GET /api/yok</code> and no route matches. Which stages run?', options: ['Routing, then the response (404). No handler, no database.', 'All five stages, with an empty database result', 'None: the request is dropped silently'], a: 0, why: 'Routing finds no match, so no handler code runs and Ktor answers 404 directly.' },
+          { q: 'The app sends <code>GET /api/nope</code> and no route matches. Which stages run?', options: ['Routing, then the response (404). No handler, no database.', 'All five stages, with an empty database result', 'None: the request is dropped silently'], a: 0, why: 'Routing finds no match, so no handler code runs and Ktor answers 404 directly.' },
           { q: 'Which of these belongs on the server, not in the app?', options: ['The colour of the like button', 'Checking that a user may delete a comment', 'Showing a loading spinner'], a: 1, why: 'Permission checks must happen where the user cannot change the code. The app can hide a button, but only the server can refuse the request.' },
           { q: 'Your server runs on your laptop at port 8080. What URL does the Android emulator use?', options: ['http://localhost:8080', 'http://10.0.2.2:8080', 'http://127.0.0.1:8080'], a: 1, why: 'Inside the emulator, localhost and 127.0.0.1 point at the emulator itself. 10.0.2.2 is the emulator’s alias for the host machine.' },
         ],
@@ -707,7 +600,26 @@ delete("/comments/{id}") {
 <p>Methods carry meaning. <code>GET</code> reads and must not change anything (it is <em>safe</em>). <code>PUT</code> and <code>DELETE</code> change things but are <em>idempotent</em>: sending the same request twice leaves the server in the same state as sending it once. <code>POST</code> is neither, so two identical POSTs can create two rows.</p>
 <p>Idempotency matters on phones. A request can time out after the server already handled it, and the app retries. Retrying a PUT is harmless. Retrying a POST can post the comment twice.</p>
 <p>The <code>Accept</code> header says which format the client wants; <code>Content-Type</code> says what format the body is in. Choosing between formats is <em>content negotiation</em>.</p>`,
-        visual: httpDemo,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['App', 'Server', 'Rows'],
+            span: 12, unit: 's',
+            predict: {
+              q: 'A <code>POST</code> reached the server and created comment #58, but the answer was lost. The app retries the same <code>POST</code>. How many comments exist afterwards?',
+              options: ['1: the server notices the retry', '2: POST is not idempotent', '0: the first one is rolled back'],
+              a: 1,
+              why: 'Each POST asks the server to create something new. Without extra work, like an idempotency key the server checks, a retry creates a second row.',
+            },
+            frames: [
+              { now: 0, say: 'On a train. The app posts a comment and waits up to 3 seconds for the answer. Times are illustrative.' },
+              { bars: [{ lane: 0, from: 0, to: 3, label: 'POST /comments', tone: 'accent' }, { lane: 1, from: 0.4, to: 1.2, label: 'insert' }, { lane: 2, from: 1.2, to: 12, label: '#58', tone: 'ok' }], now: 1.3, say: 'The request arrives. The server inserts comment 58 and sends <code>201 Created</code>.' },
+              { marks: [{ at: 1.5, label: 'lost', tone: 'err' }], now: 3, say: 'The answer is lost in a tunnel. At 3 s the app gives up. It cannot know the comment was saved.' },
+              { bars: [{ lane: 0, from: 3, to: 5, label: 'retry POST', tone: 'warm' }, { lane: 1, from: 3.4, to: 4.2, label: 'insert' }, { lane: 2, from: 4.2, to: 12, label: '#59 duplicate', tone: 'err' }], now: 5, say: 'The app retries. The server sees a new POST and inserts again. The reader’s comment now shows twice.' },
+              { bars: [{ lane: 0, from: 6, to: 9, label: 'PUT /bookmarks/42' }, { lane: 1, from: 6.4, to: 7.2, label: 'set #42' }], marks: [{ at: 7.5, label: 'lost', tone: 'err' }], now: 9, say: 'Now a <code>PUT /api/bookmarks/42</code>. It sets bookmark 42 to a full value. The answer is lost too.' },
+              { bars: [{ lane: 0, from: 9, to: 11, label: 'retry PUT', tone: 'ok' }, { lane: 1, from: 9.4, to: 10.2, label: 'set #42' }], now: 11, say: 'The retry sets the same value again. The server ends in the same state as after one PUT: that is idempotent, so retrying is safe.' },
+            ],
+          });
+        },
         code: `// The same rules, in a Ktor server
 routing {
     route("/api/bookmarks") {
@@ -810,6 +722,12 @@ get("/api/articles/{id}/delete") {
 <p>Ktor is JetBrains' Kotlin framework for servers (and clients). A Ktor server has three parts. An <em>engine</em> such as Netty listens on a port. A <em>module</em>, a function <code>Application.module()</code>, installs <em>plugins</em> and declares routes. And <em>routes</em> form a tree: each <code>route("/api")</code> adds a path segment, and <code>get</code>, <code>post</code> and friends attach handlers to a node.</p>
 <p>Inside a handler, <code>call</code> is the current exchange. <code>call.parameters</code> holds path parameters like <code>{id}</code>, <code>call.receive&lt;T&gt;()</code> reads and decodes the body, and <code>call.respond(...)</code> sends the answer. Handlers are <code>suspend</code> lambdas, so you can call suspending code directly.</p>
 <p>Plugins add behaviour around every request. <em>ContentNegotiation</em> with kotlinx.serialization turns <code>@Serializable</code> classes into JSON and back. <em>StatusPages</em> turns exceptions into proper error responses.</p>`,
+        predict: {
+          q: "The route is <code>get(\"/api/articles/{id}\")</code>. The app requests <code>/api/articles/abc</code>. What answers?",
+          options: ["A 404: abc is not a number, so no route matches", "The route matches; the handler’s <code>toIntOrNull()</code> gives null and it answers 400", "A 500: the server crashes"],
+          a: 1,
+          why: "<code>{id}</code> accepts any one path segment. Checking that it is a number is the handler’s job.",
+        },
         visual: routingDemo,
         code: `// build.gradle.kts: plugins id("io.ktor.plugin") and kotlin("plugin.serialization")
 // deps: ktor-server-netty, ktor-server-content-negotiation,
@@ -945,6 +863,12 @@ fun Application.module(repo: ArticleRepository = PostgresArticleRepository()) {
 <p>A REST API is organised around <em>resources</em>: things with an id, named by nouns. <code>/v1/articles</code> is the collection, <code>/v1/articles/7</code> is one item, <code>/v1/articles/7/comments</code> is a sub-collection. The method says what to do with it, so you never need <code>/getArticles</code> or <code>/deleteComment</code>.</p>
 <p>Decide three things once and use them everywhere. <em>Validation</em>: check every field on the server and answer 400 when input is wrong. <em>Errors</em>: one JSON shape for all failures, with a stable machine-readable <code>code</code> and a human message. <em>Pagination</em>: never return an unbounded list; return a page plus a way to ask for the next one.</p>
 <p>Put a version in the path (<code>/v1</code>). Installed apps stay on old versions for months, and you cannot force an update. A version prefix lets you ship <code>/v2</code> while <code>/v1</code> keeps working.</p>`,
+        predict: {
+          q: "The app sends <code>POST /v1/articles</code> with an empty title. What comes back?",
+          options: ["201 Created, with an empty title", "400, with a body that names the field and the reason", "500 Internal Server Error"],
+          a: 1,
+          why: "The server validates every field and answers 400 in the same error shape it uses everywhere, so the app can show the message next to the right input.",
+        },
         visual: restDemo,
         code: `@Serializable
 data class ApiError(val code: String, val message: String = "", val fields: Map<String, String> = emptyMap())
@@ -1052,6 +976,12 @@ patch("/v1/articles/{id}") { … }`,
 <p>A relational database stores rows in <em>tables</em> with fixed columns. Every row has a <em>primary key</em>, and a <em>foreign key</em> column such as <code>articles.user_id</code> points at a row in another table. PostgreSQL is a solid, free default for app backends.</p>
 <p>You will write four statements most days: <code>SELECT</code> reads, <code>INSERT</code> adds, <code>UPDATE</code> changes, and <code>DELETE</code> removes. A <code>JOIN</code> combines rows from two tables on a matching column, such as each article with its author.</p>
 <p>Without an <em>index</em> the database answers <code>WHERE user_id = 2</code> by reading every row. An index is a sorted lookup structure, so it can jump straight to the matches. It costs a little on every write, so index the columns you filter and join on, not all of them. If you know Room (see <a href="#data.room">Room</a>), this is the same SQL, just on a server shared by every user.</p>`,
+        predict: {
+          q: "The articles table has 8 rows, 3 of them by user 2. How many rows does <code>WHERE user_id = 2</code> read before and after <code>CREATE INDEX</code> on user_id?",
+          options: ["8, then 8", "8, then 3", "3, then 1"],
+          a: 1,
+          why: "Without an index the database checks every row. With one it jumps straight to the matching rows.",
+        },
         visual: sqlDemo,
         code: `// Exposed 1.x DSL (packages org.jetbrains.exposed.v1.*), JDBC driver org.postgresql:postgresql
 object Users : Table("users") {
@@ -1182,6 +1112,12 @@ connection.prepareStatement("SELECT * FROM users WHERE name = ?").use { st ->
 <p>Authentication answers “who is calling?”. Two common shapes exist. With <em>sessions</em> the server stores a session row and the client holds only a random id, usually in a cookie; revoking is just deleting the row. With <em>JWTs</em> the server signs a token that carries the user id and an expiry; any server instance can check the signature without a database lookup, but a signed token stays valid until it expires.</p>
 <p>Mobile apps usually combine both ideas: a short-lived JWT <em>access token</em> (minutes) sent on every call, and a long-lived random <em>refresh token</em> stored in the database. When the access token expires, the app trades the refresh token for a new pair. Signing out or a stolen phone deletes the refresh row, and the damage window is only as long as the access token's lifetime.</p>
 <p>Never store passwords. Store a slow, salted hash: Argon2id first, bcrypt where Argon2 is not available. For “Sign in with Google”, the app sends Google's ID token and the server verifies it before creating its own tokens. The Android side of this is in <a href="#data.auth">Auth</a>.</p>`,
+        predict: {
+          q: "The access token lasts 15 minutes. You sign in, wait 20 minutes and call <code>GET /me</code>. What does the user see?",
+          options: ["The sign-in screen", "Nothing: the call gets 401, the app refreshes, retries and gets 200", "A 200 from the expired token"],
+          a: 1,
+          why: "An expired access token is normal. The app trades the refresh token for a new pair and repeats the call, so the user notices nothing.",
+        },
         visual: jwtDemo,
         code: `// deps: ktor-server-auth, ktor-server-auth-jwt
 fun Application.configureAuth(cfg: JwtConfig) {
@@ -1317,6 +1253,12 @@ users.findOrCreateByGoogleSub(token.payload.subject, token.payload.email)`,
 <p>Ktor's <code>testApplication { }</code> starts your module without a real network: requests from its <code>client</code> go straight into the pipeline. You test what the Android app will see, routes, plugins, status codes and JSON, in milliseconds.</p>
 <p>Test behaviour at the HTTP edge: “POST with a blank title returns 400”, “GET /me without a token returns 401”. Those tests survive refactoring, because they do not care which class does the work.</p>
 <p>The database is the tricky part. Tests must not share rows, or one test's leftovers change another's result and the suite passes or fails depending on order. Give each test a clean database: an in-memory fake repository for fast route tests (see <a href="#testing.fakes">Fakes</a>), and a real, throwaway PostgreSQL for the repository tests.</p>`,
+        predict: {
+          q: "You remove the validation rule for blank titles and run the suite. Which test fails?",
+          options: ["<code>GET /health returns 200</code>", "<code>POST … with blank title returns 400</code>: it now gets 201", "All of them"],
+          a: 1,
+          why: "Each test checks one behaviour at the HTTP edge. Only the one that depends on the rule notices it is gone.",
+        },
         visual: testDemo,
         code: `// deps: testImplementation("io.ktor:ktor-server-test-host"), kotlin("test")
 class ArticleRoutesTest {
@@ -1422,8 +1364,28 @@ fun clean() = transaction(db) {
         body: `
 <p>Deploying means getting the same build running somewhere the app can reach it. Keep one artifact and change only configuration per environment. Ktor reads <code>application.conf</code> or <code>application.yaml</code>, and those can pull values from environment variables, so the port, the database URL and the JWT secret come from the host, never from the source code.</p>
 <p>The Ktor Gradle plugin packages the server two ways. <code>buildFatJar</code> makes one JAR with every dependency inside (<code>build/libs/*-all.jar</code>), runnable with <code>java -jar</code>. <code>buildImage</code> makes a Docker image. Most managed hosts accept a container image and run it for you, with HTTPS, restarts and logs included.</p>
-<p>A good host starts the new version, calls a health endpoint, and only then moves traffic. If the new version cannot start, users keep the old one. Try both failure switches below.</p>`,
-        visual: deployDemo,
+<p>A good host starts the new version, calls a health endpoint, and only then moves traffic. If the new version cannot start, users keep the old one. The demo deploys v2 twice: once with a missing secret, once fixed.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['Old: v1', 'New: v2', 'Traffic'],
+            span: 60, unit: 's',
+            predict: {
+              q: 'v2 has passed its health check and traffic moves to it. What happens to requests v1 is still handling?',
+              options: ['They are cut off at once', 'v1 finishes them, then stops', 'They are replayed on v2'],
+              a: 1,
+              why: 'The host stops sending v1 new requests and lets it drain the ones in flight before shutting it down, so a deploy drops nothing.',
+            },
+            frames: [
+              { bars: [{ lane: 0, from: 0, to: 10, label: 'serving', tone: 'ok' }, { lane: 2, from: 0, to: 10, label: '→ v1' }], say: 'v1 is live. CI has built and pushed the v2 image. Nobody set <code>JWT_SECRET</code> on the host.' },
+              { bars: [{ lane: 1, from: 10, to: 14, label: 'starting' }, { lane: 0, from: 10, to: 14, label: 'serving', tone: 'ok' }, { lane: 2, from: 10, to: 14, label: '→ v1' }], say: 'The host starts v2 next to v1 and passes in the environment variables it has.' },
+              { bars: [{ lane: 1, from: 14, to: 15, label: 'exit', tone: 'err' }], marks: [{ at: 14, label: 'no JWT_SECRET', tone: 'err' }], say: 'v2 reads its config at startup. <code>${JWT_SECRET}</code> has no value and no default, so it exits.' },
+              { bars: [{ lane: 0, from: 14, to: 24, label: 'serving', tone: 'ok' }, { lane: 2, from: 14, to: 24, label: '→ v1' }], say: 'v2 never answers <code>GET /health</code>, so the host never sends it traffic. Users keep v1 and notice nothing.' },
+              { bars: [{ lane: 1, from: 26, to: 32, label: 'starting' }, { lane: 0, from: 24, to: 32, label: 'serving', tone: 'ok' }, { lane: 2, from: 24, to: 32, label: '→ v1' }], marks: [{ at: 26, label: 'secret set', tone: 'ok' }], say: 'Someone adds the secret on the host and deploys again.' },
+              { bars: [{ lane: 1, from: 32, to: 34, label: '/health 200', tone: 'ok' }], say: 'This time v2 starts and its health endpoint answers <code>200</code>.' },
+              { bars: [{ lane: 2, from: 34, to: 60, label: '→ v2', tone: 'ok' }, { lane: 1, from: 34, to: 60, label: 'serving', tone: 'ok' }, { lane: 0, from: 34, to: 40, label: 'draining', tone: 'muted' }], say: 'Only now does traffic move to v2. v1 finishes what it was doing and stops.' },
+            ],
+          });
+        },
         code: `// build.gradle.kts
 plugins {
     kotlin("jvm") version "<kotlin version>"
@@ -1534,6 +1496,12 @@ post("/auth/login") {
 <p>You own both ends now, so share what they agree on. Put the request and response classes (<code>@Serializable</code> DTOs and <code>ApiError</code>) in a Kotlin Multiplatform <code>shared</code> module that both the server and the app depend on. Rename a field once and both sides see the change at compile time. See <a href="#kmp.shares">What to share</a>.</p>
 <p>On Android, call the server with the Ktor client or Retrofit, as in <a href="#data.net">Networking</a>. Ktor client fits naturally when the models are already in a KMP module, and it can live in shared code if an iOS app comes later.</p>
 <p>Errors need a plan from end to end. The server sends a status and an <code>ApiError</code>. The HTTP layer turns that into an exception. The repository turns exceptions into a small sealed <code>AppError</code>. The screen turns <code>AppError</code> into a sentence in the user's language. Each layer speaks its own words, and the UI never sees a status code.</p>`,
+        predict: {
+          q: "The phone is offline, so the request never reaches the server. What does the repository return?",
+          options: ["<code>AppError.Server</code>", "<code>AppError.Offline</code>, mapped from an <code>IOException</code>", "A status code of 500"],
+          a: 1,
+          why: "No response means no status code. The HTTP layer throws an <code>IOException</code>, and the repository turns it into its own error type.",
+        },
         visual: e2eDemo,
         code: `// shared/src/commonMain: used by server AND app
 @Serializable data class ArticleDto(val id: Int, val title: String)

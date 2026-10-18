@@ -1303,6 +1303,32 @@ val results: Flow<List<Article>> = query
           reqs, shown, stats),
         so);
     },
+        predict: {
+          q: 'With <code>flatMapMerge</code>, A starts an inner flow at 0 ms and B at 500 ms. Each inner flow emits three values, 400 ms apart. Which comes out first: A2 or B1?',
+          options: ['A2', 'B1', 'They come out together'],
+          a: 0,
+          why: 'Merge runs the inner flows at the same time and passes values on as they arrive. A2 is ready at 800 ms, B1 at 900 ms.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+fun main() = runBlocking {
+    val queries = flow {
+        emit("ko"); delay(150)
+        emit("kot"); delay(150)
+        emit("kotlin")
+    }
+    queries
+        .flatMapLatest { q ->            // try flatMapConcat, then flatMapMerge
+            flow {
+                println("start search '$q'")
+                delay(200)               // a slow request
+                emit("results for '$q'")
+            }
+        }
+        .collect { println(it) }
+}`,
   };
 
   // ─── buffer / conflate / collectLatest ─────────────────
@@ -1457,6 +1483,34 @@ logLines.[[buffer]]().collect { file.appendLine(it) }`, why: '<code>collectLates
           h('span', {}, h('i', { class: 'flw-ibar cut on', style: 'position:static;margin:0 6px 0 0;display:inline-block' }), 'dropped or cancelled')),
         stats, o);
     },
+        predict: {
+          q: 'No operator. The producer needs 400 ms to make each value and the collector 600 ms to handle it. About how long do 5 values take?',
+          options: ['About 3,000 ms', 'About 5,000 ms', 'About 2,000 ms'],
+          a: 1,
+          why: 'Without an operator, <code>emit</code> calls the collector and waits for it. The two sides take turns: 400 + 600 ms per value, five times.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+fun main() = runBlocking {
+    val start = System.currentTimeMillis()
+    fun t() = System.currentTimeMillis() - start
+
+    val readings = flow {
+        for (i in 1..5) {
+            delay(100)
+            println("\${t()} ms  emit $i")
+            emit(i)
+        }
+    }
+    readings
+        .conflate()                      // try buffer(), or delete this line
+        .collect {
+            delay(300)
+            println("\${t()} ms  handled $it")
+        }
+    println("total \${t()} ms")
+}`,
   };
 
   // ─── catch / retry / retryWhen / onCompletion ─────────────────
@@ -1618,6 +1672,40 @@ articles()
           }))),
         log);
     },
+        predict: {
+          q: 'The server fails twice, then works. <code>retryWhen</code> waits 1 s, then 2 s. What does the screen show in the end?',
+          options: ['Error, right after the first failure', 'Success, after the third attempt', 'Loading, forever'],
+          a: 1,
+          why: 'Each failure reaches <code>retryWhen</code> first. It returns true, so the upstream is collected again from the start, and <code>catch</code> never sees an exception.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import java.io.IOException
+
+var calls = 0
+
+suspend fun fetch(): String {
+    delay(50)
+    calls++
+    if (calls <= 2) throw IOException("timeout #$calls")
+    return "20 articles"
+}
+
+fun main() = runBlocking {
+    flow { emit(fetch()) }
+        .retryWhen { cause, attempt ->
+            val retry = cause is IOException && attempt < 3   // change 3 to 1
+            if (retry) {
+                val wait = 100L shl attempt.toInt()            // 100, 200, 400 ms
+                println("attempt \${attempt + 1} failed (\${cause.message}), retry in $wait ms")
+                delay(wait)
+            }
+            retry
+        }
+        .catch { e -> emit("Error: \${e.message}") }
+        .onCompletion { cause -> println("onCompletion, cause = $cause") }
+        .collect { println("show: $it") }
+}`,
   };
 
   // ─── callbackFlow / channelFlow ─────────────────
@@ -1803,6 +1891,39 @@ fun posts(): Flow<List<Post>> = channelFlow {
           h('div', { class: 'flw-srow' }, h('span', { class: 'lane-name' }, 'collect'), outStrip)),
         o2);
     },
+        predict: {
+          q: 'The collector stops. <code>awaitClose { }</code> is empty, so the listener is never unregistered. What happens when the network changes again?',
+          options: ['Nothing: the listener was removed for you', 'The system still calls the old listener, which leaks with everything it holds', 'The app crashes with an IllegalStateException'],
+          a: 1,
+          why: 'The flow is closed, so <code>trySend</code> fails quietly, but the system still holds the listener. Only your code in <code>awaitClose</code> can unregister it.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.*
+
+fun interface Listener { fun onChange(online: Boolean) }
+
+class FakeNetwork {
+    val listeners = mutableListOf<Listener>()
+    fun register(l: Listener) { listeners += l; println("registered, \${listeners.size} listener(s)") }
+    fun unregister(l: Listener) { listeners -= l; println("unregistered, \${listeners.size} listener(s)") }
+    fun change(online: Boolean) = listeners.forEach { it.onChange(online) }
+}
+
+fun FakeNetwork.isOnline(): Flow<Boolean> = callbackFlow {
+    val l = Listener { trySend(it) }
+    register(l)
+    awaitClose { unregister(l) }       // change to awaitClose { } and run again
+}
+
+fun main() = runBlocking {
+    val net = FakeNetwork()
+    val job = launch { net.isOnline().collect { println("online = $it") } }
+    delay(50); net.change(false)
+    delay(50); net.change(true)
+    delay(50); job.cancel(); job.join()
+    println("listeners left: \${net.listeners.size}")
+}`,
   };
 
   // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
@@ -2217,7 +2338,57 @@ fun MapScreen(vm: MapViewModel) {
 <p>The rule of thumb: a callback that fires many times becomes a <code>callbackFlow</code>, one that fires once becomes a suspend function.</p>`,
     code: oneShotStep.code,
     remember: 'One answer: suspendCancellableCoroutine, resume exactly once, cancel the request in invokeOnCancellation. Many answers: callbackFlow.',
-    visual: oneShotStep.visual,
+    visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: 'suspend fun FusedLocationProviderClient.currentFix(): Location? =\n    suspendCancellableCoroutine { cont ->\n        val cts = CancellationTokenSource()\n        getCurrentLocation(PRIORITY_HIGH_ACCURACY, cts.token)\n            .addOnSuccessListener { cont.resume(it) }\n            .addOnFailureListener { cont.resumeWithException(it) }\n        cont.invokeOnCancellation { cts.cancel() }\n    }\n\n// in the ViewModel\nval fix = client.currentFix()\nshow(fix)',
+            varsTitle: 'State',
+            predict: {
+              q: 'The block registers the listeners and reaches its closing brace. The GPS has not answered yet. What happens to the caller?',
+              options: ['<code>currentFix()</code> returns <code>null</code>', 'It stays suspended until someone calls <code>resume</code>', 'Its thread blocks until the callback fires'],
+              a: 1,
+              why: 'Reaching the end of the block does not return anything. The caller stays suspended, with its thread free, until the continuation is resumed.',
+            },
+            frames: [
+              { say: 'A ViewModel coroutine on Main needs one location. The GPS answers once, through a callback.' },
+              { line: 11, vars: { caller: 'running on Main' }, say: 'The coroutine calls <code>currentFix()</code>.' },
+              { line: [2, 3, 4], vars: { cont: 'waiting', GPS: 'request started' }, say: '<code>suspendCancellableCoroutine</code> hands the block a continuation, <code>cont</code>. The block starts the GPS request.' },
+              { line: [5, 6, 7], say: 'It registers the success and failure listeners, and a cancel hook that stops the GPS request if the caller is cancelled.' },
+              { line: 8, vars: { caller: 'suspended, Main is free' }, say: 'The block ends, but nothing is returned yet. The caller is suspended and Main goes back to drawing frames.' },
+              { line: 5, vars: { GPS: 'answered', cont: 'resumed' }, say: 'Later the GPS answers. The success listener calls <code>cont.resume(location)</code>, exactly once.' },
+              { line: [11, 12], vars: { caller: 'running on Main', fix: 'Location(51.50, -0.12)' }, say: 'The coroutine wakes up on Main, and <code>currentFix()</code> returns the location. A callback has become a return value.' },
+              { line: 7, vars: { caller: null, fix: null, cont: 'cancelled', GPS: 'stopped' }, say: 'Had the screen closed first, cancelling the caller would run the hook: <code>cts.cancel()</code> stops the GPS request, and a late <code>resume</code> is ignored.' },
+            ],
+          });
+        },
+        play: `import kotlinx.coroutines.*
+import kotlin.coroutines.resume
+
+// A pretend callback API: it answers once, 300 ms later, on another thread.
+class FakeGps {
+    fun request(onFix: (String) -> Unit): () -> Unit {
+        val t = Thread {
+            try { Thread.sleep(300); onFix("51.50, -0.12") }
+            catch (e: InterruptedException) { println("GPS request stopped") }
+        }
+        t.start()
+        return { t.interrupt() }
+    }
+}
+
+suspend fun FakeGps.currentFix(): String = suspendCancellableCoroutine { cont ->
+    val stop = request { fix -> cont.resume(fix) }
+    cont.invokeOnCancellation { stop() }
+}
+
+fun main() = runBlocking {
+    val gps = FakeGps()
+    println("first fix: \${gps.currentFix()}")
+    val job = launch { println("second fix: \${gps.currentFix()}") }
+    delay(100)                   // change to 500 and run again
+    job.cancel()
+    job.join()
+    println("done")
+}`,
     terms: [
       { term: 'Continuation', def: 'The handle to a suspended coroutine. Resuming it with a value or an exception makes the coroutine continue from where it paused.' },
       { term: 'resume', def: 'Continues the suspended coroutine with a value. Calling it a second time on the same continuation throws IllegalStateException.' },
@@ -2477,66 +2648,55 @@ val messages: Flow<String> = _messages.receiveAsFlow()`,
       },
     ],
     visual(el) {
-      const MODES = [
-        ['cold', 'cold flow', 'val loc = repo.locationUpdates()   // cold'],
-        ['share0', 'shareIn(replay = 0)', 'val loc = repo.locationUpdates()\n    .shareIn(viewModelScope, WhileSubscribed(5_000))'],
-        ['share1', 'shareIn(replay = 1)', 'val loc = repo.locationUpdates()\n    .shareIn(viewModelScope, WhileSubscribed(5_000), replay = 1)'],
-        ['state', 'stateIn(initial = Loading)', 'val loc = repo.locationUpdates()\n    .stateIn(viewModelScope, WhileSubscribed(5_000), Loading)'],
-      ];
-      let mode = 'state', cols = [], seq = 0, last = null;
-      const snippet = h('div', { class: 'kt' });
-      const gps = h('span', { class: 'flw-gps off' }, 'GPS listeners: 0');
-      const rows = h('div', { class: 'flw-search' });
-      const o = out();
-      const btns = MODES.map(([k, label]) => cmd(label, () => { mode = k; reset(); say(o, `<span class="muted">mode:</span> ${hl(label)}. Add a screen, emit, then add another.`); }));
-      const chip = (text, cls = '') => h('span', { class: `flw-v drop-in ${cls}` }, text);
-      function paintGps() {
-        const n = mode === 'cold' ? cols.length : cols.length ? 1 : 0;
-        gps.textContent = `GPS listeners: ${n}`; gps.className = `flw-gps${n ? (n > 1 ? ' bad' : '') : ' off'}`;
-      }
-      function reset() {
-        cols = []; seq = 0; last = null;
-        snippet.innerHTML = hl(MODES.find(m => m[0] === mode)[2]);
-        rows.replaceChildren(h('span', { class: 'flw-note' }, 'No screen is collecting.'));
-        pressed(btns, MODES.map(m => m[0]), mode); paintGps();
-      }
-      function give(c, v, cls) {
-        c.strip.querySelectorAll('.flw-note').forEach(n => n.remove());
-        c.strip.append(chip(v, cls));
-        while (c.strip.children.length > 4) c.strip.firstElementChild.remove();
-      }
-      function add() {
-        if (cols.length >= 3) { replay(rows, 'shake'); say(o, '<span class="muted">enough:</span> three screens make the point. Pick a mode to start over.'); return; }
-        if (!cols.length) rows.replaceChildren();
-        const c = { strip: h('div', { class: 'flw-strip flw-wrap' }, h('span', { class: 'flw-note' }, 'nothing yet')), seq: 0, last: null };
-        cols.push(c);
-        rows.append(h('div', { class: 'flw-srow drop-in' }, h('span', { class: 'lane-name' }, `screen ${cols.length}`), c.strip));
-        paintGps();
-        if (mode === 'cold') { say(o, cols.length > 1 ? `<span class="bad">another producer:</span> screen ${cols.length} started its own upstream. ${cols.length} GPS listeners now, each with its own numbers.` : 'Screen 1 started the upstream. Emit a value.'); return; }
-        if (cols.length === 1 && !last) { if (mode === 'state') { give(c, 'Loading', 'warn'); say(o, '<span class="good">initial value:</span> nothing emitted yet, so the StateFlow hands out Loading.'); } else say(o, 'Screen 1 started the shared upstream. Emit a value.'); return; }
-        if (mode === 'share0') say(o, '<span class="bad">replay = 0:</span> the new screen joined the shared upstream but got nothing. It waits for the next emission.');
-        else if (mode === 'share1') { give(c, last, 'acc'); say(o, `<span class="good">replay = 1:</span> the new screen got ${last} from the replay cache right away.`); }
-        else { give(c, last || 'Loading', last ? 'acc' : 'warn'); say(o, `<span class="good">current value:</span> a StateFlow always has one, so the new screen drew ${last || 'Loading'} at once.`); }
-      }
-      function emit(same) {
-        if (!cols.length) { replay(gps, 'shake'); say(o, '<span class="muted">nobody collects,</span> so the upstream is not running. Add a screen first.'); return; }
-        if (mode === 'cold') {
-          cols.forEach(c => { if (!same || !c.last) c.last = `fix ${++c.seq}`; give(c, c.last); });
-          say(o, same ? 'Each upstream sent its last fix again, and each collector got it.' : '<span class="muted">separate producers:</span> each screen counts its own fixes. They are not even seeing the same data.');
-          return;
-        }
-        if (same && !last) { say(o, '<span class="muted">nothing to repeat yet.</span> Emit a new fix first.'); return; }
-        if (same && mode === 'state') { cols.forEach(c => replay(c.strip, 'shake')); say(o, `<span class="good">skipped:</span> ${last} equals the current value, so the StateFlow did not emit it.`); return; }
-        if (!same) last = `fix ${++seq}`;
-        cols.forEach(c => give(c, last, 'ok'));
-        say(o, same ? `<span class="muted">sent again:</span> a SharedFlow delivers ${last} again to every screen, even though it repeats.` : `<span class="good">shared:</span> one upstream, ${last} went to all ${cols.length} screen${cols.length === 1 ? '' : 's'}.`);
-      }
-      reset();
-      o.innerHTML = 'Add a screen, emit a fix, then add another screen. Compare the modes.';
-      el.append(h('div', { class: 'controls' }, btns), snippet,
-        h('div', { class: 'controls' }, cmd('screen starts collecting', add), cmd('upstream emits', () => emit(false)), cmd('emit the same fix again', () => emit(true))),
-        h('div', { class: 'flw-ui' }, gps), rows, o);
-    },
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'gps', label: 'GPS<small>locationUpdates()</small>', x: 50, y: 12, tone: 'warm' },
+              { id: 'st', label: 'stateIn<small>viewModelScope</small>', x: 50, y: 50, hidden: true },
+              { id: 's1', label: 'Screen 1', x: 17, y: 88 },
+              { id: 's2', label: 'Screen 2', x: 50, y: 88 },
+              { id: 's3', label: 'Screen 3', x: 83, y: 88 },
+            ],
+            predict: {
+              q: 'With <code>stateIn(viewModelScope, WhileSubscribed(5_000), Loading)</code>, every screen stops collecting. When is the GPS listener removed?',
+              options: ['At once', 'About 5 s later, if no screen comes back', 'Only when <code>viewModelScope</code> is cancelled'],
+              a: 1,
+              why: '<code>WhileSubscribed(5_000)</code> keeps the shared upstream for 5 s after the last collector leaves, then cancels it. Cancelling the callbackFlow runs <code>awaitClose</code>, which removes the listener.',
+            },
+            frames: [
+              { say: '<code>repo.locationUpdates()</code> is a cold <code>callbackFlow</code>. Each collection registers a GPS listener.' },
+              { add: [['gps', 's1', 'run 1']], say: 'Screen 1 collects the cold flow directly. It gets its own run and its own GPS listener.' },
+              { add: [['gps', 's2', 'run 2', 'err'], ['gps', 's3', 'run 3', 'err']], hl: ['gps'], say: 'Screens 2 and 3 do the same. Three runs, three GPS listeners, three times the battery.' },
+              { remove: [['gps', 's1'], ['gps', 's2'], ['gps', 's3']], show: ['st'], add: [['gps', 'st', 'one run', 'ok'], ['st', 's1'], ['st', 's2']], say: 'Now the ViewModel calls <code>stateIn</code>. One coroutine in <code>viewModelScope</code> collects the upstream, and screens collect the StateFlow.' },
+              { add: [['st', 's3', 'current value', 'accent']], hl: ['s3'], say: 'Screen 3 joins late and gets the current value at once. Still one GPS listener.' },
+              { remove: [['st', 's1'], ['st', 's2'], ['st', 's3']], gone: ['s1', 's2', 's3'], say: 'Every screen stops collecting. <code>WhileSubscribed(5_000)</code> keeps the upstream running for 5 more seconds, in case one comes back after a rotation.' },
+              { remove: [['gps', 'st']], hl: ['st'], say: 'Nobody came back, so the upstream is cancelled and <code>awaitClose</code> removes the GPS listener. The StateFlow keeps its last value for the next collector.' },
+            ],
+          });
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+var listeners = 0
+
+fun locationUpdates(): Flow<Int> = flow {
+    listeners++
+    println("GPS listener added, now $listeners")
+    var fix = 0
+    while (true) { emit(++fix); delay(100) }
+}
+
+fun main() = runBlocking {
+    val scope = CoroutineScope(Dispatchers.Default)
+    val location = locationUpdates()
+        .stateIn(scope, SharingStarted.WhileSubscribed(), 0)
+    // try: val location = locationUpdates()   (cold, no stateIn)
+    val screens = List(3) { n ->
+        launch { location.take(3).collect { println("screen $n got $it") } }
+    }
+    screens.joinAll()
+    scope.cancel()
+}`,
   };
 
   Lab.addTrack({
@@ -2590,56 +2750,42 @@ launch { ticks.collect { println("B got $it") } }
         underHood: coldDepth.underHood,
         mistakes: coldDepth.mistakes,
         visual(el) {
-          let runs = 1;
-          const running = {};
-          const runsBadge = h('span', { class: 'flw-badge' }, 'block has run 1 time');
-          const idle = h('p', { class: 'flw-idle' }, 'Idle. The block runs only while someone collects.');
-          const runRows = h('div', { style: 'display:grid;gap:6px' });
-          const prod = h('div', { class: 'flw-prod' },
-            h('div', { class: 'flw-prod-head' }, h('span', { html: hl('flow { for (i in 1..4) { delay(800); emit(i) } }') }), runsBadge),
-            idle, runRows);
-          const cols = {};
-          const col = name => {
-            const strip = h('div', { class: 'flw-strip' }), stat = h('span', { class: 'flw-stat' }, 'not collecting');
-            cols[name] = { strip, stat };
-            return h('div', { class: 'flw-col' }, h('span', { class: 'lane-name', html: hl(`collector ${name}`) }), strip, stat);
-          };
-          const colBox = h('div', { class: 'flw-cols' }, col('A'), col('B'));
-          const o = out('A collected once already. Start A again, then start B while A is halfway.');
-          [1, 2, 3, 4].forEach(i => cols.A.strip.append(h('span', { class: 'flw-v' }, String(i))));
-          cols.A.stat.textContent = 'completed'; cols.A.stat.className = 'flw-stat fin';
-          const syncIdle = () => { idle.hidden = runRows.children.length > 0; };
-          syncIdle();
-          async function collect(name) {
-            const c = cols[name];
-            if (running[name]) { replay(c.strip, 'shake'); say(o, `<span class="muted">busy:</span> collector ${name} is still collecting. collect returns when the flow completes.`); return; }
-            running[name] = true; runs++;
-            runsBadge.textContent = `block has run ${runs} times`; replay(runsBadge, 'pop');
-            c.strip.replaceChildren(); c.stat.textContent = 'collecting'; c.stat.className = 'flw-stat on';
-            const st = h('b', {}, 'Flow started');
-            const row = h('div', { class: 'flw-run drop-in' }, `run ${runs} for ${name}: `, st);
-            runRows.append(row); syncIdle();
-            say(o, `${hl(`launch { ticks.collect { ${name} } }`)} <span class="muted">// the block starts from the top for ${name}</span>`);
-            for (let i = 1; i <= 4; i++) {
-              await sleep(800); if (!prod.isConnected) return;
-              st.textContent = `emit(${i})`; replay(row, 'pop-soft');
-              c.strip.append(h('span', { class: 'flw-v acc drop-in' }, String(i)));
-            }
-            await sleep(300); if (!prod.isConnected) return;
-            c.strip.querySelectorAll('.flw-v').forEach(v => v.classList.remove('acc'));
-            c.stat.textContent = 'completed'; c.stat.className = 'flw-stat fin';
-            row.classList.add('leave');
-            await sleep(450); row.remove(); syncIdle();
-            running[name] = false;
-            say(o, `<span class="good">done:</span> ${name}'s run finished and collect returned. ${Object.values(running).some(Boolean) ? 'The other run is still going on its own.' : 'The producer is idle again.'}`);
-          }
-          el.append(
-            h('div', { class: 'controls' },
-              cmd('val ticks = flow { … }', () => { replay(prod, 'shake'); say(o, '<span class="muted">nothing happened:</span> defining a Flow runs no code. The block waits for a collector.'); }),
-              cmd('launch { ticks.collect { A } }', () => collect('A')),
-              cmd('launch { ticks.collect { B } }', () => collect('B'))),
-            prod, colBox, o);
+          const v = (lane, at, n) => ({ lane, from: at, to: at + 700, label: String(n), tone: 'ok' });
+          Lab.ui.timeline(el, {
+            lanes: ['run for A', 'run for B', 'A gets', 'B gets'],
+            span: 5200,
+            predict: {
+              q: 'A has been collecting for 1.2 s and already got 1. Now B starts collecting <code>ticks</code>. What is the first value B gets?',
+              options: ['2, the same value A gets next', '1: the block starts again from the top, just for B', 'Nothing: a flow can have only one collector'],
+              a: 1,
+              why: 'A cold flow has no shared producer. Every <code>collect</code> runs the <code>flow { }</code> block again, with its own loop and its own delays.',
+            },
+            frames: [
+              { now: 0, say: '<code>val ticks = flow { for (i in 1..4) { delay(800); emit(i) } }</code>. Defining it ran nothing: every lane is empty.' },
+              { bars: [{ lane: 0, from: 0, to: 1200, label: 'run 1' }, v(2, 800, 1)], say: 'A calls <code>collect</code>. Now the block starts, just for A. After 800 ms it emits 1.' },
+              { bars: [{ lane: 1, from: 1200, to: 2000, label: '', tone: 'warm' }, { lane: 0, from: 1200, to: 2000, label: '' }, v(2, 1600, 2), v(3, 2000, 1)], say: 'At 1.2 s B calls <code>collect</code>. A second run of the block starts from the top. B’s first value is its own 1.' },
+              { bars: [{ lane: 0, from: 2000, to: 3200, label: '' }, { lane: 1, from: 2000, to: 4400, label: 'run 2', tone: 'warm' }, v(2, 2400, 3), v(2, 3200, 4), v(3, 2800, 2), v(3, 3600, 3), v(3, 4400, 4)], say: 'Both runs go on side by side, each with its own loop and delays. Run 1 ends at 3.2 s, and A’s <code>collect</code> returns.' },
+              { now: 5100, say: 'Two collectors, two runs, and "Flow started" printed twice. If the block made a network request, it would have made two.' },
+            ],
+          });
         },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+val ticks = flow {
+    println("  block starts")
+    for (i in 1..3) {
+        delay(300)
+        emit(i)
+    }
+}
+
+fun main() = runBlocking {
+    println("flow defined, nothing ran yet")
+    launch { ticks.collect { println("A got $it") } }
+    delay(500)                                   // change to 0 and run again
+    launch { ticks.collect { println("B got $it") } }
+}`,
       },
 
       // 2 ─────────────────────────────────────────────
@@ -2839,6 +2985,31 @@ val screen: Flow<List<Article>> = combine(results, favorites) { list, favs ->
               cmd('add a space', () => autoType([[' ', 400]]))),
             so);
         },
+        predict: {
+          q: 'With <code>debounce(300)</code>, values arrive at 100, 330 and 560 ms, then nothing for a while. When does something come out?',
+          options: ['At 100 ms: the first value goes through at once', 'At 860 ms: the last value, 300 ms after it arrived', 'At 400 ms and 700 ms: one value every 300 ms'],
+          a: 1,
+          why: 'Each new value restarts the 300 ms wait and replaces the pending one. Only a value followed by 300 ms of quiet gets through.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+@OptIn(FlowPreview::class)
+fun main() = runBlocking {
+    flowOf(1, 2, 2, 3, 4, 4, 5)
+        .distinctUntilChanged()
+        .filter { it % 2 == 0 }          // change to it % 2 == 1
+        .map { it * 10 }
+        .collect { println(it) }
+
+    val keys = flow {
+        for (q in listOf("k", "ko", "kot")) { emit(q); delay(100) }
+        delay(500)
+        emit("kotlin")
+    }
+    keys.debounce(300)                   // change 300 to 50 and run again
+        .collect { println("search '$it'") }
+}`,
       },
 
       flatmap,
@@ -2895,75 +3066,46 @@ val screen: Flow<List<Article>> = combine(results, favorites) { list, favs ->
         underHood: hotDepth.underHood,
         mistakes: hotDepth.mistakes,
         visual(el) {
-          let count = 2, evN = 1, busy = false;
-          const TOASTS = ['Saved', 'Deleted', 'Copied', 'Sent', 'Synced'];
-          const NAMES = ['A', 'B', 'C', 'D'];
-          const subs = [];
-          const stateVal = h('span', { class: 'flw-val' }, '2');
-          const sharedInfo = h('span', { class: 'flw-badge' }, 'emitted 1');
-          const sList = h('div', { style: 'display:grid;gap:8px' }), eList = h('div', { style: 'display:grid;gap:8px' });
-          const o = out('Screen A has been collecting from the start. Change things, then let a new screen join late.');
-          const chip = (text, cls = '') => h('span', { class: `flw-v drop-in ${cls}` }, String(text));
-          const push = (strip, c, max) => {
-            strip.querySelectorAll('.flw-note').forEach(n => n.remove());
-            strip.querySelectorAll('.acc').forEach(n => n.classList.remove('acc'));
-            strip.append(c);
-            while (strip.children.length > max) strip.firstElementChild.remove();
-          };
-          function addSub(name, late) {
-            const sStrip = h('div', { class: 'flw-strip' }), sNote = h('span', { class: 'flw-note' });
-            const eStrip = h('div', { class: 'flw-strip' }), eNote = h('span', { class: 'flw-note' });
-            const row = (strip, note) => h('div', { class: `flw-subrow${late ? ' drop-in' : ''}` }, h('div', { class: 'flw-subhead' }, h('span', {}, `screen ${name}`), note), strip);
-            sList.append(row(sStrip, sNote)); eList.append(row(eStrip, eNote));
-            subs.push({ sStrip, sNote, eStrip, eNote });
-            if (late) {
-              push(sStrip, chip(count, 'acc'), 5); sNote.textContent = 'got the current value at once';
-              eStrip.append(h('span', { class: 'flw-note' }, 'waiting for the next event'));
-              eNote.textContent = `missed ${evN} earlier event${evN === 1 ? '' : 's'}`; eNote.className = 'flw-note warn';
-            }
-          }
-          addSub('A');
-          [0, 1, 2].forEach(v => subs[0].sStrip.append(h('span', { class: 'flw-v' }, String(v))));
-          subs[0].eStrip.append(h('span', { class: 'flw-v ok' }, 'Saved'));
-          const setVal = v => { stateVal.textContent = String(v); replay(stateVal, 'pop'); };
-          const deliver = (fn) => subs.forEach((s, i) => setTimeout(() => { if (stateVal.isConnected) fn(s); }, i * 120));
-          el.append(
-            h('div', { class: 'controls' },
-              cmd('_count.update { it + 1 }', () => {
-                if (busy) return; setVal(++count);
-                deliver(s => { push(s.sStrip, chip(count), 5); s.sNote.textContent = ''; });
-                say(o, `<span class="good">StateFlow:</span> value is now ${count}. Every current collector got it.`);
-              }),
-              cmd('_count.value = _count.value', () => {
-                if (busy) return; replay(stateVal, 'shake');
-                say(o, `<span class="muted">no emission:</span> ${count} equals the current value, so StateFlow sent nothing.`);
-              }),
-              cmd('repeat(3) { _count.update { it + 1 } }', async () => {
-                if (busy) return; busy = true;
-                const from = count;
-                for (let k = 0; k < 3; k++) { setVal(++count); await sleep(140); if (!stateVal.isConnected) return; }
-                await sleep(250); if (!stateVal.isConnected) return;
-                deliver(s => { push(s.sStrip, chip(count), 5); s.sNote.textContent = `skipped ${from + 1}, ${from + 2}`; });
-                say(o, `<span class="good">conflated:</span> the collectors were busy drawing, so they skipped ${from + 1} and ${from + 2} and got only the latest, ${count}.`);
-                busy = false;
-              }),
-              cmd('_events.emit(ShowToast(…))', () => {
-                const t = TOASTS[evN % TOASTS.length]; evN++;
-                sharedInfo.textContent = `emitted ${evN}`; replay(sharedInfo, 'pop');
-                deliver(s => push(s.eStrip, chip(t, 'ok'), 3));
-                say(o, `<span class="good">SharedFlow:</span> "${t}" went to everyone collecting right now. Nobody who joins later will see it.`);
-              }),
-              cmd('a new screen starts collecting', () => {
-                if (subs.length >= NAMES.length) { replay(sList, 'shake'); say(o, '<span class="muted">full:</span> four screens is enough for this demo. Press Reset to start over.'); return; }
-                const name = NAMES[subs.length];
-                addSub(name, true);
-                say(o, `<span class="good">screen ${name} joined:</span> StateFlow replayed ${count} at once. SharedFlow had nothing to replay, so ${name} missed ${evN} event${evN === 1 ? '' : 's'}.`);
-              })),
-            h('div', { class: 'flw-duo' },
-              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl('StateFlow<Int>') }), stateVal), sList),
-              h('div', { class: 'flw-panel' }, h('div', { class: 'flw-ph' }, h('span', { class: 'flw-src', html: hl('SharedFlow<UiEvent>') }), sharedInfo), eList)),
-            o);
+          Lab.ui.timeline(el, {
+            lanes: ['StateFlow', 'B: state', 'SharedFlow', 'B: events'],
+            span: 6,
+            unit: 's',
+            predict: {
+              q: 'At 1 s the ViewModel sets <code>count</code> to 1 and emits a "Saved" toast. Screen B starts collecting both at 2 s. Which flow gives B something right away?',
+              options: ['Both of them', 'Only the StateFlow', 'Only the SharedFlow', 'Neither'],
+              a: 1,
+              why: 'A StateFlow always holds a current value and hands it to every new collector. A SharedFlow with <code>replay = 0</code> keeps nothing, so an event nobody was collecting is gone.',
+            },
+            frames: [
+              { now: 0, say: '<code>count</code> is a <code>MutableStateFlow(0)</code>. <code>toasts</code> is a <code>MutableSharedFlow&lt;String&gt;()</code> with no replay. Screen B is not collecting yet.' },
+              { bars: [{ lane: 0, from: 0, to: 1, label: '0', tone: 'muted' }, { lane: 0, from: 1, to: 2, label: '1' }, { lane: 2, from: 1, to: 2, label: 'Saved', tone: 'warm' }], say: 'At 1 s count becomes 1 and "Saved" is emitted. Both flows are hot: they work with no one collecting. The StateFlow keeps 1. The toast reaches no one.' },
+              { bars: [{ lane: 1, from: 2, to: 3, label: '1', tone: 'ok' }], marks: [{ at: 2, label: 'B joins', tone: 'accent' }], say: 'B starts collecting at 2 s. The StateFlow gives it the current value, 1, at once. The SharedFlow has nothing to give: "Saved" was not kept.' },
+              { bars: [{ lane: 0, from: 2, to: 4, label: '1' }, { lane: 0, from: 4, to: 6, label: '2' }, { lane: 1, from: 4, to: 5, label: '2', tone: 'ok' }], say: 'At 4 s count becomes 2. B is collecting, so it gets 2. Setting 2 again would emit nothing: a StateFlow skips equal values.' },
+              { bars: [{ lane: 2, from: 4.5, to: 5.5, label: 'Sent', tone: 'warm' }, { lane: 3, from: 4.5, to: 5.5, label: 'Sent', tone: 'ok' }], say: 'A new toast, "Sent", while B is collecting. B gets it. A SharedFlow reaches only the collectors that are there at that moment.' },
+            ],
+          });
         },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+fun main() = runBlocking {
+    val count = MutableStateFlow(0)
+    val toasts = MutableSharedFlow<String>()   // try MutableSharedFlow<String>(replay = 1)
+
+    count.value = 1
+    toasts.emit("Saved")         // nobody is collecting yet
+
+    val screenB = launch {
+        launch { count.collect { println("B state: $it") } }
+        launch { toasts.collect { println("B toast: $it") } }
+    }
+    delay(100)
+    count.value = 2
+    count.value = 2              // equal to the current value: not emitted again
+    toasts.emit("Sent")
+    delay(100)
+    screenB.cancel()
+}`,
       },
 
       callbackflow,
@@ -3056,7 +3198,7 @@ viewLifecycleOwner.lifecycleScope.launch {
             if (on && (!open || last.k !== kind)) arr.push({ s: now, e: null, k: kind });
             while (arr.length && arr[0].e != null && arr[0].e < now - W) arr.shift();
           }
-          const coord = n => `${(41.0082 + n * 0.0004).toFixed(4)}\n${(28.9784 + n * 0.0003).toFixed(4)}`;
+          const coord = n => `${(51.5074 + n * 0.0004).toFixed(4)}\n${(-0.1278 + n * 0.0003).toFixed(4)}`;
           function paintPhone(rotating) {
             const key = `${fg}|${rotating}|${coll}|${up}|${reads}`;
             if (key === phoneKey) return; phoneKey = key;
@@ -3137,6 +3279,35 @@ viewLifecycleOwner.lifecycleScope.launch {
               stats)),
             o);
         },
+        predict: {
+          q: 'With <code>stateIn(viewModelScope, WhileSubscribed(5_000), null)</code>, the user rotates the phone. What happens to the GPS upstream?',
+          options: ['It stops and starts again with the new screen', 'It keeps running: the new screen subscribes well within 5 s', 'It stops for good'],
+          a: 1,
+          why: 'The ViewModel survives rotation, and its StateFlow keeps the upstream for 5 s after the old screen stops collecting. The new screen starts collecting long before that.',
+        },
+        play: `import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+fun main() = runBlocking {
+    val gps = flow {
+        println("  upstream START")
+        try {
+            var i = 0
+            while (true) { emit(i++); delay(100) }
+        } finally {
+            println("  upstream STOP")
+        }
+    }
+    val location = gps.stateIn(this, SharingStarted.WhileSubscribed(500), -1)   // change 500 to 0
+
+    var screen = launch { location.collect { } }
+    delay(300); screen.cancel(); println("rotate: old screen gone")
+    delay(100); screen = launch { location.collect { } }; println("new screen collecting")
+    delay(300); screen.cancel(); println("home: screen gone")
+    delay(1_000)
+    println("one second later")
+    coroutineContext.cancelChildren()
+}`,
       },
       statein,
     ],

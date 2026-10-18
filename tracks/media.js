@@ -332,78 +332,28 @@ val withSound = ContextCompat.checkSelfPermission(context, Manifest.permission.R
       { q: 'Finalize reports ERROR_FILE_SIZE_LIMIT_REACHED. What should you do with the file?', options: ['Delete it, since any error means a broken file', 'Keep it: the data recorded before the limit is saved', 'Start a new recording into the same file to finish it'], a: 1, why: 'Size and duration limits still leave a usable video. ERROR_NO_VALID_DATA is the one where the file is not valid and should be deleted.' },
     ],
     visual(el) {
-      const DEVICES = { 'flagship (up to UHD)': ['UHD', 'FHD', 'HD', 'SD'], 'budget (up to HD)': ['HD', 'SD'] };
-      const RATE = { FHD: 2.1, HD: 1.1 };
-      const S = { dev: 'flagship (up to UHD)', perm: true, audio: true, st: 'idle', fg: true, secs: 0, n: 0, tok: 0 };
-      const scene = h('div', { class: 'md-scene' });
-      const label = h('span', { class: 'md-vf-label' });
-      const rec = h('span', { class: 'md-vc-rec' });
-      const vf = h('div', { class: 'md-vf md-open' }, scene, rec, label);
-      const qTag = tag(''), stTag = tag(''), audTag = tag('');
-      const { el: logEl, log } = logger(5);
-      const quality = () => { const sup = DEVICES[S.dev]; return sup.includes('FHD') ? 'FHD' : sup.find(q => ['HD', 'SD'].includes(q)); };
-      function paint() {
-        setTag(qTag, `quality: ${quality()}${quality() === 'FHD' ? '' : ' (fallback)'}`, 'acc');
-        setTag(stTag, { idle: 'no recording', rec: 'recording', paused: 'paused' }[S.st], { idle: '', rec: 'no', paused: 'wait' }[S.st]);
-        setTag(audTag, S.perm ? 'RECORD_AUDIO granted' : 'RECORD_AUDIO denied', S.perm ? 'ok' : '');
-        vf.classList.toggle('md-open', S.fg);
-        scene.classList.toggle('md-run', S.fg && S.st === 'rec');
-        rec.textContent = S.st === 'idle' ? '' : `${S.st === 'rec' ? '● REC' : '❚❚'} 0:${String(S.secs).padStart(2, '0')}`;
-        rec.classList.toggle('md-vc-on', S.st === 'rec');
-        label.textContent = S.fg ? '' : 'camera closed';
-      }
-      const finalize = (err, note) => {
-        S.st = 'idle'; S.tok++;
-        log(`Finalize: ${err === 'ERROR_NONE' ? '<span class="good">ERROR_NONE</span>' : `<span class="bad">${err}</span>`}${note ? ` <span class="muted">${note}</span>` : ''}`);
-        paint();
-      };
-      async function ticker(my) {
-        for (;;) {
-          await sleep(1000);
-          if (my !== S.tok || !vf.isConnected) return;
-          if (S.st !== 'rec') continue;
-          S.secs++;
-          const mb = (S.secs * RATE[quality()]).toFixed(1);
-          if (S.secs % 2 === 0) log(`Status: ${S.secs} s, numBytesRecorded ≈ ${mb} MB`);
-          paint();
-        }
-      }
-      function start() {
-        if (!S.fg) { log('<span class="muted">the camera is closed: open the app first</span>'); return; }
-        if (S.audio && !S.perm) { replay(vf, 'shake'); log('withAudioEnabled(): <span class="bad">SecurityException</span>, RECORD_AUDIO not granted'); return; }
-        if (S.st !== 'idle') { replay(vf, 'shake'); log('start(): <span class="bad">IllegalStateException</span>, the Recorder has an unfinished recording'); return; }
-        S.st = 'rec'; S.secs = 0; S.n++;
-        log(`Start <span class="muted">(${quality()}, ${S.audio ? 'with audio' : 'silent'})</span>`);
-        paint(); ticker(++S.tok);
-      }
-      const root = h('div', { class: 'md-root' },
-        h('div', { class: 'md-split' },
-          h('div', { class: 'md-col' },
-            h('div', { class: 'md-tags' }, qTag, stTag, audTag),
-            choice('device', Object.keys(DEVICES), S.dev, v => { if (S.st !== 'idle') { log('<span class="muted">stop first: quality is chosen when you bind</span>'); return false; } S.dev = v; paint(); log(`bound: QualitySelector.from(FHD, lowerQualityOrHigherThan(FHD)) → ${quality()}`); }).el,
-            h('div', { class: 'controls md-vc-cmds' },
-              toggle('md-vc-perm', 'RECORD_AUDIO granted', true, v => { S.perm = v; paint(); }),
-              toggle('md-vc-audio', '<code>.withAudioEnabled()</code>', true, v => { S.audio = v; })),
-            h('div', { class: 'controls md-vc-cmds' },
-              cmd('prepareRecording(context, output).start(executor, listener)', start),
-              cmd('recording.pause()', () => { if (S.st !== 'rec') return; S.st = 'paused'; log('Pause'); paint(); }),
-              cmd('recording.resume()', () => { if (S.st !== 'paused') return; S.st = 'rec'; log('Resume'); paint(); }),
-              cmd('recording.stop()', () => { if (S.st === 'idle') { log('<span class="muted">no active recording</span>'); return; } finalize('ERROR_NONE', `content://media/…/video/${2000 + S.n}, ${S.secs} s`); })),
-            h('div', { class: 'controls md-vc-cmds' },
-              act('Press Home (ON_STOP)', () => {
-                if (!S.fg) return;
-                S.fg = false;
-                if (S.st !== 'idle') finalize('ERROR_SOURCE_INACTIVE', `camera closed: the ${S.secs} s before it are saved`);
-                else { log('ON_STOP: camera closed'); paint(); }
-              }),
-              act('Open app (ON_START)', () => { if (S.fg) return; S.fg = true; log('ON_START: camera open, preview running'); paint(); }))),
-          vf),
-        logEl,
-        h('p', { class: 'tip' }, 'File sizes are rough examples. Times run at real speed.'));
-      el.append(root);
-      paint();
-      log('Bound: Preview + VideoCapture. Start a recording.');
-    },
+          Lab.ui.timeline(el, {
+            lanes: ['your code', 'Recorder', 'listener'],
+            span: 12,
+            unit: 's',
+            predict: {
+              q: 'You call <code>stop()</code> on an active <code>Recording</code>. When is the video file ready to use?',
+              options: ['As soon as <code>stop()</code> returns', 'When the listener receives <code>VideoRecordEvent.Finalize</code>', 'After the next <code>Status</code> event'],
+              a: 1,
+              why: '<code>stop()</code> only asks the Recorder to finish. It still has to flush the encoder and close the file, then it reports <code>Finalize</code> with the URI or an error.',
+            },
+            frames: [
+              { now: 0, say: '<code>VideoCapture</code> wraps a <code>Recorder</code>, bound next to <code>Preview</code>. Nothing records yet.' },
+              { bars: [{ lane: 0, from: 0, to: 1, label: 'prepare', tone: 'accent' }], say: '<code>prepareRecording(context, MediaStoreOutputOptions)</code> picks the output and returns a <code>PendingRecording</code>. Still nothing records.' },
+              { bars: [{ lane: 0, from: 1, to: 2, label: 'audio', tone: 'accent' }], say: '<code>withAudioEnabled()</code> adds sound. Call it only after <code>RECORD_AUDIO</code> is granted.' },
+              { bars: [{ lane: 0, from: 2, to: 3, label: 'start()', tone: 'ok' }, { lane: 1, from: 3, to: 7, label: 'recording', tone: 'ok' }, { lane: 2, from: 3, to: 4, label: 'Start', tone: 'accent' }], now: 4, say: '<code>start(executor, listener)</code> returns an active <code>Recording</code>. The listener gets <code>Start</code>.' },
+              { bars: [{ lane: 2, from: 4, to: 5, label: 'Status', tone: 'muted' }, { lane: 2, from: 5, to: 6, label: 'Status', tone: 'muted' }, { lane: 2, from: 6, to: 7, label: 'Status', tone: 'muted' }], now: 7, say: 'While it records, <code>Status</code> events report the duration and the bytes written so far.' },
+              { bars: [{ lane: 0, from: 7, to: 8, label: 'pause()', tone: 'warm' }, { lane: 1, from: 7, to: 9, label: 'paused', tone: 'warm' }, { lane: 2, from: 7, to: 8, label: 'Pause', tone: 'warm' }], now: 9, say: '<code>pause()</code> holds the same recording. The file is not finished.' },
+              { bars: [{ lane: 0, from: 9, to: 10, label: 'stop()', tone: 'err' }, { lane: 1, from: 9, to: 11, label: 'finishing', tone: 'muted' }], now: 10, say: '<code>stop()</code> returns at once, but the Recorder is still flushing the encoder and closing the file.' },
+              { bars: [{ lane: 2, from: 11, to: 12, label: 'Finalize', tone: 'ok' }], now: 12, say: '<code>Finalize</code> arrives with the output URI, or with an error code if it stopped for a reason. Now the file is ready, and the Recorder can take a new recording.' },
+            ],
+          });
+        },
   };
 
   Lab.addTrack({
@@ -683,6 +633,12 @@ Util.handlePlayPauseButtonAction(player)`,
             why: 'READY says nothing about whether the user paused, and BUFFERING hides the pause button while playback is about to continue. The helpers look at <code>playWhenReady</code>, IDLE and ENDED for you, and the action also seeks back to the start after ENDED.',
           },
         ],
+        predict: {
+          q: "You call <code>prepare()</code> and <code>play()</code> on a slow network. Which state does the player reach first?",
+          options: ["<code>STATE_READY</code>", "<code>STATE_BUFFERING</code>", "<code>STATE_ENDED</code>"],
+          a: 1,
+          why: "After prepare() the player waits for data in BUFFERING. It moves to READY, and isPlaying turns true, once enough is loaded.",
+        },
         visual(el) {
           const DUR = 30;
           const S = { state: 'BUFFERING', pwr: false, pos: 0, buf: 0, item: true, released: false, slow: false, playing: false };
@@ -1073,88 +1029,31 @@ mediaSession = MediaSession.Builder(this, player)
           },
         ],
         visual(el) {
-          const S = { playing: false, ready: false, app: 'visible', svc: 'none', stopOnSwipe: false };
-          const { el: logEl, log } = logger(5);
-          const svcTag = tag(''), appTag = tag(''), ctlTag = tag('');
-          const shade = h('div', { class: 'md-col' });
-          const body = h('div', { class: 'md-col' });
-          const sb = h('div', { class: 'md-sb' }, h('span', {}, '9:41'), h('span', {}, ''));
-          const ph = h('div', { class: 'md-phone' }, sb, h('div', { class: 'md-pscreen' }, shade, body));
-          const notiShown = () => S.ready && (S.svc === 'fg' || S.svc === 'bg');
-          function toggleViaSession(from) {
-            if (!notiShown()) { replay(ph, 'shake'); log(`${from}: <span class="bad">no active session to receive it</span>`); return; }
-            log(`${from} -> MediaSession -> player.${S.playing ? 'pause' : 'play'}()`);
-            setPlaying(!S.playing);
-          }
-          function setPlaying(p) {
-            S.playing = p;
-            if (p && S.svc !== 'fg') { S.svc = 'fg'; log('Media3: <span class="good">startForeground(mediaPlayback)</span> + notification'); }
-            if (!p && S.svc === 'fg') { S.svc = 'bg'; log('Media3: leaves foreground, <span class="muted">notification stays</span>'); }
-            paint();
-          }
-          function paint() {
-            setTag(svcTag, { none: 'service: not started', fg: 'service: foreground', bg: 'service: started, not foreground', stopped: 'service: stopped' }[S.svc], { fg: 'ok', bg: 'wait', stopped: 'no' }[S.svc]);
-            setTag(appTag, { visible: 'app: visible', background: 'app: in background', removed: 'app: swiped away' }[S.app], S.app === 'visible' ? 'acc' : '');
-            const live = S.svc === 'fg' || S.svc === 'bg';
-            setTag(ctlTag, S.app === 'visible' && live ? 'controller: connected' : 'controller: none', S.app === 'visible' && live ? 'ok' : '');
-            sb.lastChild.textContent = S.playing ? 'audio' : '';
-            shade.replaceChildren(...(notiShown() ? [h('div', { class: 'md-noti' },
-              h('div', { class: 'md-noti-top' }, h('span', { class: 'md-art' }), h('span', {}, h('b', {}, 'Episode 12'), h('small', {}, S.playing ? 'Playing' : 'Paused'))),
-              h('div', { class: 'md-nbtns' }, h('button', { class: 'md-nbtn md-main', onclick: () => toggleViaSession('notification') }, S.playing ? 'Pause' : 'Play')))] : []));
-            body.replaceChildren(S.app === 'visible'
-              ? h('div', { class: 'md-appui' }, h('div', { class: 'md-cover' + (S.playing ? ' md-run' : '') }), h('b', {}, 'Episode 12'), h('span', { class: 'muted-text' }, S.playing ? 'Playing' : S.ready ? 'Paused' : 'Ready to play'))
-              : h('div', { class: 'md-home' }, Array.from({ length: 12 }, () => h('span', { class: 'md-app' }))));
-          }
-          const needUi = () => { if (S.app === 'visible') return false; replay(ph, 'shake'); log('<span class="bad">the UI is gone:</span> use the notification or the headset'); return true; };
-          const connect = () => {
-            if (S.svc === 'fg' || S.svc === 'bg') return;
-            log('MediaController connects: service onCreate(), onGetSession()');
-            S.svc = 'bg'; S.ready = false;
-          };
-          const root = h('div', { class: 'md-root' },
-            h('div', { class: 'md-split' },
-              h('div', { class: 'md-col' },
-                h('div', { class: 'md-tags' }, appTag, svcTag, ctlTag),
-                h('span', { class: 'md-label' }, 'From the app'),
-                h('div', { class: 'controls' },
-                  cmd('controller.play()', () => { if (needUi()) return; connect(); S.ready = true; if (S.playing) { log('<span class="muted">already playing</span>'); return; } log('controller.play()'); setPlaying(true); }),
-                  cmd('controller.pause()', () => { if (needUi()) return; if (!S.playing) { log('<span class="muted">already paused</span>'); return; } log('controller.pause()'); setPlaying(false); })),
-                h('span', { class: 'md-label' }, 'From the system'),
-                h('div', { class: 'controls' },
-                  act('Notification: play/pause', () => toggleViaSession('notification')),
-                  act('Headset button', () => toggleViaSession('headset'))),
-                h('span', { class: 'md-label' }, 'The user'),
-                h('div', { class: 'controls' },
-                  act('Press Home', () => {
-                    if (S.app !== 'visible') { log('<span class="muted">already in the background</span>'); return; }
-                    S.app = 'background';
-                    log(S.playing ? 'Home: <span class="good">audio keeps playing</span>, the service is in the foreground' : S.svc === 'bg' ? 'Home: paused service is not foreground, <span class="muted">the system may stop it</span>' : 'Home: nothing is playing');
-                    paint();
-                  }),
-                  act('Swipe away in Recents', () => {
-                    if (S.app === 'removed') { log('<span class="muted">already swiped away</span>'); return; }
-                    S.app = 'removed';
-                    if (S.svc === 'fg' || S.svc === 'bg') {
-                      if (S.stopOnSwipe || !S.playing) {
-                        log(S.stopOnSwipe ? 'onTaskRemoved: pauseAllPlayersAndStopSelf()' : 'onTaskRemoved (default): not playing, so stop');
-                        S.playing = false; S.svc = 'stopped'; S.ready = false;
-                        log('onDestroy(): <span class="good">player and session released</span>');
-                      } else log('onTaskRemoved (default): <span class="good">still playing, keep going</span>');
-                    } else log('task removed, no service running');
-                    paint();
-                  }),
-                  act('Open the app', () => {
-                    if (S.app === 'visible') { log('<span class="muted">already open</span>'); return; }
-                    S.app = 'visible';
-                    log(S.svc === 'fg' || S.svc === 'bg' ? 'new MediaController connects to the <span class="good">same session</span>' : 'app opened, no session yet');
-                    paint();
-                  })),
-                toggle('md-session-swipe', 'Override onTaskRemoved with <code>pauseAllPlayersAndStopSelf()</code>', false, v => { S.stopOnSwipe = v; log(v ? 'swipe away will always stop playback' : 'default: swipe away keeps playing audio alive'); })),
-              ph),
-            logEl);
-          el.append(root);
-          paint();
-          log('Tap controller.play(), then press Home.');
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'act', label: 'Activity<small>MediaController</small>', x: 17, y: 12, hidden: true },
+              { id: 'noti', label: 'Notification<small>media controls</small>', x: 50, y: 12, hidden: true },
+              { id: 'bt', label: 'Headset<small>Bluetooth</small>', x: 83, y: 12, hidden: true },
+              { id: 'session', label: 'MediaSession', x: 50, y: 50 },
+              { id: 'svc', label: 'Service<small>MediaSessionService</small>', x: 20, y: 88, tone: 'muted' },
+              { id: 'player', label: 'ExoPlayer', x: 80, y: 88 },
+            ],
+            predict: {
+              q: 'Music is playing. The user switches to another app, and your Activity stops and releases its <code>MediaController</code>. What happens to playback?',
+              options: ['It stops with the controller', 'It keeps going: the service owns the player', 'It pauses until the app is opened again'],
+              a: 1,
+              why: 'The player lives in the <code>MediaSessionService</code>, not in the Activity. The Activity only held a controller.',
+            },
+            frames: [
+              { add: [['svc', 'player', 'owns'], ['svc', 'session', 'owns'], ['session', 'player', 'controls']], say: 'The service owns the ExoPlayer and a <code>MediaSession</code> built around it. <code>onGetSession()</code> returns that session.' },
+              { show: ['act'], add: [['act', 'session', 'SessionToken', 'accent']], say: 'The Activity builds a <code>MediaController</code> from a <code>SessionToken</code>. It connects to the session, never to the player.' },
+              { hl: ['act', 'session', 'player'], add: [['act', 'session', 'play()', 'ok'], ['session', 'player', 'play()', 'ok']], say: 'The user taps play. <code>controller.play()</code> goes to the session, and the session calls <code>player.play()</code>.' },
+              { show: ['noti'], add: [['noti', 'session', 'pause', 'accent']], say: 'While it plays, Media3 posts the media notification and keeps the service in the foreground. The notification’s buttons talk to the same session.' },
+              { remove: [['act', 'session']], gone: ['act'], say: 'The user leaves the app and the Activity releases its controller. The service and the player keep going.' },
+              { show: ['bt'], hl: ['bt', 'session', 'player'], add: [['bt', 'session', 'play / pause', 'ok']], say: 'A headset button arrives at the session too. Notification, lock screen, Bluetooth, Android Auto: every remote goes through this one door.' },
+            ],
+          });
         },
       },
 
@@ -1372,74 +1271,26 @@ mediaPlayer.start()`,
           },
         ],
         visual(el) {
-          const S = { focus: true, noisy: true, type: 'MUSIC', playing: true, vol: 1, other: 0, otherName: '', out: 'headphones', permanent: false };
-          let busy = false;
-          const mine = h('span', { class: 'md-fill' }), mineL = h('span', { class: 'md-fill-label' });
-          const oth = h('span', { class: 'md-fill md-other' }), othL = h('span', { class: 'md-fill-label' });
-          const outTag = tag(''), focusTag = tag('');
-          const { el: logEl, log } = logger();
-          function paint() {
-            const v = S.playing ? S.vol : 0;
-            mine.style.width = `${v * 100}%`;
-            mineL.textContent = S.playing ? `podcast ${Math.round(v * 100)}%` : 'paused';
-            oth.style.width = `${S.other * 100}%`;
-            othL.textContent = S.other ? S.otherName : 'silent';
-            setTag(outTag, S.out === 'headphones' ? 'output: headphones' : 'output: speaker', S.out === 'speaker' ? 'wait' : '');
-            setTag(focusTag, S.focus ? (S.permanent ? 'focus: lost' : 'focus: held') : 'focus: never requested', S.focus ? (S.permanent ? 'no' : 'ok') : 'wait');
-          }
-          async function transient(name, kind, ms) {
-            if (busy) return; busy = true;
-            S.other = 1; S.otherName = name; S.permanent = false;
-            const wasPlaying = S.playing;
-            if (!S.playing) log(`${name}: <span class="muted">you were not playing</span>`);
-            else if (!S.focus) { log(`${name}: <span class="bad">your app never asked for focus, so it plays right over it</span>`); paint(); replay(mine.parentNode, 'shake'); }
-            else if (kind === 'duck' && S.type === 'MUSIC') { S.vol = 0.2; log('AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: <span class="good">volume 20%</span>'); }
-            else { S.playing = false; log(`${kind === 'duck' ? 'CAN_DUCK, but content is SPEECH' : 'AUDIOFOCUS_LOSS_TRANSIENT'}: <span class="good">pause</span>`); }
-            paint();
-            await sleep(ms);
-            S.other = 0;
-            if (wasPlaying && S.focus) { S.vol = 1; S.playing = true; log('AUDIOFOCUS_GAIN: <span class="good">back to normal</span>'); }
-            paint();
-            busy = false;
-          }
-          let plug;
-          const root = h('div', { class: 'md-root' },
-            h('div', { class: 'md-tags' }, focusTag, outTag),
-            h('div', { class: 'timeline' }, lane('Your app', mineL, mine), lane('Other', othL, oth)),
-            h('div', { class: 'controls' },
-              cmd('player.play()', () => {
-                if (busy) return;
-                if (S.playing) { log('<span class="muted">already playing</span>'); return; }
-                if (S.focus) { log('requestAudioFocus(): <span class="good">GRANTED</span>'); if (S.permanent) { S.other = 0; log('the other music app loses focus and pauses'); } }
-                S.permanent = false; S.playing = true; S.vol = 1; paint();
-              }),
-              act('Navigation prompt', () => transient('Maps prompt', 'duck', 1800)),
-              act('Incoming call', () => transient('Ringtone', 'call', 2400)),
-              act('Other music app plays', () => {
-                if (busy) return;
-                S.other = 1; S.otherName = 'Music app';
-                if (S.focus && S.playing) { S.playing = false; S.permanent = true; log('AUDIOFOCUS_LOSS: <span class="good">pause, and stay paused</span>'); }
-                else if (S.playing) { log('<span class="bad">no focus handling: both apps play at once</span>'); replay(mine.parentNode, 'shake'); }
-                else log('<span class="muted">you were not playing</span>');
-                paint();
-              }),
-              plug = act('Unplug headphones', () => {
-                if (busy) return;
-                if (S.out === 'speaker') { S.out = 'headphones'; plug.textContent = 'Unplug headphones'; log('headphones plugged in'); paint(); return; }
-                S.out = 'speaker'; plug.textContent = 'Plug headphones in';
-                if (!S.playing) log('ACTION_AUDIO_BECOMING_NOISY: <span class="muted">nothing playing</span>');
-                else if (S.noisy) { S.playing = false; log('ACTION_AUDIO_BECOMING_NOISY: <span class="good">paused</span>'); }
-                else { log('<span class="bad">keeps playing out loud from the speaker</span>'); replay(mine.parentNode, 'shake'); }
-                paint();
-              })),
-            h('div', { class: 'controls' },
-              toggle('md-focus-handle', 'handleAudioFocus', true, v => { S.focus = v; S.permanent = false; log(`setAudioAttributes(attrs, <span class="t-n">${v}</span>)`); paint(); }),
-              toggle('md-focus-noisy', 'setHandleAudioBecomingNoisy', true, v => { S.noisy = v; log(`setHandleAudioBecomingNoisy(<span class="t-n">${v}</span>)`); })),
-            choice('content type', ['MUSIC', 'SPEECH'], 'MUSIC', v => { S.type = v; log(`content type: C.AUDIO_CONTENT_TYPE_${v}`); }).el,
-            logEl);
-          el.append(root);
-          paint();
-          log('Playing with focus held. Try a navigation prompt with MUSIC, then with SPEECH.');
+          Lab.ui.timeline(el, {
+            lanes: ['your player', 'other audio'],
+            span: 60,
+            unit: 's',
+            predict: {
+              q: 'Your music player uses <code>AUDIO_CONTENT_TYPE_MUSIC</code> and <code>handleAudioFocus = true</code>. A navigation app speaks a turn instruction. What does your player do?',
+              options: ['Pauses until the prompt ends', 'Lowers its volume (ducks) and keeps playing', 'Keeps playing at full volume'],
+              a: 1,
+              why: 'A navigation prompt asks for short focus that allows ducking. Music still makes sense quietly, so ExoPlayer ducks. Speech content would pause instead.',
+            },
+            frames: [
+              { now: 0, say: 'A music player built with <code>setAudioAttributes(attrs, handleAudioFocus = true)</code>. Watch who holds focus.' },
+              { bars: [{ lane: 0, from: 0, to: 10, label: 'playing', tone: 'ok' }], say: '<code>play()</code> requests audio focus and gets it.' },
+              { bars: [{ lane: 1, from: 10, to: 16, label: 'nav prompt', tone: 'accent' }, { lane: 0, from: 10, to: 16, label: 'ducked', tone: 'warm' }], say: 'A navigation app asks for short focus that may duck. ExoPlayer lowers the volume and keeps going.' },
+              { bars: [{ lane: 0, from: 16, to: 26, label: 'playing', tone: 'ok' }], say: 'The prompt ends and gives focus back. Full volume again.' },
+              { bars: [{ lane: 1, from: 26, to: 40, label: 'phone call', tone: 'err' }, { lane: 0, from: 26, to: 40, label: 'paused', tone: 'muted' }], say: 'A call takes focus for a while, with no ducking allowed. ExoPlayer pauses.' },
+              { bars: [{ lane: 0, from: 40, to: 46, label: 'playing', tone: 'ok' }], say: 'The call ends and focus returns. Playback resumes on its own.' },
+              { bars: [{ lane: 1, from: 46, to: 60, label: 'other music app', tone: 'accent' }, { lane: 0, from: 46, to: 60, label: 'paused for good', tone: 'muted' }], marks: [{ at: 46, label: 'focus lost', tone: 'err' }], say: 'Another music app takes focus for good. ExoPlayer pauses and stays paused until the user presses play again.' },
+            ],
+          });
         },
       },
 
@@ -1667,6 +1518,12 @@ provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview)`,
             why: '<code>bindToLifecycle()</code> throws <code>IllegalArgumentException</code> when no camera matches the selector, which happens on some tablets, TVs and Chromebooks. Check with <code>hasCamera()</code> and hide the flip button when there is only one camera.',
           },
         ],
+        predict: {
+          q: "Use cases are bound with <code>bindToLifecycle()</code>. The user presses Home and comes back. What does your code have to do?",
+          options: ["Call <code>bindToLifecycle()</code> again in <code>onResume()</code>", "Nothing: CameraX reopens the camera when the lifecycle starts again", "Ask for the <code>CAMERA</code> permission again"],
+          a: 1,
+          why: "The binding follows the lifecycle owner. The camera closes on stop and opens again on start, with no code from you.",
+        },
         visual(el) {
           const S = { fg: true, bound: true, lens: 'BACK', cam: 'OPEN', shots: 0 };
           let busy = false;
@@ -1942,6 +1799,12 @@ for (row in 0 until image.height) {
             why: 'Many devices pad each row, so <code>rowStride</code> is larger than the width. Copy row by row. The Y plane’s <code>pixelStride</code> is always 1.',
           },
         ],
+        predict: {
+          q: "The analyzer takes 120 ms per frame and uses <code>STRATEGY_BLOCK_PRODUCER</code> with a queue of 6. What happens to the delay between a frame and its result?",
+          options: ["It stays the same", "It grows, until the queue is full and the camera stalls", "It shrinks as the queue warms up"],
+          a: 1,
+          why: "Frames arrive every 33 ms but leave every 120 ms, so the queue fills and each result is older than the last.",
+        },
         visual(el) {
           const S = { cost: 120, strat: 'KEEP_ONLY_LATEST', close: true };
           const FRAMES = 30, GAP = 1000 / 30, DEPTH = 6;
@@ -2261,6 +2124,12 @@ if (gyro == null) showTiltButtons() else register(gyro)
             why: '<code>event.timestamp</code> is in nanoseconds, on the same clock as <code>elapsedRealtimeNanos()</code>. It is not wall time, so mixing the two gives nonsense ages.',
           },
         ],
+        predict: {
+          q: "You switch the sampling rate from <code>SENSOR_DELAY_UI</code> to <code>SENSOR_DELAY_FASTEST</code>. What changes?",
+          options: ["Readings arrive much more often and the sensor draws more power", "Readings get more accurate at the same power", "Nothing: the rate is fixed by the hardware"],
+          a: 0,
+          why: "The rate is how often events are delivered. Faster means more work for the sensor hub and your code.",
+        },
         visual(el) {
           const RATES = { NORMAL: 200, UI: 60, GAME: 20, FASTEST: 5 };
           const POWER = { NORMAL: 0.12, UI: 0.3, GAME: 0.6, FASTEST: 1 };
@@ -2385,7 +2254,7 @@ client.removeLocationUpdates(callback)
 // Geofence: needs ACCESS_FINE_LOCATION and ACCESS_BACKGROUND_LOCATION
 val fence = Geofence.Builder()
     .setRequestId("office")
-    .setCircularRegion(41.0082, 28.9784, 150f)
+    .setCircularRegion(51.5074, -0.1278, 150f)
     .setExpirationDuration(Geofence.NEVER_EXPIRE)
     .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
     .build()
@@ -2629,6 +2498,12 @@ startRunButton.setOnClickListener {
             why: 'While-in-use location only carries over to a foreground service that starts while the app is visible. Started from the background, the service gets no location without <code>ACCESS_BACKGROUND_LOCATION</code>, and since Android 12 most background starts of foreground services are blocked anyway.',
           },
         ],
+        predict: {
+          q: "You change the request from <code>PRIORITY_BALANCED_POWER_ACCURACY</code> to <code>PRIORITY_HIGH_ACCURACY</code>. What do you expect?",
+          options: ["Tighter fixes, and the battery drains faster", "The same fixes for less battery", "Fewer fixes, but each one is exact"],
+          a: 0,
+          why: "High accuracy turns on GPS, which costs the most. Balanced settles for about city-block accuracy from Wi-Fi and cell.",
+        },
         visual(el) {
           const PRI = {
             HIGH_ACCURACY: { every: 1, acc: 3, m: '±5 m', power: 1 },

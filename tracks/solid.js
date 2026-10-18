@@ -376,6 +376,37 @@ fun ProfileScreenPreview() =
             o);
           area.style.cssText = 'width:100%;min-width:0;display:grid';
         },
+        predict: {
+          q: 'Before the split, product tightens the email rules. Which file do you edit?',
+          options: ['<code>EmailValidator.kt</code>', '<code>ProfileViewModel.kt</code>, where every other job lives too', 'None: the rules come from the server'],
+          a: 1,
+          why: 'Before the split all six jobs share one class, so every change request, from any team, edits and retests the same file.',
+        },
+        play: `data class Profile(val name: String, val joinedYear: Int, val joinedMonth: Int)
+
+class ProfileRepository { fun load() = Profile("Ada", 2021, 3) }            // changes when the API does
+class ProfileFormatter {                                                     // changes when design does
+    private val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    fun joined(p: Profile) = "Joined \${months[p.joinedMonth - 1]} \${p.joinedYear}"
+}
+class ProfileAnalytics { fun screenViewed() = println("event: profile_view") } // changes when analytics does
+
+class ProfileViewModel(                                                      // only coordinates
+    private val repo: ProfileRepository,
+    private val formatter: ProfileFormatter,
+    private val analytics: ProfileAnalytics,
+) {
+    fun joinedText(): String {
+        analytics.screenViewed()
+        return formatter.joined(repo.load())
+    }
+}
+
+fun main() {
+    val vm = ProfileViewModel(ProfileRepository(), ProfileFormatter(), ProfileAnalytics())
+    println(vm.joinedText())
+    // Design wants "Member since 2021": change only ProfileFormatter.joined
+}`,
       },
 
       // 2 ─────────────────────────────────────────────
@@ -671,6 +702,32 @@ throw new NoWhenBranchMatchedException();`,
             h('div', { class: 'controls' }, act('Add a payment type', () => grow('type')), act('Add an operation', () => grow('op'))),
             o);
         },
+        predict: {
+          q: 'In the <code>sealed interface Payment</code> design, you add a new payment type. What happens to the existing <code>when</code> blocks?',
+          options: ['Nothing: they keep compiling', 'Each one stops compiling until it gets a branch for the new type', 'They fall through to a default at runtime'],
+          a: 1,
+          why: 'A <code>when</code> over a sealed type must cover every subtype. A new subtype makes each one incomplete, and the compiler lists them all. Safe, but not closed.',
+        },
+        play: `// Sealed: a fixed set of types. A new operation is one new function.
+sealed interface Payment
+data class Card(val last4: String) : Payment
+data object Wallet : Payment
+
+fun fee(p: Payment): Int = when (p) {     // no else: the compiler checks every case
+    is Card -> 30
+    Wallet -> 0
+}
+
+// Open: any class can join. A new type is one new class.
+interface PaymentMethod { val label: String; fun fee(): Int }
+class PayPal : PaymentMethod { override val label = "PayPal"; override fun fee() = 25 }
+class BankTransfer : PaymentMethod { override val label = "Bank"; override fun fee() = 10 }
+
+fun main() {
+    listOf(Card("4242"), Wallet).forEach { println("$it fee \${fee(it)}") }
+    listOf(PayPal(), BankTransfer()).forEach { println("\${it.label} fee \${it.fee()}") }
+    // Add \`data object Voucher : Payment\` and run: the compiler points at fee()
+}`,
       },
 
       // 3 ─────────────────────────────────────────────
@@ -682,7 +739,7 @@ throw new NoWhenBranchMatchedException();`,
         body: `
 <p>The Liskov substitution principle says that anywhere code expects a type, any subtype must work without surprises. Compiling is not enough. The subtype has to keep the parent’s behaviour: the same rules on inputs, the same guarantees on results, no new exceptions.</p>
 <p>The classic case is <code>Square</code> extending <code>Rectangle</code>. A square must keep both sides equal, so setting the width also sets the height. Code written for rectangles assumes the two are independent, and it breaks.</p>
-<p>The Android flavour is an implementation that throws <code>UnsupportedOperationException</code> for half its interface, like a read-only <code>Settings</code> whose <code>put()</code> throws. If a type can’t keep a promise, it should implement a smaller interface. Run the same caller with each object below.</p>`,
+<p>The Android flavour is an implementation that throws <code>UnsupportedOperationException</code> for half its interface, like a read-only <code>Settings</code> whose <code>put()</code> throws. If a type can’t keep a promise, it should implement a smaller interface. Step the same caller through both objects below.</p>`,
         code: `open class Rectangle(width: Int, height: Int) {
     open var width = width
     open var height = height
@@ -867,51 +924,53 @@ source += song2          // p.songs is unaffected`,
           { title: 'Casting a read-only list to mutable', bad: 'fun addDefault(tags: List<String>) {\n    (tags as MutableList).add("news")\n}\naddDefault(listOf("kotlin", "android"))   // throws', good: 'fun withDefault(tags: List<String>): List<String> =\n    tags + "news"', why: 'The cast compiles and even succeeds, but <code>listOf</code> returns a fixed-size list. <code>add</code> throws <code>UnsupportedOperationException</code>. Return a new list instead.' },
         ],
         visual(el) {
-          const U = 16;
-          const subs = {
-            rect: { src: 'Rectangle(2, 2)', set: (s, k, v) => { s[k] = v; } },
-            square: { src: 'Square(2)', set: (s, k, v) => { s.w = v; s.h = v; } },
-            sq2: { src: 'Sq(2)', decl: 'val r: Shape = Sq(2)', immut: true },
-          };
-          let pick = 'rect', busy = false, s = { w: 2, h: 2 };
-          const lines = ['fun stretch(r: Rectangle) {', '    r.width = 10', '    r.height = 4', '    check(r.area == 40)', '}'].map(t => h('div', { class: 'oo-line', html: hl(t) }));
-          const shape = h('div', { class: 'oo-shape' });
-          const o = out('Pick an object and pass it to stretch().');
-          function paint() { shape.style.width = `${s.w * U}px`; shape.style.height = `${s.h * U}px`; shape.textContent = s.w >= 3 && s.h >= 2 ? `${s.w}×${s.h}` : ''; }
-          const btns = Object.entries(subs).map(([k, x]) => cmd(x.decl || `val r = ${x.src}`, () => { if (busy) return; pick = k; s = { w: 2, h: 2 }; shape.className = 'oo-shape'; lines.forEach(l => l.classList.remove('oo-cur', 'oo-ln-ok', 'oo-ln-err')); paint(); press(btns, btns[Object.keys(subs).indexOf(k)]); say(o, `${hl(x.src)} ready. Run stretch(r).`); }));
-          async function run() {
-            if (busy) return; busy = true;
-            const x = subs[pick];
-            s = { w: 2, h: 2 }; paint(); shape.className = 'oo-shape';
-            lines.forEach(l => l.classList.remove('oo-cur', 'oo-ln-ok', 'oo-ln-err'));
-            if (x.immut) {
-              lines[0].classList.add('oo-ln-err'); replay(lines[0], 'shake');
-              say(o, `<span class="bad">compile error:</span> Argument type mismatch: actual type is 'Shape', but 'Rectangle' was expected. <span class="muted">An immutable Sq never promised setters, so it can’t be misused.</span>`);
-              busy = false; return;
-            }
-            lines[0].classList.add('oo-cur'); await sleep(450);
-            for (const [i, k, v] of [[1, 'w', 10], [2, 'h', 4]]) {
-              if (!el.isConnected) return;
-              lines[i - 1].classList.remove('oo-cur'); lines[i].classList.add('oo-cur');
-              x.set(s, k, v); paint();
-              say(o, `${hl(lines[i].textContent.trim())} <span class="muted">→ now ${s.w} × ${s.h}</span>`);
-              await sleep(800);
-            }
-            lines[2].classList.remove('oo-cur');
-            const area = s.w * s.h, ok = area === 40;
-            lines[3].classList.add(ok ? 'oo-ln-ok' : 'oo-ln-err');
-            shape.classList.add(ok ? 'oo-pass' : 'oo-fail');
-            if (!ok) replay(shape, 'shake'); else replay(shape, 'pop');
-            say(o, ok ? `<span class="good">ok:</span> area = ${area}. Rectangle kept its promise.` : `<span class="bad">IllegalStateException: Check failed.</span> area = ${area}, expected 40. Setting height also changed width.`);
-            busy = false;
-          }
-          press(btns, btns[0]); paint();
-          el.append(
-            h('div', { class: 'oo-pair' }, h('div', { class: 'oo-code' }, lines), h('div', { class: 'oo-canvas' }, shape)),
-            h('div', { class: 'controls' }, btns),
-            h('div', { class: 'controls' }, cmd('stretch(r)', run)),
-            o);
+          Lab.ui.codeStepper(el, {
+            code: 'class Square(side: Int) :\n    Rectangle(side, side) {\n    override var width: Int\n        get() = super.width\n        set(v) {\n            super.width = v\n            super.height = v\n        }\n    // height: the same setter\n}\nfun stretch(r: Rectangle) {\n    r.width = 10\n    r.height = 4\n    check(r.area == 40)\n}\nstretch(Rectangle(2, 2))\nstretch(Square(2))',
+            predict: {
+              q: '<code>stretch(Square(2))</code> sets the width to 10, then the height to 4. What is <code>r.area</code> at the check?',
+              options: ['40', '16', '100', '20'],
+              a: 1,
+              why: 'Square’s setters keep both sides equal. Setting the height last turns it into a 4 × 4 square, so the area is 16.',
+            },
+            frames: [
+              { say: '<code>stretch()</code> was written for rectangles. Run it with a Rectangle, then with a Square.' },
+              { line: 16, stack: ['main()', 'stretch(Rectangle)'], vars: { width: 2, height: 2 }, say: 'A plain 2 × 2 Rectangle goes in.' },
+              { line: 12, vars: { width: 10 }, say: '<code>width = 10</code> changes only the width.' },
+              { line: 13, vars: { height: 4 }, say: '<code>height = 4</code> changes only the height.' },
+              { line: 14, vars: { area: 40 }, out: 'Rectangle: check passed', say: '10 × 4 = 40. The caller’s assumption holds: the two sides change independently.' },
+              { line: 17, stack: ['main()', 'stretch(Square)'], vars: { width: 2, height: 2, area: null }, say: 'Same caller, now a Square. It compiles: a Square is a Rectangle, as far as the type system knows.' },
+              { line: [12, 6, 7], vars: { width: 10, height: 10 }, say: '<code>width = 10</code> runs Square’s setter, which sets both sides to 10.' },
+              { line: [13, 6, 7], vars: { width: 4, height: 4 }, say: '<code>height = 4</code> does the same, and quietly undoes the width.' },
+              { line: 14, vars: { area: 16 }, out: 'IllegalStateException: Check failed.', say: 'Area 16, not 40. The caller did nothing wrong. The subtype broke a promise the parent made, so it can’t stand in for it.' },
+            ],
+          });
         },
+        play: `open class Rectangle(width: Int, height: Int) {
+    open var width = width
+    open var height = height
+    val area: Int get() = width * height
+}
+
+class Square(side: Int) : Rectangle(side, side) {
+    override var width: Int
+        get() = super.width
+        set(value) { super.width = value; super.height = value }
+    override var height: Int
+        get() = super.height
+        set(value) { super.width = value; super.height = value }
+}
+
+fun stretch(r: Rectangle): String {
+    r.width = 10
+    r.height = 4
+    return "\${r::class.simpleName}: area \${r.area}, the caller expects 40"
+}
+
+fun main() {
+    println(stretch(Rectangle(2, 2)))
+    println(stretch(Square(2)))
+    // Swap the two lines in stretch (set height first) and run again
+}`,
       },
 
       // 4 ─────────────────────────────────────────────
@@ -1167,6 +1226,37 @@ if (player instanceof Seekable) {
             h('div', { class: 'controls' }, calls.map(c => cmd(c.src, () => call(c)))),
             o);
         },
+        predict: {
+          q: 'With the fat <code>MediaPlayer</code> interface, LiveRadio implements <code>seek()</code> as <code>TODO()</code>. You call <code>radio.seek(30_000)</code>. When do you find out?',
+          options: ['At compile time', 'At runtime, with <code>NotImplementedError</code>', 'Never: <code>TODO()</code> does nothing'],
+          a: 1,
+          why: '<code>TODO()</code> compiles and throws <code>NotImplementedError</code> when it runs. With small roles the same call becomes a compile error.',
+        },
+        play: `interface Playable { fun play(): String }
+interface Seekable { fun seek(ms: Long): String }
+interface Downloadable { fun download(): String }
+
+class LiveRadio : Playable {
+    override fun play() = "radio: live"
+}
+
+class Podcast : Playable, Seekable, Downloadable {
+    override fun play() = "podcast: playing"
+    override fun seek(ms: Long) = "podcast: at \${ms / 1000} s"
+    override fun download() = "podcast: saved"
+}
+
+fun skipIntro(p: Seekable) = p.seek(30_000)   // asks only for the role it needs
+
+fun main() {
+    val radio = LiveRadio()
+    val pod = Podcast()
+    println(radio.play())
+    println(skipIntro(pod))
+    // println(skipIntro(radio))   // remove the //: a compile error, not a crash
+    val all: List<Playable> = listOf(radio, pod)
+    all.filterIsInstance<Downloadable>().forEach { println(it.download()) }
+}`,
       },
 
       // 5 ─────────────────────────────────────────────
@@ -1178,7 +1268,7 @@ if (player instanceof Seekable) {
         body: `
 <p>The dependency inversion principle says high-level policy should not depend on low-level details. Both should depend on an abstraction. A <code>NewsViewModel</code> should not build a Retrofit client. It should ask for a <code>NewsRepository</code>, and something else decides which one.</p>
 <p>“Inversion” is about the arrows. Without it, the ViewModel points down at the network class. With it, the ViewModel points at the interface, and the network class points <em>up</em> at the same interface by implementing it. Details now depend on policy.</p>
-<p>On Android, Hilt does the wiring. A <code>@Binds</code> line in a module is the one place that names the concrete class. Swapping to an offline-first repository changes that line only, and a unit test can pass a fake by hand. Try both setups below.</p>`,
+<p>On Android, Hilt does the wiring. A <code>@Binds</code> line in a module is the one place that names the concrete class. Swapping to an offline-first repository changes that line only, and a unit test can pass a fake by hand. Step through both setups below.</p>`,
         code: `// High level: knows only the abstraction
 interface NewsRepository {
     fun headlines(): Flow<List<Article>>
@@ -1383,69 +1473,53 @@ newsProvider = DoubleCheck.provider(OfflineFirstNewsRepository_Factory.create(da
           { title: 'A scope wider than the state', bad: '@Singleton\nclass CheckoutForm @Inject constructor() {\n    var address = ""\n    var coupon = ""\n}', good: '@ViewModelScoped\nclass CheckoutForm @Inject constructor() {\n    var address = ""\n    var coupon = ""\n}', why: 'As a singleton, the half-filled form follows the user into the next checkout, and into the next account after a logout. Scope state to the screen that owns it.' },
         ],
         visual(el) {
-          const impls = ['NetworkNewsRepository', 'OfflineFirstNewsRepository'];
-          let mode = 'direct', impl = 0, busy = false, vmEdits = 0;
-          const vmLine = h('div', { class: 'kt oo-wrap' });
-          const vmStat = h('span', { class: 'oo-stat' });
-          const vm = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'High level'), h('span', { class: 'oo-title' }, 'class NewsViewModel'), vmLine, vmStat);
-          const arrow1 = h('div', { class: 'oo-arrow' });
-          const iface = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'Abstraction'), kt('interface NewsRepository'));
-          const arrow2 = h('div', { class: 'oo-arrow' }, '↑ implements');
-          const implName = h('span', { class: 'oo-title' });
-          const binds = h('div', { class: 'kt oo-wrap' });
-          const low = h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'Low level'), implName, binds);
-          const o = out('Pick a setup, then swap the data source or run a unit test.');
-          function paint() {
-            const dir = mode === 'direct';
-            vmLine.innerHTML = hl(dir ? `private val repo = ${impls[impl]}(api)` : '@Inject constructor(repo: NewsRepository)');
-            vmStat.innerHTML = `edits to NewsViewModel.kt: <b>${vmEdits}</b>`;
-            arrow1.textContent = dir ? `↓ creates and depends on ${impls[impl]}` : '↓ depends on';
-            arrow1.classList.toggle('oo-hot', dir);
-            iface.hidden = dir; arrow2.hidden = dir;
-            implName.textContent = `class ${impls[impl]}${dir ? '' : ' : NewsRepository'}`;
-            binds.hidden = dir;
-            binds.innerHTML = hl(`@Binds fun bind(impl: ${impls[impl]}): NewsRepository`);
-          }
-          const modeBtns = [cmd('val repo = NetworkNewsRepository(api)', () => setMode('direct')), cmd('@Inject constructor(repo: NewsRepository)', () => setMode('inverted'))];
-          function setMode(m) { if (busy) return; mode = m; impl = 0; vmEdits = 0; press(modeBtns, modeBtns[m === 'direct' ? 0 : 1]); [vm, low].forEach(c => c.classList.remove('oo-warn', 'oo-good', 'oo-bad')); paint(); say(o, m === 'direct' ? 'The ViewModel builds its own repository. The arrow points down at a detail.' : 'Both sides point at the interface. Hilt picks the class.'); }
-          async function swap() {
-            if (busy) return; busy = true;
-            impl = 1 - impl;
-            if (mode === 'direct') {
-              vmEdits++; paint(); vm.classList.add('oo-warn'); replay(vm, 'shake');
-              say(o, `<span class="bad">edit NewsViewModel.kt:</span> the screen logic had to change just to switch to ${impls[impl]}.`);
-            } else {
-              paint(); low.classList.add('oo-good'); replay(binds, 'pop'); replay(vm, 'oo-flash');
-              say(o, `<span class="good">edit DataModule only:</span> one @Binds line now names ${impls[impl]}. NewsViewModel is untouched.`);
-            }
-            await sleep(1000);
-            if (el.isConnected) { vm.classList.remove('oo-warn'); low.classList.remove('oo-good'); }
-            busy = false;
-          }
-          async function test() {
-            if (busy) return; busy = true;
-            say(o, `${hl('@Test fun showsHeadlines()')} <span class="muted">running on the JVM…</span>`);
-            await sleep(700);
-            if (!el.isConnected) return;
-            if (mode === 'direct') {
-              vm.classList.add('oo-bad'); replay(vm, 'shake');
-              say(o, `<span class="bad">FAILED</span> UnknownHostException: the ViewModel made a real network call. <span class="muted">There is no seam to pass a fake.</span>`);
-            } else {
-              implName.textContent = 'class FakeNewsRepository : NewsRepository'; binds.hidden = true;
-              low.classList.add('oo-good'); replay(low, 'pop');
-              say(o, `<span class="good">PASSED</span> in 4 ms. ${hl('NewsViewModel(FakeNewsRepository(sample))')}`);
-            }
-            await sleep(1300);
-            if (el.isConnected) { vm.classList.remove('oo-bad'); low.classList.remove('oo-good'); paint(); }
-            busy = false;
-          }
-          press(modeBtns, modeBtns[0]); paint();
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            h('div', { class: 'oo-layers' }, vm, arrow1, iface, arrow2, low),
-            h('div', { class: 'controls' }, act('Switch to the other data source', swap), act('Run the ViewModel unit test', test)),
-            o);
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'vm', label: 'NewsViewModel<small>policy</small>', x: 50, y: 12 },
+              { id: 'repo', label: 'NewsRepository<small>interface</small>', x: 50, y: 48, tone: 'warm', hidden: true },
+              { id: 'net', label: 'Network<small>repository</small>', x: 17, y: 86, tone: 'muted' },
+              { id: 'off', label: 'OfflineFirst<small>repository</small>', x: 50, y: 86, tone: 'muted', hidden: true },
+              { id: 'fake', label: 'Fake<small>for tests</small>', x: 83, y: 86, tone: 'muted', hidden: true },
+            ],
+            predict: {
+              q: 'In the first setup, <code>NewsViewModel</code> builds the network repository itself. Can a unit test give it fake data without editing it?',
+              options: ['Yes: pass a fake to its constructor', 'No: it creates its own repository inside', 'Only by running Hilt in the test'],
+              a: 1,
+              why: 'A class that builds its own dependency leaves no way in. Asking for an interface in the constructor opens one, and the test passes a fake by hand.',
+            },
+            frames: [
+              { add: [['vm', 'net', 'builds', 'err']], say: 'Without inversion, the ViewModel creates <code>NetworkNewsRepository()</code> itself. The arrow points down, from policy to detail.' },
+              { hl: ['vm', 'net'], say: 'Switching to offline-first means editing the ViewModel. A test of it would hit the network.' },
+              { show: ['repo'], remove: [['vm', 'net']], add: [['vm', 'repo', 'depends on', 'accent']], say: 'Add an interface. The ViewModel asks for a <code>NewsRepository</code> and knows nothing else.' },
+              { add: [['net', 'repo', 'implements', 'ok']], hl: ['net', 'repo'], say: 'The network class now points <em>up</em> at the same interface by implementing it. That flipped arrow is the inversion.' },
+              { show: ['off'], remove: [['net', 'repo']], add: [['net', 'repo', '', 'weak'], ['off', 'repo', 'implements', 'ok']], gone: ['net'], hl: ['off'], say: 'Go offline-first: write one new class and change the <code>@Binds</code> line. NewsViewModel is not touched.' },
+              { show: ['fake'], add: [['fake', 'repo', 'implements', 'ok']], hl: ['vm', 'fake'], say: 'A unit test builds <code>NewsViewModel(FakeNewsRepository(...))</code> by hand. No network, no Hilt.' },
+            ],
+          });
         },
+        play: `interface NewsRepository { fun headlines(): List<String> }
+
+class NetworkNewsRepository : NewsRepository {
+    override fun headlines() = listOf("From the network")
+}
+class FakeNewsRepository(private val items: List<String>) : NewsRepository {
+    override fun headlines() = items
+}
+
+class NewsViewModel(private val repo: NewsRepository) {   // knows only the interface
+    fun title() = repo.headlines().firstOrNull() ?: "No news"
+}
+
+// The one place that names the concrete class, like a Hilt @Binds line
+fun provideRepo(): NewsRepository = NetworkNewsRepository()
+
+fun main() {
+    println(NewsViewModel(provideRepo()).title())
+    println(NewsViewModel(FakeNewsRepository(listOf("Test headline"))).title())
+    println(NewsViewModel(FakeNewsRepository(emptyList())).title())
+    // Write an OfflineNewsRepository and return it from provideRepo(). NewsViewModel stays the same.
+}`,
       },
     ],
   });

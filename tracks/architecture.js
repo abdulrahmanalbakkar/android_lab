@@ -248,7 +248,7 @@
         body: `
 <p>Google’s recommended architecture splits an app into layers. The <b>UI layer</b> draws the screen and holds screen state in a ViewModel. The <b>data layer</b> owns the data: repositories decide where it comes from, and data sources talk to the network or the database.</p>
 <p>The <b>domain layer</b> sits between them and is optional. It holds use cases: small classes with one job, like “get the latest news, sorted”. Add it when several ViewModels need the same logic or a ViewModel grows too much.</p>
-<p>The rule that makes this work: dependencies point one way, from UI down to data. A repository never knows which screen asked. Follow a request down and back, then try breaking the rule.</p>`,
+<p>The rule that makes this work: dependencies point one way, from UI down to data. A repository never knows which screen asked. Follow one refresh down the layers and back.</p>`,
         code: `// UI layer
 @HiltViewModel
 class NewsViewModel @Inject constructor(
@@ -424,85 +424,32 @@ class NewsViewModel @Inject constructor(
           },
         ],
         visual(el) {
-          const pool = ['Room 2.8 notes', 'Hilt in 5 minutes', 'KSP is the default', 'StateFlow vs LiveData', 'Navigation 3 guide', 'Baseline profiles'];
-          let busy = false, useCase = true, round = 0;
-          const list = h('div', { class: 'arc-mini' });
-          const N = {
-            screen: node('NewsScreen', '@Composable · draws state', list),
-            vm: node('NewsViewModel', 'holds UiState'),
-            uc: node('GetLatestNewsUseCase', 'one job: latest news, sorted'),
-            repo: node('NewsRepository', 'decides where data comes from'),
-            api: node('NewsApi', 'remote source (Retrofit)'),
-            dao: node('ArticleDao', 'local source (Room)'),
-          };
-          const all = Object.values(N);
-          const dir1 = h('div', { class: 'arc-dir' }), dir2 = h('div', { class: 'arc-dir' });
-          const band = (name, ...nodes) => h('div', { class: 'arc-band' }, h('span', { class: 'arc-band-name' }, name), h('div', { class: 'arc-row' }, nodes));
-          const domain = band('Domain layer (optional)', N.uc);
-          const o = out();
-          const paintList = (fresh) => {
-            const items = pool.slice(round % pool.length).concat(pool).slice(0, 3);
-            list.replaceChildren(...items.map((t, i) => h('span', { class: fresh && i === 0 ? 'arc-new drop-in' : null }, t)));
-          };
-          const paintDirs = () => {
-            dir1.className = dir2.className = 'arc-dir';
-            dir1.textContent = '↓ depends on';
-            dir2.textContent = useCase ? '↓ depends on' : '↓ ViewModel calls the repository directly';
-          };
-          const hop = async (n, text, back) => {
-            all.forEach(x => x.classList.remove('on'));
-            all.forEach(x => x.box.replaceChildren());
-            n.classList.add('on'); tok(n, text, back ? 'arc-back' : '');
-            await sleep(560);
-            return el.isConnected;
-          };
-          async function refresh() {
-            if (busy) return; busy = true;
-            clearAll(all); paintDirs();
-            const down = [[N.screen, 'onRefresh()'], [N.vm, 'refresh()'], ...(useCase ? [[N.uc, 'invoke()']] : []), [N.repo, 'latest()']];
-            say(o, '<span class="muted">request going down…</span>');
-            for (const [n, t] of down) if (!await hop(n, t)) return;
-            all.forEach(x => { x.classList.remove('on'); x.box.replaceChildren(); });
-            N.api.classList.add('on'); tok(N.api, 'GET /latest');
-            N.dao.classList.add('on'); tok(N.dao, 'upsertAll()');
-            await sleep(700); if (!el.isConnected) return;
-            say(o, '<span class="muted">result coming back up…</span>');
-            const up = [[N.repo, 'List<Article>'], ...(useCase ? [[N.uc, 'sorted list']] : []), [N.vm, 'UiState(items = 3)']];
-            for (const [n, t] of up) if (!await hop(n, t, true)) return;
-            round++;
-            all.forEach(x => { x.classList.remove('on'); x.box.replaceChildren(); });
-            N.screen.classList.add('ok'); paintList(true); replay(N.screen, 'pop-soft');
-            say(o, `<span class="good">done:</span> ${useCase ? 'screen → ViewModel → use case → repository' : 'screen → ViewModel → repository'} → sources, and back up as UiState. Every arrow pointed down.`);
-            busy = false;
-          }
-          function wrong(kind) {
-            if (busy) return;
-            clearAll(all); paintDirs();
-            if (kind === 'up') {
-              N.repo.classList.add('bad'); N.vm.classList.add('bad');
-              tok(N.repo, 'import NewsViewModel', 'boom');
-              const d = useCase ? dir2 : dir1;
-              (useCase ? [dir1, dir2] : [dir1]).forEach(x => { x.className = 'arc-dir bad'; x.textContent = '↑ wrong way: data layer imports the UI layer'; });
-              replay(N.repo, 'shake'); replay(d, 'shake');
-              say(o, '<span class="bad">rule broken:</span> NewsRepository now needs a NewsViewModel to exist. You can’t test it alone, a second screen can’t reuse it, and the two classes now change together.');
-            } else {
-              N.screen.classList.add('bad'); N.api.classList.add('bad');
-              tok(N.screen, 'api.getLatest()', 'boom'); tok(N.api, 'called from UI', 'boom');
-              [dir1, dir2].forEach(x => { x.className = 'arc-dir bad'; x.textContent = '✗ skipped: ViewModel and repository'; });
-              replay(N.screen, 'shake');
-              say(o, '<span class="bad">rule broken:</span> the screen talks to the network itself. Nothing caches the result, rotation repeats the call, and the logic can’t be tested without a UI.');
-            }
-          }
-          const sw = switchEl('arc-usecase', 'Use a domain layer', true, i => { if (busy) { i.checked = useCase; return; } useCase = i.checked; domain.classList.toggle('off', !useCase); clearAll(all); paintDirs(); say(o, useCase ? 'The ViewModel calls the use case, which calls the repository.' : 'No use case: the ViewModel calls the repository directly. That is allowed.'); });
-          paintList(false); paintDirs();
-          say(o, 'The screen shows 3 stories. Press onRefresh() to follow the request down and back.');
-          el.append(
-            h('div', { class: 'controls arc-fit' }, cmd('onRefresh()', refresh), sw),
-            h('div', { class: 'arc-layers' }, band('UI layer', N.screen, N.vm), dir1, domain, dir2, band('Data layer', N.repo, N.api, N.dao)),
-            h('div', { class: 'controls arc-fit' },
-              cmd('class NewsRepository(val vm: NewsViewModel)', () => wrong('up')),
-              cmd('NewsScreen { api.getLatest() }', () => wrong('skip'))),
-            o);
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'screen', label: 'NewsScreen', sub: 'UI layer' },
+              { id: 'vm', label: 'NewsViewModel', sub: 'UI layer' },
+              { id: 'uc', label: 'GetLatestNews', sub: 'domain (optional)' },
+              { id: 'repo', label: 'NewsRepository', sub: 'data layer' },
+              { id: 'api', label: 'NewsApi', sub: 'remote source' },
+            ],
+            predict: {
+              q: '<code>NewsRepository</code> has the fresh articles. How do they reach the screen?',
+              options: ['It calls <code>NewsScreen</code> to show them', 'It returns them to its caller, and each layer hands the result back up', 'It writes them straight into the ViewModel’s state'],
+              a: 1,
+              why: 'Dependencies point down only. The repository does not know who called it, so it can only return. Each layer above passes the result up, and the ViewModel turns it into state.',
+            },
+            frames: [
+              { at: 'screen', packet: 'pull', say: 'The user pulls to refresh. The screen does not fetch anything: it calls <code>viewModel.refresh()</code>.' },
+              { at: 'vm', packet: 'refresh()', say: 'The ViewModel launches in <code>viewModelScope</code> and calls the use case.' },
+              { at: 'uc', packet: 'invoke()', say: '<code>getLatestNews()</code> asks the repository for the latest articles.' },
+              { at: 'repo', packet: 'latest()', say: 'The repository decides where data comes from: here, the network first, then the database.' },
+              { at: 'api', packet: 'GET', tone: 'warm', say: 'The remote data source makes the HTTP request. This is the bottom of the chain.' },
+              { at: 'repo', packet: '20', tone: 'ok', mark: { api: 'ok' }, say: 'The answer comes back up as a return value. The repository saves it in Room and returns 20 articles.' },
+              { at: 'uc', packet: 'sorted', tone: 'ok', mark: { repo: 'ok' }, say: 'The use case applies its one rule: newest first.' },
+              { at: 'vm', packet: 'state', tone: 'ok', mark: { uc: 'ok' }, say: 'The ViewModel puts the list into <code>NewsUiState</code> with <code>copy()</code>.' },
+              { at: 'screen', packet: 'draw', tone: 'ok', mark: { vm: 'ok', screen: 'ok' }, say: 'The screen redraws from the new state. Calls went down, results came back up, and no layer ever called the one above it.' },
+            ],
+          });
         },
       },
 
@@ -929,6 +876,12 @@ fun ArticleRow(article: Article, onToggleSave: () -> Unit) {
               cmd('state.items.add(article)', mutate)),
             o);
         },
+        predict: {
+          q: 'The user taps the star on an article. Who changes <code>saved</code> in the state?',
+          options: ['The screen, by editing the list it shows', 'The ViewModel, after it receives a <code>ToggleSave</code> event', 'The Composable, by calling <code>copy()</code> itself'],
+          a: 1,
+          why: 'In unidirectional data flow the screen only sends events. The ViewModel decides what they mean and emits a new state, and the screen redraws from it.',
+        },
       },
 
       // mvvm-mvi ───────────────────────────────────────
@@ -1336,6 +1289,12 @@ private val intents = MutableSharedFlow<CartIntent>(extraBufferCapacity = 64)`,
             h('div', { class: 'arc-mvx' }, phone, h('div', { class: 'arc-panes' }, A.root, B.root)),
             o);
         },
+        predict: {
+          q: 'You tap + in the cart. What reaches the MVI ViewModel?',
+          options: ['A call to <code>increment()</code>', 'An <code>Increment</code> intent, passed to <code>onIntent()</code>', 'A new state built by the screen'],
+          a: 1,
+          why: 'MVI has one entry point. Every action becomes a value of one sealed type, and the reducer turns state plus intent into the next state.',
+        },
       },
 
       // usecases ───────────────────────────────────────
@@ -1712,6 +1671,12 @@ public final class GetPersonalizedFeedUseCase_Factory implements Factory<GetPers
               h('div', { class: 'arc-dir' }, '↓ depends on'),
               band('Data layer', N.news, N.user)),
             o);
+        },
+        predict: {
+          q: 'Both screens use <code>GetPersonalizedFeedUseCase</code>. You follow a new topic. Which screens update?',
+          options: ['Only the screen where you tapped', 'Both: the use case combines the topics flow, so both feeds emit again', 'Neither, until each screen refreshes'],
+          a: 1,
+          why: 'The use case returns a Flow built with <code>combine</code>. A change in the followed topics makes it emit again for every collector.',
         },
       },
 
@@ -2118,6 +2083,12 @@ fun retryWeather() = viewModelScope.launch {
             h('div', { class: 'arc-udf' }, phone, h('div', { class: 'arc-col' }, h('div', { class: 'arc-cap' }, 'last ViewModel line'), line, h('div', { class: 'arc-cap' }, 'current state'), slot)),
             o);
         },
+        predict: {
+          q: 'After a delete, the snackbar shows and the UI reports it shown. Then the user rotates. Does the snackbar come back?',
+          options: ['Yes: the state survives rotation, and the message with it', 'No: the ViewModel cleared the message when the UI reported it shown', 'Only if the snackbar had an action button'],
+          a: 1,
+          why: 'The message lives in UiState until the UI calls back. The ViewModel then sets it to null, so a redraw after rotation has nothing to show.',
+        },
       },
 
       // 3 ─────────────────────────────────────────────
@@ -2451,6 +2422,12 @@ abstract class ArticleDao {
             h('p', { class: 'tip' }, 'There is no arrow from the server to the screen. Every update goes through the database.'),
             o);
         },
+        predict: {
+          q: 'The network is off. The user closes the app and opens it again. What appears first?',
+          options: ['A spinner until the network is back', 'The articles already saved in Room', 'An empty list with an error'],
+          a: 1,
+          why: 'The screen observes the database, not the network. Whatever was saved before is still there and is emitted at once.',
+        },
       },
 
       // 4 ─────────────────────────────────────────────
@@ -2461,7 +2438,7 @@ abstract class ArticleDao {
         body: `
 <p>A class shouldn’t build its own dependencies. It asks for them in its constructor, and something else hands them over. That something is Hilt.</p>
 <p>Put <code>@Inject</code> on a constructor and Hilt knows how to build that class. For types you can’t annotate, like Retrofit or a Room database, write a <code>@Module</code> with <code>@Provides</code> functions. Use <code>@Binds</code> to say which implementation fills an interface. Hilt checks the whole graph at compile time, so a missing piece is a build error, not a crash.</p>
-<p>Scopes decide how many instances exist. <code>@Singleton</code> means one for the whole app. A <code>@HiltViewModel</code> lives as long as its screen and survives rotation. The next lesson, Hilt components and scopes, covers every scope. Ask for a ViewModel below and watch the graph build bottom-up.</p>`,
+<p>Scopes decide how many instances exist. <code>@Singleton</code> means one for the whole app. A <code>@HiltViewModel</code> lives as long as its screen and survives rotation. The next lesson, Hilt components and scopes, covers every scope. Step through the demo below to watch the graph build bottom-up.</p>`,
         code: `@HiltAndroidApp
 class NewsApp : Application()
 
@@ -2609,90 +2586,34 @@ class NewsViewModel @Inject constructor(
           },
         ],
         visual(el) {
-          const G = {
-            vm: { name: 'NewsViewModel', how: '@HiltViewModel @Inject constructor', deps: ['repo'], scope: () => 'per screen' },
-            repo: { name: 'NewsRepository', how: '@Binds → OfflineFirstNewsRepository', deps: ['api', 'dao'], scope: () => (single ? '@Singleton' : 'unscoped') },
-            api: { name: 'NewsApi', how: '@Provides provideApi(client)', deps: ['ok'], scope: () => '@Singleton' },
-            dao: { name: 'ArticleDao', how: '@Provides provideDao(db)', deps: ['db'], scope: () => '@Singleton' },
-            ok: { name: 'OkHttpClient', how: '@Provides provideOkHttp()', deps: [], scope: () => '@Singleton' },
-            db: { name: 'AppDatabase', how: '@Provides provideDb(context)', deps: [], scope: () => '@Singleton' },
-          };
-          let single = true, noApi = false, busy = false, screenNo = 0, current = null;
-          for (const [k, n] of Object.entries(G)) {
-            n.badge = h('span', { class: 'arc-scope' });
-            n.el = node(n.name, `<code>${n.how}</code>`, n.badge);
-            n.key = k;
-          }
-          const nodes = Object.values(G).map(n => n.el);
-          const paintBadges = () => Object.values(G).forEach(n => { const s = n.scope(); n.badge.textContent = s; n.badge.className = 'arc-scope' + (s === '@Singleton' ? ' single' : ''); });
-          const screens = h('div', { class: 'arc-screens' });
-          const o = out();
-          const isScoped = n => n.scope() === '@Singleton';
-          const put = (n, id, reused) => { n.el.box.replaceChildren(h('span', { class: `chip ${reused ? 'arc-reused pop' : 'drop-in'}` }, reused ? `${id} reused` : `${id} new`)); };
-          async function resolve(k, made, animate) {
-            const n = G[k];
-            if (animate) { n.el.classList.add('ask'); await sleep(260); if (!el.isConnected) throw 0; }
-            if (k === 'api' && noApi) throw 'missing';
-            if (isScoped(n) && n.inst) {
-              if (animate) { n.el.classList.replace('ask', 'ok'); put(n, n.inst, true); await sleep(260); }
-              made.reused.push(n.name); return n.inst;
-            }
-            for (const d of n.deps) await resolve(d, made, animate);
-            n.inst = addr();
-            if (animate) { n.el.classList.remove('ask'); n.el.classList.add('on'); put(n, n.inst, false); await sleep(380); if (!el.isConnected) throw 0; }
-            made.created.push(n.name);
-            return n.inst;
-          }
-          const paintInst = () => Object.values(G).forEach(n => { if (n.inst) n.el.box.replaceChildren(h('span', { class: 'chip arc-old' }, n.inst)); });
-          async function request(animate = true) {
-            if (busy) return; busy = true;
-            clearAll(nodes); paintInst();
-            const made = { created: [], reused: [] };
-            if (animate) say(o, hl('hiltViewModel<NewsViewModel>()') + ' <span class="muted">resolving what it needs…</span>');
-            try { await resolve('vm', made, animate); } catch (e) {
-              if (e !== 'missing') return;
-              G.api.el.classList.replace('ask', 'bad'); replay(G.api.el, 'shake');
-              say(o, '<span class="bad">error: [Dagger/MissingBinding]</span> NewsApi cannot be provided without an @Provides-annotated method. <span class="muted">The build fails. The app never runs with a hole in its graph.</span>');
-              busy = false; return;
-            }
-            screenNo++;
-            current = h('span', { class: 'arc-screen drop-in' }, `screen ${screenNo}: VM${G.vm.inst} · repo${G.repo.inst}`);
-            screens.append(current);
-            if (animate) say(o, `<span class="good">built bottom-up:</span> ${made.created.join(', ')}. ${made.reused.length ? `<span class="muted">Reused:</span> ${made.reused.join(', ')}.` : ''}`);
-            busy = false;
-          }
-          function rotate() {
-            if (busy) return;
-            if (!current) { say(o, '<span class="muted">No screen is open yet. Ask for a ViewModel first.</span>'); return; }
-            clearAll(nodes); paintInst();
-            G.vm.el.classList.add('ok'); put(G.vm, G.vm.inst, true);
-            replay(current, 'flip');
-            say(o, `<span class="good">rotated:</span> the Activity was recreated, but ${hl(`NewsViewModel${G.vm.inst}`)} survived. Nothing in the graph was built again.`);
-          }
-          const swSingle = switchEl('arc-singleton', '@Singleton on the repository', true, i => {
-            if (busy) { i.checked = single; return; }
-            single = i.checked; paintBadges();
-            say(o, single ? 'One repository for the whole app again.' : 'Unscoped: every ViewModel will get its own repository, and its own cache.');
+          Lab.ui.graph(el, {
+            height: 290,
+            nodes: [
+              { id: 'vm', label: 'NewsViewModel<small>screen 1</small>', x: 17, y: 12 },
+              { id: 'repo', label: 'NewsRepository<small>@Binds, @Singleton</small>', x: 83, y: 12, hidden: true },
+              { id: 'vm2', label: 'NewsViewModel<small>screen 2</small>', x: 17, y: 50, hidden: true },
+              { id: 'api', label: 'NewsApi<small>@Provides</small>', x: 50, y: 50, hidden: true },
+              { id: 'dao', label: 'ArticleDao<small>@Provides</small>', x: 83, y: 50, hidden: true },
+              { id: 'ok', label: 'OkHttpClient<small>@Provides</small>', x: 50, y: 88, hidden: true },
+              { id: 'db', label: 'AppDatabase<small>@Provides</small>', x: 83, y: 88, hidden: true },
+            ],
+            predict: {
+              q: 'A screen calls <code>hiltViewModel()</code> for the first time. Which object does Hilt build first?',
+              options: ['<code>NewsViewModel</code>, the one you asked for', '<code>OkHttpClient</code> and <code>AppDatabase</code>, which need nothing from the graph', '<code>NewsRepository</code>, the one in the middle'],
+              a: 1,
+              why: 'A constructor can only run when its arguments exist. So Hilt starts at the leaves and works up to the object you asked for.',
+            },
+            frames: [
+              { hl: ['vm'], say: '<code>hiltViewModel()</code> asks Hilt for a <code>NewsViewModel</code>. Hilt already checked this graph at compile time.' },
+              { show: ['repo'], add: [['vm', 'repo', 'needs', 'weak']], say: 'Its <code>@Inject</code> constructor needs a <code>NewsRepository</code>. <code>@Binds</code> says that means <code>OfflineFirstNewsRepository</code>.' },
+              { show: ['api', 'dao'], add: [['repo', 'api', '', 'weak'], ['repo', 'dao', '', 'weak']], say: 'That needs a <code>NewsApi</code> and an <code>ArticleDao</code>, which come from <code>@Provides</code> functions.' },
+              { show: ['ok', 'db'], add: [['api', 'ok', '', 'weak'], ['dao', 'db', '', 'weak']], say: 'They need an <code>OkHttpClient</code> and an <code>AppDatabase</code>. Those need nothing else from the graph: they are the leaves.' },
+              { hl: ['ok', 'db'], add: [['api', 'ok', '', 'ok'], ['dao', 'db', '', 'ok']], say: 'Now Hilt builds, bottom-up. The leaves first. Both are <code>@Singleton</code>, so <code>SingletonComponent</code> keeps them.' },
+              { hl: ['api', 'dao'], add: [['repo', 'api', '', 'ok'], ['repo', 'dao', '', 'ok']], say: 'Then <code>NewsApi</code> and <code>ArticleDao</code>, built from those.' },
+              { hl: ['repo', 'vm'], add: [['vm', 'repo', 'injected', 'ok']], say: 'Then the repository, and last the ViewModel. It received everything through its constructor and never built a dependency itself.' },
+              { show: ['vm2'], hl: ['vm2', 'repo'], add: [['vm2', 'repo', 'reused', 'accent']], say: 'A second screen asks for its own <code>NewsViewModel</code>. The ViewModel is new, but the <code>@Singleton</code> repository and everything below it are reused.' },
+            ],
           });
-          const swApi = switchEl('arc-noapi', 'Delete provideApi()', false, i => {
-            if (busy) { i.checked = noApi; return; }
-            noApi = i.checked; clearAll(nodes); paintInst();
-            G.api.el.classList.toggle('bad', noApi);
-            say(o, noApi ? 'NewsApi has no binding now. Try building a ViewModel.' : 'provideApi() is back.');
-          });
-          paintBadges();
-          // Open with screen 1 already built so every node shows an instance.
-          request(false).then(() => {
-            Object.values(G).forEach(n => put(n, n.inst, false));
-            say(o, 'Screen 1 is open. Open a second screen to see which instances are new and which are shared.');
-          });
-          const row = (...ks) => h('div', { class: 'arc-row' }, ks.map(k => G[k].el));
-          const up = () => h('div', { class: 'arc-dir' }, '↑ injected into');
-          el.append(
-            h('div', { class: 'controls arc-fit' }, cmd('hiltViewModel<NewsViewModel>()', () => request()), cmd('rotate()', rotate)),
-            h('div', { class: 'controls arc-fit' }, swSingle, swApi),
-            h('div', { class: 'arc-graph' }, row('vm'), up(), row('repo'), up(), row('api', 'dao'), up(), row('ok', 'db')),
-            screens, o);
         },
       },
 
@@ -2705,7 +2626,7 @@ class NewsViewModel @Inject constructor(
         body: `
 <p>Hilt builds a tree of components, and each one lives as long as something on Android. <code>SingletonComponent</code> lives as long as the app process. <code>ActivityRetainedComponent</code> survives rotation and ends when the Activity finishes for real. <code>ViewModelComponent</code> belongs to one ViewModel. <code>ActivityComponent</code> is rebuilt every time the Activity object is recreated.</p>
 <p>A scope annotation ties a class to one of them: <code>@Singleton</code>, <code>@ActivityRetainedScoped</code>, <code>@ViewModelScoped</code>, <code>@ActivityScoped</code>. Hilt then keeps one instance per component and reuses it until that component dies. Without a scope, Hilt builds a new instance every time someone asks.</p>
-<p>A scope is a promise to keep an object in memory. Use one when the object holds state that several classes must share, needs synchronization, or is measured to be expensive to build. Leave everything else unscoped. Fire the events below and watch which instances survive.</p>`,
+<p>A scope is a promise to keep an object in memory. Use one when the object holds state that several classes must share, needs synchronization, or is measured to be expensive to build. Leave everything else unscoped. Step through the events below and watch which instances survive.</p>`,
         code: `@Singleton
 class Analytics @Inject constructor()                    // one per app process
 
@@ -2865,45 +2786,25 @@ class CheckoutSession @Inject constructor() {
           },
         ],
         visual(el) {
-          const R = [
-            { k: 'app', ann: '@Singleton', cls: 'Analytics', life: 'SingletonComponent · the app process' },
-            { k: 'ret', ann: '@ActivityRetainedScoped', cls: 'CheckoutSession', life: 'ActivityRetainedComponent · until the Activity finishes' },
-            { k: 'vm', ann: '@ViewModelScoped', cls: 'SearchCache', life: 'ViewModelComponent · one ViewModel' },
-            { k: 'act', ann: '@ActivityScoped', cls: 'PermissionHelper', life: 'ActivityComponent · one Activity object' },
-            { k: 'none', ann: '(no scope)', cls: 'PriceFormatter', life: 'no component keeps it · new for every request' },
-          ];
-          const EV = {
-            nav: { label: 'navigate(Search)', renew: ['vm', 'none'], msg: 'A new screen made a new ViewModel. The ViewModel-scoped object is new, and so is every unscoped one it asked for.' },
-            rot: { label: 'rotate()', renew: ['act', 'none'], msg: 'The Activity object was rebuilt, so its scoped helper is new. The retained and ViewModel scopes survived. The unscoped formatter is always new.' },
-            fin: { label: 'finish(); relaunch()', renew: ['ret', 'vm', 'act', 'none'], msg: 'The Activity finished for real. Everything below the app scope is gone. Analytics stayed.' },
-            die: { label: 'process death', renew: ['app', 'ret', 'vm', 'act', 'none'], msg: 'A new process starts from nothing. Even the singleton is new.' },
-          };
-          let busy = false;
-          const rows = R.map(r => Object.assign(r, { inst: addr(), el: node(`${r.ann} ${r.cls}`, r.life) }));
-          const o = out();
-          const chip = (r, fresh) => r.el.box.replaceChildren(h('span', { class: `chip ${fresh ? 'drop-in' : 'arc-reused pop'}` }, `${r.inst} ${fresh ? 'new' : 'kept'}`));
-          async function fire(k) {
-            if (busy) return; busy = true;
-            const ev = EV[k];
-            clearAll(rows.map(r => r.el));
-            rows.forEach(r => r.el.box.replaceChildren(h('span', { class: 'chip arc-old' }, r.inst)));
-            say(o, hl(ev.label));
-            for (const r of rows) {
-              await sleep(320); if (!el.isConnected) return;
-              const fresh = ev.renew.includes(r.k);
-              if (fresh) r.inst = addr();
-              r.el.classList.add(fresh ? 'on' : 'ok');
-              chip(r, fresh);
-            }
-            o.append(h('div', { class: 'line drop-in', html: `<span class="muted">${ev.msg}</span>` }));
-            busy = false;
-          }
-          rows.forEach(r => chip(r, true));
-          say(o, 'The app is running with one screen. Fire an event.');
-          el.append(
-            h('div', { class: 'controls arc-fit' }, Object.entries(EV).map(([k, ev]) => cmd(ev.label, () => fire(k)))),
-            h('div', { class: 'arc-col' }, rows.map(r => r.el)),
-            o);
+          const b = (lane, from, to, label, tone) => ({ lane, from, to, label, tone });
+          Lab.ui.timeline(el, {
+            lanes: ['App', 'Retain', 'VM', 'Act', 'None'],
+            span: 10,
+            unit: 'min',
+            predict: {
+              q: 'The user leaves with Back, then opens the app again in the same process. Which instance is still the same object?',
+              options: ['Only <code>Analytics</code> (<code>@Singleton</code>)', '<code>Analytics</code> and <code>CheckoutSession</code> (<code>@ActivityRetainedScoped</code>)', 'All of them: Hilt caches every instance'],
+              a: 0,
+              why: 'Finishing the Activity ends its retained, ViewModel and Activity components. Only <code>SingletonComponent</code> lives as long as the process.',
+            },
+            frames: [
+              { now: 0, say: 'One class per lane, top to bottom: <code>@Singleton Analytics</code>, <code>@ActivityRetainedScoped CheckoutSession</code>, <code>@ViewModelScoped SearchCache</code>, <code>@ActivityScoped PermissionHelper</code>, and an unscoped <code>PriceFormatter</code>.' },
+              { bars: [b(0, 0, 3, '#1'), b(1, 0, 3, '#1'), b(2, 0, 3, '#1'), b(3, 0, 3, '#1'), b(4, 0, 1, '', 'muted'), b(4, 2, 3, '', 'muted')], say: 'The app starts. Each scoped class gets one instance in its component, reused by everyone who asks. The unscoped formatter (bottom lane) is a new object on every request.' },
+              { bars: [b(0, 3, 6, '#1'), b(1, 3, 6, '#1'), b(2, 3, 6, '#1'), b(3, 3, 6, '#2', 'warm'), b(4, 3, 4, '', 'muted')], marks: [{ at: 3, label: 'rotate', tone: 'warm' }], say: 'Rotate. The Activity object is rebuilt, so <code>PermissionHelper</code> is #2. The retained and ViewModel components survive rotation.' },
+              { bars: [b(0, 6, 8.5, '#1'), b(1, 6, 8.5, '#2', 'warm'), b(2, 6, 8.5, '#2', 'warm'), b(3, 6, 8.5, '#3', 'warm'), b(4, 6, 7, '', 'muted')], marks: [{ at: 6, label: 'finish', tone: 'warm' }], say: 'Back finishes the Activity for real, and the user opens the app again. Retained, ViewModel and Activity scopes all start over. <code>Analytics</code> stays: same process.' },
+              { bars: [b(0, 8.5, 10, '#2', 'err'), b(1, 8.5, 10, '#3', 'warm'), b(2, 8.5, 10, '#3', 'warm'), b(3, 8.5, 10, '#4', 'warm'), b(4, 8.5, 9.5, '', 'muted')], marks: [{ at: 8.5, label: 'killed', tone: 'err' }], say: 'In the background, Android kills the process. The next launch starts from nothing, so even the <code>@Singleton</code> is a new object.' },
+            ],
+          });
         },
       },
 
@@ -2916,7 +2817,7 @@ class CheckoutSession @Inject constructor() {
         body: `
 <p>Layers split code by job. Feature modules split it by screen or flow, so one team can change Bookmarks without touching News. Split each feature in two. <code>:feature:news:api</code> is the small public surface: route classes and maybe an interface. <code>:feature:news:impl</code> holds the screens, ViewModels and DI wiring, and only <code>:app</code> depends on it.</p>
 <p>The rules: an impl module may depend on api modules and on core modules, never on another impl module. Api modules depend on almost nothing. <code>:app</code> depends on every impl and builds the navigation graph from each feature’s entry point. So Bookmarks opens an article by navigating to <code>ArticleRoute</code> from news:api, without knowing which screen draws it.</p>
-<p>This lesson is about where the lines go. The Build track’s Modularization lesson covers the Gradle side: <code>api</code> vs <code>implementation</code>, convention plugins and build speed. Below, open an article across features, then see what a change recompiles.</p>`,
+<p>This lesson is about where the lines go. The Build track’s Modularization lesson covers the Gradle side: <code>api</code> vs <code>implementation</code>, convention plugins and build speed. Below, draw the allowed arrows, then see which modules a change can reach.</p>`,
         code: `// :feature:news:api, the only part other features see
 @Serializable data class ArticleRoute(val id: Int)
 
@@ -3194,101 +3095,32 @@ bookmarksSection(onOpenArticle = navController::navigateToArticle)`,
           },
         ],
         visual(el) {
-          const M = {
-            app: { name: ':app', short: 'app', deps: ['newsImpl', 'bmImpl'], role: 'wires everything' },
-            newsImpl: { name: ':feature:news:impl', short: 'news:impl', deps: ['newsApi', 'data', 'ui'], role: 'screens + DI' },
-            bmImpl: { name: ':feature:bookmarks:impl', short: 'bookmarks:impl', deps: ['bmApi', 'newsApi', 'data', 'ui'], role: 'screens + DI' },
-            newsApi: { name: ':feature:news:api', short: 'news:api', deps: [], role: 'ArticleRoute' },
-            bmApi: { name: ':feature:bookmarks:api', short: 'bookmarks:api', deps: [], role: 'BookmarksRoute' },
-            data: { name: ':core:data', short: 'core:data', deps: [], role: 'shared' },
-            ui: { name: ':core:ui', short: 'core:ui', deps: [], role: 'shared' },
-          };
-          let bad = false, busy = false;
-          const deps = k => M[k].deps.concat(bad && k === 'bmImpl' ? ['newsImpl'] : []);
-          for (const m of Object.values(M)) {
-            m.depsEl = h('small');
-            m.badge = h('span', { class: 'arc-scope' });
-            m.el = node(m.name, null, m.depsEl, m.badge);
-          }
-          const nodes = Object.values(M).map(m => m.el);
-          const screens = h('div', { class: 'arc-screens' });
-          const o = out();
-          const paintDeps = () => Object.entries(M).forEach(([k, m]) => {
-            const ds = deps(k);
-            m.depsEl.innerHTML = ds.length ? '→ ' + ds.map(d => `<span class="${bad && k === 'bmImpl' && d === 'newsImpl' ? 'arc-baddep' : ''}">${M[d].short}</span>`).join(', ') : 'depends on nothing';
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'app', label: ':app', x: 50, y: 12, tone: 'warm' },
+              { id: 'ni', label: 'news:impl<small>screens, DI</small>', x: 17, y: 50 },
+              { id: 'bi', label: 'bookmarks:impl<small>screens, DI</small>', x: 83, y: 50 },
+              { id: 'na', label: 'news:api<small>ArticleRoute</small>', x: 17, y: 88, tone: 'ok' },
+              { id: 'core', label: 'core:data<small>core:ui</small>', x: 50, y: 88, tone: 'muted' },
+              { id: 'ba', label: 'bookmarks:api<small>BookmarksRoute</small>', x: 83, y: 88, tone: 'ok' },
+            ],
+            predict: {
+              q: 'You change <code>ArticleRoute</code> in <code>:feature:news:api</code>. Which modules depend on it, directly or through another module?',
+              options: ['Only news:impl', 'news:impl, bookmarks:impl and :app', 'Every module in the project'],
+              a: 1,
+              why: 'news:impl and bookmarks:impl both use <code>ArticleRoute</code>, and <code>:app</code> depends on both impls. core and bookmarks:api do not see it.',
+            },
+            frames: [
+              { say: 'Two features, each split into an api and an impl module, plus shared core modules. Arrows will mean “depends on”.' },
+              { add: [['app', 'ni'], ['app', 'bi']], hl: ['app'], say: '<code>:app</code> depends on every impl. It is the one place that builds the <code>NavHost</code> from each feature’s entry point.' },
+              { add: [['ni', 'na'], ['ni', 'core'], ['bi', 'ba'], ['bi', 'core']], say: 'Each impl depends on its own api module and on core. Api modules depend on almost nothing.' },
+              { add: [['bi', 'na', 'ArticleRoute', 'accent']], hl: ['bi', 'na'], say: 'Bookmarks must open an article. It depends on <code>news:api</code> and navigates to <code>ArticleRoute</code>, without knowing which screen draws it.' },
+              { add: [['bi', 'ni', 'never', 'err']], hl: ['bi', 'ni'], say: 'The rule forbids this: an impl depending on another impl. Bookmarks would see News’s screens, and every change to them would reach Bookmarks too.' },
+              { remove: [['bi', 'ni']], hl: ['ni', 'app'], say: 'Without that arrow, a change inside <code>news:impl</code> can only reach the modules that depend on it: just <code>:app</code>.' },
+              { hl: ['na', 'ni', 'bi', 'app'], say: 'A change to <code>news:api</code> reaches news:impl, bookmarks:impl and :app. That is why api modules stay small and change rarely.' },
+            ],
           });
-          const badge = (m, text, cls = '') => { m.badge.textContent = text; m.badge.className = 'arc-scope' + (cls ? ' ' + cls : ''); };
-          const reset = () => {
-            clearAll(nodes);
-            Object.values(M).forEach(m => badge(m, m.role));
-            if (bad) [M.bmImpl, M.newsImpl].forEach(m => m.el.classList.add('bad'));
-          };
-          const showScreens = (names) => screens.replaceChildren(...names.map((n, i) => h('span', { class: 'arc-screen drop-in' + (i === names.length - 1 ? ' arc-now' : '') }, n)));
-          async function openArticle() {
-            if (busy) return; busy = true;
-            reset(); showScreens(['BookmarksScreen']);
-            const path = bad
-              ? [[M.bmImpl, 'ArticleScreen(7)'], [M.newsImpl, 'called directly']]
-              : [[M.bmImpl, 'onOpenArticle(7)'], [M.app, 'navigateToArticle(7)'], [M.newsApi, 'ArticleRoute(7)'], [M.newsImpl, 'composable<ArticleRoute>']];
-            say(o, '<span class="muted">tap on a bookmark…</span>');
-            for (const [m, t] of path) {
-              nodes.forEach(n => { n.classList.remove('on'); n.box.replaceChildren(); });
-              m.el.classList.add('on'); tok(m.el, t);
-              await sleep(650); if (!el.isConnected) return;
-            }
-            showScreens(['BookmarksScreen', 'ArticleScreen(id = 7)']);
-            say(o, bad
-              ? '<span class="bad">works, but coupled:</span> Bookmarks built the news screen itself. It now compiles against every public class in news:impl, and the two features can’t be built or tested apart.'
-              : '<span class="good">opened across features:</span> Bookmarks only knew ArticleRoute from news:api. :app passed navigateToArticle in, and news:impl drew the screen.');
-            busy = false;
-          }
-          const dependents = k => Object.keys(M).filter(x => deps(x).includes(k));
-          async function change(k) {
-            if (busy) return; busy = true;
-            reset(); screens.replaceChildren();
-            const m = M[k];
-            m.el.classList.add('on'); badge(m, 'changed', 'single'); replay(m.el, 'pop-soft');
-            say(o, `<span class="muted">${k === 'newsApi' ? 'ArticleRoute gets a new field' : 'a public class in news:impl changes'}…</span>`);
-            await sleep(600); if (!el.isConnected) return;
-            const hit = dependents(k);
-            for (const d of hit) {
-              M[d].el.classList.add('ask'); badge(M[d], 'recompiles', 'arc-hot'); replay(M[d].el, 'pop');
-              await sleep(380); if (!el.isConnected) return;
-            }
-            if (!hit.includes('app') && k !== 'app') badge(M.app, 'repackages');
-            Object.keys(M).filter(x => x !== k && x !== 'app' && !hit.includes(x)).forEach(x => { M[x].el.classList.add('ok'); badge(M[x], 'up to date', 'arc-fine'); });
-            const names = hit.map(d => M[d].short).join(', ');
-            say(o, k === 'newsApi'
-              ? `<span class="muted">contract change:</span> ${names} recompile, because both features use the route. Keep api modules small and change them rarely.`
-              : bad
-                ? `<span class="bad">${names} recompile:</span> Bookmarks depends on news:impl directly, so News’ internals now break and rebuild Bookmarks.`
-                : `<span class="good">only ${names} recompiles</span> beyond news:impl itself. Bookmarks never noticed.`);
-            busy = false;
-          }
-          const sw = switchEl('arc-mod-baddep', 'bookmarks:impl → news:impl', false, i => {
-            if (busy) { i.checked = bad; return; }
-            bad = i.checked; paintDeps(); reset(); screens.replaceChildren();
-            if (bad) { replay(M.bmImpl.el, 'shake'); say(o, '<span class="bad">rule broken:</span> an impl module now depends on another impl. Open an article or change news:impl to see the cost.'); }
-            else say(o, '<span class="good">rule restored:</span> bookmarks:impl depends on news:api only.');
-          });
-          paintDeps(); reset(); showScreens(['BookmarksScreen']);
-          say(o, 'Bookmarks is on screen. Open an article from it, or change a module and see what recompiles.');
-          el.append(
-            h('div', { class: 'controls arc-fit' },
-              cmd('bookmarks: open article 7', openArticle),
-              cmd('edit a public class in news:impl', () => change('newsImpl')),
-              cmd('edit ArticleRoute in news:api', () => change('newsApi')),
-              sw),
-            h('div', { class: 'arc-layers arc-mods' },
-              band('App', M.app.el),
-              h('div', { class: 'arc-dir' }, '↓ depends on every impl'),
-              band('Feature impl', M.newsImpl.el, M.bmImpl.el),
-              h('div', { class: 'arc-dir' }, '↓ impl → api, never impl → impl'),
-              band('Feature api', M.newsApi.el, M.bmApi.el),
-              band('Core', M.data.el, M.ui.el)),
-            screens,
-            h('p', { class: 'tip' }, 'How Gradle decides what recompiles is in the Build track’s Modularization lesson.'),
-            o);
         },
       },
 
@@ -3665,6 +3497,12 @@ interface NewsRepository {
             pipe,
             h('div', { class: 'arc-cost' }, rowFull, rowSmall),
             o);
+        },
+        predict: {
+          q: 'The server sends <code>publishedAt</code> as text. Which model holds it as an <code>Instant</code>?',
+          options: ['<code>ArticleDto</code>, which matches the JSON', '<code>Article</code>, the domain model', '<code>ArticleUi</code>, the screen model'],
+          a: 1,
+          why: 'Each ring keeps the shape it needs. The DTO mirrors the JSON text, Room stores millis, the domain uses an <code>Instant</code>, and the UI shows “2 h ago”.',
         },
       },
     ],

@@ -370,6 +370,8 @@ const Lab = (() => {
     const items = t.lessons.map(x => h('li', { class: [x === l && 'cur', state.done[key(t, x)] && 'done'].filter(Boolean).join(' ') || null },
       h('a', { href: '#' + key(t, x), 'aria-current': x === l ? 'page' : null }, x.title)));
     const viz = h('div', { class: 'viz' });
+    // l.predict / d.predict: { q, options, a, why } asked before an old-style demo unlocks. Kit demos (Lab.ui) ask their own.
+    const guess = (p, v) => { if (!p || !Lab.ui) return null; v.classList.add('ui-locked'); v.inert = true; const w = h('div', { class: 'ui' }); Lab.ui.predict(w, p, () => { v.classList.remove('ui-locked'); v.inert = false; }); return w; };
     const resetViz = () => { viz.replaceChildren(); l.visual(viz); };
 
     let left = l.quiz.length;
@@ -386,8 +388,9 @@ const Lab = (() => {
 
     const bench = h('section', { class: 'bench', 'aria-label': 'Interactive demo' },
       h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick: resetViz }, 'Reset')),
-      viz);
+      guess(l.predict, viz), viz);
     const snippet = code(l.code);
+    const run = l.play ? runView(l.play) : null;
     const pin = h('aside', { class: 'pin' }, h('span', { class: 'pin-label' }, 'Pin this'), h('p', {}, l.remember));
     const practice = l.challenges && l.challenges.length ? h('section', { class: 'quiz' }, h('h2', {}, 'Practice'), l.challenges.map(challengeView)) : null;
     // Optional depth: l.deeper = [{ title, body, code?, visual? }], l.underHood = { body, code? }, l.mistakes = [{ title, bad, good, why }]
@@ -399,7 +402,7 @@ const Lab = (() => {
           h('h3', {}, h('span', { class: 'step-n', 'aria-hidden': 'true' }, String(i + 1)), d.title),
           h('div', { class: 'prose', html: d.body }),
           v && h('div', { class: 'bench mini' },
-            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); d.visual(v); } }, 'Reset')), v),
+            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); d.visual(v); } }, 'Reset')), guess(d.predict, v), v),
           d.code ? code(d.code) : null);
         if (v) d.visual(v);
         return li;
@@ -417,7 +420,7 @@ const Lab = (() => {
         h('p', { class: 'why', html: m.why })))) : null;
     const docs = docsView(DOCS[key(t, l)] || l.docs);
     const terms = l.terms && l.terms.length ? h('section', { class: 'terms' }, h('h2', {}, 'Terms'), h('dl', {}, l.terms.map(x => [h('dt', {}, x.term), h('dd', {}, x.def)]))) : null;
-    const sections = [['Demo', bench], ['Code', snippet], ['Pin', pin], ['Go deeper', deeper], ['Under the hood', hood], ['Mistakes', mistakes], ['Practice', practice], ['Terms', terms], ['Docs', docs], ['Check yourself', quiz]].filter(([, el]) => el);
+    const sections = [['Demo', bench], ['Code', snippet], ['Run it', run], ['Pin', pin], ['Go deeper', deeper], ['Under the hood', hood], ['Mistakes', mistakes], ['Practice', practice], ['Terms', terms], ['Docs', docs], ['Check yourself', quiz]].filter(([, el]) => el);
     const toc = h('nav', { class: 'toc', 'aria-label': 'On this page' }, h('span', { class: 'toc-label' }, 'On this page'),
       sections.map(([label, el]) => h('button', { type: 'button', onclick() {
         el.setAttribute('tabindex', '-1');
@@ -437,12 +440,43 @@ const Lab = (() => {
         reviewFirst(l),
         toc,
         h('div', { class: 'prose', html: l.body }),
-        bench, snippet, pin, deeper, hood, mistakes, practice, terms, docs, quiz,
+        bench, snippet, run, pin, deeper, hood, mistakes, practice, terms, docs, quiz,
         h('nav', { class: 'pager', 'aria-label': 'Lesson navigation' },
           prev && h('a', { href: '#' + key(t, prev) }, h('small', {}, '← Previous'), prev.title),
           next && h('a', { class: 'next', href: '#' + key(t, next) }, h('small', {}, 'Next →'), next.title))));
     l.visual(viz);
     return page;
+  }
+
+  // l.play: a complete Kotlin program (with fun main) that the learner can edit and run.
+  // ponytail: uses JetBrains' official Kotlin Playground embed; code compiles on their server, so it needs a connection.
+  const KP = ['https://unpkg.com/kotlin-playground@1.34.0/dist/playground.min.js', 'https://cdn.jsdelivr.net/npm/kotlin-playground@1.34.0/dist/playground.min.js'];
+  let kpLoad = null;
+  function loadPlayground() {
+    if (window.KotlinPlayground) return Promise.resolve();
+    const tryUrl = k => new Promise((ok, fail) => {
+      const s = h('script', { src: KP[k], async: true });
+      s.onload = ok; s.onerror = () => { s.remove(); k + 1 < KP.length ? tryUrl(k + 1).then(ok, fail) : fail(); };
+      document.head.append(s);
+    });
+    return kpLoad || (kpLoad = tryUrl(0).catch(e => { kpLoad = null; throw e; }));
+  }
+  function runView(src) {
+    const slot = h('div', { class: 'run-slot' });
+    const note = h('p', { class: 'muted-text run-note', 'aria-live': 'polite' }, 'Edit the code, then press ▶ at the top right of the editor. It compiles on the Kotlin Playground server, so you need a connection.');
+    const btn = h('button', { class: 'btn small primary', onclick() {
+      btn.disabled = true; btn.textContent = 'Loading…';
+      loadPlayground().then(() => {
+        const dark = document.documentElement.dataset.theme === 'dark' || (document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        const node = h('div', { theme: dark ? 'darcula' : 'idea', lines: 'true', 'auto-indent': 'true', 'match-brackets': 'true' });
+        node.textContent = src;
+        slot.replaceChildren(node);
+        window.KotlinPlayground(node);
+        btn.remove();
+      }).catch(() => { btn.disabled = false; btn.textContent = 'Try again'; note.textContent = 'Could not load the editor. Check your connection and try again.'; });
+    } }, 'Open editor');
+    slot.append(code(src));
+    return h('section', { class: 'run', 'aria-label': 'Run it' }, h('div', { class: 'run-head' }, h('h2', {}, 'Run it'), btn), note, slot);
   }
 
   // Project steps: compact links to the lessons a step applies. Ids that don't resolve are skipped.

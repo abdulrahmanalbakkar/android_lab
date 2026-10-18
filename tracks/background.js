@@ -662,6 +662,12 @@ adb shell dumpsys deviceidle force-idle`,
       { q: 'You test your sync on a phone plugged into your laptop and it always runs on time. Users report delays. Why?', options: ['A charging phone never dozes and bucket limits are lifted', 'USB debugging turns off WorkManager’s scheduler', 'Debug builds always stay in the active bucket'], a: 0, why: 'Doze needs the phone unplugged, and buckets apply only on battery. Simulate battery power, or force idle with adb.' },
       { q: 'An app is on the battery optimization exemption list. It sets a regular <code>set()</code> alarm, and the phone enters Doze. Does it fire on time?', options: ['Yes, the exemption covers alarms', 'No: the exemption allows network and partial wake locks, not regular alarms', 'Only while the screen is on'], a: 1, why: 'The exemption only partly lifts Doze. Regular alarms still wait, which is why it is not a fix.' },
     ],
+    predict: {
+      q: "The phone is dozing. A WorkManager job, a normal priority FCM message and a <code>setExact()</code> alarm all come due in the night. When do they run?",
+      options: ["Each at its own time", "Each waits for the next maintenance window, or for the phone to wake", "None of them run until the next morning’s unlock"],
+      a: 1,
+      why: "Doze holds jobs, normal FCM and ordinary alarms, then runs everything that waited in short maintenance windows.",
+    },
     visual(el) {
       // 23:00 to 07:30. Doze from 23:30, windows at 00:30, 02:00 and 04:30, the user picks up the phone at 07:00.
       const START = 23 * 60, SPAN = 510, DOZE = 30, WAKE = 480, WIN = [[90, 105], [180, 195], [330, 345]];
@@ -864,6 +870,12 @@ alarmManager.set(AlarmManager.RTC_WAKEUP, at, pi)
       { q: '<code>canScheduleExactAlarms()</code> returns false for a reminder app. What is the best flow?', options: ['Call setExact() anyway inside try/catch and ignore the error', 'Explain why in your UI, open the Alarms & reminders settings screen, keep an inexact fallback, and check again in onResume()', 'Ask for SCHEDULE_EXACT_ALARM with the runtime permission dialog'], a: 1, why: 'SCHEDULE_EXACT_ALARM is special access granted in settings, not through a dialog. Some users say no, so the fallback keeps the feature working.' },
       { q: 'The user sets a reminder, then the phone restarts. What happens to the alarm?', options: ['AlarmManager restores it after boot', 'It is gone; set it again from a BOOT_COMPLETED receiver using your stored reminders', 'It fires right away when the phone boots'], a: 1, why: 'All alarms are cleared on shutdown. Keep reminders in storage and reschedule them at boot.' },
     ],
+    predict: {
+      q: "Your app has not been granted <b>Alarms &amp; reminders</b>. It calls <code>setExactAndAllowWhileIdle()</code>. What happens?",
+      options: ["It fires on time anyway", "It fires late, like <code>set()</code>", "It throws <code>SecurityException</code>"],
+      a: 2,
+      why: "Exact alarms need <code>SCHEDULE_EXACT_ALARM</code> or <code>USE_EXACT_ALARM</code>. Without it, setting one throws, so check <code>canScheduleExactAlarms()</code> first.",
+    },
     visual(el) {
       // 06:30 to 08:30. The user asks for 07:00.
       const START = 6 * 60 + 30, SPAN = 120, AT = 30, WINDOW_DOZE = 82;
@@ -1175,6 +1187,12 @@ val status = workManager.getWorkInfoByIdFlow(request.id)`,
             why: 'After process death the new id matches nothing that was enqueued, so the UI shows no progress. Observe the unique name, which stays the same.',
           },
         ],
+        predict: {
+          q: "A sync request needs network and charging. The phone is on Wi-Fi but unplugged. What state is the work in?",
+          options: ["<code>RUNNING</code>: one constraint is enough", "<code>ENQUEUED</code>, waiting for charging", "<code>FAILED</code>: the constraints were not met"],
+          a: 1,
+          why: "Work starts only when every constraint holds. Until then it waits as ENQUEUED, and it is stopped again if a constraint breaks mid-run.",
+        },
         visual(el) {
           const RUN = 12; // simulated seconds per run
           let t = 0, net = true, charging = false, policy = 'KEEP', seq = 0, seen = false, misses = 0;
@@ -1329,69 +1347,26 @@ ContextCompat.startForegroundService(context, Intent(context, BriefingService::c
         underHood: fgsDepth.underHood,
         mistakes: fgsDepth.mistakes,
         visual(el) {
-          const FROM = {
-            tap: { label: 'Button tap (app visible)', ok: 'The app is visible, so a foreground start is allowed.' },
-            high: { label: 'High priority FCM (background)', ok: 'A high priority FCM message gives a short exemption from the background start ban.' },
-            normal: { label: 'Normal priority FCM (background)', no: 'ForegroundServiceStartNotAllowedException: the app is in the background and a normal priority message gives no exemption.' },
-            boot: { label: 'BOOT_COMPLETED receiver', no: 'ForegroundServiceStartNotAllowedException: apps targeting Android 15 can’t start a mediaPlayback service from BOOT_COMPLETED.' },
-          };
-          const MAX = 7, LIMIT = 5;
-          let from = 'tap', declared = true, quick = true, running = false, busy = false;
-          const ph = phone();
-          const shade = h('div', { class: 'plt-shade' });
-          ph.screen.append(h('p', { class: 'plt-shade-title' }, 'Notification shade'), shade);
-          const bar = h('div', { class: 'bar run', style: 'left:0;width:0' });
-          const cursor = h('div', { class: 'cursor', style: 'left:0' });
-          const track = h('div', { class: 'lane-track' }, bar, h('div', { class: 'plt-deadline', style: `left:${(LIMIT / MAX) * 100}%` }), cursor);
-          const clock = h('span', { class: 'clock' }, '0.0 s');
-          const o = out('Pick where the start comes from, then call startForegroundService().');
-          const setT = s => { const p = `${Math.min(s / MAX, 1) * 100}%`; cursor.style.left = p; bar.style.width = p; clock.textContent = `${s.toFixed(1)} s`; };
-          let icon = null;
-          function fail(msg) { replay(ph.dev, 'shake'); bar.style.background = 'var(--err)'; say(o, `<span class="bad">crash:</span> ${msg}`); busy = false; }
-          async function start() {
-            if (busy) return;
-            if (running) { say(o, 'Already running. Calling it again just delivers another onStartCommand().'); return; }
-            busy = true; bar.style.background = ''; setT(0);
-            const f = FROM[from];
-            if (f.no) { await sleep(300); fail(f.no); return; }
-            say(o, `${f.ok} onStartCommand() runs. The deadline clock is ticking.`);
-            const callAt = quick ? 0.4 : 6;
-            for (let s = 0; ; s += 0.2) {
-              setT(s);
-              if (s >= LIMIT && !quick) { fail('ForegroundServiceDidNotStartInTimeException: startForeground() was not called in time.'); return; }
-              if (s >= callAt) break;
-              await sleep(80);
-              if (!el.isConnected) return;
-            }
-            if (!declared) { fail('MissingForegroundServiceTypeException: apps targeting Android 14 must declare android:foregroundServiceType on the &lt;service&gt;.'); return; }
-            running = true;
-            bar.style.background = 'var(--ok)';
-            icon = h('span', { class: 'plt-ico plt-ongoing pop' }); ph.icons.append(icon);
-            shade.replaceChildren(note('ongoing · mediaPlayback', 'Morning briefing', 'Playing. Pause · Stop', 'plt-fg drop-in'));
-            say(o, '<span class="good">foreground:</span> startForeground() in time, with the declared type. The ongoing notification shows while it runs.');
-            busy = false;
-          }
-          function stop() {
-            if (busy) return;
-            if (!running) { say(o, 'Nothing is running.'); return; }
-            running = false; if (icon) icon.remove();
-            const n = shade.firstElementChild; if (n) { n.classList.add('leave'); setTimeout(() => n.remove(), 450); }
-            setT(0); bar.style.background = '';
-            say(o, 'stopSelf(): the service ends and its notification goes away.');
-          }
-          const froms = choice('started from', Object.keys(FROM), from, v => { if (busy) return false; from = v; }, v => FROM[v].label);
-          const dec = toggle('plt-fgs-type', 'Manifest declares foregroundServiceType', true, v => { declared = v; });
-          const fast = toggle('plt-fgs-quick', 'Call startForeground() first', true, v => { quick = v; });
-          el.append(froms.el,
-            h('div', { class: 'plt-split' },
-              h('div', { class: 'plt-col' },
-                h('div', { class: 'controls plt-row' }, dec.el, fast.el),
-                h('div', { class: 'controls plt-row' }, cmd('startForegroundService(intent)', start), cmd('stopSelf()', stop)),
-                h('div', { class: 'timeline' },
-                  h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'clock'), track),
-                  h('div', { class: 'plt-lane-note' }, h('span', {}, 'red line: the deadline (a few seconds, varies by version)'), clock))),
-              ph.dev),
-            o);
+          Lab.ui.timeline(el, {
+            lanes: ['v1: service', 'v1: notification', 'v2: service'],
+            span: 8,
+            unit: 's',
+            predict: {
+              q: 'Two versions of a player service, both started with <code>startForegroundService()</code>. v1 calls <code>startForeground()</code> first thing. v2 downloads a file first and calls it after 6 seconds. Which version is still running at 8 s?',
+              options: ['Both', 'Only v1', 'Only v2', 'Neither'],
+              a: 1,
+              why: 'After <code>startForegroundService()</code> the system waits only a few seconds for <code>startForeground()</code>. v2 misses that deadline and the app crashes.',
+            },
+            frames: [
+              { now: 0, marks: [{ at: 5, label: 'deadline', tone: 'warm' }], say: 'Two versions of the same app, each run on its own. Both call <code>startForegroundService()</code>, and a clock starts: a few seconds to call <code>startForeground()</code>.' },
+              { now: 0.4, bars: [{ lane: 0, from: 0, to: 0.4, label: 'start', tone: 'accent' }], say: 'In v1, <code>onStartCommand()</code> calls <code>startForeground(id, notification, type)</code> before anything else.' },
+              { now: 3, bars: [{ lane: 0, from: 0.4, to: 3, label: 'playing', tone: 'ok' }, { lane: 1, from: 0.4, to: 3, label: 'shown', tone: 'ok' }], say: 'v1 is now a foreground service with its notification. The deadline no longer applies to it.' },
+              { now: 3, marks: [{ at: 3, label: 'Home', tone: 'muted' }], say: 'The user presses Home. The app is in the background, but v1 keeps running: the user can see it.' },
+              { now: 5, bars: [{ lane: 2, from: 0, to: 5, label: 'downloading…', tone: 'warm' }], say: 'In v2, <code>onStartCommand()</code> starts a download first. It plans to call <code>startForeground()</code> when it is done, at 6 s.' },
+              { now: 5.4, bars: [{ lane: 2, from: 5, to: 5.4, label: '', tone: 'err' }], marks: [{ at: 5.4, label: 'crash', tone: 'err' }], say: 'The deadline passes first. The app crashes with <code>ForegroundServiceDidNotStartInTimeException</code>.' },
+              { now: 8, bars: [{ lane: 0, from: 3, to: 8, label: 'playing', tone: 'ok' }, { lane: 1, from: 3, to: 8, label: 'shown', tone: 'ok' }], say: 'v1 is still playing. Make <code>startForeground()</code> the first call, then start the work. The exact limit depends on the Android version, so never cut it close.' },
+            ],
+          });
         },
       },
 
@@ -1464,71 +1439,31 @@ sendBroadcast(Intent(ACTION_REFRESH).setPackage(packageName))`,
         underHood: receiversDepth.underHood,
         mistakes: receiversDepth.mistakes,
         visual(el) {
-          let registered = true, flag = 'NOT_EXPORTED', busy = false;
-          const mkRx = (name, filter) => {
-            const log = h('div', { class: 'plt-log' });
-            const box = h('div', { class: 'plt-rx' }, h('span', { class: 'plt-rx-name' }, name), h('span', { class: 'plt-filter' }, 'filter: ' + filter), log);
-            return { box, log };
-          };
-          const man = mkRx('BootReceiver (manifest)', 'BOOT_COMPLETED, POWER_CONNECTED');
-          const ctx = mkRx('receiver in MainActivity (context)', 'POWER_CONNECTED, ACTION_REFRESH, com.partner.SYNC_DONE');
-          const status = tag('');
-          const o = out('MainActivity is started and its receiver is registered. Send a broadcast.');
-          const paintStatus = () => { status.textContent = registered ? `registered · ${flag}` : 'not registered'; status.className = 'plt-tag ' + (registered ? 'plt-ok' : 'plt-no'); };
-          const flags = choice('flag', ['NOT_EXPORTED', 'EXPORTED', 'none'], flag, v => {
-            flag = v;
-            if (registered) { registered = false; register(true); }
-          }, v => (v === 'none' ? 'no flag' : 'RECEIVER_' + v));
-          const reg = toggle('plt-rx-reg', 'MainActivity started (registered)', true, (v, input) => {
-            if (v) register(false); else { registered = false; paintStatus(); say(o, 'onStop(): unregisterReceiver(receiver).'); }
-            input.checked = registered;
+          Lab.ui.graph(el, {
+            height: 270,
+            nodes: [
+              { id: 'boot', label: 'Reboot<small>BOOT_COMPLETED</small>', x: 17, y: 14, tone: 'muted' },
+              { id: 'power', label: 'Plug in<small>implicit</small>', x: 50, y: 14, tone: 'muted' },
+              { id: 'partner', label: 'Other app<small>SYNC_DONE</small>', x: 83, y: 14, tone: 'warm' },
+              { id: 'man', label: 'BootReceiver<small>manifest</small>', x: 25, y: 82 },
+              { id: 'ctx', label: 'Context receiver<small>from onStart</small>', x: 75, y: 82 },
+            ],
+            predict: {
+              q: 'Another app sends <code>com.partner.SYNC_DONE</code>. Your context receiver listens for it and was registered with <code>RECEIVER_NOT_EXPORTED</code>. Does it run?',
+              options: ['Yes: it is registered for that action', 'No: not exported means other apps can’t reach it', 'Only if the other app is signed with your key'],
+              a: 1,
+              why: 'The exported flag decides who may send to a context-registered receiver. Not exported accepts only your own app and the system.',
+            },
+            frames: [
+              { say: 'Two receivers. <code>BootReceiver</code> is declared in the manifest. <code>MainActivity</code> registers a second one from code while it is started.' },
+              { add: [['boot', 'man', '', 'ok']], hl: ['man'], say: 'The phone restarts. <code>BOOT_COMPLETED</code> is on the exempt list, so the system starts your process just to deliver it.' },
+              { add: [['power', 'man', 'blocked', 'err']], say: 'The user plugs in. Since Android 8, manifest receivers don’t get most implicit broadcasts, so <code>BootReceiver</code> never hears it.' },
+              { add: [['power', 'ctx', '', 'ok']], hl: ['ctx'], say: 'The context receiver does get it, because it is registered right now.' },
+              { add: [['partner', 'ctx', 'blocked', 'err']], say: 'Another app sends a custom broadcast. Registered with <code>RECEIVER_NOT_EXPORTED</code>, the receiver only accepts your app and the system.' },
+              { add: [['partner', 'ctx', '', 'ok']], hl: ['ctx'], say: 'Registered with <code>RECEIVER_EXPORTED</code>, it arrives. Targeting Android 14 with neither flag, <code>registerReceiver</code> throws.' },
+              { remove: [['power', 'ctx'], ['partner', 'ctx']], gone: ['ctx'], say: '<code>onStop()</code> calls <code>unregisterReceiver()</code>. From now on nothing in your app hears <code>POWER_CONNECTED</code>.' },
+            ],
           });
-          function register(re) {
-            if (flag === 'none') {
-              registered = false; paintStatus(); reg.input.checked = false; replay(ctx.box, 'shake');
-              say(o, '<span class="bad">SecurityException:</span> one of RECEIVER_EXPORTED or RECEIVER_NOT_EXPORTED should be specified when a receiver isn’t registered only for system broadcasts.');
-              return;
-            }
-            registered = true; reg.input.checked = true; paintStatus(); replay(status, 'pop');
-            say(o, `${re ? 'Re-registered' : 'onStart(): registered'} with RECEIVER_${flag}.`);
-          }
-          const EVENTS = [
-            { src: 'system: BOOT_COMPLETED', run() {
-              const was = registered; registered = false; reg.input.checked = false; paintStatus();
-              return [['ok', 'onReceive(). The system started your process for it. BOOT_COMPLETED is exempt.'],
-                ['no', was ? 'Not registered: the reboot killed MainActivity and its registration.' : 'Not registered.']];
-            } },
-            { src: 'system: ACTION_POWER_CONNECTED', run: () => [
-              ['no', 'Skipped: implicit broadcast, not exempt. Manifest receivers stopped getting it in Android 8.'],
-              registered ? ['ok', 'onReceive(). System broadcast, so the exported flag doesn’t matter.'] : ['no', 'Not registered.']] },
-            { src: 'sendBroadcast(Intent(ACTION_REFRESH).setPackage(packageName))', run: () => [
-              ['', 'Not in this filter.'],
-              registered ? ['ok', 'onReceive(). Your own app, so it arrives either way.'] : ['no', 'Not registered.']] },
-            { src: 'partner app: sendBroadcast(Intent("com.partner.SYNC_DONE"))', run: () => [
-              ['', 'Not in this filter.'],
-              !registered ? ['no', 'Not registered.'] : flag === 'EXPORTED' ? ['ok', 'onReceive(). Exported, so other apps reach it. Check who sent it.'] : ['no', 'Blocked: RECEIVER_NOT_EXPORTED hides it from other apps.']] },
-          ];
-          async function fire(ev) {
-            if (busy) return; busy = true;
-            const results = ev.run();
-            say(o, `${hl(ev.src)}`);
-            for (const [i, rx] of [man, ctx].entries()) {
-              const [k, text] = results[i];
-              rx.box.classList.remove('plt-hit', 'plt-miss');
-              if (k) { rx.box.classList.add(k === 'ok' ? 'plt-hit' : 'plt-miss'); replay(rx.box, k === 'ok' ? 'pop' : 'shake'); }
-              rx.log.prepend(h('div', { class: 'drop-in' }, tag(k === 'ok' ? 'delivered' : k === 'no' ? 'missed' : 'n/a', k === 'ok' ? 'ok' : k === 'no' ? 'no' : ''), h('span', {}, text)));
-              while (rx.log.children.length > 3) rx.log.lastElementChild.remove();
-              await sleep(350);
-            }
-            busy = false;
-          }
-          paintStatus();
-          el.append(
-            h('div', { class: 'plt-events' }, h('span', { class: 'plt-label' }, 'Send a broadcast'), EVENTS.map(ev => cmd(ev.src, () => fire(ev)))),
-            h('div', { class: 'controls plt-row' }, flags.el),
-            h('div', { class: 'controls plt-row' }, reg.el, status),
-            h('div', { class: 'plt-pair' }, man.box, ctx.box),
-            o);
         },
       },
 

@@ -197,44 +197,25 @@ suspend fun sortBoth(a: IntArray, b: IntArray) = coroutineScope {
 }`,
     remember: 'Concurrency is about structure (tasks overlap in time). Parallelism is about hardware (tasks run at the same instant). Correct code must work for every interleaving.',
     visual(el) {
-      const tl = timeline(12);
-      const msg = out('');
-      const stats = h('div', { class: 'cc-stats' });
-      const MODES = [
-        { text: 'One core, one after another', rows: ['core 1'], plan: [['A', 'A', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'B', 'B']],
-          end: 'B could not start until A was done. Neither concurrent nor parallel: 12 ticks, and B waited 6 before its first step.' },
-        { text: 'One core, interleaved', rows: ['core 1'], plan: [['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B']],
-          end: 'Concurrent: both made progress from tick 1. Still 12 ticks, because one core does one thing at a time. A task waiting on the network gains a lot from this; pure CPU work does not.' },
-        { text: 'Two cores, parallel', rows: ['core 1', 'core 2'], plan: [['A', 'A', 'A', 'A', 'A', 'A'], ['B', 'B', 'B', 'B', 'B', 'B']],
-          end: 'Parallel: A and B ran at the same instant on two cores. Done in 6 ticks.' },
-      ];
-      let mode = MODES[0], tok = 0;
-      const runB = act('Run', run);
-      function setup() { tok++; tl.setRows(mode.rows); stats.innerHTML = 'A done: <b>-</b> · B done: <b>-</b>'; say(msg, `${mode.text}. Each task needs 6 slices of CPU time. Press Run.`); runB.disabled = false; }
-      async function run() {
-        const t = ++tok; runB.disabled = true;
-        tl.setRows(mode.rows);
-        const done = { A: '-', B: '-' }, left = { A: 6, B: 6 };
-        for (let c = 0; c < 12; c++) {
-          let any = false;
-          mode.plan.forEach((row, r) => {
-            const x = row[c];
-            if (!x) return;
-            any = true;
-            tl.fill(r, c, x, x === 'A' ? 'cc-a' : 'cc-b');
-            if (--left[x] === 0) done[x] = c + 1;
+          Lab.ui.timeline(el, {
+            lanes: ['1 core', '2 cores: #1', '2 cores: #2'],
+            span: 12,
+            predict: {
+              q: 'Two tasks need 6 ms of CPU work each. The phone has <b>one</b> core. When are both done?',
+              options: ['At 6 ms: they run at the same time', 'At about 12 ms: they take turns', 'At 3 ms: the work is split in half'],
+              a: 1,
+              why: 'One core runs one thread at a time. Taking turns makes both tasks progress, but the total work is still 12 ms.',
+            },
+            frames: [
+              { now: 0, say: 'Two tasks: <b>A</b> (sort the news) and <b>B</b> (sort the weather). Each needs 6 ms of CPU. First, one core.' },
+              { bars: [{ lane: 0, from: 0, to: 2, label: 'A' }], say: 'The scheduler runs A for a time slice.' },
+              { bars: [{ lane: 0, from: 2, to: 4, label: 'B', tone: 'warm' }], say: 'Then it saves A’s state and switches to B. Both are in progress: that is <em>concurrent</em>.' },
+              { bars: [{ lane: 0, from: 4, to: 6, label: 'A' }, { lane: 0, from: 6, to: 8, label: 'B', tone: 'warm' }], say: 'Back and forth. You do not choose the order; the scheduler does, and it can change from run to run.' },
+              { bars: [{ lane: 0, from: 8, to: 10, label: 'A' }, { lane: 0, from: 10, to: 12, label: 'B', tone: 'warm' }], say: 'Both finish at 12 ms. They never ran at the same instant: concurrent, not parallel.' },
+              { now: 6, bars: [{ lane: 1, from: 0, to: 6, label: 'A' }, { lane: 2, from: 0, to: 6, label: 'B', tone: 'warm' }], say: 'With two cores, A and B run at the same instant. That is <em>parallel</em>, and both finish at 6 ms.' },
+            ],
           });
-          if (!any) break;
-          stats.innerHTML = `tick <b>${c + 1}</b> · A done: <b>${done.A}</b> · B done: <b>${done.B}</b>`;
-          await sleep(280);
-          if (t !== tok || !el.isConnected) return;
-        }
-        say(msg, mode.end);
-        runB.disabled = false;
-      }
-      el.append(picker('', MODES, m => { mode = m; setup(); }), h('div', { class: 'cc-stage' }, tl.root, stats), h('div', { class: 'controls' }, runB), msg);
-      setup();
-    },
+        },
     deeper: [
       {
         title: 'Process, thread, core',
@@ -356,6 +337,28 @@ val config: Config by lazy { load() }`,
       el.append(h('label', { class: 'cc-row', for: 'cc-race-lock' }, sw, h('span', {}, 'Guard count++ with a lock')), box);
       stepper(box, incCfg(false));
     },
+        predict: {
+          q: 'There is no lock. You are the scheduler and can pick which thread runs its next step. Can you make two <code>count++</code> calls end with count = 1?',
+          options: ['No: <code>count++</code> is a single step', 'Yes: let both threads read before either one writes', 'Only on a device with one core'],
+          a: 1,
+          why: '<code>count++</code> is read, add, write. If both threads read the same old value, both write the same new value, and one increment is lost. One core is enough: a switch between the read and the write does it.',
+        },
+        play: `import kotlin.concurrent.thread
+
+var count = 0
+val lock = Any()
+
+fun main() {
+    val threads = List(4) {
+        thread {
+            repeat(100_000) {
+                count++                    // try: synchronized(lock) { count++ }
+            }
+        }
+    }
+    threads.forEach { it.join() }
+    println("count = $count, expected 400000")
+}`,
     deeper: [
       {
         title: 'What a correct critical section needs',
@@ -462,55 +465,49 @@ class Downloads {
 }`,
     remember: 'Lock the whole critical section, keep it short, release in finally. synchronized and ReentrantLock are reentrant; Mutex is not.',
     visual(el) {
-      const KINDS = [
-        { src: 'ReentrantLock()', fair: false, re: true },
-        { src: 'ReentrantLock(true)', fair: true, re: true },
-        { src: 'Mutex()', fair: null, re: false },
-      ];
-      let kind = KINDS[0], owner = null, holds = 0, queue = [], stuck = false;
-      const room = h('div', { class: 'cc-room' });
-      const q = h('div', { class: 'cc-queue' });
-      const meta = h('div', { class: 'cc-stats' });
-      const msg = out('');
-      const word = () => (kind.re ? 'blocks (its thread is parked)' : 'suspends (its thread is free for other coroutines)');
-      function paint() {
-        room.replaceChildren(owner ? h('span', { class: `cc-chip cc-in ${stuck ? 'cc-err' : 'cc-acc'}` }, owner + (holds > 1 ? ` ×${holds}` : '')) : h('span', { class: 'muted-text' }, 'lock is free'));
-        q.replaceChildren(label('waiting'), ...(queue.length ? queue.map(t => h('span', { class: 'cc-chip cc-warm cc-in' }, t)) : [h('span', { class: 'muted-text' }, 'nobody')]));
-        meta.innerHTML = `holder: <b>${owner || '-'}</b> · hold count: <b>${holds}</b>`;
-      }
-      function lock(t) {
-        if (stuck) { say(msg, 'The holder is stuck waiting for itself. Press Reset.'); return; }
-        if (!owner) { owner = t; holds = 1; say(msg, `${t} takes the free lock and enters.`); }
-        else if (owner === t) {
-          if (kind.re) { holds++; say(msg, `${t} already holds it. A reentrant lock just counts: hold count ${holds}. It must unlock ${holds} times.`); }
-          else { stuck = true; say(msg, `<span class="bad">Mutex is not reentrant. ${t} now suspends, waiting for a lock it holds itself. Deadlock.</span>`); }
-        } else if (queue.includes(t)) say(msg, `${t} is already waiting.`);
-        else { queue.push(t); say(msg, `${t} finds the lock held by ${owner} and ${word()}.`); }
-        paint();
-      }
-      function unlock() {
-        if (stuck) { say(msg, 'Nobody can unlock now: the holder is stuck inside lock(). Press Reset.'); return; }
-        if (!owner) { say(msg, 'Nobody holds the lock. With ReentrantLock this would throw IllegalMonitorStateException.'); return; }
-        if (--holds > 0) { say(msg, `${owner} unlocks once. Hold count ${holds}: still held.`); paint(); return; }
-        const prev = owner;
-        if (!queue.length) { owner = null; say(msg, `${prev} leaves. The lock is free.`); }
-        else if (kind.fair === false) {
-          const k = Math.floor(Math.random() * queue.length);
-          owner = queue.splice(k, 1)[0]; holds = 1;
-          say(msg, k ? `${prev} leaves and ${owner} wins, though it did not wait longest. A non-fair lock promises no order: here the simulation picks at random.` : `${prev} leaves and ${owner} gets it. With a non-fair lock that is luck, not a promise.`);
-        } else {
-          owner = queue.shift(); holds = 1;
-          say(msg, kind.fair ? `${prev} leaves. The fair lock hands it to ${owner}, the longest waiter.` : `${prev} leaves and ${owner} resumes. The Mutex() docs say it is fair: the lock goes to waiters in first come, first served order.`);
+          Lab.ui.timeline(el, {
+            lanes: ['T1', 'T2', 'T3'],
+            span: 14,
+            predict: {
+              q: 'The lock is <code>ReentrantLock(true)</code>. T2 has waited since 1 ms, T3 since 4 ms. T1 unlocks for the last time. Who enters next?',
+              options: ['T2', 'T3', 'Both at once', 'No promise: any waiter may win'],
+              a: 0,
+              why: 'A fair lock grants access to the thread that has waited longest. The default <code>ReentrantLock()</code> makes no such promise.',
+            },
+            frames: [
+              { now: 0, say: 'Three threads share one <code>ReentrantLock(true)</code>, a fair lock. Only the holder may run the critical section. Bar labels show T1’s hold count.' },
+              { bars: [{ lane: 0, from: 0, to: 3, label: '×1' }, { lane: 1, from: 1, to: 3, tone: 'muted' }], say: 'T1 calls <code>lock()</code> on a free lock and enters. Hold count 1. At 1 ms T2 calls <code>lock()</code>, finds it held, and is parked.' },
+              { bars: [{ lane: 0, from: 3, to: 6, label: '×2', tone: 'warm' }, { lane: 1, from: 3, to: 6, label: 'wait', tone: 'muted' }, { lane: 2, from: 4, to: 6, tone: 'muted' }], say: 'T1 calls a helper that locks again. The lock is reentrant, so T1 does not wait: the hold count goes to 2. At 4 ms T3 arrives and parks behind T2.' },
+              { bars: [{ lane: 0, from: 6, to: 8, label: '×1' }, { lane: 1, from: 6, to: 8, tone: 'muted' }, { lane: 2, from: 6, to: 8, tone: 'muted' }], say: 'The helper unlocks. Hold count 1: T1 still holds the lock, so nobody else can enter.' },
+              { bars: [{ lane: 1, from: 8, to: 11, label: 'holds', tone: 'ok' }, { lane: 2, from: 8, to: 11, label: 'wait', tone: 'muted' }], say: 'T1 unlocks again. Count 0, the lock is free. The fair lock hands it to the longest waiter, T2.' },
+              { bars: [{ lane: 2, from: 11, to: 14, label: 'holds', tone: 'ok' }], say: 'T2 unlocks and T3 enters. At every moment exactly one thread was inside. With the default, non-fair lock, T3 could have gone before T2.' },
+            ],
+          });
+        },
+        play: `import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.thread
+import kotlin.concurrent.withLock
+
+val lock = ReentrantLock(true)    // fair. Try ReentrantLock(): then no order is promised
+
+fun log(msg: String) = println("\${Thread.currentThread().name}: $msg, holdCount = \${lock.holdCount}")
+
+fun save() = lock.withLock { log("inside save()") }
+
+fun main() {
+    val workers = lock.withLock {
+        log("main locked")
+        save()                         // the same thread locks again: reentrant
+        val started = (1..3).map { n ->
+            thread(name = "T$n") { lock.withLock { log("got the lock") } }
+                .also { Thread.sleep(50) }   // T1 waits longest, then T2, then T3
         }
-        paint();
-      }
-      function reset() { owner = null; holds = 0; queue = []; stuck = false; paint(); say(msg, `${kind.src}: lock with T1, T2 and T3, then unlock as the holder. Also try "holder locks again".`); }
-      el.append(picker('lock', KINDS, k => { kind = k; reset(); }),
-        h('div', { class: 'cc-stage' }, label('critical section'), room, q, meta),
-        h('div', { class: 'controls' }, ['T1', 'T2', 'T3'].map(t => cmd(`${t}: lock()`, () => lock(t))), act('Holder: unlock()', unlock), act('Holder: lock() again', () => (owner ? lock(owner) : say(msg, 'Nobody holds the lock yet.')))),
-        msg);
-      reset();
-    },
+        log("main unlocking")
+        started
+    }
+    workers.forEach { it.join() }
+    println("free again, tryLock() = \${lock.tryLock()}")
+}`,
     deeper: [
       {
         title: 'synchronized or ReentrantLock?',
@@ -698,6 +695,38 @@ ${P.map((p, i) => `<g class="cc-ph" data-p="${i}"><circle cx="${p.x.toFixed(1)}"
         h('div', { class: 'controls' }, act('Step', () => { tok++; stepOnce(); }), act('Run', run), act('Restart', reset)), msg);
       reset();
     },
+        predict: {
+          q: 'Every philosopher takes the left fork first, and all five reach for it at the same moment. What happens next?',
+          options: ['They take turns eating', 'All five wait forever', 'The philosopher with the lowest number eats first'],
+          a: 1,
+          why: 'Each one holds one fork and waits for the fork its neighbor holds. That is a circular wait, and with locks that are never taken away nobody can move.',
+        },
+        play: `import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.thread
+
+val a = ReentrantLock()
+val b = ReentrantLock()
+
+fun work(name: String, first: ReentrantLock, second: ReentrantLock) {
+    first.lock()
+    try {
+        Thread.sleep(50)                     // the other thread takes its first lock now
+        if (second.tryLock(500, TimeUnit.MILLISECONDS)) {
+            try { println("$name: got both locks") } finally { second.unlock() }
+        } else {
+            println("$name: waited 500 ms for the second lock and gave up")
+        }
+    } finally {
+        first.unlock()
+    }
+}
+
+fun main() {
+    val t1 = thread { work("T1", a, b) }
+    val t2 = thread { work("T2", b, a) }     // change to work("T2", a, b): one lock order
+    t1.join(); t2.join()
+}`,
     deeper: [
       {
         title: 'Break one condition, any one',
@@ -809,46 +838,49 @@ class Holder {
 }`,
     remember: 'Without a happens-before edge (lock, volatile, start/join), another thread may never see your write. @Volatile gives visibility, not atomicity.',
     visual(el) {
-      let vol = false, aView, bView, mem, loops, stopped;
-      const box = (title, sub) => { const v = h('span', { class: 'cc-val' }); return { v, el: h('div', { class: 'cc-box' }, h('h4', {}, title), h('span', { class: 'cc-note' }, sub), v) }; };
-      const A = box('Thread A, core 1', 'while (running) poll()');
-      const B = box('Thread B, core 2', 'running = false');
-      const M = box('Main memory', 'shared by all cores');
-      const st = h('div', { class: 'cc-stats' });
-      const msg = out('');
-      function reset() { aView = true; bView = true; mem = true; loops = 0; stopped = false; paint(); say(msg, vol ? '@Volatile var running = true. Every read and write of running goes through to shared memory, with a happens-before edge from the write to later reads.' : 'var running = true, no @Volatile. Each thread may work with its own copy: a register, a store buffer, or a value the JIT hoisted out of the loop.'); }
-      function paint() {
-        A.v.textContent = `sees running = ${aView}`; A.v.className = `cc-val ${stopped ? 'cc-fresh' : aView && !bView ? 'cc-stale' : ''}`;
-        B.v.textContent = `sees running = ${bView}`;
-        M.v.textContent = `running = ${mem}`;
-        A.el.className = `cc-box ${stopped ? 'cc-ok' : 'cc-acc'}`;
-        st.innerHTML = `A loop iterations: <b>${loops}</b> · A ${stopped ? '<b>stopped</b>' : 'still <b>running</b>'}`;
-      }
-      function write() {
-        bView = false;
-        if (vol) { mem = false; say(msg, 'B writes running = false. Volatile: the write goes straight to shared memory before B continues.'); }
-        else say(msg, 'B writes running = false into its own store buffer. Memory and A still say true. Nothing forces the write out yet.');
-        paint();
-      }
-      function read() {
-        if (stopped) { say(msg, 'A already left the loop.'); return; }
-        loops++;
-        if (vol) aView = mem;
-        if (!aView) { stopped = true; say(msg, `A reads running from memory, sees false, and stops. The volatile write happens-before this read.`); }
-        else say(msg, vol ? 'A reads running from memory: still true, because B has not written yet.' : `A reads its own copy: true. It keeps looping. ${!bView ? 'B wrote false, but there is no happens-before edge, so A is not required to see it.' : ''}`);
-        paint();
-      }
-      function wait() {
-        if (!vol && !bView && mem) { mem = false; say(msg, 'Time passes. B\'s store buffer drains and memory now says false. A still uses the value it loaded: the JIT may have read running once and turned the loop into while (true). The JMM allows A to loop forever.'); }
-        else say(msg, vol ? 'With @Volatile, waiting is not needed: every read already goes to memory.' : 'Time passes. Nothing changes for A: no rule makes it reload running.');
-        paint();
-      }
-      el.append(picker('declaration', [{ src: 'var running = true' }, { src: '@Volatile var running = true' }], (_, k) => { vol = k === 1; reset(); }),
-        h('div', { class: 'cc-stage' }, h('div', { class: 'cc-two' }, A.el, B.el), M.el, st),
-        h('div', { class: 'controls' }, act('B: running = false', write), act('A: check running', read), act('Time passes', wait)),
-        msg, h('p', { class: 'cc-note' }, 'A simplified model. Real CPU caches are kept coherent, but values in registers, store buffers and JIT-optimized loops behave like this private copy.'));
-      reset();
-    },
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'A', label: 'Thread A<small>while (running)</small>', x: 17, y: 12 },
+              { id: 'B', label: 'Thread B<small>running = false</small>', x: 83, y: 12, tone: 'warm' },
+              { id: 'reg', label: 'A’s copy<small>register / JIT</small>', x: 17, y: 52, tone: 'muted' },
+              { id: 'buf', label: 'B’s store<small>buffer</small>', x: 83, y: 52, tone: 'muted' },
+              { id: 'mem', label: 'Main memory<small>running</small>', x: 50, y: 88, tone: 'muted' },
+            ],
+            predict: {
+              q: 'Plain <code>var running</code>. B’s write has reached main memory, which now says false. Does A’s loop have to stop?',
+              options: ['Yes, at its next check', 'No: A may keep using its own copy forever', 'Yes, but only after the next garbage collection'],
+              a: 1,
+              why: 'Without a happens-before edge, A is never required to read memory again. The JIT may read <code>running</code> once and turn the loop into <code>while (true)</code>.',
+            },
+            frames: [
+              { add: [['mem', 'reg', 'true'], ['reg', 'A', 'true']], say: 'A spins on a plain <code>var running = true</code>. It loaded the value once, and the JIT may keep it in a register.' },
+              { add: [['B', 'buf', 'false', 'warm']], say: 'B writes <code>running = false</code>. The write lands in B’s store buffer first. Memory still says true.' },
+              { hl: ['A'], add: [['reg', 'A', 'true', 'err']], say: 'A checks again and sees its copy: true. Nothing forces A to look for B’s write.' },
+              { add: [['buf', 'mem', 'false', 'warm']], say: 'Later the buffer drains, and memory says false. A still uses its copy. The memory model allows it to loop forever.' },
+              { remove: [['mem', 'reg'], ['reg', 'A'], ['B', 'buf'], ['buf', 'mem']], gone: ['reg', 'buf'], add: [['B', 'mem', 'volatile write', 'ok']], say: 'Now <code>@Volatile var running</code>. B’s write is a volatile write: it cannot stay private to B.' },
+              { add: [['mem', 'A', 'volatile read: false', 'ok']], hl: ['A'], say: 'Every check in A’s loop is a volatile read, so it cannot be cached. The write happens-before the read that sees it, and A stops.' },
+            ],
+          });
+        },
+        play: `import kotlin.concurrent.thread
+
+object Flags {
+    @Volatile var running = true   // delete @Volatile and run again
+}
+
+fun main() {
+    val worker = thread(isDaemon = true) {
+        var spins = 0L
+        while (Flags.running) spins++
+        println("worker saw running = false after $spins spins")
+    }
+    Thread.sleep(100)
+    Flags.running = false
+    println("main set running = false")
+    worker.join(2_000)
+    println(if (worker.isAlive) "after 2 s the worker is still spinning: it never saw the write" else "worker stopped")
+}`,
     deeper: [
       {
         title: 'Reordering: seeing the flag before the data',
@@ -966,6 +998,33 @@ suspend fun put(a: Article) = withContext(confined) { cache[a.id] = a }`,
       el.append(box);
       stepper(box, casCfg());
     },
+        predict: {
+          q: 'T2 changes <code>value</code> between T1’s read and T1’s compare-and-set, so T1 has to retry. What is <code>value</code> when both threads are done?',
+          options: ['1: one update was lost', '2: both increments counted', '0: the failed CAS undid everything'],
+          a: 1,
+          why: 'A failed CAS writes nothing. T1 reads the new value, computes again and retries, so no update is lost and no thread ever waited on a lock.',
+        },
+        play: `import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
+
+val count = AtomicInteger(0)
+val retries = AtomicInteger(0)
+
+fun increment() {
+    while (true) {
+        val old = count.get()
+        if (count.compareAndSet(old, old + 1)) return
+        retries.incrementAndGet()          // another thread got there first: retry
+    }
+}
+
+fun main() {
+    val threads = List(4) {
+        thread { repeat(100_000) { increment() } }   // change 4 to 1 and compare the retries
+    }
+    threads.forEach { it.join() }
+    println("count = \${count.get()}, failed CAS attempts = \${retries.get()}")
+}`,
     deeper: [
       {
         title: 'The CAS loop and why the function must be pure',

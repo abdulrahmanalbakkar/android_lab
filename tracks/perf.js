@@ -1596,6 +1596,12 @@ runOnUiThread { progress.isVisible = false }`,
       { q: 'This runs on the main thread inside an Activity. What is logged, in order?<pre class="code mini">handler.post { log("A") }\nlog("B")\nlifecycleScope.launch { log("C") }</pre>', options: ['A, B, C', 'B, A, C', 'B, C, A'], a: 2, why: 'post() queues A behind the current message. lifecycleScope uses Dispatchers.Main.immediate, so C runs right away because you are already on the main thread.' },
       { q: 'A HandlerThread has one message due now and one posted with a 5 second delay. You call <code>quitSafely()</code>. What happens?', options: ['Both messages run, then the thread ends', 'The due message runs; the delayed one is dropped', 'Both are dropped and the thread ends at once'], a: 1, why: 'quitSafely() handles the messages that are already due and drops the delayed ones. quit() would drop everything.' },
     ],
+    predict: {
+          q: 'You post a 300 ms task to the main thread. What happens to the spinning animation while it runs?',
+          options: ['It keeps turning: animations run on their own thread', 'It freezes: its frame messages wait in the same queue', 'It speeds up to catch up'],
+          a: 1,
+          why: 'This animation moves once per frame, and each frame is a message for the same Looper. One message runs at a time, so the frames wait.',
+        },
     visual(el) {
       const SLOW = 8, FRAME = 16.7, STEP = 5;
       const root = h('div', { class: 'viz' });
@@ -1730,6 +1736,12 @@ val jankStats = JankStats.createAndTrack(window) { frame ->
         deeper: frameDepth.deeper,
         underHood: frameDepth.underHood,
         mistakes: frameDepth.mistakes,
+        predict: {
+          q: 'Every frame now includes a 12 ms JSON parse on the main thread. You switch the display from 60 Hz to 120 Hz. What happens?',
+          options: ['Frames get smoother: the screen is faster', 'Frames start to miss: the budget drops from 16.7 ms to 8.3 ms', 'Nothing: the frame budget doesn’t depend on the display'],
+          a: 1,
+          why: 'The budget is one refresh interval. A faster display gives each frame less time, so work that fit at 60 Hz no longer fits at 120 Hz.',
+        },
         visual(el) {
           const SCALE = 3, MAXMS = 43, KEEP = 30;
           let hz = 60, work = 0, vsync = 0, pending = 0, pos = 0;
@@ -1855,6 +1867,12 @@ suspend fun readDraft(): String = withContext(Dispatchers.IO) {
         deeper: anrDepth.deeper,
         underHood: anrDepth.underHood,
         mistakes: anrDepth.mistakes,
+        predict: {
+          q: 'A file read on the main thread takes 7 s on slow storage. The user taps the screen during it. What do they get?',
+          options: ['A short freeze, then the tap runs', 'An ANR dialog: the tap was not handled within 5 seconds', 'A crash from StrictMode'],
+          a: 1,
+          why: 'The tap waits behind the read. After 5 seconds without handling input, the system reports Application Not Responding.',
+        },
         visual(el) {
           const SEC = 380, TOTAL = 8; // ms of real time per simulated second, timeline length in s
           let busy = false, strict = true;
@@ -2015,90 +2033,32 @@ object Analytics {
         underHood: leaksDepth.underHood,
         mistakes: leaksDepth.mistakes,
         visual(el) {
-          const MB = 14, LIMIT = 96;
-          let n = 0, fixed = false, busy = false, oom = false;
-          const acts = [], listeners = [];
-          const root = h('div', { class: 'viz' });
-          const refs = h('div', { class: 'pf-refs' });
-          const gcRoot = h('div', { class: 'pf-root' }, h('span', { class: 'eyebrow' }, 'GC root'), h('span', { class: 'pf-root-name' }, 'object LocationRepo'), h('span', {}, 'listeners ='), refs);
-          const actsBox = h('div', { class: 'pf-acts' });
-          const heapNum = h('span', { class: 'pf-stat' });
-          const heapFill = h('span');
-          const heapBar = h('div', { class: 'pf-heap-bar' }, heapFill);
-          const o = out('MapActivity #1 is on screen and registered with LocationRepo. Rotate the phone.');
-          const fixT = toggle('pf-unreg', 'removeListener in <code>onStop()</code>', false, v => { fixed = v; say(o, v ? 'Fix on: the next Activity unregisters when it stops. Earlier leaks stay leaked.' : 'Fix off: Activities register and never unregister.'); });
-          const used = () => acts.length * MB + 10;
-          function paint() {
-            refs.replaceChildren(...(listeners.length ? listeners.map(a => h('span', { class: 'pf-ref pop' }, `#${a.n}`)) : [h('span', { class: 'muted-text' }, '[ ]')]));
-            acts.forEach(a => {
-              a.el.className = 'obj pf-act ' + (a.alive ? 'pf-alive' : a.leak ? 'pf-leak' : 'pf-dead');
-              a.state.textContent = a.alive ? 'on screen' : a.leak ? 'leaked, reachable' : 'destroyed';
-            });
-            const u = used();
-            heapNum.innerHTML = `Java heap <b>${u} MB</b> of ${LIMIT} MB`;
-            heapFill.style.width = Math.min(100, (u / LIMIT) * 100) + '%';
-            heapBar.className = 'pf-heap-bar' + (u >= LIMIT - MB ? ' pf-full' : u > LIMIT / 2 ? ' pf-high' : '');
-          }
-          function create() {
-            n++;
-            const state = h('small');
-            const a = { n, alive: true, leak: false, state, el: h('div', { class: 'obj pf-act drop-in' }, h('span', { class: 'obj-name' }, `MapActivity #${n}`), state, h('small', {}, `views + bitmaps ≈ ${MB} MB`)) };
-            acts.push(a); actsBox.append(a.el); listeners.push(a);
-            return a;
-          }
-          function rotate() {
-            if (busy || oom) return;
-            const cur = acts.find(a => a.alive);
-            if (used() + MB > LIMIT) {
-              oom = true; replay(root, 'shake');
-              say(o, '<span class="bad">FATAL EXCEPTION: java.lang.OutOfMemoryError: Failed to allocate a 3145740 byte allocation</span>');
-              line(o, 'Press Run GC to see what can be freed, or Reset.');
-              return;
-            }
-            if (cur) {
-              cur.alive = false;
-              if (fixed) listeners.splice(listeners.indexOf(cur), 1);
-            }
-            const a = create();
-            say(o, `rotation: #${cur ? cur.n : '?'} onStop, onDestroy. #${a.n} onCreate, onStart, ${hl('addListener(onLocation)')}${fixed ? ' <span class="good">#' + cur.n + ' removed itself in onStop</span>' : ''}`);
-            paint();
-          }
-          async function gc() {
-            if (busy) return; busy = true;
-            const dead = acts.filter(a => !a.alive);
-            const free = dead.filter(a => !listeners.includes(a)), kept = dead.filter(a => listeners.includes(a));
-            say(o, `${hl('Runtime.getRuntime().gc()')} <span class="muted">// walk from GC roots</span>`);
-            free.forEach(a => a.el.classList.add('leave'));
-            kept.forEach(a => { a.leak = true; replay(a.el, 'shake'); });
-            paint();
-            await sleep(460); if (!root.isConnected) return;
-            free.forEach(a => { a.el.remove(); acts.splice(acts.indexOf(a), 1); });
-            if (free.length) oom = false;
-            paint();
-            line(o, `freed ${free.length * MB} MB. ${kept.length ? `<span class="bad">${kept.length} destroyed Activit${kept.length > 1 ? 'ies' : 'y'} still reachable from LocationRepo.</span>` : '<span class="good">Nothing destroyed is reachable.</span>'}`);
-            busy = false;
-          }
-          function canary() {
-            if (busy) return;
-            const leaked = acts.filter(a => !a.alive && listeners.includes(a));
-            if (!leaked.length) { say(o, 'LeakCanary: <span class="good">0 retained objects.</span> No heap dump needed.'); return; }
-            const a = leaked[0];
-            const i = listeners.indexOf(a);
-            say(o, `LeakCanary: ${leaked.length} retained object${leaked.length > 1 ? 's' : ''}. Heap dump analyzed. First trace:`);
-            ['┬───', '│ GC Root: System class', '│', '├─ com.example.LocationRepo class', '│    Leaking: NO (a class is never leaking)', '│    ↓ static LocationRepo.INSTANCE', '├─ com.example.LocationRepo instance', '│    ↓ LocationRepo.listeners', '│                   ~~~~~~~~~', '├─ java.util.ArrayList instance', `│    ↓ ArrayList[${i}]`, '├─ com.example.MapActivity$onLocation$1 instance', '│    ↓ MapActivity$onLocation$1.this$0', '╰→ com.example.MapActivity instance', `     Leaking: YES (Activity#mDestroyed is true) #${a.n}`]
-              .forEach(s => line(o, esc(s), 'pf-pre'));
-          }
-          create(); paint();
-          root.append(
-            h('div', { class: 'controls' }, fixT.el),
-            h('div', { class: 'pf-heap-stage' }, gcRoot, actsBox),
-            h('div', { class: 'pf-heap' }, heapNum, heapBar),
-            h('div', { class: 'controls' },
-              act('Rotate the phone', rotate),
-              cmd('Runtime.getRuntime().gc()', gc),
-              act('LeakCanary: dump heap', canary)),
-            o);
-          el.append(root);
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'root', label: 'GC root<small>static field</small>', x: 17, y: 12, tone: 'muted' },
+              { id: 'repo', label: 'LocationRepo<small>object</small>', x: 50, y: 12 },
+              { id: 'sys', label: 'GC root<small>system</small>', x: 17, y: 55, tone: 'muted' },
+              { id: 'l1', label: 'listener #1', x: 50, y: 50, hidden: true },
+              { id: 'a1', label: 'MapActivity #1<small>views, bitmaps</small>', x: 50, y: 88 },
+              { id: 'l2', label: 'listener #2', x: 83, y: 50, hidden: true },
+              { id: 'a2', label: 'MapActivity #2', x: 83, y: 88, hidden: true },
+            ],
+            predict: {
+              q: 'You rotate the phone. Android destroys <code>MapActivity #1</code>, but a listener it registered is still in <code>LocationRepo</code>. Can the GC free #1?',
+              options: ['Yes, destroyed Activities are always freed', 'No, it is still reachable from a GC root', 'Only when the device is low on memory'],
+              a: 1,
+              why: 'The GC frees objects by reachability, not by lifecycle. A static object holds the listener, and the listener holds the Activity.',
+            },
+            frames: [
+              { add: [['root', 'repo'], ['sys', 'a1']], say: 'MapActivity #1 is on screen, held by the system. <code>LocationRepo</code> is an <code>object</code>, so a static field keeps it alive as long as the process.' },
+              { show: ['l1'], add: [['repo', 'l1', 'listeners'], ['l1', 'a1', 'captures']], say: '<code>onStart</code> registers a listener. The lambda captures <code>this</code>, the Activity.' },
+              { show: ['a2'], remove: [['sys', 'a1']], add: [['sys', 'a2']], say: 'Rotate. Android destroys #1, creates #2, and the system lets go of #1.' },
+              { hl: ['root', 'repo', 'l1', 'a1'], add: [['root', 'repo', '', 'err'], ['repo', 'l1', 'listeners', 'err'], ['l1', 'a1', 'captures', 'err']], say: 'But #1 is still reachable: root → <code>LocationRepo</code> → listener → Activity. The GC cannot free it, or its views and bitmaps. That is a leak.' },
+              { show: ['l2'], add: [['repo', 'l2', 'listeners'], ['l2', 'a2', 'captures']], say: '#2 registers its own listener. Every rotation adds one more dead Activity that never goes away.' },
+              { remove: [['repo', 'l1'], ['l1', 'a1']], add: [['root', 'repo'], ['repo', 'l2', 'listeners']], gone: ['l1', 'a1'], say: 'The fix: <code>removeListener</code> in <code>onStop</code>. Nothing reachable points at #1 any more, so the next GC frees it.' },
+            ],
+          });
         },
       },
 
@@ -2146,6 +2106,12 @@ private val dateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
         deeper: profilerDepth.deeper,
         underHood: profilerDepth.underHood,
         mistakes: profilerDepth.mistakes,
+        predict: {
+          q: 'In the flame chart, a wide bar has almost nothing stacked on top of it. Where is its time going?',
+          options: ['Into the functions it calls', 'Into the function itself: that is self time', 'Into waiting for the GPU'],
+          a: 1,
+          why: 'Callees sit above a bar. If they are narrow or missing, the bar’s width is spent in its own code, which makes it the place to optimize.',
+        },
         visual(el) {
           const BUDGET = 16.7;
           const tree = cached => ({ n: 'Choreographer#doFrame', c: [
@@ -2289,6 +2255,12 @@ composeCompiler {
         deeper: composePerfDepth.deeper,
         underHood: composePerfDepth.underHood,
         mistakes: composePerfDepth.mistakes,
+        predict: {
+          q: 'Without <code>derivedStateOf</code>, <code>FeedScreen</code> reads the first visible index to decide whether to show a “back to top” button. You scroll down 3 rows. How often does it recompose?',
+          options: ['Once, when the button appears', '3 times: once per index change', 'Never: scrolling isn’t state'],
+          a: 1,
+          why: 'Reading the index subscribes to every change of it. <code>derivedStateOf</code> turns it into a Boolean that only changes once.',
+        },
         visual(el) {
           const pool = ['Kotlin', 'Compose', 'Flow', 'Room', 'Hilt', 'Ktor'];
           let imm = false, derived = false, keyed = false, busy = false, scrolled = false, next = 3, uid = 4;
@@ -2441,78 +2413,25 @@ class AnalyticsInitializer : Initializer<Analytics> {
         underHood: startupDepth.underHood,
         mistakes: startupDepth.mistakes,
         visual(el) {
-          const TOTAL = 1150, SLOW = 2.4;
-          const plans = {
-            cold: { label: 'Cold', eager: [['proc', 0, 180, 'pf-proc', 'fork + bindApplication'], ['app', 180, 400, 'pf-appseg', 'Analytics.init'], ['app', 400, 640, 'pf-appseg', 'AdsSdk.init'], ['app', 640, 730, 'pf-appseg', 'ImageLoader.build'], ['app', 730, 780, 'pf-appseg', 'CrashReporter.install'], ['act', 780, 1000, 'pf-actb', 'onCreate + setContent'], ['frame', 1000, 1080, 'pf-frame', 'first frame']],
-              lazy: [['proc', 0, 180, 'pf-proc', 'fork + bindApplication'], ['app', 180, 230, 'pf-appseg', 'CrashReporter.install'], ['act', 230, 450, 'pf-actb', 'onCreate + setContent'], ['frame', 450, 530, 'pf-frame', 'first frame']], splash: true },
-            warm: { label: 'Warm', eager: [['act', 0, 220, 'pf-actb', 'onCreate + setContent'], ['frame', 220, 300, 'pf-frame', 'first frame']], splash: true },
-            hot: { label: 'Hot', eager: [['act', 0, 40, 'pf-actb', 'onStart + onResume'], ['frame', 40, 90, 'pf-frame', 'next frame']], splash: false },
-          };
-          let mode = 'cold', lazy = false, busy = false;
-          const root = h('div', { class: 'viz' });
-          const lanes = {};
-          const tl = h('div', { class: 'timeline' }, [['proc', 'Process'], ['app', 'Application'], ['act', 'Activity'], ['frame', 'Frame']].map(([k, name]) => {
-            lanes[k] = h('div', { class: 'lane-track' });
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), lanes[k]);
-          }));
-          const clock = h('span', { class: 'clock' }, '0 ms');
-          const screen = h('div', { class: 'phone' });
-          const o = out();
-          const fmt = ms => ms >= 1000 ? `+${Math.floor(ms / 1000)}s${ms % 1000}ms` : `+${ms}ms`;
-          const show = what => {
-            if (what === 'home') screen.replaceChildren(h('div', { class: 'pf-launcher' }, Array.from({ length: 9 }, (_, i) => h('i', { class: i === 4 ? 'pf-me' : null }))));
-            else if (what === 'splash') screen.replaceChildren(h('div', { class: 'pf-splash pop' }, 'N'));
-            else screen.replaceChildren(h('div', { class: 'pf-content drop-in' }, ['Top stories', 'Markets', 'Sport'].map(t => h('div', { class: 'item' }, t))));
-          };
-          const segs = () => (mode === 'cold' && lazy ? plans.cold.lazy : plans[mode].eager);
-          function clear() { Object.values(lanes).forEach(l => l.replaceChildren()); }
-          const modeBtns = Object.entries(plans).map(([k, p]) => act(`${p.label} start`, () => launch(k)));
-          const lazyT = toggle('pf-lazy', 'Init SDKs lazily, after the first frame', false, v => { lazy = v; say(o, v ? 'Only CrashReporter stays in Application.onCreate. Analytics, ads and the image loader start when needed.' : 'Every SDK initializes in Application.onCreate, on the main thread.'); });
-          function launch(k) {
-            if (busy) return; busy = true;
-            mode = k; press(modeBtns, modeBtns[Object.keys(plans).indexOf(k)]);
-            clear(); show('home');
-            const ss = segs(), end = ss[ss.length - 1][2];
-            const bars = ss.map(([lane, s, e, cls, label]) => { const b = h('span', { class: `bar ${cls}`, title: label, style: `left:${(s / TOTAL) * 100}%;width:0` }); lanes[lane].append(b); return { b, s, e, label }; });
-            say(o, `${k} start${k === 'cold' ? (lazy ? ', lazy init' : ', eager init') : ''}: ${k === 'cold' ? 'no process yet' : k === 'warm' ? 'process alive, Activity recreated' : 'Activity still in memory'}`);
-            const logged = new Set();
-            const t0 = performance.now();
-            let splashShown = false;
-            const tick = now => {
-              if (!root.isConnected) return;
-              const t = Math.min((now - t0) / SLOW, end);
-              clock.textContent = Math.round(t) + ' ms';
-              if (plans[k].splash && !splashShown && t > 20) { splashShown = true; show('splash'); }
-              bars.forEach(x => {
-                x.b.style.width = (Math.max(0, Math.min(t, x.e) - x.s) / TOTAL) * 100 + '%';
-                if (t > x.s && !logged.has(x) && x.label !== 'first frame' && x.label !== 'next frame') { logged.add(x); line(o, `${esc(x.label)} <span class="muted">${x.e - x.s} ms</span>`); }
-              });
-              if (t < end) { requestAnimationFrame(tick); return; }
-              lanes.frame.append(h('span', { class: 'pf-ttid', style: `left:${(end / TOTAL) * 100}%` }));
-              show('content');
-              line(o, `<span class="good">ActivityTaskManager: Displayed com.example.news/.MainActivity ${fmt(end)}</span>`);
-              busy = false;
-            };
-            requestAnimationFrame(tick);
-          }
-          // open on a finished cold start
-          press(modeBtns, modeBtns[0]);
-          plans.cold.eager.forEach(([lane, s, e, cls, label]) => lanes[lane].append(h('span', { class: `bar ${cls}`, title: label, style: `left:${(s / TOTAL) * 100}%;width:${((e - s) / TOTAL) * 100}%` })));
-          lanes.frame.append(h('span', { class: 'pf-ttid', style: `left:${(1080 / TOTAL) * 100}%` }));
-          clock.textContent = '1080 ms';
-          show('content');
-          o.innerHTML = 'Last cold start: <span class="bad">1080 ms</span> to first frame. 600 ms of it was SDK init in Application.onCreate.';
-          root.append(
-            h('div', { class: 'controls' }, modeBtns),
-            h('div', { class: 'controls' }, lazyT.el),
-            h('div', { class: 'pf-split' }, h('div', { class: 'viz' }, h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'main thread'), clock), tl,
-              h('div', { class: 'legend' },
-                h('span', {}, h('i', { class: 'bar pf-proc' }), 'process start'),
-                h('span', {}, h('i', { class: 'bar pf-app' }), 'Application.onCreate'),
-                h('span', {}, h('i', { class: 'bar pf-actb' }), 'Activity'),
-                h('span', {}, h('i', { class: 'bar pf-frame' }), 'first frame'))), screen),
-            o);
-          el.append(root);
+          Lab.ui.timeline(el, {
+            lanes: ['main: eager', 'main: lazy', 'bg: lazy'],
+            span: 1100,
+            predict: {
+              q: '<code>Application.onCreate</code> initializes analytics, ads and an image loader. When can the first frame appear?',
+              options: ['Only after all three finish: they run on the main thread before any Activity', 'Right away: SDKs always start in the background', 'Before them: the Activity is created first'],
+              a: 0,
+              why: 'In a cold start the main thread runs <code>Application.onCreate</code> first, then the Activity, then the first frame. Every init in between delays it.',
+            },
+            frames: [
+              { now: 0, say: 'A cold start. The user taps the icon and there is no process yet. The top lane is the main thread with every SDK in <code>onCreate</code>, the others the same app made lazy.' },
+              { bars: [{ lane: 0, from: 0, to: 180, tone: 'muted', label: 'fork' }], say: 'The system forks a process and binds your <code>Application</code>.' },
+              { bars: [{ lane: 0, from: 180, to: 400, tone: 'warm', label: 'Analytics' }, { lane: 0, from: 400, to: 640, tone: 'warm', label: 'Ads' }, { lane: 0, from: 640, to: 730, tone: 'warm', label: 'Images' }, { lane: 0, from: 730, to: 780, tone: 'err', label: 'Crash' }], say: '<code>Application.onCreate</code> initializes four SDKs, one after another, on the main thread. No Activity exists yet.' },
+              { bars: [{ lane: 0, from: 780, to: 1000, label: 'Activity' }, { lane: 0, from: 1000, to: 1080, tone: 'ok', label: 'frame' }], marks: [{ at: 1080, label: '1080 ms', tone: 'err' }], say: 'Then <code>onCreate</code> and <code>setContent</code>, then the first frame. Logcat prints <code>Displayed … +1s80ms</code>.' },
+              { bars: [{ lane: 1, from: 0, to: 180, tone: 'muted', label: 'fork' }, { lane: 1, from: 180, to: 230, tone: 'err', label: 'Crash' }], say: 'Same app, made lazy. Only the crash reporter stays in <code>onCreate</code>: it has to catch crashes during startup.' },
+              { bars: [{ lane: 1, from: 230, to: 450, label: 'Activity' }, { lane: 1, from: 450, to: 530, tone: 'ok', label: 'frame' }], marks: [{ at: 530, label: '530 ms', tone: 'ok' }], say: 'The Activity starts much sooner, and the first frame lands at 530 ms.' },
+              { bars: [{ lane: 2, from: 530, to: 750, tone: 'warm', label: 'Analytics' }, { lane: 2, from: 760, to: 850, tone: 'warm', label: 'Images' }], say: 'After the first frame, analytics starts on a background thread, and the image loader is built <code>by lazy</code> when a screen first needs it. Ads wait until a screen shows one.' },
+            ],
+          });
         },
       },
 
@@ -2571,89 +2490,29 @@ android {
         underHood: r8Depth.underHood,
         mistakes: r8Depth.mistakes,
         visual(el) {
-          const base = [
-            { k: 'cls', src: 'class com.example.news.ArticleRepository', ren: 'class a.a' },
-            { src: '    fun load(): List<Article>', ren: '    fun a(): List' },
-            { src: '    fun debugDump()', why: 'never called', drop: 'shrink' },
-            { k: 'cls', src: 'class com.example.news.Session', ren: 'class a.b' },
-            { src: '    fun isLoggedIn(): Boolean', why: 'inlined into callers', drop: 'optimize' },
-            { k: 'cls', src: 'class com.example.news.LegacyExporter', why: 'nothing references it', drop: 'shrink' },
-            { k: 'cls', src: 'class com.example.api.UserDto', ren: 'class a.c', keep: 'dto', why: 'read by Gson' },
-            { src: '    val name: String', ren: '    val a: String', keep: 'dto' },
-            { k: 'cls', src: 'class com.example.plugins.PdfPlugin', why: 'only via Class.forName', drop: 'shrink', keep: 'plugin' },
-            { k: 'cls', src: 'class okhttp3.internal.ws.RealWebSocket', why: 'library code you never use', drop: 'shrink' },
-          ];
-          const SIZES = { before: 12.4, shrink: 8.1, optimize: 7.6, obfuscate: 6.9 };
-          let keepDto = false, keepPlugin = false, phase = 'before', busy = false;
-          const root = h('div', { class: 'viz' });
-          const dex = h('div', { class: 'pf-dex', 'aria-live': 'polite' });
-          const size = h('span', { class: 'pf-size' });
-          const phaseTag = h('span', { class: 'pf-label' });
-          const o = out('Debug build: no R8. Every class keeps its name and the APK is 12.4 MB.');
-          const rows = base.map(r => ({ ...r, el: h('div', { class: 'pf-dl' + (r.k ? ' pf-cls' : '') }) }));
-          dex.append(...rows.map(r => r.el));
-          const kept = r => (r.keep === 'dto' && keepDto) || (r.keep === 'plugin' && keepPlugin);
-          const order = ['before', 'shrink', 'optimize', 'obfuscate'];
-          const reached = p => order.indexOf(phase) >= order.indexOf(p);
-          function paint() {
-            rows.forEach(r => {
-              const gone = r.drop && reached(r.drop) && !kept(r);
-              const renamed = r.ren && reached('obfuscate') && !kept(r);
-              r.el.className = 'pf-dl' + (r.k ? ' pf-cls' : '') + (gone ? (r.drop === 'optimize' ? ' pf-inl pf-gone' : ' pf-gone') : renamed ? ' pf-ren' : (kept(r) && phase !== 'before') ? ' pf-kept' : '');
-              r.el.innerHTML = hl(renamed ? r.ren : r.src) + (gone || (kept(r) && phase !== 'before' && r.k) ? `  <span class="pf-why">// ${gone ? r.why : 'kept by rule'}</span>` : '');
-            });
-            const extra = keepPlugin && reached('shrink') ? 0.1 : 0;
-            size.textContent = (SIZES[phase] + extra).toFixed(1) + ' MB';
-            phaseTag.textContent = phase === 'before' ? 'before R8' : `after ${phase}`;
-          }
-          const setRule = which => v => { if (which === 'dto') keepDto = v; else keepPlugin = v; phase = 'before'; paint(); say(o, 'Rules changed. Run R8 again.'); };
-          const tDto = toggle('pf-keepdto', '<code>-keep class ...UserDto { *; }</code>', false, setRule('dto'));
-          const tPlg = toggle('pf-keepplg', '<code>-keep class ...PdfPlugin</code>', false, setRule('plugin'));
-          async function run() {
-            if (busy) return; busy = true;
-            phase = 'before'; paint();
-            say(o, `${hl('./gradlew assembleRelease')} <span class="muted">// R8 runs</span>`);
-            for (const p of ['shrink', 'optimize', 'obfuscate']) {
-              await sleep(650); if (!root.isConnected) return;
-              phase = p; paint(); replay(size, 'pop');
-              rows.forEach(r => { if ((r.drop === p && !kept(r)) || (p === 'obfuscate' && r.ren && !kept(r))) replay(r.el, 'flip'); });
-              line(o, { shrink: 'shrink: removed unreachable classes and methods', optimize: 'optimize: inlined small methods', obfuscate: 'obfuscate: renamed the rest, wrote mapping.txt' }[p]);
-            }
-            busy = false;
-          }
-          let crashed = false;
-          function launch() {
-            if (busy) return;
-            crashed = false;
-            if (phase !== 'obfuscate') { say(o, phase === 'before' ? 'Runs fine, but this is the unshrunk build. Run R8 first.' : 'R8 still running.'); return; }
-            if (!keepPlugin) {
-              crashed = true;
-              say(o, '<span class="bad">FATAL EXCEPTION: main  java.lang.ClassNotFoundException: com.example.plugins.PdfPlugin</span>');
-              ['    at a.d.a(r8-map-id-5f2c1a:23)', '    at a.e.onClick(r8-map-id-5f2c1a:41)'].forEach(s => line(o, s, 'pf-pre'));
-              replay(dex, 'shake');
-              return;
-            }
-            if (!keepDto) { say(o, 'App runs. Profile screen says <span class="bad">"Hello, null"</span>: Gson looks for field <code>name</code>, R8 renamed it to <code>a</code>.'); return; }
-            say(o, `<span class="good">Release build works</span> and is ${size.textContent}, down from 12.4 MB.`);
-          }
-          function retrace() {
-            if (!crashed) { say(o, 'No obfuscated crash to retrace. Launch a broken release build first.'); return; }
-            say(o, `${hl('retrace mapping.txt stacktrace.txt')}`);
-            line(o, '<span class="bad">java.lang.ClassNotFoundException: com.example.plugins.PdfPlugin</span>');
-            ['    at com.example.news.PluginLoader.load(PluginLoader.kt:23)', '    at com.example.news.ExportMenu.onClick(ExportMenu.kt:41)'].forEach(s => replay(line(o, s, 'pf-pre'), 'flip'));
-            line(o, 'Now you know where to look: add a keep rule for the reflected class.');
-          }
-          paint();
-          root.append(
-            h('div', { class: 'controls' }, tDto.el, tPlg.el),
-            h('div', { class: 'pf-row' }, phaseTag, size),
-            dex,
-            h('div', { class: 'controls' },
-              cmd('./gradlew assembleRelease', run),
-              act('Launch release build', launch),
-              act('Retrace with mapping.txt', retrace)),
-            o);
-          el.append(root);
+          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const dex = s => '<pre class="ui-out">' + esc(s) + '</pre>';
+          const before = 'com.example.news.ArticleRepository\ncom.example.news.LegacyExporter\ncom.example.news.PluginLoader\ncom.example.plugins.PdfPlugin\n… 1,240 more classes';
+          const after = 'a.a       ← ArticleRepository\na.d       ← PluginLoader\n(removed)   LegacyExporter\n(removed)   PdfPlugin\n… 410 more classes';
+          const fixed = 'a.a       ← ArticleRepository\na.d       ← PluginLoader\n(removed)   LegacyExporter\ncom.example.plugins.PdfPlugin   kept\n… 410 more classes';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Classes in the release DEX',
+            predict: {
+              q: '<code>PluginLoader</code> loads <code>PdfPlugin</code> only with <code>Class.forName(...)</code>, and there is no keep rule. When does that show up?',
+              options: ['As an R8 error during the build', 'At run time, when the release app reaches that code', 'Never: R8 follows <code>Class.forName</code>'],
+              a: 1,
+              why: 'R8 only sees direct references. It removes the class without a warning, the build succeeds, and the minified app crashes when the reflection runs.',
+            },
+            frames: [
+              { panel: dex(before), say: 'The release build has <code>isMinifyEnabled = true</code>. Before R8, every class keeps its full name.' },
+              { cmd: './gradlew :app:assembleRelease', out: '&gt; Task :app:minifyReleaseWithR8\n\nBUILD SUCCESSFUL in 52s', panel: dex(after), say: 'R8 starts from entry points and removes what nothing reaches, then renames the rest. <code>PdfPlugin</code> is only named in a string, so it looks unused.' },
+              { cmd: 'adb install -r app/build/outputs/apk/release/app-release.apk', out: 'Performing Streamed Install\nSuccess', say: 'The build passed. Install the minified APK, the one users will get.' },
+              { cmd: 'adb logcat -v brief -s AndroidRuntime', out: 'E/AndroidRuntime( 4211): FATAL EXCEPTION: main\nE/AndroidRuntime( 4211): java.lang.ClassNotFoundException: com.example.plugins.PdfPlugin\nE/AndroidRuntime( 4211): \tat java.lang.Class.forName(Class.java:536)\nE/AndroidRuntime( 4211): \tat a.d.a(r8-map-id-5f2c1a:12)', say: 'Open a PDF and it crashes. The class is gone, and your own frame is renamed to <code>a.d.a</code>.' },
+              { cmd: 'retrace app/build/outputs/mapping/release/mapping.txt crash.txt', out: 'java.lang.ClassNotFoundException: com.example.plugins.PdfPlugin\n\tat java.lang.Class.forName(Class.java:536)\n\tat com.example.news.PluginLoader.load(PluginLoader.kt:12)', say: '<code>retrace</code> reads <code>mapping.txt</code> and turns <code>a.d.a</code> back into <code>PluginLoader.load</code>, line 12.' },
+              { cmd: "echo '-keep class com.example.plugins.PdfPlugin { <init>(); }' >> app/proguard-rules.pro", say: 'Add the narrowest keep rule: the class and the constructor that reflection calls.' },
+              { cmd: './gradlew :app:assembleRelease', out: '&gt; Task :app:minifyReleaseWithR8\n\nBUILD SUCCESSFUL in 49s', panel: dex(fixed), say: 'Build again. <code>PdfPlugin</code> stays, with its real name, so <code>Class.forName</code> can find it. Everything else is still shrunk.' },
+            ],
+          });
         },
       },
     ],

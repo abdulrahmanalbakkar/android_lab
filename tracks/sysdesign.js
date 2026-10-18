@@ -144,7 +144,7 @@ button.sd-box:hover { transform: translateY(-1px); }
     body: `
 <p>A design discussion often starts from an open prompt like "design a news app" or "design a chat app", and a first pass can fit in about 45 minutes. There is no single right answer. What matters is how you turn a vague prompt into a scoped problem, make decisions, and say what each decision costs.</p>
 <p>Use a fixed order: clarify the requirements, estimate the load, sketch the client and the server, deep-dive into one or two hard parts, then talk about trade-offs. Mobile designs usually put more weight on the client than backend designs do: the <a href="#arch.layers">layers</a>, the <a href="#arch.ssot">source of truth</a>, offline behaviour, battery, data use, and how the app talks to the API. The server can stay at the level of boxes unless your team needs more detail.</p>
-<p>Say your assumptions out loud and write them down where everyone can see them. "1M daily users, Android first, cached articles must open offline" is a decision the rest of the design can point back to. Coding problems have their own routine in <a href="#cs.interview">Solving a problem step by step</a>. Step through the phases below, then try the estimate.</p>`,
+<p>Say your assumptions out loud and write them down where everyone can see them. "1M daily users, Android first, cached articles must open offline" is a decision the rest of the design can point back to. Coding problems have their own routine in <a href="#cs.interview">Solving a problem step by step</a>. Step through the phases below.</p>`,
     code: `// Back-of-the-envelope numbers: say them out loud and write them down
 val dailyUsers = 1_000_000L
 val feedLoadsPerUser = 10
@@ -215,42 +215,26 @@ val perUserPerDay = thumbsPerLoad * bytesPerThumb * loadsPerDay   // 6,000,000 b
       { title: 'A backend-only design for a mobile app', bad: 'Server boxes: LB → API → DB\nClient: "the app calls the API"', good: 'Client: Compose → ViewModel → Repository\n        → Room (source of truth) + WorkManager sync\nServer: CDN → API → cache → DB', why: 'A mobile design needs depth on the app: what the screen reads, what happens offline, when the radio wakes up.' },
     ],
     visual(el) {
-      const PH = [
-        ['Clarify', 5, 'Find the scope and the constraints.', 'You: "Is it the feed and article pages only, or also comments and login? Must cached articles open offline? Android only? How many daily users?"'],
-        ['Estimate', 5, 'Turn users into load and bytes.', 'You: "1M daily users, 10 feed loads each: about 116 requests per second, maybe 600 at the morning peak. Mostly identical reads, so a CDN fits."'],
-        ['Sketch', 10, 'Draw the client and the server boxes it talks to.', 'You: "Compose UI → ViewModel → Repository. Room is the source of truth; Paging pulls pages into it. Server side: CDN → API → feed cache → database, plus FCM for breaking news."'],
-        ['Deep dive', 15, 'Go into detail on the hardest part.', 'You: "Let me go deep on freshness: Cache-Control per endpoint, how an edited headline gets purged, and what phones still show until max-age runs out."'],
-        ['Trade-offs', 5, 'Name what each choice costs.', 'You: "Cursor pagination means no jump to page 50. A 30-second max-age on the feed means breaking news can be up to 30 seconds late in the list, so push covers that."'],
-        ['Questions', 5, 'List what is still open.', 'You: "Open question: how does the backend handle API changes for old app versions still in use?"'],
-      ];
-      const total = PH.reduce((a, p) => a + p[1], 0);
-      const segs = PH.map(p => h('span', { class: 'sd-seg', style: `flex:${p[1]} 1 0` }, `${p[1]}m`));
-      const sayBox = h('div', { class: 'sd-say', 'aria-live': 'polite' });
-      const btns = PH.map((p, i) => act(p[0], () => show(i)));
-      function show(i) {
-        press(btns, btns[i]);
-        segs.forEach((s, j) => s.classList.toggle('sd-on', j <= i));
-        const used = PH.slice(0, i + 1).reduce((a, p) => a + p[1], 0);
-        sayBox.innerHTML = `<p><b>${PH[i][0]}</b> · ${PH[i][1]} min · minute ${used} of ${total}</p><p>${PH[i][2]}</p><p>${PH[i][3]}</p>`;
-        replay(sayBox, 'pop-soft');
-      }
-      // Estimate calculator
-      let users = 1e6, loads = 10;
-      const o = out('');
-      const uBtns = [1e5, 1e6, 1e7].map(u => act(u >= 1e6 ? `${u / 1e6}M users` : `${u / 1e3}K users`, () => { users = u; press(uBtns, uBtns.find(b => b.u === u)); calc(); }));
-      uBtns.forEach((b, i) => { b.u = [1e5, 1e6, 1e7][i]; });
-      const lBtns = [3, 10, 30].map(l => act(`${l} loads/day`, () => { loads = l; press(lBtns, lBtns.find(b => b.l === l)); calc(); }));
-      lBtns.forEach((b, i) => { b.l = [3, 10, 30][i]; });
-      function calc() {
-        const avg = users * loads / 86400, peak = avg * 5, mb = users * loads * 20 * 30e3 / 1e12;
-        say(o, `avg ${fmt(avg)} req/s · peak ≈ ${fmt(peak)} req/s (5× assumed)<br>thumbnails: ${mb.toFixed(1)} TB/day at 20 × 30 KB per load`);
-      }
-      press(uBtns, uBtns[1]); press(lBtns, lBtns[1]);
-      el.append(h('div', { class: 'sd-wrap' },
-        label('a 45-minute session'), h('div', { class: 'sd-strip', 'aria-hidden': 'true' }, segs),
-        row(...btns), sayBox,
-        label('back-of-the-envelope'), row(...uBtns), row(...lBtns), o));
-      show(0); calc();
+      Lab.ui.timeline(el, {
+        lanes: ['Scope', 'Design', 'Wrap up'],
+        span: 45,
+        unit: 'min',
+        predict: {
+          q: 'Which phase should get the biggest block of the 45 minutes?',
+          options: ['Clarifying the requirements', 'Drawing every server box in detail', 'A deep dive into the hardest part'],
+          a: 2,
+          why: 'Clarifying and estimating are short and come first. The deep dive is where you show real judgement, so it gets the most time.',
+        },
+        frames: [
+          { now: 0, say: 'A 45-minute session: “Design a news app.” Watch where the minutes go.' },
+          { bars: [{ lane: 0, from: 0, to: 5, label: 'Clarify' }], say: 'Clarify first: feed and article pages only? Must cached articles open offline? How many daily users?' },
+          { bars: [{ lane: 0, from: 5, to: 10, label: 'Estimate', tone: 'warm' }], say: '1M daily users × 10 feed loads ≈ 116 requests per second, more at the morning peak. Mostly identical reads, so a CDN fits.' },
+          { bars: [{ lane: 1, from: 10, to: 20, label: 'Sketch', tone: 'ok' }], say: 'Sketch the boxes: Compose UI → ViewModel → Repository → Room, then CDN → API → cache → database, plus FCM.' },
+          { bars: [{ lane: 1, from: 20, to: 35, label: 'Deep dive' }], say: 'The longest block goes to the hardest part. Here: freshness, Cache-Control per endpoint, and how an edited headline gets purged.' },
+          { bars: [{ lane: 2, from: 35, to: 40, label: 'Trade-offs', tone: 'warm' }], say: 'Name what each choice costs: cursor pages cannot jump to page 50; a 30 s max-age means the list can lag, so push covers breaking news.' },
+          { bars: [{ lane: 2, from: 40, to: 45, label: 'Questions', tone: 'muted' }], say: 'End with what is still open, for example how old app versions cope with API changes.' },
+        ],
+      });
     },
   });
 
@@ -299,6 +283,12 @@ interface NewsApi {
       { type: 'blank', prompt: 'Make the parser survive new fields and new enum values from the server.', code: 'val json = Json {\n    [[ignoreUnknownKeys]] = true\n    [[coerceInputValues]] = true\n}', why: '<code>ignoreUnknownKeys</code> skips fields the app doesn\'t know. <code>coerceInputValues</code> replaces an unknown enum value with the property\'s default.' },
       { type: 'bug', prompt: 'The server starts sending <code>"type": "LIVE"</code>. The app has <code>coerceInputValues = true</code> but still fails to parse the feed. Tap the line.', code: '@Serializable\ndata class ArticleDto(\n    val id: String,\n    val title: String,\n    val type: ArticleType,\n    val imageUrl: String? = null,\n)', bug: 4, fix: '    val type: ArticleType = ArticleType.UNKNOWN,', why: 'Coercion can only fall back to a default value. Without one there is nothing to coerce to, so parsing throws.' },
     ],
+    predict: {
+      q: "The server renames <code>title</code> to <code>headline</code>. Which installed app versions break?",
+      options: ["Only the oldest, strict one","Every installed version","None: lenient parsing handles it"],
+      a: 1,
+      why: "<code>ignoreUnknownKeys</code> skips the new key, but every version still needs <code>title</code>. Removing or renaming a field breaks all of them.",
+    },
     quiz: [
       { q: 'The server adds a field <code>liveScore</code> to every article. Your 3.0 app was built with plain <code>Json</code> and default settings. What happens?', options: ['It ignores the field', 'Parsing throws for every article that has it', 'It shows the score'], a: 1, why: 'By default kotlinx.serialization rejects unknown keys. That is why <code>ignoreUnknownKeys = true</code> belongs in every mobile client.' },
       { q: 'Which change is safe without a new API version?', options: ['Renaming title to headline', 'Adding an optional field that clients default', 'Changing id from a number to a string', 'Removing a field old apps read'], a: 1, why: 'Adding is safe for lenient parsers. Renames, type changes and removals break versions already installed.' },
@@ -436,6 +426,12 @@ val pager = Pager(PagingConfig(pageSize = 20, prefetchDistance = 10)) { FeedPagi
       { type: 'blank', prompt: 'Pass the server\'s cursor on as the key for the next page.', code: 'val page = api.feed(cursor = params.[[key]], limit = params.loadSize)\nLoadResult.Page(data = page.items, prevKey = null, nextKey = page.[[nextCursor]])', why: 'Paging hands you the previous page\'s <code>nextKey</code> as <code>params.key</code>. The server says where to continue.' },
       { type: 'bug', prompt: 'Scrolling down shows the first page again and again. Tap the line.', code: 'override suspend fun load(params: LoadParams<String>): LoadResult<String, ArticleDto> {\n    val page = api.feed(cursor = params.key, limit = params.loadSize)\n    return LoadResult.Page(\n        data = page.items,\n        prevKey = null,\n        nextKey = params.key,\n    )\n}', bug: 5, fix: '        nextKey = page.nextCursor,', why: 'The next key must come from the response. Reusing the current key asks for the same page forever.' },
     ],
+    predict: {
+      q: "Cursor pagination: two articles are published at the top before you load page 2. What does page 2 contain?",
+      options: ["Two items you already saw, then new ones","The next items older than the last one you saw, with no repeats","The two new articles"],
+      a: 1,
+      why: "A cursor asks for items older than the last one seen. New items above it do not shift anything below it.",
+    },
     quiz: [
       { q: 'You loaded 20 items with offset pagination. Two articles are published. You request <code>offset=20&amp;limit=20</code>. What do you get?', options: ['20 new items, no repeats', 'Two items at the start repeat items you already have', 'Two items are skipped'], a: 1, why: 'The two new articles pushed everything down two places. The first two items after offset 20 are the last two items of the page you already have.' },
       { q: 'With offset pagination, one article above your position is deleted before you load the next page. What happens?', options: ['A duplicate appears', 'One item is skipped and never shown', 'Nothing changes'], a: 1, why: 'Everything shifts up one place, so the item that moved into position 19 is never requested.' },
@@ -534,7 +530,7 @@ LIMIT 20;
     body: `
 <p>The fastest request is the one you never send. A news app can keep copies in five places, from nearest to farthest: memory in the app, disk in the app (Room or the OkHttp cache), the CDN edge near the user, a cache in front of the database on the server (such as Redis), and the database itself. Each hop you skip saves time, battery and data.</p>
 <p>HTTP gives the app and the CDN shared rules. <code>Cache-Control: max-age=300</code> says the response stays fresh for 5 minutes, so OkHttp can answer from disk without touching the network. After that it is stale and must be revalidated: the client sends <code>If-None-Match</code> with the stored <code>ETag</code>, and if nothing changed the server answers <code>304 Not Modified</code> with no body. You still pay a round trip, but not the download.</p>
-<p>The hard part is invalidation. When an editor fixes a headline, you can delete the server cache entry and purge the CDN, but you can't reach into phones: copies already on devices stay until their <code>max-age</code> runs out. So choose <code>max-age</code> per endpoint by how stale it may be. The client side is in <a href="#data.caching">Caching strategies</a>. Open the article below, wait, edit it, and watch which layer answers.</p>`,
+<p>The hard part is invalidation. When an editor fixes a headline, you can delete the server cache entry and purge the CDN, but you can't reach into phones: copies already on devices stay until their <code>max-age</code> runs out. So choose <code>max-age</code> per endpoint by how stale it may be. The client side is in <a href="#data.caching">Caching strategies</a>. Step through below: open, wait, edit, and watch which layer answers.</p>`,
     code: `val client = OkHttpClient.Builder()
     .cache(Cache(File(context.cacheDir, "http"), 50L * 1024 * 1024))   // honours Cache-Control and ETag
     .build()
@@ -602,66 +598,33 @@ fun cachedArticle(id: String): Response {
       { title: 'A long max-age on something editors change', bad: '// GET /v1/feed\nCache-Control: public, max-age=86400', good: '// GET /v1/feed\nCache-Control: public, max-age=30', why: 'Phones would keep yesterday\'s feed for a whole day, and no purge can reach them.' },
     ],
     visual(el) {
-      const HEAD = ['', 'Team A 2-2 Team B', 'Team A 2-2 Team B: late equaliser', 'Team A 2-2 Team B: VAR check in the 93rd minute'];
-      const LAYERS = [['mem', 'Memory', 'in the app'], ['disk', 'Disk', 'OkHttp cache'], ['cdn', 'CDN', 'edge near user'], ['sc', 'Server cache', 'Redis'], ['db', 'Database', 'source']];
-      const boxes = {}, subs = {};
-      LAYERS.forEach(([k, t, s]) => { subs[k] = h('small', {}, s); boxes[k] = h('div', { class: 'sd-box' }, h('b', {}, t), subs[k]); });
-      const flow = h('div', { class: 'sd-flow' }, LAYERS.flatMap(([k], i) => i ? [h('span', { class: 'sd-arrow', 'aria-hidden': 'true' }, '→'), boxes[k]] : [boxes[k]]));
-      const clock = h('div', { class: 'sd-stats' });
-      const phone = h('div', { class: 'sd-say', 'aria-live': 'polite' });
-      const o = out('');
-      let t, v, sc, cdn, disk, mem, busy;
-      const AGE = 5;
-      function reset() { t = 0; v = 1; sc = null; cdn = null; disk = null; mem = null; busy = false; paint(); phone.textContent = 'Phone shows: nothing yet'; say(o, 'All caches are empty. Open the article.'); }
-      const desc = c => !c ? 'empty' : `v${c.v} · ${t < c.until ? `fresh ${c.until - t}m` : 'stale'}`;
-      function paint(path = []) {
-        subs.mem.textContent = desc(mem); subs.disk.textContent = desc(disk);
-        subs.cdn.textContent = desc(cdn); subs.sc.textContent = sc ? `v${sc}` : 'empty'; subs.db.textContent = `v${v}`;
-        LAYERS.forEach(([k]) => mark(boxes[k], path.includes(k) ? 'sd-hot' : null));
-        clock.innerHTML = `<span>clock <b>${t} min</b></span><span>max-age <b>${AGE} min</b></span>`;
-      }
-      async function open() {
-        if (busy) return; busy = true;
-        const path = []; let ms = 0, bytes = 0, how, got;
-        const hop = async (k, add) => { path.push(k); ms += add; paint(path); await sleep(260); };
-        await hop('mem', 1);
-        if (mem && t < mem.until) { how = '200 from memory'; got = mem.v; }
-        else {
-          await hop('disk', 8);
-          if (disk && t < disk.until) { how = '200 from disk, no network'; got = disk.v; }
-          else {
-            const cond = disk ? disk.v : null;
-            await hop('cdn', 45);
-            let ans;
-            if (cdn && t < cdn.until) ans = cdn.v;
-            else {
-              await hop('sc', 25);
-              if (!sc) { await hop('db', 60); sc = v; }
-              ans = sc; cdn = { v: ans, until: t + AGE };
-            }
-            if (cond === ans) { how = `304 Not Modified (If-None-Match "v${cond}")`; bytes = 0.3; }
-            else { how = `200 with body${cond ? ` (had v${cond})` : ''}`; bytes = 48; }
-            got = ans; disk = { v: ans, until: t + AGE };
-          }
-          mem = { v: got, until: disk.until };
-        }
-        paint(path);
-        phone.innerHTML = `Phone shows: <b>v${got}</b> “${HEAD[Math.min(got, 3)]}”${got < v ? ' <span class="bad">(old)</span>' : ''}`;
-        replay(phone, 'pop-soft');
-        say(o, `${how} · ${ms} ms · ${bytes ? bytes + ' KB' : '0 KB'} downloaded`);
-        busy = false;
-      }
-      const kill = () => { if (busy) return; mem = null; paint(); say(o, 'App process killed: the memory cache is gone, the disk cache survives.'); };
-      const wait = () => { if (busy) return; t += AGE; paint(); say(o, `${AGE} minutes pass. Copies older than max-age are now stale.`); };
-      const edit = () => {
-        if (busy || v >= 3) { say(o, 'Enough edits. Reset to start over.'); return; }
-        v++; sc = null; cdn = null; paint();
-        say(o, `Editor saves v${v}. Server cache key deleted and CDN purged. Phones still hold their copy until max-age.`);
-      };
-      el.append(h('div', { class: 'sd-wrap' },
-        row(act('Open article', open), act('Kill app', kill), act(`+${AGE} min`, wait), act('Editor edits', edit), act('Reset', reset)),
-        flow, clock, phone, o));
-      reset();
+      Lab.ui.flow(el, {
+        nodes: [
+          { id: 'mem', label: 'Memory', sub: 'in the app' },
+          { id: 'disk', label: 'Disk', sub: 'OkHttp cache' },
+          { id: 'cdn', label: 'CDN', sub: 'edge near user' },
+          { id: 'sc', label: 'Server cache', sub: 'Redis' },
+          { id: 'db', label: 'Database', sub: 'source' },
+        ],
+        predict: {
+          q: 'The article came with <code>max-age=300</code>. The app process is killed, and the user reopens the article 3 minutes after the first load. Which layer answers?',
+          options: ['The memory cache', 'The disk cache, with no network', 'The CDN'],
+          a: 1,
+          why: 'Killing the process empties the memory cache, but the disk copy survives and is still fresh for two more minutes. No request goes out.',
+        },
+        frames: [
+          { say: 'All caches are empty. The user opens an article; the response will say <code>max-age=300</code> (5 minutes).' },
+          { at: 'cdn', packet: 'miss', tone: 'warm', say: 'First open: memory, disk and the CDN have nothing, so the request goes further in.' },
+          { at: 'db', packet: 'v1', tone: 'ok', mark: { db: 'ok' }, say: 'The server cache misses too, so the database answers. On the way back, each layer keeps a copy.' },
+          { at: 'mem', packet: 'v1 · 200', tone: 'ok', mark: { mem: 'ok', disk: 'ok', cdn: 'ok', sc: 'ok' }, say: 'The phone shows v1 and keeps it in memory and on disk, fresh for 5 minutes.' },
+          { at: 'mem', packet: 'hit', tone: 'ok', say: 'One minute later: the memory copy is still fresh. No network at all.' },
+          { at: 'disk', packet: 'hit', tone: 'ok', mark: { mem: 'muted' }, say: 'The app is killed and reopened. Memory is gone, but the disk copy is still fresh.' },
+          { at: 'cdn', packet: 'If-None-Match "v1"', tone: 'warm', mark: { disk: 'warm' }, say: 'Ten minutes later the disk copy is stale. OkHttp sends a conditional request with the ETag it has.' },
+          { at: 'disk', packet: '304 Not Modified', tone: 'ok', mark: { disk: 'ok' }, say: 'Nothing changed, so the answer is <code>304</code>: one round trip, no body. The disk copy is fresh again.' },
+          { at: 'db', packet: 'v2', tone: 'warm', mark: { cdn: 'err', sc: 'err', db: 'warm' }, say: 'An editor saves v2. The server deletes its cache key and purges the CDN. It cannot reach copies already on phones.' },
+          { at: 'mem', packet: 'still v1', tone: 'err', mark: { mem: 'err' }, say: 'A phone that loaded v1 a minute ago keeps showing it until its max-age runs out. Choose max-age by how stale each endpoint may be.' },
+        ],
+      });
     },
   });
 
@@ -727,6 +690,12 @@ class OutboxWorker @AssistedInject constructor(
       { type: 'blank', prompt: 'Send the stored key on every attempt, and ask WorkManager to try again on a network error.', code: 'try {\n    api.addBookmark(AddBookmark(entry.articleId), entry.[[idempotencyKey]])\n} catch (e: IOException) {\n    return Result.[[retry]]()\n}', why: 'The key must be the one saved with the outbox row, so every retry carries the same value. <code>Result.retry()</code> uses the request\'s backoff policy.' },
       { type: 'bug', prompt: 'After flaky Wi-Fi, some users have the same bookmark twice on the server. Tap the line.', code: 'override suspend fun doWork(): Result {\n    val entry = db.outbox().oldest() ?: return Result.success()\n    val key = UUID.randomUUID().toString()\n    return try {\n        api.addBookmark(AddBookmark(entry.articleId), key)\n        db.outbox().delete(entry)\n        Result.success()\n    } catch (e: IOException) {\n        Result.retry()\n    }\n}', bug: 2, fix: '    val key = entry.idempotencyKey', why: 'A new key per attempt makes each retry look like a new request to the server. The key has to be made once, when the user acted, and stored.' },
     ],
+    predict: {
+      q: "Idempotency keys are switched off. A bookmark request reaches the server, the response is lost, and WorkManager retries. What ends up on the server?",
+      options: ["One bookmark","Two copies of the bookmark","None: the retry is dropped"],
+      a: 1,
+      why: "Without a key, the server cannot tell a retry from a new request, so it applies it again.",
+    },
     quiz: [
       { q: 'The user bookmarks an article with no connection. What should the screen show?', options: ['An error: "No connection"', 'The bookmark at once, marked as pending', 'Nothing until the server confirms'], a: 1, why: 'The write goes to Room first, so the UI updates straight away. A small pending mark is honest about the sync.' },
       { q: 'A request reached the server and was applied, but the response was lost. The worker retries with the same key. What should the server do?', options: ['Apply it again', 'Return the first result without applying it again', 'Return 500 so the client stops'], a: 1, why: 'That is the point of the key: the server stored the result under it and replays the result for any repeat.' },
@@ -887,6 +856,12 @@ val score by viewModel.score.collectAsStateWithLifecycle()`,
       { type: 'blank', prompt: 'Keep the socket open only while someone collects, and close it when they stop.', code: '.stateIn(viewModelScope, SharingStarted.[[WhileSubscribed]](5_000), null)\n\nawaitClose { socket.[[close]](1000, "no collectors") }', why: '<code>WhileSubscribed</code> cancels the upstream flow after the last collector leaves. Cancelling runs <code>awaitClose</code>, which closes the socket.' },
       { type: 'bug', prompt: 'Users complain the app drains battery: the live-score socket stays open while the app sits in the background. Tap the line.', code: 'val scores: StateFlow<Score?> = repository.scores(matchId)\n    .stateIn(\n        scope = viewModelScope,\n        started = SharingStarted.Eagerly,\n        initialValue = null,\n    )', bug: 3, fix: '        started = SharingStarted.WhileSubscribed(5_000),', why: '<code>Eagerly</code> keeps collecting for as long as the ViewModel lives, which includes time in the background. <code>WhileSubscribed</code> stops when the UI stops collecting.' },
     ],
+    predict: {
+      q: "Over one minute, how many requests does polling every 10 seconds open?",
+      options: ["1","6","60"],
+      a: 1,
+      why: "One request every 10 seconds for 60 seconds is six, whether or not anything happened in between.",
+    },
     quiz: [
       { q: 'The app polls every 10 seconds. A goal happens at second 11. When does the user see it?', options: ['At second 11', 'At second 20, the next poll', 'At second 30'], a: 1, why: 'Polling delivers on its own schedule. The worst-case delay is the full interval, and most polls return nothing.' },
       { q: 'The match screen shows a live score while it is open. What fits best?', options: ['Only FCM push for every event', 'A WebSocket or SSE stream while the screen is visible, and push when the app is in the background', 'Poll every second'], a: 1, why: 'A stream gives instant updates while the user watches. Push covers the background without holding a connection.' },
@@ -976,7 +951,7 @@ val score by viewModel.score.collectAsStateWithLifecycle()`,
     body: `
 <p>Sending one notification is one API call. Sending a breaking story to a million phones is a <b>fan-out</b>: one event becomes a million deliveries. You can address them by <b>token</b> (each install has a registration token you store with the user) or by <b>topic</b> (installs subscribe to <code>breaking-news</code> and FCM does the fan-out). Firebase documents topic messages as tuned for throughput rather than latency, so a big topic does not reach every phone in the same second.</p>
 <p>Delivery is not guaranteed. Phones are switched off, in Doze, out of coverage, or the app was uninstalled. FCM keeps messages for offline devices for their time to live (TTL), which defaults to four weeks, the maximum. A <b>collapse key</b> says "only the newest of these matters": a phone that was offline through three score updates gets only the last one. FCM allows up to four different collapse keys per device at a time.</p>
-<p>Tokens go stale. Upload the token from <code>onNewToken</code> and on app start, with a timestamp. Delete a token when FCM answers <code>UNREGISTERED</code>, and drop tokens you haven\'t seen for about a month. FCM treats an Android token as expired after 270 days without activity. The app side is in <a href="#push.fcm">FCM basics</a> and <a href="#push.messages">notification vs data messages</a>. Send a breaking story to a million installs below.</p>`,
+<p>Tokens go stale. Upload the token from <code>onNewToken</code> and on app start, with a timestamp. Delete a token when FCM answers <code>UNREGISTERED</code>, and drop tokens you haven\'t seen for about a month. FCM treats an Android token as expired after 270 days without activity. The app side is in <a href="#push.fcm">FCM basics</a> and <a href="#push.messages">notification vs data messages</a>. Step through a breaking story going to a million installs below.</p>`,
     code: `// Server (Kotlin + Firebase Admin SDK): one request, FCM fans out to every subscriber
 val message = Message.builder()
     .setTopic("breaking-news")
@@ -1070,39 +1045,33 @@ for (batch in tokens.forSegment(job.segment).chunked(500)) {
       { title: 'Uploading the token only once', bad: 'override fun onNewToken(token: String) {\n    api.uploadToken(token)   // fails offline, never retried\n}', good: 'override fun onNewToken(token: String) {\n    TokenUploader.enqueue(applicationContext, token)   // WorkManager, retried\n}\n// and refresh the timestamp on app start', why: 'A lost upload means the server has no valid token for this install. Without timestamps you can\'t tell live tokens from dead ones.' },
     ],
     visual(el) {
-      const N = 1_000_000;
-      let clean = false, shortTtl = false, byTopic = true, busy = false;
-      const bar = h('div', { class: 'sd-bar' }, h('span', {}));
-      const count = h('div', { class: 'sd-stats' });
-      const mk = (name, cls) => { const b = h('div', { class: `sd-bar ${cls}` }, h('span', {})); const n = h('span', {}, '0'); return { el: h('div', { class: 'sd-meter' }, h('span', {}, name), b, n), b, n }; };
-      const mNow = mk('delivered now', 'sd-b-ok'), mLater = mk('offline / Doze', 'sd-b-warn'), mDead = mk('stale tokens', 'sd-b-err');
-      const after = h('div', { class: 'sd-say', 'aria-live': 'polite' }, 'Press send.');
-      const setM = (m, v) => { m.b.firstChild.style.width = `${(v / N) * 100}%`; m.n.textContent = fmt(v); };
-      const cleanBtn = toggle(on => `Prune stale tokens: ${on ? 'yes' : 'no'}`, false, on => { clean = on; });
-      const ttlBtn = toggle(on => `TTL: ${on ? '1 hour' : 'default (4 weeks)'}`, false, on => { shortTtl = on; });
-      const modeBtn = toggle(on => `Address by: ${on ? 'topic' : 'tokens'}`, true, on => { byTopic = on; });
-      async function send() {
-        if (busy) return; busy = true;
-        const dead = clean ? 0.03 : 0.18, off = 0.22;
-        const tot = { now: N * (1 - dead) * (1 - off), later: N * (1 - dead) * off, dead: N * dead };
-        for (let i = 1; i <= 20; i++) {
-          const f = i / 20;
-          bar.firstChild.style.width = `${f * 100}%`;
-          count.innerHTML = `<span>fanned out <b>${fmt(N * f)}</b> / ${fmt(N)}</span><span>your server's requests <b>${byTopic ? '1' : fmt(N * f)}</b></span>`;
-          setM(mNow, tot.now * f); setM(mLater, tot.later * f); setM(mDead, tot.dead * f);
-          await sleep(90);
-        }
-        const tips = [];
-        tips.push(shortTtl ? `${fmt(tot.later * 0.6)} of the offline phones don't reconnect within the hour; the alert expires for them. Good: it is old news by then.` : `Phones that stay off for days still get this alert when they return, up to four weeks late.`);
-        tips.push(clean ? 'Few dead tokens: you pruned tokens not seen for a month.' : (byTopic ? `${fmt(tot.dead)} subscriptions belong to dead installs. FCM fans out to them anyway, so the send takes longer.` : `${fmt(tot.dead)} sends come back UNREGISTERED. Delete those tokens.`));
-        if (!byTopic) tips.push('Per-token sends let you personalise, but your workers now carry the fan-out, quotas and retries.');
-        after.innerHTML = tips.map(t => `<p>${t}</p>`).join('');
-        replay(after, 'pop-soft');
-        busy = false;
-      }
-      el.append(h('div', { class: 'sd-wrap' },
-        row(act('Send breaking news', send), modeBtn, ttlBtn, cleanBtn),
-        label('1,000,000 installs · illustrative numbers'), bar, count, mNow.el, mLater.el, mDead.el, after));
+      Lab.ui.graph(el, {
+        height: 300,
+        nodes: [
+          { id: 'srv', label: 'Your server', x: 50, y: 10 },
+          { id: 'tok', label: 'Tokens<small>your table</small>', x: 17, y: 44, tone: 'muted', hidden: true },
+          { id: 'fcm', label: 'FCM<small>topic: breaking</small>', x: 50, y: 44, tone: 'warm' },
+          { id: 'on', label: 'Online<small>now</small>', x: 17, y: 86, tone: 'ok' },
+          { id: 'off', label: 'Offline<small>or Doze</small>', x: 50, y: 86, tone: 'muted' },
+          { id: 'dead', label: 'Uninstalled<small>stale</small>', x: 83, y: 86, tone: 'err', hidden: true },
+        ],
+        predict: {
+          q: 'Your server sends one breaking-news message to a topic with a million subscribers. How many requests does your server make?',
+          options: ['One', 'One per subscriber', 'One per thousand subscribers'],
+          a: 0,
+          why: 'With a topic, FCM does the fan-out on its side. Your server only names the topic.',
+        },
+        frames: [
+          { say: 'A breaking story must reach about a million installs subscribed to the topic <code>breaking</code>.' },
+          { add: [['srv', 'fcm', '1 request']], say: 'Your server sends one message to the topic. FCM does the fan-out, not your workers.' },
+          { add: [['fcm', 'on', '', 'ok']], hl: ['on'], say: 'Phones with a live FCM connection get it within seconds.' },
+          { add: [['fcm', 'off', 'stored', 'warm']], hl: ['off'], say: 'Phones that are off or in Doze: FCM stores the message and delivers it when they reconnect, until its TTL runs out. The default is 4 weeks.' },
+          { add: [['fcm', 'off', 'TTL 1 h', 'err']], hl: ['off'], say: 'Breaking news is old after an hour. With a 1-hour TTL, phones that stay off longer never get stale alerts.' },
+          { show: ['tok'], remove: [['srv', 'fcm']], add: [['srv', 'tok', 'reads'], ['tok', 'fcm', 'per token']], hl: ['tok'], say: 'Personal alerts go per token instead. Now your server reads tokens from its own table and sends one request each.' },
+          { show: ['dead'], add: [['fcm', 'dead', '', 'err']], hl: ['dead'], say: 'For an uninstalled app, FCM answers <code>UNREGISTERED</code>. Delete that token, and drop tokens you have not seen for about a month.' },
+          { gone: ['dead'], remove: [['fcm', 'dead']], say: 'Pruned. Fewer wasted sends, and your delivery numbers mean something again.' },
+        ],
+      });
     },
   });
 
@@ -1115,7 +1084,7 @@ for (batch in tokens.forSegment(job.segment).chunked(500)) {
     body: `
 <p>Images are most of the bytes a news app downloads. A photographer\'s original is 4000×3000 pixels and several megabytes, but a list thumbnail needs a few hundred pixels across. Sending the original wastes the user\'s data plan, and decoding it takes 4000 × 3000 × 4 bytes, about 48 MB of memory, for one picture.</p>
 <p>So the server stores one original, and an image service behind the CDN makes variants on request: <code>/img/a981.jpg?w=360&amp;fmt=webp</code>. The app asks for the width it will draw in pixels: the size in dp times the screen density. Modern formats help: WebP decodes on every Android version you still support, and AVIF decodes from Android 12. The CDN caches each variant, so the resize happens once.</p>
-<p>For speed the user can feel, load progressively: a placeholder colour at once, a tiny blurred preview, then the real image. The image loader (<a href="#compose.images">Coil</a>) handles memory and disk caching on the device. Uploads go the other way, and big ones should go in chunks that can resume after a drop. Pick a variant and a network below.</p>`,
+<p>For speed the user can feel, load progressively: a placeholder colour at once, a tiny blurred preview, then the real image. The image loader (<a href="#compose.images">Coil</a>) handles memory and disk caching on the device. Uploads go the other way, and big ones should go in chunks that can resume after a drop. Follow one thumbnail request below.</p>`,
     code: `@Composable
 fun ArticleThumb(article: Article, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.aspectRatio(4f / 3f)) {
@@ -1205,39 +1174,30 @@ fun ArticleThumb(article: Article, modifier: Modifier = Modifier) {
       { title: 'A big upload in one request', bad: 'api.upload(file.asRequestBody())   // 40 MB, all or nothing', good: '// resumable session: send chunks, ask for the offset after a failure\nuploader.resume(sessionUri, file, fromByte = server.offset(sessionUri))', why: 'On mobile, a drop during a long upload is likely. Restarting from zero wastes data and may never finish on a bad network.' },
     ],
     visual(el) {
-      const VAR = [
-        { k: 'Original JPEG', w: 4000, hgt: 3000, kb: 3100 },
-        { k: 'JPEG w=360', w: 360, hgt: 270, kb: 38 },
-        { k: 'WebP w=360', w: 360, hgt: 270, kb: 26 },
-        { k: 'AVIF w=360', w: 360, hgt: 270, kb: 19, note: 'decodes on Android 12+' },
-      ];
-      const NET = [['3G 1.5 Mbps', 1.5], ['4G 12 Mbps', 12]];
-      let vi = 2, ni = 0, run = 0;
-      const photo = h('div', { class: 'sd-photo sd-ph-color' }, h('div', { class: 'sd-sky' }, h('span', { class: 'sd-sun' }), h('span', { class: 'sd-hill' }), h('span', { class: 'sd-hill2' })));
-      const bars = VAR.map(v => { const b = h('div', { class: 'sd-bar' }, h('span', {})); const n = h('span', {}, `${fmt(v.kb)} KB`); return { el: h('div', { class: 'sd-meter' }, h('span', {}, v.k), b, n), b }; });
-      const stats = h('div', { class: 'sd-stats' });
-      const o = out('');
-      const vBtns = VAR.map((v, i) => act(v.k, () => { vi = i; press(vBtns, vBtns[i]); paint(); }));
-      const nBtns = NET.map((n, i) => act(n[0], () => { ni = i; press(nBtns, nBtns[i]); paint(); }));
-      function paint() {
-        const v = VAR[vi], secs = v.kb * 8 / 1000 / NET[ni][1];
-        bars.forEach((b, i) => { b.b.firstChild.style.width = `${Math.max(1.5, (Math.log10(VAR[i].kb) / Math.log10(3100)) * 100)}%`; mark(b.el, i === vi ? 'sd-hot' : null); });
-        stats.innerHTML = `<span>download <b>${secs < 1 ? Math.round(secs * 1000) + ' ms' : secs.toFixed(1) + ' s'}</b></span><span>decoded <b>${v.w * v.hgt * 4 >= 1e6 ? (v.w * v.hgt * 4 / 1e6).toFixed(0) + ' MB' : Math.round(v.w * v.hgt * 4 / 1e3) + ' KB'}</b></span><span>${v.w}×${v.hgt}</span>${v.note ? `<span>${v.note}</span>` : ''}`;
-      }
-      async function load() {
-        const me = ++run, v = VAR[vi], secs = v.kb * 8 / 1000 / NET[ni][1];
-        photo.className = 'sd-photo sd-ph-color'; say(o, '0 ms: placeholder colour from the feed JSON, layout already the right size.');
-        await sleep(500); if (me !== run) return;
-        photo.className = 'sd-photo sd-ph-blur'; say(o, 'Tiny preview, drawn blurred.');
-        const wait = Math.min(4000, 300 + secs * 300);
-        await sleep(wait); if (me !== run) return;
-        photo.className = 'sd-photo';
-        say(o, `Full image after about ${secs < 1 ? Math.round(secs * 1000) + ' ms' : secs.toFixed(1) + ' s'} on ${NET[ni][0]}${secs > 5 ? '. <span class="bad">Too slow for a list.</span>' : '.'}`);
-      }
-      press(vBtns, vBtns[vi]); press(nBtns, nBtns[ni]);
-      el.append(h('div', { class: 'sd-wrap' }, row(...vBtns), row(...nBtns, act('Load it', load)),
-        h('div', { class: 'sd-pair' }, photo, h('div', { class: 'sd-list' }, label('example sizes for one photo (log scale)'), bars.map(b => b.el), stats)), o));
-      paint();
+      Lab.ui.flow(el, {
+        nodes: [
+          { id: 'app', label: 'App', sub: 'image loader' },
+          { id: 'cdn', label: 'Image CDN', sub: 'variant cache' },
+          { id: 'rs', label: 'Resizer', sub: 'scale + encode' },
+          { id: 'org', label: 'Origin', sub: '4000×3000 JPEG' },
+        ],
+        predict: {
+          q: 'A second phone asks for the same <code>w=360</code> WebP a minute later. What does the resizer do?',
+          options: ['Resizes the original again', 'Nothing: the CDN answers from its cache', 'Sends the original so the phone can resize it'],
+          a: 1,
+          why: 'Each variant has its own URL, so the CDN caches it like any other file. The resize happens once per variant.',
+        },
+        frames: [
+          { say: 'A list cell needs a thumbnail 360 pixels wide. Follow one image request.' },
+          { at: 'app', packet: '?w=360&fmt=webp', say: 'The app asks for exactly that width and a modern format, not the original photo.' },
+          { at: 'cdn', packet: 'miss', tone: 'warm', say: 'This is the first request for this variant, so the CDN has no copy yet.' },
+          { at: 'org', packet: '≈3 MB JPEG', tone: 'warm', say: 'The resizer fetches the original once: 4000×3000 pixels, a few megabytes.' },
+          { at: 'rs', packet: '360×270 WebP', tone: 'ok', mark: { rs: 'ok' }, say: 'It scales the photo to 360 px wide and encodes it as WebP: tens of kilobytes instead of megabytes (example sizes).' },
+          { at: 'cdn', packet: '≈26 KB', tone: 'ok', mark: { cdn: 'ok' }, say: 'The CDN caches this variant under its own URL.' },
+          { at: 'app', packet: '≈26 KB', tone: 'ok', mark: { app: 'ok' }, say: 'The phone downloads about 26 KB and decodes a 360×270 bitmap: 360 × 270 × 4 bytes ≈ 390 KB of memory.' },
+          { at: 'cdn', packet: 'hit', tone: 'ok', say: 'The next phone that asks for the same variant gets a CDN hit. The origin and the resizer are not touched.' },
+        ],
+      });
     },
   });
 
@@ -1294,6 +1254,12 @@ val client = OkHttpClient.Builder()
       { type: 'blank', prompt: 'Compute the exponential ceiling and pick a random wait under it.', code: 'val ceiling = minOf(capMs, baseMs [[shl]] attempt)\nval wait = Random.[[nextLong]](0, ceiling + 1)', why: '<code>baseMs shl attempt</code> is baseMs × 2^attempt. A random value from 0 to that ceiling is "full jitter".' },
       { type: 'bug', prompt: 'After a server outage, every phone retries in lockstep every second and the server can\'t recover. Tap the line.', code: 'suspend fun refreshWithRetry() {\n    var attempt = 0\n    while (attempt < 5) {\n        try { return repository.refresh() }\n        catch (e: IOException) { attempt++ }\n        delay(1_000)\n    }\n}', bug: 5, fix: '        delay(Random.nextLong(0, (1_000L shl attempt) + 1))', why: 'A fixed one-second wait keeps all clients in sync. Growing the wait and randomising it spreads the retries out.' },
     ],
+    predict: {
+      q: "Eight phones retry every second during a 6-second outage. The server comes back. What is its first second like?",
+      options: ["Calm: one phone retries at a time","A burst: all eight retry at once, above capacity","Empty: the phones have given up"],
+      a: 1,
+      why: "Fixed one-second retries keep every phone in step, so they all hit the recovering server together.",
+    },
     quiz: [
       { q: 'Why add jitter to exponential backoff?', options: ['To make retries faster', 'So clients that failed together don\'t retry together and overload the server again', 'To use less memory'], a: 1, why: 'Without jitter, every client that failed at second 0 retries at 1, 3, 7… at the same moments, in spikes.' },
       { q: 'The server answers <code>429</code> with <code>Retry-After: 120</code>. What should the client do?', options: ['Retry after 1 second', 'Wait at least 120 seconds before retrying', 'Never retry'], a: 1, why: 'The server is telling you its limit. Retrying sooner just gets more 429s and adds load.' },
@@ -1456,6 +1422,12 @@ WorkManager.getInstance(context)
       { type: 'blank', prompt: 'Let the network fill Room, and let the UI page from Room.', code: 'Pager(\n    config = PagingConfig(pageSize = 20),\n    remoteMediator = [[FeedRemoteMediator]](category, db, api),\n    pagingSourceFactory = { db.articles().[[pagingSource]](category) },\n).flow', why: 'The mediator writes network pages into Room. The paging source comes from Room, so the list works offline and survives process death.' },
       { type: 'bug', prompt: 'The feed must open with content on the metro, but this pager shows an error offline. Tap the line.', code: 'val feed: Flow<PagingData<ArticleDto>> = Pager(\n    config = PagingConfig(pageSize = 20),\n    pagingSourceFactory = { FeedPagingSource(api) },\n).flow', bug: 2, fix: '    pagingSourceFactory = { db.articles().pagingSource(category) },', why: 'A network paging source has nothing to show offline. Page from Room and add a <code>RemoteMediator</code> to fill it from the network.' },
     ],
+    predict: {
+      q: "An editor publishes breaking news. Which part of the design reaches phones where the app is closed?",
+      options: ["The CDN","FCM, with a topic message","Room"],
+      a: 1,
+      why: "The CDN and Room only answer when the app asks. FCM delivers to the device on its own shared connection.",
+    },
     quiz: [
       { q: 'Which response is easiest to cache at the CDN?', options: ['The shared category feed, the same for everyone', 'The user\'s bookmarks', 'The user\'s notification settings'], a: 0, why: 'One response serves every reader of that category. Personal data must stay private and can\'t be shared.' },
       { q: 'About 116 feed requests per second arrive, and the CDN hit ratio is 95%. About how many reach the origin?', options: ['About 6 per second', 'About 116 per second', 'About 1,000 per second'], a: 0, why: '5% of 116 is about 6. That is why the origin for a news feed can be small.' },
@@ -1585,6 +1557,12 @@ interface MessageDao {
       { type: 'blank', prompt: 'When the server acks, store its sequence number and move the message to the sent state.', code: '@Query("UPDATE messages SET serverSeq = :seq, state = \'[[SENT]]\' WHERE [[clientId]] = :clientId")\nsuspend fun markSent(clientId: String, seq: Long)', why: 'The ack carries the client id you sent, so you can find the local row, and the sequence number that fixes its place in the conversation.' },
       { type: 'bug', prompt: 'Two friends see their messages in a different order, because one phone\'s clock is 3 minutes fast. Tap the line.', code: '@Query("""\n    SELECT * FROM messages WHERE conversationId = :id\n    ORDER BY createdAt\n""")\nfun observe(id: String): Flow<List<MessageEntity>>', bug: 2, fix: '    ORDER BY serverSeq IS NULL, serverSeq, createdAt', why: '<code>createdAt</code> comes from each phone\'s own clock. The server\'s sequence number is one order that every device shares.' },
     ],
+    predict: {
+      q: "The server stored Alice’s message, but its ack to Alice was lost. What does Alice’s phone show?",
+      options: ["✓ sent","◷ pending, and it will resend","✓✓ delivered"],
+      a: 1,
+      why: "Alice only marks a message sent when the ack arrives. Without it the message stays pending and is resent with the same client id.",
+    },
     quiz: [
       { q: 'Alice sends a message while Bob\'s phone is switched off. What does Alice see?', options: ['A clock forever', '✓ sent, then ✓✓ once Bob\'s phone comes online and stores it', '✓✓ at once'], a: 1, why: 'The server acks (✓) when it stores the message. Delivered (✓✓) needs Bob\'s device to receive it and ack.' },
       { q: 'The server stored a message, but the connection dropped before the ack reached the sender. The app resends with the same client id. What should happen?', options: ['Two copies appear', 'The server finds the client id and returns the existing sequence number: one copy', 'The message is lost'], a: 1, why: 'The client id makes the send idempotent. The resend only recovers the ack.' },

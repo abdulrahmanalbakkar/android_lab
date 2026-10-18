@@ -222,6 +222,12 @@ fun total(price: Int, tax: Int): Int = price * 2 + tax
 // Kotlin itself compiles to JVM bytecode, which is one more intermediate form:
 // kotlinc total.kt -d out/        → out/TotalKt.class`,
     remember: 'Front end = understand the language. Back end = target the machine. IR is the contract between them.',
+    predict: {
+      q: "In compiler mode, what becomes of <code>price * 2</code> before it reaches the CPU?",
+      options: ["It stays a multiply instruction", "The optimizer turns ×2 into a left shift", "It is computed at compile time"],
+      a: 1,
+      why: "<code>price</code> is only known at run time, so the work can’t be done early. But shifting left by one bit doubles an integer and is cheaper than a multiply.",
+    },
     visual(el) {
       let mode = 'compile';
       const pipe = h('div', { class: 'rt-pipe' });
@@ -451,7 +457,7 @@ fun main() {
     body: `
 <p>On Android, the Kotlin compiler turns <code>.kt</code> files into JVM <code>.class</code> files. Since Kotlin 2.0 the compiler uses a rewritten front end called K2, which does the parsing, name resolution and type inference. A shared IR back end then generates the bytecode.</p>
 <p>Bytecode is the honest version of your code. A <code>val</code> becomes a private field plus a getter. A <code>data class</code> becomes about ten methods. Top-level functions land in a class named after the file, like <code>MainKt</code>. None of this is bad, but it is real code that gets shipped, loaded and run.</p>
-<p>You can see it yourself: in Android Studio, open a Kotlin file and use <b>Tools › Kotlin › Show Kotlin Bytecode</b>, then <b>Decompile</b> for a Java-like view. The demo has precomputed, slightly trimmed output for four snippets. Switch between them.</p>`,
+<p>You can see it yourself: in Android Studio, open a Kotlin file and use <b>Tools › Kotlin › Show Kotlin Bytecode</b>, then <b>Decompile</b> for a Java-like view. The demo runs <code>kotlinc</code> and <code>javap</code> on three small files; the output is real, from Kotlin 2.2.</p>`,
     code: `// Compile one file on the command line and look inside
 // $ kotlinc Point.kt -d out/
 // $ javap -p out/Point.class          (members)
@@ -466,25 +472,25 @@ fun main() {
 }`,
     remember: 'Every Kotlin feature compiles to plain JVM members. Decompile when you need to know what a line really costs.',
     visual(el) {
-      let snip = SNIPS[0], view = 'java';
-      const left = h('div', { class: 'rt-pane' });
-      const right = h('div', { class: 'rt-pane' });
-      const note = out('');
-      const st = stats(['Kotlin lines', 'output lines']);
-      const viewBtns = picker('show', [{ label: 'Decompiled Java', v: 'java' }, { label: 'Bytecode', v: 'bc' }], it => { view = it.v; paint(); });
-      function paint() {
-        left.replaceChildren(label('Kotlin'), pre(snip.kt));
-        const text = snip[view];
-        const p = pre(text);
-        right.replaceChildren(label(view === 'java' ? 'decompiled (trimmed)' : 'javap output (trimmed)'), p);
-        replay(p, 'drop-in');
-        st.set('Kotlin lines', snip.kt.split('\n').length);
-        st.set('output lines', text.split('\n').length);
-        say(note, snip.note);
-      }
-      el.append(picker('snippet', SNIPS.map(s => ({ label: s.label, s })), it => { snip = it.s; paint(); }), viewBtns,
-        h('div', { class: 'rt-stage' }, h('div', { class: 'rt-split' }, left, right), st), note);
-      paint();
+      const src = s => '<pre class="ui-out">' + s.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>';
+      Lab.ui.terminal(el, {
+        panelTitle: 'Kotlin source',
+        predict: {
+          q: '<code>Main.kt</code> holds only a top-level function, <code>doubled()</code>. What does kotlinc write for it?',
+          options: ['Nothing: a top-level function needs a class around it', 'A class <code>MainKt</code> with <code>doubled</code> as a static method', 'A class named <code>Main</code>'],
+          a: 1,
+          why: 'The JVM only knows classes, so top-level functions go into a class named after the file plus <code>Kt</code>, as static methods.',
+        },
+        frames: [
+          { panel: src('// User.kt\nclass User(val name: String, var age: Int)\n\n// Point.kt\ndata class Point(val x: Int, val y: Int)\n\n// Main.kt\nfun doubled(xs: List<Int>): List<Int> {\n    val twice = { x: Int -> x * 2 }\n    return xs.map(twice)\n}'), say: 'Three small Kotlin files. Compile them and look inside the class files with <code>javap</code>, the JDK’s class file viewer.' },
+          { cmd: 'kotlinc User.kt Point.kt Main.kt -d out', say: 'kotlinc writes JVM <code>.class</code> files. No output means no errors.' },
+          { cmd: 'ls out', out: 'META-INF  MainKt.class  Point.class  User.class', say: 'One class file per class, plus <code>MainKt</code> for the top-level function in <code>Main.kt</code>.' },
+          { cmd: 'javap -p out/User.class', panel: src('class User(val name: String, var age: Int)'), out: 'Compiled from "User.kt"\npublic final class User {\n  private final java.lang.String name;\n  private int age;\n  public User(java.lang.String, int);\n  public final java.lang.String getName();\n  public final int getAge();\n  public final void setAge(int);\n}', say: '<code>val</code> became a private final field and a getter. <code>var</code> also got a setter. The class is <code>final</code> because Kotlin classes are closed by default.' },
+          { cmd: 'javap -p out/Point.class', clear: true, panel: src('data class Point(val x: Int, val y: Int)'), out: 'Compiled from "Point.kt"\npublic final class Point {\n  private final int x;\n  private final int y;\n  public Point(int, int);\n  public final int getX();\n  public final int getY();\n  public final int component1();\n  public final int component2();\n  public final Point copy(int, int);\n  public static Point copy$default(Point, int, int, int, java.lang.Object);\n  public java.lang.String toString();\n  public int hashCode();\n  public boolean equals(java.lang.Object);\n}', say: 'One line of Kotlin, ten methods: getters, <code>componentN</code> for destructuring, <code>copy</code> with a helper for default arguments, and <code>toString</code>, <code>hashCode</code>, <code>equals</code>.' },
+          { cmd: 'javap -p out/MainKt.class', clear: true, panel: src('fun doubled(xs: List<Int>): List<Int> {\n    val twice = { x: Int -> x * 2 }\n    return xs.map(twice)\n}'), out: 'Compiled from "Main.kt"\npublic final class MainKt {\n  public static final java.util.List&lt;java.lang.Integer&gt; doubled(java.util.List&lt;java.lang.Integer&gt;);\n  private static final int doubled$lambda$0(int);\n}', say: 'The top-level function is a static method of <code>MainKt</code>. The lambda body became a private static method, <code>doubled$lambda$0</code>.' },
+          { cmd: 'javap -c -p out/MainKt.class | grep -E "invokedynamic|Function1.invoke"', out: '       6: invokedynamic #36,  0             // InvokeDynamic #0:invoke:()Lkotlin/jvm/functions/Function1;\n      76: invokeinterface #70,  2           // InterfaceMethod kotlin/jvm/functions/Function1.invoke:(Ljava/lang/Object;)Ljava/lang/Object;', say: 'Since Kotlin 2.0 the lambda object is made with <code>invokedynamic</code>. <code>map</code> is inline, so its loop was copied into <code>doubled</code> and calls <code>invoke</code> once per item, with <code>Object</code> parameters: each <code>Int</code> is boxed.' },
+        ],
+      });
     },
     deeper: [
       {
@@ -587,6 +593,12 @@ android {
     }
 }`,
     remember: 'D8 converts. R8 converts and removes, inlines and renames, starting from your entry points.',
+    predict: {
+      q: "<code>LegacyParser</code> is in the app, but nothing reachable from <code>MainActivity</code> calls it. What happens to it in a debug build (D8) and a release build (R8)?",
+      options: ["Both keep it", "D8 keeps it; R8 removes it", "Both remove it"],
+      a: 1,
+      why: "D8 only converts. R8 starts from the entry points and keeps only what they can reach.",
+    },
     visual(el) {
       const box = h('div', { class: 'rt-classes' });
       const st = stats(['classes', 'methods', 'tool']);
@@ -718,6 +730,12 @@ adb shell cmd package compile -m speed-profile -f com.example.news
 # Reset to the just-installed state to measure a first launch
 adb shell cmd package compile --reset com.example.news`,
     remember: 'Interpreted first, JIT when hot, AOT for what the profile lists. A Baseline Profile gives the profile on day one.',
+    predict: {
+      q: "In the JIT run, the method counts as hot at call 10. When do calls get fast?",
+      options: ["At call 10 exactly", "A few calls later, once the background compile is done", "Only after the app restarts"],
+      a: 1,
+      why: "The JIT compiles in the background. Until the machine code is ready, calls keep running in the interpreter.",
+    },
     visual(el) {
       const W = 320, H = 170, L = 34, B = 24, T = 10;
       const x = c => L + (c / (CALLS - 1)) * (W - L - 8);
@@ -889,6 +907,12 @@ object Cache {                       // static: a GC root for as long as the pro
     val articles = mutableListOf<Article>()
 }`,
     remember: 'Reachable from a GC root means alive. Everything else is garbage, cycles included.',
+    predict: {
+      q: "<code>T2</code> points at the live object <code>U</code>, but nothing points at <code>T2</code>. Does <code>T2</code> survive the collection?",
+      options: ["Yes: it references a live object", "No: no path from a root reaches it, so it is freed", "Only if <code>U</code> is freed too"],
+      a: 1,
+      why: "Marking follows references out of the roots. What an object points at does not matter, only whether something reachable points at it.",
+    },
     visual(el) {
       const g = graphSvg(GC_NODES, GC_EDGES, { w: 360, ht: 228, name: 'heap objects and references from GC roots' });
       const st = stats(['marked', 'freed']);
@@ -1014,7 +1038,7 @@ val cache = LruCache<String, Bitmap>(heapMb * 1024 * 1024 / 8)   // bytes, sizeO
     body: `
 <p>A garbage-collected app can still leak memory. The collector frees only unreachable objects, so if something long-lived still references an object you are done with, that object stays. The classic Android case is an <code>Activity</code>. On rotation the system destroys the old activity and creates a new one. If a static field, a singleton or a long-running task still points at the old one, it stays in memory with its whole view tree and bitmaps.</p>
 <p>Java and Kotlin also have weaker references. A <code>WeakReference</code> does not keep its object alive: once only weak references remain, the next collection can clear it. A <code>SoftReference</code> is cleared when memory runs low. Normal references are <em>strong</em>.</p>
-<p>In the demo, each Activity registers with a long-lived event bus. Rotate a few times with and without unregistering, then run the GC. See <a href="#perf.leaks">memory leaks</a> for finding them in a real app.</p>`,
+<p>In the demo, each Activity registers with a long-lived event bus. Watch what the GC can and cannot free after each rotation. See <a href="#perf.leaks">memory leaks</a> for finding them in a real app.</p>`,
     code: `// Leaks: a static (companion) field outlives every Activity
 class ArticleActivity : AppCompatActivity() {
     companion object {
@@ -1030,42 +1054,30 @@ class ArticleActivity : AppCompatActivity() {
 class ImageCache(private val app: Application)   // Application context, not an Activity`,
     remember: 'Never let something longer-lived hold a strong reference to something shorter-lived, especially an Activity, View or Context.',
     visual(el) {
-      let leaky = true, n = 1, objs = [{ id: 1, state: 'live' }];
-      const heap = h('div', { class: 'rt-heap' });
-      const path = h('div', { class: 'rt-path' });
-      const st = stats(['Activities in memory', 'retained MB']);
-      const msg = out('');
-      const START = { true: 'Each Activity calls <code>NewsBus.register(this)</code> in onCreate and never unregisters. NewsBus is an <code>object</code>, held by a static field. Rotate the phone.', false: 'Each Activity registers in onCreate and unregisters in onDestroy. Rotate the phone.' };
-      function paint() {
-        heap.replaceChildren(...objs.map(o => h('div', { class: `rt-obj rt-${o.state}` }, `MainActivity #${o.id}`,
-          h('small', {}, o.state === 'live' ? 'on screen' : o.state === 'leak' ? 'destroyed, still reachable' : o.state === 'freed' ? 'collected' : 'destroyed, unreachable'))));
-        st.set('Activities in memory', objs.filter(o => o.state !== 'freed').length);
-        st.set('retained MB', `${objs.filter(o => o.state === 'leak').length * 12} (illustrative)`);
-        const leaked = objs.filter(o => o.state === 'leak');
-        path.replaceChildren(label('path from a GC root'), ...(leaked.length
-          ? [h('span', { class: 'rt-pill rt-warm' }, 'static NewsBus.listeners'), h('span', { class: 'rt-arrowtxt' }, '→'), ...leaked.map(o => h('span', { class: 'rt-pill rt-bad' }, `#${o.id}`)), h('span', { class: 'rt-arrowtxt' }, '→'), h('span', { class: 'rt-pill' }, 'views, bitmaps')]
-          : [h('span', { class: 'rt-pill rt-ghost' }, 'none to a destroyed Activity')]));
-      }
-      function rotate() {
-        objs.forEach(o => { if (o.state === 'live') o.state = leaky ? 'leak' : 'dead'; });
-        objs.push({ id: ++n, state: 'live' });
-        paint();
-        say(msg, leaky
-          ? `Rotated: #${n} created, #${n - 1} destroyed. <span class="bad">NewsBus still lists #${n - 1} as a listener.</span>`
-          : `Rotated: #${n} created, #${n - 1} destroyed and unregistered. Nothing long-lived points at it.`);
-      }
-      function gc() {
-        objs.forEach(o => { if (o.state === 'dead') o.state = 'freed'; });
-        paint();
-        const k = objs.filter(o => o.state === 'leak').length;
-        say(msg, k ? `GC ran. <span class="bad">${k} destroyed Activit${k > 1 ? 'ies stay' : 'y stays'}</span>: a static field is a GC root, and the listener list connects it to them.` : 'GC ran. Destroyed Activities were unreachable and have been freed.');
-      }
-      const modes = picker('code', [{ label: 'register, never unregister', v: true }, { label: 'unregister in onDestroy', v: false }], it => {
-        leaky = it.v; n = 1; objs = [{ id: 1, state: 'live' }]; paint(); say(msg, START[leaky]);
+      Lab.ui.graph(el, {
+        height: 270,
+        nodes: [
+          { id: 'root', label: 'GC root<small>static field</small>', x: 17, y: 14, tone: 'muted' },
+          { id: 'bus', label: 'NewsBus<small>object</small>', x: 50, y: 14 },
+          { id: 'sys', label: 'GC root<small>system</small>', x: 83, y: 14, tone: 'muted' },
+          { id: 'a1', label: 'Activity #1<small>+ its views</small>', x: 17, y: 82 },
+          { id: 'a2', label: 'Activity #2', x: 50, y: 82, hidden: true },
+          { id: 'a3', label: 'Activity #3', x: 83, y: 82, hidden: true },
+        ],
+        predict: {
+          q: 'Each Activity calls <code>NewsBus.register(this)</code> and never unregisters. You rotate twice, then the GC runs. How many <code>MainActivity</code> objects are still in memory?',
+          options: ['1: the one on screen', '3: the one on screen and both destroyed ones', '0: the GC frees them all'],
+          a: 1,
+          why: 'NewsBus is held by a static field, a GC root, and its listener list holds every Activity strongly. Reachable means alive.',
+        },
+        frames: [
+          { add: [['root', 'bus'], ['sys', 'a1'], ['bus', 'a1', 'listener']], say: 'Activity #1 is on screen, held by the system. In <code>onCreate</code> it registers with <code>NewsBus</code>, an <code>object</code> that lives as long as the process.' },
+          { show: ['a2'], remove: [['sys', 'a1']], add: [['sys', 'a2'], ['bus', 'a2', 'listener']], say: 'Rotate. The system destroys #1 and creates #2, which registers too. Nobody removed #1 from the list.' },
+          { hl: ['root', 'bus', 'a1'], add: [['root', 'bus', '', 'err'], ['bus', 'a1', 'listener', 'err']], say: 'The GC runs. Root → NewsBus → #1 is a path, so #1 is reachable and stays, with its whole view tree and bitmaps. That is a leak.' },
+          { show: ['a3'], remove: [['sys', 'a2']], add: [['sys', 'a3'], ['bus', 'a3', 'listener'], ['bus', 'a2', 'listener', 'err']], say: 'Rotate again: two destroyed Activities are held now. Every rotation adds one.' },
+          { remove: [['bus', 'a1'], ['bus', 'a2']], add: [['root', 'bus']], gone: ['a1', 'a2'], say: 'The fix: <code>unregister(this)</code> in <code>onDestroy</code>. No path from a root reaches #1 or #2 any more, so the next GC frees them.' },
+        ],
       });
-      el.append(modes, h('div', { class: 'controls' }, act('Rotate', rotate), act('Run GC', gc)),
-        h('div', { class: 'rt-stage' }, label('heap'), heap, path, st), msg);
-      paint(); say(msg, START[leaky]);
     },
     deeper: [
       {
@@ -1144,7 +1156,7 @@ lifecycleScope.launch { delay(60_000); binding.title.text = "Ready" }`,
     body: `
 <p>A <em>cold start</em> begins with no process for your app. The system forks a new process from Zygote, a process that already has the framework loaded. Then your app’s classes start loading on first use, every <code>ContentProvider</code> in the merged manifest is created, <code>Application.onCreate</code> runs, the launcher activity is created and its UI is composed or inflated, and the first frame is drawn. After the fork, all of your part runs on the main thread, before the user sees anything but the starting window.</p>
 <p>Everything from the previous lessons shows up here. Classes have to be loaded and verified. Methods run interpreted or JIT-compiled unless a profile got them compiled. Objects created during startup are allocated and collected.</p>
-<p>Turn on fixes in the demo and watch the timeline. The numbers are illustrative; measure your own with Macrobenchmark or the <code>Displayed</code> line in Logcat. See <a href="#perf.startup">startup performance</a> for the measuring side.</p>`,
+<p>The demo shows one cold start before and after two kinds of fixes. The numbers are illustrative; measure your own with Macrobenchmark or the <code>Displayed</code> line in Logcat. See <a href="#perf.startup">startup performance</a> for the measuring side.</p>`,
     code: `class NewsApp : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -1159,38 +1171,31 @@ lifecycleScope.launch { delay(60_000); binding.title.text = "Ready" }`,
 val ads by lazy { Ads.create(app) }`,
     remember: 'Cold start runs every provider, Application.onCreate and your first screen on the main thread. Do less there, later, or off the main thread.',
     visual(el) {
-      const on = { lazy: false, startup: false, profile: false };
-      const tl = h('div', { class: 'rt-tl', role: 'img', 'aria-label': 'startup timeline' });
-      const legend = h('div', { class: 'rt-legend' });
-      const total = h('span', { class: 'rt-total' });
-      const msg = out('');
-      const segs = PHASES.map(p => h('div', { class: `rt-seg ${p.cls}` }));
-      tl.append(...segs);
-      const msOf = p => {
-        let v = p.ms;
-        if (p.opt === 'lazy' && on.lazy) v = 90;
-        if (p.opt === 'startup' && on.startup) v = 50;
-        if (on.profile && p.code) v = Math.round(v * 0.7);
-        return v;
+      const run = (lane, ms) => {
+        const names = ['fork', 'classes', 'providers', 'App', 'Activity', 'frame'];
+        const tones = ['muted', 'accent', 'warm', 'err', 'accent', 'ok'];
+        let t = 0;
+        return ms.map((d, k) => ({ lane, from: t, to: (t += d), label: names[k], tone: tones[k] }));
       };
-      function paint(text) {
-        const vals = PHASES.map(msOf), sum = vals.reduce((a, b) => a + b, 0);
-        segs.forEach((s, i) => { s.style.flexBasis = `${(vals[i] / 1210) * 100}%`; s.title = `${PHASES[i].n}: ${vals[i]} ms`; });
-        legend.replaceChildren(...PHASES.map((p, i) => h('span', {}, h('i', { class: p.cls }), p.n, h('b', {}, `${vals[i]}`))));
-        total.textContent = `time to first frame: ${sum} ms`;
-        replay(total, 'pop-soft');
-        if (text) say(msg, text);
-      }
-      const tog = (k, text, why) => {
-        const b = act(text, () => { on[k] = !on[k]; b.setAttribute('aria-pressed', String(on[k])); paint(on[k] ? why : `Turned off: ${text}.`); }, { 'aria-pressed': 'false' });
-        return b;
-      };
-      el.append(h('div', { class: 'controls' },
-        tog('lazy', 'Lazy SDK init', 'Ads and search set-up moved out of Application.onCreate: created on first use or by a background worker after the first frame.'),
-        tog('startup', 'App Startup', 'Three libraries each had their own ContentProvider. App Startup runs their initializers from one shared provider, and you can mark some lazy.'),
-        tog('profile', 'Baseline Profile', 'Startup code is AOT-compiled at install, so every phase that runs your code gets faster. The fork from Zygote does not change.')),
-      h('div', { class: 'rt-stage' }, total, tl, legend, h('span', { class: 'rt-note' }, 'main thread, cold start · illustrative ms')), msg);
-      paint('A cold start with heavy init. Toggle the fixes.');
+      Lab.ui.timeline(el, {
+        lanes: ['Shipped', 'Lazy init', '+ Profile'],
+        span: 1250, unit: 'ms',
+        predict: {
+          q: 'In this cold start, which phase is the longest before any fixes?',
+          options: ['Forking the process from Zygote', 'Creating the ContentProviders', '<code>Application.onCreate</code> with SDK set-up'],
+          a: 2,
+          why: 'Everything in <code>Application.onCreate</code> runs on the main thread before the first frame, on every cold start. Heavy SDK init there is the usual culprit.',
+        },
+        frames: [
+          { now: 0, say: 'One cold start on the main thread, as shipped. The numbers are illustrative.' },
+          { bars: run(0, [60, 140]), say: 'The system forks the process from Zygote. Then classes load on first use.' },
+          { bars: run(0, [60, 140, 180]).slice(2), say: 'Every <code>ContentProvider</code> in the merged manifest is created next, before <code>Application.onCreate</code>. Three SDKs bring three.' },
+          { bars: run(0, [60, 140, 180, 420]).slice(3), say: '<code>Application.onCreate</code> sets up ads and search. 420 ms of work nobody sees.' },
+          { bars: run(0, [60, 140, 180, 420, 300, 110]).slice(4), marks: [{ at: 1210, label: '1210', tone: 'err' }], say: 'Then the Activity, its UI, and the first frame: 1210 ms in all.' },
+          { bars: run(1, [60, 140, 50, 90, 300, 110]), marks: [{ at: 750, label: '750', tone: 'warm' }], say: 'App Startup runs the three initializers from one provider, and ads and search set up on first use. 750 ms.' },
+          { bars: run(2, [60, 98, 35, 63, 210, 77]), marks: [{ at: 543, label: '543', tone: 'ok' }], say: 'A Baseline Profile gets the startup code AOT-compiled at install, so every phase that runs your code is faster. The fork is not.' },
+        ],
+      });
     },
     deeper: [
       {

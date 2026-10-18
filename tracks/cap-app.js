@@ -521,7 +521,7 @@
         body: `
 <p>We are building <b>News</b>: an app that lists headlines, opens an article, and keeps working offline. This first step creates the project and lists every library it will use in <code>gradle/libs.versions.toml</code>, so the later steps only add code.</p>
 <p>Each library serves one layer. Compose and Navigation draw the UI, Lifecycle holds the ViewModel, Retrofit and kotlinx.serialization talk to the API, Room stores the cache, and Hilt wires it together. Room and Hilt generate code with KSP. AGP 9 compiles Kotlin itself, so there is no <code>kotlin-android</code> plugin. You still apply the Compose and serialization compiler plugins.</p>
-<p>The Compose BOM picks matching versions for every Compose library, so those entries have no version of their own. Tap a catalog entry to see which layer it feeds, sync the project, then run the empty app.</p>`,
+<p>The Compose BOM picks matching versions for every Compose library, so those entries have no version of their own. Below, follow one library from the catalog to the running app, then see what breaks without the BOM.</p>`,
         code: `# gradle/libs.versions.toml
 [versions]
 agp = "9.4.0"
@@ -625,66 +625,31 @@ class MainActivity : ComponentActivity() {
           { q: 'With AGP 9, what happens to the <code>org.jetbrains.kotlin.android</code> plugin?', options: ['You still need it for Kotlin files', 'You remove it: AGP compiles Kotlin itself', 'It is renamed to <code>kotlin-compose</code>'], a: 1, why: 'AGP 9 turns on built-in Kotlin by default. Compiler plugins like Compose and serialization are still applied on their own.' },
         ],
         visual(el) {
-          const ENTRIES = [
-            ['compose-bom', 'platform(libs.compose.bom)', ['ui'], 'one version for all Compose libraries'],
-            ['compose-material3', 'libs.compose.material3', ['ui'], 'no version: the BOM picks it'],
-            ['navigation-compose', 'libs.navigation.compose', ['ui'], 'NavHost and typed routes'],
-            ['lifecycle-viewmodel-compose', 'libs.lifecycle.viewmodel.compose', ['vm'], 'ViewModels in composables'],
-            ['retrofit', 'libs.retrofit', ['api'], 'HTTP calls from an interface'],
-            ['serialization-json', 'libs.serialization.json', ['api'], 'JSON into Kotlin classes'],
-            ['room-runtime', 'libs.room.runtime', ['db'], 'the local database, compiled by KSP'],
-            ['hilt-android', 'libs.hilt.android', ['ui', 'vm', 'repo', 'db', 'api'], 'builds and connects every layer'],
-          ];
-          const ph = phone();
-          ph.show(center({ title: 'Not built yet', note: 'Sync the project, then run it.' }));
-          const A = arch({ ui: ['new', 'MainActivity'] });
-          const o = out('Tap a catalog entry to see its accessor and the layer it feeds.');
-          let bom = true, synced = false, busy = false;
-          const rows = ENTRIES.map(([name, acc, layers, note]) => h('button', { class: 'ca-trow', type: 'button', onclick() {
-            if (busy) return;
-            rows.forEach(r => r.classList.remove('on')); this.classList.add('on');
-            layers.forEach(k => A.ping(k));
-            const call = name === 'compose-bom' ? 'implementation(platform(libs.compose.bom))' : `implementation(${acc})`;
-            say(o, `${hl(call)} <span class="muted">// ${note}</span>`);
-          } }, h('span', {}, name), h('em', {})));
-          const bomSw = switchEl('platform(libs.compose.bom)', true, v => {
-            bom = v; synced = false;
-            rows.forEach(r => { r.classList.remove('ok', 'bad', 'skip', 'on'); r.lastChild.textContent = ''; });
-            say(o, v ? 'BOM back in the dependencies. Sync again.' : 'BOM removed from the dependencies. Sync to see what breaks.');
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'toml', label: 'libs.versions.toml', sub: '[libraries]' },
+              { id: 'sync', label: 'Gradle sync', sub: 'libs.* accessors' },
+              { id: 'bom', label: 'Compose BOM', sub: 'platform(...)' },
+              { id: 'repo', label: 'Resolve', sub: 'google() repository' },
+              { id: 'app', label: 'App', sub: 'MainActivity' },
+            ],
+            predict: {
+              q: '<code>compose-material3</code> has no version in the catalog. You delete <code>implementation(platform(libs.compose.bom))</code> and sync. What happens?',
+              options: ['Gradle picks the newest Material 3', 'Sync fails: Gradle can’t find a version for material3', 'It uses the version that ships with the Android SDK'],
+              a: 1,
+              why: 'Only the BOM supplies that version. Without it the dependency has no version, and resolution fails.',
+            },
+            frames: [
+              { say: 'Follow one library, <code>compose-material3</code>, from the catalog to the running app.' },
+              { at: 'toml', packet: 'compose-material3 (no version)', say: 'The catalog names the module <code>androidx.compose.material3:material3</code> and leaves the version out on purpose.' },
+              { at: 'sync', packet: 'libs.compose.material3', mark: { sync: 'ok' }, say: 'Sync reads the catalog and generates type-safe accessors. A dash in the alias becomes a dot.' },
+              { at: 'bom', packet: 'material3 + BOM version', mark: { bom: 'ok' }, say: '<code>platform(libs.compose.bom)</code> is a list of matching versions. It fills in material3’s version, and every other Compose library’s.' },
+              { at: 'repo', packet: 'material3:&lt;BOM version&gt;', tone: 'ok', mark: { repo: 'ok' }, say: 'Gradle downloads that exact version from Google’s Maven repository. Room’s and Hilt’s compilers go to <code>ksp</code> the same way.' },
+              { at: 'app', packet: 'Hello, News', tone: 'ok', mark: { app: 'ok' }, say: 'The app builds and runs: one screen with <code>Text("Hello, News")</code>. The next steps only add code.' },
+              { at: 'toml', packet: 'compose-material3 (no version)', mark: { bom: 'err', repo: null, app: null }, say: 'Now delete the <code>platform(...)</code> line and sync again.' },
+              { at: 'repo', packet: 'material3:?', tone: 'err', mark: { repo: 'err' }, say: 'Nothing supplies a version. Sync fails with <code>Could not find androidx.compose.material3:material3:.</code>, the empty part after the last colon being the missing version.' },
+            ],
           });
-          async function sync() {
-            if (busy) return;
-            busy = true; synced = false; A.clear();
-            rows.forEach(r => { r.classList.remove('ok', 'bad', 'skip', 'on'); r.lastChild.textContent = ''; });
-            say(o, 'Syncing: Gradle reads the catalog and resolves each library…');
-            for (let i = 0; i < rows.length; i++) {
-              const r = rows[i], name = ENTRIES[i][0];
-              r.classList.add('on');
-              await sleep(200); if (!el.isConnected) return;
-              r.classList.remove('on');
-              if (name === 'compose-bom' && !bom) { r.classList.add('skip'); continue; }
-              if (name === 'compose-material3' && !bom) {
-                r.classList.add('bad'); r.lastChild.textContent = '✗'; replay(r, 'shake');
-                say(o, '<span class="bad">Could not find androidx.compose.material3:material3:.</span> No version in the catalog and no BOM to supply one.');
-                busy = false; return;
-              }
-              r.lastChild.textContent = '✓';
-            }
-            synced = true; busy = false;
-            say(o, '<span class="good">BUILD SUCCESSFUL.</span> Gradle generated the type-safe <code>libs.*</code> accessors.');
-          }
-          async function run() {
-            if (busy) return;
-            if (!synced) { replay(ph.el, 'shake'); say(o, 'Sync the project first. The build can’t resolve its libraries yet.'); return; }
-            busy = true;
-            await ph.dark(450); if (!el.isConnected) return;
-            ph.show(center({ title: 'Hello, News', note: 'One screen, no data yet.' }));
-            A.ping('ui');
-            say(o, `${hl('MainActivity.onCreate()')} called ${hl('setContent { }')}. The app runs. Next step: real screens.`);
-            busy = false;
-          }
-          layout(el, ph, A, panelBox('libs.versions.toml', h('div', { class: 'ca-toml' }, h('div', { class: 'ca-thead' }, '[libraries]'), rows)),
-            h('div', { class: 'controls' }, cmd('Sync project', sync), cmd('Run app', run), bomSw), o);
         },
       },
 
@@ -698,7 +663,7 @@ class MainActivity : ComponentActivity() {
         body: `
 <p>Now the app gets its two screens: a list of headlines and an article page. Both read from a hard-coded <code>sampleArticles</code> list, so you can build the UI before any data layer exists.</p>
 <p>The list is a <code>LazyColumn</code> with <code>key = { it.id }</code>, so rows keep their identity when new articles arrive later. Each screen takes plain data and lambdas like <code>onArticleClick</code>. That is state hoisting: the screens know nothing about navigation or where the data comes from.</p>
-<p>Navigation uses typed routes. <code>ArticleList</code> is a <code>data object</code>, <code>ArticleDetail(id)</code> is a <code>data class</code>, and both are <code>@Serializable</code>. Pass the id, not the whole article. Tap a headline below and watch the back stack.</p>`,
+<p>Navigation uses typed routes. <code>ArticleList</code> is a <code>data object</code>, <code>ArticleDetail(id)</code> is a <code>data class</code>, and both are <code>@Serializable</code>. Pass the id, not the whole article. Step through a tap below and watch the back stack.</p>`,
         code: `// Article.kt: the app's own model
 data class Article(
     val id: String,
@@ -761,43 +726,27 @@ setContent { MaterialTheme { NewsNavHost() } }`,
           { q: '<code>id</code> is a String. What happens with <code>navigate(ArticleDetail(id = 42))</code>?', options: ['It compiles and converts to "42"', 'A compile error: argument type mismatch', 'A crash when you tap'], a: 1, why: 'Typed routes are plain Kotlin constructors, so the compiler checks every argument.' },
         ],
         visual(el) {
-          const SAMPLE = newest(STORIES.slice(0, 5));
-          const ph = phone();
-          const A = arch({ ui: ['new', 'ArticleListScreen · ArticleDetailScreen'] });
-          const o = out('Tap a headline, or use the commands below.');
-          const stackEl = h('div', { class: 'ca-stack', 'aria-live': 'polite' });
-          const stack = ['ArticleList'];
-          const label = r => (r === 'ArticleList' ? 'ArticleList' : `ArticleDetail(id = "${r.id}")`);
-          function paint(anim) {
-            const top = stack[stack.length - 1];
-            if (top === 'ArticleList') ph.show(listView(SAMPLE, a => open(a.id)), { title: 'News' });
-            else ph.show(detailView(SAMPLE.find(a => a.id === top.id)), { title: 'Article', onBack: back });
-            const kids = [];
-            stack.forEach((r, i) => {
-              if (i) kids.push(h('span', { class: 'ca-sep', 'aria-hidden': 'true' }, '›'));
-              kids.push(h('span', { class: 'ca-route' + (i === stack.length - 1 ? ' top' : '') + (anim && i === stack.length - 1 ? ' drop-in' : '') }, label(r)));
-            });
-            stackEl.replaceChildren(...kids);
-          }
-          function open(id) {
-            if (stack.length >= 4) { replay(stackEl, 'shake'); say(o, 'The stack is getting deep. Press Back first.'); return; }
-            stack.push({ id }); A.ping('ui');
-            paint(true);
-            say(o, `${hl(`navController.navigate(ArticleDetail(id = "${id}"))`)} pushed a new entry. The detail screen got the id back with ${hl('toRoute()')}.`);
-          }
-          function back() {
-            if (stack.length === 1) { replay(ph.el, 'shake'); say(o, 'Only ArticleList is left. Back on the start destination closes the app.'); return; }
-            const gone = stack.pop(); A.ping('ui');
-            paint(false);
-            say(o, `${hl('popBackStack()')} removed ${hl(label(gone))}.`);
-          }
-          paint(false);
-          layout(el, ph, A, panelBox('Back stack', stackEl),
-            h('div', { class: 'controls' },
-              cmd('navigate(ArticleDetail("a3"))', () => open('a3')),
-              cmd('press Back', back),
-              cmd('navigate(ArticleDetail(id = 42))', () => { replay(stackEl, 'shake'); A.fail('ui'); setTimeout(() => A.nodes.ui.classList.remove('fail'), 900); say(o, '<span class="bad">error:</span> Argument type mismatch: actual type is \'Int\', but \'String\' was expected.'); })),
-            o);
+          const rows = [['a5', 'Storm expected along the coast'], ['a4', 'City council approves bike lanes'], ['a3', 'Researchers map a deep-sea reef'], ['a2', 'Rail line reopens after repairs']];
+          const list = '<div class="ui-m-bar">News</div><div class="ui-m-body">' + rows.map(([id, t]) => `<div class="ui-m-card r-${id}"><b>${t}</b><span class="ui-m-muted">id = "${id}"</span></div>`).join('') + '</div>';
+          const detail = '<div class="ui-m-bar"><span class="go-back">←</span> Article</div><div class="ui-m-body"><span class="ui-m-muted">Science</span><b>Researchers map a deep-sea reef</b><div class="ui-m-img"></div><div class="ui-m-line"></div><div class="ui-m-line short"></div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'NavHost and back stack',
+            predict: {
+              q: 'You tap a headline. What does <code>ArticleListScreen</code> itself do?',
+              options: ['Calls <code>navController.navigate(...)</code>', 'Calls <code>onArticleClick(id)</code> and nothing else', 'Loads the article and passes it to the next screen'],
+              a: 1,
+              why: 'The screen is hoisted: it gets data and lambdas. The NavHost passed a lambda that does the navigating, so the screen never sees the NavController.',
+            },
+            frames: [
+              { screen: list, log: 'back stack: [ArticleList]', say: 'The start destination is <code>ArticleList</code>. The screen got <code>sampleArticles</code> and an <code>onArticleClick</code> lambda.' },
+              { tap: '.r-a3', log: 'ArticleListScreen: onArticleClick("a3")', say: 'Tap a card. The screen only calls its lambda with the id.' },
+              { screen: detail, log: ['navigate(ArticleDetail(id = "a3"))', 'back stack: [ArticleList, ArticleDetail("a3")]'], say: 'The lambda from the NavHost navigates. A typed route goes on the back stack, carrying only the id.' },
+              { log: 'entry.toRoute&lt;ArticleDetail&gt;().id == "a3"', say: 'The detail destination rebuilds the route with <code>toRoute()</code> and looks the article up by id.' },
+              { tap: '.go-back', log: 'ArticleDetailScreen: onBack()', say: 'The back arrow calls the screen’s <code>onBack</code> lambda.' },
+              { screen: list, log: ['popBackStack()', 'back stack: [ArticleList]'], say: '<code>popBackStack()</code> removes the detail entry, and the list is on top again.' },
+              { log: 'navigate(ArticleDetail(id = 42)) → compile error: argument type mismatch', say: 'Routes are plain Kotlin constructors, so passing an <code>Int</code> where the id is a <code>String</code> doesn’t even compile.' },
+            ],
+          });
         },
       },
 
@@ -865,6 +814,12 @@ composable<ArticleList> {
           { q: 'Why <code>WhileSubscribed(5_000)</code> and not <code>WhileSubscribed()</code>?', options: ['A rotation unsubscribes for a moment, and the 5 seconds keep the upstream from restarting', 'It refreshes every 5 seconds', 'It is a network timeout'], a: 0, why: 'With no delay, the upstream stops the moment the old Activity stops collecting and restarts for the new one.' },
           { q: 'Step 5 replaces <code>FakeNewsRepository</code>. What has to change in <code>uiState</code>?', options: ['Nothing: it only knows the <code>NewsRepository</code> interface', 'Its type', 'Every operator'], a: 0, why: 'Depending on the interface lets you swap the data source without touching the ViewModel’s state pipeline.' },
         ],
+        predict: {
+          q: 'Switch off <code>viewModel { }</code>, so the screen calls <code>NewsViewModel(...)</code> directly, then rotate. What does the list do?',
+          options: ['Nothing changes: the state carries over', 'It blinks empty: a new ViewModel starts from its initial value', 'The app crashes'],
+          a: 1,
+          why: 'A plain constructor call builds a new ViewModel on every recomposition. Only <code>viewModel { }</code> reuses the one in the ViewModelStore.',
+        },
         visual(el) {
           const fake = newest(STORIES.slice(0, 4)).map(copy);
           let next = 4, activity = 1, retained = true, busy = false, empty = false;
@@ -993,6 +948,12 @@ class OnlineNewsRepository(private val api: NewsApi) : NewsRepository {
           { q: 'Why map <code>ArticleDto</code> to <code>Article</code>?', options: ['So the rest of the app doesn’t depend on the server’s JSON shape', 'Retrofit requires it', 'To make requests faster'], a: 0, why: 'If the API renames a field, only the DTO and the mapper change.' },
           { q: 'Offline, what does <code>OnlineNewsRepository</code> show at launch?', options: ['An empty list: nothing from earlier is kept', 'Yesterday’s articles', 'A crash'], a: 0, why: 'The IOException is caught and turned into an empty list. There is no local copy yet.' },
         ],
+        predict: {
+          q: 'You open the app three times in a row while online. How many requests does <code>OnlineNewsRepository</code> send?',
+          options: ['One: the first response is reused', 'Three: every launch downloads everything again', 'None after the first: Retrofit caches the result'],
+          a: 1,
+          why: 'Nothing is stored yet. Each launch collects a new cold <code>flow { }</code>, and each collection calls the API.',
+        },
         visual(el) {
           const JSON_LINES = [
             ['{ "articles": [', ''],
@@ -1142,6 +1103,12 @@ init {
           { q: 'Offline, the user reopens the app. What do they see?', options: ['The articles saved by the last successful refresh', 'An empty list', 'A crash'], a: 0, why: 'Room is on disk. The query emits the saved rows, and the failed refresh only leaves them as they are.' },
           { q: 'What did <code>NewsViewModel</code> need for the cache?', options: ['Only an <code>init</code> block that calls <code>refresh()</code>', 'A new <code>uiState</code> pipeline', 'A reference to the DAO'], a: 0, why: 'It still reads <code>repository.observeArticles()</code>. Only the repository behind the interface changed.' },
         ],
+        predict: {
+          q: 'You change a row’s title with <code>dao.update(...)</code> and never call <code>refresh()</code>. What does the screen do?',
+          options: ['Nothing until the next refresh', 'It updates: Room re-runs <code>observeAll()</code> and the Flow emits', 'It reloads the list from the API'],
+          a: 1,
+          why: 'The screen reads Room, and any write to the table wakes its Flow queries. It doesn’t matter who wrote.',
+        },
         visual(el) { offlineApp(el, 5); },
       },
 
@@ -1155,7 +1122,7 @@ init {
         body: `
 <p>Until now the pieces were built by hand. Hilt takes that over. <code>@HiltAndroidApp</code> on <code>NewsApp</code> creates the app-wide graph, and <code>@AndroidEntryPoint</code> on <code>MainActivity</code> lets its screens ask for ViewModels.</p>
 <p><code>DataModule</code> provides what we can’t annotate: the Retrofit <code>NewsApi</code> and the Room database, both <code>@Singleton</code>, plus the DAO. <code>RepositoryModule</code> binds <code>NewsRepository</code> to <code>OfflineFirstNewsRepository</code>. The ViewModels get <code>@HiltViewModel</code> and an <code>@Inject</code> constructor, and the screens call <code>hiltViewModel()</code>.</p>
-<p>The detail screen now has its own <code>ArticleViewModel</code>. Hilt hands it a <code>SavedStateHandle</code> that holds the route, so <code>toRoute&lt;ArticleDetail&gt;()</code> gives it the id. Below, open an article, rotate, go back, and restart the process.</p>`,
+<p>The detail screen now has its own <code>ArticleViewModel</code>. Hilt hands it a <code>SavedStateHandle</code> that holds the route, so <code>toRoute&lt;ArticleDetail&gt;()</code> gives it the id. Below, watch Hilt build the graph at launch, then open an article, rotate and go back.</p>`,
         code: `@HiltAndroidApp
 class NewsApp : Application()          // android:name=".NewsApp" in the manifest
 
@@ -1239,79 +1206,34 @@ composable<ArticleDetail> {
           { q: 'You press back on the article. What happens to <code>ArticleViewModel</code>?', options: ['Its entry leaves the back stack, so it is cleared', 'It lives until the app closes', 'Hilt keeps it as a singleton'], a: 0, why: '<code>hiltViewModel()</code> scopes it to the navigation entry. Popping the entry clears its ViewModelStore.' },
         ],
         visual(el) {
-          const db = newest(STORIES.slice(0, 5)).map(copy);
-          const G = [
-            ['api', 'NewsApi', '@Singleton · Retrofit'],
-            ['dbi', 'NewsDatabase', '@Singleton · Room'],
-            ['dao', 'ArticleDao', 'from NewsDatabase'],
-            ['repo', 'NewsRepository', '@Binds → OfflineFirstNewsRepository'],
-          ];
-          const V = [['nvm', 'NewsViewModel', 'ArticleList entry'], ['avm', 'ArticleViewModel', 'ArticleDetail entry']];
-          const items = {};
-          const gi = ([k, name, note]) => {
-            const chip = h('span', { class: 'ca-vm' });
-            const lab = h('small', {}, note);
-            const row = h('div', { class: 'ca-gi' }, h('span', {}, name), lab, chip);
-            items[k] = Object.assign(row, { chip, lab });
-            return row;
-          };
-          const ids = {};
-          const make = (k, anim = true) => { ids[k] = addr(); const r = items[k]; r.classList.remove('gone'); r.classList.add('made'); r.chip.textContent = ids[k]; r.chip.className = 'ca-vm cur'; if (anim) replay(r, 'pop'); };
-          const unmake = k => { const r = items[k]; r.classList.remove('made'); r.chip.textContent = ''; r.chip.className = 'ca-vm'; };
-          const graph = h('div', { class: 'ca-graph' }, h('span', { class: 'ca-gh' }, 'SingletonComponent'), G.map(gi), h('span', { class: 'ca-gh' }, 'ViewModelComponent'), V.map(gi));
-          const ph = phone();
-          const A = arch({ ui: ['have', 'hiltViewModel()'], vm: ['new', 'NewsViewModel · ArticleViewModel'], repo: ['have', 'OfflineFirstNewsRepository'], db: ['have', 'ArticleDao'], api: ['have', 'NewsApi'], hilt: 'new' });
-          const o = out('The graph is built and the list is on screen. Open an article, rotate, or restart.');
-          let busy = false, activity = 1, openId = null;
-          const showList = () => ph.show(listView(db, a => openArticle(a.id)), { title: 'News' });
-          function openArticle(id) {
-            if (busy || openId) return;
-            openId = id;
-            make('avm'); items.avm.lab.textContent = `id = "${id}"`;
-            ph.show(detailView(db.find(a => a.id === id)), { title: 'Article', onBack: back });
-            A.ping('ui'); A.ping('vm'); A.pkt('vr', `observeArticle("${id}")`);
-            say(o, `${hl('hiltViewModel<ArticleViewModel>()')} built a new ViewModel ${ids.avm}. Hilt gave it the same NewsRepository ${ids.repo} and a SavedStateHandle holding ${hl(`ArticleDetail(id = "${id}")`)}.`);
-          }
-          function back() {
-            if (busy || !openId) { if (!openId) say(o, 'Already on the list.'); return; }
-            const gone = ids.avm; openId = null;
-            items.avm.classList.add('gone'); items.avm.chip.className = 'ca-vm';
-            showList(); A.ping('ui');
-            say(o, `The ArticleDetail entry left the back stack, so ArticleViewModel ${gone} was cleared. The singletons stay.`);
-          }
-          async function rotate() {
-            if (busy) return;
-            busy = true; A.clear();
-            await ph.rotate(); if (!el.isConnected) return;
-            activity++;
-            ['nvm', 'avm', 'repo', 'dbi'].forEach(k => { if (items[k].classList.contains('made')) replay(items[k], 'pop'); });
-            A.ping('ui');
-            say(o, `MainActivity #${activity} is new. NewsViewModel ${ids.nvm}${openId ? ` and ArticleViewModel ${ids.avm}` : ''} came back from their entries, and every singleton is the same object.`);
-            busy = false;
-          }
-          async function restart() {
-            if (busy) return;
-            busy = true; A.clear(); openId = null;
-            [...G, ...V].forEach(([k]) => { unmake(k); items[k].classList.remove('gone'); });
-            items.avm.lab.textContent = 'ArticleDetail entry';
-            await ph.dark(450); if (!el.isConnected) return;
-            ph.show(center({ spin: true }));
-            say(o, `New process. ${hl('@HiltAndroidApp')} creates the SingletonComponent. Asking for NewsViewModel pulls in everything below it.`);
-            const order = [['api', 'api'], ['dbi', 'db'], ['dao', 'db'], ['repo', 'repo'], ['nvm', 'vm']];
-            for (const [k, node] of order) {
-              await sleep(380); if (!el.isConnected) return;
-              make(k); A.ping(node);
-            }
-            await sleep(300); if (!el.isConnected) return;
-            A.ping('ui'); showList();
-            say(o, `<span class="good">ready:</span> built bottom-up, each piece once. NewsViewModel ${ids.nvm} got NewsRepository ${ids.repo}.`);
-            busy = false;
-          }
-          ['api', 'dbi', 'dao', 'repo', 'nvm'].forEach(k => make(k, false));
-          showList();
-          layout(el, ph, A, panelBox('Hilt graph', graph),
-            h('div', { class: 'controls' }, cmd('open article', () => (openId ? say(o, 'Already on an article. Press back.') : openArticle(db[1].id))), cmd('rotate()', rotate), cmd('press Back', back), cmd('Kill process + launch', restart)),
-            o);
+          Lab.ui.graph(el, {
+            height: 320,
+            nodes: [
+              { id: 'nvm', label: 'NewsViewModel<small>list entry</small>', x: 25, y: 10 },
+              { id: 'avm', label: 'ArticleViewModel<small>detail entry</small>', x: 75, y: 10, hidden: true },
+              { id: 'repo', label: 'NewsRepository<small>@Binds</small>', x: 25, y: 48, hidden: true, tone: 'ok' },
+              { id: 'ssh', label: 'SavedStateHandle<small>id = "a3"</small>', x: 75, y: 48, hidden: true, tone: 'warm' },
+              { id: 'api', label: 'NewsApi<small>@Singleton</small>', x: 17, y: 90, hidden: true, tone: 'ok' },
+              { id: 'dao', label: 'ArticleDao', x: 50, y: 90, hidden: true, tone: 'ok' },
+              { id: 'db', label: 'NewsDatabase<small>@Singleton</small>', x: 83, y: 90, hidden: true, tone: 'ok' },
+            ],
+            predict: {
+              q: 'Later you open an article. Hilt builds <code>ArticleViewModel</code>, which also needs a <code>NewsRepository</code>. What does it get?',
+              options: ['A new repository with a new database', 'The same repository object the list ViewModel has', 'Nothing, until you write a ViewModel factory'],
+              a: 1,
+              why: '<code>OfflineFirstNewsRepository</code> is <code>@Singleton</code>, so <code>SingletonComponent</code> builds it once and hands the same object to every ViewModel.',
+            },
+            frames: [
+              { say: 'A new process. The list screen calls <code>hiltViewModel&lt;NewsViewModel&gt;()</code>. Its <code>@Inject</code> constructor asks for a <code>NewsRepository</code>.' },
+              { show: ['repo'], add: [['nvm', 'repo', 'needs']], say: '<code>NewsRepository</code> is an interface. <code>@Binds</code> in <code>RepositoryModule</code> picks <code>OfflineFirstNewsRepository</code>, which needs a <code>NewsApi</code> and an <code>ArticleDao</code>.' },
+              { show: ['api'], add: [['repo', 'api']], say: '<code>DataModule.provideNewsApi()</code> builds Retrofit once. It is <code>@Singleton</code>.' },
+              { show: ['dao', 'db'], add: [['repo', 'dao'], ['dao', 'db']], say: 'The DAO comes from <code>NewsDatabase</code>, also a <code>@Singleton</code>: one database, one invalidation tracker.' },
+              { hl: ['nvm'], say: 'Built from the bottom up, each piece once. Then the ViewModel gets its repository and the list shows.' },
+              { show: ['avm', 'ssh'], add: [['avm', 'repo', 'same', 'ok'], ['avm', 'ssh', 'route']], say: 'Open article a3. <code>ArticleViewModel</code> is new, for the <code>ArticleDetail</code> entry. It gets the same repository, and a <code>SavedStateHandle</code> holding the route.' },
+              { hl: ['nvm', 'avm', 'repo', 'api', 'db'], say: 'Rotate. The Activity is new, but both ViewModels come back from their entries, and the singletons are untouched. Nothing is built again.' },
+              { gone: ['avm', 'ssh'], remove: [['avm', 'repo'], ['avm', 'ssh']], say: 'Press Back. The <code>ArticleDetail</code> entry leaves the back stack, so <code>ArticleViewModel</code> is cleared. The singletons stay.' },
+            ],
+          });
         },
       },
 
@@ -1424,6 +1346,12 @@ fun FullScreenMessage(text: String, action: String? = null, onAction: () -> Unit
           { q: 'Why is <code>isRefreshing.value = false</code> in <code>finally</code>?', options: ['So the indicator stops even when refresh throws something unexpected or the coroutine is cancelled', 'finally runs faster', 'Kotlin requires it after try'], a: 0, why: '<code>finally</code> runs on every exit path. Anywhere else, one uncaught exception leaves the spinner on forever.' },
           { q: 'First launch, offline, nothing saved. Which branch draws?', options: ['The loading spinner', 'The full-screen error with Retry', 'The empty state'], a: 1, why: 'Articles are empty, the refresh finished, and <code>errorMessage</code> is set, so the error branch matches before the empty one.' },
         ],
+        predict: {
+          q: 'Room holds 4 articles. A refresh succeeds, but the server returns 0 articles. What does the screen show?',
+          options: ['The empty state', 'The 4 saved articles: an upsert of nothing leaves Room’s rows as they are', 'An error message'],
+          a: 1,
+          why: 'The repository only upserts what the server sent. With nothing new, the rows stay, and the <code>else</code> branch draws the list.',
+        },
         visual(el) { offlineApp(el, 7); },
       },
 
@@ -1486,6 +1414,12 @@ fun NewsNavHost(navController: NavHostController = rememberNavController()) {
           { q: 'During a rotation, which objects are new?', options: ['The Activity and its composition. ViewModels and singletons stay.', 'Everything, including the database', 'Nothing'], a: 0, why: 'ViewModels survive configuration changes, and Hilt singletons live as long as the process.' },
           { q: 'A WorkManager sync job should call which function?', options: ['<code>NewsRepository.refresh()</code>', '<code>NewsViewModel.refresh()</code>', '<code>ArticleListScreen</code>'], a: 0, why: 'Workers run without a screen or a ViewModel. The repository writes to Room, and any open screen updates on its own.' },
         ],
+        predict: {
+          q: 'A refresh is still running when you rotate the phone. What happens to the request?',
+          options: ['It is cancelled and starts again', 'It keeps going: it runs in viewModelScope, and the ViewModel survives rotation', 'It fails with an error'],
+          a: 1,
+          why: 'Rotation recreates the Activity, not the ViewModel. Work in <code>viewModelScope</code> carries on, and the new Activity collects its result.',
+        },
         visual(el) { offlineApp(el, 8); },
       },
     ],

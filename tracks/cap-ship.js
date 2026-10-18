@@ -409,6 +409,12 @@ fun AlertsOptInCard(onEnabled: () -> Unit) {
           { q: 'The user sets the breaking channel to Silent. Your next release creates it again with <code>IMPORTANCE_HIGH</code>. What happens?', options: ['It goes back to high', 'It stays silent: the user owns it now', 'The app crashes'], a: 1, why: 'Creating an existing channel can update its name and description, and can only lower an importance the user never touched. It can’t raise it or undo the user’s choice.' },
           { q: 'The user tapped Don’t allow twice. What does <code>launcher.launch(POST_NOTIFICATIONS)</code> do now?', options: ['Shows the dialog again', 'Returns false right away without a dialog', 'Opens Settings'], a: 1, why: 'Since Android 11 two denials stop the dialog. Only the app’s notification settings can turn it on, so link there.' },
         ],
+        predict: {
+          q: "In Settings the reader sets the Breaking channel to Silent. Then a test alert is posted on it. What appears?",
+          options: ["A heads-up banner with sound, because the code asked for <code>IMPORTANCE_HIGH</code>", "The alert lands quietly, with no banner and no sound", "Nothing at all: the channel is blocked"],
+          a: 1,
+          why: "Once a channel exists, the user owns its settings. Silent keeps the notification in the shade but drops the sound and the heads-up banner.",
+        },
         visual(el) {
           const { wait, once } = runner(el);
           const path = pathView(1, wait), P = phoneView();
@@ -581,6 +587,12 @@ class TokenUploadWorker @AssistedInject constructor(
           { q: 'A reader turns Tech off. What should the app call?', options: ['<code>unsubscribeFromTopic("news-tech")</code>', '<code>deleteToken()</code>', 'Nothing; the server filters'], a: 0, why: 'Unsubscribing removes this token from the topic. Deleting the token would stop every push to this install.' },
           { q: 'Which message fits a topic best?', options: ['Breaking news for everyone who follows Sports', 'A reply to the reader’s own comment', 'A sign-in code'], a: 0, why: 'Topics are for public messages to many installs. Personal or private messages go to that user’s tokens.' },
         ],
+        predict: {
+          q: "The install’s token rotates. Later the server sends to every token it has stored, including the old one. What happens to the old row?",
+          options: ["FCM forwards the message to the new token", "FCM answers <code>404 UNREGISTERED</code>, and the server deletes the row", "The send succeeds and the row stays"],
+          a: 1,
+          why: "A replaced token stops being valid. The server keys rows by token and removes a row when FCM reports it as unregistered.",
+        },
         visual(el) {
           const { wait, once } = runner(el);
           const path = pathView(2, wait), P = phoneView();
@@ -743,6 +755,12 @@ class BreakingNotifier @Inject constructor(@ApplicationContext private val conte
           { title: 'A notification message when you need your code', bad: '{ "message": {\n    "topic": "news-breaking",\n    "notification": { "title": "Bridge closed after quake" },\n    "data": { "article_id": "a-81723" }\n} }\n// In the background, onMessageReceived never runs', good: '{ "message": {\n    "topic": "news-breaking",\n    "data": { "type": "breaking", "article_id": "a-81723",\n              "title": "Bridge closed after quake" },\n    "android": { "priority": "high" }\n} }', why: 'With a <code>notification</code> block, the SDK draws the alert in the background and your service is skipped. No deep link with a back stack, no sync. Data-only keeps your code in charge.' },
           { title: 'High priority for messages that show nothing', bad: '// a silent "refresh the headlines" ping\n.setAndroidConfig(AndroidConfig.builder()\n    .setPriority(AndroidConfig.Priority.HIGH)\n    .build())', good: '// silent work can wait for the next maintenance window\n.setAndroidConfig(AndroidConfig.builder()\n    .setPriority(AndroidConfig.Priority.NORMAL)\n    .build())', why: 'FCM watches about a week of behavior per install. High-priority messages that never lead to a notification can be downgraded to normal, and then your real breaking alerts arrive late.' },
         ],
+        predict: {
+          q: "The app is in the background. The server sends a <b>notification</b> message instead of a data-only one. Who draws the alert?",
+          options: ["<code>NewsMessagingService</code>, in <code>onMessageReceived()</code>", "The FCM SDK, and your service does not run", "Nobody, until the reader opens the app"],
+          a: 1,
+          why: "In the background the SDK displays notification messages itself. Your channel choice, deep link and sync code never run, which is why breaking news uses data messages.",
+        },
         visual(el) {
           const { wait, once } = runner(el);
           const path = pathView(3, wait), P = phoneView();
@@ -857,61 +875,29 @@ private fun openArticle(articleId: String): PendingIntent? {
           { q: 'Why doesn’t the alert need an intent filter in the manifest?', options: ['The Intent names MainActivity explicitly, and NavHost matches the URI against the graph', 'Notifications skip the manifest', 'FLAG_IMMUTABLE replaces the filter'], a: 0, why: 'Filters are for implicit Intents, like a link tapped in the browser. An explicit Intent goes straight to the component.' },
         ],
         visual(el) {
-          const { wait, once } = runner(el);
-          const path = pathView(4, wait), P = phoneView();
-          let running = false, stack = [], shortcut = false, next = 1;
-          let current = ALERTS[0];
-          const log = logger('The app is not running. A breaking alert is on the lock screen.');
-          const stackEl = h('div', { class: 'cs-chips' }), intentEl = h('div', { class: 'cs-steps' });
-          const paint = () => {
-            stackEl.replaceChildren(...(stack.length ? stack.flatMap((s, i) => [i ? h('span', { class: 'cs-arrow' }, '›') : null, h('span', { class: 'cs-chip' + (i === stack.length - 1 ? ' top' : '') }, s)]).filter(Boolean) : [tag(running ? 'running' : 'no task')]));
-          };
-          const paintIntent = s => intentEl.replaceChildren(
-            row(mono('ACTION_VIEW')), row(mono(`…/article/${s.id}`)),
-            row(shortcut ? tag('getActivity(), singleTop', 'warn') : tag('TaskStackBuilder: NEW_TASK | CLEAR_TASK', 'on')));
-          const showTop = () => {
-            const top = stack[stack.length - 1] || '';
-            if (top.startsWith('Article')) { const s = [...ALERTS, ...FEED].find(x => top.includes(x.id)) || current; P.app('Article', articleBody(s, 'from Room', 'ok'), { back: true }); }
-            else P.app('News', feedItems(FEED));
-          };
-          const tap = once(async () => {
-            if (!P.has() || P.mode() === 'app') { log.add('No alert waiting. Press Home first to get a new one.', 'dim'); return; }
-            const n = P.take();
-            const s = ALERTS.find(a => a.id === n.id) || current;
-            paintIntent(s);
-            path.clear(); path.mark('device', 'hot');
-            await path.run('device', 'app', { keep: true });
-            path.ping('link');
-            if (shortcut && running) {
-              P.shake(); showTop();
-              log.add('singleTop: the running MainActivity gets onNewIntent(). Nothing calls handleDeepLink(), so the screen doesn’t change.', 'er');
-              return;
-            }
-            stack = ['ArticleList', `ArticleDetail(${s.id})`]; running = true; paint();
-            P.app('Article', articleBody(s, 'opened from alert', 'on'), { back: true });
-            log.add(`Task cleared and rebuilt. NavHost matched …/article/${s.id} and put ArticleList underneath.`, 'ok');
+          const home = (cards = '') => `<div class="ui-m-body" style="background:var(--sunk)">${cards}<div class="ui-m-center ui-m-muted">Home screen</div></div>`;
+          const alert = (cls, title) => `<div class="ui-m-card ${cls}" style="background:var(--surface)"><b>${title}</b><span class="ui-m-muted">News · Breaking · now</span></div>`;
+          const feed = '<div class="ui-m-bar">News</div><div class="ui-m-body"><div class="ui-m-row"><span class="ui-m-av"></span><div>Council approves new tram line</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Chip makers report a record quarter</div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>Derby ends 2-1 after late goal</div></div></div>';
+          const settings = '<div class="ui-m-bar">← Settings</div><div class="ui-m-body"><div class="ui-m-row"><div>Breaking news alerts</div></div><div class="ui-m-row"><div>Text size</div></div><div class="ui-m-row"><div>About</div></div></div>';
+          const article = (title, id) => `<div class="ui-m-bar">← Article</div><div class="ui-m-body"><b>${title}</b><span class="ui-m-muted">${id}</span><div class="ui-m-img"></div><div class="ui-m-line"></div><div class="ui-m-line short"></div></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'What runs',
+            predict: {
+              q: 'The reader has the app open on <b>Settings</b>, presses Home, then taps a breaking alert. The PendingIntent was built with <code>TaskStackBuilder</code>. What happens to the Settings screen?',
+              options: ['The article opens on top of Settings', 'The old task is cleared: the new stack is feed, then article', 'Nothing opens, because the app is already running'],
+              a: 1,
+              why: 'A <code>TaskStackBuilder</code> PendingIntent starts a new, cleared task. <code>NavHost</code> then builds the back stack from the deep link: start destination first, article on top.',
+            },
+            frames: [
+              { screen: settings, log: '// app running: feed → Settings', say: 'The app is open. The reader went from the feed to Settings.' },
+              { screen: home(alert('n1', 'Bridge closed after quake')), log: '// Home pressed, alert posted', say: 'They press Home. A breaking alert arrives. Its PendingIntent wraps an <code>ACTION_VIEW</code> Intent for <code>https://news.example.com/article/a-81723</code>, aimed at <code>MainActivity</code>.' },
+              { tap: '.n1', screen: article('Bridge closed after quake', 'a-81723'), log: ['PendingIntent: NEW_TASK | CLEAR_TASK', 'old task (feed → Settings) cleared', 'MainActivity.onCreate(intent)'], say: 'The tap starts <code>MainActivity</code> in a fresh task. The old feed and Settings screens are gone.' },
+              { log: ['NavHost → handleDeepLink(intent)', 'matches navDeepLink …/article/{id}', 'back stack: ArticleList → ArticleDetail(a-81723)'], say: 'When <code>NavHost</code> sets up its graph, it hands the launch Intent to <code>handleDeepLink()</code>. It puts the start destination, <code>ArticleList</code>, under the article.' },
+              { screen: feed, log: 'Back → ArticleList', say: 'Back lands on the feed, not the home screen. That is the stack a reader expects.' },
+              { screen: home(alert('n2', 'Central bank cuts rates')), log: ['Back → task finishes', 'new alert: …/article/a-81741'], say: 'Back again leaves the app. A second alert arrives for another story, with its own URI.' },
+              { tap: '.n2', screen: article('Central bank cuts rates', 'a-81741'), log: ['different URI → its own PendingIntent', 'back stack: ArticleList → ArticleDetail(a-81741)'], say: 'Each article has its own URI, so two alerts never share a PendingIntent. This tap opens the right story.' },
+            ],
           });
-          const back = () => {
-            if (!running) { log.add('You are on the home screen.', 'dim'); return; }
-            if (P.mode() !== 'app') { log.add('The app is in the background. Tap the alert to bring it up.', 'dim'); return; }
-            if (stack.length > 1) { stack.pop(); paint(); showTop(); log.add('popBackStack(): the feed, not the home screen.', 'ok'); }
-            else { stack = []; running = false; paint(); P.home(); log.add('Back on the start destination finishes MainActivity.', 'dim'); }
-          };
-          const newAlert = once(async () => {
-            current = ALERTS[next % ALERTS.length]; next++;
-            P.lock();
-            await path.run('server', 'device');
-            P.post(alertOf(current));
-            log.add(running ? `Home pressed; the app keeps running. A new alert, a new URI: …/article/${current.id}.` : `A new alert: …/article/${current.id}.`);
-          });
-          P.post(alertOf(current)); P.lock(); paint(); paintIntent(current);
-          frame(el, path, P, [
-            box('Back stack', stackEl),
-            box('PendingIntent', intentEl),
-          ], [
-            act('Tap the alert', tap), act('Back', back), act('Press Home, new alert', newAlert),
-            toggle('Shortcut: singleTop + plain getActivity()', false, v => { shortcut = v; paintIntent(current); log.add(v ? 'Now try: tap an alert, press Home, get a new alert, tap it.' : 'Back to TaskStackBuilder and standard launch mode.', 'dim'); }),
-          ], log);
         },
       },
 
@@ -1021,75 +1007,25 @@ class NewsApp : Application(), Configuration.Provider {
           { title: 'Expediting the quiet refresh too', bad: '"refresh" -> enqueue(context, "headlines", Data.EMPTY, expedited = true)', good: '"refresh" -> enqueue(context, "headlines", Data.EMPTY, expedited = false)', why: 'Expedited quota is small and shared. A normal-priority message gets no exemption, and spending quota on a background refresh can leave none for the next breaking story.' },
         ],
         visual(el) {
-          const { wait, once } = runner(el);
-          const path = pathView(5, wait), P = phoneView();
-          let online = true, next = 0, freshId = null;
-          const room = new Map(FEED.map(s => [s.id, s]));
-          const works = []; // { name, state, exp, run }
-          const log = logger('The app is in the background. Room holds three stories.');
-          const workEl = h('div', { class: 'cs-steps' }), roomEl = h('div', { class: 'cs-steps' });
-          const STATE = { ENQUEUED: 'warn', RUNNING: 'on', SUCCEEDED: 'ok' };
-          const paint = () => {
-            workEl.replaceChildren(...(works.length ? works.slice(-3).map(w => row(mono(w.name), tag(w.state, STATE[w.state]), tag(w.exp ? 'expedited' : 'regular'))) : [tag('no work')]));
-            roomEl.replaceChildren(...[...room.values()].slice(-4).map(s => h('div', { class: 'cs-row' + (s.id === freshId ? ' fresh' : '') }, mono(s.id), h('span', {}, s.title))));
-          };
-          async function runWork(w) {
-            w.state = 'RUNNING'; paint(); path.ping('worker');
-            await wait(700);
-            w.run(); w.state = 'SUCCEEDED'; paint(); path.ping('room');
-            if (P.mode() === 'app') P.app('News', feedItems([...room.values()].reverse().slice(0, 4), freshId));
-          }
-          const sendBreaking = once(async () => {
-            const s = ALERTS[next % ALERTS.length]; next++;
-            if (P.mode() !== 'app') P.lock();
-            await path.run('server', 'app');
-            path.ping('notify');
-            P.post(alertOf(s));
-            const w = { name: `article-${s.id}`, state: 'ENQUEUED', exp: true, run: () => { room.set(s.id, s); freshId = s.id; log.add(`refreshArticle("${s.id}") upserted it. Room’s Flow emits.`, 'ok'); } };
-            if (works.some(x => x.name === w.name && x.state !== 'SUCCEEDED')) { log.add('KEEP: that article is already queued.', 'dim'); return; }
-            works.push(w); paint();
-            log.add('Alert posted, then enqueueArticle(): expedited, unique, needs a network.');
-            if (!online) { log.add('Offline: the constraint holds the job in ENQUEUED.', 'wa'); return; }
-            await wait(300);
-            await runWork(w);
+          Lab.ui.timeline(el, {
+            lanes: ['Service', 'Worker', 'Network', 'Room'],
+            span: 10, unit: 's',
+            predict: {
+              q: 'The fetch worker is waiting because the phone is offline. When does it run?',
+              options: ['At the next periodic sync, up to 15 minutes later', 'As soon as the network constraint is met', 'Only when the reader opens the app'],
+              a: 1,
+              why: 'WorkManager watches the constraints of queued work. When the phone reports a connection, the job is free to run, without waiting for the app.',
+            },
+            frames: [
+              { now: 0, say: 'A train with no signal. A high-priority breaking message for article <code>a-81723</code> arrives anyway, before the tunnel.' },
+              { bars: [{ lane: 0, from: 0, to: 1.4, label: 'notify()', tone: 'ok' }], say: '<code>onMessageReceived()</code> posts the alert first, straight from the payload. That fits in its short window.' },
+              { bars: [{ lane: 0, from: 1.4, to: 2.6, label: 'enqueue' }, { lane: 1, from: 2.6, to: 6.5, label: 'waiting', tone: 'muted' }], say: 'Then it enqueues unique expedited work named <code>article-a-81723</code>, with a network constraint. There is no network, so the work waits.' },
+              { marks: [{ at: 3.6, label: 'again', tone: 'warm' }], bars: [{ lane: 0, from: 3.6, to: 4.8, label: 'KEEP', tone: 'warm' }], now: 4.8, say: 'FCM delivers the same message again. <code>enqueueUniqueWork(…, KEEP, …)</code> sees pending work with that name and ignores the new request.' },
+              { marks: [{ at: 6.5, label: 'online', tone: 'ok' }], bars: [{ lane: 2, from: 6.5, to: 10, label: 'connected', tone: 'ok' }], now: 6.5, say: 'The train leaves the tunnel. The constraint is met.' },
+              { bars: [{ lane: 1, from: 6.5, to: 8.4, label: 'fetch', tone: 'accent' }], say: 'The worker runs <code>NewsRepository.refreshArticle(id)</code>: one GET for that story.' },
+              { bars: [{ lane: 3, from: 8.4, to: 10, label: 'upsert, UI updates', tone: 'ok' }], say: 'It upserts the article into Room. The ViewModels observe Room, so any open screen updates by itself, and a tap later works offline.' },
+            ],
           });
-          const sendRefresh = once(async () => {
-            await path.run('server', 'app');
-            const w = { name: 'headlines', state: 'ENQUEUED', exp: false, run: () => {
-              const extra = [{ id: `a-8177${works.length}`, title: 'Rail strike called off', cat: 'Local' }];
-              extra.forEach(s => room.set(s.id, s)); freshId = extra[0].id;
-              log.add('refresh() wrote new rows. No alert for a refresh.', 'ok');
-            } };
-            if (works.some(x => x.name === 'headlines' && x.state === 'ENQUEUED')) { log.add('KEEP: a headlines refresh is already pending.', 'dim'); return; }
-            works.push(w); paint();
-            log.add('type=refresh, normal priority: a regular, non-expedited request.');
-            if (!online) { log.add('Offline: it waits for the network.', 'wa'); return; }
-            await wait(500);
-            await runWork(w);
-          });
-          const tap = once(async () => {
-            if (!P.has() || P.mode() === 'app') { log.add('No alert to tap. Send breaking news first.', 'dim'); return; }
-            const n = P.take();
-            const s = room.get(n.id);
-            await path.run('device', 'app');
-            path.ping('link');
-            if (s) { P.app('Article', articleBody(s, online ? 'from Room' : 'from Room, offline', 'ok'), { back: true }); log.add('The article was prefetched. It opens at once, even offline.', 'ok'); }
-            else { P.app('Article', articleBody({ title: n.title }, 'waiting for network', 'warn'), { back: true }); log.add('Not in Room yet: the title from the alert, the body when the job runs.', 'wa'); }
-          });
-          const openApp = () => { P.app('News', feedItems([...room.values()].reverse().slice(0, 4), freshId)); log.add('The feed reads Room, newest first.', 'dim'); };
-          const net = once(async () => {
-            online = !online;
-            log.add(online ? 'Back online. Waiting jobs start.' : 'Network off.', online ? 'ok' : 'wa');
-            if (online) for (const w of works.filter(x => x.state === 'ENQUEUED')) await runWork(w);
-          });
-          P.lock(); paint();
-          frame(el, path, P, [
-            box('WorkManager', workEl),
-            box('Room · articles', roomEl),
-          ], [
-            act('Send breaking (high)', sendBreaking), act('Send refresh (normal)', sendRefresh),
-            act('Tap the alert', tap), act('Open the app', openApp), act('Network on/off', net),
-          ], log);
         },
       },
 
@@ -1163,6 +1099,12 @@ override fun onMessageReceived(message: RemoteMessage) {
           { title: 'Shipping the credential that sends pushes', bad: '// "Send breaking news" for editors, inside the app\nval auth = GoogleCredentials\n    .fromStream(context.assets.open("service-account.json"))\n    .createScoped("https://www.googleapis.com/auth/firebase.messaging")', good: '// The app asks your server; the server checks the editor and sends\napi.publishBreaking(\n    PublishRequest(articleId, title),\n    session.accessToken,\n)', why: 'Anyone who unzips the APK gets the key and can push anything to every reader. Keep the service account on the server behind your own auth.' },
           { title: 'Building a link from raw payload text', bad: 'val uri = "$ARTICLE_LINK_BASE/\${data["article_id"]}".toUri()', good: 'val id = data["article_id"]?.takeIf { ARTICLE_ID.matches(it) } ?: return\nval uri = "$ARTICLE_LINK_BASE/$id".toUri()', why: 'An id like <code>../account</code> changes the path. Check the shape first, then build the URI.' },
         ],
+        predict: {
+          q: "A release build tries to load <code>http://api.example.com</code>, plain HTTP, with this network security config. What happens?",
+          options: ["The request goes out unencrypted", "The request fails before it leaves the phone", "Android quietly upgrades it to HTTPS"],
+          a: 1,
+          why: "With cleartext traffic not permitted, the network stack refuses plain HTTP. A stray <code>http://</code> URL fails loudly instead of leaking data.",
+        },
         visual(el) {
           const { wait, once } = runner(el);
           const path = pathView(6, wait), P = phoneView();
@@ -1303,6 +1245,12 @@ androidComponents {
           { title: 'One Firebase project for testing and production', bad: '// app/google-services.json  (news-prod only)\n// Test sends from your laptop:\n//   topic "news-breaking"  -> every real reader', good: '// app/src/dev/google-services.json   (news-dev)\n// app/src/prod/google-services.json  (news-prod)\n// Test sends use news-dev: real readers never see them', why: 'A topic test in the production project reaches everyone subscribed. Separate projects make that mistake impossible from a dev machine.' },
           { title: 'The upload key in assetlinks.json', bad: '"sha256_cert_fingerprints": [\n  "UPLOAD:KEY:SHA256:..."\n]', good: '"sha256_cert_fingerprints": [\n  "APP:SIGNING:KEY:SHA256:...",\n  "UPLOAD:KEY:SHA256:..."\n]', why: 'Phones verify App Links against the certificate the installed app is signed with. Play installs carry the app signing key, so its fingerprint must be listed.' },
         ],
+        predict: {
+          q: "The dev flavor has <code>applicationIdSuffix = \".dev\"</code>. Can a tester install the dev build and the prod build on the same phone?",
+          options: ["Yes: they have different application ids, so they are two apps", "No: they are the same app, so one replaces the other", "Only if they are signed with different keys"],
+          a: 0,
+          why: "The suffix makes the id <code>com.example.news.dev</code>. Android treats it as a separate app, and each id is registered in its own Firebase project.",
+        },
         visual(el) {
           const { wait, once } = runner(el);
           const path = pathView(7, wait), P = phoneView();
@@ -1405,75 +1353,25 @@ override fun onMessageReceived(message: RemoteMessage) {
           { q: 'A reader never granted <code>POST_NOTIFICATIONS</code>. What happens when breaking news is sent?', options: ['Nothing reaches the phone', 'The data message still arrives and the sync runs; only the alert is skipped', '<code>notify()</code> crashes the app'], a: 1, why: 'Delivery doesn’t depend on the permission. <code>BreakingNotifier</code> returns early and the worker still fills Room. Over time FCM may treat that install’s high-priority messages as normal.' },
         ],
         visual(el) {
-          const { wait, once } = runner(el);
-          const path = pathView(8, wait), P = phoneView();
-          const STAGES = [5, 20, 50, 100];
-          const ORDER = [3, 17, 8, 12, 0, 19, 6, 14, 10, 1, 15, 4, 9, 18, 2, 7, 13, 11, 5, 16];
-          let stage = -1, halted = false, roomHas = false;
-          const log = logger('Version 41 is live. Version 42 is uploaded and ready to roll out.');
-          const dots = Array.from({ length: 20 }, () => h('span', { class: 'cs-dot' }));
-          const statusEl = h('div', { class: 'cs-row' });
-          const pct = () => (stage < 0 ? 0 : STAGES[stage]);
-          const paint = () => {
-            const n = Math.round(pct() / 5);
-            ORDER.forEach((d, i) => dots[d].classList.toggle('v42', i < n));
-            statusEl.replaceChildren(tag(stage < 0 ? 'not started' : halted ? `halted at ${pct()}%` : pct() === 100 ? 'completed' : `inProgress ${pct()}%`, halted ? 'bad' : stage < 0 ? '' : 'on'));
-          };
-          const nextStage = () => {
-            if (halted) { log.add('Halted. Resume, or upload versionCode 43 with the fix.', 'wa'); return; }
-            if (stage >= STAGES.length - 1) { log.add('Already at 100%: the rollout is complete.', 'dim'); return; }
-            stage++; paint(); path.ping('play');
-            log.add(pct() === 100 ? '"status": "completed". Everyone gets version 42.' : `"userFraction": ${pct() / 100}. Watch Android vitals before the next step.`, 'ok');
-          };
-          const halt = () => {
-            if (stage < 0) { log.add('Nothing to halt yet.', 'dim'); return; }
-            if (pct() === 100 && !halted) { log.add('A completed rollout can’t be halted. Fix forward with a new versionCode.', 'wa'); return; }
-            halted = !halted; paint();
-            log.add(halted ? 'Halted: no new installs of 42. Phones on 42 keep it.' : 'Resumed at the same percentage.', halted ? 'wa' : 'ok');
-          };
-          const flashDots = (fn) => dots.forEach(d => { d.classList.remove('hit', 'ign'); void d.offsetWidth; fn(d); });
-          const sendBreaking = once(async () => {
-            P.lock();
-            log.add('Server → topic news-breaking, data, priority high');
-            await path.run('server', 'app');
-            flashDots(d => d.classList.add('hit'));
-            P.post(alertOf(ALERTS[0]));
-            path.ping('notify');
-            log.add('Versions 41 and 42 both post the alert and enqueue the sync.', 'ok');
-            await wait(600);
-            path.ping('worker'); path.ping('room'); roomHas = true;
-            log.add('ArticleSyncWorker put a-81723 into Room.', 'ok');
+          Lab.ui.timeline(el, {
+            lanes: ['v42', 'Crashes', 'v43'],
+            span: 12, unit: 'days',
+            predict: {
+              q: 'At 50% the crash rate spikes and you halt the rollout. What happens to readers who already have version 42?',
+              options: ['Play rolls them back to version 41', 'They keep version 42 until a newer version reaches them', 'The app is removed from their phones'],
+              a: 1,
+              why: 'Halting stops new installs of the release. It cannot undo installs, so the fix is a new release with a higher <code>versionCode</code>.',
+            },
+            frames: [
+              { now: 0, say: 'Version 42 passed internal testing on real phones. Production starts as a staged rollout.' },
+              { bars: [{ lane: 0, from: 0, to: 2, label: '5%' }, { lane: 1, from: 0, to: 2, label: 'normal', tone: 'ok' }], say: 'Day 0: 5% of users can get it. You watch Android vitals and your push numbers.' },
+              { bars: [{ lane: 0, from: 2, to: 4, label: '20%' }, { lane: 1, from: 2, to: 4, label: 'normal', tone: 'ok' }], say: 'Both stay calm, so you raise it to 20%. Old and new versions now read the same pushes.' },
+              { bars: [{ lane: 0, from: 4, to: 5, label: '50%' }, { lane: 1, from: 4, to: 5, label: 'spike', tone: 'err' }], marks: [{ at: 5, label: 'halt', tone: 'err' }], say: 'At 50% crashes jump on one device family. You halt the rollout.' },
+              { bars: [{ lane: 0, from: 5, to: 12, label: 'halted', tone: 'muted' }, { lane: 1, from: 5, to: 7, label: 'still high', tone: 'warm' }], say: 'No new users get 42. The people who already updated keep it and keep crashing.' },
+              { bars: [{ lane: 2, from: 7, to: 9, label: '5%', tone: 'ok' }, { lane: 1, from: 7, to: 9, label: 'falling', tone: 'ok' }], say: 'You fix forward: version 43, with a higher <code>versionCode</code>, starts its own staged rollout.' },
+              { bars: [{ lane: 2, from: 9, to: 12, label: '100%', tone: 'ok' }, { lane: 1, from: 9, to: 12, label: 'normal', tone: 'ok' }], say: 'It reaches everyone, including the phones stuck on 42. Rollouts limit how many people a bad build reaches.' },
+            ],
           });
-          const sendLive = once(async () => {
-            if (stage < 0) { log.add('No phone has version 42 yet. Start the rollout first.', 'dim'); return; }
-            log.add('Server → data { "type": "live", ... }');
-            await path.run('server', 'device');
-            flashDots(d => d.classList.add(d.classList.contains('v42') ? 'hit' : 'ign'));
-            log.add('Version 42 handles it. Version 41 hits else -> Unit and ignores it.', 'ok');
-          });
-          const tap = once(async () => {
-            if (!P.has() || P.mode() !== 'lock') { log.add('No alert to tap. Send breaking news first.', 'dim'); return; }
-            P.take();
-            await path.run('device', 'app');
-            path.ping('link');
-            P.app('Article', articleBody(ALERTS[0], roomHas ? 'from Room' : 'loading', roomHas ? 'ok' : 'warn'), { back: true });
-            log.add('ArticleList › ArticleDetail(a-81723). Back goes to the feed.', 'ok');
-          });
-          const rotate = once(async () => {
-            log.add('onNewToken → TokenUploadWorker: register with appVersion, re-subscribe topics');
-            await path.token();
-            path.ping('tokens');
-            log.add('The server row now says which version this install runs.', 'ok');
-          });
-          P.lock(); paint();
-          frame(el, path, P, [
-            box('Production rollout', statusEl, h('div', { class: 'cs-dots', role: 'img', 'aria-label': 'Twenty phones; filled ones run version 42' }, dots),
-              h('div', { class: 'cs-legend' }, h('span', {}, h('i'), 'v41'), h('span', {}, h('i', { class: 'v42' }), 'v42'))),
-          ], [
-            act('Next rollout stage', nextStage), act('Halt / resume', halt),
-            act('Send breaking news', sendBreaking), act('Tap the alert', tap),
-            act('Send a v42-only type', sendLive), act('Token rotates', rotate),
-          ], log);
         },
       },
     ],

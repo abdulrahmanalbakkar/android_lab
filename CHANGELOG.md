@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-18: visual demos, predict first, runnable Kotlin
+
+- **Visual kit** (`js/ui.js`): six step players for demos (phone screen, timeline, graph of boxes and arrows, pipeline flow, code stepper, terminal). Each has Back, Play/Pause, Next and Reset, shows one idea per step, and follows the system's reduce-motion setting.
+- **126 demos rebuilt** on the kit, across every stage. The other demos already showed the mechanism and were kept.
+- **Predict first:** all 348 lessons ask "what do you think happens?" before the demo plays. The demo unlocks after an answer or Skip.
+- **Run it:** 95 lessons in the Kotlin, Kotlin in depth, Kotlin project, OOP, SOLID, design patterns, data structures, coroutines, Flow and concurrency tracks have an editable program that runs on JetBrains' official Kotlin Playground. It loads only when you press **Open editor** and needs a connection.
+- **Neutral examples:** the last Turkish words, coordinates and ids in demos and code are gone (fruit names, a product id, `/api/yok`, Istanbul coordinates). The dotted/dotless "i" locale step stays on purpose.
+- **Service worker cache:** version bumped to v13 (adds `js/ui.js`).
+
 ## 2026-10-18: simpler roadmap, "Test yourself"
 
 - **Roadmap redesigned:**
