@@ -372,7 +372,9 @@ const Lab = (() => {
     const viz = h('div', { class: 'viz' });
     // l.predict / d.predict: { q, options, a, why } asked before an old-style demo unlocks. Kit demos (Lab.ui) ask their own.
     const guess = (p, v) => { if (!p || !Lab.ui) return null; v.classList.add('ui-locked'); v.inert = true; const w = h('div', { class: 'ui' }); Lab.ui.predict(w, p, () => { v.classList.remove('ui-locked'); v.inert = false; }); return w; };
-    const resetViz = () => { viz.replaceChildren(); l.visual(viz); };
+    // A broken demo must not take the whole lesson down.
+    const showViz = (fn, v) => { try { fn(v); } catch (e) { console.error(e); v.replaceChildren(h('p', { class: 'muted-text' }, 'This demo could not start. Reload the page to get the latest version.')); } };
+    const resetViz = () => { viz.replaceChildren(); showViz(l.visual, viz); };
 
     let left = l.quiz.length;
     const quiz = h('section', { class: 'quiz' },
@@ -402,9 +404,9 @@ const Lab = (() => {
           h('h3', {}, h('span', { class: 'step-n', 'aria-hidden': 'true' }, String(i + 1)), d.title),
           h('div', { class: 'prose', html: d.body }),
           v && h('div', { class: 'bench mini' },
-            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); d.visual(v); } }, 'Reset')), guess(d.predict, v), v),
+            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); showViz(d.visual, v); } }, 'Reset')), guess(d.predict, v), v),
           d.code ? code(d.code) : null);
-        if (v) d.visual(v);
+        if (v) showViz(d.visual, v);
         return li;
       }))) : null;
     const hood = l.underHood ? h('details', { class: 'hood' },
@@ -444,7 +446,7 @@ const Lab = (() => {
         h('nav', { class: 'pager', 'aria-label': 'Lesson navigation' },
           prev && h('a', { href: '#' + key(t, prev) }, h('small', {}, '← Previous'), prev.title),
           next && h('a', { class: 'next', href: '#' + key(t, next) }, h('small', {}, 'Next →'), next.title))));
-    l.visual(viz);
+    showViz(l.visual, viz);
     return page;
   }
 
@@ -979,6 +981,9 @@ const Lab = (() => {
     try {
       if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
         addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+        // A new service worker took over: reload once so the page runs the new files, not a mix of old and new.
+        const had = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) location.reload(); });
       }
     } catch (e) { /* no offline mode */ }
   }

@@ -1,10 +1,9 @@
 /* Android Lab offline support.
    The shell (page, styles, app, catalog, docs) is cached on install. Track files (tracks/*.js) are cached the first
-   time a lesson from them opens. Both are cache-first, refreshed in the background, so a visited lesson works
-   offline and picks up edits on the visit after. Anything else is network-first with
-   the cache as fallback. Bump VERSION to drop every old cache at once. Paths are relative to this file, so the
+   time a lesson from them opens. Everything is network-first with the cache as the offline fallback, so a deploy
+   shows up on the next load and a visited lesson still works offline. Bump VERSION to drop every old cache at once. Paths are relative to this file, so the
    site works from a subpath such as /android_lab/. */
-const VERSION = 'v13';
+const VERSION = 'v14';
 const CACHE = 'android-lab-' + VERSION;
 const CORE = ['./', 'index.html', 'style.css', 'js/app.js', 'js/ui.js', 'favicon.svg', 'manifest.webmanifest', 'icon-512.png', 'icon-192.png', 'icon-maskable-512.png', 'js/catalog.js', 'js/docs.js'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
@@ -25,35 +24,20 @@ self.addEventListener('activate', event => {
   })());
 });
 
-const isShell = url => url.origin === location.origin && /(\/|\.html|\.css|\.js|\.svg|\.webmanifest)$/.test(url.pathname) && !url.pathname.endsWith('/sw.js');
-
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const sameOrigin = url.origin === location.origin;
-  if (!sameOrigin && !FONT_HOSTS.includes(url.hostname)) return;
-
-  if (req.mode === 'navigate' || isShell(url)) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE);
-      // Navigations to the folder or index.html share one entry; the #route never reaches the server.
-      const hit = await cache.match(req, { ignoreSearch: true }) || (req.mode === 'navigate' ? await cache.match('index.html') : null);
-      const fresh = fetch(req).then(res => { if (res.ok) cache.put(req, res.clone()); return res; });
-      if (hit) { event.waitUntil(fresh.catch(() => {})); return hit; }
-      return fresh;
-    })());
-    return;
-  }
-
+  if (url.origin !== location.origin && !FONT_HOSTS.includes(url.hostname)) return;
+  // Network first, cache as the offline fallback. Cache-first served an old page with new track files after a deploy.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const res = await fetch(req);
+      const res = await fetch(req, url.origin === location.origin ? { cache: 'no-cache' } : undefined);
       if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
       return res;
     } catch (e) {
-      const hit = await cache.match(req);
+      const hit = await cache.match(req, { ignoreSearch: true }) || (req.mode === 'navigate' ? await cache.match('index.html') : null);
       if (hit) return hit;
       throw e;
     }
