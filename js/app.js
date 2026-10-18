@@ -226,7 +226,7 @@ const Lab = (() => {
       h('section', { class: 'hero' },
         h('div', { class: 'hero-copy' },
           h('h1', {}, 'The Android developer roadmap'),
-          h('p', { class: 'lede' }, 'From your first val to shipping on Google Play. Every topic is a live demo you can poke at, and the quizzes come back before you forget.'),
+          h('p', { class: 'lede' }, 'Learn Android from the ground up: Kotlin, apps, architecture, and the computer science underneath. Every lesson is a live demo, and quizzes bring it back before you forget.'),
           h('p', { class: 'hero-meta' }, `${stages().length} stages · ${topics} topics · ${pins.length} lessons`)),
         card),
       syllabusView(next && next.t));
