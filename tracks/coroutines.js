@@ -1315,7 +1315,7 @@ val weather = [[withTimeoutOrNull]](2_000) { api.weather() } ?: cachedWeather`, 
               say(o, `${hl(MODES.find(m => m[0] === mode)[1] + ' { api.weather() }')}`);
               await sleep(stop); if (!el.isConnected) return;
               if (ms <= LIMIT) {
-                bar.className = 'bar run'; screen.className = 'flw-shown'; screen.textContent = 'Weather: 18°C, İstanbul'; replay(screen, 'pop');
+                bar.className = 'bar run'; screen.className = 'flw-shown'; screen.textContent = 'Weather: 18°C, sunny'; replay(screen, 'pop');
                 say(o, '<span class="good">in time:</span> the answer came before the deadline, so both versions just return it.');
               } else if (mode === 'throw') {
                 bar.className = 'bar block'; replay(track, 'shake'); screen.className = 'flw-shown stale'; screen.textContent = 'Loading… (forever)';

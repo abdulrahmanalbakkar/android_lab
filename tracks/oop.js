@@ -140,7 +140,7 @@
         level: 'beginner',
         body: `
 <p>An object bundles three things. <em>State</em> is the data it holds right now, like an article's title and like count. <em>Behaviour</em> is what it can do, its methods, which read and change that state. <em>Identity</em> means it is one particular thing in memory, separate from every other object, even one with the same data.</p>
-<p>A class describes the shape. It holds no article data by itself. Each call like <code>Article("Derbi 2-2")</code> builds a new <em>instance</em> with its own copy of the state. Liking one article does not touch another.</p>
+<p>A class describes the shape. It holds no article data by itself. Each call like <code>Article("Final 2-2")</code> builds a new <em>instance</em> with its own copy of the state. Liking one article does not touch another.</p>
 <p>A variable does not contain the object. It holds a <em>reference</em> to it. <code>val c = a</code> copies the reference, so <code>a</code> and <code>c</code> are two names for one object. Build a few objects below and watch which ones change.</p>`,
         code: `class Article(val title: String) {      // the blueprint
     var likes = 0                         // state
@@ -150,8 +150,8 @@
     fun isPopular() = likes >= 100        // behaviour that reads it
 }
 
-val a = Article("Derbi 2-2")              // instance 1
-val b = Article("Derbi 2-2")              // instance 2, same data, different object
+val a = Article("Final 2-2")              // instance 1
+val b = Article("Final 2-2")              // instance 2, same data, different object
 val c = a                                 // no new object: a second reference
 
 c.like()
@@ -165,14 +165,14 @@ println(b.likes)   // 0: b is a different object`,
           { term: 'Reference', def: 'What a variable holds: a pointer to an object, not the object itself. Copying it gives another name for the same object.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Make <code>b</code> a second name for the article <code>a</code>, so the like shows up through <code>a</code>.', code: 'val a = [[Article]]("Derbi 2-2")\nval b = [[a]]\nb.like()\nprintln(a.likes)   // 1', why: '<code>Article(...)</code> builds an object. <code>val b = a</code> copies only the reference, so both names reach the same object.' },
+          { type: 'blank', prompt: 'Make <code>b</code> a second name for the article <code>a</code>, so the like shows up through <code>a</code>.', code: 'val a = [[Article]]("Final 2-2")\nval b = [[a]]\nb.like()\nprintln(a.likes)   // 1', why: '<code>Article(...)</code> builds an object. <code>val b = a</code> copies only the reference, so both names reach the same object.' },
           { type: 'bug', prompt: 'Two counters should count separately, but <code>first.count</code> prints 1. Tap the line that causes it.', code: 'class Counter {\n    var count = 0\n    fun inc() { count++ }\n}\nval first = Counter()\nval second = first\nsecond.inc()\nprintln(first.count)   // expected 0', bug: 5, fix: 'val second = Counter()', why: '<code>val second = first</code> creates no object. Call the constructor to get a second, independent counter.' },
         ],
         quiz: [
           { q: '<code>val x = Article("A")</code> then <code>val y = x</code>. How many Article objects exist?', options: ['Two', 'One, with two references to it', 'None until you call a method'], a: 1, why: 'Only a constructor call builds an object. Assigning copies the reference.' },
           { q: 'Where does the data of an article live?', options: ['In the class', 'In each object', 'In the variable'], a: 1, why: 'The class only describes the shape. Each instance holds its own values, and a variable points at one instance.' },
           { q: '<code>val a = Article("A")</code>. Can you call <code>a.like()</code> and change its likes?', options: ['No, a is a val', 'Yes: val fixes the reference, not the object'], a: 1, why: '<code>val</code> means <code>a</code> always points at the same object. Whether that object can change depends on its own properties.' },
-          { q: 'What does this print?<pre class="code mini"><code>class Draft(var title: String)\nfun clean(d: Draft) { d.title = d.title.trim() }\n\nval draft = Draft(" Derbi 2-2 ")\nclean(draft)\nprintln("[" + draft.title + "]")</code></pre>', options: ['<code>[ Derbi 2-2 ]</code>', 'It does not compile: parameters are val', '<code>[Derbi 2-2]</code>'], a: 2, why: 'The function gets a copy of the reference, not of the object, so it changes the caller’s Draft. Parameters being val only stops d from pointing elsewhere.' },
+          { q: 'What does this print?<pre class="code mini"><code>class Draft(var title: String)\nfun clean(d: Draft) { d.title = d.title.trim() }\n\nval draft = Draft(" Final 2-2 ")\nclean(draft)\nprintln("[" + draft.title + "]")</code></pre>', options: ['<code>[ Final 2-2 ]</code>', 'It does not compile: parameters are val', '<code>[Final 2-2]</code>'], a: 2, why: 'The function gets a copy of the reference, not of the object, so it changes the caller’s Draft. Parameters being val only stops d from pointing elsewhere.' },
           { q: 'A singleton keeps a reference to the Activity that set it up. The user leaves that screen. What happens?', options: ['The Activity, its views and bitmaps stay in memory', 'The garbage collector frees the Activity anyway', 'The app crashes at once'], a: 0, why: 'An object lives while something reachable points to it, and a singleton lives as long as the process. Keep the application context, or no context at all.' },
         ],
         deeper: [
@@ -202,9 +202,9 @@ fun clean(d: Draft) {
     // d = Draft("x")            // error: parameters are val
 }
 
-val draft = Draft("  Derbi 2-2 ")
+val draft = Draft("  Final 2-2 ")
 clean(draft)
-println("[" + draft.title + "]")   // [Derbi 2-2]`,
+println("[" + draft.title + "]")   // [Final 2-2]`,
           },
           {
             title: 'An object lives while something points to it',
@@ -221,15 +221,15 @@ class ImageCache(context: Context) {
           },
         ],
         underHood: {
-          body: `<p>On the JVM, <code>Article("Derbi")</code> compiles to three steps: allocate memory for a new object on the heap, then call its constructor (<code>&lt;init&gt;</code>) to fill in the fields. The variable gets a reference to that heap object.</p>
+          body: `<p>On the JVM, <code>Article("Final")</code> compiles to three steps: allocate memory for a new object on the heap, then call its constructor (<code>&lt;init&gt;</code>) to fill in the fields. The variable gets a reference to that heap object.</p>
 <p>Each object stores its own fields plus a small header the runtime uses for things like its class. Methods are not copied into each object. They live once with the class, and a call passes the object in as <code>this</code>.</p>`,
           code: `// Kotlin
-val a = Article("Derbi")
+val a = Article("Final")
 
 // Bytecode, simplified
 NEW Article                    // allocate, fields zeroed
 DUP
-LDC "Derbi"
+LDC "Final"
 INVOKESPECIAL Article.<init>(String)   // run the constructor
 ASTORE a                       // a now holds the reference`,
         },
@@ -265,9 +265,9 @@ ASTORE a                       // a now holds the reference`,
             vars[name] = r.obj; paint(r.obj); say(o, r.msg);
           }
           const newObj = name => () => {
-            const ob = { addr: ADDR[objs.length], title: 'Derbi 2-2', likes: 0 };
+            const ob = { addr: ADDR[objs.length], title: 'Final 2-2', likes: 0 };
             objs.push(ob);
-            return { obj: ob, msg: `${hl(`val ${name} = Article("Derbi 2-2")`)} <span class="muted">→</span> <span class="good">new object ${ob.addr}</span> <span class="muted">with its own likes</span>` };
+            return { obj: ob, msg: `${hl(`val ${name} = Article("Final 2-2")`)} <span class="muted">→</span> <span class="good">new object ${ob.addr}</span> <span class="muted">with its own likes</span>` };
           };
           const alias = () => {
             if (!vars.a) { replay(heap, 'shake'); say(o, `<span class="bad">compile error:</span> Unresolved reference 'a'. Declare it first.`); return null; }
@@ -288,7 +288,7 @@ ASTORE a                       // a now holds the reference`,
           say(o, 'Build objects, alias one, then like them through different names.');
           el.append(
             cls,
-            h('div', { class: 'controls' }, cmd('val a = Article("Derbi 2-2")', () => declare('a', newObj('a'))), cmd('val b = Article("Derbi 2-2")', () => declare('b', newObj('b'))), cmd('val c = a', () => declare('c', alias))),
+            h('div', { class: 'controls' }, cmd('val a = Article("Final 2-2")', () => declare('a', newObj('a'))), cmd('val b = Article("Final 2-2")', () => declare('b', newObj('b'))), cmd('val c = a', () => declare('c', alias))),
             h('span', { class: 'oo-label' }, 'objects in memory'),
             heap,
             h('div', { class: 'controls' }, ['a', 'b', 'c'].map(n => cmd(`${n}.like()`, () => like(n)))),
@@ -364,7 +364,7 @@ hashSetOf(Tag("Kotlin"), Tag("kotlin")).size   // 1`,
             body: `<p>A list adapter must tell an <em>edited</em> item from a <em>different</em> item. DiffUtil asks <code>areItemsTheSame</code> first. If that says yes, it asks <code>areContentsTheSame</code> to decide whether to rebind the row.</p>
 <p>Compare items with full equality and every edit looks like “old item removed, new item inserted”. The row animates out and back in and loses its state. Give an article a like below with each rule.</p>`,
             visual(el) {
-              const base = [{ id: 1, title: 'Metro hattı açıldı', likes: 4 }, { id: 2, title: 'Derbi 2-2 bitti', likes: 10 }, { id: 3, title: 'Cuma yağmur var', likes: 1 }];
+              const base = [{ id: 1, title: 'New metro line opens', likes: 4 }, { id: 2, title: 'Final ends 2-2', likes: 10 }, { id: 3, title: 'Rain expected Friday', likes: 1 }];
               let list = base.map(x => ({ ...x })), rule = 'id', busy = false;
               const rows = h('div', { class: 'oo-id-list' });
               const ops = h('div', { class: 'oo-code' });
@@ -1034,8 +1034,8 @@ val fake = object : FeedLoader {
 val underTest = FeedScreen(fake)              // no network in tests`,
             visual(el) {
               const LOADERS = [
-                { name: 'NetworkLoader', ms: 1100, note: 'fresh from the server', items: ['New metro line opens', 'Derby ends 2-2', 'Rain expected Friday'] },
-                { name: 'CacheLoader', ms: 150, note: 'cached 2 h ago', items: ['New metro line opens', 'Derby ends 2-2'] },
+                { name: 'NetworkLoader', ms: 1100, note: 'fresh from the server', items: ['New metro line opens', 'Final ends 2-2', 'Rain expected Friday'] },
+                { name: 'CacheLoader', ms: 150, note: 'cached 2 h ago', items: ['New metro line opens', 'Final ends 2-2'] },
                 { name: 'FakeLoader', ms: 60, note: 'fixed test data', items: ['Fake 1', 'Fake 2'] },
               ];
               let cur = LOADERS[0], busy = false;
@@ -2097,12 +2097,12 @@ AsyncImage(model = ui.authorAvatarUrl, contentDescription = null)`,
             body: `<p>Cohesion can also be too low in the other direction. If one small rule is copied into six screens, a change to it means editing six files and hoping you found them all. That is <em>shotgun surgery</em>.</p>
 <p>Code that always changes together should live together, even if it ends up in one larger class. File size is not the measure. What changes together is.</p>`,
             code: `// Spread over 6 screens
-if (BuildConfig.FLAVOR == "tr" && user.isSignedIn && remoteConfig.getBoolean("live_scores")) { /* ... */ }
+if (BuildConfig.FLAVOR == "eu" && user.isSignedIn && remoteConfig.getBoolean("live_scores")) { /* ... */ }
 
 // One place owns the rule
 class LiveScoresPolicy(private val config: FirebaseRemoteConfig, private val market: Market) {
     fun canShow(user: User): Boolean =
-        market == Market.TR && user.isSignedIn && config.getBoolean("live_scores")
+        market == Market.EU && user.isSignedIn && config.getBoolean("live_scores")
 }`,
           },
         ],
@@ -2136,7 +2136,7 @@ dependencies {
           const CHANGES = [
             { label: 'API v2 renames fields', f: ['api'] },
             { label: 'Bookmarks sync to server', f: ['bookmarks', 'dao'] },
-            { label: '“Bugün” for today’s dates', f: ['locale'] },
+            { label: '“Today” for today’s dates', f: ['locale'] },
             { label: 'New analytics vendor', f: ['analytics'] },
           ];
           let grouped = false, busy = false;
@@ -2300,7 +2300,7 @@ saveBookmark(article.id, user.id)   // compile error: argument type mismatch`,
 val articles = dtos.mapNotNull { it.toDomainOrNull() }`,
             visual(el) {
               const TRIES = [
-                { src: 'Article(ArticleId("a-42"), title = "Derbi 2-2", ...)', ok: true, msg: 'built. Every function that gets it can trust the title.' },
+                { src: 'Article(ArticleId("a-42"), title = "Final 2-2", ...)', ok: true, msg: 'built. Every function that gets it can trust the title.' },
                 { src: 'Article(ArticleId("a-43"), title = "   ", ...)', ok: false, msg: 'IllegalArgumentException: Article a-43 has a blank title' },
                 { src: 'ArticleId("")', ok: false, msg: 'IllegalArgumentException: ArticleId is blank' },
                 { src: 'good.copy(title = "")', ok: false, msg: 'IllegalArgumentException: Article a-42 has a blank title  (copy() runs init too)' },

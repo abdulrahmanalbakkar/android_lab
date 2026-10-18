@@ -594,7 +594,7 @@ throw new NoWhenBranchMatchedException();`,
         },
         mistakes: [
           { title: 'A Boolean per variant', bad: 'fun share(\n    text: String,\n    viaSms: Boolean,\n    viaEmail: Boolean,\n    viaWhatsApp: Boolean,\n) {\n    if (viaSms) { /* ... */ }\n    if (viaEmail) { /* ... */ }\n    if (viaWhatsApp) { /* ... */ }\n}', good: 'interface ShareTarget { fun share(text: String) }\n\nfun share(text: String, targets: List<ShareTarget>) =\n    targets.forEach { it.share(text) }', why: 'Every new channel edits the signature, the body and every call site. With a small interface, a new channel is a new class.' },
-          { title: 'Making everything open "for extension"', bad: 'open class PriceFormatter {\n    open fun currency() = "TRY"\n    open fun format(cents: Long) = "${cents / 100} ${currency()}"\n}', good: 'class PriceFormatter(private val currency: String) {\n    fun format(cents: Long) = "${cents / 100} $currency"\n}', why: '<code>open</code> lets subclasses depend on every detail, which is the fragile base class problem again. Extend through constructor parameters or interfaces you designed for it.' },
+          { title: 'Making everything open "for extension"', bad: 'open class PriceFormatter {\n    open fun currency() = "EUR"\n    open fun format(cents: Long) = "${cents / 100} ${currency()}"\n}', good: 'class PriceFormatter(private val currency: String) {\n    fun format(cents: Long) = "${cents / 100} $currency"\n}', why: '<code>open</code> lets subclasses depend on every detail, which is the fragile base class problem again. Extend through constructor parameters or interfaces you designed for it.' },
         ],
         visual(el) {
           const fees = { Card: 30, GooglePay: 0, PayPal: 25, Klarna: 40, Bank: 10 };

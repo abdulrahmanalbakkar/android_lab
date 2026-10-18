@@ -2309,7 +2309,7 @@ class ArticlePageFragment : Fragment(R.layout.page_article) {
           {
             title: 'Tabs: TabLayoutMediator',
             body: `<p>A <code>TabLayout</code> above the pager is the usual way to show where you are. <code>TabLayoutMediator</code> links the two: a tap on a tab scrolls the pager, and a swipe selects the tab. You only set each tab’s text or icon. For many tabs, set <code>app:tabMode="scrollable"</code>.</p>`,
-            code: `val titles = listOf("Gündem", "Spor", "Ekonomi")
+            code: `val titles = listOf("Top stories", "Sports", "Business")
 TabLayoutMediator(binding.tabs, binding.pager) { tab, position ->
     tab.text = titles[position]
 }.attach()`,
@@ -2333,7 +2333,7 @@ TabLayoutMediator(binding.tabs, binding.pager) { tab, position ->
             body: `<p>Sometimes the host needs to know the page, not the page itself: to change the toolbar title or show a “Next” button on the last onboarding step. Register an <code>OnPageChangeCallback</code> and use <code>onPageSelected</code>. Unregister it when the view goes away.</p>`,
             code: `private val pageCallback = object : ViewPager2.OnPageChangeCallback() {
     override fun onPageSelected(position: Int) {
-        binding.next.text = if (position == lastIndex) "Başla" else "İleri"
+        binding.next.text = if (position == lastIndex) "Start" else "Next"
     }
 }
 
@@ -2371,7 +2371,7 @@ override fun createFragment(position: Int) = pages[position]`,
           },
         ],
         visual(el) {
-          const PAGES = ['Gündem', 'Spor', 'Ekonomi', 'Teknoloji', 'Kültür', 'Hava'];
+          const PAGES = ['Top stories', 'Sports', 'Business', 'Tech', 'Culture', 'Weather'];
           let cur = 0, mode = 'resume', busy = false;
           const state = PAGES.map(() => 'none');
           const logged = [];

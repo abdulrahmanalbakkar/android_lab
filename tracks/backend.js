@@ -142,9 +142,9 @@
   function pipelineDemo(el) {
     const STAGES = [['Client', 'The app builds the request'], ['Routing', 'Which handler owns this path?'], ['Handler', 'Your code runs'], ['Database', 'Read or write rows'], ['Response', 'Status, headers, body']];
     const SCEN = [
-      { req: 'GET /api/haberler?limit=2', notes: ['Android app sends GET, Accept: application/json', 'Matches get("/api/haberler")', 'Reads limit = 2, calls the repository', 'SELECT … ORDER BY published_at DESC LIMIT 2 → 2 rows', '200 OK with a JSON list'], status: 200, body: '[{"id":12,"title":"Derbi 2-2"},{"id":11,"title":"Dolar rekor kırdı"}]' },
-      { req: 'POST /api/yorumlar', notes: ['Sends JSON {"articleId":12,"text":"Harika maç"}', 'Matches post("/api/yorumlar")', 'receive<NewComment>(), checks the text is not blank', 'INSERT INTO comments … → new id 58', '201 Created, Location: /api/yorumlar/58'], status: 201, body: '{"id":58,"articleId":12,"text":"Harika maç"}' },
-      { req: 'GET /api/haberler/999', notes: ['Asks for article 999', 'Matches get("/api/haberler/{id}"), id = 999', 'Parses id, asks the repository', 'SELECT … WHERE id = 999 → 0 rows', '404 Not Found with an error body'], status: 404, body: '{"code":"article_not_found","message":"No article with id 999."}' },
+      { req: 'GET /api/articles?limit=2', notes: ['Android app sends GET, Accept: application/json', 'Matches get("/api/articles")', 'Reads limit = 2, calls the repository', 'SELECT … ORDER BY published_at DESC LIMIT 2 → 2 rows', '200 OK with a JSON list'], status: 200, body: '[{"id":12,"title":"Match ends 2-2"},{"id":11,"title":"Markets hit a record"}]' },
+      { req: 'POST /api/comments', notes: ['Sends JSON {"articleId":12,"text":"Great game"}', 'Matches post("/api/comments")', 'receive<NewComment>(), checks the text is not blank', 'INSERT INTO comments … → new id 58', '201 Created, Location: /api/comments/58'], status: 201, body: '{"id":58,"articleId":12,"text":"Great game"}' },
+      { req: 'GET /api/articles/999', notes: ['Asks for article 999', 'Matches get("/api/articles/{id}"), id = 999', 'Parses id, asks the repository', 'SELECT … WHERE id = 999 → 0 rows', '404 Not Found with an error body'], status: 404, body: '{"code":"article_not_found","message":"No article with id 999."}' },
       { req: 'GET /api/yok', notes: ['Asks for a path nobody wrote', 'No route matches /api/yok', '', '', '404 Not Found, no handler ran'], status: 404, body: '', stopAt: 1 },
     ];
     const cards = STAGES.map(([t, d]) => h('div', { class: 'be-stage' }, h('b', {}, t), h('span', {}, d)));
@@ -172,7 +172,7 @@
 
   // ---------- 2: HTTP simulator ----------
   function httpDemo(el) {
-    let store = { 41: 'Derbi özeti' }, nextId = 43, sent = 0;
+    let store = { 41: 'Match recap' }, nextId = 43, sent = 0;
     let method = 'GET', accept = 'application/json';
     const preview = h('div', { class: 'be-req' });
     const res = httpBox();
@@ -181,8 +181,8 @@
     const counter = h('span', { class: 'be-stat' });
     const path = () => method === 'POST' ? '/api/bookmarks' : '/api/bookmarks/42';
     function drawPreview() {
-      const body = method === 'POST' || method === 'PUT' ? '\nContent-Type: application/json\n\n{"title":"Transfer haberi"}' : '';
-      preview.textContent = `${method} ${path()} HTTP/1.1\nHost: api.ornek.com\nAccept: ${accept}${body}`;
+      const body = method === 'POST' || method === 'PUT' ? '\nContent-Type: application/json\n\n{"title":"Transfer news"}' : '';
+      preview.textContent = `${method} ${path()} HTTP/1.1\nHost: api.example.com\nAccept: ${accept}${body}`;
     }
     function drawState(changed) {
       state.replaceChildren(...Object.entries(store).map(([k, v]) => pill(`#${k} ${v}`, 'be-acc')));
@@ -200,11 +200,11 @@
         if (store[42]) { st = 200; hd = [['Content-Type', 'application/json'], ['Cache-Control', 'max-age=60']]; body = J({ id: 42, title: store[42] }); }
         else { st = 404; hd = [['Content-Type', 'application/json']]; body = '{"code":"not_found","message":"No bookmark 42."}'; }
       } else if (method === 'POST') {
-        const id = nextId++; store[id] = 'Transfer haberi';
-        st = 201; hd = [['Location', `/api/bookmarks/${id}`], ['Content-Type', 'application/json']]; body = J({ id, title: 'Transfer haberi' });
+        const id = nextId++; store[id] = 'Transfer news';
+        st = 201; hd = [['Location', `/api/bookmarks/${id}`], ['Content-Type', 'application/json']]; body = J({ id, title: 'Transfer news' });
       } else if (method === 'PUT') {
-        st = store[42] ? 200 : 201; store[42] = 'Transfer haberi';
-        hd = [['Content-Type', 'application/json']]; body = J({ id: 42, title: 'Transfer haberi' });
+        st = store[42] ? 200 : 201; store[42] = 'Transfer news';
+        hd = [['Content-Type', 'application/json']]; body = J({ id: 42, title: 'Transfer news' });
       } else {
         if (store[42]) { delete store[42]; st = 204; } else { st = 404; body = '{"code":"not_found","message":"No bookmark 42."}'; }
       }
@@ -241,10 +241,10 @@
     ];
     const REQS = [
       { r: 'GET /health', path: ['root', 'health'], st: 200, body: 'OK' },
-      { r: 'GET /api/articles', path: ['root', 'api', 'articles'], st: 200, body: '[{"id":7,"title":"Derbi 2-2"}, …]' },
-      { r: 'POST /api/articles', path: ['root', 'api', 'articles'], st: 201, body: '{"id":8,"title":"Yeni haber"}' },
-      { r: 'GET /api/articles/7', path: ['root', 'api', 'articles', 'aid'], st: 200, params: 'id = "7"', body: '{"id":7,"title":"Derbi 2-2"}' },
-      { r: 'GET /api/articles/7/comments', path: ['root', 'api', 'articles', 'aid', 'comments'], st: 200, params: 'id = "7"', body: '[{"id":1,"text":"Harika maç"}]' },
+      { r: 'GET /api/articles', path: ['root', 'api', 'articles'], st: 200, body: '[{"id":7,"title":"Match ends 2-2"}, …]' },
+      { r: 'POST /api/articles', path: ['root', 'api', 'articles'], st: 201, body: '{"id":8,"title":"New article"}' },
+      { r: 'GET /api/articles/7', path: ['root', 'api', 'articles', 'aid'], st: 200, params: 'id = "7"', body: '{"id":7,"title":"Match ends 2-2"}' },
+      { r: 'GET /api/articles/7/comments', path: ['root', 'api', 'articles', 'aid', 'comments'], st: 200, params: 'id = "7"', body: '[{"id":1,"text":"Great game"}]' },
       { r: 'GET /api/articles/abc', path: ['root', 'api', 'articles', 'aid'], st: 400, params: 'id = "abc"', body: '{"code":"bad_id","message":"id must be a number"}', why: 'The route matched, because {id} accepts any one segment. The handler’s toIntOrNull() returned null, so it answered 400.' },
       { r: 'GET /api/users', path: ['root', 'api'], miss: true, st: 404, body: '', why: 'No child of /api is called users, so routing gives up and Ktor answers 404. No handler ran.' },
     ];
@@ -285,7 +285,7 @@
 
   function pluginDemo(el) {
     const CASES = [
-      { b: 'handler returns Article', steps: ['ok', 'ok', 'ok', 'skip'], st: 200, body: '{"id":7,"title":"Derbi 2-2"}', n: 'ContentNegotiation turned the Article object into JSON because the client accepts application/json.' },
+      { b: 'handler returns Article', steps: ['ok', 'ok', 'ok', 'skip'], st: 200, body: '{"id":7,"title":"Match ends 2-2"}', n: 'ContentNegotiation turned the Article object into JSON because the client accepts application/json.' },
       { b: 'throws ArticleNotFound', steps: ['ok', 'fail', 'on', 'ok'], st: 404, body: '{"code":"article_not_found","message":""}', n: 'StatusPages caught your exception and mapped it to 404 with the same error shape every endpoint uses.' },
       { b: 'throws IllegalStateException', steps: ['ok', 'fail', 'on', 'ok'], st: 500, body: '{"code":"internal","message":""}', n: 'An unexpected crash. Your catch-all StatusPages handler logs the stack trace on the server and sends a bland 500. The client never sees internals.' },
     ];
@@ -308,7 +308,7 @@
 
   // ---------- 4: REST console ----------
   function restDemo(el) {
-    const ALL = ['Derbi 2-2 bitti', 'Dolar rekor kırdı', 'İstanbul’da yağmur', 'Yeni metro hattı', 'Konser iptal', 'Seçim anketi', 'Transfer dönemi', 'Deprem tatbikatı'];
+    const ALL = ['Final ends 2-2', 'Markets hit a record', 'Rain in the city', 'New metro line', 'Concert cancelled', 'Election poll', 'Transfer window', 'Earthquake drill'];
     let items = ALL.map((t, i) => ({ id: ALL.length - i, title: t })), cursor = null;
     const ERR = (code, message, fields) => J(Object.assign({ code, message }, fields ? { fields } : {}));
     const page = after => {
@@ -321,7 +321,7 @@
     const CALLS = [
       { b: 'GET /v1/articles?limit=3', run: () => [200, [['Content-Type', 'application/json']], J(page(null))], n: 'First page. The server returns a cursor that points just past the last item it sent.' },
       { b: 'GET next page', run: () => cursor == null ? [200, [], J({ items: [], nextCursor: null })] : (c => [200, [['Content-Type', 'application/json']], J(page(c))])(cursor), n: 'The client sends ?cursor=… back unchanged. A null cursor means there is nothing more to load.', label: () => cursor == null ? 'GET next page' : `GET /v1/articles?limit=3&cursor=${cursor}` },
-      { b: 'POST /v1/articles {"title":"Maç özeti"}', run: () => { const id = Math.max(...items.map(x => x.id)) + 1; items.unshift({ id, title: 'Maç özeti' }); return [201, [['Location', `/v1/articles/${id}`], ['Content-Type', 'application/json']], J({ id, title: 'Maç özeti' })]; }, n: '201 Created plus a Location header that names the new resource.' },
+      { b: 'POST /v1/articles {"title":"Match recap"}', run: () => { const id = Math.max(...items.map(x => x.id)) + 1; items.unshift({ id, title: 'Match recap' }); return [201, [['Location', `/v1/articles/${id}`], ['Content-Type', 'application/json']], J({ id, title: 'Match recap' })]; }, n: '201 Created plus a Location header that names the new resource.' },
       { b: 'POST /v1/articles {"title":""}', run: () => [400, [['Content-Type', 'application/json']], ERR('validation_failed', 'Some fields are invalid.', { title: 'must not be blank' })], n: 'Validation failed. The body says which field and why, so the app can put the message next to the right input.' },
       { b: 'GET /v1/articles/999', run: () => [404, [['Content-Type', 'application/json']], ERR('not_found', 'No article with id 999.')], n: 'Same error shape as the 400. One shape for every error means one parser on the client.' },
       { b: 'DELETE /v1/articles/3 (no token)', run: () => [401, [['WWW-Authenticate', 'Bearer'], ['Content-Type', 'application/json']], ERR('unauthorized', 'Sign in first.')], n: '401 means “who are you?”. A 403 would mean “I know you, and you may not do this”.' },
@@ -340,8 +340,8 @@
 
   // ---------- 5: SQL runner ----------
   function sqlDemo(el) {
-    const USERS = [[1, 'Ayşe', 'İstanbul'], [2, 'Mehmet', 'Ankara'], [3, 'Zeynep', 'İzmir']];
-    const START = [[1, 1, 'Derbi 2-2', 1200], [2, 2, 'Dolar rekor', 800], [3, 1, 'Hava durumu', 300], [4, 3, 'Konser', 150], [5, 2, 'Seçim anketi', 950], [6, 1, 'Transfer', 2200], [7, 3, 'Trafik', 90], [8, 2, 'Tatbikat', 400]];
+    const USERS = [[1, 'Alice', 'City A'], [2, 'Omar', 'City B'], [3, 'Maya', 'City C']];
+    const START = [[1, 1, 'Match ends 2-2', 1200], [2, 2, 'Markets record', 800], [3, 1, 'Weather', 300], [4, 3, 'Concert', 150], [5, 2, 'Election poll', 950], [6, 1, 'Transfer', 2200], [7, 3, 'Traffic', 90], [8, 2, 'Drill', 400]];
     let arts = START.map(r => r.slice()), indexed = false, newId = 9;
     const aTbl = h('table', { class: 'be-tbl' }); const uTbl = h('table', { class: 'be-tbl' });
     const result = h('div', { class: 'be-tblwrap' }); const stats = h('div', { class: 'be-stat' }, 'Run a query.');
@@ -382,8 +382,8 @@
         indexed = true; showResult([], []);
         stats.innerHTML = 'Index created. Reads by user_id get faster. Every INSERT and UPDATE now also updates the index.';
       } },
-      { sql: "INSERT INTO articles (user_id, title, views)\nVALUES (3, 'Yeni haber', 0);", async go() {
-        arts.push([newId++, 3, 'Yeni haber', 0]); drawTables();
+      { sql: "INSERT INTO articles (user_id, title, views)\nVALUES (3, 'New article', 0);", async go() {
+        arts.push([newId++, 3, 'New article', 0]); drawTables();
         rowsOf(aTbl).at(-1).classList.add('be-new'); showResult([], []);
         stats.innerHTML = `1 row inserted. The database chose id <b>${newId - 1}</b>${indexed ? ' and updated the index too' : ''}.`;
       } },
@@ -393,8 +393,8 @@
         showResult([], []);
         stats.innerHTML = `1 row updated. The primary key has its own index, so finding id 4 read <b>${s.read}</b> row. Forget the WHERE and every row changes.`;
       } },
-      { sql: "SELECT u.name, a.title\nFROM articles a\nJOIN users u ON a.user_id = u.id\nWHERE u.city = 'Ankara';", async go(id) {
-        const su = await scan(id, uTbl, i => USERS[i][2] === 'Ankara'); if (!su) return;
+      { sql: "SELECT u.name, a.title\nFROM articles a\nJOIN users u ON a.user_id = u.id\nWHERE u.city = 'City B';", async go(id) {
+        const su = await scan(id, uTbl, i => USERS[i][2] === 'City B'); if (!su) return;
         const uid = USERS[su.hits[0]][0];
         const sa = await scan(id, aTbl, i => arts[i][1] === uid, indexed); if (!sa) return;
         showResult(['name', 'title'], sa.hits.map(i => [USERS[su.hits[0]][1], arts[i][2]]));
@@ -459,7 +459,7 @@
     }
     async function me() {
       if (!signed || !access) { line('GET /me (no token) → 401', 'be-l-err'); draw(); return; }
-      if (now < access.exp && !refreshDead) { line(`GET /me with access #${access.n} → 200 {"name":"Ayşe"}`, 'be-l-ok'); draw(); return; }
+      if (now < access.exp && !refreshDead) { line(`GET /me with access #${access.n} → 200 {"name":"Alice"}`, 'be-l-ok'); draw(); return; }
       line(`GET /me with access #${access.n} → 401, token expired`, 'be-l-warn'); draw();
       await sleep(450);
       if (doRefresh()) { draw(); await sleep(400); line(`retry GET /me with access #${access.n} → 200`, 'be-l-ok'); }
@@ -535,8 +535,8 @@
       ['CI: commit 3f2a9c1 on main', ''],
       ['CI: ./gradlew test → 42 tests passed', 'be-l-ok'],
       ['CI: ./gradlew buildFatJar → build/libs/server-all.jar', 'be-l-ok'],
-      ['CI: docker build -t haber-api:3f2a9c1 .', 'be-l-ok'],
-      ['CI: push registry/haber-api:3f2a9c1', 'be-l-ok'],
+      ['CI: docker build -t news-api:3f2a9c1 .', 'be-l-ok'],
+      ['CI: push registry/news-api:3f2a9c1', 'be-l-ok'],
       ['host: start container with env DATABASE_URL, JWT_SECRET', ''],
       ['host: GET /health → 200 {"db":"up"}', 'be-l-ok'],
       ['host: v2 takes traffic, v1 drains and stops', 'be-l-ok'],
@@ -570,12 +570,12 @@
   // ---------- 9: end-to-end error mapping ----------
   function e2eDemo(el) {
     const CASES = [
-      { b: '200 OK', server: '200\n{"id":7,"title":"Derbi 2-2"}', client: 'body<ArticleDto>()', repo: 'Result.Ok(Article(7, …))', ui: 'Shows the article', tone: 'ok' },
-      { b: '400 validation', server: '400\n{"code":"validation_failed","fields":{"text":"must not be blank"}}', client: 'ClientRequestException\n→ read ApiError body', repo: 'AppError.Invalid(\n  field = "text")', ui: 'Yorum boş olamaz.\n(“Comment can’t be empty.” under the field)', tone: 'warn' },
+      { b: '200 OK', server: '200\n{"id":7,"title":"Match ends 2-2"}', client: 'body<ArticleDto>()', repo: 'Result.Ok(Article(7, …))', ui: 'Shows the article', tone: 'ok' },
+      { b: '400 validation', server: '400\n{"code":"validation_failed","fields":{"text":"must not be blank"}}', client: 'ClientRequestException\n→ read ApiError body', repo: 'AppError.Invalid(\n  field = "text")', ui: 'Comment can’t be empty.\n(under the field)', tone: 'warn' },
       { b: '401 expired', server: '401\nWWW-Authenticate: Bearer', client: 'Auth plugin refreshes,\nretries once', repo: 'Result.Ok(…) after refresh\nor AppError.SignedOut', ui: 'Nothing visible, or the sign-in screen if refresh failed', tone: 'ok' },
-      { b: '404', server: '404\n{"code":"not_found"}', client: 'ClientRequestException\nstatus = 404', repo: 'AppError.NotFound', ui: 'Bu haber kaldırılmış.\n(“This article was removed.”)', tone: 'warn' },
-      { b: '500', server: '500\n{"code":"internal"}\n(stack trace stays in server logs)', client: 'ServerResponseException', repo: 'AppError.Server', ui: 'Bir sorun oluştu, tekrar dene.\n(“Something went wrong, try again.” + Retry)', tone: 'err' },
-      { b: 'no network', server: '(request never arrived)', client: 'IOException', repo: 'AppError.Offline', ui: 'İnternet bağlantısı yok.\n(“No internet connection.” + cached data)', tone: 'err' },
+      { b: '404', server: '404\n{"code":"not_found"}', client: 'ClientRequestException\nstatus = 404', repo: 'AppError.NotFound', ui: 'This article was removed.', tone: 'warn' },
+      { b: '500', server: '500\n{"code":"internal"}\n(stack trace stays in server logs)', client: 'ServerResponseException', repo: 'AppError.Server', ui: 'Something went wrong, try again.\n(+ Retry)', tone: 'err' },
+      { b: 'no network', server: '(request never arrived)', client: 'IOException', repo: 'AppError.Offline', ui: 'No internet connection.\n(+ cached data)', tone: 'err' },
     ];
     const NAMES = ['Server', 'HTTP client', 'Repository', 'Screen'];
     const vals = NAMES.map(() => h('div', { class: 'be-v' }, '—'));
@@ -619,7 +619,7 @@
         visual: pipelineDemo,
         code: `// One request, start to finish, in Ktor
 routing {
-    get("/api/haberler/{id}") {                                   // 1. routing matched
+    get("/api/articles/{id}") {                                   // 1. routing matched
         val id = call.parameters["id"]?.toIntOrNull()            // 2. handler reads input
             ?: return@get call.respond(HttpStatusCode.BadRequest)
         val article = articleRepository.find(id)                 // 3. database
@@ -637,7 +637,7 @@ routing {
 const val BASE_URL = "http://10.0.2.2:8080"
 
 // Release build: the real host, always HTTPS
-const val BASE_URL_RELEASE = "https://api.ornek.com"`,
+const val BASE_URL_RELEASE = "https://api.example.com"`,
           },
           {
             title: 'One server, many clients, all at once',
@@ -686,7 +686,7 @@ delete("/comments/{id}") {
           { term: 'Stateless', def: 'Each request carries everything needed to answer it. The server keeps no per-client memory between requests.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Answer 404 when the repository finds nothing.', code: 'get("/api/haberler/{id}") {\n    val id = call.parameters["id"]!!.toInt()\n    val article = repo.find(id)\n        ?: return@get call.respond(HttpStatusCode.[[NotFound]])\n    call.[[respond]](article)\n}', why: '<code>HttpStatusCode.NotFound</code> is 404. <code>call.respond(article)</code> sends 200 with the object serialized as the body.' },
+          { type: 'blank', prompt: 'Answer 404 when the repository finds nothing.', code: 'get("/api/articles/{id}") {\n    val id = call.parameters["id"]!!.toInt()\n    val article = repo.find(id)\n        ?: return@get call.respond(HttpStatusCode.[[NotFound]])\n    call.[[respond]](article)\n}', why: '<code>HttpStatusCode.NotFound</code> is 404. <code>call.respond(article)</code> sends 200 with the object serialized as the body.' },
           { type: 'bug', prompt: 'This server counts page views for all users. Under load the number comes out too low. Tap the line that causes it.', code: 'var views = 0\n\nfun Application.module() {\n    routing {\n        get("/view") {\n            views++\n            call.respond(views)\n        }\n    }\n}', bug: 5, fix: '            call.respond(viewRepository.increment())  // atomic UPDATE in the database', why: 'Requests run concurrently. <code>views++</code> is a read and a write, so two requests can read the same value and one increment is lost. Let the database do the increment atomically.' },
         ],
         quiz: [
@@ -739,17 +739,17 @@ fun shouldRetry(status: Int) = status >= 500 || status == 429`,
           },
           {
             title: 'Headers you will meet',
-            body: `<p><code>Authorization: Bearer &lt;token&gt;</code> carries the access token. <code>Content-Type</code> and <code>Accept</code> carry formats. <code>Location</code> on a 201 names the new resource. <code>Cache-Control</code> tells the app and any proxy how long a response stays fresh. <code>Accept-Language: tr-TR</code> lets the server pick Turkish text for error messages.</p>`,
-            code: `GET /api/haberler HTTP/1.1
-Host: api.ornek.com
+            body: `<p><code>Authorization: Bearer &lt;token&gt;</code> carries the access token. <code>Content-Type</code> and <code>Accept</code> carry formats. <code>Location</code> on a 201 names the new resource. <code>Cache-Control</code> tells the app and any proxy how long a response stays fresh. <code>Accept-Language: es-ES</code> lets the server pick Spanish text for error messages.</p>`,
+            code: `GET /api/articles HTTP/1.1
+Host: api.example.com
 Accept: application/json
-Accept-Language: tr-TR
+Accept-Language: es-ES
 Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...`,
           },
           {
             title: 'Making a POST safe to retry',
             body: `<p>When a POST must not run twice (a payment, a comment), let the app generate a unique key per action and send it in a header. The server stores keys it has seen and returns the saved result for a repeat instead of doing the work again. The header name is your choice; <code>Idempotency-Key</code> is a common convention.</p>`,
-            code: `post("/api/yorumlar") {
+            code: `post("/api/comments") {
     val key = call.request.headers["Idempotency-Key"]
         ?: return@post call.respond(HttpStatusCode.BadRequest)
     val earlier = idempotencyStore.find(key)
@@ -789,7 +789,7 @@ get("/api/articles/{id}/delete") {
         ],
         challenges: [
           { type: 'blank', prompt: 'A successful create answers 201 and names the new resource.', code: 'call.response.header(HttpHeaders.[[Location]], "/api/bookmarks/" + saved.id)\ncall.respond(HttpStatusCode.[[Created]], saved)', why: '<code>201 Created</code> plus a <code>Location</code> header tells the client where the new resource lives.' },
-          { type: 'bug', prompt: 'The app retries this call when the network times out, and users see their comment twice. Which line is the problem?', code: 'suspend fun postComment(text: String) {\n    retry(times = 3) {\n        client.post("/api/yorumlar") {\n            setBody(NewComment(text))\n        }\n    }\n}', bug: 2, fix: '        client.post("/api/yorumlar") { header("Idempotency-Key", key); setBody(NewComment(text)) }', why: 'POST is not idempotent. A timed-out request may already have been saved. Send a key created once per action, outside the retry, so the server can spot the repeat.' },
+          { type: 'bug', prompt: 'The app retries this call when the network times out, and users see their comment twice. Which line is the problem?', code: 'suspend fun postComment(text: String) {\n    retry(times = 3) {\n        client.post("/api/comments") {\n            setBody(NewComment(text))\n        }\n    }\n}', bug: 2, fix: '        client.post("/api/comments") { header("Idempotency-Key", key); setBody(NewComment(text)) }', why: 'POST is not idempotent. A timed-out request may already have been saved. Send a key created once per action, outside the retry, so the server can spot the repeat.' },
         ],
         quiz: [
           { q: 'The app sends <code>DELETE /api/bookmarks/42</code> twice. The first returns 204, the second 404. Is DELETE still idempotent here?', options: ['No, the responses differ', 'Yes: the server state after both is the same as after one', 'Only if the server returns 204 both times'], a: 1, why: 'Idempotency is about the effect on the server, not the response. After one or two deletes, bookmark 42 is gone either way.' },
@@ -878,7 +878,7 @@ fun Application.module() { /* plugins and routes */ }
 //     port: 8080
 //   application:
 //     modules:
-//       - com.ornek.ApplicationKt.module`,
+//       - com.example.ApplicationKt.module`,
           },
           {
             title: 'Split routes into files',
@@ -1038,7 +1038,7 @@ patch("/v1/articles/{id}") { … }`,
           { q: 'Which path fits REST style for “comments on article 7”?', options: ['GET /getCommentsForArticle?id=7', 'GET /v1/articles/7/comments', 'POST /v1/comments/list'], a: 1, why: 'A sub-collection under the parent resource, read with GET.' },
           { q: 'Users scroll a feed while new articles arrive at the top. Offset paging shows duplicates. Why does a cursor fix it?', options: ['Cursors are cached', 'The cursor marks “older than id 42”, so new rows at the top do not shift the next page', 'Cursors return fewer items'], a: 1, why: 'An offset counts rows from the top, which moves when rows are added. A cursor is anchored to an item.' },
           { q: 'You need to rename <code>title</code> to <code>headline</code> in responses. Old app versions are still installed. What do you do?', options: ['Rename it in /v1 and force-update', 'Add headline to /v2, keep /v1 returning title', 'Return both and remove title next week'], a: 1, why: 'Installed apps keep calling /v1 for a long time. Breaking changes go into a new version.' },
-          { q: 'Why give every error a stable <code>code</code> like <code>validation_failed</code> as well as a message?', options: ['Messages are translated and may change; the code is what client logic can switch on', 'Codes are shorter', 'HTTP requires it'], a: 0, why: 'The app maps codes to behaviour and its own Turkish text. Messages are for people and logs.' },
+          { q: 'Why give every error a stable <code>code</code> like <code>validation_failed</code> as well as a message?', options: ['Messages are translated and may change; the code is what client logic can switch on', 'Codes are shorter', 'HTTP requires it'], a: 0, why: 'The app maps codes to behaviour and its own localized text. Messages are for people and logs.' },
         ],
       },
 
@@ -1105,7 +1105,7 @@ CREATE INDEX articles_user_id_idx ON articles (user_id);
 
 SELECT u.name, a.title
 FROM articles a JOIN users u ON a.user_id = u.id
-WHERE u.name = 'Ayşe';`,
+WHERE u.name = 'Alice';`,
           },
           {
             title: 'Parameters, never string building',
@@ -1123,8 +1123,8 @@ connection.prepareStatement("SELECT * FROM users WHERE name = ?").use { st ->
             title: 'Transactions keep changes together',
             body: `<p>A transaction makes several statements succeed or fail as one. If the second insert throws, the first is rolled back too. In Exposed, everything inside one <code>transaction { }</code> block is one transaction.</p>`,
             code: `transaction(db) {
-    val id = Articles.insert { it[userId] = 1; it[title] = "Derbi 2-2" } get Articles.id
-    Tags.insert { it[articleId] = id; it[name] = "spor" }
+    val id = Articles.insert { it[userId] = 1; it[title] = "Match ends 2-2" } get Articles.id
+    Tags.insert { it[articleId] = id; it[name] = "sports" }
     // an exception here rolls back both inserts
 }`,
           },
@@ -1247,7 +1247,7 @@ post("/auth/login") {
     val req = call.receive<LoginRequest>()
     val user = users.byEmail(req.email)
     if (user == null || !hasher.verify(req.password.toCharArray(), user.passwordHash)) {
-        return@post call.respond(HttpStatusCode.Unauthorized, ApiError("bad_credentials", "E-posta veya şifre hatalı."))
+        return@post call.respond(HttpStatusCode.Unauthorized, ApiError("bad_credentials", "Wrong email or password."))
     }
     call.respond(newTokenPair(user.id))
 }`,
@@ -1359,7 +1359,7 @@ fun tokenFromLoginWorksOnMe() = testApplication {
     val client = createClient { install(ContentNegotiation) { json() } }
     val tokens = client.post("/auth/login") {
         contentType(ContentType.Application.Json)
-        setBody(LoginRequest("ayse@ornek.com", "dogru-sifre"))
+        setBody(LoginRequest("alice@example.com", "correct-password"))
     }.body<TokenPair>()
     val me = client.get("/me") { bearerAuth(tokens.accessToken) }
     assertEquals(HttpStatusCode.OK, me.status)
@@ -1404,7 +1404,7 @@ fun clean() = transaction(db) {
         ],
         challenges: [
           { type: 'blank', prompt: 'Start the module in a test and check the health endpoint.', code: '@Test\nfun health() = [[testApplication]] {\n    application { module() }\n    val res = client.get("/health")\n    assertEquals(HttpStatusCode.[[OK]], res.status)\n}', why: '<code>testApplication</code> runs the module in memory; <code>client</code> sends requests into it.' },
-          { type: 'bug', prompt: 'This test throws before any request leaves the client: it cannot turn <code>NewArticle</code> into a request body. Tap the line that is missing something.', code: 'val client = createClient { install(ContentNegotiation) { json() } }\nval res = client.post("/v1/articles") {\n    setBody(NewArticle(title = "Derbi 2-2"))\n}\nassertEquals(HttpStatusCode.Created, res.status)', bug: 2, fix: '    contentType(ContentType.Application.Json); setBody(NewArticle(title = "Derbi 2-2"))', why: 'The client\'s ContentNegotiation picks a converter from the request\'s Content-Type. With none set, it skips the body and the client fails to send a plain object. Set <code>contentType(ContentType.Application.Json)</code> before <code>setBody</code>.' },
+          { type: 'bug', prompt: 'This test throws before any request leaves the client: it cannot turn <code>NewArticle</code> into a request body. Tap the line that is missing something.', code: 'val client = createClient { install(ContentNegotiation) { json() } }\nval res = client.post("/v1/articles") {\n    setBody(NewArticle(title = "Match ends 2-2"))\n}\nassertEquals(HttpStatusCode.Created, res.status)', bug: 2, fix: '    contentType(ContentType.Application.Json); setBody(NewArticle(title = "Match ends 2-2"))', why: 'The client\'s ContentNegotiation picks a converter from the request\'s Content-Type. With none set, it skips the body and the client fails to send a plain object. Set <code>contentType(ContentType.Application.Json)</code> before <code>setBody</code>.' },
         ],
         quiz: [
           { q: 'Test 4 passes alone but fails when the whole suite runs. What is the most likely cause?', options: ['Ktor is slower in suites', 'Another test leaves rows in a shared database', 'The JIT compiler'], a: 1, why: 'Order-dependent results almost always mean shared state. Give each test clean data.' },
@@ -1429,13 +1429,13 @@ plugins {
     kotlin("jvm") version "<kotlin version>"
     id("io.ktor.plugin") version "3.6.0"
 }
-application { mainClass.set("com.ornek.ApplicationKt") }
+application { mainClass.set("com.example.ApplicationKt") }
 // ./gradlew buildFatJar  ->  build/libs/<project>-all.jar
 
 // src/main/resources/application.conf
 // ktor {
 //   deployment { port = 8080, port = \${?PORT} }
-//   application { modules = [ com.ornek.ApplicationKt.module ] }
+//   application { modules = [ com.example.ApplicationKt.module ] }
 // }
 // jwt { secret = \${JWT_SECRET} }        // no default: missing secret = no start
 // db  { url = \${DATABASE_URL} }
@@ -1544,7 +1544,7 @@ val http = HttpClient(OkHttp) {
     expectSuccess = true                              // non-2xx throws
     install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
     install(HttpTimeout) { requestTimeoutMillis = 15_000 }
-    defaultRequest { url("https://api.ornek.com/v1/") }
+    defaultRequest { url("https://api.example.com/v1/") }
 }
 
 sealed interface AppError {
@@ -1608,14 +1608,14 @@ dependencies { implementation(project(":shared")) }`,
           },
           {
             title: 'From AppError to the screen',
-            body: `<p>The ViewModel maps <code>AppError</code> to UI state, and the screen picks the string resource. Turkish text lives in <code>values-tr/strings.xml</code>, so the server's English <code>message</code> is only a fallback for logs. Offline errors are a good moment to show cached data (see <a href="#data.caching">Caching</a>).</p>`,
+            body: `<p>The ViewModel maps <code>AppError</code> to UI state, and the screen picks the string resource. Translated text lives in <code>res/values-*/strings.xml</code>, so the server's English <code>message</code> is only a fallback for logs. Offline errors are a good moment to show cached data (see <a href="#data.caching">Caching</a>).</p>`,
             code: `@StringRes
 fun AppError.messageRes(): Int = when (this) {
-    AppError.Offline -> R.string.error_offline          // "İnternet bağlantısı yok."
-    AppError.NotFound -> R.string.error_article_removed // "Bu haber kaldırılmış."
+    AppError.Offline -> R.string.error_offline          // "No internet connection."
+    AppError.NotFound -> R.string.error_article_removed // "This article was removed."
     AppError.SignedOut -> R.string.error_signed_out
     is AppError.Invalid -> R.string.error_check_fields
-    AppError.Server -> R.string.error_try_again         // "Bir sorun oluştu, tekrar dene."
+    AppError.Server -> R.string.error_try_again         // "Something went wrong, try again."
 }`,
           },
         ],
@@ -1655,10 +1655,10 @@ fun AppError.messageRes(): Int = when (this) {
         ],
         challenges: [
           { type: 'blank', prompt: 'Make the client throw on 4xx and 5xx, and tolerate new JSON fields.', code: 'val http = HttpClient(OkHttp) {\n    [[expectSuccess]] = true\n    install(ContentNegotiation) { json(Json { [[ignoreUnknownKeys]] = true }) }\n}', why: 'With <code>expectSuccess</code> the client throws typed exceptions you can map. <code>ignoreUnknownKeys</code> keeps old app versions working when the server adds fields.' },
-          { type: 'bug', prompt: 'Users with no network see “Bir sorun oluştu” instead of “İnternet bağlantısı yok”. Tap the line.', code: 'suspend fun load(id: Int): AppError? = try {\n    http.get("articles/$id"); null\n} catch (e: ClientRequestException) {\n    AppError.NotFound\n} catch (e: Exception) {\n    AppError.Server\n}', bug: 4, fix: '} catch (e: IOException) { AppError.Offline } catch (e: ServerResponseException) {', why: 'A missing network throws an IOException, not an HTTP error. The catch-all maps it to Server. Catch IOException first and map it to Offline.' },
+          { type: 'bug', prompt: 'Users with no network see “Something went wrong” instead of “No internet connection”. Tap the line.', code: 'suspend fun load(id: Int): AppError? = try {\n    http.get("articles/$id"); null\n} catch (e: ClientRequestException) {\n    AppError.NotFound\n} catch (e: Exception) {\n    AppError.Server\n}', bug: 4, fix: '} catch (e: IOException) { AppError.Offline } catch (e: ServerResponseException) {', why: 'A missing network throws an IOException, not an HTTP error. The catch-all maps it to Server. Catch IOException first and map it to Offline.' },
         ],
         quiz: [
-          { q: 'The server answers 400 with <code>{"code":"validation_failed","fields":{"text":"must not be blank"}}</code>. What should the screen show?', options: ['“HTTP 400”', 'A Turkish message under the text field, from AppError.Invalid(fields)', 'Nothing, and retry'], a: 1, why: 'The field map tells the UI where the problem is. The user sees their language, not a status code.' },
+          { q: 'The server answers 400 with <code>{"code":"validation_failed","fields":{"text":"must not be blank"}}</code>. What should the screen show?', options: ['“HTTP 400”', 'A message in the user’s language under the text field, from AppError.Invalid(fields)', 'Nothing, and retry'], a: 1, why: 'The field map tells the UI where the problem is. The user sees their language, not a status code.' },
           { q: 'Where should <code>ArticleDto</code> live if you own both the server and the app?', options: ['Copied into each project', 'In a shared KMP module both depend on', 'Only on the server'], a: 1, why: 'One definition means a rename or type change breaks the build instead of breaking users’ apps at runtime.' },
           { q: 'With <code>expectSuccess = true</code>, the server returns 503. Which exception does the Ktor client throw?', options: ['ClientRequestException', 'ServerResponseException', 'IOException'], a: 1, why: 'ServerResponseException covers 5xx. ClientRequestException is 4xx; IOException is a network failure with no response at all.' },
           { q: 'The access token expired. With the Auth plugin’s bearer provider, what happens on the next call?', options: ['The call fails and the user signs in again', 'The server answers 401, the plugin calls refreshTokens, then retries the call once with the new token', 'The plugin refreshes before every call'], a: 1, why: 'The bearer provider reacts to 401: it refreshes and replays the request. Only if refresh fails do you send the user to sign-in.' },

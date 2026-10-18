@@ -4,7 +4,7 @@
    offline and picks up edits on the visit after. Anything else is network-first with
    the cache as fallback. Bump VERSION to drop every old cache at once. Paths are relative to this file, so the
    site works from a subpath such as /android_lab/. */
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = 'android-lab-' + VERSION;
 const CORE = ['./', 'index.html', 'style.css', 'js/app.js', 'favicon.svg', 'manifest.webmanifest', 'icon-512.png', 'icon-192.png', 'icon-maskable-512.png', 'js/catalog.js', 'js/docs.js'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];

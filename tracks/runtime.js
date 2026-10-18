@@ -418,12 +418,12 @@ private static final int doubled$lambda$0(int);
 }
 
 fun main() {
-    timed { println("Merhaba") }
+    timed { println("Hello") }
 }`,
       java: `public static final void main() {
    // the body of timed() is copied in, and so is the lambda
    long start$iv = System.nanoTime();
-   System.out.println("Merhaba");
+   System.out.println("Hello");
    System.out.println(System.nanoTime() - start$iv);
 }
 
@@ -433,7 +433,7 @@ fun main() {
   Code:
      0: invokestatic  // Method java/lang/System.nanoTime:()J
      3: lstore_1
-     4: ldc           // String Merhaba
+     4: ldc           // String Hello
      6: getstatic     // Field java/lang/System.out
      9: swap
     10: invokevirtual // Method java/io/PrintStream.println
@@ -494,9 +494,9 @@ fun main() {
       },
       {
         title: 'Names Java sees',
-        body: `<p>Properties become <code>getX()</code>/<code>setX()</code>; a property named <code>isOpen</code> keeps the name for its getter. Top-level functions in <code>Haber.kt</code> become static methods of <code>HaberKt</code>. A <code>companion object</code> becomes a nested class called <code>Companion</code> with a static instance field. Annotations change the shape when Java callers need it.</p>`,
-        code: `@file:JvmName("HaberUtils")          // class name instead of HaberKt
-package com.example.haber
+        body: `<p>Properties become <code>getX()</code>/<code>setX()</code>; a property named <code>isOpen</code> keeps the name for its getter. Top-level functions in <code>News.kt</code> become static methods of <code>NewsKt</code>. A <code>companion object</code> becomes a nested class called <code>Companion</code> with a static instance field. Annotations change the shape when Java callers need it.</p>`,
+        code: `@file:JvmName("NewsUtils")          // class name instead of NewsKt
+package com.example.news
 
 fun slugify(title: String) = title.lowercase().replace(' ', '-')
 
@@ -544,7 +544,7 @@ ireturn`,
     ],
     challenges: [
       { type: 'blank', prompt: 'Fill in what Java sees for this Kotlin class.', code: '// class Account(val iban: String, var isActive: Boolean)\naccount.[[getIban]]()\naccount.[[isActive]]()\naccount.[[setActive]](false)', why: 'A property gets a <code>get</code> prefix. A property that starts with <code>is</code> keeps its name for the getter, and its setter replaces <code>is</code> with <code>set</code>.' },
-      { type: 'bug', prompt: 'Java code calls a Kotlin top-level function from <code>Haber.kt</code> in package <code>com.example</code>. One line is wrong. Tap it.', code: '// Kotlin, file Haber.kt\npackage com.example\nfun headline(id: Long): String = "..."\n\n// Java\nString h = com.example.Haber.headline(42L);', bug: 5, fix: 'String h = com.example.HaberKt.headline(42L);', why: 'Top-level functions compile into a class named after the file plus <code>Kt</code>, so <code>Haber.kt</code> becomes <code>HaberKt</code>. Use <code>@file:JvmName("Haber")</code> if you want the shorter name.' },
+      { type: 'bug', prompt: 'Java code calls a Kotlin top-level function from <code>News.kt</code> in package <code>com.example</code>. One line is wrong. Tap it.', code: '// Kotlin, file News.kt\npackage com.example\nfun headline(id: Long): String = "..."\n\n// Java\nString h = com.example.News.headline(42L);', bug: 5, fix: 'String h = com.example.NewsKt.headline(42L);', why: 'Top-level functions compile into a class named after the file plus <code>Kt</code>, so <code>News.kt</code> becomes <code>NewsKt</code>. Use <code>@file:JvmName("News")</code> if you want the shorter name.' },
     ],
     quiz: [
       { q: '<code>class Box(val size: Int)</code>. What does the class file contain for <code>size</code>?', options: ['A public field only', 'A private final field and a public getSize() method', 'A getter and a setter', 'Nothing; Kotlin properties exist only at compile time'], a: 1, why: '<code>val</code> means read-only: one private final backing field plus a getter. A <code>var</code> would add <code>setSize</code>.' },
@@ -658,7 +658,7 @@ android {
         body: `<p>R8 can only follow calls it can see in code. Anything found by name at runtime (reflection, JSON libraries that read field names, classes named in XML) looks unused and may be removed or renamed. Keep rules tell R8 to leave it alone. Many libraries ship their own rules inside the AAR, so you add rules mainly for your own reflective code.</p>`,
         code: `# proguard-rules.pro
 # A model parsed by reflection: keep its field names as they are
--keepclassmembers class com.example.haber.data.ArticleDto {
+-keepclassmembers class com.example.news.data.ArticleDto {
     <fields>;
 }
 
@@ -669,14 +669,14 @@ android {
         title: 'Read obfuscated crashes',
         body: `<p>After renaming, a release stack trace says <code>at a.b.a(SourceFile:12)</code>. R8 writes a mapping file, <code>build/outputs/mapping/release/mapping.txt</code>, from each new name back to the original. Keep it for every release you ship and upload it to Play Console (or your crash reporter) so traces come back readable.</p>`,
         code: `# mapping.txt (excerpt)
-com.example.haber.Headlines -> a:
+com.example.news.Headlines -> a:
     java.lang.String shareText(java.lang.String) -> a
-com.example.haber.LegacyParser -> b:`,
+com.example.news.LegacyParser -> b:`,
       },
     ],
     mistakes: [
       { title: 'Testing only debug builds', bad: '// Ship release with R8 on,\n// but every test ran on debug (D8 only)\n./gradlew connectedDebugAndroidTest', good: '// Run the release build (or a minified test build type)\n// before shipping\n./gradlew assembleRelease\n// install it and walk the main flows', why: 'R8 changes the code: it removes, inlines and renames. A missing keep rule shows up only in a minified build, often as <code>ClassNotFoundException</code> or a JSON field that is suddenly null.' },
-      { title: 'Turning off optimization to "fix" a crash', bad: '# proguard-rules.pro\n-dontobfuscate\n-dontoptimize\n-dontshrink', good: '# keep only what is accessed reflectively\n-keep class com.example.haber.plugins.** { <init>(); }', why: 'Disabling R8 hides one missing rule and gives up all the size and speed gains. Find the class or member that is loaded by name and keep just that.' },
+      { title: 'Turning off optimization to "fix" a crash', bad: '# proguard-rules.pro\n-dontobfuscate\n-dontoptimize\n-dontshrink', good: '# keep only what is accessed reflectively\n-keep class com.example.news.plugins.** { <init>(); }', why: 'Disabling R8 hides one missing rule and gives up all the size and speed gains. Find the class or member that is loaded by name and keep just that.' },
     ],
     terms: [
       { term: 'DEX', def: 'Dalvik Executable: the register-based bytecode format Android runs, stored as classes.dex files in the APK.' },
@@ -686,7 +686,7 @@ com.example.haber.LegacyParser -> b:`,
     ],
     challenges: [
       { type: 'blank', prompt: 'Turn on code and resource shrinking for release.', code: 'release {\n    is[[MinifyEnabled]] = true\n    is[[ShrinkResources]] = true\n    proguardFiles(getDefaultProguardFile("proguard-android-[[optimize]].txt"), "proguard-rules.pro")\n}', why: '<code>isMinifyEnabled</code> runs R8 on code, <code>isShrinkResources</code> removes unused resources, and <code>proguard-android-optimize.txt</code> is the default rule file that leaves optimization on.' },
-      { type: 'bug', prompt: 'The release build parses JSON with a reflection-based library and every field comes back null. Tap the line that explains why.', code: 'class ArticleDto {\n    var title: String? = null   // read by name at runtime\n}\n// build.gradle.kts\nisMinifyEnabled = true\n// proguard-rules.pro is empty', bug: 5, fix: '-keepclassmembers class com.example.haber.ArticleDto { <fields>; }', why: 'R8 renamed <code>title</code> to something like <code>a</code>, so the library looks for a JSON key that does not match. A keep rule for the fields (or a codegen-based serializer) fixes it.' },
+      { type: 'bug', prompt: 'The release build parses JSON with a reflection-based library and every field comes back null. Tap the line that explains why.', code: 'class ArticleDto {\n    var title: String? = null   // read by name at runtime\n}\n// build.gradle.kts\nisMinifyEnabled = true\n// proguard-rules.pro is empty', bug: 5, fix: '-keepclassmembers class com.example.news.ArticleDto { <fields>; }', why: 'R8 renamed <code>title</code> to something like <code>a</code>, so the library looks for a JSON key that does not match. A keep rule for the fields (or a codegen-based serializer) fixes it.' },
     ],
     quiz: [
       { q: 'Put the release build steps in order.', options: ['R8 → kotlinc → APK', 'kotlinc → .class files → R8 (shrink, optimize, rename, dex) → classes.dex in the APK', 'kotlinc → DEX → .class → R8'], a: 1, why: 'kotlinc writes JVM bytecode. R8 reads it together with library bytecode and writes optimized DEX, which is packaged into the APK or bundle.' },
@@ -710,13 +710,13 @@ com.example.haber.LegacyParser -> b:`,
 <p>ART does not AOT-compile everything, because that costs install time and storage for code that rarely runs. Instead it uses <em>profiles</em>: lists of the classes and methods that matter. While the app runs, ART records a profile. When the device is idle and charging, a background job recompiles the app with the <code>speed-profile</code> filter, so only the profiled methods become machine code.</p>
 <p>The catch: a fresh install has no local profile yet, so the first launches run interpreted and JIT code. Watch one method warm up in the demo.</p>`,
     code: `# Check how an installed app is compiled (filter per DEX file)
-adb shell dumpsys package dexopt | grep -A 3 com.example.haber
+adb shell dumpsys package dexopt | grep -A 3 com.example.news
 
 # Force profile-guided AOT compilation now, as the idle job would
-adb shell cmd package compile -m speed-profile -f com.example.haber
+adb shell cmd package compile -m speed-profile -f com.example.news
 
 # Reset to the just-installed state to measure a first launch
-adb shell cmd package compile --reset com.example.haber`,
+adb shell cmd package compile --reset com.example.news`,
     remember: 'Interpreted first, JIT when hot, AOT for what the profile lists. A Baseline Profile gives the profile on day one.',
     visual(el) {
       const W = 320, H = 170, L = 34, B = 24, T = 10;
@@ -773,7 +773,7 @@ adb shell cmd package compile --reset com.example.haber`,
         title: 'Compiler filters',
         body: `<p>ART compiles each app with a <em>compiler filter</em>. <code>verify</code> only checks the DEX code, with no AOT compilation. <code>speed-profile</code> AOT-compiles the methods listed in the profile and optimizes loading of the profiled classes. <code>speed</code> AOT-compiles everything. Most apps end up on <code>speed-profile</code>: fast where it matters, small on disk.</p>`,
         code: `$ adb shell dumpsys package dexopt
-  [com.example.haber]
+  [com.example.news]
     path: /data/app/.../base.apk
       arm64: [status=speed-profile] [reason=bg-dexopt]
       // after a fresh install without a profile you would see status=verify`,
@@ -818,7 +818,7 @@ class BaselineProfileGenerator {
     val rule = BaselineProfileRule()
 
     @Test
-    fun generate() = rule.collect(packageName = "com.example.haber") {
+    fun generate() = rule.collect(packageName = "com.example.news") {
         pressHome()
         startActivityAndWait()             // the cold start path
         device.findObject(By.res("feed")).fling(Direction.DOWN)   // a key journey
@@ -826,7 +826,7 @@ class BaselineProfileGenerator {
 }
 
 // Output rules look like:
-// HSPLcom/example/haber/MainActivity;->onCreate(Landroid/os/Bundle;)V
+// HSPLcom/example/news/MainActivity;->onCreate(Landroid/os/Bundle;)V
 // flags H = hot, S = startup, P = post-startup; the L starts the DEX class descriptor`,
       },
     ],
@@ -834,7 +834,7 @@ class BaselineProfileGenerator {
       body: `<p>When ART loads a DEX file it looks for a matching <code>.oat</code>/<code>.odex</code> file with compiled code. If a method has compiled code, ART calls it directly. Otherwise the method runs in the interpreter, which also counts calls and loop iterations. Crossing a threshold queues the method for the JIT. JIT profiling data is kept in the code cache and written to a profile file that only the app can access; <code>dex2oat</code> reads that file later to drive AOT compilation.</p>`,
     },
     mistakes: [
-      { title: 'Measuring startup only on your own phone', bad: '// Installed from Android Studio days ago,\n// opened 50 times, dexopt already ran\n// "Startup is 400 ms, we are fine"', good: '// Measure a real first launch\nadb shell cmd package compile --reset com.example.haber\n// or use Macrobenchmark with\n// CompilationMode.None / Partial(BaselineProfileMode.Require)', why: 'Your device has a rich local profile and AOT code. A user who just installed or updated has neither. Reset compilation or use Macrobenchmark compilation modes to see what they see.' },
+      { title: 'Measuring startup only on your own phone', bad: '// Installed from Android Studio days ago,\n// opened 50 times, dexopt already ran\n// "Startup is 400 ms, we are fine"', good: '// Measure a real first launch\nadb shell cmd package compile --reset com.example.news\n// or use Macrobenchmark with\n// CompilationMode.None / Partial(BaselineProfileMode.Require)', why: 'Your device has a rich local profile and AOT code. A user who just installed or updated has neither. Reset compilation or use Macrobenchmark compilation modes to see what they see.' },
     ],
     terms: [
       { term: 'ART', def: 'The Android Runtime, which runs DEX bytecode with an interpreter, a JIT compiler and AOT-compiled code.' },
@@ -843,7 +843,7 @@ class BaselineProfileGenerator {
       { term: 'Baseline Profile', def: 'A list of classes and methods shipped in the app so ART AOT-compiles them at install time.' },
     ],
     challenges: [
-      { type: 'blank', prompt: 'Force the same compilation the idle job would do.', code: 'adb shell cmd package compile -m [[speed-profile]] -f com.example.haber', why: '<code>speed-profile</code> AOT-compiles only the methods in the profile. <code>speed</code> would compile everything, which is not what users get.' },
+      { type: 'blank', prompt: 'Force the same compilation the idle job would do.', code: 'adb shell cmd package compile -m [[speed-profile]] -f com.example.news', why: '<code>speed-profile</code> AOT-compiles only the methods in the profile. <code>speed</code> would compile everything, which is not what users get.' },
       { type: 'bug', prompt: 'A developer explains why the first launch after an update is slow. One line is wrong. Tap it.', code: '1. The update replaces the DEX files.\n2. Old AOT code no longer matches, so methods start interpreted.\n3. Hot methods get JIT-compiled while the app runs.\n4. The JIT writes its machine code to disk for next time.\n5. Idle and charging, dex2oat recompiles from the profile.', bug: 3, fix: '4. The JIT records a profile; its machine code stays in memory only.', why: 'JIT code lives in the code cache of the running process. What survives is the <em>profile</em>, which dex2oat uses later for AOT compilation.' },
     ],
     quiz: [
@@ -1100,10 +1100,10 @@ class ImageCache(private val app: Application)   // Application context, not an 
         title: 'Common leak paths',
         body: `<p>Most Android leaks come from a few shapes: a static or singleton field holding an Activity, View or Activity <code>Context</code>; a listener registered on a long-lived object and never unregistered; an inner class or lambda that captures the Activity and is handed to a long-lived thread or <code>GlobalScope</code>; a cache that grows forever. The Android Studio memory profiler can capture a heap dump and flags leaked <code>Activity</code> and <code>Fragment</code> instances.</p>`,
         code: `// Leak: the lambda captures this@MainActivity, the scope outlives it
-GlobalScope.launch { delay(60_000); binding.title.text = "Hazır" }
+GlobalScope.launch { delay(60_000); binding.title.text = "Ready" }
 
 // Fixed: cancelled in onDestroy
-lifecycleScope.launch { delay(60_000); binding.title.text = "Hazır" }`,
+lifecycleScope.launch { delay(60_000); binding.title.text = "Ready" }`,
       },
     ],
     mistakes: [
@@ -1145,7 +1145,7 @@ lifecycleScope.launch { delay(60_000); binding.title.text = "Hazır" }`,
 <p>A <em>cold start</em> begins with no process for your app. The system forks a new process from Zygote, a process that already has the framework loaded. Then your app’s classes start loading on first use, every <code>ContentProvider</code> in the merged manifest is created, <code>Application.onCreate</code> runs, the launcher activity is created and its UI is composed or inflated, and the first frame is drawn. After the fork, all of your part runs on the main thread, before the user sees anything but the starting window.</p>
 <p>Everything from the previous lessons shows up here. Classes have to be loaded and verified. Methods run interpreted or JIT-compiled unless a profile got them compiled. Objects created during startup are allocated and collected.</p>
 <p>Turn on fixes in the demo and watch the timeline. The numbers are illustrative; measure your own with Macrobenchmark or the <code>Displayed</code> line in Logcat. See <a href="#perf.startup">startup performance</a> for the measuring side.</p>`,
-    code: `class HaberApp : Application() {
+    code: `class NewsApp : Application() {
     override fun onCreate() {
         super.onCreate()
         // Every line here delays the first frame of every cold start.
@@ -1198,7 +1198,7 @@ val ads by lazy { Ads.create(app) }`,
         body: `<p>A <em>cold</em> start creates the process. A <em>warm</em> start finds the process alive but has to recreate the activity. A <em>hot</em> start only brings an existing activity to the front. Optimizing cold start improves the other two. Android vitals treats starts as excessive at 5 seconds or more for cold, 2 for warm and 1.5 for hot.</p>
 <p>Time to initial display (TTID) is the first frame and is measured for you. Time to full display (TTFD) is when the content is really usable, and you report it with <code>reportFullyDrawn()</code>.</p>`,
         code: `// Logcat after a launch
-// ActivityTaskManager: Displayed com.example.haber/.MainActivity: +612ms
+// ActivityTaskManager: Displayed com.example.news/.MainActivity: +612ms
 
 @Composable
 fun FeedScreen(items: List<Article>) {
@@ -1231,7 +1231,7 @@ lifecycleScope.launch(Dispatchers.IO) { Dictionary.words }`,
     ],
     mistakes: [
       { title: 'Disk or network work in Application.onCreate', bad: 'override fun onCreate() {\n    super.onCreate()\n    val cfg = File(filesDir, "config.json").readText()  // main thread I/O\n    Config.load(cfg)\n}', good: 'override fun onCreate() {\n    super.onCreate()\n    appScope.launch(Dispatchers.IO) {\n        Config.load(File(filesDir, "config.json").readText())\n    }\n}', why: 'Application.onCreate blocks the first frame on every cold start. Move I/O to a background dispatcher and show a placeholder until the data arrives.' },
-      { title: 'Measuring warm starts and calling it startup', bad: '// Press Home, tap the icon again: 180 ms\n// "Our startup is fast"', good: '// Kill the process first, then launch\nadb shell am force-stop com.example.haber\nadb shell am start -W -n com.example.haber/.MainActivity', why: 'A process that is still alive skips the fork, class loading, providers and Application.onCreate. Users coming from a notification after a few hours usually get a cold start.' },
+      { title: 'Measuring warm starts and calling it startup', bad: '// Press Home, tap the icon again: 180 ms\n// "Our startup is fast"', good: '// Kill the process first, then launch\nadb shell am force-stop com.example.news\nadb shell am start -W -n com.example.news/.MainActivity', why: 'A process that is still alive skips the fork, class loading, providers and Application.onCreate. Users coming from a notification after a few hours usually get a cold start.' },
     ],
     terms: [
       { term: 'Cold start', def: 'A launch where the app process does not exist yet, so everything from process creation to first frame runs.' },
@@ -1240,8 +1240,8 @@ lifecycleScope.launch(Dispatchers.IO) { Dictionary.words }`,
       { term: 'App Startup', def: 'An AndroidX library that runs component initializers from a single shared ContentProvider in dependency order.' },
     ],
     challenges: [
-      { type: 'blank', prompt: 'Create the ads client on first use instead of in Application.onCreate.', code: 'class HaberApp : Application() {\n    val ads: AdsClient by [[lazy]] { AdsClient.create(this) }\n}', why: '<code>by lazy</code> runs its block the first time <code>ads</code> is read, so a cold start that never shows an ad never pays for it.' },
-      { type: 'bug', prompt: 'Cold start got 300 ms slower after this change. Tap the line that runs on the main thread during startup.', code: 'object Emoji {\n    val table = loadTable()   // reads a 2 MB file\n}\nclass HaberApp : Application() {\n    override fun onCreate() {\n        super.onCreate()\n        Log.d("app", "emoji: " + Emoji.table.size)\n    }\n}', bug: 6, fix: '        // touch Emoji later, off the main thread', why: 'Reading <code>Emoji.table</code> loads and initializes the <code>Emoji</code> class on the spot, so the 2 MB read runs inside <code>Application.onCreate</code>. The innocent-looking log line is the trigger.' },
+      { type: 'blank', prompt: 'Create the ads client on first use instead of in Application.onCreate.', code: 'class NewsApp : Application() {\n    val ads: AdsClient by [[lazy]] { AdsClient.create(this) }\n}', why: '<code>by lazy</code> runs its block the first time <code>ads</code> is read, so a cold start that never shows an ad never pays for it.' },
+      { type: 'bug', prompt: 'Cold start got 300 ms slower after this change. Tap the line that runs on the main thread during startup.', code: 'object Emoji {\n    val table = loadTable()   // reads a 2 MB file\n}\nclass NewsApp : Application() {\n    override fun onCreate() {\n        super.onCreate()\n        Log.d("app", "emoji: " + Emoji.table.size)\n    }\n}', bug: 6, fix: '        // touch Emoji later, off the main thread', why: 'Reading <code>Emoji.table</code> loads and initializes the <code>Emoji</code> class on the spot, so the 2 MB read runs inside <code>Application.onCreate</code>. The innocent-looking log line is the trigger.' },
     ],
     quiz: [
       { q: 'Put the cold start steps in order.', options: ['Application.onCreate → fork process → providers → first frame', 'Fork from Zygote → ContentProviders → Application.onCreate → Activity.onCreate → first frame', 'Activity.onCreate → Application.onCreate → fork'], a: 1, why: 'The process must exist before any of your code runs, providers are created before Application.onCreate, and the activity comes last before drawing.' },

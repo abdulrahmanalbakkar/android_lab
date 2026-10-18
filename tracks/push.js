@@ -199,7 +199,7 @@ fun openGoalSettings(context: Context) {
           function paint(hiGoals) {
             if (screen === 'app') {
               ph.screen.replaceChildren(h('div', { class: 'plt-appbar' }, 'Scores'),
-                h('div', { class: 'plt-note' }, h('b', {}, 'Galatasaray'), h('span', {}, 'Following · goal alerts')),
+                h('div', { class: 'plt-note' }, h('b', {}, 'Team A'), h('span', {}, 'Following · goal alerts')),
                 h('p', { class: 'plt-shade-title' }, 'Notification shade'), shade);
             } else {
               ph.screen.replaceChildren(h('div', { class: 'plt-appbar plt-ext' }, 'Settings · Scores'),
@@ -217,7 +217,7 @@ fun openGoalSettings(context: Context) {
               await sleep(300); if (!el.isConnected) return;
               if (!appOn || !goalsOn) { replay(ph.dev, 'shake'); o.append(h('div', { class: 'line drop-in', html: `<span class="bad">nothing shown:</span> ${!appOn ? 'the app’s notifications are off' : 'the goals channel is blocked'}. No exception, so your code can’t tell.` })); return; }
               if (screen !== 'app') { screen = 'app'; paint(); }
-              shade.prepend(note('goals · HIGH', 'Galatasaray', text, 'drop-in'));
+              shade.prepend(note('goals · HIGH', 'Team A', text, 'drop-in'));
               while (shade.children.length > 3) shade.lastElementChild.remove();
               o.append(h('div', { class: 'line drop-in', html: '<span class="good">shown.</span>' }));
             } finally { busy = false; }
@@ -267,7 +267,7 @@ fun openGoalSettings(context: Context) {
             st.r.textContent = `rationale: ${r}`; st.r.className = 'plt-tag ' + (r ? 'plt-acc' : '');
           }
           function paint() {
-            const kids = [h('div', { class: 'plt-appbar' }, 'Scores'), h('div', { class: 'plt-note' }, h('b', {}, 'Galatasaray'), h('span', {}, granted ? 'Goal alerts on' : 'Goal alerts need permission'))];
+            const kids = [h('div', { class: 'plt-appbar' }, 'Scores'), h('div', { class: 'plt-note' }, h('b', {}, 'Team A'), h('span', {}, granted ? 'Goal alerts on' : 'Goal alerts need permission'))];
             if (settings) {
               ph.screen.replaceChildren(h('div', { class: 'plt-appbar plt-ext' }, 'App info · Notifications'),
                 h('button', { class: 'plt-ps2-set', 'aria-pressed': String(granted), onclick() { granted = !granted; paintTags(); paint(); say(o, granted ? '<span class="good">Allowed from settings.</span> The only way back after two denials.' : 'Turned off again in settings.'); } }, h('span', {}, 'All Scores notifications'), h('span', { class: 'plt-ps2-knob', 'aria-hidden': 'true' })),
@@ -320,12 +320,12 @@ fun openGoalSettings(context: Context) {
         title: 'No small icon',
         bad: `val n = NotificationCompat.Builder(context, GOALS_CHANNEL)
     .setContentTitle("Goal!")
-    .setContentText("Galatasaray 1-0")
+    .setContentText("Team A 1-0")
     .build()`,
         good: `val n = NotificationCompat.Builder(context, GOALS_CHANNEL)
     .setSmallIcon(R.drawable.ic_stat_goal)   // white shape on transparent
     .setContentTitle("Goal!")
-    .setContentText("Galatasaray 1-0")
+    .setContentText("Team A 1-0")
     .build()`,
         why: 'Posting a notification without a small icon fails with <code>IllegalArgumentException: Invalid notification (no valid small icon)</code>. The status bar draws only the icon’s alpha, so use a flat vector shape.',
       },
@@ -557,11 +557,11 @@ fun parse(uri: Uri?): Route {
         .build()
 
 // A chat: MessagingStyle ignores setContentTitle and setContentText.
-val me = Person.Builder().setName("Sen").build()
-val ayse = Person.Builder().setName("Ayşe").build()
+val me = Person.Builder().setName("You").build()
+val maya = Person.Builder().setName("Maya").build()
 val chat = NotificationCompat.MessagingStyle(me)
-    .addMessage("Maç kaçta?", t1, ayse)
-    .addMessage("21:00, geliyor musun?", t2, me)
+    .addMessage("What time is the game?", t1, maya)
+    .addMessage("9 pm. Are you coming?", t2, me)
     // no setConversationTitle(): this is a one-on-one chat`,
     remember: 'A style for the content, up to three actions, none that repeat the tap.',
     deeper: [
@@ -571,11 +571,11 @@ val chat = NotificationCompat.MessagingStyle(me)
 <p>In the receiver, read the text with <code>RemoteInput.getResultsFromIntent()</code>. Then post the notification again with the same id. Until you do, the reply box keeps spinning, and the user can't tell whether the message went out.</p>`,
         code: `const val KEY_TEXT_REPLY = "key_text_reply"
 
-val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Yanıtla").build()
+val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Reply").build()
 val replyIntent = PendingIntent.getBroadcast(context, conversationId,   // one per conversation
     Intent(context, ReplyReceiver::class.java).putExtra("chat", conversationId),
     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)    // the system adds the text
-val reply = NotificationCompat.Action.Builder(R.drawable.ic_reply, "Yanıtla", replyIntent)
+val reply = NotificationCompat.Action.Builder(R.drawable.ic_reply, "Reply", replyIntent)
     .addRemoteInput(remoteInput)
     .build()
 
@@ -590,18 +590,18 @@ class ReplyReceiver : BroadcastReceiver() {
 }`,
         visual(el) {
           let mutable = true, update = true, phase = 'idle';
-          const msgs = [['Ayşe', 'Maç kaçta?'], ['Sen', '21:00, geliyor musun?'], ['Ayşe', 'Bilet sende mi?']];
+          const msgs = [['Maya', 'What time is the game?'], ['You', '9 pm. Are you coming?'], ['Maya', 'Do you have the tickets?']];
           const ph = phone();
           const o = out();
           function paint() {
-            const kids = [h('div', { class: 'plt-sty-head' }, h('span', { class: 'plt-note-ch' }, 'chat · Ayşe'))];
+            const kids = [h('div', { class: 'plt-sty-head' }, h('span', { class: 'plt-note-ch' }, 'chat · Maya'))];
             msgs.forEach(([who, t]) => kids.push(h('span', { class: 'plt-sty-msg' }, h('b', {}, who + ': '), t)));
-            if (phase === 'idle') kids.push(h('div', { class: 'plt-sty-acts' }, h('button', { class: 'plt-sty-act', onclick: openBox }, 'Yanıtla'), h('button', { class: 'plt-sty-act', onclick: () => say(o, 'Mark as read: a second action. Try Yanıtla.') }, 'Okundu')));
-            if (phase === 'typing') kids.push(h('div', { class: 'plt-sty-input drop-in' }, h('span', {}, 'Evet, bende!'), h('button', { class: 'plt-sty-act', onclick: send }, 'Gönder')));
-            if (phase === 'sending') kids.push(h('div', { class: 'plt-sty-input' }, h('span', {}, 'Evet, bende!'), h('span', { class: 'plt-sty-spin', 'aria-label': 'sending' })));
+            if (phase === 'idle') kids.push(h('div', { class: 'plt-sty-acts' }, h('button', { class: 'plt-sty-act', onclick: openBox }, 'Reply'), h('button', { class: 'plt-sty-act', onclick: () => say(o, 'Mark as read: a second action. Try Reply.') }, 'Mark as read')));
+            if (phase === 'typing') kids.push(h('div', { class: 'plt-sty-input drop-in' }, h('span', {}, 'Yes, I have them!'), h('button', { class: 'plt-sty-act', onclick: send }, 'Send')));
+            if (phase === 'sending') kids.push(h('div', { class: 'plt-sty-input' }, h('span', {}, 'Yes, I have them!'), h('span', { class: 'plt-sty-spin', 'aria-label': 'sending' })));
             ph.screen.replaceChildren(h('p', { class: 'plt-shade-title' }, 'Notification shade'), h('div', { class: 'plt-note plt-sty-note' }, kids));
           }
-          function openBox() { if (phase !== 'idle') return; phase = 'typing'; paint(); say(o, 'The reply box is open. Tap Gönder on the phone.'); }
+          function openBox() { if (phase !== 'idle') return; phase = 'typing'; paint(); say(o, 'The reply box is open. Tap Send on the phone.'); }
           async function send() {
             if (phase !== 'typing') return;
             phase = 'sending'; paint();
@@ -611,17 +611,17 @@ class ReplyReceiver : BroadcastReceiver() {
               o.append(h('div', { class: 'line drop-in', html: `<span class="bad">getResultsFromIntent() = null.</span> An immutable PendingIntent can’t be filled in, so the text never arrived. The receiver returns and the box keeps spinning.` }));
               replay(ph.dev, 'shake'); return;
             }
-            o.append(h('div', { class: 'line drop-in', html: `<span class="good">ReplyReceiver:</span> text = "Evet, bende!" → ChatWork.send()` }));
+            o.append(h('div', { class: 'line drop-in', html: `<span class="good">ReplyReceiver:</span> text = "Yes, I have them!" → ChatWork.send()` }));
             await sleep(700); if (!el.isConnected) return;
             if (!update) {
               o.append(h('div', { class: 'line drop-in', html: '<span class="bad">no notify() after the reply.</span> The message went out, but the box spins on. The user may send it twice.' }));
               replay(ph.dev, 'shake'); return;
             }
-            msgs.push(['Sen', 'Evet, bende!']); while (msgs.length > 4) msgs.shift();
+            msgs.push(['You', 'Yes, I have them!']); while (msgs.length > 4) msgs.shift();
             phase = 'idle'; paint();
             o.append(h('div', { class: 'line drop-in', html: '<span class="good">notify(chat, updated)</span> with the same id. The reply shows in the conversation.' }));
           }
-          function reset() { phase = 'idle'; paint(); say(o, 'Ayşe wrote. Reply from the notification.'); }
+          function reset() { phase = 'idle'; paint(); say(o, 'Maya wrote. Reply from the notification.'); }
           const tm = toggle('plt-sty-mut', 'reply PendingIntent is FLAG_MUTABLE', true, v => { mutable = v; reset(); });
           const tu = toggle('plt-sty-upd', 'notify() again after the reply', true, v => { update = v; reset(); });
           reset();
@@ -636,7 +636,7 @@ class ReplyReceiver : BroadcastReceiver() {
 <p>Every post on a channel that makes sound would alert again. <code>setOnlyAlertOnce(true)</code> makes only the first post alert. Don't post too often either: the system rate-limits updates, and many posts within one second can be dropped. A few steps per second is plenty.</p>`,
         code: `val builder = NotificationCompat.Builder(context, DOWNLOADS_CHANNEL)
     .setSmallIcon(R.drawable.ic_stat_download)
-    .setContentTitle("Bölüm 12 indiriliyor")
+    .setContentTitle("Downloading episode 12")
     .setOngoing(true)
     .setOnlyAlertOnce(true)          // sound and vibration on the first post only
 
@@ -644,7 +644,7 @@ downloads.collect { p ->
     builder.setProgress(100, p.percent, false)
     manager.notify(DOWNLOAD_ID, builder.build())   // same id: an update, not a new card
 }
-builder.setContentTitle("İndirme tamamlandı")
+builder.setContentTitle("Download complete")
     .setProgress(0, 0, false)                      // removes the bar
     .setOngoing(false)
 manager.notify(DOWNLOAD_ID, builder.build())`,
@@ -652,7 +652,7 @@ manager.notify(DOWNLOAD_ID, builder.build())`,
           let once = true, busy = false, alerts = 0;
           const ph = phone();
           const bar = h('span');
-          const title = h('b', {}, 'Bölüm 12');
+          const title = h('b', {}, 'Episode 12');
           const pct = h('span', {}, 'Not started');
           const card = h('div', { class: 'plt-note plt-sty-note' }, h('span', { class: 'plt-note-ch' }, 'downloads · DEFAULT'), title, pct, h('div', { class: 'plt-sty-bar' }, bar));
           ph.screen.append(h('p', { class: 'plt-shade-title' }, 'Notification shade'), card);
@@ -661,7 +661,7 @@ manager.notify(DOWNLOAD_ID, builder.build())`,
           async function run() {
             if (busy) return; busy = true; alerts = 0;
             try {
-              title.textContent = 'Bölüm 12 indiriliyor'; bar.parentElement.hidden = false;
+              title.textContent = 'Downloading episode 12'; bar.parentElement.hidden = false;
               say(o, 'Posting an update every 20%.');
               for (let p = 0; p <= 100; p += 20) {
                 bar.style.width = p + '%'; pct.textContent = p + '%';
@@ -669,7 +669,7 @@ manager.notify(DOWNLOAD_ID, builder.build())`,
                 count.textContent = `alerts: ${alerts}`; count.className = 'plt-tag ' + (alerts > 1 ? 'plt-no' : 'plt-ok');
                 await sleep(550); if (!el.isConnected) return;
               }
-              title.textContent = 'İndirme tamamlandı'; pct.textContent = 'Tap to watch'; bar.parentElement.hidden = true; replay(card, 'pop');
+              title.textContent = 'Download complete'; pct.textContent = 'Tap to watch'; bar.parentElement.hidden = true; replay(card, 'pop');
               o.append(h('div', { class: 'line drop-in', html: once ? '<span class="good">One alert</span> for the whole download. setProgress(0, 0, false) removed the bar.' : `<span class="bad">${alerts} alerts</span> for one download. Each update buzzed the phone.` }));
             } finally { busy = false; }
           }
@@ -688,8 +688,8 @@ manager.notify(DOWNLOAD_ID, builder.build())`,
 
 val delivery = NotificationCompat.Builder(context, DELIVERY_CHANNEL)   // not IMPORTANCE_MIN
     .setSmallIcon(R.drawable.ic_stat_delivery)
-    .setContentTitle("Siparişin yolda")       // a title is required
-    .setContentText("Kurye 5 dakika uzakta")
+    .setContentTitle("Your order is on the way")       // a title is required
+    .setContentText("Courier is 5 minutes away")
     .setOngoing(true)
     .setRequestPromotedOngoing(true)
     .build()
@@ -705,14 +705,14 @@ if (Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
       {
         title: 'Setting a title on a chat notification',
         bad: `NotificationCompat.Builder(context, CHAT_CHANNEL)
-    .setContentTitle("Ayşe")
-    .setContentText("Maç kaçta?")
+    .setContentTitle("Maya")
+    .setContentText("What time is the game?")
     .setStyle(NotificationCompat.MessagingStyle(me)
-        .setConversationTitle("Ayşe")              // one-on-one chat
-        .addMessage("Maç kaçta?", t, ayse))`,
+        .setConversationTitle("Maya")              // one-on-one chat
+        .addMessage("What time is the game?", t, maya))`,
         good: `NotificationCompat.Builder(context, CHAT_CHANNEL)
     .setStyle(NotificationCompat.MessagingStyle(me)
-        .addMessage("Maç kaçta?", t, ayse))       // the sender Person names the chat`,
+        .addMessage("What time is the game?", t, maya))       // the sender Person names the chat`,
         why: 'MessagingStyle ignores the content title and text. A conversation title tells the system the chat is a group, so a one-on-one chat is shown as one.',
       },
       {
@@ -738,11 +738,11 @@ if (Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
     ],
     challenges: [
       { type: 'blank', prompt: 'Show the full match report when the user expands the notification.', code: 'NotificationCompat.Builder(context, NEWS_CHANNEL)\n    .setSmallIcon(R.drawable.ic_stat_news)\n    .setContentTitle("Derby report")\n    .setContentText(report.summary)\n    .[[setStyle]](NotificationCompat.[[BigTextStyle]]().bigText(report.fullText))\n    .build()', why: '<code>BigTextStyle</code> fills the expanded view with the long text. The content text stays as the collapsed line.' },
-      { type: 'bug', prompt: 'Users type a reply in the notification and tap send. The receiver runs, but the text is always null. Tap the line.', code: 'val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Yanıtla").build()\nval intent = Intent(context, ReplyReceiver::class.java).putExtra("chat", chatId)\nval pending = PendingIntent.getBroadcast(context, chatId, intent,\n    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)\nval action = NotificationCompat.Action.Builder(R.drawable.ic_reply, "Yanıtla", pending)\n    .addRemoteInput(remoteInput)\n    .build()', bug: 3, fix: '    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)', why: 'The system adds the typed text to the Intent when it sends the PendingIntent. An immutable one can’t be filled in, so <code>getResultsFromIntent()</code> finds nothing.' },
+      { type: 'bug', prompt: 'Users type a reply in the notification and tap send. The receiver runs, but the text is always null. Tap the line.', code: 'val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Reply").build()\nval intent = Intent(context, ReplyReceiver::class.java).putExtra("chat", chatId)\nval pending = PendingIntent.getBroadcast(context, chatId, intent,\n    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)\nval action = NotificationCompat.Action.Builder(R.drawable.ic_reply, "Reply", pending)\n    .addRemoteInput(remoteInput)\n    .build()', bug: 3, fix: '    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)', why: 'The system adds the typed text to the Intent when it sends the PendingIntent. An immutable one can’t be filled in, so <code>getResultsFromIntent()</code> finds nothing.' },
     ],
     quiz: [
       { q: 'You add five lines with <code>InboxStyle.addLine()</code>, then two more. How many show when expanded?', options: ['All seven', 'Six', 'Five'], a: 1, why: 'InboxStyle shows up to six lines. Put a "+1 more" in the summary text if it matters.' },
-      { q: 'You set <code>setContentTitle("Ayşe")</code> on a <code>MessagingStyle</code> notification. What does the user see?', options: ['"Ayşe" as the title', 'The title is ignored; the style decides what shows', 'Both the title and the conversation'], a: 1, why: 'MessagingStyle ignores setContentTitle and setContentText. Senders come from the Person on each message.' },
+      { q: 'You set <code>setContentTitle("Maya")</code> on a <code>MessagingStyle</code> notification. What does the user see?', options: ['"Maya" as the title', 'The title is ignored; the style decides what shows', 'Both the title and the conversation'], a: 1, why: 'MessagingStyle ignores setContentTitle and setContentText. Senders come from the Person on each message.' },
       { q: 'A download notification on a sound-making channel is updated ten times. How do you make it alert only once?', options: ['Post each update with a new id', '<code>setOnlyAlertOnce(true)</code>', 'Use <code>IMPORTANCE_HIGH</code>'], a: 1, why: 'setOnlyAlertOnce lets only the first post make sound or vibrate. New ids would stack ten cards.' },
       { q: 'Inline replies arrive with no text. Which line is the bug?<pre class="code mini">val pi = PendingIntent.getBroadcast(\n  ctx, chatId,                    // 1\n  replyIntent,                    // 2\n  PendingIntent.FLAG_IMMUTABLE)   // 3\nbuilder.addRemoteInput(input)     // 4</pre>', options: ['Line 1', 'Line 3', 'Line 4'], a: 1, why: 'The system writes the reply into the action’s Intent, so the reply PendingIntent must be FLAG_MUTABLE and explicit. An immutable one cannot be filled in.' },
       { q: 'Your receiver reads the inline reply and sends it, but the reply box in the notification keeps spinning. What is missing?', options: ['setOnlyAlertOnce(true) on the original notification', 'Posting the notification again with the same id', 'Calling cancelAll() on the NotificationManager'], a: 1, why: 'The spinner stays until you update the notification. Post it again with the same id, for example with the sent message added.' },
@@ -753,10 +753,10 @@ if (Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
         big: { label: 'BigTextStyle', src: '.setStyle(NotificationCompat.BigTextStyle().bigText(report.fullText))' },
         pic: { label: 'BigPictureStyle', src: '.setLargeIcon(photo)\n.setStyle(NotificationCompat.BigPictureStyle().bigPicture(photo).bigLargeIcon(null as Bitmap?))' },
         inbox: { label: 'InboxStyle', src: '.setStyle(NotificationCompat.InboxStyle()\n    .addLine("Derby ends 2-1")\n    // ... 7 lines added: only the first six show\n    .setSummaryText("7 new"))' },
-        msg: { label: 'MessagingStyle', src: '.setStyle(NotificationCompat.MessagingStyle(me)\n    .addMessage("Maç kaçta?", t1, ayse)\n    .addMessage("21:00, geliyor musun?", t2, me)\n    .addMessage("Bilet sende mi?", t3, ayse))' },
+        msg: { label: 'MessagingStyle', src: '.setStyle(NotificationCompat.MessagingStyle(me)\n    .addMessage("What time is the game?", t1, maya)\n    .addMessage("9 pm. Are you coming?", t2, me)\n    .addMessage("Do you have the tickets?", t3, maya))' },
       };
-      const STORY = 'Galatasaray beat Fenerbahçe 2-1. The winner came in the 88th minute after a long VAR check, and the visitors finished with ten men.';
-      const LINES = ['Derby ends 2-1', 'Coach: “Best night of the season”', 'Transfer: keeper talks go on', 'Women’s league: 3-0 away win', 'EuroLeague preview', 'Volleyball cup final', 'U19: late equalizer'];
+      const STORY = 'Team A beat Team B 2-1. The winner came in the 88th minute after a long VAR check, and the visitors finished with ten men.';
+      const LINES = ['Derby ends 2-1', 'Coach: “Best night of the season”', 'Transfer: keeper talks go on', 'Women’s league: 3-0 away win', 'Basketball preview', 'Volleyball cup final', 'U19: late equalizer'];
       const ACTIONS = ['Read later', 'Share', 'Mute team', 'Report'];
       let style = 'big', open = false, acts = 1;
       const ph = phone();
@@ -764,12 +764,12 @@ if (Build.VERSION.SDK_INT >= 36 && !manager.canPostPromotedNotifications()) {
       const o = out();
       function content() {
         if (style === 'msg') {
-          const m = [['Ayşe', 'Maç kaçta?'], ['Sen', '21:00, geliyor musun?'], ['Ayşe', 'Bilet sende mi?']];
-          return open ? [h('b', {}, 'Ayşe'), ...m.map(([w, t]) => h('span', { class: 'plt-sty-msg' }, h('b', {}, w + ': '), t))]
-            : [h('b', {}, 'Ayşe'), h('span', { class: 'plt-sty-one' }, m[2][1])];
+          const m = [['Maya', 'What time is the game?'], ['You', '9 pm. Are you coming?'], ['Maya', 'Do you have the tickets?']];
+          return open ? [h('b', {}, 'Maya'), ...m.map(([w, t]) => h('span', { class: 'plt-sty-msg' }, h('b', {}, w + ': '), t))]
+            : [h('b', {}, 'Maya'), h('span', { class: 'plt-sty-one' }, m[2][1])];
         }
-        if (style === 'inbox') return open ? [h('b', {}, 'Spor haberleri'), ...LINES.slice(0, 6).map(l => h('span', { class: 'plt-sty-one' }, l))]
-          : [h('b', {}, 'Spor haberleri'), h('span', { class: 'plt-sty-one' }, '7 new')];
+        if (style === 'inbox') return open ? [h('b', {}, 'Sports news'), ...LINES.slice(0, 6).map(l => h('span', { class: 'plt-sty-one' }, l))]
+          : [h('b', {}, 'Sports news'), h('span', { class: 'plt-sty-one' }, '7 new')];
         if (style === 'pic') return open ? [h('b', {}, 'Derby report'), h('span', { class: 'plt-sty-one' }, 'The winner in the 88th minute'), h('div', { class: 'plt-sty-pic', role: 'img', 'aria-label': 'match photo' })]
           : [h('div', { class: 'plt-sty-row' }, h('span', {}, h('b', {}, 'Derby report'), h('span', { class: 'plt-sty-one' }, 'The winner in the 88th minute')), h('span', { class: 'plt-sty-thumb', role: 'img', 'aria-label': 'thumbnail' }))];
         if (style === 'big' && open) return [h('b', {}, 'Derby report'), h('span', {}, STORY)];
@@ -867,7 +867,7 @@ adb shell am start -a android.intent.action.VIEW \\
           const o = out();
           const term = h('div', { class: 'plt-steps', 'aria-live': 'polite' });
           const ph = phone();
-          const show = (kind) => ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' + (kind === 'app' ? '' : ' plt-ext') }, kind === 'app' ? 'Haberler · Article 42' : kind === 'web' ? 'Browser · news.example.com' : 'Home screen'), h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }));
+          const show = (kind) => ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' + (kind === 'app' ? '' : ' plt-ext') }, kind === 'app' ? 'News · Article 42' : kind === 'web' ? 'Browser · news.example.com' : 'Home screen'), h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }));
           const line = (k, who, text) => { term.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', { html: text }))); while (term.children.length > 5) term.firstElementChild.remove(); };
           const stateHtml = () => state === 'verified' ? '<span class="good">verified</span>' : state === 'none' ? 'none' : `<span class="bad">${state === 'legacy' ? '1024' : state}</span>`;
           async function run(which) {
@@ -996,7 +996,7 @@ adb shell am start -a android.intent.action.VIEW \\
       const log = h('div', { class: 'plt-steps' });
       const o = out();
       const cards = {};
-      const show = (kind, host) => ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' + (kind === 'app' ? '' : ' plt-ext') }, kind === 'app' ? 'Haberler · Article 42' : kind === 'web' ? 'Browser · ' + host : 'Chat · link from a friend'), h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }), h('span', { class: 'plt-ln', style: 'width:80%' }));
+      const show = (kind, host) => ph.screen.replaceChildren(h('div', { class: 'plt-appbar drop-in' + (kind === 'app' ? '' : ' plt-ext') }, kind === 'app' ? 'News · Article 42' : kind === 'web' ? 'Browser · ' + host : 'Chat · link from a friend'), h('span', { class: 'plt-ln', style: 'width:90%' }), h('span', { class: 'plt-ln', style: 'width:70%' }), h('span', { class: 'plt-ln', style: 'width:80%' }));
       const step = (k, who, text) => { log.append(h('div', { class: `plt-step drop-in ${k ? 'plt-' + k : ''}` }, h('b', {}, who), h('span', {}, text))); while (log.children.length > 4) log.firstElementChild.remove(); };
       function paintHost(host) {
         const c = cards[host];
@@ -1364,9 +1364,9 @@ WorkManager.getInstance(context).enqueueUniquePeriodicWork(
               const INSTALLS = [
                 { name: 'Ada, phone, daily user', off: Infinity, opens: true },
                 { name: 'Bob, phone, opens app rarely', off: Infinity, opens: false },
-                { name: 'Cem, old phone in a drawer', off: 0, opens: false },
+                { name: 'Cal, old phone in a drawer', off: 0, opens: false },
                 { name: 'Dee, uninstalled the app', off: 1, opens: false, uninstall: true },
-                { name: 'Eda, broke her phone', off: 3, opens: false },
+                { name: 'Eve, broke her phone', off: 3, opens: false },
               ];
               let month = 0, refresh = true, busy = false;
               const o = out('Month 0. Every install registered this month. Advance time.');

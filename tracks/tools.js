@@ -135,7 +135,7 @@
 `;
 
   // ───────────── shared data for the Logcat lesson ─────────────
-  const MINE = 'com.mynet.haber';
+  const MINE = 'com.example.news';
   const LOGS = [
     { pk: 'system_server', tg: 'ActivityManager', lv: 'I', ms: `Start proc 12345:${MINE}/u0a210 for top-activity` },
     { pk: MINE, tg: 'MainActivity', lv: 'D', ms: 'onCreate savedInstanceState=null' },
@@ -143,12 +143,12 @@
     { pk: MINE, tg: 'OkHttp', lv: 'D', ms: '<-- 200 OK (412ms)' },
     { pk: MINE, tg: 'FeedRepository', lv: 'I', ms: 'loaded 20 items from network in 412ms' },
     { pk: 'com.google.android.gms', tg: 'GmsClient', lv: 'W', ms: 'Connection to service timed out, retrying' },
-    { pk: MINE, tg: 'AuthManager', lv: 'D', ms: 'refresh token=eyJhbGciOiJIUzI1NiJ9.x9f… user=ayse@example.com', pii: true },
+    { pk: MINE, tg: 'AuthManager', lv: 'D', ms: 'refresh token=eyJhbGciOiJIUzI1NiJ9.x9f… user=maya@example.com', pii: true },
     { pk: MINE, tg: 'FeedViewModel', lv: 'W', ms: 'image cache full, evicting 12 entries' },
     { pk: MINE, tg: 'AuthManager', lv: 'I', ms: 'session refreshed' },
-    { pk: 'system_server', tg: 'WindowManager', lv: 'V', ms: 'Relayout Window{a1b2 com.mynet.haber/.MainActivity}' },
+    { pk: 'system_server', tg: 'WindowManager', lv: 'V', ms: 'Relayout Window{a1b2 com.example.news/.MainActivity}' },
     { pk: MINE, tg: 'FeedViewModel', lv: 'E', ms: 'parse failed for item id=42: missing "title"' },
-    { pk: MINE, tg: 'AndroidRuntime', lv: 'E', ms: 'FATAL EXCEPTION: main\njava.lang.IllegalStateException: title must not be null\n\tat com.mynet.haber.feed.NewsRow(NewsRow.kt:31)', crash: true },
+    { pk: MINE, tg: 'AndroidRuntime', lv: 'E', ms: 'FATAL EXCEPTION: main\njava.lang.IllegalStateException: title must not be null\n\tat com.example.news.feed.NewsRow(NewsRow.kt:31)', crash: true },
     { pk: 'com.google.android.gms', tg: 'Auth', lv: 'D', ms: 'token cache hit' },
   ];
   const LEVELS = ['V', 'D', 'I', 'W', 'E', 'A'];
@@ -207,12 +207,12 @@
           ];
           const TREES = {
             android: [
-              [0, 'app', 'grp'], [1, 'manifests', 'grp'], [2, 'AndroidManifest.xml'], [1, 'java', 'grp'], [2, 'com.mynet.haber', 'dir'], [3, 'MainActivity.kt'],
-              [1, 'res', 'grp'], [2, 'values', 'dir'], [3, 'strings.xml (2)'], [0, 'Gradle Scripts', 'grp'], [1, 'build.gradle.kts (Project: Haber)'],
+              [0, 'app', 'grp'], [1, 'manifests', 'grp'], [2, 'AndroidManifest.xml'], [1, 'java', 'grp'], [2, 'com.example.news', 'dir'], [3, 'MainActivity.kt'],
+              [1, 'res', 'grp'], [2, 'values', 'dir'], [3, 'strings.xml (2)'], [0, 'Gradle Scripts', 'grp'], [1, 'build.gradle.kts (Project: News)'],
               [1, 'build.gradle.kts (Module :app)'], [1, 'libs.versions.toml'], [1, 'settings.gradle.kts'],
             ],
             project: [
-              [0, 'Haber/', 'dir'], [1, 'app/', 'dir'], [2, 'build/', 'dir'], [2, 'src/', 'dir'], [3, 'main/', 'dir'], [4, 'AndroidManifest.xml'], [4, 'java/com/mynet/haber/', 'dir'],
+              [0, 'News/', 'dir'], [1, 'app/', 'dir'], [2, 'build/', 'dir'], [2, 'src/', 'dir'], [3, 'main/', 'dir'], [4, 'AndroidManifest.xml'], [4, 'java/com/example/news/', 'dir'],
               [4, 'res/values/strings.xml'], [4, 'res/values-en/strings.xml'], [3, 'test/', 'dir'], [3, 'androidTest/', 'dir'], [2, 'build.gradle.kts'], [1, 'gradle/libs.versions.toml'], [1, 'settings.gradle.kts'],
             ],
           };
@@ -296,9 +296,9 @@ plugins {
 }
 
 android {
-    namespace = "com.mynet.haber"
+    namespace = "com.example.news"
     defaultConfig {
-        applicationId = "com.mynet.haber"
+        applicationId = "com.example.news"
         minSdk = 24
     }
 }
@@ -348,7 +348,7 @@ dependencies {
           body: `<p>The Run button is a shortcut for three steps you can run yourself in a terminal. Knowing them helps when the IDE misbehaves: if the command line build works, the problem is usually a stale sync or a cache in the IDE, not your code.</p>`,
           code: `./gradlew :app:assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.mynet.haber/.MainActivity`,
+adb shell am start -n com.example.news/.MainActivity`,
         },
         mistakes: [
           {
@@ -421,7 +421,7 @@ adb shell am start -n com.mynet.haber/.MainActivity`,
           press(btns, btns[0]); paint();
           el.append(h('div', { class: 'tl-q' }, h('b', {}, 'Q'), input), h('div', { class: 'controls' }, btns), count, panel, o);
         },
-        code: `class HaberApp : Application() {
+        code: `class NewsApp : Application() {
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.DEBUG) Timber.plant(Timber.DebugTree())   // tag = calling class
@@ -536,7 +536,7 @@ Timber.d("token refreshed for user #%s (expires in %ds)", user.id, ttl)`,
             '    return base - off',
             '}',
           ];
-          const CART = [{ name: 'simit', price: 1500, qty: 2 }, { name: 'çay', price: 1000, qty: 3 }, { name: 'ayran', price: 2500, qty: 1 }];
+          const CART = [{ name: 'bagel', price: 1500, qty: 2 }, { name: 'tea', price: 1000, qty: 3 }, { name: 'juice', price: 2500, qty: 1 }];
           const fmt = it => `Item(name="${it.name}", price=${it.price}, qty=${it.qty})`;
           // trace: each entry is "paused before running this line"
           const T = [];
@@ -586,7 +586,7 @@ Timber.d("token refreshed for user #%s (expires in %ds)", user.id, ttl)`,
           }
           function hitsBp(i) { const e = T[i]; return bps.has(e.line) && (!cond || (e.it && e.it.qty >= 3)); }
           function goTo(i, why) {
-            if (i >= T.length) { at = T.length; paint(); say(o, `<span class="good">Finished.</span> total = ${sum}. <span class="muted">Expected 8200: simit 3000 + çay 2700 + ayran 2500.</span>`); return; }
+            if (i >= T.length) { at = T.length; paint(); say(o, `<span class="good">Finished.</span> total = ${sum}. <span class="muted">Expected 8200: bagel 3000 + tea 2700 + juice 2500.</span>`); return; }
             at = i; paint(); say(o, why);
           }
           const need = () => { if (at < 0 || at >= T.length) { say(o, 'Not paused. Press Debug first.'); return false; } return true; };
@@ -613,7 +613,7 @@ Timber.d("token refreshed for user #%s (expires in %ds)", user.id, ttl)`,
           }));
           evalOut.append(h('div', { class: 'tl-panel-h' }, h('span', {}, 'Evaluate expression')), h('div', { class: 'tl-ln tl-nt' }, 'Pick an expression while paused'));
           paintGutters(); paint();
-          say(o, 'A breakpoint sits on line 5. Press Debug, then step. Why is çay 2700 and not 3000?');
+          say(o, 'A breakpoint sits on line 5. Press Debug, then step. Why is tea 2700 and not 3000?');
           el.append(
             h('div', { class: 'controls' }, act('Debug', debug), act('Step Over', over), act('Step Into', into), act('Step Out', outOf), act('Resume', resume)),
             h('div', { class: 'controls' }, condBtn, watchBtn),
@@ -721,12 +721,12 @@ kotlin {
           const c = {}; const s = {};
           let read = 0, remembered = false;
           const ui = {
-            bar: h('div', { class: 'tl-ui tl-top' }, 'Gündem'),
+            bar: h('div', { class: 'tl-ui tl-top' }, 'Top stories'),
             count: h('div', { class: 'tl-ui' }),
             list: h('div', { class: 'tl-ui' }, 'NewsList'),
-            r1: h('div', { class: 'tl-ui tl-sub' }, 'Deprem raporu'),
-            r2: h('div', { class: 'tl-ui tl-sub' }, 'Dolar kuru'),
-            r3: h('div', { class: 'tl-ui tl-sub' }, 'Maç sonucu'),
+            r1: h('div', { class: 'tl-ui tl-sub' }, 'Earthquake report'),
+            r2: h('div', { class: 'tl-ui tl-sub' }, 'Exchange rates'),
+            r3: h('div', { class: 'tl-ui tl-sub' }, 'Match result'),
           };
           const phone = h('div', { class: 'tl-phone' }, ui.bar, ui.count, ui.list, ui.r1, ui.r2, ui.r3);
           const rows = {};
@@ -737,7 +737,7 @@ kotlin {
           const src = h('div', { class: 'kt' });
           const o = out('');
           function paint(changed = {}) {
-            ui.count.textContent = `Okundu: ${read}`;
+            ui.count.textContent = `Read: ${read}`;
             NODES.forEach(n => {
               const [, a, b] = rows[n.id].children;
               a.textContent = c[n.id]; b.textContent = s[n.id];
@@ -765,9 +765,9 @@ kotlin {
           ];
           NODES.forEach(n => { c[n.id] = 1; s[n.id] = 0; });
           press(modeBtns, modeBtns[0]); paint();
-          say(o, 'Every node composed once on first show. Tap "Okundu +1".');
+          say(o, 'Every node composed once on first show. Tap "Read +1".');
           el.append(
-            h('div', { class: 'controls' }, act('Okundu +1', tap), act('Reset', reset)),
+            h('div', { class: 'controls' }, act('Read +1', tap), act('Reset', reset)),
             h('div', { class: 'controls' }, label('list param'), modeBtns),
             src,
             h('div', { class: 'tl-grid' }, phone, ct), o);
@@ -778,7 +778,7 @@ fun NewsScreen(all: List<News>) {
     val visible = remember(all) { all.filter { it.visible } }
 
     Column {
-        TopBar(title = "Gündem")            // skips: title did not change
+        TopBar(title = "Top stories")            // skips: title did not change
         ReadCounter(read) { read++ }        // recomposes: read changed
         NewsList(items = visible)           // skips: same List instance
     }
@@ -859,13 +859,13 @@ NewsList(items = visible)`,
           function paint() {
             procPill.className = 'tl-pill ' + ({ fg: 'tl-ok', bg: 'tl-warn', dead: 'tl-err', none: 'tl-ghost' }[proc]);
             procPill.textContent = { fg: 'process: foreground', bg: 'process: cached (background)', dead: 'process: killed', none: 'process: not running' }[proc];
-            if (proc !== 'fg') { scr.className = 'tl-panel tl-scr tl-off'; scr.replaceChildren(h('div', {}, installed ? 'Launcher' : 'Launcher (Haber not installed)')); return; }
+            if (proc !== 'fg') { scr.className = 'tl-panel tl-scr tl-off'; scr.replaceChildren(h('div', {}, installed ? 'Launcher' : 'Launcher (News not installed)')); return; }
             scr.className = 'tl-panel tl-scr';
             scr.replaceChildren(recDot,
-              h('div', { class: 'tl-panel-h' }, h('span', {}, 'Haber'), h('span', {}, screen === 'article' ? 'haber/42' : 'feed')),
+              h('div', { class: 'tl-panel-h' }, h('span', {}, 'News'), h('span', {}, screen === 'article' ? 'article/42' : 'feed')),
               ...(screen === 'article'
-                ? [h('div', { class: 'tl-ln tl-wrap' }, 'Haber #42: Deprem raporu'), h('div', { class: 'tl-ln tl-wrap', style: 'color:var(--t-s)' }, `Yorum taslağı: ${draft ? '"' + draft + '"' : '(empty)'}`)]
-                : [h('div', { class: 'tl-ln' }, '• Gündem'), h('div', { class: 'tl-ln' }, '• Ekonomi'), h('div', { class: 'tl-ln' }, '• Spor')]));
+                ? [h('div', { class: 'tl-ln tl-wrap' }, 'Article #42: Earthquake report'), h('div', { class: 'tl-ln tl-wrap', style: 'color:var(--t-s)' }, `Comment draft: ${draft ? '"' + draft + '"' : '(empty)'}`)]
+                : [h('div', { class: 'tl-ln' }, '• Top stories'), h('div', { class: 'tl-ln' }, '• Business'), h('div', { class: 'tl-ln' }, '• Sports')]));
             recDot.hidden = !rec;
           }
           async function runCmd(c, fn) {
@@ -881,7 +881,7 @@ NewsList(items = visible)`,
             ['adb devices -l', () => { print('List of devices attached'); print('emulator-5554  device product:sdk_gphone64_x86_64 model:Pixel_8 transport_id:1'); say(o, 'One emulator. With several devices, pick one with <span class="muted">adb -s emulator-5554 ...</span>'); }],
             ['adb install app-debug.apk', () => { print('Performing Streamed Install'); print('Success'); installed = true; say(o, 'Installed. Nothing is running yet.'); }],
             [`adb shell am start -n ${PKG}/.MainActivity`, () => { if (!installed) return notInstalled(); print(`Starting: Intent { cmp=${PKG}/.MainActivity }`); proc = 'fg'; screen = 'feed'; say(o, 'Started the activity by component name.'); }],
-            ['adb shell am start -a android.intent.action.VIEW -d "https://haber.example.com/haber/42"', () => { if (!installed) return notInstalled(); print('Starting: Intent { act=android.intent.action.VIEW dat=https://haber.example.com/... }'); proc = 'fg'; screen = 'article'; say(o, 'The same intent a notification or a browser link would send. Your intent filter routed it to article 42.'); }],
+            ['adb shell am start -a android.intent.action.VIEW -d "https://news.example.com/article/42"', () => { if (!installed) return notInstalled(); print('Starting: Intent { act=android.intent.action.VIEW dat=https://news.example.com/... }'); proc = 'fg'; screen = 'article'; say(o, 'The same intent a notification or a browser link would send. Your intent filter routed it to article 42.'); }],
             [`adb shell pm clear ${PKG}`, () => { if (!installed) { print('Error: package not found', 'tl-er'); return; } print('Success'); proc = 'none'; draft = ''; screen = 'feed'; say(o, 'All app data deleted and the app stopped: like a fresh install, without reinstalling. Good for onboarding and login tests.'); }],
             [`adb shell dumpsys meminfo ${PKG}`, () => { if (proc === 'fg' || proc === 'bg') { print(`** MEMINFO in pid 12345 [${PKG}] **`); print('                 Pss Total  Private Dirty'); print('  Native Heap        14210          14120'); print('  Dalvik Heap         9832           9744'); print('        TOTAL        61048          41230'); say(o, 'Watch Pss Total and Private Dirty. Numbers here are made up for the demo.'); } else { print(`No process found for: ${PKG}`, 'tl-er'); } }],
             ['adb shell screenrecord --time-limit 10 /sdcard/bug.mp4', async () => { if (proc !== 'fg') { say(o, 'Open the app first so there is something to record.'); } rec = true; paint(); say(o, 'Recording (max 180 s, no audio). Then: <span class="muted">adb pull /sdcard/bug.mp4</span>'); await sleep(1600); rec = false; if (el.isConnected) { paint(); print('(recording saved to /sdcard/bug.mp4)', 'tl-nt'); } }],
@@ -894,7 +894,7 @@ NewsList(items = visible)`,
           const btns = CMDS.map(([c, fn]) => cmdk(c, () => runCmd(c, fn)));
           const savedBtn = act('State in SavedStateHandle', () => { saved = !saved; savedBtn.setAttribute('aria-pressed', String(saved)); say(o, saved ? 'The draft is saved in SavedStateHandle.' : 'The draft lives only in a ViewModel field.'); });
           const phoneBtns = [
-            act('Type a comment draft', () => { if (proc !== 'fg' || screen !== 'article') { say(o, 'Open article 42 with the deep link command first.'); return; } draft = 'Geçmiş olsun'; paint(); }),
+            act('Type a comment draft', () => { if (proc !== 'fg' || screen !== 'article') { say(o, 'Open article 42 with the deep link command first.'); return; } draft = 'Get well soon'; paint(); }),
             act('Home', () => { if (proc === 'fg') { proc = 'bg'; paint(); say(o, 'App in the background. Its process is now cached and killable.'); } }),
             act('Open from Recents', () => {
               if (proc === 'bg') { proc = 'fg'; paint(); say(o, 'Same process, nothing was lost. That is not the interesting case.'); return; }
@@ -916,20 +916,20 @@ adb devices -l
 
 # install, then start by component name
 adb install app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.mynet.haber/.MainActivity
+adb shell am start -n com.example.news/.MainActivity
 
 # open a deep link exactly like a notification would
-adb shell am start -a android.intent.action.VIEW -d "https://haber.example.com/haber/42"
+adb shell am start -a android.intent.action.VIEW -d "https://news.example.com/article/42"
 
 # fresh start: delete all app data
-adb shell pm clear com.mynet.haber
+adb shell pm clear com.example.news
 
 # process death test: press Home on the device first
-adb shell am kill com.mynet.haber
+adb shell am kill com.example.news
 # ...then reopen the app from Recents
 
 # memory snapshot and a screen recording
-adb shell dumpsys meminfo com.mynet.haber
+adb shell dumpsys meminfo com.example.news
 adb shell screenrecord --time-limit 30 /sdcard/bug.mp4
 adb pull /sdcard/bug.mp4`,
         remember: 'Deep link with am start -a VIEW -d, fresh start with pm clear, process death with Home then am kill then Recents.',
@@ -948,8 +948,8 @@ adb pull /sdcard/bug.mp4`,
             title: 'dumpsys, one service at a time',
             body: `<p><code>dumpsys</code> prints the state of a system service. <code>adb shell dumpsys -l</code> lists the services. The two most useful for app work are <code>meminfo &lt;package&gt;</code> (look at <b>Pss Total</b> and <b>Private Dirty</b>) and <code>gfxinfo &lt;package&gt;</code> for frame timing. Add <code>-h</code> after a service name to see its options.</p>`,
             code: `adb shell dumpsys -l
-adb shell dumpsys meminfo -d com.mynet.haber
-adb shell dumpsys gfxinfo com.mynet.haber framestats`,
+adb shell dumpsys meminfo -d com.example.news
+adb shell dumpsys gfxinfo com.example.news framestats`,
           },
           {
             title: 'Logs from the command line',
@@ -963,8 +963,8 @@ adb shell dumpsys gfxinfo com.mynet.haber framestats`,
         mistakes: [
           {
             title: 'Testing restoration with force-stop',
-            bad: 'adb shell am force-stop com.mynet.haber\n# reopen -> starts at the launcher screen, "works fine"',
-            good: '# press Home\nadb shell am kill com.mynet.haber\n# reopen from Recents -> must restore the screen and draft',
+            bad: 'adb shell am force-stop com.example.news\n# reopen -> starts at the launcher screen, "works fine"',
+            good: '# press Home\nadb shell am kill com.example.news\n# reopen from Recents -> must restore the screen and draft',
             why: 'force-stop also clears the task, so nothing is restored and you never test your saved state. am kill on a backgrounded app matches what the system does under memory pressure.',
           },
         ],
@@ -975,8 +975,8 @@ adb shell dumpsys gfxinfo com.mynet.haber framestats`,
           { term: 'Process death', def: 'The system killing a background app process to free memory, then recreating the app when the user returns.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Open article 42 through its deep link.', code: 'adb shell am start -a android.intent.action.[[VIEW]] -d "https://haber.example.com/haber/42"', why: 'A VIEW intent with a data URI is what a browser or notification sends. Your intent filter decides which activity handles it.' },
-          { type: 'bug', prompt: 'This process death test never kills the process. Tap the wrong step.', code: '# 1. open article 42 and type a draft\n# 2. keep the app on screen\n# 3. adb shell am kill com.mynet.haber\n# 4. reopen from Recents', bug: 1, fix: '# 2. press Home so the app goes to the background', why: '<code>am kill</code> only kills processes that are safe to kill. A foreground app is not one of them.' },
+          { type: 'blank', prompt: 'Open article 42 through its deep link.', code: 'adb shell am start -a android.intent.action.[[VIEW]] -d "https://news.example.com/article/42"', why: 'A VIEW intent with a data URI is what a browser or notification sends. Your intent filter decides which activity handles it.' },
+          { type: 'bug', prompt: 'This process death test never kills the process. Tap the wrong step.', code: '# 1. open article 42 and type a draft\n# 2. keep the app on screen\n# 3. adb shell am kill com.example.news\n# 4. reopen from Recents', bug: 1, fix: '# 2. press Home so the app goes to the background', why: '<code>am kill</code> only kills processes that are safe to kill. A foreground app is not one of them.' },
         ],
         quiz: [
           { q: 'Which command deletes all data of an app without uninstalling it?', options: ['adb uninstall -k', 'adb shell pm clear <package>', 'adb shell am kill <package>'], a: 1, why: '<code>pm clear</code> deletes all data associated with the package.' },
@@ -1001,7 +1001,7 @@ adb shell dumpsys gfxinfo com.mynet.haber framestats`,
             ['if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {', 'ObsoleteSdkInt'],
             ['    window.insetsController?.hide(statusBars())', 'NewApi'],
             ['}', null],
-            ['binding.count.text = "Okundu: " + read', 'SetTextI18n'],
+            ['binding.count.text = "Read: " + read', 'SetTextI18n'],
           ];
           const NEW_LINE = ['val label = String.format("%.1f MB", size)', 'DefaultLocale'];
           const ISSUES = {

@@ -2395,8 +2395,8 @@ int n = 2 + 3 * k;     // imul, iadd: no method calls`,
 }
 
 // Java, thanks to the annotations:
-// Toasts.make("Kaydedildi");          short overload, static call
-// Toasts.make("Kaydedildi", 3500);
+// Toasts.make("Saved");          short overload, static call
+// Toasts.make("Saved", 3500);
 
 // Kotlin calling Java: a lambda for View.OnClickListener
 button.setOnClickListener { save() }`,

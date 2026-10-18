@@ -1421,14 +1421,14 @@ fun main() = application {
           { q: 'Where does a shared <code>strings.xml</code> go?', options: ['<code>androidMain/res/values</code>', '<code>commonMain/composeResources/values</code>', 'In the Xcode project'], a: 1, why: 'Files under <code>composeResources</code> are packaged for every target and exposed through <code>Res</code>.' },
           { q: 'How does an iOS app show a shared composable?', options: ['It wraps it with <code>ComposeUIViewController</code> and shows the UIViewController', 'It converts it to SwiftUI views at build time', 'It runs Android inside the iOS app'], a: 0, why: 'Compose draws into a UIViewController. SwiftUI hosts it with <code>UIViewControllerRepresentable</code>.' },
           { q: 'On iOS, what draws a Compose Multiplatform <code>Button</code>?', options: ['A UIKit <code>UIButton</code>', 'Compose itself, rendering with Skia', 'WebKit'], a: 1, why: 'Compose renders its own pixels with Skia. Use <code>UIKitView</code> when you need a real native view.' },
-          { q: 'The phone is set to Turkish. <code>values-tr/strings.xml</code> has no entry for <code>share</code>, but <code>values/strings.xml</code> does. What does <code>stringResource(Res.string.share)</code> show?', options: ['The text from values/strings.xml', 'The key name "share"', 'It throws because the Turkish string is missing'], a: 0, why: 'Compose picks the closest match and falls back to the folder without a qualifier when the qualified one has no entry.' },
+          { q: 'The phone is set to Spanish. <code>values-es/strings.xml</code> has no entry for <code>share</code>, but <code>values/strings.xml</code> does. What does <code>stringResource(Res.string.share)</code> show?', options: ['The text from values/strings.xml', 'The key name "share"', 'It throws because the Spanish string is missing'], a: 0, why: 'Compose picks the closest match and falls back to the folder without a qualifier when the qualified one has no entry.' },
           { q: 'A shared ViewModel needs to show "Could not load". What fits best?', options: ['Call <code>stringResource(Res.string.load_failed)</code> in the ViewModel', 'Hard-code the English text in the ViewModel', 'Keep the <code>StringResource</code> in state and resolve it in the UI with stringResource'], a: 2, why: 'stringResource is a composable, so a ViewModel cannot call it. Resolving in the UI also updates the text when the language changes.' },
         ],
         deeper: [
           {
             title: 'Qualifiers pick the right resource',
             body: `
-<p>Resources can have variants. Put Turkish strings in <code>composeResources/values-tr/strings.xml</code> and a dark logo in <code>drawable-dark</code>. At runtime Compose picks the closest match for the device language and theme, and falls back to the folder without a qualifier when nothing matches. Your code keeps calling <code>Res.string.greeting</code>.</p>
+<p>Resources can have variants. Put Spanish strings in <code>composeResources/values-es/strings.xml</code> and a dark logo in <code>drawable-dark</code>. At runtime Compose picks the closest match for the device language and theme, and falls back to the folder without a qualifier when nothing matches. Your code keeps calling <code>Res.string.greeting</code>.</p>
 <p>Strings can take arguments and plurals. <code>stringResource(Res.string.greeting, name)</code> fills <code>%1$s</code>, and <code>pluralStringResource</code> picks the right form for the count, using the plural rules of the language.</p>`,
             code: `// composeResources/values/strings.xml
 // <string name="greeting">Hello, %1$s!</string>
@@ -1437,11 +1437,11 @@ fun main() = application {
 //     <item quantity="other">%1$d new articles</item>
 // </plurals>
 
-// composeResources/values-tr/strings.xml
-// <string name="greeting">Merhaba, %1$s!</string>
+// composeResources/values-es/strings.xml
+// <string name="greeting">¡Hola, %1$s!</string>
 // <plurals name="new_articles">
-//     <item quantity="one">%1$d yeni makale</item>
-//     <item quantity="other">%1$d yeni makale</item>
+//     <item quantity="one">%1$d artículo nuevo</item>
+//     <item quantity="other">%1$d artículos nuevos</item>
 // </plurals>
 
 Text(stringResource(Res.string.greeting, user.name))
@@ -1450,9 +1450,9 @@ Image(painterResource(Res.drawable.logo), contentDescription = null)   // drawab
             visual(el) {
               const STR = {
                 en: ['Hello, Ada!', n => `${n} new article${n === 1 ? '' : 's'}`],
-                tr: ['Merhaba, Ada!', n => `${n} yeni makale`],
+                es: ['¡Hola, Ada!', n => n === 1 ? `${n} artículo nuevo` : `${n} artículos nuevos`],
               };
-              const LANGS = [['en', 'English'], ['tr', 'Türkçe'], ['de', 'Deutsch']];
+              const LANGS = [['en', 'English'], ['es', 'Español'], ['de', 'Deutsch']];
               const S = { lang: 'en', dark: false, n: 1 };
               const logo = h('div', { class: 'kmp-logo' });
               const hello = h('div', { class: 'kmp-hello' });
@@ -1624,7 +1624,7 @@ fun SaveButton(snackbar: SnackbarHostState, onSave: () -> Unit) {
           },
         ],
         visual(el) {
-          const GREET = ['Hello, KMP!', 'Merhaba!', 'Welcome back', 'Hi from common'];
+          const GREET = ['Hello, KMP!', 'Hi there!', 'Welcome back', 'Hi from common'];
           const COLORS = [['', 'accent'], ['kmp-c-warm', 'warm'], ['kmp-c-ok', 'ok'], ['kmp-c-err', 'err']];
           let g = 0, c = 0, busy = false;
           const lines = {};

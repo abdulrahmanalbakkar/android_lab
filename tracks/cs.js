@@ -1,5 +1,5 @@
-/* CS and interview basics track. Same shape as tracks/kotlin.js.
-   Data structures and algorithms for job interviews, all in Kotlin.
+/* Data structures and algorithms track. Same shape as tracks/kotlin.js.
+   Big-O, core data structures and classic algorithm patterns, all in Kotlin.
    Most demos are step players: a lesson builds a list of frames (snapshots of the algorithm),
    and player() gives Step / Run / Reset over them. Every class is prefixed dsa- (cs- is taken by tracks/cap-ship.js). */
 (() => {
@@ -183,7 +183,7 @@
 .dsa-svg .dsa-gt { font-size: 13px; font-weight: 700; }
 .dsa-svg .dsa-gl { font-size: 11px; font-weight: 600; fill: var(--muted); }
 
-/* interview card */
+/* problem-solving card */
 .dsa-card { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--accent); background: var(--surface); min-width: 0; }
 .dsa-card h4 { margin: 0; font: 700 1rem var(--display); color: var(--ink); }
 .dsa-card p, .dsa-card ul { margin: 0; color: var(--ink); }
@@ -365,10 +365,10 @@ println("slow: $slow, fast: $fast")`,
     code: `val scores = IntArray(5)                 // fixed size, primitive ints, no boxing
 scores[2] = 90                           // O(1)
 
-val names = mutableListOf("Ada", "Ali")  // an ArrayList under the hood
-names += "Ece"                           // O(1) amortized: append
+val names = mutableListOf("Ada", "Omar") // an ArrayList under the hood
+names += "Lena"                          // O(1) amortized: append
 names[0]                                 // O(1): index into the array
-names.add(0, "Zeynep")                   // O(n): shifts every element right
+names.add(0, "Maya")                     // O(n): shifts every element right
 names.removeAt(0)                        // O(n): shifts every element left
 
 // Know the size up front? Allocate once.
@@ -517,11 +517,11 @@ for (word in words) {
     if (!seen.add(word)) println("repeat: $word")   // add() returns false if it was there
 }
 
-// Counting things: the most common interview pattern
+// Counting things: the most common pattern
 val counts: Map<String, Int> = words.groupingBy { it }.eachCount()`,
     remember: 'equals and hashCode go together. Equal objects must have equal hash codes, or the map looks in the wrong bucket.',
     visual(el) {
-      const KEYS = ['elma', 'armut', 'kiraz', 'muz', 'nar', 'incir', 'ayva', 'erik', 'üzüm', 'limon'];
+      const KEYS = ['apple', 'pear', 'cherry', 'banana', 'fig', 'kiwi', 'quince', 'plum', 'grape', 'lemon'];
       const box = h('div', {});
       const st = stats(['size', 'buckets', 'resize after']);
       player(el, {
@@ -545,8 +545,8 @@ val counts: Map<String, Int> = words.groupingBy { it }.eachCount()`,
               fr.push(snap({ resized: true, msg: `size ${size} &gt; ${thr} (8 × 0.75). <span class="bad">Resize:</span> ${cap} buckets, and every key moves to its new bucket. O(n) once, then lookups stay short.` }));
             }
           }
-          const k = 'nar', x = javaHash(k), i = bucketOf(x, cap);
-          fr.push(snap({ hot: i, key: k, find: true, msg: `${code('map["nar"]')}: hash → bucket ${i}, compare ${b[i].length} key${b[i].length > 1 ? 's' : ''} with equals(). The other ${cap - 1} buckets are never touched.` }));
+          const k = 'fig', x = javaHash(k), i = bucketOf(x, cap);
+          fr.push(snap({ hot: i, key: k, find: true, msg: `${code('map["fig"]')}: hash → bucket ${i}, compare ${b[i].length} key${b[i].length > 1 ? 's' : ''} with equals(). The other ${cap - 1} buckets are never touched.` }));
           return fr;
         },
         paint(f) {
@@ -642,7 +642,7 @@ fun indexFor(key: Any?, tableSize: Int): Int {
     ],
     challenges: [
       { type: 'blank', prompt: 'Count every word in one line, then detect a repeat with a set in O(1).', code: 'val counts = words.[[groupingBy]] { it }.[[eachCount]]()\nval seen = HashSet<String>()\nif (!seen.[[add]](word)) println("repeat")', why: '<code>groupingBy { it }.eachCount()</code> builds a <code>Map&lt;String, Int&gt;</code>. <code>add</code> returns <code>false</code> when the element was already in the set.' },
-      { type: 'bug', prompt: 'Two <code>Money(100, "TRY")</code> objects are equal, but the set keeps both. Tap the line to change.', code: 'class Money(val amount: Long, val currency: String) {\n    override fun equals(other: Any?) =\n        other is Money && amount == other.amount && currency == other.currency\n}\nval set = hashSetOf(Money(100, "TRY"), Money(100, "TRY"))\nprintln(set.size)   // 2', bug: 0, fix: 'data class Money(val amount: Long, val currency: String) {', why: '<code>equals</code> is overridden but <code>hashCode</code> is not, so the two objects get different identity hashes. A <code>data class</code> generates a matching <code>hashCode</code> (or you write one by hand).' },
+      { type: 'bug', prompt: 'Two <code>Money(100, "USD")</code> objects are equal, but the set keeps both. Tap the line to change.', code: 'class Money(val amount: Long, val currency: String) {\n    override fun equals(other: Any?) =\n        other is Money && amount == other.amount && currency == other.currency\n}\nval set = hashSetOf(Money(100, "USD"), Money(100, "USD"))\nprintln(set.size)   // 2', bug: 0, fix: 'data class Money(val amount: Long, val currency: String) {', why: '<code>equals</code> is overridden but <code>hashCode</code> is not, so the two objects get different identity hashes. A <code>data class</code> generates a matching <code>hashCode</code> (or you write one by hand).' },
     ],
     quiz: [
       { q: 'Two keys land in the same bucket. What does HashMap use to tell them apart?', options: ['hashCode()', 'equals()', 'toString()'], a: 1, why: 'The hash code only picks the bucket. Inside it, keys are compared with <code>equals()</code>.' },
@@ -808,7 +808,7 @@ jobs.removeFirst()   // "upload"`,
       },
       {
         title: 'Monotonic stack: the next warmer day',
-        body: `<p>A popular interview pattern keeps a stack whose values only go one way, here decreasing from bottom to top. For each day, pop every colder day still waiting on the stack: today is their answer. Every index is pushed once and popped at most once, so the whole thing is O(n) even with a loop inside a loop.</p>`,
+        body: `<p>A classic pattern keeps a stack whose values only go one way, here decreasing from bottom to top. For each day, pop every colder day still waiting on the stack: today is their answer. Every index is pushed once and popped at most once, so the whole thing is O(n) even with a loop inside a loop.</p>`,
         code: `// For each day, how many days until a warmer one? 0 if never.
 fun daysUntilWarmer(temps: IntArray): IntArray {
     val answer = IntArray(temps.size)
@@ -1142,7 +1142,7 @@ fun lowerBound(a: IntArray, target: Int): Int {
       },
       {
         title: 'Search the answer, not the array',
-        body: `<p>Binary search works on any yes/no question that flips once. “Can a truck with capacity <em>c</em> ship all parcels in 5 days?” is no for small <em>c</em> and yes from some point on. Binary search over <em>c</em> finds that point in O(log(range)) checks, each check O(n). Interviewers love this twist.</p>`,
+        body: `<p>Binary search works on any yes/no question that flips once. “Can a truck with capacity <em>c</em> ship all parcels in 5 days?” is no for small <em>c</em> and yes from some point on. Binary search over <em>c</em> finds that point in O(log(range)) checks, each check O(n). It is a very useful twist.</p>`,
         code: `// Smallest daily capacity that ships every parcel, in order, within \`days\` days.
 fun minCapacity(weights: IntArray, days: Int): Int {
     var lo = weights.max()        // must fit the heaviest parcel
@@ -1198,7 +1198,7 @@ fun daysNeeded(weights: IntArray, cap: Int): Int {
     body: `
 <p>You will rarely write a sort at work. <code>sorted()</code>, <code>sortedBy { }</code> and <code>sortedWith(comparator)</code> return a new sorted list; <code>sort()</code> and <code>sortBy { }</code> sort a mutable list in place. They are O(n log n). The Kotlin API docs promise that sorting objects is <em>stable</em>: items that compare equal keep their original order.</p>
 <p>On the JVM and Android, these calls end up in Java’s object sort, which is TimSort: a merge sort that also spots stretches that are already in order, so nearly sorted data sorts fast. <code>IntArray.sort()</code> uses a quicksort variant instead; stability does not matter there, because two equal ints are identical.</p>
-<p>Interviews still ask how sorts work. Merge sort splits the list, sorts the halves and merges them by comparing their fronts. Step through the merges below.</p>`,
+<p>It still pays to know how sorts work. Merge sort splits the list, sorts the halves and merges them by comparing their fronts. Step through the merges below.</p>`,
     code: `import java.text.Collator
 import java.util.Locale
 
@@ -1207,9 +1207,9 @@ data class Song(val title: String, val artist: String, val plays: Int)
 val byPlays = songs.sortedByDescending { it.plays }
 val byArtistThenTitle = songs.sortedWith(compareBy<Song>({ it.artist }, { it.title }))
 
-// Turkish alphabetical order: Ç after C, Ş after S
-val turkish = Collator.getInstance(Locale.forLanguageTag("tr"))
-val byTitleTr = songs.sortedWith(compareBy(turkish) { it.title })
+// Alphabetical order for the user's language: accented letters sort next to their base letter
+val collator = Collator.getInstance(Locale.getDefault())
+val byTitleLocal = songs.sortedWith(compareBy(collator) { it.title })
 
 val scores = intArrayOf(40, 7, 19)
 scores.sort()                       // in place, primitive sort
@@ -1262,10 +1262,10 @@ val top3 = songs.sortedByDescending { it.plays }.take(3)`,
     deeper: [
       {
         title: 'Stable means ties keep their order',
-        body: `<p>Sort five people by score. Ece and Su both have 1; Ali and Can both have 3. A stable sort promises Ece stays before Su and Ali before Can, as in the input. This lets you sort by one key after another: sort by name, then stably by score, and people with equal scores stay in name order.</p>
+        body: `<p>Sort five people by score. Lena and Maya both have 1; Omar and Ken both have 3. A stable sort promises Lena stays before Maya and Omar before Ken, as in the input. This lets you sort by one key after another: sort by name, then stably by score, and people with equal scores stay in name order.</p>
 <p>The demo uses insertion sort, which is also stable: it only moves an item past others that are <em>strictly</em> bigger.</p>`,
         visual(el) {
-          const P = [['Ali', 3], ['Ece', 1], ['Can', 3], ['Su', 1], ['Naz', 2]];
+          const P = [['Omar', 3], ['Lena', 1], ['Ken', 3], ['Maya', 1], ['Sam', 2]];
           const row = h('div', {});
           player(el, {
             view: [label('people.sortedBy { it.score }'), row], speed: 700,
@@ -1278,7 +1278,7 @@ val top3 = songs.sortedByDescending { it.plays }.take(3)`,
                 while (j >= 0 && a[j][1] > key[1]) { a[j + 1] = a[j]; a[j] = key; fr.push({ a: a.map(x => [...x]), cur: j, msg: `${a[j + 1][0]} (${a[j + 1][1]}) &gt; ${key[1]}: swap.` }); j--; }
                 if (j >= 0) fr.push({ a: a.map(x => [...x]), cur: j + 1, stop: j, msg: `${a[j][0]} has ${a[j][1]}, not bigger than ${key[1]}: stop.${a[j][1] === key[1] ? ' Equal scores never swap, so the earlier person stays first.' : ''}` });
               }
-              fr.push({ a: a.map(x => [...x]), end: true, msg: 'Result: Ece, Su, Naz, Ali, Can. Ece is still before Su, and Ali before Can: stable.' });
+              fr.push({ a: a.map(x => [...x]), end: true, msg: 'Result: Lena, Maya, Sam, Omar, Ken. Lena is still before Maya, and Omar before Ken: stable.' });
               return fr;
             },
             paint(f) {
@@ -1286,9 +1286,9 @@ val top3 = songs.sortedByDescending { it.plays }.take(3)`,
             },
           });
         },
-        code: `val people = listOf("Ali" to 3, "Ece" to 1, "Can" to 3, "Su" to 1, "Naz" to 2)
+        code: `val people = listOf("Omar" to 3, "Lena" to 1, "Ken" to 3, "Maya" to 1, "Sam" to 2)
 people.sortedBy { it.second }
-// [(Ece, 1), (Su, 1), (Naz, 2), (Ali, 3), (Can, 3)]`,
+// [(Lena, 1), (Maya, 1), (Sam, 2), (Omar, 3), (Ken, 3)]`,
       },
       {
         title: 'Comparators that read well',
@@ -1381,7 +1381,7 @@ fun <T : Comparable<T>> Iterable<T>.sorted(): List<T> {
       { q: 'What does “stable” mean for <code>sortedBy</code>?', options: ['It never throws', 'Items with equal keys keep their original order', 'It runs in O(n)'], a: 1, why: 'Stability is about ties: equal items do not swap places.' },
       { q: 'Which sort is O(n log n) in the worst case and stable?', options: ['Quick sort', 'Merge sort', 'Selection sort'], a: 1, why: 'Merge sort always splits in half and merges with ties going left. Quick sort can hit O(n²) and is not stable.' },
       { q: 'You only need the biggest number in a list. Best call?', options: ['sortedDescending().first()', 'maxOrNull()', 'sorted().last()'], a: 1, why: 'One pass, O(n), and no new list.' },
-      { q: '<code>listOf("Can" to 2, "Ali" to 1, "Ece" to 2).sortedBy { it.second }</code>. What is the order of names?', options: ['Ali, Can, Ece', 'Ali, Ece, Can', 'Can, Ece, Ali'], a: 0, why: 'sortedBy is stable. Can and Ece both have 2, so they keep their input order: Can before Ece.' },
+      { q: '<code>listOf("Ken" to 2, "Omar" to 1, "Lena" to 2).sortedBy { it.second }</code>. What is the order of names?', options: ['Omar, Ken, Lena', 'Omar, Lena, Ken', 'Ken, Lena, Omar'], a: 0, why: 'sortedBy is stable. Ken and Lena both have 2, so they keep their input order: Ken before Lena.' },
       { q: 'The quick sort from the lesson always picks the last item as the pivot. You give it an array that is already sorted. What happens?', options: ['It finishes in O(n), since nothing moves', 'It stays O(n log n)', 'It degrades to O(n²), because every partition splits off only one item'], a: 2, why: 'The pivot is the biggest item every time, so each partition leaves one side empty. That is n levels of O(n) work.' },
     ],
   });
@@ -1579,8 +1579,8 @@ fun countViews(view: View): Int =
 
   // 9 ─────────────────────────────────────────────
   const CITY = [
-    { id: 'ist', label: 'İstanbul', x: 60, y: 26 }, { id: 'bur', label: 'Bursa', x: 62, y: 104 }, { id: 'izm', label: 'İzmir', x: 34, y: 186 },
-    { id: 'esk', label: 'Eskişehir', x: 160, y: 96 }, { id: 'ank', label: 'Ankara', x: 282, y: 40 }, { id: 'kon', label: 'Konya', x: 258, y: 150 }, { id: 'ant', label: 'Antalya', x: 150, y: 196 },
+    { id: 'ist', label: 'City A', x: 60, y: 26 }, { id: 'bur', label: 'City B', x: 62, y: 104 }, { id: 'izm', label: 'City C', x: 34, y: 186 },
+    { id: 'esk', label: 'City D', x: 160, y: 96 }, { id: 'ank', label: 'City E', x: 282, y: 40 }, { id: 'kon', label: 'City F', x: 258, y: 150 }, { id: 'ant', label: 'City G', x: 150, y: 196 },
   ];
   const ROADS = [['ist', 'bur'], ['ist', 'ank'], ['bur', 'izm'], ['bur', 'esk'], ['esk', 'ank'], ['esk', 'kon'], ['ank', 'kon'], ['izm', 'ant'], ['kon', 'ant']];
   const NAME = Object.fromEntries(CITY.map(c => [c.id, c.label]));
@@ -1593,7 +1593,7 @@ fun countViews(view: View): Int =
     body: `
 <p>A graph is a set of nodes connected by edges: cities and roads, users and follows, Gradle modules and their dependencies. Unlike a tree, a graph can have cycles and many paths between two nodes, so you must remember which nodes you have already seen.</p>
 <p>The usual way to store one is an <em>adjacency list</em>: a map from each node to its neighbours. It takes O(V + E) memory, where V is the number of nodes and E the number of edges, and BFS or DFS over it is O(V + E) time.</p>
-<p>When every edge costs the same, BFS finds the shortest path: it reaches every node at distance 1 before any node at distance 2. Record each node’s <code>parent</code> when you first see it, then follow the parents back from the goal. Step through BFS from İstanbul to Antalya on a made-up road map.</p>`,
+<p>When every edge costs the same, BFS finds the shortest path: it reaches every node at distance 1 before any node at distance 2. Record each node’s <code>parent</code> when you first see it, then follow the parents back from the goal. Step through BFS from City A to City G on a made-up road map.</p>`,
     code: `typealias Graph = Map<String, List<String>>
 
 fun graphOf(vararg roads: Pair<String, String>): Graph {
@@ -1622,21 +1622,21 @@ fun shortestPath(g: Graph, from: String, to: String): List<String>? {
 }`,
     remember: 'Graphs have cycles, so keep a visited set. BFS gives shortest paths when every edge costs the same.',
     visual(el) {
-      const g = graphSvg(CITY.map(c => ({ ...c, text: '' })), ROADS, { w: 320, ht: 215, r: 15, name: 'Road map of seven Turkish cities' });
+      const g = graphSvg(CITY.map(c => ({ ...c, text: '' })), ROADS, { w: 320, ht: 215, r: 15, name: 'Road map of seven cities' });
       const adj = {};
       for (const [a, b] of ROADS) { (adj[a] = adj[a] || []).push(b); (adj[b] = adj[b] || []).push(a); }
       const queue = h('div', { class: 'dsa-queue' });
       player(el, {
-        view: [g.root, label('queue (front → back)'), queue, h('span', { class: 'dsa-stat' }, 'Numbers in the circles: distance from İstanbul.')], speed: 700,
+        view: [g.root, label('queue (front → back)'), queue, h('span', { class: 'dsa-stat' }, 'Numbers in the circles: distance from City A.')], speed: 700,
         build() {
           const dist = { ist: 0 }, par = {}, q = ['ist'];
           const snap = o => ({ dist: { ...dist }, par: { ...par }, q: [...q], ...o });
-          const fr = [snap({ msg: 'Start: İstanbul has distance 0 and is the only node in the queue.' })];
+          const fr = [snap({ msg: 'Start: City A has distance 0 and is the only node in the queue.' })];
           while (q.length) {
             const n = q.shift();
             if (n === 'ant') {
               const path = []; let k = n; while (k) { path.push(k); k = par[k]; }
-              fr.push(snap({ cur: n, path, msg: `Antalya comes out of the queue at distance ${dist[n]}. Follow parents back: <b>${path.reverse().map(x => NAME[x]).join(' → ')}</b>.` }));
+              fr.push(snap({ cur: n, path, msg: `City G comes out of the queue at distance ${dist[n]}. Follow parents back: <b>${path.reverse().map(x => NAME[x]).join(' → ')}</b>.` }));
               return fr;
             }
             fr.push(snap({ cur: n, msg: `removeFirst() → ${NAME[n]} (distance ${dist[n]}). Check its neighbours: ${adj[n].map(x => NAME[x]).join(', ')}.` }));
@@ -1901,7 +1901,7 @@ fun ways(n: Int, memo: MutableMap<Int, Long> = HashMap()): Long {
       },
       {
         title: 'Keep only what you need',
-        body: `<p>A tabulated DP often only reads the last row or the last few cells. Climbing stairs only needs the previous two values, so two variables replace the whole array: O(n) time, O(1) space. Interviewers often ask for this follow-up.</p>`,
+        body: `<p>A tabulated DP often only reads the last row or the last few cells. Climbing stairs only needs the previous two values, so two variables replace the whole array: O(n) time, O(1) space. It is a common next step.</p>`,
         code: `fun ways(n: Int): Long {
     var prev = 1L   // ways(i - 2)
     var cur = 1L    // ways(i - 1)
@@ -1953,12 +1953,12 @@ fun gridPaths(rows: Int, cols: Int): Long {
   // 11 ────────────────────────────────────────────
   lessons.push({
     id: 'interview',
-    title: 'Approaching a coding interview',
+    title: 'Solving a problem step by step',
     tagline: 'Clarify, try examples, start simple, improve, then test out loud.',
     level: 'beginner',
     body: `
-<p>Interviewers grade how you think as much as the final code. A fixed routine keeps you from freezing, or from racing into the wrong solution. Five steps work for most problems.</p>
-<p><b>Clarify</b> the input and output: sizes, empty input, duplicates, character set. <b>Examples</b>: work one normal case by hand, plus an edge case. <b>Brute force</b>: say the simple solution and its Big-O, even if it is slow. <b>Optimize</b>: find the repeated work and remove it with a set, a map, two pointers, sorting or DP. <b>Test</b>: run your code on the examples line by line and fix bugs before the interviewer points them out.</p>
+<p>How you get to the code matters as much as the code. A fixed routine keeps you from getting stuck, or from racing into the wrong solution. Five steps work for most problems.</p>
+<p><b>Clarify</b> the input and output: sizes, empty input, duplicates, character set. <b>Examples</b>: work one normal case by hand, plus an edge case. <b>Brute force</b>: say the simple solution and its Big-O, even if it is slow. <b>Optimize</b>: find the repeated work and remove it with a set, a map, two pointers, sorting or DP. <b>Test</b>: run your code on the examples line by line and fix bugs before anyone else finds them.</p>
 <p>Step through the five phases on a real question: <em>return the first character that appears only once in a string</em>.</p>`,
     code: `// First character that appears exactly once, or null.
 // O(n) time, O(k) extra space for k distinct characters.
@@ -1971,7 +1971,7 @@ fun firstUnique(s: String): Char? {
 check(firstUnique("swiss") == 'w')
 check(firstUnique("aabb") == null)
 check(firstUnique("") == null)
-check(firstUnique("ğüğ") == 'ü')`,
+check(firstUnique("éèé") == 'è')`,
     remember: 'Clarify, examples, brute force, optimize, test. Say each step out loud before you code it.',
     visual(el) {
       const PH = ['Clarify', 'Examples', 'Brute force', 'Optimize', 'Test'];
@@ -1998,7 +1998,7 @@ check(firstUnique("ğüğ") == 'ü')`,
             fr.push({ p: 4, title: 'Trace "swiss": scan pass', cells: { at: k, counts: { ...counts }, scan: true, hit: one }, html: '', msg: one ? `counts['${S[k]}'] == 1. <span class="good">return '${S[k]}'</span>, matching the example.` : `counts['${S[k]}'] == ${counts[S[k]]}, keep going.` });
             if (one) break;
           }
-          fr.push({ p: 5, title: 'Wrap up', html: '<ul><li>Run "aabb" and "": both null.</li><li>State the final cost: O(n) time, O(k) space.</li><li>Mention a trade-off: for only a–z, an <code>IntArray(26)</code> is faster than a map.</li></ul>', msg: 'Done. The interviewer heard every decision.' });
+          fr.push({ p: 5, title: 'Wrap up', html: '<ul><li>Run "aabb" and "": both null.</li><li>State the final cost: O(n) time, O(k) space.</li><li>Mention a trade-off: for only a–z, an <code>IntArray(26)</code> is faster than a map.</li></ul>', msg: 'Done. Every decision was made on purpose.' });
           return fr;
         },
         paint(f) {
@@ -2041,7 +2041,7 @@ check(firstUnique("ğüğ") == 'ü')`,
       },
       {
         title: 'Test like a debugger',
-        body: `<p>After writing the code, don’t say “I think it works”. Walk through it with a small example, tracking each variable as the interviewer watches. Then try the edge cases you collected: empty input, one item, all items equal, the biggest size, negative numbers. Finding your own bug is a good sign in an interview; missing it is not.</p>`,
+        body: `<p>After writing the code, don’t say “I think it works”. Walk through it with a small example, tracking each variable as you go. Then try the edge cases you collected: empty input, one item, all items equal, the biggest size, negative numbers. Finding your own bug now is much cheaper than finding it later.</p>`,
         code: `// Say the trace out loud for "aab":
 // counts = {a=2, b=1}
 // scan: 'a' -> 2, skip; 'a' -> 2, skip; 'b' -> 1, return 'b'
@@ -2051,7 +2051,7 @@ check(firstUnique("zzzz") == null)        // all the same`,
       },
     ],
     mistakes: [
-      { title: 'Coding before clarifying', bad: '// Heard "first unique character" and started typing\nfun firstUnique(s: String): Char =\n    s.first { c -> s.count { it == c } == 1 }   // throws on "aabb"', good: '// Asked: what if nothing is unique? -> return null\nfun firstUnique(s: String): Char? =\n    s.firstOrNull { c -> s.count { it == c } == 1 }', why: 'One question about the no-answer case changes the return type and avoids a crash. It also shows the interviewer you think about edge cases.' },
+      { title: 'Coding before clarifying', bad: '// Heard "first unique character" and started typing\nfun firstUnique(s: String): Char =\n    s.first { c -> s.count { it == c } == 1 }   // throws on "aabb"', good: '// Asked: what if nothing is unique? -> return null\nfun firstUnique(s: String): Char? =\n    s.firstOrNull { c -> s.count { it == c } == 1 }', why: 'One question about the no-answer case changes the return type and avoids a crash. It also gets you used to thinking about edge cases.' },
       { title: 'Forgetting the small edge cases', bad: 'fun maxGap(a: IntArray): Int =\n    (1 until a.size).maxOf { a[it] - a[it - 1] }   // throws for size < 2', good: 'fun maxGap(a: IntArray): Int? =\n    (1 until a.size).maxOfOrNull { a[it] - a[it - 1] }', why: '<code>maxOf</code> throws <code>NoSuchElementException</code> on an empty range. Empty and one-item inputs are the first tests to try.' },
     ],
     terms: [
@@ -2065,7 +2065,7 @@ check(firstUnique("zzzz") == null)        // all the same`,
     ],
     quiz: [
       { q: 'What should you do first when you get a problem?', options: ['Write the optimal code', 'Clarify the inputs, outputs and edge cases', 'Pick the fastest language'], a: 1, why: 'Questions about size, empty input and the no-answer case shape everything after.' },
-      { q: 'Why say the brute force solution out loud?', options: ['It gives a correct baseline and a Big-O to improve on', 'Interviewers want slow code', 'It is always the final answer'], a: 0, why: 'A working baseline shows you can solve it, and its cost points at the repeated work to remove.' },
+      { q: 'Why say the brute force solution out loud?', options: ['It gives a correct baseline and a Big-O to improve on', 'Slow code is the goal', 'It is always the final answer'], a: 0, why: 'A working baseline shows you can solve it, and its cost points at the repeated work to remove.' },
       { q: 'The input is sorted and you need a pair with a given sum. Which tool fits?', options: ['Two pointers', 'Dynamic programming', 'A stack'], a: 0, why: 'Sorted input lets you move one pointer or the other based on the sum, in O(n).' },
       { q: 'Which order is the five-step routine?', options: ['Brute force, clarify, optimize, examples, test', 'Clarify, examples, brute force, optimize, test', 'Examples, optimize, clarify, test, brute force'], a: 1, why: 'Clarifying first can change the problem, examples check your understanding, and the brute force gives a baseline to improve before you test.' },
       { q: '<code>fun maxGap(a: IntArray) = (1 until a.size).maxOf { a[it] - a[it - 1] }</code>. What does <code>maxGap(intArrayOf(5))</code> do?', options: ['Returns 0', 'Returns 5', 'Throws NoSuchElementException'], a: 2, why: 'With one item the range 1 until 1 is empty, and maxOf throws on an empty range. One-item and empty inputs are the first tests to try.' },
@@ -2074,8 +2074,8 @@ check(firstUnique("zzzz") == null)        // all the same`,
 
   Lab.addTrack({
     id: 'cs',
-    title: 'CS and interview basics',
-    description: 'Big-O, the core data structures and the classic algorithm patterns, in Kotlin, to get ready for coding interviews.',
+    title: 'Data structures and algorithms',
+    description: 'Big-O, the core data structures and the classic algorithm patterns, in Kotlin, to write faster code and solve problems with confidence.',
     requires: ['kotlin'],
     css,
     lessons,

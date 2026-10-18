@@ -1681,7 +1681,7 @@ suspend fun signIn(activity: Activity) {
         terms: [
           { term: 'Credential Manager', def: 'The Jetpack API (androidx.credentials) that gets and saves passkeys, passwords and federated sign-in credentials through one system UI.' },
           { term: 'Passkey', def: 'A WebAuthn key pair for one account on one domain. The private key stays with the credential provider and signs server challenges; the server stores only the public key.' },
-          { term: 'Relying party ID (rpId)', def: 'The domain a passkey belongs to, such as haber.example. The provider only offers the passkey to that domain and to apps the domain vouches for.' },
+          { term: 'Relying party ID (rpId)', def: 'The domain a passkey belongs to, such as news.example. The provider only offers the passkey to that domain and to apps the domain vouches for.' },
           { term: 'Digital Asset Links', def: 'An assetlinks.json file on your domain that lists your app’s package name and signing certificate fingerprint. Required for passkeys.' },
         ],
         challenges: [
@@ -1784,20 +1784,20 @@ implementation("androidx.credentials:credentials-play-services-auth:1.6.0")`,
           let user = null, busy = false, sheet = null;
           const o = h('div', { class: 'out', 'aria-live': 'polite' });
           const log = html => { line(o, html); trim(o, 7); };
-          const title = h('div', { class: 'sec-ph-title' }, 'Haber+');
+          const title = h('div', { class: 'sec-ph-title' }, 'News+');
           const sub = h('div', { class: 'sec-ph-sub' }, 'Not signed in');
           const phone = h('div', { class: 'phone sec-cm-phone' }, title, sub);
           const saved = h('div', { class: 'sec-cm-chips' });
           const server = h('div', { class: 'sec-cm-chips' });
           const paint = () => {
             saved.replaceChildren(
-              h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey · ayse' : 'no passkey'),
-              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password · ayse'),
-              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'Google · ayse.yilmaz'));
+              h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey · alice' : 'no passkey'),
+              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password · alice'),
+              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'Google · alice.dev'));
             server.replaceChildren(
               h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password hash'),
               h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey public key' : 'no public key'));
-            sub.textContent = user ? `Hoş geldin, Ayşe (${user})` : 'Not signed in';
+            sub.textContent = user ? `Welcome, Alice (${user})` : 'Not signed in';
           };
           const close = () => { if (sheet) { sheet.remove(); sheet = null; } busy = false; };
           const wait = async ms => { await sleep(ms); return el.isConnected; };
@@ -1815,7 +1815,7 @@ implementation("androidx.credentials:credentials-play-services-auth:1.6.0")`,
               if (!await wait(450)) return;
               log('<span class="good">server: signature checks out with the stored public key</span>');
             } else if (kind === 'password') {
-              log('PasswordCredential(id = "ayse@ornek.com", password = ••••••)');
+              log('PasswordCredential(id = "alice@example.com", password = ••••••)');
               if (!await wait(450)) return;
               log('<span class="good">server: password hash matches</span> <span class="muted">// a password can still be phished</span>');
             } else {
@@ -1833,12 +1833,12 @@ implementation("androidx.credentials:credentials-play-services-auth:1.6.0")`,
             log(`getCredential(<span class="muted">${Object.keys(opt).filter(k => opt[k]).join(' + ') || 'no options'}</span>)${copycat ? ' <span class="muted">// from a copycat app</span>' : ''}`);
             if (!await wait(350)) return;
             const entries = [];
-            if (copycat && (opt.passkey || opt.password)) log('<span class="muted">assetlinks.json for haber.example does not list this app’s certificate</span>');
-            if (!copycat && opt.passkey && dev.passkey) entries.push(['Passkey · ayse@ornek.com', () => finish('passkey')]);
-            if (!copycat && opt.password && dev.password) entries.push(['Password · ayse@ornek.com', () => finish('password')]);
-            if (opt.google) entries.push(['Google · ayse.yilmaz@gmail.com', () => copycat ? copyGoogle() : finish('google')]);
+            if (copycat && (opt.passkey || opt.password)) log('<span class="muted">assetlinks.json for news.example does not list this app’s certificate</span>');
+            if (!copycat && opt.passkey && dev.passkey) entries.push(['Passkey · alice@example.com', () => finish('passkey')]);
+            if (!copycat && opt.password && dev.password) entries.push(['Password · alice@example.com', () => finish('password')]);
+            if (opt.google) entries.push(['Google · alice.dev@gmail.com', () => copycat ? copyGoogle() : finish('google')]);
             if (!entries.length) { log('<span class="bad">NoCredentialException</span> <span class="muted">// show the normal sign-in form</span>'); replay(phone, 'shake'); busy = false; return; }
-            openSheet('Sign in to Haber+', entries, () => log('<span class="bad">GetCredentialCancellationException</span> <span class="muted">// don’t reopen it</span>'));
+            openSheet('Sign in to News+', entries, () => log('<span class="bad">GetCredentialCancellationException</span> <span class="muted">// don’t reopen it</span>'));
           }
           async function copyGoogle() {
             log('CustomCredential → idToken sent to the copycat’s server');
@@ -1851,9 +1851,9 @@ implementation("androidx.credentials:credentials-play-services-auth:1.6.0")`,
             if (!user) { log('<span class="muted">Sign in first. A passkey is created for an account that already exists.</span>'); return; }
             if (dev.passkey) { log('<span class="muted">A passkey already exists for this account.</span>'); return; }
             busy = true; o.replaceChildren();
-            log('createCredential(CreatePublicKeyCredentialRequest(<span class="muted">challenge, rpId = haber.example</span>))');
+            log('createCredential(CreatePublicKeyCredentialRequest(<span class="muted">challenge, rpId = news.example</span>))');
             if (!await wait(350)) return;
-            openSheet('Create a passkey for ayse@ornek.com?', [['Create with screen lock', async () => {
+            openSheet('Create a passkey for alice@example.com?', [['Create with screen lock', async () => {
               log('screen lock: <span class="good">fingerprint ok</span> <span class="muted">// provider makes the key pair</span>');
               if (!await wait(450)) return;
               log('registrationResponseJson → server <span class="muted">// public key only</span>');

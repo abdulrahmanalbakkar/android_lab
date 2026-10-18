@@ -755,7 +755,7 @@ android {
 // Call a newer API only where it exists
 fun createChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {          // API 26
-        val channel = NotificationChannel("son-dakika", "Son dakika", NotificationManager.IMPORTANCE_HIGH)
+        val channel = NotificationChannel("breaking-news", "Breaking news", NotificationManager.IMPORTANCE_HIGH)
         context.getSystemService<NotificationManager>()?.createNotificationChannel(channel)
     }
 }
@@ -794,8 +794,8 @@ nm.createNotificationChannel(channel)
 
 // Fixed by the library: no check needed in your code
 NotificationManagerCompat.from(context).createNotificationChannel(
-    NotificationChannelCompat.Builder("son-dakika", NotificationManagerCompat.IMPORTANCE_HIGH)
-        .setName("Son dakika")
+    NotificationChannelCompat.Builder("breaking-news", NotificationManagerCompat.IMPORTANCE_HIGH)
+        .setName("Breaking news")
         .build()
 )  // does nothing below API 26, where channels do not exist`,
           },
@@ -1881,7 +1881,7 @@ manager.startInstall(request)
           { type: 'bug', prompt: 'The app ships a native library and must still install on 32-bit ARM phones. Tap the wrong line.', code: 'android {\n    defaultConfig {\n        minSdk = 24\n        ndk {\n            abiFilters += listOf("arm64-v8a")\n        }\n    }\n}', bug: 4, fix: '            abiFilters += listOf("arm64-v8a", "armeabi-v7a")', why: 'With only <code>arm64-v8a</code>, the bundle has no 32-bit native code and 32-bit phones can\u2019t install it. Include <code>armeabi-v7a</code>, or drop the filter and let ABI splits keep downloads small.' },
         ],
         quiz: [
-          { q: 'A Turkish-speaking user on an arm64 phone with an xxhdpi screen installs your app. What does Play send?', options: ['A universal APK with every ABI, density and language', 'The base APK plus arm64-v8a, xxhdpi and tr config splits', 'Only the base APK'], a: 1, why: 'Play picks the splits that match the device configuration and installs them together.' },
+          { q: 'A French-speaking user on an arm64 phone with an xxhdpi screen installs your app. What does Play send?', options: ['A universal APK with every ABI, density and language', 'The base APK plus arm64-v8a, xxhdpi and fr config splits', 'Only the base APK'], a: 1, why: 'Play picks the splits that match the device configuration and installs them together.' },
           { q: 'What is a dynamic feature module good for?', options: ['Code most users don\u2019t need at install, like a rarely used scanner', 'Making every screen load faster', 'Replacing Gradle modules'], a: 0, why: 'Delivering it on demand keeps the first download small. Users who never open it never download it.' },
           { q: 'Your app has an in-app language picker. Why might you turn off the language split?', options: ['Language splits are not allowed with pickers', 'The phone only gets its system languages, so other languages would be missing until downloaded', 'It makes the app smaller'], a: 1, why: 'With language splits on, only device languages install. Turn the split off, or request extra languages with SplitInstallManager.' },
           { q: 'You run bundletool build-apks, then <code>adb install</code> only the base APK on a recent Android phone. What usually happens?', options: ['The install is refused with <code>INSTALL_FAILED_MISSING_SPLIT</code>', 'It installs and works, because the base has everything', 'adb installs the missing splits automatically'], a: 0, why: 'The base declares that it needs its splits. Use <code>bundletool install-apks</code> so the matching splits go in together, or build a universal APK for testers.' },
@@ -1901,7 +1901,7 @@ $ bundletool build-apks --bundle=app-release.aab --output=universal.apks --mode=
             visual(el) {
               let modern = true, inst = null, busy = false;
               const files = h('div', { class: 'bd-files', 'aria-live': 'polite' }, h('div', { class: 'bd-file' }, h('span', {}, 'nothing installed'), h('span', {}, '')));
-              const o = out('Pick how to install on this arm64, xxhdpi, Turkish phone.');
+              const o = out('Pick how to install on this arm64, xxhdpi, French-language phone.');
               const verBtns = [['Android 15', true], ['Android 9', false]].map(([t, v]) => h('button', { class: 'bd-opt', 'aria-pressed': String(v === modern), onclick() {
                 if (busy) return;
                 modern = v; verBtns.forEach(b => b.setAttribute('aria-pressed', String(b.textContent === t))); clear();
@@ -1910,7 +1910,7 @@ $ bundletool build-apks --bundle=app-release.aab --output=universal.apks --mode=
               const clear = () => { inst = null; files.replaceChildren(h('div', { class: 'bd-file' }, h('span', {}, 'nothing installed'), h('span', {}, ''))); };
               const SETS = {
                 base: [['base-master.apk', '8.2 MB']],
-                apks: [['base-master.apk', '8.2 MB'], ['base-arm64_v8a.apk', '5.6 MB'], ['base-xxhdpi.apk', '1.3 MB'], ['base-tr.apk', '0.1 MB']],
+                apks: [['base-master.apk', '8.2 MB'], ['base-arm64_v8a.apk', '5.6 MB'], ['base-xxhdpi.apk', '1.3 MB'], ['base-fr.apk', '0.1 MB']],
                 uni: [['universal.apk', '31.4 MB']],
               };
               async function install(kind) {
@@ -2058,7 +2058,7 @@ scanner/dex/classes.dex
 $ adb shell pm path com.example.news
 package:/data/app/~~Xk2…/com.example.news-9fA…/base.apk
 package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.arm64_v8a.apk
-package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.tr.apk
+package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.fr.apk
 package:/data/app/~~Xk2…/com.example.news-9fA…/split_config.xxhdpi.apk`,
         },
         mistakes: [
@@ -2107,10 +2107,10 @@ val scanner = Class.forName("com.example.scanner.ScannerEntry")
         visual(el) {
           const ABI = { arm64_v8a: 5.6, x86_64: 6.0, armeabi_v7a: 4.1 };
           const DPI = { hdpi: 0.7, xxhdpi: 1.3 };
-          const LANGS = ['en', 'tr', 'de'];
+          const LANGS = ['en', 'fr', 'de'];
           const BASE = 8.2, LANG = 0.06, UNI = 31.4;
           let abi = 'arm64_v8a', dpi = 'xxhdpi', busy = false, scanner = false, total = 0;
-          const langs = new Set(['tr']);
+          const langs = new Set(['fr']);
           const files = h('div', { class: 'bd-files', 'aria-live': 'polite' });
           const fmt = n => n.toFixed(1) + ' MB';
           const meter = (cls = '') => { const fill = h('span'); return Object.assign(h('div', { class: 'bd-meter ' + cls }, fill), { fill }); };

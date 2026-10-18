@@ -2725,7 +2725,7 @@ class ScoreRepository @Inject constructor(
     json: Json,
     @ApplicationScope scope: CoroutineScope,
 ) {
-    val galatasarayFenerbahce: SharedFlow<ScoreEvent> = socket.messages("gs-fb")
+    val teamAvsTeamB: SharedFlow<ScoreEvent> = socket.messages("a-vs-b")
         .map { json.decodeFromString<ScoreEvent>(it) }
         .retryWithBackoff()
         .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
@@ -2776,14 +2776,14 @@ class ScoreRepository @Inject constructor(
           {
             title: 'A socket per collector',
             bad: `// Match screen and score banner each call:
-repository.score("gs-fb").collect { … }   // two sockets to one match`,
-            good: `val score = repository.score("gs-fb")
+repository.score("a-vs-b").collect { … }   // two sockets to one match`,
+            good: `val score = repository.score("a-vs-b")
     .shareIn(appScope, SharingStarted.WhileSubscribed(5_000), replay = 1)`,
             why: 'Every collector of a cold flow runs the producer again. Share one hot stream so each match has one connection, however many screens watch it.',
           },
         ],
         visual(el) {
-          const TEAMS = ['Galatasaray', 'Fenerbahçe'];
+          const TEAMS = ['Team A', 'Team B'];
           let collecting = false, open = false, leaked = 0, attempt = 0, epoch = 0, closeOn = true, busy = false;
           const goals = [0, 0];
           let minute = 12;
@@ -2812,7 +2812,7 @@ repository.score("gs-fb").collect { … }   // two sockets to one match`,
           }
           async function connect(my) {
             paint();
-            log(`<span class="muted">newWebSocket(wss://live.example.com/matches/gs-fb)</span>`);
+            log(`<span class="muted">newWebSocket(wss://live.example.com/matches/a-vs-b)</span>`);
             await packet('GET  Upgrade: websocket', '', true);
             if (!el.isConnected || my !== epoch || !collecting) return;
             await packet('101 Switching Protocols', 'okp', false);
@@ -2883,7 +2883,7 @@ repository.score("gs-fb").collect { … }   // two sockets to one match`,
             h('div', { class: 'controls' }, sw),
             h('div', { class: 'arc-wire-row' }, h('span', { class: 'arc-end' }, 'server'), wire, h('span', { class: 'arc-end' }, 'app')),
             h('div', { class: 'dt-ws-board' },
-              h('div', { class: 'dt-ws-score' }, h('div', { class: 'dt-ws-teams' }, h('span', {}, 'Galatasaray'), minuteEl, h('span', {}, 'Fenerbahçe')), big),
+              h('div', { class: 'dt-ws-score' }, h('div', { class: 'dt-ws-teams' }, h('span', {}, 'Team A'), minuteEl, h('span', {}, 'Team B')), big),
               h('div', { class: 'dt-side' }, status, count)),
             o);
         },

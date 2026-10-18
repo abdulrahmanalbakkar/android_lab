@@ -230,7 +230,7 @@ git tag v5.12.0 && git push origin v5.12.0  # mark what shipped, so you can main
 // so that I can read it on the metro without signal.
 //
 // Acceptance criteria, written as Given / When / Then:
-// AC1 Given I am online, when I tap Save, then the article appears under "Kaydedilenler".
+// AC1 Given I am online, when I tap Save, then the article appears under "Saved".
 // AC2 Given a saved article, when I go offline and open it, then the full text shows.
 // AC3 Given a saved article, when I tap Save again, then it is removed.
 
@@ -320,12 +320,12 @@ class SaveArticleTest {
       },
       {
         title: 'Make the retrospective change something',
-        body: `<p>A retro that ends with ten complaints and no owner changes nothing. Pick one or two actions, give each an owner, and check them at the start of the next retro. "Ask backend for the API contract before sprint planning, owner: Elif" beats "communicate better".</p>`,
+        body: `<p>A retro that ends with ten complaints and no owner changes nothing. Pick one or two actions, give each an owner, and check them at the start of the next retro. "Ask backend for the API contract before sprint planning, owner: Maya" beats "communicate better".</p>`,
       },
     ],
     mistakes: [
       { title: 'A story that is a task', bad: 'Story: Add Room table for articles', good: 'Story: As a reader, I can save an article\nand read it offline.\nTasks: Room table, Save button, offline screen', why: 'A story describes user value, so the product owner can prioritize it and QA can check it. Technical steps are tasks inside the story.' },
-      { title: 'Acceptance criteria nobody can test', bad: 'AC: Saving should be fast and easy.', good: 'AC: Given I am online, when I tap Save,\nthen the icon fills within 300 ms\nand the article is under "Kaydedilenler".', why: '"Fast and easy" can\'t fail. Given / When / Then with a concrete result can, which is what makes it useful.' },
+      { title: 'Acceptance criteria nobody can test', bad: 'AC: Saving should be fast and easy.', good: 'AC: Given I am online, when I tap Save,\nthen the icon fills within 300 ms\nand the article is under "Saved".', why: '"Fast and easy" can\'t fail. Given / When / Then with a concrete result can, which is what makes it useful.' },
     ],
     terms: [
       { term: 'Sprint', def: 'A fixed-length Scrum iteration of one month or less in which the team builds a usable increment.' },
@@ -334,8 +334,8 @@ class SaveArticleTest {
       { term: 'Cycle time', def: 'The time from when work on an item starts to when it is finished.' },
     ],
     challenges: [
-      { type: 'blank', prompt: 'Complete the acceptance criterion in the Given / When / Then form.', code: '[[Given]] I am offline and have a saved article,\n[[when|When]] I open it from "Kaydedilenler",\n[[then|Then]] the full text and images show.', why: 'Given sets the starting state, When is the user action, Then is the result you can check.' },
-      { type: 'bug', prompt: 'This is a team\'s Definition of Done. One line does not belong. Tap it.', code: 'Code reviewed and merged to main\nUnit tests pass in CI\nTested on a small phone and a tablet\nStrings added in Turkish and English\nWill be tested by QA next sprint', bug: 4, fix: 'Tested by QA on the release build', why: 'Done means done now. Pushing testing into a future sprint leaves the story unfinished and hides the bugs.' },
+      { type: 'blank', prompt: 'Complete the acceptance criterion in the Given / When / Then form.', code: '[[Given]] I am offline and have a saved article,\n[[when|When]] I open it from "Saved",\n[[then|Then]] the full text and images show.', why: 'Given sets the starting state, When is the user action, Then is the result you can check.' },
+      { type: 'bug', prompt: 'This is a team\'s Definition of Done. One line does not belong. Tap it.', code: 'Code reviewed and merged to main\nUnit tests pass in CI\nTested on a small phone and a tablet\nStrings added in English and Spanish\nWill be tested by QA next sprint', bug: 4, fix: 'Tested by QA on the release build', why: 'Done means done now. Pushing testing into a future sprint leaves the story unfinished and hides the bugs.' },
     ],
     quiz: [
       { q: 'Doing holds 2 cards and is at its WIP limit. A developer is free. What should they do first?', options: ['Help finish or review an item already in progress', 'Start a new card anyway, the limit is a suggestion', 'Wait idle until the next sprint'], a: 0, why: 'The limit pushes free people toward finishing started work, which lowers cycle time. Starting more just adds age to everything.' },
@@ -435,7 +435,7 @@ fun main() {
       {
         title: 'List the work that is not code',
         body: `<p>Most mobile estimates miss the same items. Before you give a number, walk this list:</p>
-<ul><li>Code review rounds and CI fixes</li><li>Testing on small, large and old devices, light and dark</li><li>Strings in every language you ship (Turkish and English, say)</li><li>Analytics events and their dashboards</li><li>Waiting for a backend endpoint or a design</li><li>Store review and a staged rollout</li></ul>`,
+<ul><li>Code review rounds and CI fixes</li><li>Testing on small, large and old devices, light and dark</li><li>Strings in every language you ship (English and Spanish, say)</li><li>Analytics events and their dashboards</li><li>Waiting for a backend endpoint or a design</li><li>Store review and a staged rollout</li></ul>`,
       },
     ],
     mistakes: [
@@ -479,7 +479,7 @@ fun main() {
 <p>A useful doc has six parts. <b>Problem</b>: what hurts, for whom. <b>Goals</b>: what success looks like, measurably. <b>Non-goals</b>: what you are deliberately not doing. <b>Options</b>: two or three real alternatives, including "do nothing". <b>Decision</b>: which one, and why it beat the others. <b>Risks</b>: what could go wrong and what you need from other teams.</p>
 <p>Keep it to a few pages and share it early, while it is still a draft. Build the doc in the demo, then send it to a reviewer and see which questions come back for every missing part. Kotlin itself uses a public process like this: changes to the language are proposed and discussed as documents in the <a href="https://github.com/Kotlin/KEEP" target="_blank" rel="noopener">KEEP</a> repository.</p>`,
     code: `# Design: Offline saved articles            Status: In review
-Author: Elif   Reviewers: Android, Backend, Product   Updated: 2026-10-18
+Author: Maya   Reviewers: Android, Backend, Product   Updated: 2026-10-18
 
 ## Problem
 Readers lose articles they meant to read later. On the metro the app shows nothing.
@@ -583,7 +583,7 @@ C does not work offline.
     { s: '            try {' },
     { s: '                repo.save(a.id, session.token!!)', sev: 'must', note: '<code>token!!</code> crashes for a logged-out reader. Handle the null case (show login, or disable Save).' },
     { s: '                Log.d("Save", "token=" + session.token)', sev: 'must', note: 'Logs the auth token. Anyone with logcat access, or a log upload, gets the session. Remove it.' },
-    { s: '                _message.value = "Kaydedildi"', sev: 'should', note: 'Hard-coded UI text can\'t be translated. Expose a state or a string resource id and let the UI pick the text.' },
+    { s: '                _message.value = "Saved"', sev: 'should', note: 'Hard-coded UI text can\'t be translated. Expose a state or a string resource id and let the UI pick the text.' },
     { s: '            } catch (e: Exception) { }', sev: 'must', note: 'Swallows every error, so the reader sees nothing when saving fails. It also catches <code>CancellationException</code>. Show an error state and rethrow cancellation.' },
     { s: '        }' },
     { s: '    }' },
@@ -814,7 +814,7 @@ fun articleSource(flags: Flags, legacy: LegacyArticleSource, repo: ArticleReposi
     ],
     challenges: [
       { type: 'blank', prompt: 'Route callers through the seam, so the flag decides which implementation runs.', code: 'fun articleSource(flags: Flags): [[ArticleSource]] =\n    if (flags.isOn("new_article_repository")) [[repo]] else legacy', why: 'Callers depend on the interface, and the flag chooses the new repository or the legacy one. Turning the flag off is the rollback.' },
-      { type: 'bug', prompt: 'This PR claims to be a pure refactor (no behavior change). Tap the line that breaks that promise.', code: 'fun formatDate(epochMs: Long): String {\n    val zone = ZoneId.of("Europe/Istanbul")\n    val date = Instant.ofEpochMilli(epochMs).atZone(zone)\n    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))\n}', bug: 3, fix: '    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("tr")))', why: 'The old code formatted months in Turkish ("5 Eki"). Switching the locale changes what users see, so it is a behavior change hiding inside a refactor.' },
+      { type: 'bug', prompt: 'This PR claims to be a pure refactor (no behavior change). Tap the line that breaks that promise.', code: 'fun formatDate(epochMs: Long): String {\n    val zone = ZoneId.of("Europe/Berlin")\n    val date = Instant.ofEpochMilli(epochMs).atZone(zone)\n    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))\n}', bug: 3, fix: '    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("de")))', why: 'The old code formatted months in German ("5 Okt."). Switching the locale changes what users see, so it is a behavior change hiding inside a refactor.' },
     ],
     quiz: [
       { q: 'A messy module is touched by about one feature a year. What does the interest metaphor suggest?', options: ['Leave it for now; interest is only charged when you change it', 'Rewrite it this sprint', 'Delete it'], a: 0, why: 'Fowler notes that cruft in rarely touched code costs little. Spend cleanup effort where changes happen.' },
@@ -843,7 +843,7 @@ fun articleSource(flags: Flags, legacy: LegacyArticleSource, repo: ArticleReposi
     body: `
 <p>Sooner or later a release breaks something for real users. Teams that handle it well decide the rules in advance: who is <b>on call</b>, what counts as an incident, and who does what. Google's SRE book suggests declaring an incident early and splitting roles: an <b>incident commander</b> who coordinates, people who work on the fix, and someone who keeps stakeholders updated. On mobile, your fastest lever is often to <a href="#build.tracks">halt a staged rollout</a> or turn off a <a href="#launch.flags">flag</a>: halting stops new users getting the version, but people who already have it keep it.</p>
 <p>Afterwards, write a <b>postmortem</b>: what happened, the impact, what you did, the root causes and follow-up actions. Make it <b>blameless</b>. The SRE book describes this as assuming everyone acted with good intentions and the information they had, and fixing the systems that let the mistake through. People who fear blame hide problems; people who don't, report them early.</p>
-<p>The same habits apply every day: agree on API contracts with backend before building, ask design about edge cases (empty, error, long Turkish words), and keep docs short and current. Build the incident timeline in the demo by tapping events in order.</p>`,
+<p>The same habits apply every day: agree on API contracts with backend before building, ask design about edge cases (empty, error, long German words), and keep docs short and current. Build the incident timeline in the demo by tapping events in order.</p>`,
     code: `// Postmortem action item #1: "The parser must accept a missing image."
 // The fix ships with the test that would have caught it.
 @Serializable
@@ -876,7 +876,7 @@ class ArticleDtoTest {
       function paintQuote() {
         quote.className = `swe-quote ${blame ? 'swe-blame' : 'swe-fair'}`;
         quote.textContent = blame
-          ? 'Root cause: Emre forgot to make imageUrl nullable.'
+          ? 'Root cause: Omar forgot to make imageUrl nullable.'
           : 'Root causes: the API contract did not say imageUrl can be null; no test covered a missing image; the crash alert fired 38 minutes after the rollout began. Actions: document nullability in the contract (backend), add parser tests for optional fields (Android), alert on 5.12.x crash rate at 1% rollout (on-call).';
         qBtn.textContent = blame ? 'Rewrite blamelessly' : 'Show the blame version';
       }
@@ -917,7 +917,7 @@ class ArticleDtoTest {
       },
       {
         title: 'Working with backend, product and design',
-        body: `<p>Most cross-team pain comes from assumptions. Agree on the API contract in writing before either side builds: field names, which fields can be null, error codes, pagination. Ask design for the states they didn't draw: loading, empty, error, offline, a 40-character Turkish headline at 200% font size. Tell product early when an estimate moves, with the reason and the new range.</p>
+        body: `<p>Most cross-team pain comes from assumptions. Agree on the API contract in writing before either side builds: field names, which fields can be null, error codes, pagination. Ask design for the states they didn't draw: loading, empty, error, offline, a 40-character German headline at 200% font size. Tell product early when an estimate moves, with the reason and the new range.</p>
 <p>Prefer written, searchable channels for decisions (the design doc, the ticket) and calls for untangling disagreement. After the call, write down what was decided.</p>`,
       },
       {
@@ -927,7 +927,7 @@ class ArticleDtoTest {
     ],
     mistakes: [
       { title: 'Debugging before mitigating', bad: '10:40 alert\n10:45-12:30 investigate the crash\n12:30 halt rollout (rollout kept growing)', good: '10:40 alert\n10:52 halt rollout\n10:52-11:30 investigate, calmly', why: 'Every minute of debugging with the rollout still running adds affected users. Stop the bleeding, then find the cause.' },
-      { title: 'A root cause with a name in it', bad: 'Root cause: Emre forgot the null check.', good: 'Root causes: contract didn\'t say imageUrl\ncan be null; no parser test for optional\nfields; alert fired 38 min late.', why: 'Naming a person ends the analysis and teaches people to hide mistakes. Naming system gaps produces fixes that stop the next person too.' },
+      { title: 'A root cause with a name in it', bad: 'Root cause: Omar forgot the null check.', good: 'Root causes: contract didn\'t say imageUrl\ncan be null; no parser test for optional\nfields; alert fired 38 min late.', why: 'Naming a person ends the analysis and teaches people to hide mistakes. Naming system gaps produces fixes that stop the next person too.' },
     ],
     terms: [
       { term: 'On-call', def: 'The person responsible, for a set period, for responding to alerts and incidents.' },

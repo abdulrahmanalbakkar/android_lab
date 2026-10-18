@@ -203,7 +203,7 @@
 <p>Sending data means <em>encapsulation</em>. Each layer takes what the layer above gave it, adds its own header in front, and passes the bundle down. TCP adds ports and sequence numbers. IP adds source and destination addresses. The link layer adds the address of the next device only. A router opens the bundle down to the IP header, picks the next hop, and wraps it in a fresh link frame. It never reads your HTTP.</p>
 <p>So when your app calls <code>api.getHeadlines()</code>, a lot happens below Retrofit: a DNS lookup, a TCP connection, a TLS handshake, then your JSON split into segments, packets and frames. Every later lesson in this track is one of those layers. (For the Retrofit side of the same call, see <a href="#data.net">Retrofit and kotlinx.serialization</a>.) Step through the demo and watch the request get wrapped, then unwrapped on the server.</p>`,
     code: `interface NewsApi {
-    @GET("v1/haberler")
+    @GET("v1/headlines")
     suspend fun headlines(): List<Headline>        // what you write: application layer
 }
 
@@ -258,7 +258,7 @@ val headlines = api.headlines()`,
         ],
         paint(f) {
           items.forEach((li, k) => li.classList.toggle('nw-on', k === f.on));
-          let node = h('div', { class: `nw-payload ${f.enc ? 'nw-enc' : ''}` }, f.enc ? '17 03 03 00 a1 · 9f 3c e0 71 b4 0d … (ciphertext)' : 'GET /v1/haberler HTTP/1.1  Host: api.example.com  Accept: application/json');
+          let node = h('div', { class: `nw-payload ${f.enc ? 'nw-enc' : ''}` }, f.enc ? '17 03 03 00 a1 · 9f 3c e0 71 b4 0d … (ciphertext)' : 'GET /v1/headlines HTTP/1.1  Host: api.example.com  Accept: application/json');
           for (let k = 1; k < f.depth; k++) {
             let tag = TAGS[k];
             if (f.hop && k === 3) tag = '<b>IPv4 packet</b> · 20 B header · 203.0.113.7 → 198.51.100.80 · TTL 63';
@@ -823,7 +823,7 @@ val client = OkHttpClient.Builder()
             return fr;
           }
           fr.push({ chain: 'ok', rtt: 1, msg: '<span class="good">Chain trusted</span>: leaf → intermediate → a root in the Android system store, name matches, in date.' });
-          fr.push({ chain: 'ok', rtt: 1, rows: [['{Finished} + GET /v1/haberler (encrypted)', 'r']], msg: 'The client sends Finished and its first request <b>in the same flight</b>. TLS 1.3 cost one round trip on top of TCP’s one.' });
+          fr.push({ chain: 'ok', rtt: 1, rows: [['{Finished} + GET /v1/headlines (encrypted)', 'r']], msg: 'The client sends Finished and its first request <b>in the same flight</b>. TLS 1.3 cost one round trip on top of TCP’s one.' });
           fr.push({ chain: 'ok', rtt: 1, rows: [['{HTTP/2 200 + JSON}', 'l']], msg: '<span class="good">Response.</span> Total before the first response byte on a fresh connection: TCP 1 RTT + TLS 1 RTT + request 1 RTT. A reused connection skips the first two.' });
           return fr;
         },
@@ -1280,7 +1280,7 @@ val client = OkHttpClient.Builder()
       {
         title: 'curl: reproduce outside the app',
         body: `<p>If a call is slow in the app, run the same request from your computer. If curl is slow too, it is not your app's code. curl's <code>-w</code> option prints timings measured from the start of the call, so subtract neighbours to get each phase. <code>time_starttransfer</code> minus <code>time_appconnect</code> is roughly the server's TTFB.</p>`,
-        code: `curl -s -o /dev/null https://api.example.com/v1/haberler \\
+        code: `curl -s -o /dev/null https://api.example.com/v1/headlines \\
   -H "Authorization: Bearer $TOKEN" \\
   -w "dns     %{time_namelookup}\\nconnect %{time_connect}\\ntls     %{time_appconnect}\\nttfb    %{time_starttransfer}\\ntotal   %{time_total}\\nproto   %{http_version}\\n"`,
       },

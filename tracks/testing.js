@@ -556,8 +556,8 @@ rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
             { k: 'ui', name: 'UI test on a device', ms: 4000 },
           ];
           const BUGS = [
-            { label: 'Price shows 12.5 instead of ₺12,50', low: 'unit', res: {
-              unit: 'formatter test fails: expected ₺12,50', int: 'caught too, but the database adds nothing here', ui: 'caught too, 500 times slower' } },
+            { label: 'Price shows 12.5 instead of $12.50', low: 'unit', res: {
+              unit: 'formatter test fails: expected $12.50', int: 'caught too, but the database adds nothing here', ui: 'caught too, 500 times slower' } },
             { label: 'Room query sorts oldest first', low: 'int', res: {
               unit: null, int: 'the real query runs on SQLite and the order check fails', ui: 'caught, if a UI test happens to look at the order' }, miss: 'missed: the fake has no SQL. It returns the list you gave it.' },
             { label: 'Pay opens Settings instead of Receipt', low: 'ui', res: {
@@ -622,13 +622,13 @@ class TitleRulesTest { /* ... */ }`,
       {
         title: 'Checking a pure rule through a UI test',
         bad: `// androidTest: a device run to check a formatting rule
-@Test fun showsPriceInLira() {
+@Test fun showsPriceInDollars() {
     rule.setContent { PriceTag(cents = 1250) }
-    rule.onNodeWithText("₺12,50").assertIsDisplayed()
+    rule.onNodeWithText("$12.50").assertIsDisplayed()
 }`,
         good: `// test: milliseconds on the JVM
-@Test fun formatsLira() {
-    assertEquals("₺12,50", PriceFormatter(trLocale).format(1250))
+@Test fun formatsDollars() {
+    assertEquals("$12.50", PriceFormatter(Locale.US).format(1250))
 }`,
         why: 'The rule has nothing to do with the screen. Test it once at the bottom, and keep UI tests for wiring: this button opens that screen.',
       },
@@ -1170,7 +1170,7 @@ class LinkParserTest {
     }
 
     @Test fun readsTheBreakingLabel() {
-        assertEquals("Son dakika", context.getString(R.string.breaking))
+        assertEquals("Eilmeldung", context.getString(R.string.breaking))
     }
 }`,
     remember: 'Need Android classes but not a device? Robolectric runs them on the JVM. You pay the sandbox boot once per run.',
@@ -1255,7 +1255,7 @@ class LinkParserTest {
       {
         title: 'Pick the API level and resources with @Config',
         body: `<p>By default Robolectric runs your tests at the <code>targetSdk</code> of the app. Put <code>@Config(sdk = [...])</code> on a class or a test to choose levels yourself. With several levels listed, the test runs once per level, which is a cheap way to check code that branches on <code>Build.VERSION.SDK_INT</code>.</p>
-<p><code>@Config(qualifiers = "...")</code> sets resource qualifiers like language, night mode or screen size, so you can check that Turkish strings or dark colors are picked up.</p>`,
+<p><code>@Config(qualifiers = "...")</code> sets resource qualifiers like language, night mode or screen size, so you can check that German strings or dark colors are picked up.</p>`,
         code: `@RunWith(AndroidJUnit4::class)
 @Config(sdk = [26, 35])                    // every test runs twice
 class NotificationFactoryTest {
@@ -1263,9 +1263,9 @@ class NotificationFactoryTest {
 }
 
 @Test
-@Config(qualifiers = "tr-rTR-night")
-fun picksTurkishDarkResources() {
-    assertEquals("Son dakika", context.getString(R.string.breaking))
+@Config(qualifiers = "de-rDE-night")
+fun picksGermanDarkResources() {
+    assertEquals("Eilmeldung", context.getString(R.string.breaking))
 }`,
       },
       {
@@ -1280,8 +1280,8 @@ class LikeButtonTest {
 
     @Test fun tapTogglesLike() {
         rule.setContent { LikeButton() }
-        rule.onNodeWithContentDescription("Beğen").performClick()
-        rule.onNodeWithContentDescription("Beğenildi").assertExists()
+        rule.onNodeWithContentDescription("Like").performClick()
+        rule.onNodeWithContentDescription("Liked").assertExists()
     }
 }`,
       },
@@ -1440,9 +1440,9 @@ coVerify(exactly = 1) { repo.latest() }`,
         code: `val sent = slot<ChatMessage>()
 coEvery { chatApi.send(capture(sent)) } just Runs
 
-vm.send("Merhaba")
+vm.send("Hello")
 
-assertEquals("Merhaba", sent.captured.text)
+assertEquals("Hello", sent.captured.text)
 assertEquals(UserId(42), sent.captured.from)`,
       },
       {
@@ -1480,9 +1480,9 @@ assertEquals(UiState.Empty, vm.state.value)`,
       {
         title: 'Mocking types you don’t own',
         bad: `val context = mockk<Context>()
-every { context.getString(R.string.breaking) } returns "Son dakika"`,
+every { context.getString(R.string.breaking) } returns "Eilmeldung"`,
         good: `interface Strings { fun breaking(): String }
-class FakeStrings : Strings { override fun breaking() = "Son dakika" }`,
+class FakeStrings : Strings { override fun breaking() = "Eilmeldung" }`,
         why: 'You don’t know every call a framework class makes inside. Wrap it behind your own small interface, or use the real thing on Robolectric.',
       },
     ],
@@ -1609,7 +1609,7 @@ fun ArticleCardPreview() {
         code: `@Preview(name = "light")
 @Preview(name = "dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Preview(name = "large font", fontScale = 2f)
-@Preview(name = "Turkish", locale = "tr")
+@Preview(name = "German", locale = "de")
 @Composable
 fun ArticleCardCases() { AppTheme { ArticleCard(sampleArticle) } }`,
         visual(el) {
@@ -1769,7 +1769,7 @@ abstract class FakeNetworkModule {
 
 @Singleton
 class FakeNewsApi @Inject constructor() : NewsApi {
-    var articles = listOf(Article("Kotlin 2.3 çıktı"))
+    var articles = listOf(Article("Kotlin 2.3 released"))
     var error: Exception? = null
     var calls = 0
     override suspend fun latest(): List<Article> { calls++; error?.let { throw it }; return articles }
@@ -1785,7 +1785,7 @@ class NewsScreenTest {
     @Before fun setUp() { hiltRule.inject() }
 
     @Test fun showsHeadlinesFromTheFake() {
-        composeRule.onNodeWithText("Kotlin 2.3 çıktı").assertIsDisplayed()
+        composeRule.onNodeWithText("Kotlin 2.3 released").assertIsDisplayed()
         assertEquals(1, api.calls)
     }
 }
@@ -1988,8 +1988,8 @@ class CheckoutErrorTest {
 <p>So keep most tests at the bottom, where you run them on every change. Use the top layers for the few flows that must never break, like login or checkout. Run each layer below and compare the bars.</p>`,
         code: `// app/src/test/java/.../PriceFormatterTest.kt   (JVM, no device)
 class PriceFormatterTest {
-    @Test fun formatsLira() {
-        assertEquals("₺12,50", PriceFormatter(Locale.forLanguageTag("tr-TR")).format(1250))
+    @Test fun formatsDollars() {
+        assertEquals("$12.50", PriceFormatter(Locale.US).format(1250))
     }
 }
 

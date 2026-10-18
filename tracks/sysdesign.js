@@ -1,5 +1,5 @@
 /* Mobile system design track. Same shape as tracks/kotlin.js.
-   Client plus server design for the interview round and for senior work, always tied back to the Android side.
+   Client plus server design for design reviews and senior work, always tied back to the Android side.
    Demo styles live in the css string below; every class is prefixed sd-. */
 (() => {
   const { h, sleep, replay } = Lab;
@@ -61,7 +61,7 @@ button.sd-box:hover { transform: translateY(-1px); }
 .sd-meter > span { overflow-wrap: anywhere; min-width: 0; }
 .sd-meter > span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* 1 interview */
+/* 1 approach */
 .sd-strip { display: flex; height: 30px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--line); min-width: 0; }
 .sd-seg { display: grid; place-items: center; font: 600 0.66rem var(--mono); color: var(--muted); background: var(--surface); border-right: 1.5px solid var(--line); min-width: 0; overflow: hidden; white-space: nowrap; transition: background 0.2s, color 0.2s; }
 .sd-seg:last-child { border-right: 0; }
@@ -138,13 +138,13 @@ button.sd-box:hover { transform: translateY(-1px); }
   // 1 ─────────────────────────────────────────────
   lessons.push({
     id: 'interview',
-    title: 'How a mobile system design interview works',
+    title: 'How to approach a system design',
     tagline: 'Turn a vague prompt into a scoped design: clarify, estimate, sketch, deep-dive, weigh trade-offs.',
     level: 'intermediate',
     body: `
-<p>A mobile system design round is 45 to 60 minutes on an open prompt like "design a news app" or "design a chat app". There is no single right answer. The interviewer watches how you turn a vague prompt into a scoped problem, make decisions, and say what each decision costs.</p>
-<p>Use a fixed order: clarify the requirements, estimate the load, sketch the client and the server, deep-dive into one or two hard parts, then talk about trade-offs. Mobile rounds usually put more weight on the client than backend rounds do: the <a href="#arch.layers">layers</a>, the <a href="#arch.ssot">source of truth</a>, offline behaviour, battery, data use, and how the app talks to the API. The server can stay at the level of boxes unless you are asked to go deeper.</p>
-<p>Say your assumptions out loud and write them on the board. "1M daily users, Android first, cached articles must open offline" is a decision the rest of the design can point back to. The coding round has its own plan in <a href="#cs.interview">Approaching a coding interview</a>. Step through the phases below, then try the estimate.</p>`,
+<p>A design discussion often starts from an open prompt like "design a news app" or "design a chat app", and a first pass can fit in about 45 minutes. There is no single right answer. What matters is how you turn a vague prompt into a scoped problem, make decisions, and say what each decision costs.</p>
+<p>Use a fixed order: clarify the requirements, estimate the load, sketch the client and the server, deep-dive into one or two hard parts, then talk about trade-offs. Mobile designs usually put more weight on the client than backend designs do: the <a href="#arch.layers">layers</a>, the <a href="#arch.ssot">source of truth</a>, offline behaviour, battery, data use, and how the app talks to the API. The server can stay at the level of boxes unless your team needs more detail.</p>
+<p>Say your assumptions out loud and write them down where everyone can see them. "1M daily users, Android first, cached articles must open offline" is a decision the rest of the design can point back to. Coding problems have their own routine in <a href="#cs.interview">Solving a problem step by step</a>. Step through the phases below, then try the estimate.</p>`,
     code: `// Back-of-the-envelope numbers: say them out loud and write them down
 val dailyUsers = 1_000_000L
 val feedLoadsPerUser = 10
@@ -170,23 +170,23 @@ class FeedRepository(private val api: ArticleApi, private val dao: ArticleDao) {
       { term: 'Functional requirement', def: 'What the product does: show a feed, open an article, bookmark it, receive breaking news.' },
       { term: 'Non-functional requirement', def: 'How well it must do it: works offline, opens fast, light on battery and data, handles 1M users.' },
       { term: 'Back-of-the-envelope estimate', def: 'A rough calculation of load (requests per second, bytes per day) used to pick the design, not to be precise.' },
-      { term: 'Deep dive', def: 'The part of the round where you go into detail on one hard piece, such as sync or caching.' },
+      { term: 'Deep dive', def: 'The part of the design where you go into detail on one hard piece, such as sync or caching.' },
     ],
     challenges: [
       { type: 'blank', prompt: 'Finish the estimate: 1M users load the feed 10 times a day. Divide by the seconds in a day.', code: 'val requestsPerDay = 1_000_000L * [[10]]\nval avgPerSecond = requestsPerDay / [[86_400|86400]]   // about 116', why: 'A day has 24 × 60 × 60 = 86,400 seconds. 10M requests spread over it is about 116 per second on average.' },
       { type: 'bug', prompt: 'The estimate says the server needs to handle 2,777 requests per second on average. Tap the line that is wrong.', code: 'val dailyUsers = 1_000_000L\nval loadsPerUser = 10\nval perDay = dailyUsers * loadsPerUser\nval perSecond = perDay / 3_600\nval peak = perSecond * 5', bug: 3, fix: 'val perSecond = perDay / 86_400', why: '3,600 is the number of seconds in an hour, not a day. The real average is about 116 requests per second.' },
     ],
     quiz: [
-      { q: 'The prompt is "Design a news app." What do you do in the first five minutes?', options: ['Draw a load balancer, three servers and a database', 'Ask about scope, users, offline needs and platforms, and write the answers down', 'Write the Retrofit interface', 'Pick between SQL and NoSQL'], a: 1, why: 'Every later decision depends on the requirements. Asking first also shows the interviewer you scope before you build.' },
-      { q: 'Which order fits a 45-minute round?', options: ['Sketch → Clarify → Deep dive → Estimate', 'Clarify → Estimate → Sketch → Deep dive → Trade-offs', 'Estimate → Deep dive → Clarify → Sketch', 'Deep dive → Sketch → Trade-offs → Clarify'], a: 1, why: 'Requirements decide what to estimate, the numbers shape the sketch, and the sketch shows which part deserves a deep dive.' },
-      { q: 'The interviewer adds: "People read on the metro with no signal." Which part of your design changes most?', options: ['The CDN provider', 'The client: a local database as the source of truth, plus a sync job', 'The server language', 'The load balancer'], a: 1, why: 'Offline reading is a client problem. The screen must read from Room and the network only refreshes it.' },
+      { q: 'The prompt is "Design a news app." What do you do in the first five minutes?', options: ['Draw a load balancer, three servers and a database', 'Ask about scope, users, offline needs and platforms, and write the answers down', 'Write the Retrofit interface', 'Pick between SQL and NoSQL'], a: 1, why: 'Every later decision depends on the requirements. Asking first means you scope before you build.' },
+      { q: 'Which order fits a 45-minute design session?', options: ['Sketch → Clarify → Deep dive → Estimate', 'Clarify → Estimate → Sketch → Deep dive → Trade-offs', 'Estimate → Deep dive → Clarify → Sketch', 'Deep dive → Sketch → Trade-offs → Clarify'], a: 1, why: 'Requirements decide what to estimate, the numbers shape the sketch, and the sketch shows which part deserves a deep dive.' },
+      { q: 'A stakeholder adds: "People read on the metro with no signal." Which part of your design changes most?', options: ['The CDN provider', 'The client: a local database as the source of truth, plus a sync job', 'The server language', 'The load balancer'], a: 1, why: 'Offline reading is a client problem. The screen must read from Room and the network only refreshes it.' },
       { q: '2M daily users each make 5 requests a day. About how many requests per second on average?', options: ['About 12', 'About 116', 'About 1,160', 'About 10,000'], a: 1, why: '2M × 5 = 10M requests a day. 10M / 86,400 is about 116 per second.' },
     ],
     deeper: [
       {
         title: 'Split requirements into two lists',
-        body: `<p>Functional requirements are features. Non-functional ones are qualities, and on mobile they drive most of the design. Write both lists, then ask the interviewer to confirm or trim them. Cutting scope is allowed and expected: "Comments and login are out of scope; I will mention where they would plug in."</p>
-<p>For a Turkish news app a good non-functional list is short and concrete: opens with content in under a second, readable offline, works on 3G outside the big cities, small data use, low battery cost, and correct Turkish dates and plurals ("2 saat önce").</p>`,
+        body: `<p>Functional requirements are features. Non-functional ones are qualities, and on mobile they drive most of the design. Write both lists, then ask your team to confirm or trim them. Cutting scope is allowed and expected: "Comments and login are out of scope; I will mention where they would plug in."</p>
+<p>For a news app a good non-functional list is short and concrete: opens with content in under a second, readable offline, works on 3G outside the big cities, small data use, low battery cost, and correct relative dates and plurals ("2 hours ago").</p>`,
         code: `Functional                      Non-functional
 - feed by category              - content on screen < 1 s, even offline
 - article detail                - works on slow 3G
@@ -203,7 +203,7 @@ val perUserPerDay = thumbsPerLoad * bytesPerThumb * loadsPerDay   // 6,000,000 b
       },
       {
         title: 'Choose the deep dive on purpose',
-        body: `<p>Pick the part that is hardest for this product, and offer it: "The interesting parts here are feed freshness and offline. Shall I go deep on sync?" For a news app that is caching and push. For chat it is delivery, ordering and offline sending. For a photo app it is upload and image delivery. The interviewer may redirect you, which is fine.</p>`,
+        body: `<p>Pick the part that is hardest for this product, and offer it: "The interesting parts here are feed freshness and offline. Shall I go deep on sync?" For a news app that is caching and push. For chat it is delivery, ordering and offline sending. For a photo app it is upload and image delivery. Your team may want a different part, which is fine.</p>`,
       },
       {
         title: 'Say every trade-off in one sentence',
@@ -211,8 +211,8 @@ val perUserPerDay = thumbsPerLoad * bytesPerThumb * loadsPerDay   // 6,000,000 b
       },
     ],
     mistakes: [
-      { title: 'Drawing boxes before asking anything', bad: '// minute 1\n"We need Kafka, Redis, a CDN and microservices."', good: '// minute 1\n"Who reads this, how many of them,\n and must it work without a connection?"', why: 'Without requirements every box is a guess, and the interviewer can\'t tell whether you would pick the right tools for this product.' },
-      { title: 'A backend-only design in a mobile round', bad: 'Server boxes: LB → API → DB\nClient: "the app calls the API"', good: 'Client: Compose → ViewModel → Repository\n        → Room (source of truth) + WorkManager sync\nServer: CDN → API → cache → DB', why: 'Mobile interviewers expect depth on the app: what the screen reads, what happens offline, when the radio wakes up.' },
+      { title: 'Drawing boxes before asking anything', bad: '// minute 1\n"We need Kafka, Redis, a CDN and microservices."', good: '// minute 1\n"Who reads this, how many of them,\n and must it work without a connection?"', why: 'Without requirements every box is a guess, and the reviewer can\'t tell whether you picked the right tools for this product.' },
+      { title: 'A backend-only design for a mobile app', bad: 'Server boxes: LB → API → DB\nClient: "the app calls the API"', good: 'Client: Compose → ViewModel → Repository\n        → Room (source of truth) + WorkManager sync\nServer: CDN → API → cache → DB', why: 'A mobile design needs depth on the app: what the screen reads, what happens offline, when the radio wakes up.' },
     ],
     visual(el) {
       const PH = [
@@ -221,7 +221,7 @@ val perUserPerDay = thumbsPerLoad * bytesPerThumb * loadsPerDay   // 6,000,000 b
         ['Sketch', 10, 'Draw the client and the server boxes it talks to.', 'You: "Compose UI → ViewModel → Repository. Room is the source of truth; Paging pulls pages into it. Server side: CDN → API → feed cache → database, plus FCM for breaking news."'],
         ['Deep dive', 15, 'Go into detail on the hardest part.', 'You: "Let me go deep on freshness: Cache-Control per endpoint, how an edited headline gets purged, and what phones still show until max-age runs out."'],
         ['Trade-offs', 5, 'Name what each choice costs.', 'You: "Cursor pagination means no jump to page 50. A 30-second max-age on the feed means breaking news can be up to 30 seconds late in the list, so push covers that."'],
-        ['Questions', 5, 'Your questions for them.', 'You: "How does your team handle API changes for old app versions still in use?"'],
+        ['Questions', 5, 'List what is still open.', 'You: "Open question: how does the backend handle API changes for old app versions still in use?"'],
       ];
       const total = PH.reduce((a, p) => a + p[1], 0);
       const segs = PH.map(p => h('span', { class: 'sd-seg', style: `flex:${p[1]} 1 0` }, `${p[1]}m`));
@@ -247,7 +247,7 @@ val perUserPerDay = thumbsPerLoad * bytesPerThumb * loadsPerDay   // 6,000,000 b
       }
       press(uBtns, uBtns[1]); press(lBtns, lBtns[1]);
       el.append(h('div', { class: 'sd-wrap' },
-        label('a 45-minute round'), h('div', { class: 'sd-strip', 'aria-hidden': 'true' }, segs),
+        label('a 45-minute session'), h('div', { class: 'sd-strip', 'aria-hidden': 'true' }, segs),
         row(...btns), sayBox,
         label('back-of-the-envelope'), row(...uBtns), row(...lBtns), o));
       show(0); calc();
@@ -357,7 +357,7 @@ interface NewsApi {
     ],
     mistakes: [
       { title: 'A strict parser in a shipped app', bad: 'val json = Json   // default: unknown keys throw', good: 'val json = Json {\n    ignoreUnknownKeys = true\n    coerceInputValues = true\n}', why: 'The first time the server adds a field, every installed copy of this build fails to parse. You can\'t fix apps that are already out there.' },
-      { title: 'Renaming a field in place', bad: '// server, new release\n{ "id": "42", "headline": "Derbi 2-2" }', good: '// add the new name, keep the old one\n{ "id": "42", "title": "Derbi 2-2", "headline": "Derbi 2-2" }', why: 'Old apps still read <code>title</code>. Keep both until the versions that use the old name are gone.' },
+      { title: 'Renaming a field in place', bad: '// server, new release\n{ "id": "42", "headline": "Team A 2-2 Team B" }', good: '// add the new name, keep the old one\n{ "id": "42", "title": "Team A 2-2 Team B", "headline": "Team A 2-2 Team B" }', why: 'Old apps still read <code>title</code>. Keep both until the versions that use the old name are gone.' },
     ],
     visual(el) {
       const VERS = [
@@ -602,7 +602,7 @@ fun cachedArticle(id: String): Response {
       { title: 'A long max-age on something editors change', bad: '// GET /v1/feed\nCache-Control: public, max-age=86400', good: '// GET /v1/feed\nCache-Control: public, max-age=30', why: 'Phones would keep yesterday\'s feed for a whole day, and no purge can reach them.' },
     ],
     visual(el) {
-      const HEAD = ['', 'Derbi 2-2', 'Derbi 2-2: late equaliser', 'Derbi 2-2: VAR check in the 93rd minute'];
+      const HEAD = ['', 'Team A 2-2 Team B', 'Team A 2-2 Team B: late equaliser', 'Team A 2-2 Team B: VAR check in the 93rd minute'];
       const LAYERS = [['mem', 'Memory', 'in the app'], ['disk', 'Disk', 'OkHttp cache'], ['cdn', 'CDN', 'edge near user'], ['sc', 'Server cache', 'Redis'], ['db', 'Database', 'source']];
       const boxes = {}, subs = {};
       LAYERS.forEach(([k, t, s]) => { subs[k] = h('small', {}, s); boxes[k] = h('div', { class: 'sd-box' }, h('b', {}, t), subs[k]); });
@@ -739,9 +739,9 @@ class OutboxWorker @AssistedInject constructor(
         title: 'Conflicts: last-write-wins vs merge',
         body: `<p>Two devices edit the same note while offline, then both sync. Last-write-wins keeps whichever arrives last, whole. A field-level merge keeps each field\'s latest change, so edits to different fields both survive. Try both.</p>`,
         visual(el) {
-          const base = { title: 'Maç notları', tags: 'spor' };
-          const phone = { title: 'Derbi notları', tags: 'spor' };
-          const tablet = { title: 'Maç notları', tags: 'spor, derbi' };
+          const base = { title: 'Match notes', tags: 'sports' };
+          const phone = { title: 'Final notes', tags: 'sports' };
+          const tablet = { title: 'Match notes', tags: 'sports, final' };
           const show = (t, x, cls) => h('div', { class: `sd-card ${cls || ''}` }, h('h4', {}, t), h('span', { class: 'sd-label' }, `title: ${x.title}`), h('span', { class: 'sd-label' }, `tags: ${x.tags}`));
           const res = h('div', {});
           const o = out('Phone changed the title. Tablet changed the tags. Tablet syncs last.');
@@ -779,7 +779,7 @@ suspend fun changes(@Query("since") token: String?): ChangesDto   // { upserts, 
       { title: 'Two writes without a transaction', bad: 'db.bookmarks().upsert(BookmarkEntity(id, pending = true))\ndb.outbox().insert(OutboxEntry(type = "bookmark.add", articleId = id))', good: 'db.withTransaction {\n    db.bookmarks().upsert(BookmarkEntity(id, pending = true))\n    db.outbox().insert(OutboxEntry(type = "bookmark.add", articleId = id))\n}', why: 'If the process dies between the two lines, the bookmark exists locally but never reaches the server.' },
     ],
     visual(el) {
-      const ART = ['Derbi 2-2', 'Kur rekor kırdı', 'Yeni metro hattı', 'Deprem tatbikatı', 'Seçim anketi', 'Hava durumu'];
+      const ART = ['Team A 2-2 Team B', 'Markets hit a record', 'New metro line opens', 'City holds safety drill', 'Election poll released', 'Weather update'];
       let online, keys, dropNext, n, local, outbox, server, seen, dupes, syncing;
       const listEl = h('div', { class: 'sd-list' }), boxEl = h('div', { class: 'sd-list' }), srvEl = h('div', { class: 'sd-list' });
       const stats = h('div', { class: 'sd-stats' });
@@ -974,13 +974,13 @@ val score by viewModel.score.collectAsStateWithLifecycle()`,
     tagline: 'One event, a million phones: fan-out, topics, collapse keys, TTL and stale tokens.',
     level: 'advanced',
     body: `
-<p>Sending one notification is one API call. Sending a breaking story to a million phones is a <b>fan-out</b>: one event becomes a million deliveries. You can address them by <b>token</b> (each install has a registration token you store with the user) or by <b>topic</b> (installs subscribe to <code>breaking-tr</code> and FCM does the fan-out). Firebase documents topic messages as tuned for throughput rather than latency, so a big topic does not reach every phone in the same second.</p>
+<p>Sending one notification is one API call. Sending a breaking story to a million phones is a <b>fan-out</b>: one event becomes a million deliveries. You can address them by <b>token</b> (each install has a registration token you store with the user) or by <b>topic</b> (installs subscribe to <code>breaking-news</code> and FCM does the fan-out). Firebase documents topic messages as tuned for throughput rather than latency, so a big topic does not reach every phone in the same second.</p>
 <p>Delivery is not guaranteed. Phones are switched off, in Doze, out of coverage, or the app was uninstalled. FCM keeps messages for offline devices for their time to live (TTL), which defaults to four weeks, the maximum. A <b>collapse key</b> says "only the newest of these matters": a phone that was offline through three score updates gets only the last one. FCM allows up to four different collapse keys per device at a time.</p>
 <p>Tokens go stale. Upload the token from <code>onNewToken</code> and on app start, with a timestamp. Delete a token when FCM answers <code>UNREGISTERED</code>, and drop tokens you haven\'t seen for about a month. FCM treats an Android token as expired after 270 days without activity. The app side is in <a href="#push.fcm">FCM basics</a> and <a href="#push.messages">notification vs data messages</a>. Send a breaking story to a million installs below.</p>`,
     code: `// Server (Kotlin + Firebase Admin SDK): one request, FCM fans out to every subscriber
 val message = Message.builder()
-    .setTopic("breaking-tr")
-    .setNotification(Notification.builder().setTitle("Son dakika").setBody("Deprem tatbikatı başladı").build())
+    .setTopic("breaking-news")
+    .setNotification(Notification.builder().setTitle("Breaking news").setBody("City safety drill has started").build())
     .putData("articleId", "a_981")
     .setAndroidConfig(
         AndroidConfig.builder()
@@ -1000,7 +1000,7 @@ class PushService : FirebaseMessagingService() {
 }
 
 // App: opt in to a topic, for example from a settings switch
-Firebase.messaging.subscribeToTopic("breaking-tr")`,
+Firebase.messaging.subscribeToTopic("breaking-news")`,
     remember: 'Push is best effort. Set a TTL that matches how long the news matters, collapse what supersedes itself, and prune dead tokens.',
     terms: [
       { term: 'Fan-out', def: 'Turning one event into many deliveries, one per recipient device.' },
@@ -1021,7 +1021,7 @@ Firebase.messaging.subscribeToTopic("breaking-tr")`,
     deeper: [
       {
         title: 'Collapse keys, step by step',
-        body: `<p>The phone is offline during a derby. Send three score updates, with and without a collapse key, then bring the phone back.</p>`,
+        body: `<p>The phone is offline during a match. Send three score updates, with and without a collapse key, then bring the phone back.</p>`,
         visual(el) {
           const SC = ['1-0', '1-1', '2-1'];
           let useKey = true, queue = [], sent = 0;
@@ -1037,7 +1037,7 @@ Firebase.messaging.subscribeToTopic("breaking-tr")`,
             say(o, useKey ? `Score ${s} replaces the undelivered one with the same key.` : `Score ${s} queued behind the others.`);
           });
           const on = act('Phone comes online', () => {
-            phone.replaceChildren(...queue.map(s => h('div', { class: 'sd-item sd-fresh drop-in' }, h('span', {}, `🔔 Derbi ${s}`))));
+            phone.replaceChildren(...queue.map(s => h('div', { class: 'sd-item sd-fresh drop-in' }, h('span', {}, `🔔 Team A vs Team B ${s}`))));
             say(o, queue.length > 1 ? `${queue.length} notifications at once, two of them already wrong.` : queue.length ? 'One notification with the current score.' : 'Nothing was queued.');
             queue = []; sent = 0; paint();
           });
@@ -1047,9 +1047,9 @@ Firebase.messaging.subscribeToTopic("breaking-tr")`,
       },
       {
         title: 'Your own fan-out for personal pushes',
-        body: `<p>Topics suit "everyone who follows Spor". Personal pushes ("your team scored", "a reply to your comment") need per-token sends that your server fans out. Put the job on a queue, let a pool of workers send per token with a concurrency limit, retry <code>429</code> and <code>5xx</code> answers with backoff, and delete tokens that come back <code>UNREGISTERED</code>. Store each token with the user, the app version and a last-seen timestamp.</p>`,
+        body: `<p>Topics suit "everyone who follows Sports". Personal pushes ("your team scored", "a reply to your comment") need per-token sends that your server fans out. Put the job on a queue, let a pool of workers send per token with a concurrency limit, retry <code>429</code> and <code>5xx</code> answers with backoff, and delete tokens that come back <code>UNREGISTERED</code>. Store each token with the user, the app version and a last-seen timestamp.</p>`,
         code: `// one breaking-news event -> many send jobs
-queue.publish(FanOutJob(eventId = "e_77", segment = "followers:galatasaray"))
+queue.publish(FanOutJob(eventId = "e_77", segment = "followers:team-a"))
 
 // workers
 for (batch in tokens.forSegment(job.segment).chunked(500)) {
@@ -1192,7 +1192,7 @@ fun ArticleThumb(article: Article, modifier: Modifier = Modifier) {
       {
         title: 'Reserve the space, then fill it',
         body: `<p>Put the image\'s aspect ratio and dominant colour in the feed JSON. The list can lay out every row at its final height before any image arrives, so nothing jumps, and the colour block makes the wait feel shorter. A tiny encoded preview (a few dozen bytes, blurred when drawn) is a step better.</p>`,
-        code: `{ "id": "a_981", "title": "Derbi 2-2",
+        code: `{ "id": "a_981", "title": "Team A 2-2 Team B",
   "image": { "base": "https://img.example.com/a981", "ratio": 1.333, "color": "#7A3B2E" } }`,
       },
       {
@@ -1415,10 +1415,10 @@ suspend fun refresh() {
   lessons.push({
     id: 'news-feed',
     title: 'Design walkthrough: a news feed',
-    tagline: 'A Turkish news app with a million daily readers, from requirements to the boxes and back to Room.',
+    tagline: 'A news app with a million daily readers, from requirements to the boxes and back to Room.',
     level: 'advanced',
     body: `
-<p>Prompt: "Design a news app for a Turkish publisher. 1M daily users." Clarify first. Functional: a feed per category, article pages, bookmarks, breaking-news push. Non-functional: content on screen in under a second even offline, usable on 3G, light on data and battery. Reads vastly outnumber writes: a few hundred articles a day from editors, millions of reads.</p>
+<p>Prompt: "Design a news app for a large publisher. 1M daily users." Clarify first. Functional: a feed per category, article pages, bookmarks, breaking-news push. Non-functional: content on screen in under a second even offline, usable on 3G, light on data and battery. Reads vastly outnumber writes: a few hundred articles a day from editors, millions of reads.</p>
 <p>Estimate: 1M users × 10 feed loads is about 116 requests per second on average, a few hundred at the morning peak. Most of them ask for the same category feed, so a CDN with a short <code>max-age</code> answers nearly all of them and the origin sees a trickle. Images dominate bytes, so they get their own CDN and per-screen sizes.</p>
 <p>Client: Compose UI → ViewModel → repository → Room as the source of truth. Paging with a <code>RemoteMediator</code> pulls feed pages into Room (<a href="#data.paging">Paging 3</a>). WorkManager prefetches top stories on Wi-Fi while charging, and drains the bookmark outbox. FCM topics carry breaking news (<a href="#push.fcm">FCM basics</a>). Server: CMS → feed service that rebuilds category lists on publish → cache → API behind the CDN, plus an image service and a push sender. Trace a few scenarios through the diagram below, or tap any box.</p>`,
     code: `@OptIn(ExperimentalPagingApi::class)
@@ -1466,7 +1466,7 @@ WorkManager.getInstance(context)
       {
         title: 'Split shared from personal',
         body: `<p>Personalising the whole feed makes every response unique, so the CDN can\'t help. Keep the big part shared and cacheable, and fetch a small personal part separately: the reader\'s followed teams, read markers, bookmarks. The app merges them in the repository.</p>`,
-        code: `GET /v1/feed?category=spor&cursor=...   Cache-Control: public, max-age=30   (same for everyone)
+        code: `GET /v1/feed?category=sports&cursor=...   Cache-Control: public, max-age=30   (same for everyone)
 GET /v1/me/feed-extras                    Cache-Control: private, no-cache    (small, per user)`,
       },
       {
@@ -1479,12 +1479,12 @@ GET /v1/me/feed-extras                    Cache-Control: private, no-cache    (s
       },
       {
         title: 'Things to mention if there is time',
-        body: `<p>Analytics batched and sent by WorkManager. Remote Config flags for new sections. Relative Turkish dates ("2 saat önce") and plurals from resources. Accessibility: content descriptions and large fonts in the article view. Observability: crash rate, cold-start time and feed-load errors per app version, so you notice a bad release.</p>`,
+        body: `<p>Analytics batched and sent by WorkManager. Remote Config flags for new sections. Relative dates ("2 hours ago") and plurals from resources. Accessibility: content descriptions and large fonts in the article view. Observability: crash rate, cold-start time and feed-load errors per app version, so you notice a bad release.</p>`,
       },
     ],
     mistakes: [
       { title: 'A network-first feed', bad: 'val feed = flow { emit(api.feed(category, cursor = null).items) }   // blank offline', good: 'val feed = db.articles().observe(category)   // Room first\n// and refresh() writes network results into Room', why: 'Every cold start waits for the network, and in a tunnel the user sees an error instead of yesterday\'s news.' },
-      { title: 'Polling for breaking news', bad: '// every 60 s while the app is open, and a worker in the background\nwhile (true) { api.breaking(); delay(60_000) }', good: '// server sends one topic message when it happens\nFirebase.messaging.subscribeToTopic("breaking-tr")', why: 'Every open app asks once a minute and almost every answer is "nothing". In the background a worker can\'t run that often anyway (periodic work is at least 15 minutes apart), so the alert still arrives late. One push reaches everyone.' },
+      { title: 'Polling for breaking news', bad: '// every 60 s while the app is open, and a worker in the background\nwhile (true) { api.breaking(); delay(60_000) }', good: '// server sends one topic message when it happens\nFirebase.messaging.subscribeToTopic("breaking-news")', why: 'Every open app asks once a minute and almost every answer is "nothing". In the background a worker can\'t run that often anyway (periodic work is at least 15 minutes apart), so the alert still arrives late. One push reaches everyone.' },
     ],
     visual(el) {
       const NODES = {
@@ -1503,10 +1503,10 @@ GET /v1/me/feed-extras                    Cache-Control: private, no-cache    (s
         fcm: ['FCM', 'topics', 'Fans breaking news out to topic subscribers with TTL and collapse keys.'],
       };
       const SC = {
-        'Cold start, online': [['ui', 'Feed screen opens'], ['vm', 'ViewModel collects repository.feed("gundem")'], ['repo', 'Repository reads Room first'], ['room', 'Room has 60 articles from last night: drawn at once'], ['cdn', 'RemoteMediator refresh: GET /v1/feed?category=gundem → CDN hit'], ['room', 'New page written in one transaction; the list updates'], ['img', 'Thumbnails at w=360, WebP, from the image CDN']],
+        'Cold start, online': [['ui', 'Feed screen opens'], ['vm', 'ViewModel collects repository.feed("top")'], ['repo', 'Repository reads Room first'], ['room', 'Room has 60 articles from last night: drawn at once'], ['cdn', 'RemoteMediator refresh: GET /v1/feed?category=top → CDN hit'], ['room', 'New page written in one transaction; the list updates'], ['img', 'Thumbnails at w=360, WebP, from the image CDN']],
         'Offline open': [['ui', 'Feed screen opens in a tunnel'], ['repo', 'Repository reads Room'], ['room', 'Cached articles and bookmarks shown'], ['repo', 'Refresh throws IOException: keep the content, show a banner'], ['wm', 'Sync stays queued until the network constraint is met']],
         'Pull to refresh': [['ui', 'User pulls to refresh'], ['repo', 'One refresh in flight (others ignored)'], ['cdn', 'CDN copy older than 30 s: goes to origin'], ['api', 'BFF assembles the feed'], ['cache', 'Feed cache hit: list of ids + summaries'], ['cdn', 'CDN stores the new copy for 30 s'], ['room', 'Room updated; Paging shows new items']],
-        'Breaking news': [['cms', 'Editor publishes a breaking story'], ['svc', 'Feed service inserts it into the gundem list'], ['cache', 'Cache keys for gundem deleted'], ['cdn', 'CDN paths for /v1/feed?category=gundem purged'], ['fcm', 'Topic message to breaking-tr: TTL 1 h, collapse key "breaking"'], ['ui', 'User taps the notification → deep link to the article'], ['room', 'Article fetched and stored; back stack lands on the feed']],
+        'Breaking news': [['cms', 'Editor publishes a breaking story'], ['svc', 'Feed service inserts it into the top-stories list'], ['cache', 'Cache keys for top stories deleted'], ['cdn', 'CDN paths for /v1/feed?category=top purged'], ['fcm', 'Topic message to breaking-news: TTL 1 h, collapse key "breaking"'], ['ui', 'User taps the notification → deep link to the article'], ['room', 'Article fetched and stored; back stack lands on the feed']],
         'Editor fixes a typo': [['cms', 'Editor fixes a headline'], ['db', 'Article version 8 → 9'], ['svc', 'Cache key deleted, CDN path purged'], ['cdn', 'Next request at the edge gets version 9'], ['room', 'Phones that opened it keep version 8 until max-age (5 min) runs out']],
       };
       const boxes = {};
@@ -1586,9 +1586,9 @@ interface MessageDao {
       { type: 'bug', prompt: 'Two friends see their messages in a different order, because one phone\'s clock is 3 minutes fast. Tap the line.', code: '@Query("""\n    SELECT * FROM messages WHERE conversationId = :id\n    ORDER BY createdAt\n""")\nfun observe(id: String): Flow<List<MessageEntity>>', bug: 2, fix: '    ORDER BY serverSeq IS NULL, serverSeq, createdAt', why: '<code>createdAt</code> comes from each phone\'s own clock. The server\'s sequence number is one order that every device shares.' },
     ],
     quiz: [
-      { q: 'Ayşe sends a message while Burak\'s phone is switched off. What does Ayşe see?', options: ['A clock forever', '✓ sent, then ✓✓ once Burak\'s phone comes online and stores it', '✓✓ at once'], a: 1, why: 'The server acks (✓) when it stores the message. Delivered (✓✓) needs Burak\'s device to receive it and ack.' },
+      { q: 'Alice sends a message while Bob\'s phone is switched off. What does Alice see?', options: ['A clock forever', '✓ sent, then ✓✓ once Bob\'s phone comes online and stores it', '✓✓ at once'], a: 1, why: 'The server acks (✓) when it stores the message. Delivered (✓✓) needs Bob\'s device to receive it and ack.' },
       { q: 'The server stored a message, but the connection dropped before the ack reached the sender. The app resends with the same client id. What should happen?', options: ['Two copies appear', 'The server finds the client id and returns the existing sequence number: one copy', 'The message is lost'], a: 1, why: 'The client id makes the send idempotent. The resend only recovers the ack.' },
-      { q: 'Burak has messages up to sequence 41 and then receives 43. What should his app do?', options: ['Show 43 and forget 42', 'Fetch the missing 42 from the server, then show them in order', 'Renumber 43 as 42'], a: 1, why: 'Sequence numbers make gaps visible. The client asks for what it is missing instead of silently skipping it.' },
+      { q: 'Bob has messages up to sequence 41 and then receives 43. What should his app do?', options: ['Show 43 and forget 42', 'Fetch the missing 42 from the server, then show them in order', 'Renumber 43 as 42'], a: 1, why: 'Sequence numbers make gaps visible. The client asks for what it is missing instead of silently skipping it.' },
       { q: 'With end-to-end encryption, what can the server no longer do for users?', options: ['Store messages', 'Send push wake-ups', 'Search the text of their messages on the server'], a: 2, why: 'The server holds only ciphertext. Search, previews and spam checks on content move to the device or go away.' },
     ],
     deeper: [
@@ -1609,7 +1609,7 @@ socket.send(json.encodeToString(Resume(conversationId, afterSeq = since)))`,
       },
       {
         title: 'Encryption: say where it fits',
-        body: `<p>In an interview it is usually enough to place it: keys are made and kept on each device, messages are encrypted before they leave the phone, and the server handles only ciphertext and metadata (who talked to whom, when). Name a known protocol such as Signal\'s, and the costs: multi-device needs keys for every device, backups get harder, and server-side features on content are gone.</p>`,
+        body: `<p>In a design discussion it is usually enough to place it: keys are made and kept on each device, messages are encrypted before they leave the phone, and the server handles only ciphertext and metadata (who talked to whom, when). Name a known protocol such as Signal\'s, and the costs: multi-device needs keys for every device, backups get harder, and server-side features on content are gone.</p>`,
       },
     ],
     mistakes: [
@@ -1617,7 +1617,7 @@ socket.send(json.encodeToString(Resume(conversationId, afterSeq = since)))`,
       { title: 'Showing a message only after the server acks', bad: 'val seq = api.send(text)        // spinner until this returns\ndao.insert(MessageEntity(..., serverSeq = seq))', good: 'dao.insert(MessageEntity(..., state = Delivery.PENDING))   // visible at once\nsender.enqueue(msg.clientId)', why: 'On a slow network the message would sit in a spinner, and offline it would be lost. Room first, ticks later.' },
     ],
     visual(el) {
-      const TEXT = ['Selam!', 'Maç kaçta?', '21:45 bence', 'Tamam, görüşürüz', 'Formanı getir'];
+      const TEXT = ['Hi!', 'What time is the game?', '21:45, I think', 'OK, see you', 'Bring your jersey'];
       let aOn, bOn, dropAck, n, seq, msgs, busy;
       const aPhone = h('div', { class: 'sd-phone' }), bPhone = h('div', { class: 'sd-phone' });
       const srv = h('div', { class: 'sd-card' });
@@ -1626,15 +1626,15 @@ socket.send(json.encodeToString(Resume(conversationId, afterSeq = since)))`,
       function paint() {
         aPhone.className = `sd-phone${aOn ? '' : ' sd-off'}`; bPhone.className = `sd-phone${bOn ? '' : ' sd-off'}`;
         const ordered = [...msgs].sort((x, y) => (x.seq == null) - (y.seq == null) || (x.seq || 0) - (y.seq || 0) || x.t - y.t);
-        aPhone.replaceChildren(h('div', { class: 'sd-phone-head' }, h('span', {}, 'Ayşe'), pill(aOn ? 'online' : 'offline', aOn ? 'sd-p-ok' : 'sd-p-warn')),
+        aPhone.replaceChildren(h('div', { class: 'sd-phone-head' }, h('span', {}, 'Alice'), pill(aOn ? 'online' : 'offline', aOn ? 'sd-p-ok' : 'sd-p-warn')),
           ...ordered.map(m => h('div', { class: 'sd-bub sd-me' }, m.text, h('small', { class: m.state === 'READ' ? 'sd-read' : '' }, TICK[m.state]))));
-        bPhone.replaceChildren(h('div', { class: 'sd-phone-head' }, h('span', {}, 'Burak'), pill(bOn ? 'online' : 'offline', bOn ? 'sd-p-ok' : 'sd-p-warn')),
+        bPhone.replaceChildren(h('div', { class: 'sd-phone-head' }, h('span', {}, 'Bob'), pill(bOn ? 'online' : 'offline', bOn ? 'sd-p-ok' : 'sd-p-warn')),
           ...ordered.filter(m => m.onB).map(m => h('div', { class: 'sd-bub' }, m.text)));
         const stored = msgs.filter(m => m.seq != null).sort((x, y) => x.seq - y.seq);
         srv.replaceChildren(h('h4', {}, 'Server'), label('conversation, by sequence'),
           ...(stored.length ? stored.map(m => h('div', { class: 'sd-item' }, h('span', {}, `#${m.seq} ${m.text}`), h('span', { class: 'sd-label' }, m.onB ? 'acked by B' : 'waiting for B'))) : [h('div', { class: 'sd-empty' }, 'nothing stored')]));
       }
-      function reset() { aOn = true; bOn = true; dropAck = false; n = 0; seq = 40; msgs = []; busy = false; aBtn.set(true); bBtn.set(true); paint(); say(o, 'Both phones online. Ayşe can send.'); }
+      function reset() { aOn = true; bOn = true; dropAck = false; n = 0; seq = 40; msgs = []; busy = false; aBtn.set(true); bBtn.set(true); paint(); say(o, 'Both phones online. Alice can send.'); }
       async function flushA() {
         if (busy) return; busy = true;
         for (const m of msgs.filter(x => x.state === 'PENDING')) {
@@ -1645,7 +1645,7 @@ socket.send(json.encodeToString(Resume(conversationId, afterSeq = since)))`,
           else { say(o, `Resent with client id ${m.id}. Server already has it as #${m.seq}: no copy, it just repeats the ack.`); }
           if (dropAck) {
             dropAck = false; paint();
-            say(o, `Server stored #${m.seq}, but the ack was lost. Ayşe still sees ◷ and resends with the same client id.`);
+            say(o, `Server stored #${m.seq}, but the ack was lost. Alice still sees ◷ and resends with the same client id.`);
             await sleep(1300); if (!aOn) break;
             say(o, `Resent with client id ${m.id}. Server already has it as #${m.seq}: no copy, it just repeats the ack.`);
             await sleep(900); if (!aOn) break;
@@ -1656,32 +1656,32 @@ socket.send(json.encodeToString(Resume(conversationId, afterSeq = since)))`,
         busy = false;
       }
       async function deliver(m) {
-        if (!bOn) { say(o, `#${m.seq} stored. Burak is offline: the server sends a high-priority FCM data message and waits.`); return; }
+        if (!bOn) { say(o, `#${m.seq} stored. Bob is offline: the server sends a high-priority FCM data message and waits.`); return; }
         await sleep(400);
         m.onB = true; if (m.state === 'SENT') m.state = 'DELIVERED'; paint();
-        say(o, `#${m.seq} on Burak's phone. His device acked: ✓✓ delivered.`);
+        say(o, `#${m.seq} on Bob's phone. His device acked: ✓✓ delivered.`);
       }
-      const aBtn = toggle(on => `Ayşe: ${on ? 'online' : 'offline'}`, true, on => { aOn = on; paint(); if (on) { say(o, 'Ayşe reconnects: pending messages go out in order.'); flushA(); } else say(o, 'Ayşe is offline. New messages stay in Room as pending.'); });
-      const bBtn = toggle(on => `Burak: ${on ? 'online' : 'offline'}`, true, on => {
+      const aBtn = toggle(on => `Alice: ${on ? 'online' : 'offline'}`, true, on => { aOn = on; paint(); if (on) { say(o, 'Alice reconnects: pending messages go out in order.'); flushA(); } else say(o, 'Alice is offline. New messages stay in Room as pending.'); });
+      const bBtn = toggle(on => `Bob: ${on ? 'online' : 'offline'}`, true, on => {
         bOn = on; paint();
         if (on) {
           const missing = msgs.filter(m => m.seq != null && !m.onB);
           missing.forEach(m => { m.onB = true; if (m.state === 'SENT') m.state = 'DELIVERED'; });
-          paint(); say(o, missing.length ? `Burak's app wakes, asks for everything after his last sequence, gets ${missing.length}, acks: ✓✓.` : 'Burak is back online. Nothing missed.');
-        } else say(o, 'Burak is offline.');
+          paint(); say(o, missing.length ? `Bob's app wakes, asks for everything after his last sequence, gets ${missing.length}, acks: ✓✓.` : 'Bob is back online. Nothing missed.');
+        } else say(o, 'Bob is offline.');
       });
       el.append(h('div', { class: 'sd-wrap' },
-        row(act('Ayşe sends', () => {
+        row(act('Alice sends', () => {
           if (n >= TEXT.length) { say(o, 'Enough messages. Reset to start over.'); return; }
           const m = { id: Math.random().toString(16).slice(2, 6), text: TEXT[n++], state: 'PENDING', seq: null, onB: false, t: Date.now() };
           msgs.push(m); paint();
           say(o, aOn ? `Written to Room as pending (◷), client id ${m.id}. Sending over the socket…` : `Offline: saved as pending (◷), client id ${m.id}.`);
           if (aOn) flushA();
-        }), act('Burak opens the chat', () => {
-          if (!bOn) { say(o, 'Burak is offline; he can\'t read anything new.'); return; }
+        }), act('Bob opens the chat', () => {
+          if (!bOn) { say(o, 'Bob is offline; he can\'t read anything new.'); return; }
           const r = msgs.filter(m => m.onB && m.state !== 'READ'); r.forEach(m => { m.state = 'READ'; }); paint();
-          say(o, r.length ? `Read receipt for ${r.length} message${r.length > 1 ? 's' : ''}: Ayşe's ticks turn blue.` : 'Nothing new to read.');
-        }), aBtn, bBtn, act('Lose next ack', () => { dropAck = true; say(o, 'The next server ack to Ayşe will be lost.'); }), act('Reset', reset)),
+          say(o, r.length ? `Read receipt for ${r.length} message${r.length > 1 ? 's' : ''}: Alice's ticks turn blue.` : 'Nothing new to read.');
+        }), aBtn, bBtn, act('Lose next ack', () => { dropAck = true; say(o, 'The next server ack to Alice will be lost.'); }), act('Reset', reset)),
         h('div', { class: 'sd-trio' }, aPhone, srv, bPhone), o));
       reset();
     },
@@ -1690,7 +1690,7 @@ socket.send(json.encodeToString(Resume(conversationId, afterSeq = since)))`,
   Lab.addTrack({
     id: 'sysdesign',
     title: 'Mobile system design',
-    description: 'The mobile system design round and senior-level design work: APIs, pagination, caching, offline sync, real-time, push at scale, media and reliability, with two full walkthroughs.',
+    description: 'How to design mobile systems, step by step: APIs, pagination, caching, offline sync, real-time, push at scale, media and reliability, with two full walkthroughs.',
     group: 'Beyond the app',
     requires: ['arch', 'data'],
     css,

@@ -185,7 +185,7 @@
 // depends on the dispatcher and the number of cores.
 suspend fun loadHome() = coroutineScope {
     val news = async(Dispatchers.IO) { api.headlines() }      // waits on the network
-    val weather = async(Dispatchers.IO) { api.weather("İstanbul") }
+    val weather = async(Dispatchers.IO) { api.weather("London") }
     HomeScreen(news.await(), weather.await())
 }
 
@@ -288,8 +288,8 @@ suspend fun sortBoth(a: IntArray, b: IntArray) = coroutineScope {
       { term: 'Context switch', def: 'The scheduler saving one thread’s state and loading another’s so a core can run it.' },
     ],
     challenges: [
-      { type: 'blank', prompt: 'Pick the dispatcher for each job.', code: 'withContext(Dispatchers.[[Default]]) { image.blur(radius = 8) }   // CPU work\nwithContext(Dispatchers.[[IO]]) { file.readBytes() }               // blocking I/O\nwithContext(Dispatchers.[[Main]]) { title.text = "Hazır" }        // touch the UI', why: 'CPU work goes to Default (about one thread per core), blocking I/O to IO, and UI changes to Main, because the UI toolkit is not thread-safe.' },
-      { type: 'bug', prompt: 'This freezes the screen while the file loads. Tap the line that causes it.', code: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    val text = File(filesDir, "haber.json").readText()\n    render(text)\n}', bug: 2, fix: '    lifecycleScope.launch { val text = withContext(Dispatchers.IO) { File(filesDir, "haber.json").readText() }; render(text) }', why: '<code>onCreate</code> runs on the main thread. Reading a file there blocks drawing and input until it finishes. Move the read to <code>Dispatchers.IO</code> and come back to main to render.' },
+      { type: 'blank', prompt: 'Pick the dispatcher for each job.', code: 'withContext(Dispatchers.[[Default]]) { image.blur(radius = 8) }   // CPU work\nwithContext(Dispatchers.[[IO]]) { file.readBytes() }               // blocking I/O\nwithContext(Dispatchers.[[Main]]) { title.text = "Ready" }        // touch the UI', why: 'CPU work goes to Default (about one thread per core), blocking I/O to IO, and UI changes to Main, because the UI toolkit is not thread-safe.' },
+      { type: 'bug', prompt: 'This freezes the screen while the file loads. Tap the line that causes it.', code: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    val text = File(filesDir, "news.json").readText()\n    render(text)\n}', bug: 2, fix: '    lifecycleScope.launch { val text = withContext(Dispatchers.IO) { File(filesDir, "news.json").readText() }; render(text) }', why: '<code>onCreate</code> runs on the main thread. Reading a file there blocks drawing and input until it finishes. Move the read to <code>Dispatchers.IO</code> and come back to main to render.' },
     ],
     quiz: [
       { q: 'A phone with one core runs two threads that each make progress over the same second. What is this?', options: ['Concurrency without parallelism', 'Parallelism without concurrency', 'Neither'], a: 0, why: 'The tasks overlap in time (concurrency), but one core can only run one at a time, so there is no parallelism.' },
@@ -531,11 +531,11 @@ try {
           const tl = timeline(4);
           const msg = out('');
           let fine = false, sameKey = false, tok = 0;
-          const KEYS = ['haber', 'spor', 'hava', 'borsa'];
+          const KEYS = ['news', 'sports', 'weather', 'stocks'];
           async function run() {
             const t = ++tok;
             tl.setRows(['T1', 'T2', 'T3', 'T4']);
-            const keys = sameKey ? ['haber', 'haber', 'haber', 'haber'] : KEYS;
+            const keys = sameKey ? ['news', 'news', 'news', 'news'] : KEYS;
             // time slot for each thread
             const slot = [], busy = {};
             keys.forEach((k, i) => { const lockId = fine ? k : 'all'; busy[lockId] = (busy[lockId] ?? -1) + 1; slot[i] = busy[lockId]; });

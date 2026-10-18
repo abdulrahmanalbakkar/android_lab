@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-10-18: simpler roadmap, "Test yourself"
+
+- **Roadmap redesigned:**
+  - **Layout:** the home page is now a plain syllabus. Each numbered stage is a heading, and each topic is one row with its colour dot, lesson count and progress bar.
+  - **Removed:** the tree drawing (spine, zig-zag cards, connectors), the goal picker, the jump bar, the legend and the finish card.
+  - **Folding:** finished stages fold to one line.
+- **No more interview framing:**
+  - **Menu:** "Interview" is now **Test yourself** at `#practice`. Old `#interview` links redirect, and the shortcut key is `p`.
+  - **Renames:**
+    - Stage "Get the job" → **Problem solving**
+    - "CS and interview basics" → **Data structures and algorithms**
+    - "Approaching a coding interview" → **Solving a problem step by step**
+    - "How a mobile system design interview works" → **How to approach a system design**
+    - Preset "Android interview" → **Android core**
+  - **Unchanged:** lesson ids, so saved progress is kept.
+- **International examples:** every lesson now uses neutral English names, places, app ids and UI text, for example Alice/Bob, City A, `com.example.news`, "Top stories", Team A vs Team B and USD. References to specific real apps are gone. Localization lessons show Spanish, French, German and Arabic. Turkish stays only in the dotted/dotless "i" step, because that bug is the standard example of locale-sensitive case mapping.
+- **Credit:** "Built by Abdulrahman Albakkar" moved to the page footer, where it shows on phones too.
+- **Service worker cache:** version bumped to v12.
+
 ## 2026-10-18: CS foundations, Beyond the app, goals, faster loading
 
 - **Faster loading:**

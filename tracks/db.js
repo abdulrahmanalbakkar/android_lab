@@ -63,8 +63,8 @@
   }
 
   // ---------- the shared dataset ----------
-  const USERS = [[1, 'Ayşe', 'İzmir'], [2, 'Mehmet', 'Ankara'], [3, 'Zeynep', 'İzmir'], [4, 'Can', 'İstanbul']];
-  const POSTS = [[10, 1, 'Kumru tarifi', 42], [11, 1, 'Kordon yürüyüşü', 17], [12, 2, 'Anıtkabir notları', 8], [13, 3, 'Kotlin ipuçları', 95], [14, 3, 'Room ile cache', 61]];
+  const USERS = [[1, 'Alice', 'Paris'], [2, 'Bob', 'Berlin'], [3, 'Maya', 'Paris'], [4, 'Sam', 'Lisbon']];
+  const POSTS = [[10, 1, 'Sandwich recipe', 42], [11, 1, 'Seaside walk', 17], [12, 2, 'Museum notes', 8], [13, 3, 'Kotlin tips', 95], [14, 3, 'Caching with Room', 61]];
   const TAGS = [[1, 'food'], [2, 'travel'], [3, 'android']];
   const POST_TAGS = [[10, 1], [10, 2], [11, 2], [12, 2], [13, 3], [14, 3]];
   const userName = id => (USERS.find(u => u[0] === id) || [])[1];
@@ -155,18 +155,18 @@
           tbl('users', ['id', 'name', 'city'], users, { keys: { id: 'PK' }, cls: (r) => mark && mark.t === 'users' && mark.ids.includes(r[0]) ? mark.c : null }),
           tbl('posts', ['id', 'user_id', 'title'], posts.map(p => p.slice(0, 3)), { keys: { id: 'PK', user_id: 'FK' }, cls: (r) => mark && mark.t === 'posts' && mark.ids.includes(r[0]) ? mark.c : null }));
         const name = users[0][1];
-        json.textContent = `posts.json (author copied into each post)\n[\n  { "id": 10, "author": "${name}", ... },\n  { "id": 11, "author": "${name}", ... },\n  { "id": 12, "author": "Mehmet", ... }, ...\n]`;
+        json.textContent = `posts.json (author copied into each post)\n[\n  { "id": 10, "author": "${name}", ... },\n  { "id": 11, "author": "${name}", ... },\n  { "id": 12, "author": "Bob", ... }, ...\n]`;
       }
       el.append(h('div', { class: 'dbx-stage' },
         h('div', { class: 'controls' },
-          act('Rename Ayşe', () => {
-            users[0][1] = users[0][1] === 'Ayşe' ? 'Ayşe K.' : 'Ayşe';
+          act('Rename Alice', () => {
+            users[0][1] = users[0][1] === 'Alice' ? 'Alice K.' : 'Alice';
             mark = { t: 'users', ids: [1], c: 'dbx-hit' }; paint();
             say(msg, `${c("UPDATE users SET name = '" + users[0][1] + "' WHERE id = 1")}: one row changed. In the JSON file the name is copied into every post, so you rewrite the whole file and must not miss a copy.`);
           }),
           act('Insert post by user 9', () => {
             if (fk) { mark = null; paint(); say(msg, `<span class="bad">FOREIGN KEY constraint failed</span>. User 9 does not exist, so SQLite rejects the row.`); return; }
-            if (!posts.some(p => p[0] === 15)) posts.push([15, 9, 'Kayıp yazı', 0]);
+            if (!posts.some(p => p[0] === 15)) posts.push([15, 9, 'Orphan post', 0]);
             mark = { t: 'posts', ids: [15], c: 'dbx-bad' }; paint();
             say(msg, `Accepted. Post 15 points at user 9, who does not exist: an <span class="bad">orphan row</span>. Foreign key checks are off by default in SQLite. Turn them on and try again.`);
           }),
@@ -246,7 +246,7 @@ data class Order(@PrimaryKey val id: Long, @ColumnInfo(name = "user_id") val use
       { type: 'bug', prompt: 'This test expects the orphan insert to fail on a raw SQLite connection, but it passes the insert. Tap the line that is missing its setup.', code: 'val db = SQLiteDatabase.create(null)\ndb.execSQL("CREATE TABLE users(id INTEGER PRIMARY KEY)")\ndb.execSQL("CREATE TABLE posts(id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id))")\ndb.execSQL("INSERT INTO posts VALUES (1, 9)")   // expected: FOREIGN KEY constraint failed', bug: 0, fix: 'val db = SQLiteDatabase.create(null).apply { setForeignKeyConstraintsEnabled(true) }', why: 'Foreign key checks are off by default. <code>setForeignKeyConstraintsEnabled(true)</code> runs <code>PRAGMA foreign_keys = ON</code> for this connection, before the insert.' },
     ],
     quiz: [
-      { q: 'An app keeps posts in a JSON file with the author’s name copied into each post. The author changes her name. What is the core problem?', options: ['JSON cannot store Turkish characters', 'The same fact lives in many places, so every copy must be found and rewritten', 'JSON files cannot be larger than 1 MB'], a: 1, why: 'Duplicated facts drift apart when one copy is missed. A table stores the name once and posts point at it by id.' },
+      { q: 'An app keeps posts in a JSON file with the author’s name copied into each post. The author changes her name. What is the core problem?', options: ['JSON cannot store non-ASCII characters', 'The same fact lives in many places, so every copy must be found and rewritten', 'JSON files cannot be larger than 1 MB'], a: 1, why: 'Duplicated facts drift apart when one copy is missed. A table stores the name once and posts point at it by id.' },
       { q: 'On a fresh SQLite connection you run <code>INSERT INTO posts(user_id) VALUES (9)</code> and user 9 does not exist. What happens?', options: ['FOREIGN KEY constraint failed', 'The insert succeeds and leaves an orphan row', 'SQLite creates user 9 automatically'], a: 1, why: 'SQLite leaves foreign key enforcement off by default. It only checks after <code>PRAGMA foreign_keys = ON</code> on that connection.' },
       { q: 'Which column makes the best primary key for a <code>users</code> table?', options: ['email', 'phone number', 'a generated numeric id'], a: 2, why: 'Emails and phone numbers change. A generated id never does, so nothing pointing at it has to change. Keep email unique with an index.' },
     ],
@@ -347,10 +347,9 @@ db.rawQuery("SELECT * FROM users WHERE name = '$input'", null)
 suspend fun byName(name: String): List<User>`,
       },
       {
-        title: 'Case and Turkish text',
-        body: `<p>By default, SQLite’s <code>lower()</code>, <code>upper()</code>, the <code>NOCASE</code> collation and <code>LIKE</code> only know upper and lower case for ASCII letters; full Unicode folding needs the ICU extension. So <code>'İzmir' = 'izmir' COLLATE NOCASE</code> is false. Do not count on the database for Turkish case rules: store a normalized column, lowercased in Kotlin with the Turkish locale, and query that.</p>`,
-        code: `val tr = Locale.forLanguageTag("tr")
-val key = "İzmir".lowercase(tr)            // "izmir"
+        title: 'Case and non-ASCII text',
+        body: `<p>By default, SQLite’s <code>lower()</code>, <code>upper()</code>, the <code>NOCASE</code> collation and <code>LIKE</code> only know upper and lower case for ASCII letters; full Unicode folding needs the ICU extension. So <code>'SÃO PAULO' = 'são paulo' COLLATE NOCASE</code> is false. Do not count on the database for Unicode or locale-specific case rules: store a normalized column, lowercased in Kotlin with an explicit locale, and query that.</p>`,
+        code: `val key = "SÃO PAULO".lowercase(Locale.ROOT)   // "são paulo"
 // @Entity: val cityKey: String  (filled on insert)
 @Query("SELECT * FROM users WHERE city_key = :key")
 suspend fun inCity(key: String): List<User>`,
@@ -383,22 +382,22 @@ suspend fun inCity(key: String): List<User>`,
     {
       label: 'INNER JOIN', sql: 'SELECT u.name, p.title\nFROM users u\nJOIN posts p ON p.user_id = u.id;',
       cols: ['name', 'title'], rows: () => POSTS.map(p => [userName(p[1]), p[2]]), cls: () => null,
-      msg: 'One output row per matching pair. Can has no posts, so Can is missing from the result.',
+      msg: 'One output row per matching pair. Sam has no posts, so Sam is missing from the result.',
     },
     {
       label: 'LEFT JOIN', sql: 'SELECT u.name, p.title\nFROM users u\nLEFT JOIN posts p ON p.user_id = u.id;',
-      cols: ['name', 'title'], rows: () => [...POSTS.map(p => [userName(p[1]), p[2]]), ['Can', null]], cls: r => r[1] == null ? 'dbx-warm' : null,
+      cols: ['name', 'title'], rows: () => [...POSTS.map(p => [userName(p[1]), p[2]]), ['Sam', null]], cls: r => r[1] == null ? 'dbx-warm' : null,
       msg: 'Every user stays. Where no post matches, the post columns are NULL. Use it for “users and their posts, if any”.',
     },
     {
       label: 'LEFT JOIN … IS NULL', sql: 'SELECT u.name\nFROM users u\nLEFT JOIN posts p ON p.user_id = u.id\nWHERE p.id IS NULL;',
-      cols: ['name'], rows: () => [['Can']], cls: () => 'dbx-warm',
+      cols: ['name'], rows: () => [['Sam']], cls: () => 'dbx-warm',
       msg: 'The anti-join: keep only the users the LEFT JOIN could not match. “Users who never posted.”',
     },
     {
       label: 'many-to-many', sql: 'SELECT p.title, t.name AS tag\nFROM posts p\nJOIN post_tags pt ON pt.post_id = p.id\nJOIN tags t ON t.id = pt.tag_id;',
-      cols: ['title', 'tag'], rows: () => POST_TAGS.map(([pid, tid]) => [POSTS.find(p => p[0] === pid)[2], TAGS.find(t => t[0] === tid)[1]]), cls: r => r[0] === 'Kumru tarifi' ? 'dbx-g0' : null,
-      msg: 'A post has many tags and a tag has many posts. The join table post_tags holds one row per pair. “Kumru tarifi” has two tags, so it appears twice.',
+      cols: ['title', 'tag'], rows: () => POST_TAGS.map(([pid, tid]) => [POSTS.find(p => p[0] === pid)[2], TAGS.find(t => t[0] === tid)[1]]), cls: r => r[0] === 'Sandwich recipe' ? 'dbx-g0' : null,
+      msg: 'A post has many tags and a tag has many posts. The join table post_tags holds one row per pair. “Sandwich recipe” has two tags, so it appears twice.',
     },
   ];
   lessons.push({
@@ -530,7 +529,7 @@ FROM users u;`,
       { type: 'bug', prompt: 'The feed screen is slow with 100 posts. Tap the line that causes the N+1 problem.', code: 'suspend fun loadFeed(): List<FeedItem> {\n    val posts = postDao.latest(100)\n    return posts.map { post ->\n        FeedItem(post, userDao.byId(post.userId))\n    }\n}', bug: 3, fix: '        FeedItem(post, users.getValue(post.userId))   // users = userDao.byIds(ids).associateBy { it.id }', why: 'Each <code>byId</code> call is one more query, 101 in total. Load all authors once with <code>IN (...)</code> before the loop and look them up in a map.' },
     ],
     quiz: [
-      { q: 'With the demo data (Can has no posts), how many rows does <code>users LEFT JOIN posts</code> return?', options: ['4', '5', '6'], a: 2, why: 'Five posts each match one user, giving 5 rows. Can matches nothing, so the LEFT JOIN adds one more row with NULL post columns: 6.' },
+      { q: 'With the demo data (Sam has no posts), how many rows does <code>users LEFT JOIN posts</code> return?', options: ['4', '5', '6'], a: 2, why: 'Five posts each match one user, giving 5 rows. Can matches nothing, so the LEFT JOIN adds one more row with NULL post columns: 6.' },
       { q: 'Students take many courses and courses have many students. How do you model it?', options: ['A course_id column in students', 'A comma-separated list of ids in each row', 'A third table enrollments(student_id, course_id)'], a: 2, why: 'Each enrollment is its own fact. A join table with both foreign keys, and a composite primary key, models many-to-many.' },
       { q: 'A screen loads 30 orders, then calls <code>customerDao.byId()</code> for each. How many queries run, and what is the fix?', options: ['30, use a cache', '31, load customers with one WHERE id IN (...) query', '1, nothing to fix'], a: 1, why: '1 for the orders plus 30 for customers is N+1. One batched IN query (or a JOIN) brings it to 2 (or 1).' },
       { q: 'Why does Room ask for <code>@Transaction</code> on a query returning <code>UserWithPosts</code>?', options: ['It runs more than one query, and the transaction keeps them on one snapshot', 'Room cannot read without a transaction', 'It makes the query run faster in parallel'], a: 0, why: 'Users and posts come from separate queries. Without a transaction, a write could land between them and you would get posts that do not match the users.' },
@@ -541,29 +540,29 @@ FROM users u;`,
   const NF = [
     {
       name: 'Unnormalized', anomaly: 2,
-      tables: [['orders', ['order_id', 'customer', 'city', 'items'], [[1001, 'Ayşe', 'İzmir', 'çay×2, simit×1'], [1002, 'Ayşe', 'İzmir', 'simit×3'], [1003, 'Mehmet', 'Ankara', 'çay×1']], { order_id: 'PK' }]],
-      msg: 'One wide table, and the items column holds a list. You cannot ask “how many simit were sold?” without parsing text.',
+      tables: [['orders', ['order_id', 'customer', 'city', 'items'], [[1001, 'Alice', 'Paris', 'tea×2, bagel×1'], [1002, 'Alice', 'Paris', 'bagel×3'], [1003, 'Bob', 'Berlin', 'tea×1']], { order_id: 'PK' }]],
+      msg: 'One wide table, and the items column holds a list. You cannot ask “how many bagels were sold?” without parsing text.',
     },
     {
       name: '1NF', anomaly: 3,
-      tables: [['order_lines', ['order_id', 'product', 'qty', 'customer', 'city', 'price'], [[1001, 'çay', 2, 'Ayşe', 'İzmir', 15], [1001, 'simit', 1, 'Ayşe', 'İzmir', 20], [1002, 'simit', 3, 'Ayşe', 'İzmir', 20], [1003, 'çay', 1, 'Mehmet', 'Ankara', 15]], { order_id: 'PK', product: 'PK' }]],
-      msg: '1NF: one value per cell, no lists. The key is now (order_id, product). But Ayşe’s city is copied into 3 rows, and the simit price into 2.',
+      tables: [['order_lines', ['order_id', 'product', 'qty', 'customer', 'city', 'price'], [[1001, 'tea', 2, 'Alice', 'Paris', 15], [1001, 'bagel', 1, 'Alice', 'Paris', 20], [1002, 'bagel', 3, 'Alice', 'Paris', 20], [1003, 'tea', 1, 'Bob', 'Berlin', 15]], { order_id: 'PK', product: 'PK' }]],
+      msg: '1NF: one value per cell, no lists. The key is now (order_id, product). But Alice’s city is copied into 3 rows, and the bagel price into 2.',
     },
     {
       name: '2NF', anomaly: 2,
       tables: [
-        ['orders', ['order_id', 'customer', 'city'], [[1001, 'Ayşe', 'İzmir'], [1002, 'Ayşe', 'İzmir'], [1003, 'Mehmet', 'Ankara']], { order_id: 'PK' }],
-        ['order_lines', ['order_id', 'product', 'qty'], [[1001, 'çay', 2], [1001, 'simit', 1], [1002, 'simit', 3], [1003, 'çay', 1]], { order_id: 'FK', product: 'FK' }],
-        ['products', ['product', 'price'], [['çay', 15], ['simit', 20]], { product: 'PK' }]],
+        ['orders', ['order_id', 'customer', 'city'], [[1001, 'Alice', 'Paris'], [1002, 'Alice', 'Paris'], [1003, 'Bob', 'Berlin']], { order_id: 'PK' }],
+        ['order_lines', ['order_id', 'product', 'qty'], [[1001, 'tea', 2], [1001, 'bagel', 1], [1002, 'bagel', 3], [1003, 'tea', 1]], { order_id: 'FK', product: 'FK' }],
+        ['products', ['product', 'price'], [['tea', 15], ['bagel', 20]], { product: 'PK' }]],
       msg: '2NF: every column depends on the whole key. customer and city depend only on order_id, price only on product, so they moved out. City still repeats once per order.',
     },
     {
       name: '3NF', anomaly: 1,
       tables: [
-        ['customers', ['id', 'name', 'city'], [[1, 'Ayşe', 'İzmir'], [2, 'Mehmet', 'Ankara']], { id: 'PK' }],
+        ['customers', ['id', 'name', 'city'], [[1, 'Alice', 'Paris'], [2, 'Bob', 'Berlin']], { id: 'PK' }],
         ['orders', ['order_id', 'customer_id'], [[1001, 1], [1002, 1], [1003, 2]], { order_id: 'PK', customer_id: 'FK' }],
-        ['order_lines', ['order_id', 'product', 'qty'], [[1001, 'çay', 2], [1001, 'simit', 1], [1002, 'simit', 3], [1003, 'çay', 1]], {}],
-        ['products', ['product', 'price'], [['çay', 15], ['simit', 20]], { product: 'PK' }]],
+        ['order_lines', ['order_id', 'product', 'qty'], [[1001, 'tea', 2], [1001, 'bagel', 1], [1002, 'bagel', 3], [1003, 'tea', 1]], {}],
+        ['products', ['product', 'price'], [['tea', 15], ['bagel', 20]], { product: 'PK' }]],
       msg: '3NF: no column depends on another non-key column. city depended on the customer, not the order, so customers got their own table. Each fact now lives in exactly one row.',
     },
   ];
@@ -575,10 +574,10 @@ FROM users u;`,
     body: `
 <p>Normalization is a recipe for removing duplicated facts. Duplicates cause <strong>anomalies</strong>: update one copy and forget another (update anomaly), cannot store a product until someone orders it (insert anomaly), delete the last order and lose the customer (delete anomaly).</p>
 <p><strong>1NF</strong>: one value per cell, no lists or repeating groups. <strong>2NF</strong>: every non-key column depends on the whole key, not part of it. <strong>3NF</strong>: no non-key column depends on another non-key column. The old mnemonic: every column depends on “the key, the whole key, and nothing but the key”.</p>
-<p>Normalize first, then <strong>denormalize on purpose</strong> where reads dominate. A feed that shows like counts can store <code>like_count</code> on the post instead of counting rows every time. A local <a href="#data.caching">cache</a> of API responses can be a flat copy. Each copy is a promise to keep it in sync. Press the steps to split the table and watch the cost of renaming Ayşe’s city fall.</p>`,
+<p>Normalize first, then <strong>denormalize on purpose</strong> where reads dominate. A feed that shows like counts can store <code>like_count</code> on the post instead of counting rows every time. A local <a href="#data.caching">cache</a> of API responses can be a flat copy. Each copy is a promise to keep it in sync. Press the steps to split the table and watch the cost of renaming Alice’s city fall.</p>`,
     visual(el) {
       const area = h('div', { class: 'dbx-row' });
-      const st = stats(['rows to update when Ayşe moves', 'tables']);
+      const st = stats(['rows to update when Alice moves', 'tables']);
       const msg = out('');
       const btns = NF.map((f, k) => act(f.name, () => show(k)));
       function show(k) {
@@ -586,10 +585,10 @@ FROM users u;`,
         const f = NF[k];
         area.replaceChildren(...f.tables.map(([n, cols, rows, keys]) => tbl(n, cols, rows, {
           keys,
-          cls: r => (cols.includes('city') && r.includes('Ayşe')) ? 'dbx-warm' : null,
+          cls: r => (cols.includes('city') && r.includes('Alice')) ? 'dbx-warm' : null,
         })));
         replay(area, 'pop-soft');
-        st.set('rows to update when Ayşe moves', f.anomaly);
+        st.set('rows to update when Alice moves', f.anomaly);
         st.set('tables', f.tables.length);
         say(msg, f.msg);
       }
@@ -650,7 +649,7 @@ abstract class LikeDao {
       { term: 'Denormalization', def: 'Copying data on purpose to make reads cheaper, at the cost of extra writes and sync code.' },
     ],
     challenges: [
-      { type: 'blank', prompt: 'Name the normal form each fix reaches.', code: '-- items "çay×2, simit×1" split into one row per item   -> [[1NF|1nf]]\n-- price moved out of order_lines into products         -> [[2NF|2nf]]\n-- city moved out of orders into customers              -> [[3NF|3nf]]', why: 'Removing lists gives 1NF. price depended on part of the key (product), a partial dependency, so moving it gives 2NF. city depended on customer, a non-key column, so moving it gives 3NF.' },
+      { type: 'blank', prompt: 'Name the normal form each fix reaches.', code: '-- items "tea×2, bagel×1" split into one row per item   -> [[1NF|1nf]]\n-- price moved out of order_lines into products         -> [[2NF|2nf]]\n-- city moved out of orders into customers              -> [[3NF|3nf]]', why: 'Removing lists gives 1NF. price depended on part of the key (product), a partial dependency, so moving it gives 2NF. city depended on customer, a non-key column, so moving it gives 3NF.' },
       { type: 'bug', prompt: 'This order table is meant to be in 3NF. Tap the column that breaks it.', code: 'CREATE TABLE orders (\n    id           INTEGER PRIMARY KEY,\n    customer_id  INTEGER NOT NULL REFERENCES customers(id),\n    customer_city TEXT NOT NULL,\n    created_at   INTEGER NOT NULL\n);', bug: 3, fix: '    -- (removed) city lives in customers; join when needed', why: '<code>customer_city</code> depends on <code>customer_id</code>, not on the order id. That transitive dependency breaks 3NF and means a move must update every order.' },
     ],
     quiz: [
@@ -763,16 +762,16 @@ fun latest(chat: Long): Flow<List<Message>>`,
     deeper: [
       {
         title: 'Composite index order',
-        body: `<p>An index on <code>(city, name)</code> is sorted by city, then by name inside each city, like a phone book. It serves <code>WHERE city = ?</code> and <code>WHERE city = ? AND name = ?</code>, because the matches sit next to each other. It cannot jump to <code>WHERE name = ?</code> alone: Ece in İzmir and Ece in Ankara are far apart. Rule: the index is used from its leftmost column onward.</p>`,
+        body: `<p>An index on <code>(city, name)</code> is sorted by city, then by name inside each city, like a phone book. It serves <code>WHERE city = ?</code> and <code>WHERE city = ? AND name = ?</code>, because the matches sit next to each other. It cannot jump to <code>WHERE name = ?</code> alone: Lena in Paris and Lena in Berlin are far apart. Rule: the index is used from its leftmost column onward.</p>`,
         visual(el) {
-          const IDX = [['Ankara', 'Ali'], ['Ankara', 'Ece'], ['Ankara', 'Mehmet'], ['İstanbul', 'Can'], ['İstanbul', 'Deniz'], ['İzmir', 'Ayşe'], ['İzmir', 'Ece'], ['İzmir', 'Zeynep']];
+          const IDX = [['Berlin', 'Bob'], ['Berlin', 'Lena'], ['Berlin', 'Omar'], ['Lisbon', 'Ken'], ['Lisbon', 'Sam'], ['Paris', 'Alice'], ['Paris', 'Lena'], ['Paris', 'Maya']];
           const area = h('div', {});
           const plan = h('pre', { class: 'dbx-sql' });
           const msg = out('Index idx_city_name on users(city, name). Pick a WHERE clause.');
           const Q = [
-            { l: "city = 'İzmir'", hit: r => r[0] === 'İzmir', plan: 'SEARCH users USING INDEX idx_city_name (city=?)', m: 'One seek to the first İzmir entry, then read the 3 entries next to it.' },
-            { l: "city = 'İzmir' AND name = 'Ece'", hit: r => r[0] === 'İzmir' && r[1] === 'Ece', plan: 'SEARCH users USING INDEX idx_city_name (city=? AND name=?)', m: 'Both columns narrow the seek: straight to one entry.' },
-            { l: "name = 'Ece'", hit: r => r[1] === 'Ece', scan: true, plan: 'SCAN users', m: 'The Ece entries are not adjacent, so a seek is impossible. Without other help, SQLite scans the table. Add an index that starts with name if this query matters.' },
+            { l: "city = 'Paris'", hit: r => r[0] === 'Paris', plan: 'SEARCH users USING INDEX idx_city_name (city=?)', m: 'One seek to the first Paris entry, then read the 3 entries next to it.' },
+            { l: "city = 'Paris' AND name = 'Lena'", hit: r => r[0] === 'Paris' && r[1] === 'Lena', plan: 'SEARCH users USING INDEX idx_city_name (city=? AND name=?)', m: 'Both columns narrow the seek: straight to one entry.' },
+            { l: "name = 'Lena'", hit: r => r[1] === 'Lena', scan: true, plan: 'SCAN users', m: 'The Lena entries are not adjacent, so a seek is impossible. Without other help, SQLite scans the table. Add an index that starts with name if this query matters.' },
           ];
           const btns = Q.map((q, k) => act(q.l, () => {
             press(btns, btns[k]);
@@ -806,7 +805,7 @@ db.query("EXPLAIN QUERY PLAN SELECT * FROM messages WHERE chat_id = 7 ORDER BY s
     },
     mistakes: [
       { title: 'Wrong column order in a composite index', bad: '@Entity(indices = [Index(value = ["sent_at", "chat_id"])])\n// query: WHERE chat_id = ? ORDER BY sent_at', good: '@Entity(indices = [Index(value = ["chat_id", "sent_at"])])', why: 'The query filters by chat_id with equality. Put equality columns first, then the sort or range column. Starting with sent_at cannot seek by chat.' },
-      { title: 'A function on the indexed column', bad: "SELECT * FROM users WHERE lower(email) = 'ayse@x.com';", good: "-- store emails lowercased, then\nSELECT * FROM users WHERE email = 'ayse@x.com';", why: 'The index holds email values, not lower(email). Wrapping the column hides it from the index and forces a scan. Normalize on write, or create an index on the expression.' },
+      { title: 'A function on the indexed column', bad: "SELECT * FROM users WHERE lower(email) = 'alice@x.com';", good: "-- store emails lowercased, then\nSELECT * FROM users WHERE email = 'alice@x.com';", why: 'The index holds email values, not lower(email). Wrapping the column hides it from the index and forces a scan. Normalize on write, or create an index on the expression.' },
     ],
     terms: [
       { term: 'Index', def: 'A separate sorted structure (a B-tree) mapping column values to rows, for fast lookups.' },
@@ -819,7 +818,7 @@ db.query("EXPLAIN QUERY PLAN SELECT * FROM messages WHERE chat_id = 7 ORDER BY s
       { type: 'bug', prompt: 'There is an index on <code>email</code>, yet <code>EXPLAIN QUERY PLAN</code> says <code>SCAN users</code>. Tap the line that hides the index.', code: '@Query("""\n    SELECT id, name FROM users\n    WHERE lower(email) = :email\n    LIMIT 1\n""")\nsuspend fun byEmail(email: String): UserRow?', bug: 2, fix: '    WHERE email = :email', why: 'The index stores raw email values. <code>lower(email)</code> is a different expression, so SQLite cannot use the index. Store emails lowercased and compare the column directly.' },
     ],
     quiz: [
-      { q: 'With an index on <code>(city, name)</code>, which query cannot seek with it?', options: ["WHERE city = 'İzmir'", "WHERE city = 'İzmir' AND name = 'Ece'", "WHERE name = 'Ece'"], a: 2, why: 'The index is ordered by city first. Rows with name Ece are spread across cities, so there is no single place to seek to.' },
+      { q: 'With an index on <code>(city, name)</code>, which query cannot seek with it?', options: ["WHERE city = 'Paris'", "WHERE city = 'Paris' AND name = 'Lena'", "WHERE name = 'Lena'"], a: 2, why: 'The index is ordered by city first. Rows with name Ece are spread across cities, so there is no single place to seek to.' },
       { q: 'A table has 1,000,000 rows and a B-tree index with about 100 keys per page. Roughly how many index pages does one lookup read?', options: ['About 3', 'About 1,000', 'About 500,000'], a: 0, why: '100 × 100 × 100 = 1,000,000, so three levels are enough. That is why indexes stay fast as tables grow.' },
       { q: 'You add 6 indexes to a <code>messages</code> table that syncs thousands of rows. What gets worse?', options: ['Nothing, indexes only help', 'Inserts, because each one updates 7 B-trees', 'Reads by primary key'], a: 1, why: 'Every index is another tree to update on insert and delete. Keep only the ones a real query needs.' },
       { q: 'EXPLAIN QUERY PLAN prints <code>SEARCH t USING COVERING INDEX i (a=?)</code>. What does it mean?', options: ['The query reads every row', 'The index holds all the columns needed, so the table is not read', 'The index is corrupt'], a: 1, why: 'SEARCH means a subset of rows; COVERING means the answer comes from the index alone.' },
@@ -1007,14 +1006,14 @@ db.withTransaction { dao.clear(); dao.insertAll(page) }`,
       let denorm = false;
       const doc = h('pre', { class: 'dbx-doc' });
       const st = stats(['reads', 'writes']);
-      const msg = out('Feed: 10 posts by 6 authors. Ayşe wrote 4 of them.');
+      const msg = out('Feed: 10 posts by 6 authors. Alice wrote 4 of them.');
       const modeB = [act('Normalized: authorId only', () => set(false)), act('Denormalized: copy authorName', () => set(true))];
       function set(d) {
         denorm = d; press(modeB, modeB[d ? 1 : 0]);
         st.set('reads', '-'); st.set('writes', '-');
         doc.textContent = d
-          ? 'users/ayse   { name: "Ayşe", city: "İzmir" }\nposts/p10    { authorId: "ayse",\n               authorName: "Ayşe",\n               title: "Kumru tarifi", likes: 42 }\nposts/p11    { authorId: "ayse", authorName: "Ayşe", … }'
-          : 'users/ayse   { name: "Ayşe", city: "İzmir" }\nposts/p10    { authorId: "ayse",\n               title: "Kumru tarifi", likes: 42 }\nposts/p11    { authorId: "ayse", … }';
+          ? 'users/alice   { name: "Alice", city: "Paris" }\nposts/p10    { authorId: "alice",\n               authorName: "Alice",\n               title: "Sandwich recipe", likes: 42 }\nposts/p11    { authorId: "alice", authorName: "Alice", … }'
+          : 'users/alice   { name: "Alice", city: "Paris" }\nposts/p10    { authorId: "alice",\n               title: "Sandwich recipe", likes: 42 }\nposts/p11    { authorId: "alice", … }';
         replay(doc, 'pop-soft');
         say(msg, d ? 'Each post carries the author name it shows on screen.' : 'Posts point at users by id, like a foreign key. There is no server-side join.');
       }
@@ -1025,7 +1024,7 @@ db.withTransaction { dao.clear(); dao.insertAll(page) }`,
             st.set('reads', denorm ? 10 : 16); st.set('writes', 0);
             say(msg, denorm ? '<b>10 reads</b>: one query, the name is already in each post.' : '<b>16 reads</b>: 10 posts, then 6 user documents fetched by id to show the names. The client does the join.');
           }),
-          act('Rename Ayşe', () => {
+          act('Rename Alice', () => {
             st.set('reads', denorm ? 4 : 0); st.set('writes', denorm ? 5 : 1);
             say(msg, denorm ? '<b>5 writes</b>: her user document plus 4 posts, ideally in one batched write or a Cloud Function. Miss one and the feed shows the old name.' : '<b>1 write</b>: the user document. Every feed shows the new name at once.');
           })),
@@ -1069,13 +1068,13 @@ suspend fun rename(uid: String, name: String, postIds: List<String>) {
         title: 'Firestore: nest, subcollection or root collection',
         body: `<p>Firestore stores documents in collections; a document can hold nested maps and its own <strong>subcollections</strong>. A document is limited to 1 MiB, so a growing list (all comments on a post) should not be an array inside it. Put it in a subcollection (<code>posts/p10/comments</code>) or a root collection with a <code>postId</code> field. Root collections suit many-to-many links; subcollections keep the parent small. Firestore needs an index for every query, and composite queries need composite indexes you declare.</p>`,
         code: `// Small, fixed list: nest it
-users/ayse { name: "Ayşe", links: { github: "...", site: "..." } }
+users/alice { name: "Alice", links: { github: "...", site: "..." } }
 
 // Grows without limit: subcollection
-posts/p10/comments/c1 { authorId: "can", text: "Eline sağlık" }
+posts/p10/comments/c1 { authorId: "sam", text: "Looks delicious" }
 
 // Many-to-many: a root collection of pairs
-follows/ayse_can { from: "ayse", to: "can", at: <timestamp> }`,
+follows/alice_sam { from: "alice", to: "sam", at: <timestamp> }`,
       },
       {
         title: 'CAP in plain words',
@@ -1128,19 +1127,19 @@ follows/ayse_can { from: "ayse", to: "can", at: <timestamp> }`,
 
   // 8 ─────────────────────────────────────────────
   const C = (name, st) => ({ name, st });
-  const MIG_START = { cols: ['id', 'name'], rows: [[1, 'Ayşe'], [2, 'Can']] };
+  const MIG_START = { cols: ['id', 'name'], rows: [[1, 'Alice'], [2, 'Sam']] };
   const BIGBANG = [
     { ...MIG_START, clients: [C('app v1 reads name', 'ok')], msg: 'Backend table users(id, name). Every installed app is v1 and reads name.' },
-    { cols: ['id', 'display_name'], rows: [[1, 'Ayşe'], [2, 'Can']], sql: "ALTER TABLE users RENAME COLUMN name TO display_name;", clients: [C('app v1 reads name', 'bad'), C('app v2 reads display_name', 'not out yet')], msg: '<span class="bad">Every v1 request now fails: no such column: name.</span> App stores take days to roll out v2, and some users never update.' },
+    { cols: ['id', 'display_name'], rows: [[1, 'Alice'], [2, 'Sam']], sql: "ALTER TABLE users RENAME COLUMN name TO display_name;", clients: [C('app v1 reads name', 'bad'), C('app v2 reads display_name', 'not out yet')], msg: '<span class="bad">Every v1 request now fails: no such column: name.</span> App stores take days to roll out v2, and some users never update.' },
   ];
   const EXPAND = [
     { ...MIG_START, clients: [C('app v1 reads name', 'ok')], msg: 'Same start. This time each step keeps every running version working.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Ayşe', null], [2, 'Can', null]], sql: 'ALTER TABLE users ADD COLUMN display_name TEXT;', clients: [C('app v1 reads name', 'ok')], msg: '<b>Expand.</b> Add the new column, nullable, so the change is instant and nothing that exists breaks.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Ayşe', null], [2, 'Can', null], [3, 'Ece', 'Ece']], sql: '-- backend code: on every write, set both name and display_name', clients: [C('app v1 reads name', 'ok')], msg: '<b>Dual write.</b> New and changed rows get both columns. Old rows still have NULL.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Ayşe', 'Ayşe'], [2, 'Can', 'Can'], [3, 'Ece', 'Ece']], sql: 'UPDATE users SET display_name = name\nWHERE display_name IS NULL AND id BETWEEN ? AND ?;   -- in batches', clients: [C('app v1 reads name', 'ok')], msg: '<b>Backfill.</b> Copy old values in small batches so no single transaction locks the table for long.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Ayşe', 'Ayşe'], [2, 'Can', 'Can'], [3, 'Ece', 'Ece']], sql: '-- release app v2 and API v2, reading display_name', clients: [C('app v1 reads name', 'ok'), C('app v2 reads display_name', 'ok')], msg: '<b>Switch reads.</b> Ship v2. Both versions work, because both columns exist and are in sync.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Ayşe', 'Ayşe'], [2, 'Can', 'Can'], [3, 'Ece', 'Ece']], sql: '-- wait: watch v1 traffic fall; raise the minimum supported version', clients: [C('app v1 reads name', 'retired'), C('app v2 reads display_name', 'ok')], msg: '<b>Wait.</b> Only contract when analytics show v1 is gone or you force an update.' },
-    { cols: ['id', 'display_name'], rows: [[1, 'Ayşe'], [2, 'Can'], [3, 'Ece']], sql: '-- stop writing name, then:\nALTER TABLE users DROP COLUMN name;', clients: [C('app v2 reads display_name', 'ok')], msg: '<b>Contract.</b> Remove the old column. The rename is done and no client ever broke.' },
+    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', null], [2, 'Sam', null]], sql: 'ALTER TABLE users ADD COLUMN display_name TEXT;', clients: [C('app v1 reads name', 'ok')], msg: '<b>Expand.</b> Add the new column, nullable, so the change is instant and nothing that exists breaks.' },
+    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', null], [2, 'Sam', null], [3, 'Lena', 'Lena']], sql: '-- backend code: on every write, set both name and display_name', clients: [C('app v1 reads name', 'ok')], msg: '<b>Dual write.</b> New and changed rows get both columns. Old rows still have NULL.' },
+    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', 'Alice'], [2, 'Sam', 'Sam'], [3, 'Lena', 'Lena']], sql: 'UPDATE users SET display_name = name\nWHERE display_name IS NULL AND id BETWEEN ? AND ?;   -- in batches', clients: [C('app v1 reads name', 'ok')], msg: '<b>Backfill.</b> Copy old values in small batches so no single transaction locks the table for long.' },
+    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', 'Alice'], [2, 'Sam', 'Sam'], [3, 'Lena', 'Lena']], sql: '-- release app v2 and API v2, reading display_name', clients: [C('app v1 reads name', 'ok'), C('app v2 reads display_name', 'ok')], msg: '<b>Switch reads.</b> Ship v2. Both versions work, because both columns exist and are in sync.' },
+    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', 'Alice'], [2, 'Sam', 'Sam'], [3, 'Lena', 'Lena']], sql: '-- wait: watch v1 traffic fall; raise the minimum supported version', clients: [C('app v1 reads name', 'retired'), C('app v2 reads display_name', 'ok')], msg: '<b>Wait.</b> Only contract when analytics show v1 is gone or you force an update.' },
+    { cols: ['id', 'display_name'], rows: [[1, 'Alice'], [2, 'Sam'], [3, 'Lena']], sql: '-- stop writing name, then:\nALTER TABLE users DROP COLUMN name;', clients: [C('app v2 reads display_name', 'ok')], msg: '<b>Contract.</b> Remove the old column. The rename is done and no client ever broke.' },
   ];
   lessons.push({
     id: 'schema-evolution',
@@ -1216,9 +1215,9 @@ db.execSQL("CREATE INDEX index_users_city ON users(city)")   // indexes do not c
 val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
 
 @Test fun migrate3to4() {
-    helper.createDatabase("t.db", 3).use { it.execSQL("INSERT INTO users (id, display_name, city) VALUES (1, 'Ayşe', 'İzmir')") }
+    helper.createDatabase("t.db", 3).use { it.execSQL("INSERT INTO users (id, display_name, city) VALUES (1, 'Alice', 'Paris')") }
     helper.runMigrationsAndValidate("t.db", 4, true, MIGRATION_3_4).use { db ->
-        db.query("SELECT city FROM addresses WHERE user_id = 1").use { c -> c.moveToFirst(); assertEquals("İzmir", c.getString(0)) }
+        db.query("SELECT city FROM addresses WHERE user_id = 1").use { c -> c.moveToFirst(); assertEquals("Paris", c.getString(0)) }
     }
 }`,
       },

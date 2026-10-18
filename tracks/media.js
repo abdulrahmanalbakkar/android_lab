@@ -650,7 +650,7 @@ player.setMediaItem(MediaItem.fromUri("https://example.com/show/master.m3u8"))
 player.trackSelectionParameters = player.trackSelectionParameters
     .buildUpon()
     .setMaxVideoSizeSd()                 // below 720p, for example on mobile data
-    .setPreferredAudioLanguage("tr")
+    .setPreferredAudioLanguage("es")
     .build()`,
           },
         ],

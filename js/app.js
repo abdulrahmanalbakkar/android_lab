@@ -18,12 +18,12 @@ const Lab = (() => {
 
   // ponytail: progress lives in this browser only. Move to a backend when accounts exist.
   const KEY = 'android-lab:v1';
-  // iv: interview mode, { setup, best: { [setupKey]: run }, history: [run] }. Added later; older saves simply lack it.
-  let state = { done: {}, cards: {}, level: 'all', last: null, hide: {}, iv: {}, goal: null };
+  // iv: Test yourself (practice) mode, { setup, best: { [setupKey]: run }, history: [run] }. Added later; older saves simply lack it.
+  let state = { done: {}, cards: {}, level: 'all', last: null, hide: {}, iv: {} };
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {}, iv: s.iv || {}, goal: s.goal || null };
+      if (s) state = { done: s.done || {}, cards: s.cards || {}, level: s.level || 'all', last: s.last || null, hide: s.hide || {}, iv: s.iv || {} };
       migrate();
     } catch (e) { /* storage blocked: run without saving */ }
   }
@@ -87,7 +87,7 @@ const Lab = (() => {
   // Requires pointing at a track that isn't loaded are ignored.
   const reqs = t => (Array.isArray(t.requires) ? t.requires : []).map(trackById).filter(x => x && x !== t);
   const missing = t => reqs(t).filter(r => !doneCount(r));
-  const RESERVED = ['home', 'review', 'glossary', 'interview'];
+  const RESERVED = ['home', 'review', 'glossary', 'practice', 'interview'];
   const isProject = t => t.kind === 'project';
   // 'track.lesson' -> { t, l }, or null when either id doesn't resolve.
   function lessonRef(id) {
@@ -113,18 +113,9 @@ const Lab = (() => {
     { title: 'Platform features', blurb: 'Push, background work, security and media', tracks: ['push', 'background', 'security', 'media'], optional: ['media'] },
     { title: 'Ship it', blurb: 'Build, sign, release and keep the app healthy', tracks: ['build', 'launch', 'capship', 'kmp'], optional: ['kmp'] },
     { title: 'Beyond the app', blurb: 'System design, a Kotlin backend and the cloud around it', tracks: ['sysdesign', 'backend', 'cloud'] },
-    { title: 'Get the job', blurb: 'Data structures, algorithms and interview practice', tracks: ['cs'] },
+    { title: 'Problem solving', blurb: 'Data structures, algorithms and a routine for hard problems', tracks: ['cs'] },
   ];
-  // Learner goals: which stages are open on the map. null (never chosen) and 'all' open every stage.
-  const GOALS = [
-    { id: 'start', label: 'New to programming', sub: 'Kotlin first, then your first real Android apps', stages: ['Programming basics', 'Think in objects', 'Your first app', 'Async and data', 'Architecture'] },
-    { id: 'senior', label: 'Growing to senior', sub: 'Fill the gaps and learn what seniors are expected to know', stages: ['Computer science foundations', 'Async and data', 'Architecture', 'Quality', 'Platform features', 'Ship it', 'Beyond the app'] },
-    { id: 'interview', label: 'Interview prep', sub: 'Fundamentals, system design and practice questions', stages: ['Programming basics', 'Computer science foundations', 'Async and data', 'Architecture', 'Beyond the app', 'Get the job'] },
-    { id: 'all', label: 'Everything', sub: 'The whole map, every stage open', stages: null },
-  ];
-  const goalOf = () => GOALS.find(g => g.id === state.goal) || null;
-  const inGoal = s => { const g = goalOf(); return !g || !g.stages || g.stages.includes(s.title); };
-  const opened = new Set(); // stages the learner expanded by hand this visit
+  const opened = new Set(); // finished stages the learner unfolded by hand this visit
   let stageCache;
   function stages() {
     if (stageCache && stageCache.n === tracks.length) return stageCache.list;
@@ -151,12 +142,12 @@ const Lab = (() => {
   function render() {
     clearInterval(flashTimer); clearInterval(ivTimer);
     const route = decodeURIComponent(location.hash.slice(1));
-    const to = MOVED[route] || MOVED_TRACKS[route];
+    const to = MOVED[route] || MOVED_TRACKS[route] || (route === 'interview' ? 'practice' : null);
     if (to) { location.replace('#' + to); return; }
     let view; here = {};
     if (route === 'review') view = reviewView();
     else if (route === 'glossary') view = glossaryView();
-    else if (route === 'interview') view = interviewView();
+    else if (route === 'practice') view = interviewView();
     else {
       const [tid, lid] = route.split('.');
       const t = !RESERVED.includes(tid) && trackById(tid);
@@ -167,14 +158,14 @@ const Lab = (() => {
       else view = homeView();
     }
     document.getElementById('app').replaceChildren(view);
-    document.title = [here.l && here.l.title, here.t && here.t.title, route === 'review' && 'Review', route === 'glossary' && 'Glossary', route === 'interview' && 'Interview', 'Android Lab'].filter(Boolean).join(' · ');
+    document.title = [here.l && here.l.title, here.t && here.t.title, route === 'review' && 'Review', route === 'glossary' && 'Glossary', route === 'practice' && 'Test yourself', 'Android Lab'].filter(Boolean).join(' · ');
     updateNav(route);
     window.scrollTo(0, 0);
     paintReadbar();
   }
 
   // Lessons (demos, code, challenges) live in tracks/<file>.js and load the first time one of the track's lessons opens.
-  // Everything else (map, track pages, search, glossary, review, interview) runs off js/catalog.js.
+  // Everything else (map, track pages, search, glossary, review, practice) runs off js/catalog.js.
   const loading = {};
   function loadTrack(t) {
     if (t.full) return Promise.resolve(t);
@@ -199,7 +190,7 @@ const Lab = (() => {
     const due = dueCards().length;
     const b = document.getElementById('due-badge');
     if (b) { b.textContent = due; b.hidden = !due; }
-    const cur = ['review', 'glossary', 'interview'].includes(route) ? '#' + route : '#home';
+    const cur = ['review', 'glossary', 'practice'].includes(route) ? '#' + route : '#home';
     document.querySelectorAll('.top nav a').forEach(a => {
       const on = a.getAttribute('href') === cur;
       a.classList.toggle('on', on);
@@ -219,8 +210,7 @@ const Lab = (() => {
     // Where to go next: the lesson after the last one opened (or that one, if unfinished); a new visitor starts at the first roadmap topic.
     let next = at(state.last);
     if (next && state.done[key(next.t, next.l)]) { const nl = nextLesson(next.t); next = state.done[key(next.t, nl)] ? null : { t: next.t, l: nl }; }
-    const firstStage = stages().find(inGoal) || stages()[0];
-    const first = (firstStage && firstStage.tracks[0]) || tracks[0];
+    const first = (stages()[0] && stages()[0].tracks[0]) || tracks[0];
     if (!next && first) next = { t: first, l: nextLesson(first) };
     const due = dueCards().length;
     const row = (href, label, title, sub, primary) => h('a', { class: 'today-row' + (primary ? ' primary' : ''), href },
@@ -229,7 +219,7 @@ const Lab = (() => {
       h('div', { class: 'today-top' }, h('span', { class: 'flash-label' }, state.last ? 'Pick up where you left off' : 'Start here'), h('span', {}, `${doneTotal}/${pins.length} done`)),
       next && row('#' + key(next.t, next.l), state.last ? 'Continue' : 'First lesson', next.l.title, `${next.t.title} · ${next.l.tagline || ''}`, true),
       due ? row('#review', 'Review', `${due} card${due > 1 ? 's' : ''} due`, 'Answer them before you forget') : row('#review', 'Review', 'Nothing due', 'Quiz answers come back here on a schedule'),
-      row('#interview', 'Practice', 'Interview round', '10 mixed questions, optional timer'));
+      row('#practice', 'Practice', 'Test yourself', 'A mixed quiz from the topics you pick, optional timer'));
 
     const topics = tracks.filter(t => !isProject(t)).length;
     return h('div', { class: 'wrap home' },
@@ -239,87 +229,49 @@ const Lab = (() => {
           h('p', { class: 'lede' }, 'From your first val to shipping on Google Play. Every topic is a live demo you can poke at, and the quizzes come back before you forget.'),
           h('p', { class: 'hero-meta' }, `${stages().length} stages · ${topics} topics · ${pins.length} lessons`)),
         card),
-      roadView(next && next.t));
+      syllabusView(next && next.t));
   }
 
   // ---------- roadmap ----------
-  // One spine, top to bottom. Each stage is a checkpoint; its topics hang off the spine left and right (stacked on phones).
-  function roadView(cur) {
-    const tdone = t => doneCount(t) === t.lessons.length;
-    const list = stages();
-    const stageEls = [];
-    const goalBar = h('div', { class: 'rm-goals', role: 'group', 'aria-label': 'Your goal' },
-      GOALS.map(g => h('button', { type: 'button', class: 'rm-goal', 'aria-pressed': String(state.goal === g.id || (!state.goal && g.id === 'all')), onclick() {
-        state.goal = g.id; opened.clear(); save(); render();
-      } }, h('b', {}, g.label), h('span', {}, g.sub))));
-    const jump = h('nav', { class: 'rm-jump', 'aria-label': 'Jump to stage' }, list.map((s, i) => h('button', { type: 'button', class: inGoal(s) ? '' : 'is-off', onclick() {
-      const el = stageEls[i]; if (!el) return;
-      if (el.classList.contains('is-folded')) el.querySelector('.rm-unfold').click();
-      el.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
-    } }, h('span', {}, String(i + 1)), s.title)));
-    const all = list.flatMap(s => s.tracks), goalTracks = list.filter(inGoal).flatMap(s => s.tracks);
+  // A syllabus: numbered stages in order, each topic one row. Finished stages fold to their heading.
+  function syllabusView(cur) {
     const count = ts => [ts.reduce((a, t) => a + doneCount(t), 0), ts.reduce((a, t) => a + t.lessons.length, 0)];
-    const [gd, gn] = count(goalTracks), [ad, an] = count(all), g = goalOf();
-    const scoped = g && g.stages;
-    const finished = gn && gd === gn;
-    const due = dueCards().length;
-    const finish = h('li', { class: 'rm-stage is-finish' },
-      h('div', { class: 'rm-finish' },
-        h('p', { class: 'rm-finish-label' }, finished ? 'Path complete' : 'Finish line'),
-        h('h3', {}, finished ? (scoped ? `You finished “${g.label}”` : 'You finished the whole map') : `${gd} of ${gn} lessons${scoped ? ` in “${g.label}”` : ''}`),
-        h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': gn, 'aria-valuenow': gd, 'aria-label': 'Path progress' }, h('span', { style: `width:${gn ? (gd / gn) * 100 : 0}%` })),
-        h('p', { class: 'muted-text' }, finished
-          ? (scoped && ad < an ? `Keep it fresh with Review and Interview practice, or pick another goal: ${an - ad} lessons are left on the full map.` : 'Keep it fresh: Review brings answers back before you forget, and Interview practice mixes every topic.')
-          : 'Every finished lesson adds its quiz to Review. Mix topics in Interview practice whenever you like.'),
-        h('div', { class: 'rm-finish-actions' },
-          h('a', { class: 'btn', href: '#interview' }, 'Interview practice'),
-          h('a', { class: 'btn ghost', href: '#review' }, due ? `Review · ${due} due` : 'Review')),
-        h('p', { class: 'rm-credit' }, 'Built by ', h('a', { href: 'https://abdulrahmanalbakkar.github.io/' }, 'Abdulrahman Albakkar'))));
-    return h('section', { class: 'rm-road', 'aria-labelledby': 'rm-road-h' },
-      h('div', { class: 'rm-road-head' },
-        h('h2', { id: 'rm-road-h' }, 'Your path'),
-        h('ul', { class: 'rm-legend', 'aria-label': 'Legend' },
-          h('li', {}, h('span', { class: 'rm-key' }), 'Core'),
-          h('li', {}, h('span', { class: 'rm-key is-opt' }), 'Optional'),
-          h('li', {}, h('span', { class: 'rm-key is-proj' }), 'Project'))),
-      h('p', { class: 'rm-goal-q' }, state.goal ? 'Your goal' : 'What’s your goal? The map opens the stages that matter for it.'),
-      goalBar, jump,
-      h('ol', { class: 'rm-stages' },
-        list.map((s, i) => {
-          const core = s.tracks.filter(t => !s.optional.includes(t.id));
-          const done = core.length && core.every(tdone);
-          const [d, n] = count(s.tracks);
-          // Folded: outside the goal, or finished; the current stage and hand-opened ones stay open.
-          const folded = !opened.has(s.title) && !s.tracks.includes(cur) && (!inGoal(s) || done);
-          const nodes = h('ul', { class: 'rm-nodes', id: `rm-st-${i}` }, s.tracks.map(t => nodeCard(t, s.optional.includes(t.id), t === cur)));
-          const li = h('li', { class: 'rm-stage' + (done ? ' is-done' : '') + (s.tracks.includes(cur) ? ' is-cur' : '') + (folded ? ' is-folded' : '') + (inGoal(s) ? '' : ' is-off'), style: `--i:${i}` },
-            h('div', { class: 'rm-stage-head' },
-              h('span', { class: 'rm-stage-n', 'aria-hidden': 'true' }, done ? '✓' : String(i + 1)),
-              h('h3', {}, s.title),
-              h('p', {}, s.blurb, h('span', { class: 'rm-stage-count' }, ` · ${d}/${n}`)),
-              h('button', { type: 'button', class: 'rm-unfold', 'aria-expanded': String(!folded), 'aria-controls': `rm-st-${i}`, onclick() {
-                const open = li.classList.toggle('is-folded') === false;
-                if (open) opened.add(s.title); else opened.delete(s.title);
-                this.setAttribute('aria-expanded', String(open));
-                this.textContent = open ? 'Hide topics' : `Show ${s.tracks.length} topic${s.tracks.length > 1 ? 's' : ''}`;
-              } }, folded ? `Show ${s.tracks.length} topic${s.tracks.length > 1 ? 's' : ''}` : 'Hide topics')),
-            nodes);
-          stageEls[i] = li;
-          return li;
-        }),
-        finish));
+    return h('section', { class: 'sy', 'aria-labelledby': 'sy-h' },
+      h('h2', { id: 'sy-h' }, 'The roadmap'),
+      h('ol', { class: 'sy-stages' }, stages().map((s, i) => {
+        const [d, n] = count(s.tracks);
+        const allOptional = s.tracks.every(t => s.optional.includes(t.id));
+        const finished = n && d === n;
+        const folded = finished && !opened.has(s.title) && !s.tracks.includes(cur);
+        const list = h('ul', { class: 'sy-topics', id: `sy-st-${i}`, hidden: folded }, s.tracks.map(t => topicRow(t, s.optional.includes(t.id) && !allOptional, t === cur)));
+        const toggle = finished ? h('button', { type: 'button', class: 'sy-toggle', 'aria-expanded': String(!folded), 'aria-controls': `sy-st-${i}`, onclick() {
+          list.hidden = !list.hidden;
+          if (list.hidden) opened.delete(s.title); else opened.add(s.title);
+          this.setAttribute('aria-expanded', String(!list.hidden));
+          this.textContent = list.hidden ? 'Show' : 'Hide';
+        } }, folded ? 'Show' : 'Hide') : null;
+        return h('li', { class: 'sy-stage' + (finished ? ' is-done' : '') + (s.tracks.includes(cur) ? ' is-cur' : '') },
+          h('div', { class: 'sy-head' },
+            h('span', { class: 'sy-n', 'aria-hidden': 'true' }, finished ? '✓' : String(i + 1)),
+            h('div', { class: 'sy-title' },
+              h('h3', {}, s.title, allOptional ? h('span', { class: 'sy-tag' }, 'optional') : null),
+              h('p', {}, s.blurb)),
+            h('span', { class: 'sy-count', 'aria-label': `${d} of ${n} lessons done` }, `${d}/${n}`),
+            toggle),
+          list);
+      })));
   }
 
-  function nodeCard(t, optional, cur) {
+  function topicRow(t, optional, cur) {
     const n = t.lessons.length, done = doneCount(t), proj = isProject(t);
-    const tag = proj ? 'Project' : optional ? 'Optional' : null;
-    return h('li', { class: ['rm-node', proj && 'is-proj', optional && 'is-opt', cur && 'is-cur', done === n && 'is-done'].filter(Boolean).join(' '), style: `--hue:${hue(t)}` },
-      h('a', { href: '#' + t.id, 'aria-label': `${t.title}${tag ? ', ' + tag.toLowerCase() : ''}, ${done} of ${n} done${cur ? ', you are here' : ''}` },
-        h('span', { class: 'rm-node-top' }, h('span', { class: 'rm-node-title' }, t.title), cur ? h('span', { class: 'rm-node-here' }, 'You are here') : tag && h('span', { class: 'rm-node-tag' }, tag)),
-        h('span', { class: 'rm-node-meta' }, done === n ? `Done · ${n} ${proj ? 'steps' : 'lessons'}` : `${done ? done + '/' : ''}${n} ${proj ? 'steps' : 'lessons'}`),
-        h('span', { class: 'rm-node-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${(done / n) * 100}%` }))));
+    const tag = proj ? 'project' : optional ? 'optional' : null;
+    return h('li', {}, h('a', { class: 'sy-topic' + (cur ? ' is-cur' : '') + (done === n ? ' is-done' : ''), href: '#' + t.id, style: `--hue:${hue(t)}`,
+      'aria-label': `${t.title}${tag ? ', ' + tag : ''}, ${done} of ${n} done${cur ? ', you are here' : ''}` },
+      h('span', { class: 'sy-dot', 'aria-hidden': 'true' }),
+      h('span', { class: 'sy-name' }, t.title, tag ? h('span', { class: 'sy-tag' }, tag) : null, cur ? h('span', { class: 'sy-here' }, 'you are here') : null),
+      h('span', { class: 'sy-meta' }, done === n ? 'done' : `${done ? done + '/' : ''}${n} ${proj ? 'steps' : 'lessons'}`),
+      h('span', { class: 'sy-bar', 'aria-hidden': 'true' }, h('span', { style: `width:${(done / n) * 100}%` }))));
   }
-
 
   function softNote(t, onClose) {
     const miss = missing(t);
@@ -660,7 +612,7 @@ const Lab = (() => {
   }
 
   // ---------- keyboard shortcuts ----------
-  const SHORTCUTS = [['←  →', 'Previous / next lesson'], ['/', 'Search'], ['m', 'Map'], ['r', 'Review'], ['i', 'Interview practice'], ['g', 'Glossary'], ['t', 'Light / dark theme'], ['1  –  4', 'Answer (interview)'], ['Enter', 'Next question (interview)'], ['?', 'This list']];
+  const SHORTCUTS = [['←  →', 'Previous / next lesson'], ['/', 'Search'], ['m', 'Map'], ['r', 'Review'], ['p', 'Test yourself'], ['g', 'Glossary'], ['t', 'Light / dark theme'], ['1  –  4', 'Answer (interview)'], ['Enter', 'Next question (interview)'], ['?', 'This list']];
   let keysDialog;
   function showKeys() {
     if (!keysDialog) {
@@ -692,18 +644,18 @@ const Lab = (() => {
       case 'm': go('#home'); break;
       case 'r': go('#review'); break;
       case 'g': go('#glossary'); break;
-      case 'i': go('#interview'); break;
+      case 'p': go('#practice'); break;
       case 't': e.preventDefault(); flipVisible(); break;
       case '?': e.preventDefault(); showKeys(); break;
       default:
     }
   }
 
-  // ---------- interview mode ----------
+  // ---------- Test yourself (practice mode; code names still say iv/interview) ----------
   // Timed, mixed-topic practice from every lesson quiz. Options keep their order, so q.a always stays valid.
   // Nothing touches the review schedule unless the learner presses "Add missed to Review".
   const IV_PRESETS = [
-    { label: 'Android interview', tracks: ['kotlin', 'android', 'compose', 'coroutines', 'flow', 'arch'] },
+    { label: 'Android core', tracks: ['kotlin', 'android', 'compose', 'coroutines', 'flow', 'arch'] },
     { label: 'Kotlin only', tracks: ['kotlin', 'kdeep'] },
     { label: 'System design & backend', tracks: ['sysdesign', 'backend', 'cloud'] },
     { label: 'CS fundamentals', tracks: ['os', 'net', 'db', 'concurrency', 'runtime', 'cs'] },
@@ -785,9 +737,9 @@ const Lab = (() => {
       const hist = (state.iv.history || []).slice(0, 6);
       paint(
         h('header', { class: 'lesson-head' },
-          h('p', { class: 'eyebrow' }, 'Interview practice'),
-          h('h1', { tabindex: '-1', 'data-focus': '' }, 'Practice like it’s the real thing'),
-          h('p', { class: 'lede' }, 'Mixed questions from every lesson quiz, one at a time, optionally against the clock. Your review schedule is left alone unless you add the misses at the end.')),
+          h('p', { class: 'eyebrow' }, 'Test yourself'),
+          h('h1', { tabindex: '-1', 'data-focus': '' }, 'How much do you remember?'),
+          h('p', { class: 'lede' }, 'Mixed questions from the topics you pick, one at a time, optionally against the clock. Your review schedule is left alone unless you add the misses at the end.')),
         h('section', { class: 'iv-card', 'aria-label': 'Setup' },
           h('fieldset', { class: 'iv-field' }, h('legend', {}, 'Start from a preset'), h('div', { class: 'iv-chips' }, presets)),
           h('fieldset', { class: 'iv-field' },
@@ -873,7 +825,7 @@ const Lab = (() => {
       keys = { answer };
       paint(
         h('div', { class: 'iv-top' },
-          h('p', { class: 'eyebrow' }, 'Interview · ', setupLabel(run.su)),
+          h('p', { class: 'eyebrow' }, 'Test yourself · ', setupLabel(run.su)),
           h('button', { class: 'btn small ghost', type: 'button', onclick: setup }, 'Quit')),
         h('div', { class: 'iv-bar' },
           h('span', { class: 'iv-count', 'aria-label': `Question ${run.i + 1} of ${total}` }, `${run.i + 1} / ${total}`),
@@ -908,14 +860,14 @@ const Lab = (() => {
         const now = Date.now();
         // Same shape the schedule produces after a miss (box 1), but due now instead of tomorrow.
         missed.forEach(({ c }) => { state.cards[c.id] = { ...schedule(state.cards[c.id], false, now), due: now }; });
-        save(); updateNav('interview');
+        save(); updateNav('practice');
         addBtn.disabled = true; addBtn.textContent = 'Added to Review';
         added.replaceChildren(`${missed.length} card${missed.length > 1 ? 's are' : ' is'} due now. `, h('a', { href: '#review' }, 'Open Review →'));
       } }, `Add ${missed.length} missed to Review`) : null;
       const pct = Math.round((right / total) * 100);
       paint(
         h('header', { class: 'lesson-head' },
-          h('p', { class: 'eyebrow' }, 'Interview results · ', rec.label),
+          h('p', { class: 'eyebrow' }, 'Results · ', rec.label),
           h('h1', { tabindex: '-1', 'data-focus': '' }, `${right} of ${total} right`),
           h('p', { class: 'lede' }, `${pct}% in ${clock(ms)} of answering, about ${(ms / total / 1000).toFixed(ms / total < 10000 ? 1 : 0)} s per question.`),
           h('p', { class: 'iv-best' }, isBest ? h('span', { class: 'iv-tag' }, prev ? 'New best' : 'First run') : `Best for this setup: ${ivScore(prev)} in ${clock(prev.ms)}`)),

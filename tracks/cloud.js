@@ -543,7 +543,7 @@ jobs:
           const FILES = [
             { name: 'app/build.gradle.kts', lines: [
               { src: 'signingConfigs { create("release") {' },
-              { src: '    storePassword = "Mynet2026!"', kind: 'flag', why: 'Keystore password in source.', fix: '    storePassword = System.getenv("KEYSTORE_PASSWORD")' },
+              { src: '    storePassword = "Secret2026!"', kind: 'flag', why: 'Keystore password in source.', fix: '    storePassword = System.getenv("KEYSTORE_PASSWORD")' },
               { src: '    keyAlias = "upload"' },
             ] },
             { name: 'api/src/main/kotlin/Payments.kt', lines: [
@@ -662,7 +662,7 @@ val databaseUrl = System.getenv("DATABASE_URL")
         ],
         challenges: [
           { type: 'blank', prompt: 'Decode the keystore from a repository secret into a file in CI.', code: 'run: echo "$KEYSTORE_BASE64" | base64 [[--decode|-d]] > app/upload.jks\nenv:\n  KEYSTORE_BASE64: ${{ [[secrets]].KEYSTORE_BASE64 }}', why: 'The secret holds Base64 text. The <code>secrets</code> context reads it and <code>base64 --decode</code> turns it back into the file.' },
-          { type: 'bug', prompt: 'One line puts a real secret into the APK. Tap it.', code: 'defaultConfig {\n    applicationId = "com.mynet.haber"\n    buildConfigField("String", "API_BASE", "\\"https://api.example.com\\"")\n    buildConfigField("String", "DB_PASSWORD", "\\"s3cr3t\\"")\n}', bug: 3, fix: '    // DB_PASSWORD stays on the server; the app only knows API_BASE', why: 'A base URL is config. A database password is a secret, and anything in BuildConfig ships in the APK.' },
+          { type: 'bug', prompt: 'One line puts a real secret into the APK. Tap it.', code: 'defaultConfig {\n    applicationId = "com.example.news"\n    buildConfigField("String", "API_BASE", "\\"https://api.example.com\\"")\n    buildConfigField("String", "DB_PASSWORD", "\\"s3cr3t\\"")\n}', bug: 3, fix: '    // DB_PASSWORD stays on the server; the app only knows API_BASE', why: 'A base URL is config. A database password is a secret, and anything in BuildConfig ships in the APK.' },
         ],
         quiz: [
           { q: 'A Play service account JSON was pushed to a private repo last week. What do you do first?', options: ['Delete the file in a new commit', 'Revoke the key and create a new one', 'Make the repo private again'], a: 1, why: 'The key is in history and in clones. Revoking it is the only thing that makes the leak harmless.' },
@@ -738,7 +738,7 @@ interface HeadlineSource {
 class FirestoreHeadlines(private val db: FirebaseFirestore) : HeadlineSource {
     override suspend fun latest(category: String): List<Headline> =
         db.collection("headlines")
-            .whereEqualTo("category", category)        // e.g. "spor", "ekonomi"
+            .whereEqualTo("category", category)        // e.g. "sports", "business"
             .orderBy("publishedAt", Query.Direction.DESCENDING)
             .limit(20)
             .get().await()
@@ -811,7 +811,7 @@ class FirestoreHeadlines(private val db: FirebaseFirestore) : HeadlineSource {
           const SPANS = [['app: openArticle', 0, 100], ['gateway', 4, 96], ['feed: loadArticle', 6, 92], ['postgres: related()', 12, 86, true]];
           const logRows = LOGS.map(([t, svc, msg, id, err]) => h('div', { class: 'cl-log' }, `${t} `, h('span', { class: 'cl-svc' }, svc.padEnd(7)), ' ', err ? h('span', { class: 'cl-e' }, msg) : msg, ` req=${id}`));
           logRows.forEach((r, i) => { r.id = LOGS[i][3]; });
-          const crash = h('div', { class: 'cl-crash', hidden: true }, `Crashlytics · non-fatal · HaberDetayViewModel\nHttpException: HTTP 503 · last_request_id=${ID}`);
+          const crash = h('div', { class: 'cl-crash', hidden: true }, `Crashlytics · non-fatal · ArticleDetailViewModel\nHttpException: HTTP 503 · last_request_id=${ID}`);
           const spanBars = SPANS.map(([n, s, w, slow]) => { const b = h('i', { class: 'cl-sbar' + (slow ? ' cl-slow' : ''), style: `left:${s}%` }); b.w = w; return h('div', { class: 'cl-span' }, h('span', {}, n), h('div', { class: 'cl-lane' }, b)); });
           const trace = h('div', { class: 'cl-box', hidden: true }, label(`trace ${ID} · 3.13 s`), h('div', { class: 'cl-spans' }, spanBars));
           const logs = h('div', { class: 'cl-logs', 'aria-label': 'Server logs' }, logRows);
@@ -973,7 +973,7 @@ install(CallLogging) { callIdMdc("req") }       // log pattern: ... req=%X{req}`
         code: `// Stateless Ktor route: nothing is kept in this instance's memory between requests,
 // and the response tells the CDN it may cache it for 60 seconds.
 get("/api/headlines") {
-    val category = call.request.queryParameters["category"] ?: "gundem"
+    val category = call.request.queryParameters["category"] ?: "top"
     call.response.header(HttpHeaders.CacheControl, "public, max-age=60")
     call.respond(headlineRepo.latest(category))   // reads from the shared database
 }

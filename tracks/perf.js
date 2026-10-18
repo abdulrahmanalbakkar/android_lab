@@ -1491,7 +1491,7 @@ analytics.log("screen_view", screen.analyticsName)`,
 val showTip = Runnable { tipView.isVisible = true }
 
 // from any thread: run this on the main thread, after what is already queued
-mainHandler.post { statusView.text = "Kaydedildi" }
+mainHandler.post { statusView.text = "Saved" }
 
 // run later; the delay is a minimum, not a promise
 mainHandler.postDelayed(showTip, 1_000)

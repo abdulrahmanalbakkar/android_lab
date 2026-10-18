@@ -270,7 +270,7 @@ public final class Rect {
 
     // computed on first read, then kept
     private val dateFormat by lazy {
-        SimpleDateFormat("d MMMM yyyy", Locale.forLanguageTag("tr"))
+        SimpleDateFormat("d MMMM yyyy", Locale.US)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -286,7 +286,7 @@ public final class Rect {
           { term: 'isInitialized', def: 'Checks whether a <code>lateinit</code> property has been assigned, written <code>::name.isInitialized</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'The adapter is assigned in <code>onViewCreated</code>. The formatter should be built only when first used.', code: 'private [[lateinit]] var adapter: FeedAdapter\nprivate val dateFormat by [[lazy]] {\n    SimpleDateFormat("d MMMM", Locale.forLanguageTag("tr"))\n}', why: '<code>lateinit</code> marks a <code>var</code> you assign yourself later. <code>lazy</code> builds the value on the first read.' },
+          { type: 'blank', prompt: 'The adapter is assigned in <code>onViewCreated</code>. The formatter should be built only when first used.', code: 'private [[lateinit]] var adapter: FeedAdapter\nprivate val dateFormat by [[lazy]] {\n    SimpleDateFormat("d MMMM", Locale.US)\n}', why: '<code>lateinit</code> marks a <code>var</code> you assign yourself later. <code>lazy</code> builds the value on the first read.' },
           { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'class LoginTest {\n    private lateinit val repo: FakeRepo\n\n    @Before fun setUp() {\n        repo = FakeRepo()\n    }\n}', bug: 1, fix: '    private lateinit var repo: FakeRepo', why: '<code>lateinit</code> only works on <code>var</code>. It has to be assigned after construction, and a <code>val</code> can’t be assigned there.' },
         ],
         quiz: [
@@ -1502,7 +1502,7 @@ public inline fun <T, R, C : MutableCollection<in R>>
         tagline: 'Unique items, and values you look up by key.',
         body: `
 <p>A <code>List</code> keeps every item in order, duplicates included. A <code>Set</code> keeps each item once: adding one that is already there changes nothing. A <code>Map</code> stores pairs of key and value, like a dictionary, with each key at most once.</p>
-<p>Build them with <code>setOf(…)</code> and <code>mapOf("tr" to "Türkçe")</code>. The word <code>to</code> makes a <code>Pair</code>. Like lists, the plain versions are read-only, and <code>mutableSetOf</code> and <code>mutableMapOf</code> give you ones you can change.</p>
+<p>Build them with <code>setOf(…)</code> and <code>mapOf("fr" to "French")</code>. The word <code>to</code> makes a <code>Pair</code>. Like lists, the plain versions are read-only, and <code>mutableSetOf</code> and <code>mutableMapOf</code> give you ones you can change.</p>
 <p><code>map[key]</code> returns a nullable value, because the key may not be there. The default implementations remember insertion order, so iterating gives items back in the order you added them.</p>`,
         code: `val basket = mutableListOf<String>()
 val kinds = mutableSetOf<String>()
@@ -1523,18 +1523,18 @@ add("elma"); add("armut"); add("elma")
         terms: [
           { term: 'Set', def: 'A collection of unique items. Adding an item that is already there leaves the set unchanged.' },
           { term: 'Map', def: 'A collection of key-value pairs. Keys are unique; different keys may share a value.' },
-          { term: 'to', def: 'An infix function that builds a <code>Pair</code>, used to write map entries: <code>"tr" to "Türkçe"</code>.' },
+          { term: 'to', def: 'An infix function that builds a <code>Pair</code>, used to write map entries: <code>"fr" to "French"</code>.' },
           { term: 'LinkedHashMap', def: 'The default <code>MutableMap</code>. It keeps entries in insertion order. <code>HashMap</code> makes no promise about order.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Build a read-only map from language code to name.', code: 'val langs = [[mapOf]](\n    "tr" [[to]] "Türkçe",\n    "en" to "English",\n)', why: '<code>mapOf</code> takes pairs, and <code>a to b</code> builds a pair.' },
-          { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'val langs = mapOf("tr" to "Türkçe", "en" to "English")\nval code = "de"\nval name: String = langs[code]\nprintln(name)', bug: 2, fix: 'val name: String = langs[code] ?: "Unknown"', why: '<code>langs[code]</code> is a <code>String?</code>, because the key may be missing. Give a fallback with <code>?:</code>.' },
+          { type: 'blank', prompt: 'Build a read-only map from language code to name.', code: 'val langs = [[mapOf]](\n    "fr" [[to]] "French",\n    "en" to "English",\n)', why: '<code>mapOf</code> takes pairs, and <code>a to b</code> builds a pair.' },
+          { type: 'bug', prompt: 'One line won’t compile. Tap it.', code: 'val langs = mapOf("fr" to "French", "en" to "English")\nval code = "de"\nval name: String = langs[code]\nprintln(name)', bug: 2, fix: 'val name: String = langs[code] ?: "Unknown"', why: '<code>langs[code]</code> is a <code>String?</code>, because the key may be missing. Give a fallback with <code>?:</code>.' },
         ],
         quiz: [
           { q: '<code>setOf(1, 2, 2, 3).size</code>', options: ['<code>3</code>', '<code>4</code>', 'It doesn’t compile'], a: 0, why: 'A set keeps each item once, so the second 2 is dropped.' },
           { q: '<code>mapOf("a" to 1)["b"]</code>', options: ['<code>0</code>', '<code>null</code>', 'It throws'], a: 1, why: 'Indexing a map with a missing key returns null.' },
           { q: 'You check <code>if (id in seen)</code> thousands of times. Which type should <code>seen</code> be?', options: ['<code>List</code>', '<code>Set</code>', 'It makes no difference'], a: 1, why: '<code>in</code> on a list checks items one by one. A hash set finds the item by its hash, in about the same time whatever its size.' },
-          { q: 'What does <code>mapOf("tr" to "Türkçe").getValue("de")</code> do?', options: ['Throws NoSuchElementException', 'Returns null', 'Returns an empty String'], a: 0, why: 'getValue is for keys that must be there, so a missing key fails with a message that names it. Use map[key] ?: fallback when missing is normal.' },
+          { q: 'What does <code>mapOf("fr" to "French").getValue("de")</code> do?', options: ['Throws NoSuchElementException', 'Returns null', 'Returns an empty String'], a: 0, why: 'getValue is for keys that must be there, so a missing key fails with a message that names it. Use map[key] ?: fallback when missing is normal.' },
           { q: 'What is <code>setOf(1, 2, 3) subtract setOf(2, 3, 4)</code>?', options: ['<code>[4]</code>', '<code>[1, 4]</code>', '<code>[1]</code>'], a: 2, why: 'subtract keeps what is in the left set but not in the right one, so order matters. [1, 4] would be both differences together.' },
           { q: 'This line is slow with 10,000 orders and 10,000 users. What is the best fix?<pre class="code mini"><code>orders.map { o -&gt; users.first { it.id == o.userId } }</code></pre>', options: ['Build <code>val byId = users.associateBy { it.id }</code> once, then read <code>byId[o.userId]</code>', 'Sort users by id first', 'Call <code>users.asSequence()</code> inside the lambda'], a: 0, why: 'first scans the whole user list for every order. A map built once turns each lookup into a hash lookup.' },
         ],
@@ -1543,7 +1543,7 @@ add("elma"); add("armut"); add("elma")
             title: 'Reading a key that may be missing',
             body: `<p>There are several ways to read from a map, and they differ only in what happens when the key is not there. <code>map[key]</code> returns null. <code>getValue(key)</code> throws. <code>getOrDefault(key, x)</code> returns <code>x</code>, and <code>getOrElse(key) { … }</code> runs a lambda for the fallback.</p>
 <p>Most of the time, <code>map[key] ?: fallback</code> reads best. Use <code>getValue</code> only when a missing key means a bug.</p>`,
-            code: `val langs = mapOf("tr" to "Türkçe", "en" to "English")
+            code: `val langs = mapOf("fr" to "French", "en" to "English")
 
 langs["de"]                      // null
 langs["de"] ?: "Unknown"         // "Unknown"
@@ -1551,11 +1551,11 @@ langs.getOrDefault("de", "?")    // "?"
 langs.getValue("de")             // throws NoSuchElementException`,
             visual(el) {
               const map = h('div', { class: 'obj' }, h('span', { class: 'obj-name' }, 'langs'),
-                h('span', { class: 'field' }, '"tr" → "Türkçe"'), h('span', { class: 'field' }, '"en" → "English"'));
+                h('span', { class: 'field' }, '"fr" → "French"'), h('span', { class: 'field' }, '"en" → "English"'));
               const result = h('div', { class: 'slot kt-ms-slot' });
               const o = out();
               const READS = [
-                ['langs["tr"]', '"Türkçe"', 'the key is there'],
+                ['langs["fr"]', '"French"', 'the key is there'],
                 ['langs["de"]', 'null', 'missing key, no crash, but the type is String?'],
                 ['langs["de"] ?: "Unknown"', '"Unknown"', 'the usual fallback'],
                 ['langs.getOrDefault("de", "?")', '"?"', 'fallback passed as a value'],
@@ -1580,14 +1580,14 @@ langs.getValue("de")             // throws NoSuchElementException`,
             title: 'Set math: union, intersect, subtract',
             body: `<p>Sets come with the operations you know from school maths. <code>a union b</code> has everything from both. <code>a intersect b</code> keeps what is in both. <code>a subtract b</code> keeps what is in <code>a</code> but not in <code>b</code>, so order matters there.</p>
 <p>They also work on lists, but the result is always a <code>Set</code>, so duplicates disappear.</p>`,
-            code: `val following = setOf("ayse", "can", "deniz")
-val followers = setOf("can", "deniz", "elif")
+            code: `val following = setOf("alice", "bob", "sam")
+val followers = setOf("bob", "sam", "maya")
 
-following intersect followers   // [can, deniz]   mutual
-followers subtract following    // [elif]         follow back?
-following union followers       // [ayse, can, deniz, elif]`,
+following intersect followers   // [bob, sam]     mutual
+followers subtract following    // [maya]         follow back?
+following union followers       // [alice, bob, sam, maya]`,
             visual(el) {
-              const A = ['ayse', 'can', 'deniz'], B = ['can', 'deniz', 'elif'];
+              const A = ['alice', 'bob', 'sam'], B = ['bob', 'sam', 'maya'];
               const pile = (xs, cls) => h('div', { class: 'kt-pile' }, xs.map(x => h('span', { class: 'chip kt-sm ' + (cls || '') }, x)));
               const res = h('div', { class: 'kt-pile kt-ms-res' });
               const o = out();

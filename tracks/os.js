@@ -287,7 +287,7 @@ val uid = Process.myUid()            // 10145 is shown as u0_a145: app UIDs star
 Log.d("Proc", "pid=$pid uid=$uid")
 
 // Your private files belong to your UID only
-val db = File(context.filesDir, "haber.db")   // /data/user/0/com.example.haber/files/haber.db
+val db = File(context.filesDir, "news.db")   // /data/user/0/com.example.news/files/news.db
 
 // A component can run in a second process (rarely needed). Application.onCreate runs again there.
 // <service android:name=".PlayerService" android:process=":player" />`,
@@ -301,7 +301,7 @@ val db = File(context.filesDir, "haber.db")   // /data/user/0/com.example.haber/
         { id: 'launcher', name: 'launcher', pid: 2210, uid: 'u0_a62', d: 2, state: 'foreground' },
       ];
       const APPS = {
-        haber: { name: 'com.example.haber', pid: 4821, uid: 'u0_a145' },
+        news: { name: 'com.example.news', pid: 4821, uid: 'u0_a145' },
         maps: { name: 'com.example.maps', pid: 5307, uid: 'u0_a146' },
       };
       const tree = h('div', { class: 'osy-tree' });
@@ -354,15 +354,15 @@ val db = File(context.filesDir, "haber.db")   // /data/user/0/com.example.haber/
       }
       function peek() {
         R.stop();
-        const me = find('haber');
-        if (!me) { say(msg, 'Launch Haber first.'); return; }
+        const me = find('news');
+        if (!me) { say(msg, 'Launch News first.'); return; }
         const them = find('maps');
         me.cls = 'osy-deny'; paint(); me.cls = '';
         say(msg, `<code>open("/data/data/com.example.maps/files/home.db")</code> from uid ${me.uid}: <span class="bad">EACCES, permission denied</span>. That directory belongs to ${them ? them.uid : 'u0_a146'} with mode 700, and SELinux blocks it too. To share data, Maps has to offer it through a ContentProvider, a service or an Intent.`);
       }
       paint();
       el.append(h('div', { class: 'osy-stage' }, st, tree),
-        h('div', { class: 'controls' }, act('Launch Haber', () => launch('haber')), act('Launch Maps', () => launch('maps')), act('Press Home', home), act('Haber reads Maps’ files', peek)), msg);
+        h('div', { class: 'controls' }, act('Launch News', () => launch('news')), act('Launch Maps', () => launch('maps')), act('Press Home', home), act('News reads Maps’ files', peek)), msg);
     },
     deeper: [
       {
@@ -384,7 +384,7 @@ if (pid == 0) {
         body: `<p>Every app's parent process id is the zygote. The user column shows the per-app UID.</p>`,
         code: `$ adb shell ps -A -o PID,PPID,USER,NAME | grep -E "zygote|example"
   612     1 root      zygote64
- 4821   612 u0_a145   com.example.haber
+ 4821   612 u0_a145   com.example.news
  5307   612 u0_a146   com.example.maps`,
       },
       {
@@ -588,13 +588,13 @@ fun render(item: Article) {          // \`item\` reference and locals live on th
         { n: 4, name: 'mmap: articles.db', kind: 'file' },
         { n: 5, name: 'stack', kind: 'anon' },
       ];
-      const OWN = { A: 'Haber', B: 'Maps' };
+      const OWN = { A: 'News', B: 'Maps' };
       let frames, pt, cur = 'A', zram;
       function reset() {
         frames = Array.from({ length: 8 }, () => null);
         frames[0] = { label: 'libart.so code', cls: 'osy-f-shared', key: 'shared0' };
         frames[1] = { label: 'framework', cls: 'osy-f-shared', key: 'shared1' };
-        frames[2] = { label: 'Haber stack', cls: 'osy-f-a', key: 'A5' };
+        frames[2] = { label: 'News stack', cls: 'osy-f-a', key: 'A5' };
         frames[3] = { label: 'Maps stack', cls: 'osy-f-b', key: 'B5' };
         pt = { A: { 0: 0, 1: 1, 5: 2 }, B: { 0: 0, 1: 1, 5: 3 } };
         zram = 0;
@@ -678,7 +678,7 @@ fun render(item: Article) {          // \`item\` reference and locals live on th
     for (reply in c.replies) max = maxOf(max, depth(reply))
     return max + 1                           // frame popped on return
 }
-val thread = Comment(text = "Harika haber")  // the object is on the heap`,
+val thread = Comment(text = "Great news")  // the object is on the heap`,
       },
       {
         title: 'Memory-mapped files',
@@ -695,7 +695,7 @@ val thread = Comment(text = "Harika haber")  // the object is on the heap`,
       {
         title: 'Shared pages and PSS',
         body: `<p>If 20 apps map the same framework frame, whose memory is it? Android reports <em>PSS</em>, proportional set size: each shared page is split evenly between the processes that map it. So your app's PSS includes 1/20 of that frame. Your private dirty pages, mostly your heap, are the part you control.</p>`,
-        code: `$ adb shell dumpsys meminfo com.example.haber
+        code: `$ adb shell dumpsys meminfo com.example.news
 #   Pss Total, Private Dirty and the Java Heap / Native Heap rows are the ones to watch`,
       },
     ],
@@ -720,7 +720,7 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
       { type: 'bug', prompt: 'Opening a long comment thread crashes with <code>StackOverflowError</code>. Tap the line that recurses forever.', code: 'fun depth(c: Comment): Int {\n    var max = 0\n    for (reply in c.replies) max = maxOf(max, depth(reply))\n    return depth(c) + 1\n}', bug: 3, fix: '    return max + 1', why: '<code>depth(c)</code> calls itself with the same argument, so each call pushes another stack frame until the thread’s stack runs out. Return the computed <code>max + 1</code> instead.' },
     ],
     quiz: [
-      { q: 'Haber and Maps both use the framework classes the zygote preloaded. How many copies of those pages are in RAM?', options: ['One per app', 'One, mapped into both page tables', 'None, they are read from flash every time', 'Two, one per CPU core'], a: 1, why: 'The pages came from the zygote and nobody wrote to them, so both page tables point at the same physical frames.' },
+      { q: 'News and Maps both use the framework classes the zygote preloaded. How many copies of those pages are in RAM?', options: ['One per app', 'One, mapped into both page tables', 'None, they are read from flash every time', 'Two, one per CPU core'], a: 1, why: 'The pages came from the zygote and nobody wrote to them, so both page tables point at the same physical frames.' },
       { q: 'An app allocates a 50 MB array but never touches most of it. What happens to physical RAM?', options: ['50 MB is used at once', 'Pages get frames only as they are first written; untouched pages may cost nothing yet', 'The array goes to flash', 'The kernel refuses the allocation'], a: 1, why: 'The kernel assigns frames lazily, on the first touch, through page faults. Do not count on this for Java objects: the app’s heap limit counts the full 50 MB the moment you allocate it.' },
       { q: 'RAM is tight. Which page can the kernel drop without losing data?', options: ['A heap page your app wrote to', 'A clean page of a memory-mapped file, like app code', 'A thread’s stack page', 'Any page, then it asks the app to rebuild it'], a: 1, why: 'A clean file page is identical to the file on disk, so it can be read back. Dirty pages have no other copy; on Android they can only be compressed into ZRAM.' },
       { q: 'The device has 2 GB free, yet your app throws <code>OutOfMemoryError</code>. Why?', options: ['A bug in ART', 'The app hit its per-app heap limit, which is far lower than total RAM', 'ZRAM is full', 'The stack is too small'], a: 1, why: 'Android limits each app’s heap to protect other processes. <code>getMemoryClass()</code> gives the limit. Look for leaks or oversized bitmaps.' },
@@ -736,7 +736,7 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
     body: `
 <p>A desktop OS can swap pages to disk. A phone mostly can't afford to, so Linux on Android first reclaims what it can: it drops clean file pages and compresses dirty anonymous pages into ZRAM. If memory pressure keeps rising, something has to die. The Linux kernel has an OOM killer for the very last moment, but Android acts earlier, in user space, with the <em>low memory killer daemon</em>, <code>lmkd</code>.</p>
 <p>Every process has an <code>oom_score_adj</code> value from -1000 to 1000. Android's activity manager keeps it updated from the process's importance: the foreground app is 0, a visible app 100, a foreground service around 200, the previous app 700, cached apps 900 and above. When lmkd sees pressure, it kills the process with the highest score first. Since Android 10 it measures pressure with the kernel's pressure stall information (PSI).</p>
-<p>So a background app can be killed at any time with no callback. When the user returns, Android starts a fresh process and recreates the Activity with its <a href="#android.savedstate">saved state</a>. ViewModels and singletons are gone. Open apps in the demo until lmkd steps in, then go back to Haber.</p>`,
+<p>So a background app can be killed at any time with no callback. When the user returns, Android starts a fresh process and recreates the Activity with its <a href="#android.savedstate">saved state</a>. ViewModels and singletons are gone. Open apps in the demo until lmkd steps in, then go back to News.</p>`,
     code: `class SearchViewModel(private val handle: SavedStateHandle) : ViewModel() {
     // Survives process death: SavedStateHandle is written to the saved-state Bundle
     val query: StateFlow<String> = handle.getStateFlow("query", "")
@@ -752,21 +752,21 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
       const TOTAL = 30, RESERVE = 2;
       const IMP = { 0: 'foreground', 100: 'visible', 200: 'perceptible', 600: 'home', 700: 'previous', '-900': 'system', '-1000': 'native' };
       const name = adj => IMP[adj] || (adj >= 900 ? 'cached' : '');
-      let procs, queue, killedHaber;
+      let procs, queue, killedNews;
       function reset() {
         procs = [
           { id: 'native', name: 'kernel + native daemons', mem: 6, adj: -1000, sys: true },
           { id: 'system', name: 'system_server', mem: 4, adj: -900, sys: true },
           { id: 'launcher', name: 'launcher', mem: 2, adj: 600 },
-          { id: 'haber', name: 'com.example.haber', mem: 3, adj: 0 },
+          { id: 'news', name: 'com.example.news', mem: 3, adj: 0 },
         ];
         queue = [['maps', 'com.example.maps', 5], ['camera', 'com.example.camera', 6], ['game', 'com.example.game', 9], ['browser', 'com.example.browser', 5], ['video', 'com.example.video', 7]];
-        killedHaber = false;
+        killedNews = false;
       }
       const bar = h('div', { class: 'osy-ram', role: 'img', 'aria-label': 'RAM use' });
       const list = h('div', { class: 'osy-plist' });
       const st = stats(['used', 'free', 'killed']);
-      const msg = out('Haber is in the foreground. Open more apps and watch free RAM shrink. (A made-up 3 GB phone; sizes are illustrative.)');
+      const msg = out('News is in the foreground. Open more apps and watch free RAM shrink. (A made-up 3 GB phone; sizes are illustrative.)');
       const R = runner(el);
       let killed = 0, fresh = null, dead = [];
       const used = () => procs.reduce((s, p) => s + p.mem, 0);
@@ -796,7 +796,7 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
           say(msg, `Memory pressure is high (PSI). <b>lmkd</b> picks the highest oom_score_adj: <span class="bad">kill ${v.name}</span> (adj ${v.adj}, ${v.mem * 100} MB). No callback runs in that app.`);
           await sleep(1500); if (!R.live(t)) return;
           procs = procs.filter(p => p !== v); dead.push({ name: v.name, adj: v.adj }); killed++;
-          if (v.id === 'haber') killedHaber = true;
+          if (v.id === 'news') killedNews = true;
           paint();
           await sleep(500); if (!R.live(t)) return;
         }
@@ -815,16 +815,16 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
       }
       async function back() {
         const t = R.start();
-        const p = procs.find(x => x.id === 'haber');
+        const p = procs.find(x => x.id === 'news');
         if (p) {
-          p.t = ++clock; rank('haber'); fresh = 'haber'; paint();
-          say(msg, 'Haber’s process was still alive: a warm start. Everything in memory, including the ViewModel, is still there.');
+          p.t = ++clock; rank('news'); fresh = 'news'; paint();
+          say(msg, 'The News process was still alive: a warm start. Everything in memory, including the ViewModel, is still there.');
           return;
         }
-        say(msg, 'Haber has no process. Android asks the zygote for a new one: a <b>cold start</b>.');
-        procs.push({ id: 'haber', name: 'com.example.haber', mem: 3, adj: 0, t: ++clock });
-        dead = dead.filter(d => d.name !== 'com.example.haber');
-        rank('haber'); fresh = 'haber'; paint();
+        say(msg, 'News has no process. Android asks the zygote for a new one: a <b>cold start</b>.');
+        procs.push({ id: 'news', name: 'com.example.news', mem: 3, adj: 0, t: ++clock });
+        dead = dead.filter(d => d.name !== 'com.example.news');
+        rank('news'); fresh = 'news'; paint();
         await sleep(1600); if (!R.live(t)) return;
         say(msg, 'The Activity is recreated with its saved <code>Bundle</code>: <span class="good">the search query and scroll position come back</span>. The ViewModel is new and empty, so it reloads the article list from disk using that query.');
         await sleep(1800); if (!R.live(t)) return;
@@ -842,7 +842,7 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
       }
       reset(); paint();
       el.append(h('div', { class: 'osy-stage' }, h('div', { class: 'osy-tlrow' }, label('RAM'), bar), st, list),
-        h('div', { class: 'controls' }, act('Open next app', open), act('Start music (foreground service)', music), act('Back to Haber', back)), msg);
+        h('div', { class: 'controls' }, act('Open next app', open), act('Start music (foreground service)', music), act('Back to News', back)), msg);
     },
     deeper: [
       {
@@ -860,7 +860,7 @@ physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
         title: 'Test process death on purpose',
         body: `<p>Put your app in the background and kill it from adb. Then return to it from Recents. If the screen comes back empty or crashes, some state lived only in memory. Keep IDs and user input in saved state, and the data itself in Room or DataStore. See <a href="#android.viewmodel">ViewModel</a> and <a href="#android.savedstate">saved state</a>.</p>`,
         code: `# 1. open the app, type a search, press Home
-$ adb shell am kill com.example.haber
+$ adb shell am kill com.example.news
 # 2. reopen from Recents: query and scroll position should be restored`,
       },
       {
@@ -987,11 +987,11 @@ private val connection = object : ServiceConnection {
       {
         title: 'Pipes and sockets',
         body: `<p>A pipe is a kernel buffer with a write end and a read end, both file descriptors. A reader blocks when it is empty and a writer blocks when it is full, which keeps two processes in step. Sockets work the same way but go both ways and can carry many connections. Android uses a Unix domain socket for system_server to ask the zygote for new processes.</p>`,
-        code: `$ adb logcat | grep Haber      # the shell creates a pipe between two processes
+        code: `$ adb logcat | grep News      # the shell creates a pipe between two processes
 
 // In app code, a socket to a local service
 LocalSocket().use { s ->
-    s.connect(LocalSocketAddress("haber-debug"))
+    s.connect(LocalSocketAddress("news-debug"))
     s.outputStream.write("ping\\n".toByteArray())
 }`,
       },
@@ -1069,7 +1069,7 @@ uri?.let { resolver.openOutputStream(it)?.use { out -> bitmap.compress(Bitmap.Co
       let fds;
       const table = h('div', { class: 'osy-fdt' });
       const meta = h('div', { class: 'osy-row' });
-      const msg = out('This is com.example.haber’s file descriptor table, running as uid u0_a145. The demo limit is 8 slots; real limits are much higher.');
+      const msg = out('This is com.example.news’s file descriptor table, running as uid u0_a145. The demo limit is 8 slots; real limits are much higher.');
       function reset() { fds = [{ fd: 0, path: 'standard input', std: true }, { fd: 1, path: 'standard output', std: true }, { fd: 2, path: 'standard error', std: true }]; }
       function paint(newFd) {
         table.replaceChildren(label('open files'), ...fds.map(f => h('div', { class: `osy-fd ${f.std ? 'osy-fd-std' : ''} ${f.leak ? 'osy-fd-leak' : ''} ${f.fd === newFd ? 'osy-fd-new' : ''}` }, h('b', {}, String(f.fd)), h('span', {}, f.path))));
@@ -1081,7 +1081,7 @@ uri?.let { resolver.openOutputStream(it)?.use { out -> bitmap.compress(Bitmap.Co
       function openOwn() {
         if (fds.length >= LIMIT) { say(msg, '<span class="bad">EMFILE: too many open files</span>. Every open fails now, even sockets. Close what you opened.'); return; }
         const fd = lowest();
-        fds.push({ fd, path: '/data/user/0/com.example.haber/files/cache.json' }); paint(fd);
+        fds.push({ fd, path: '/data/user/0/com.example.news/files/cache.json' }); paint(fd);
         showMeta('files/cache.json', 'u0_a145', 'rw-------', 'allowed', 'osy-ok');
         say(msg, `<code>open()</code> returned <span class="good">fd ${fd}</span>, the lowest free slot. The kernel checked: owner u0_a145 is the caller, read and write allowed.`);
       }
@@ -1155,7 +1155,7 @@ try {
     ],
     challenges: [
       { type: 'blank', prompt: 'Read the file and make sure the descriptor is closed even on an exception.', code: 'val text = File(context.[[filesDir]], "articles.json")\n    .bufferedReader()\n    .[[use]] { it.readText() }', why: '<code>filesDir</code> is your private app directory. <code>use</code> calls <code>close()</code> in a finally block.' },
-      { type: 'bug', prompt: 'This saves a report to a hardcoded shared-storage path, which scoped storage does not support. Tap the line to replace.', code: 'fun saveReport(context: Context, bytes: ByteArray) {\n    val out = File("/sdcard/Download/haber-report.pdf")\n    out.writeBytes(bytes)\n}', bug: 1, fix: '    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, "haber-report.pdf") })', why: 'Under scoped storage, the <code>File</code> API is only guaranteed for your app-specific directory and media your app created, and <code>/sdcard</code> is not the same path on every device or user. Insert into <code>MediaStore.Downloads</code> and write through the returned URI.' },
+      { type: 'bug', prompt: 'This saves a report to a hardcoded shared-storage path, which scoped storage does not support. Tap the line to replace.', code: 'fun saveReport(context: Context, bytes: ByteArray) {\n    val out = File("/sdcard/Download/news-report.pdf")\n    out.writeBytes(bytes)\n}', bug: 1, fix: '    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, "news-report.pdf") })', why: 'Under scoped storage, the <code>File</code> API is only guaranteed for your app-specific directory and media your app created, and <code>/sdcard</code> is not the same path on every device or user. Insert into <code>MediaStore.Downloads</code> and write through the returned URI.' },
     ],
     quiz: [
       { q: 'A new process has descriptors 0, 1 and 2 open. You open a file, then a socket, then close the file and open another file. What number does the last file get?', options: ['3', '4', '5', '6'], a: 0, why: 'The file got 3, the socket 4. Closing frees 3, and <code>open</code> returns the lowest free number, so the new file gets 3 again.' },
@@ -1188,7 +1188,7 @@ WorkManager.getInstance(context)
 
 // Only if you truly must keep the CPU on: short, tagged, with a timeout
 val pm = context.getSystemService(PowerManager::class.java)
-val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "haber:export")
+val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "news:export")
 lock.acquire(60_000L)
 try { exportArticles() } finally { if (lock.isHeld) lock.release() }`,
     remember: 'A sleeping phone is a happy battery. Let the system wake you (WorkManager, FCM, alarms) instead of keeping it awake yourself.',
@@ -1272,7 +1272,7 @@ $ adb shell dumpsys power | grep -i wake_lock   # who is holding wakelocks now`,
       { term: 'Doze', def: 'An Android mode, since 6.0, that defers background work into maintenance windows while the phone is unused.' },
     ],
     challenges: [
-      { type: 'blank', prompt: 'Keep only the CPU awake, for at most one minute.', code: 'val lock = pm.newWakeLock(PowerManager.[[PARTIAL_WAKE_LOCK]], "haber:export")\nlock.[[acquire]](60_000L)\ntry { export() } finally { if (lock.isHeld) lock.release() }', why: 'A partial wakelock keeps the CPU on while the screen can turn off. <code>acquire(timeout)</code> releases it automatically if your code never does.' },
+      { type: 'blank', prompt: 'Keep only the CPU awake, for at most one minute.', code: 'val lock = pm.newWakeLock(PowerManager.[[PARTIAL_WAKE_LOCK]], "news:export")\nlock.[[acquire]](60_000L)\ntry { export() } finally { if (lock.isHeld) lock.release() }', why: 'A partial wakelock keeps the CPU on while the screen can turn off. <code>acquire(timeout)</code> releases it automatically if your code never does.' },
       { type: 'bug', prompt: 'Battery stats show this app keeping the phone awake for hours after a failed export. Tap the line that causes it.', code: 'fun export() {\n    lock.acquire()\n    writeAllArticles()   // can throw IOException\n    lock.release()\n}', bug: 1, fix: '    lock.acquire(60_000L)   // and release it in a finally block', why: 'With no timeout, an exception in <code>writeAllArticles</code> skips <code>release()</code> and the lock is held forever. Add a timeout and release in <code>finally</code>.' },
     ],
     quiz: [

@@ -249,7 +249,7 @@ try {
 <p>The plugin lets you switch this off with <code>mappingFileUploadEnabled = false</code> to save build time. Do that only for debug-like variants, never for the build you ship.</p>`,
             visual(el) {
               const RAW = ['java.lang.NullPointerException', '  at a.b.c.a(SourceFile:3)', '  at a.b.d.b(SourceFile:1)', '  at o5.g.invokeSuspend(SourceFile:12)'];
-              const MAPPED = ['java.lang.NullPointerException', '  at tr.example.haber.ArticleMapper.toUi(ArticleMapper.kt:42)', '  at tr.example.haber.ArticleViewModel.open(ArticleViewModel.kt:88)', '  at tr.example.haber.ArticleViewModel$open$1.invokeSuspend(ArticleViewModel.kt:31)'];
+              const MAPPED = ['java.lang.NullPointerException', '  at com.example.news.ArticleMapper.toUi(ArticleMapper.kt:42)', '  at com.example.news.ArticleViewModel.open(ArticleViewModel.kt:88)', '  at com.example.news.ArticleViewModel$open$1.invokeSuspend(ArticleViewModel.kt:31)'];
               const trace = h('div', { class: 'al-trace' });
               const o = out('');
               const show = lines => trace.replaceChildren(...lines.map((l, i) => h('span', { class: i === 1 ? 'al-hot' : null }, l)));
@@ -434,7 +434,7 @@ Firebase.crashlytics.setCustomKey("plan", user.plan.name)`,
             body: `<p>Some values belong on every event, such as the app's edition or the experiment group. <code>setDefaultEventParameters()</code> adds them to all later events. A value passed to <code>logEvent()</code> wins over the default, and passing <code>null</code> clears it.</p>
 <p>A <em>user property</em> describes the user rather than one action, for example their plan. Reports can then be filtered by it.</p>`,
             code: `analytics.setDefaultEventParameters(
-    bundleOf("edition" to "tr", "ab_group" to flags.readerUiGroup)
+    bundleOf("edition" to "us", "ab_group" to flags.readerUiGroup)
 )
 analytics.setUserProperty("plan", if (user.isPremium) "premium" else "free")`,
           },
@@ -500,7 +500,7 @@ analytics.logEvent("open_" + screenName) { }`,
           { q: 'Why route all events through one class such as ArticleAnalytics?', options: ['It makes events send faster', 'Names and parameters stay consistent across screens', 'Firebase requires it'], a: 1, why: 'Event names are case-sensitive. One place that logs them stops two screens from inventing two spellings for the same action.' },
           { q: 'Where do you set the default consent state before the user has chosen?', options: ['In AndroidManifest.xml meta-data', 'In Remote Config', 'In the Play Console'], a: 0, why: 'Keys such as <code>google_analytics_default_allow_analytics_storage</code> set the defaults. <code>setConsent()</code> updates them later.' },
           { q: 'The article screen logs <code>"Share"</code> and the gallery logs <code>"share"</code>. What do you see in Analytics?', options: ['Two separate events, because event names are case-sensitive', 'One event, because names are lowercased', 'An error, because the same name was used twice'], a: 0, why: 'Share and share are different names, so the data splits in two. Routing every event through one class keeps names from drifting.' },
-          { q: '<pre>// a = Firebase.analytics\na.setDefaultEventParameters(\n  bundleOf("edition" to "tr")\n)\na.logEvent("share") {\n  param("edition", "en")\n}</pre>Which edition does the share event carry?', options: ['"tr", because defaults always win', 'Both values', '"en", because a value passed to logEvent wins over the default'], a: 2, why: 'Default parameters fill in what an event does not set itself. A value passed to logEvent overrides it, and passing null clears it.' },
+          { q: '<pre>// a = Firebase.analytics\na.setDefaultEventParameters(\n  bundleOf("edition" to "us")\n)\na.logEvent("share") {\n  param("edition", "uk")\n}</pre>Which edition does the share event carry?', options: ['"us", because defaults always win', 'Both values', '"uk", because a value passed to logEvent wins over the default'], a: 2, why: 'Default parameters fill in what an event does not set itself. A value passed to logEvent overrides it, and passing null clears it.' },
           { q: 'Which order matches the lesson’s advice for adding analytics?', options: ['Write the question, then the event and parameters, check which decision it drives, then log it through one class like ArticleAnalytics', 'Log every button tap, look at the dashboard, then pick questions', 'Name events after the buttons, ship, then write the tracking plan'], a: 0, why: 'A row with no decision is dropped before any code exists. One class then keeps names and parameters consistent.' },
         ],
       },
@@ -684,7 +684,7 @@ val limit = rc.getLong("max_articles_offline")   // 0: offline mode saves nothin
           const o = out('');
           const line = (t, c) => { log.append(h('div', { class: c }, t)); while (log.children.length > 7) log.firstChild.remove(); };
           const reset = () => {
-            ph.el.firstChild.textContent = `Haberler ${ver}`;
+            ph.el.firstChild.textContent = `Daily News ${ver}`;
             ph.body.replaceChildren(...articles(5)); ph.layer.replaceChildren();
           };
           const ask = (full) => new Promise(res => {
@@ -692,7 +692,7 @@ val limit = rc.getLong("max_articles_offline")   // 0: offline mode saves nothin
             const no = h('button', { class: 'cmd', onclick: () => res(false) }, full ? 'Cancel' : 'No thanks');
             const box = full
               ? h('div', { class: 'al-full drop-in' }, h('b', {}, 'Update required'), h('span', {}, 'Play UI: the app can’t be used until it updates.'), h('div', { class: 'al-row', style: 'justify-content:center' }, no, yes))
-              : h('div', { class: 'al-sheet drop-in' }, h('b', {}, 'Update available'), h('span', {}, 'Play UI: Haberler 2.4 is ready to download.'), h('div', { class: 'al-row' }, no, yes));
+              : h('div', { class: 'al-sheet drop-in' }, h('b', {}, 'Update available'), h('span', {}, 'Play UI: Daily News 2.4 is ready to download.'), h('div', { class: 'al-row' }, no, yes));
             ph.layer.replaceChildren(box);
           });
           const alive = () => el.isConnected;
@@ -865,7 +865,7 @@ class MainActivity : ComponentActivity() {
           // ponytail: the real quota is an undocumented Play detail; 30 days here is only for the demo
           const QUOTA = 30;
           let day = 1, lastShown = -999, busy = false;
-          const ph = phone('Haberler');
+          const ph = phone('Daily News');
           const log = h('div', { class: 'al-log', 'aria-live': 'polite' });
           const dayEl = h('b', {}, 'day 1');
           const o = out('');
@@ -880,7 +880,7 @@ class MainActivity : ComponentActivity() {
             if (shows) {
               lastShown = day;
               await new Promise(res => ph.layer.replaceChildren(h('div', { class: 'al-sheet drop-in' },
-                h('b', {}, 'Rate Haberler'), h('span', { class: 'al-stars', 'aria-hidden': 'true' }, '★★★★★'), h('span', { class: 'al-note' }, 'Play UI, not yours'),
+                h('b', {}, 'Rate Daily News'), h('span', { class: 'al-stars', 'aria-hidden': 'true' }, '★★★★★'), h('span', { class: 'al-note' }, 'Play UI, not yours'),
                 h('div', { class: 'al-row' }, h('button', { class: 'cmd', onclick: res }, 'Submit'), h('button', { class: 'cmd', onclick: res }, 'Not now')))));
               if (!el.isConnected) return;
               ph.layer.replaceChildren();
@@ -973,7 +973,7 @@ fun onNextTapped() {
         ],
         challenges: [
           { type: 'blank', prompt: 'Get a ReviewInfo, then hand it to Play.', code: 'manager.[[requestReviewFlow]]().addOnSuccessListener { info ->\n    manager.[[launchReviewFlow]](activity, info).addOnCompleteListener { goNext() }\n}', why: 'The first call prepares the flow and returns a <code>ReviewInfo</code>. The second one shows the card, if Play decides to.' },
-          { type: 'bug', prompt: 'This code breaks Play’s rules for the review card. Tap the line.', code: 'fun onFifthArticle() {\n    showDialog("Do you like Haberler?") { liked ->\n        if (liked) reviewPrompt.maybeAsk { goNext() }\n    }\n}', bug: 1, fix: '    reviewPrompt.maybeAsk { goNext() }', why: 'Asking a question before the card and showing it only to happy users is not allowed. Call the flow directly at a good moment.' },
+          { type: 'bug', prompt: 'This code breaks Play’s rules for the review card. Tap the line.', code: 'fun onFifthArticle() {\n    showDialog("Do you like Daily News?") { liked ->\n        if (liked) reviewPrompt.maybeAsk { goNext() }\n    }\n}', bug: 1, fix: '    reviewPrompt.maybeAsk { goNext() }', why: 'Asking a question before the card and showing it only to happy users is not allowed. Call the flow directly at a good moment.' },
         ],
         quiz: [
           { q: 'launchReviewFlow completed. What do you know?', options: ['The user rated the app', 'The card was shown', 'Only that the flow is over'], a: 2, why: 'The API does not say whether the card appeared or whether a rating was given. Continue your normal flow.' },
@@ -1245,7 +1245,7 @@ if (result.billingResult.responseCode == BillingResponseCode.OK) wallet.add(100)
 android {
     compileSdk = 36
     defaultConfig {
-        applicationId = "tr.example.haber"
+        applicationId = "com.example.news"
         minSdk = 24
         targetSdk = 36          // required for new apps and updates since Aug 31, 2026
         versionCode = 240

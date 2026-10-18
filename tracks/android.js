@@ -1453,7 +1453,7 @@ fun FeedRoute(vm: FeedViewModel = viewModel()) {
         tagline: 'Text and values live in res/, and Android picks the best folder for each phone.',
         level: 'beginner',
         body: `
-<p>Text, colors, sizes and images live in <code>res/</code>, not in code. A folder name can carry <em>qualifiers</em>: <code>values-tr/</code> holds Turkish strings, <code>values-night/</code> holds dark-theme values, <code>values-sw600dp/</code> holds values for screens at least 600 dp wide. At runtime Android picks the best match for the current configuration, and falls back to the plain <code>values/</code> folder.</p>
+<p>Text, colors, sizes and images live in <code>res/</code>, not in code. A folder name can carry <em>qualifiers</em>: <code>values-es/</code> holds Spanish strings, <code>values-night/</code> holds dark-theme values, <code>values-sw600dp/</code> holds values for screens at least 600 dp wide. At runtime Android picks the best match for the current configuration, and falls back to the plain <code>values/</code> folder.</p>
 <p>That fallback is why <code>values/strings.xml</code> must hold every string. A translation may skip some, the default may not. A missing default means a crash on a phone set to a language you don't ship.</p>
 <p>Counts need <code>&lt;plurals&gt;</code>, because languages split numbers differently. English has one and other. Arabic has six forms, and it reads right to left, so the whole layout mirrors. Change the phone below and watch which folder wins each value.</p>`,
         code: `<!-- res/values/strings.xml: the default, must have every string -->
@@ -1465,12 +1465,12 @@ fun FeedRoute(vm: FeedViewModel = viewModel()) {
     </plurals>
 </resources>
 
-<!-- res/values-tr/strings.xml -->
+<!-- res/values-es/strings.xml -->
 <resources>
-    <string name="title">Haberler</string>
+    <string name="title">Noticias</string>
     <plurals name="new_articles">
-        <item quantity="one">%d yeni haber</item>
-        <item quantity="other">%d yeni haber</item>
+        <item quantity="one">%d noticia nueva</item>
+        <item quantity="other">%d noticias nuevas</item>
     </plurals>
 </resources>
 
@@ -1482,21 +1482,21 @@ fun Header(count: Int) {
 }`,
         remember: 'values/ has every string; qualified folders override some. Counts use plurals, and the count goes in twice.',
         terms: [
-          { term: 'Resource qualifier', def: 'A suffix on a res/ folder name, like -tr, -night or -sw600dp, that says which configuration the folder is for.' },
+          { term: 'Resource qualifier', def: 'A suffix on a res/ folder name, like -es, -night or -sw600dp, that says which configuration the folder is for.' },
           { term: 'Default resources', def: 'The folders without qualifiers, like values/. Android falls back to them, so they must contain every resource.' },
           { term: 'Plurals', def: 'A string resource with one item per quantity category (zero, one, two, few, many, other) that Android picks by the count and the language.' },
           { term: 'Per-app language', def: 'A language the user picks for one app, separate from the system language. Built into system settings since Android 13.' },
         ],
         challenges: [
           { type: 'blank', prompt: 'Give English the two forms every language needs.', code: '<plurals name="comments">\n    <item quantity="[[one]]">%d comment</item>\n    <item quantity="[[other]]">%d comments</item>\n</plurals>', why: 'Always supply <code>one</code> and <code>other</code>. Translators add the extra categories their language needs.' },
-          { type: 'bug', prompt: 'The app crashes with <code>Resources.NotFoundException</code> on a phone set to German. Tap the line.', code: 'res/\n    values-en/strings.xml      (every string)\n    values-tr/strings.xml\n    values-night/colors.xml', bug: 1, fix: '    values/strings.xml         (every string)', why: 'German matches neither <code>-en</code> nor <code>-tr</code>, and there is no unqualified <code>values/</code> to fall back to. Put the full set in <code>values/</code>.' },
+          { type: 'bug', prompt: 'The app crashes with <code>Resources.NotFoundException</code> on a phone set to German. Tap the line.', code: 'res/\n    values-en/strings.xml      (every string)\n    values-es/strings.xml\n    values-night/colors.xml', bug: 1, fix: '    values/strings.xml         (every string)', why: 'German matches neither <code>-en</code> nor <code>-es</code>, and there is no unqualified <code>values/</code> to fall back to. Put the full set in <code>values/</code>.' },
         ],
         quiz: [
-          { q: 'The app has <code>values/</code> and <code>values-tr/</code>. The phone is set to German. Which strings show?', options: ['From <code>values-tr/</code>', 'From <code>values/</code>', 'None: the app crashes'], a: 1, why: 'No folder matches German, so Android uses the default folder.' },
-          { q: 'Which folder holds Turkish values for dark theme?', options: ['<code>values-night-tr</code>', '<code>values-tr-night</code>', 'Both work'], a: 1, why: 'Qualifiers must follow the order of the qualifier table, and language comes before night mode. A folder in the wrong order is ignored.' },
-          { q: 'What does Kotlin’s <code>"istanbul".uppercase()</code> return on a Turkish phone?', options: ['<code>ISTANBUL</code>', '<code>İSTANBUL</code>', 'It depends on the app language'], a: 0, why: 'The no-argument <code>uppercase()</code> uses the invariant locale on every phone. For Turkish display text, pass a Turkish <code>Locale</code>.' },
+          { q: 'The app has <code>values/</code> and <code>values-es/</code>. The phone is set to German. Which strings show?', options: ['From <code>values-es/</code>', 'From <code>values/</code>', 'None: the app crashes'], a: 1, why: 'No folder matches German, so Android uses the default folder.' },
+          { q: 'Which folder holds Spanish values for dark theme?', options: ['<code>values-night-es</code>', '<code>values-es-night</code>', 'Both work'], a: 1, why: 'Qualifiers must follow the order of the qualifier table, and language comes before night mode. A folder in the wrong order is ignored.' },
+          { q: 'What does Kotlin’s <code>"bilgi".uppercase()</code> return on a Turkish phone?', options: ['<code>BILGI</code>', '<code>BİLGİ</code>', 'It depends on the app language'], a: 0, why: 'The no-argument <code>uppercase()</code> uses the invariant locale on every phone. For Turkish display text, pass a Turkish <code>Locale</code>.' },
           { q: 'A Java library calls <code>"title".toUpperCase()</code> to build a map key. On a phone set to Turkish the lookup fails. Why?', options: ['Java strings cannot hold Turkish letters', '<code>toUpperCase()</code> with no argument uses the phone’s default locale, so the key becomes <code>TİTLE</code>', 'It uses the invariant locale, which has no capital I'], a: 1, why: 'Java’s no-argument call follows the device locale. Kotlin’s <code>uppercase()</code> uses the invariant locale, which is what keys need.' },
-          { q: 'A Compose app on <code>ComponentActivity</code> calls <code>AppCompatDelegate.setApplicationLocales()</code> from an in-app language picker. Nothing changes. What is the fix?', options: ['Make the Activity extend <code>AppCompatActivity</code>', 'Call <code>recreate()</code> right after it', 'Add a <code>values-tr</code> folder for every screen'], a: 0, why: 'The call only takes effect through AppCompat, so a Compose host must be an <code>AppCompatActivity</code>. It then recreates the Activity itself.' },
+          { q: 'A Compose app on <code>ComponentActivity</code> calls <code>AppCompatDelegate.setApplicationLocales()</code> from an in-app language picker. Nothing changes. What is the fix?', options: ['Make the Activity extend <code>AppCompatActivity</code>', 'Call <code>recreate()</code> right after it', 'Add a <code>values-es</code> folder for every screen'], a: 0, why: 'The call only takes effect through AppCompat, so a Compose host must be an <code>AppCompatActivity</code>. It then recreates the Activity itself.' },
         ],
         deeper: [
           {
@@ -1506,8 +1506,8 @@ fun Header(count: Int) {
             code: `val tr = Locale.forLanguageTag("tr")
 
 // Text the user reads: use the language of the text
-"istanbul".uppercase(tr)           // "İSTANBUL"
-"istanbul".uppercase()             // "ISTANBUL": wrong for a Turkish headline
+"bilgi".uppercase(tr)           // "BİLGİ" (Turkish for "info")
+"bilgi".uppercase()             // "BILGI": wrong for a Turkish headline
 
 // Keys, ids, enum names: invariant, the same on every phone
 Category.valueOf(raw.uppercase())  // "sport" -> SPORT on every phone
@@ -1517,7 +1517,7 @@ Category.valueOf(raw.uppercase())  // "sport" -> SPORT on every phone
             visual(el) {
               el.classList.add('and-viz');
               const WORDS = [
-                { w: 'istanbul', op: 'up', use: 'headline shown to a Turkish reader', want: 'İSTANBUL' },
+                { w: 'bilgi', op: 'up', use: 'headline shown to a Turkish reader', want: 'BİLGİ' },
                 { w: 'title', op: 'up', use: 'key compared with "TITLE"', want: 'TITLE' },
                 { w: 'ID', op: 'low', use: 'key compared with "id"', want: 'id' },
               ];
@@ -1544,12 +1544,12 @@ Category.valueOf(raw.uppercase())  // "sport" -> SPORT on every phone
                 useEl.textContent = `want "${word.want}": ${word.use}`;
                 wBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(WORDS[i] === word)));
                 pBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === phone)));
-                say(o, note(word.op === 'up' && word.w === 'istanbul'
+                say(o, note(word.op === 'up' && word.w === 'bilgi'
                   ? 'display text: only the explicit Turkish locale gets the dotted İ'
                   : `key: the invariant call is right everywhere. ${phone === 'tr' ? 'The Java call breaks on a Turkish phone.' : 'Switch the phone to Turkish and watch the Java call.'}`));
               }
               const wBtns = WORDS.map(x => cmd(`"${x.w}"`, () => { word = x; paint(); }));
-              const pBtns = [['en', 'phone: English'], ['tr', 'phone: Türkçe']].map(([p, label]) => { const b = cmd(label, () => { phone = p; paint(); }); b.dataset.p = p; return b; });
+              const pBtns = [['en', 'phone: English'], ['tr', 'phone: Turkish']].map(([p, label]) => { const b = cmd(label, () => { phone = p; paint(); }); b.dataset.p = p; return b; });
               el.append(
                 h('div', { class: 'controls' }, wBtns),
                 h('div', { class: 'controls' }, pBtns),
@@ -1571,7 +1571,7 @@ android {
 
 class MainActivity : AppCompatActivity()     // needed for setApplicationLocales with Compose
 
-fun setAppLanguage(tag: String) {            // "tr", "en", ...
+fun setAppLanguage(tag: String) {            // "es", "en", ...
     AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
 }
 
@@ -1598,10 +1598,10 @@ fun HeaderRtlPreview() = Header(count = 3)`,
 <p>At lookup time, <code>Resources</code> asks the <code>AssetManager</code> for the value of that id in the current <code>Configuration</code>. It drops the folders that contradict the phone, then goes through the qualifiers in table order, so language outranks night mode. When the configuration changes, the Activity is recreated by default and the lookups run again with the new configuration.</p>`,
           code: `// One id, many values
 // R.string.title  ->  values/        "News"
-//                     values-tr/     "Haberler"
+//                     values-es/     "Noticias"
 //                     values-ar/     "الأخبار"
 //
-// Qualifier order matters: values-tr-night is read, values-night-tr is ignored`,
+// Qualifier order matters: values-es-night is read, values-night-es is ignored`,
         },
         mistakes: [
           {
@@ -1620,8 +1620,8 @@ Text(text, Modifier.padding(start = 16.dp))`,
           },
           {
             title: 'Uppercasing Turkish text without a locale',
-            bad: `Text(headline.uppercase())   // "istanbul" -> "ISTANBUL"`,
-            good: `Text(headline.uppercase(Locale.forLanguageTag("tr")))   // "İSTANBUL"`,
+            bad: `Text(headline.uppercase())   // "bilgi" -> "BILGI"`,
+            good: `Text(headline.uppercase(Locale.forLanguageTag("tr")))   // "BİLGİ"`,
             why: 'The no-argument call uses the invariant locale. It is fine for keys, but Turkish readers see a misspelled word.',
           },
         ],
@@ -1629,7 +1629,7 @@ Text(text, Modifier.padding(start = 16.dp))`,
           el.classList.add('and-viz');
           const STR = {
             en: { title: 'News', forms: { one: '%d new article', other: '%d new articles' } },
-            tr: { title: 'Haberler', forms: { one: '%d yeni haber', other: '%d yeni haber' } },
+            es: { title: 'Noticias', forms: { one: '%d noticia nueva', other: '%d noticias nuevas' } },
             ar: { title: 'الأخبار', forms: { zero: 'لا توجد مقالات جديدة', one: 'مقال جديد واحد', two: 'مقالان جديدان', few: '%d مقالات جديدة', many: '%d مقالًا جديدًا', other: '%d مقال جديد' } },
           };
           const COUNTS = [0, 1, 2, 3, 11, 100];
@@ -1637,7 +1637,7 @@ Text(text, Modifier.padding(start = 16.dp))`,
           const { dev, view } = device();
           const dirs = {};
           const dir = (name) => (dirs[name] = h('div', { class: 'and-rs-dir' }, h('span', {}, name + '/'), h('small', {})));
-          const tree = h('div', { class: 'and-rs-tree' }, h('span', { class: 'and-lbl' }, 'res/'), dir('values'), dir('values-tr'), dir('values-ar'), dir('values-night'), dir('values-sw600dp'));
+          const tree = h('div', { class: 'and-rs-tree' }, h('span', { class: 'and-lbl' }, 'res/'), dir('values'), dir('values-es'), dir('values-ar'), dir('values-night'), dir('values-sw600dp'));
           const o = out();
           const cat = (l, n) => { try { return new Intl.PluralRules(l).select(n); } catch (e) { return n === 1 ? 'one' : 'other'; } };
           function paint() {
@@ -1648,11 +1648,11 @@ Text(text, Modifier.padding(start = 16.dp))`,
             const strFrom = lang === 'en' ? 'values' : 'values-' + lang;
             const colorFrom = night ? 'values-night' : 'values';
             const colsFrom = wide ? 'values-sw600dp' : 'values';
-            const got = { values: [], 'values-tr': [], 'values-ar': [], 'values-night': [], 'values-sw600dp': [] };
+            const got = { values: [], 'values-es': [], 'values-ar': [], 'values-night': [], 'values-sw600dp': [] };
             got[strFrom].push('title', 'new_articles');
             got[colorFrom].push('background');
             got[colsFrom].push('columns');
-            const match = { values: true, 'values-tr': lang === 'tr', 'values-ar': lang === 'ar', 'values-night': night, 'values-sw600dp': wide };
+            const match = { values: true, 'values-es': lang === 'es', 'values-ar': lang === 'ar', 'values-night': night, 'values-sw600dp': wide };
             Object.entries(dirs).forEach(([k, d]) => {
               d.className = 'and-rs-dir' + (got[k].length ? ' and-on' : match[k] ? '' : ' and-miss');
               d.lastChild.textContent = got[k].length ? got[k].join(', ') : match[k] ? 'matches, nothing left to give' : 'does not match';
@@ -1672,8 +1672,8 @@ Text(text, Modifier.padding(start = 16.dp))`,
             cBtn.innerHTML = hl(`count = ${n}`);
           }
           function explain(msg) { say(o, msg); }
-          const lBtns = [['en', 'English'], ['tr', 'Türkçe'], ['ar', 'العربية']].map(([l, label]) => {
-            const b = cmd(`language: ${label}`, () => { lang = l; paint(); explain(l === 'en' ? note('no values-en folder: English comes from the default values/') : l === 'tr' ? note('values-tr wins for strings. Turkish has one and other, but both read "haber".') : note('values-ar wins, the layout mirrors right to left, and Arabic plurals have six forms')); });
+          const lBtns = [['en', 'English'], ['es', 'Español'], ['ar', 'العربية']].map(([l, label]) => {
+            const b = cmd(`language: ${label}`, () => { lang = l; paint(); explain(l === 'en' ? note('no values-en folder: English comes from the default values/') : l === 'es' ? note('values-es wins for strings. Spanish, like English, has one and other: "1 noticia nueva", "3 noticias nuevas".') : note('values-ar wins, the layout mirrors right to left, and Arabic plurals have six forms')); });
             b.dataset.l = l; return b;
           });
           const nBtn = cmd('dark theme', () => { night = !night; paint(); explain(note(night ? 'values-night supplies the background color. Strings still come from the language folder.' : 'back to values/ for colors')); });
@@ -3274,7 +3274,7 @@ cb.isEnabled = hasUnsavedChanges`,
             obpEl.className = 'and-perm' + (impl === 'override' ? (t36 ? ' and-no' : ' and-ok') : '');
             draftEl.textContent = unsaved ? 'draft: unsaved' : 'draft: empty or saved';
             draftEl.className = 'and-perm' + (unsaved ? ' and-d2-mid' : '');
-            field.textContent = unsaved ? 'Harika bir yazı, teşekkürler!' : 'Write a comment…';
+            field.textContent = unsaved ? 'Great article, thanks!' : 'Write a comment…';
             field.classList.toggle('and-on', unsaved);
             Object.keys(IMPL).forEach((k, i) => iBtns[i].setAttribute('aria-pressed', String(k === impl)));
             tBtn.setAttribute('aria-pressed', String(t36));

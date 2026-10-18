@@ -249,7 +249,7 @@
 <p>The terminal is always "standing" in one folder, the <em>working directory</em>. <code>pwd</code> prints where you are, <code>ls</code> lists what is there, <code>cd</code> moves you, and <code>mkdir</code> makes a new folder. Git commands act on the folder you are standing in, so knowing where you are is step one.</p>
 <p>Why not just click? Commands are exact, you can repeat them, copy them from docs, and put them in scripts and CI. Every Git feature exists on the command line, while most apps only show some of them. Try the commands below and watch the highlight move in the folder tree.</p>`,
         visual(el) {
-          const FS = { projects: { MynetHaber: { app: { src: {} }, 'build.gradle.kts': null, 'settings.gradle.kts': null }, 'notes.txt': null } };
+          const FS = { projects: { NewsApp: { app: { src: {} }, 'build.gradle.kts': null, 'settings.gradle.kts': null }, 'notes.txt': null } };
           let cwd = ['projects'];
           const dirAt = p => p.reduce((d, k) => d[k], FS);
           const tilde = p => '~' + p.map(x => '/' + x).join('');
@@ -283,11 +283,11 @@
             ]));
           }
           function run(c) {
-            const ps = `deniz@laptop:${tilde(cwd)}$`;
+            const ps = `sam@laptop:${tilde(cwd)}$`;
             const [name, arg] = c.split(' ');
             let res = [], err = false, note = NOTES[c] || '';
             const d = dirAt(cwd);
-            if (name === 'pwd') res = ['/home/deniz' + cwd.map(x => '/' + x).join('')];
+            if (name === 'pwd') res = ['/home/sam' + cwd.map(x => '/' + x).join('')];
             else if (name === 'ls') { const ks = Object.keys(d); if (ks.length) res = [ks.map(k => (d[k] ? k + '/' : k)).join('  ')]; else note = 'ls printed nothing: this folder is empty.'; }
             else if (name === 'cd') {
               if (arg === '..') { if (cwd.length) cwd = cwd.slice(0, -1); else note = 'In the real terminal this goes to /home. The demo stops at your home folder.'; }
@@ -303,20 +303,20 @@
             say(o, esc(note));
           }
           drawTree();
-          log.push({ ps: 'deniz@laptop:~/projects$', cmd: '', res: [], err: false });
+          log.push({ ps: 'sam@laptop:~/projects$', cmd: '', res: [], err: false });
           drawTerm();
           say(o, 'The prompt shows who you are, the computer, and the folder you are in. Run a command.');
           el.append(
-            row(...['pwd', 'ls', 'cd MynetHaber', 'cd app', 'cd ..', 'mkdir docs', 'cd ~'].map(c => act(c, () => run(c)))),
+            row(...['pwd', 'ls', 'cd NewsApp', 'cd app', 'cd ..', 'mkdir docs', 'cd ~'].map(c => act(c, () => run(c)))),
             h('div', { class: 'gt-split' }, h('div', { class: 'gt-col' }, lab('terminal'), term), h('div', { class: 'gt-col' }, lab('folders'), tree)),
             o);
         },
         code: `# Where am I, and what is here?
-pwd                      # /home/deniz/projects
-ls                       # MynetHaber/  notes.txt
+pwd                      # /home/sam/projects
+ls                       # NewsApp/  notes.txt
 
 # Move around
-cd MynetHaber            # into a folder (relative path)
+cd NewsApp            # into a folder (relative path)
 cd app/src               # several levels at once
 cd ..                    # up one level
 cd ~/projects            # from home, wherever you are now
@@ -350,8 +350,8 @@ git --version`,
           {
             title: 'Absolute and relative paths',
             body: `<p>A path that starts with <code>/</code> (or <code>~</code>, your home folder) is <em>absolute</em>: it works from anywhere. Any other path is <em>relative</em> to where you stand. <code>.</code> means "this folder" and <code>..</code> means "the parent". If a folder name has spaces, put it in quotes.</p>`,
-            code: `cd /home/deniz/projects/MynetHaber   # absolute: works from anywhere
-cd ~/projects/MynetHaber             # same place, shorter
+            code: `cd /home/sam/projects/NewsApp   # absolute: works from anywhere
+cd ~/projects/NewsApp             # same place, shorter
 cd app                               # relative: only if app is right here
 cd ../..                             # up two levels
 cd "Android Projects"                # quotes for spaces`,
@@ -359,8 +359,8 @@ cd "Android Projects"                # quotes for spaces`,
           {
             title: 'Set Git up once: your name and email',
             body: `<p>Every commit records an author. Tell Git who you are once per computer with <code>git config --global</code>. Use the same email as your GitHub account so your commits link to your profile. Press <kbd>Tab</kbd> to complete file and folder names, and the up arrow to bring back the previous command.</p>`,
-            code: `git config --global user.name "Deniz Yılmaz"
-git config --global user.email "deniz@example.com"
+            code: `git config --global user.name "Sam Lee"
+git config --global user.email "sam@example.com"
 git config --global init.defaultBranch main   # new repos start on "main"
 git config --list                             # check what is set`,
           },
@@ -374,7 +374,7 @@ echo $?          # exit code of the last command: 0 = success`,
         },
         mistakes: [
           { title: 'Running Git in the wrong folder', bad: `cd ~
-git init        # turns your whole home folder into a repository`, good: `cd ~/projects/MynetHaber
+git init        # turns your whole home folder into a repository`, good: `cd ~/projects/NewsApp
 pwd             # check first
 git init`, why: 'Git acts on the current folder. Running <code>git init</code> in your home folder makes Git track everything under it. Check with <code>pwd</code> first.' },
           { title: 'Spaces in paths without quotes', bad: `cd Android Projects
@@ -387,14 +387,14 @@ git init`, why: 'Git acts on the current folder. Running <code>git init</code> i
           { term: 'Exit code', def: 'The number a program returns when it ends. 0 means success.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Print where you are, then move into the <code>app</code> folder inside <code>MynetHaber</code>.', code: '[[pwd]]\n[[cd]] MynetHaber/app', why: '<code>pwd</code> prints the working directory. <code>cd</code> changes it, and one path can go down several levels.' },
-          { type: 'bug', prompt: 'You start in <code>~/projects</code> and want to end in <code>~/projects/MynetHaber/app</code>. Tap the wrong line.', code: 'cd MynetHaber\nls\ncd ../app\npwd', bug: 2, fix: 'cd app', why: '<code>..</code> goes up to <code>projects</code> first, where there is no <code>app</code> folder. <code>app</code> is right here inside <code>MynetHaber</code>, so a plain relative path works.' },
+          { type: 'blank', prompt: 'Print where you are, then move into the <code>app</code> folder inside <code>NewsApp</code>.', code: '[[pwd]]\n[[cd]] NewsApp/app', why: '<code>pwd</code> prints the working directory. <code>cd</code> changes it, and one path can go down several levels.' },
+          { type: 'bug', prompt: 'You start in <code>~/projects</code> and want to end in <code>~/projects/NewsApp/app</code>. Tap the wrong line.', code: 'cd NewsApp\nls\ncd ../app\npwd', bug: 2, fix: 'cd app', why: '<code>..</code> goes up to <code>projects</code> first, where there is no <code>app</code> folder. <code>app</code> is right here inside <code>NewsApp</code>, so a plain relative path works.' },
         ],
         quiz: [
           { q: 'What does <code>cd ..</code> do?', options: ['Goes to your home folder', 'Moves up one level to the parent folder', 'Lists hidden files'], a: 1, why: '<code>..</code> always means the parent of the current folder.' },
           { q: 'In <code>git commit -m "Fix crash"</code>, what is <code>"Fix crash"</code>?', options: ['A subcommand', 'A flag', 'An argument, the value of -m'], a: 2, why: 'The quoted text is the argument that <code>-m</code> expects. Quotes keep the two words together.' },
           { q: 'A command printed nothing at all. What most likely happened?', options: ['It failed', 'It succeeded and had nothing to report', 'The terminal froze'], a: 1, why: 'Many commands stay silent on success. Check the exit code with <code>echo $?</code> if you are unsure.' },
-          { q: 'You are in <code>/home/deniz/projects/MynetHaber/app/src</code> and run <code>cd ../..</code>. Where are you now?', options: ['<code>/home/deniz/projects</code>', '<code>/home/deniz/projects/MynetHaber/app</code>', '<code>/home/deniz/projects/MynetHaber</code>'], a: 2, why: 'Each .. goes up one level: first to app, then to MynetHaber.' },
+          { q: 'You are in <code>/home/sam/projects/NewsApp/app/src</code> and run <code>cd ../..</code>. Where are you now?', options: ['<code>/home/sam/projects</code>', '<code>/home/sam/projects/NewsApp/app</code>', '<code>/home/sam/projects/NewsApp</code>'], a: 2, why: 'Each .. goes up one level: first to app, then to NewsApp.' },
           { q: '<code>cd Android Projects</code> fails, but the folder exists. Why?', options: ['Folder names can’t contain spaces', 'The shell split the name into two arguments; quote it: <code>cd "Android Projects"</code>', 'cd only accepts absolute paths'], a: 1, why: 'The shell splits words on spaces before the program sees them. Quotes keep the folder name together as one argument.' },
         ],
       },
@@ -476,11 +476,11 @@ git init`, why: 'Git acts on the current folder. Running <code>git init</code> i
             row(act('git add MainActivity.kt', () => add([F[0]])), act('git add .', () => add(F)), act('git commit -m "…"', commit), act('git status', status)),
             h('div', { class: 'gt-boxes' }, bW, bS, bH), o);
         },
-        code: `cd ~/projects/MynetHaber
+        code: `cd ~/projects/NewsApp
 git init                         # creates .git/, starts on the default branch
 git status                       # what changed, what is staged, what is new
 
-git add app/src/main/java/com/mynet/haber/MainActivity.kt
+git add app/src/main/java/com/example/news/MainActivity.kt
 git add .                        # stage every change under this folder
 git commit -m "Add news list screen"
 
@@ -493,7 +493,7 @@ git log --oneline                # one line per commit, newest first
             title: 'git diff: what exactly changed?',
             body: `<p><code>git diff</code> compares two of the three areas. With no options it shows what you changed but have not staged. <code>git diff --staged</code> shows what the next commit will contain. <code>git diff HEAD</code> shows everything since the last commit. Lines with <code>-</code> were removed, lines with <code>+</code> were added.</p>`,
             visual(el) {
-              const V = { w: 'Mynet Haber Pro', s: 'Mynet Haber', c: 'Haber' };
+              const V = { w: 'News Pro', s: 'News App', c: 'News' };
               const mk = (t, k) => h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, t), h('span', { class: 'gt-f' }, 'app_name = ', h('small', {}, V[k])));
               const bW = mk('Working tree', 'w'), bS = mk('Staging area', 's'), bC = mk('Last commit', 'c');
               const diff = h('div', { class: 'gt-diff' });
@@ -524,7 +524,7 @@ git log --oneline                # one line per commit, newest first
             code: `git log --oneline -5                     # last 5 commits
 git log -p -- app/src/main/res/values/strings.xml   # every change to one file
 git show 5b2f7d4                         # one commit in full
-git log --author="Deniz" --since="1 week ago"`,
+git log --author="Sam" --since="1 week ago"`,
           },
           {
             title: 'Commit ids are hashes',
@@ -536,8 +536,8 @@ git log --author="Deniz" --since="1 week ago"`,
           code: `git cat-file -p HEAD
 # tree 9c3e5a1f...
 # parent e3a91c0b...
-# author Deniz Yılmaz <deniz@example.com> 1760600000 +0300
-# committer Deniz Yılmaz <deniz@example.com> 1760600000 +0300
+# author Sam Lee <sam@example.com> 1760600000 +0000
+# committer Sam Lee <sam@example.com> 1760600000 +0000
 #
 # Add news list screen`,
         },
@@ -549,7 +549,7 @@ git commit -m "Fix crash"`, why: '<code>git commit</code> only saves what is in 
           { title: 'git add . without looking', bad: `git add .
 git commit -m "Stuff"`, good: `git status
 git diff
-git add app/src/main/java/com/mynet/haber/NewsAdapter.kt
+git add app/src/main/java/com/example/news/NewsAdapter.kt
 git commit -m "Show source name on news cards"`, why: '<code>git add .</code> stages everything, including debug logs, keys and unrelated edits. Look at <code>git status</code> and <code>git diff</code> first, and add what belongs together.' },
         ],
         terms: [
@@ -560,7 +560,7 @@ git commit -m "Show source name on news cards"`, why: '<code>git add .</code> st
         ],
         challenges: [
           { type: 'blank', prompt: 'Stage one file, then save it as a commit.', code: 'git [[add]] MainActivity.kt\ngit [[commit]] -m "Add login screen"', why: '<code>add</code> puts the change in the staging area, <code>commit</code> saves the staging area into history.' },
-          { type: 'bug', prompt: 'Git replies "nothing added to commit but untracked files present". Tap the line to change.', code: 'cd MynetHaber\ngit init\ngit commit -m "Initial commit"\ngit log --oneline', bug: 2, fix: 'git add . && git commit -m "Initial commit"', why: 'A new repository tracks nothing yet. Stage the files first, then commit.' },
+          { type: 'bug', prompt: 'Git replies "nothing added to commit but untracked files present". Tap the line to change.', code: 'cd NewsApp\ngit init\ngit commit -m "Initial commit"\ngit log --oneline', bug: 2, fix: 'git add . && git commit -m "Initial commit"', why: 'A new repository tracks nothing yet. Stage the files first, then commit.' },
         ],
         quiz: [
           { q: 'You changed 3 files but want only 2 in the next commit. How?', options: ['git commit -m with the 2 names in the message', 'git add the 2 files, then git commit', 'Delete the third file'], a: 1, why: 'The staging area exists for exactly this. Only staged changes go into the commit.' },
@@ -583,7 +583,7 @@ git commit -m "Show source name on news cards"`, why: '<code>git add .</code> st
 <p>Be careful with broad patterns. <code>gradle/wrapper/gradle-wrapper.jar</code> must be committed, so that teammates and CI can run <code>./gradlew</code>. Turn the patterns on below and watch which files Git would still offer to commit.</p>`,
         visual(el) {
           const FILES = [
-            ['app/src/main/java/com/mynet/haber/MainActivity.kt', 'keep'],
+            ['app/src/main/java/com/example/news/MainActivity.kt', 'keep'],
             ['app/build.gradle.kts', 'keep'],
             ['gradle/wrapper/gradle-wrapper.jar', 'keep'],
             ['app/build/outputs/apk/debug/app-debug.apk', 'junk'],
@@ -635,7 +635,7 @@ git commit -m "Show source name on news cards"`, why: '<code>git add .</code> st
         code: `# .gitignore for an Android project (in the project root)
 build/                 # every build output folder, at any depth
 .gradle/               # Gradle's local cache
-local.properties       # sdk.dir=/Users/deniz/Library/Android/sdk
+local.properties       # sdk.dir=/Users/sam/Library/Android/sdk
 *.jks
 *.keystore             # signing keys never go in Git
 .idea/workspace.xml
@@ -907,7 +907,7 @@ git merge --abort                # or: give up and go back to before the merge`,
             title: 'Resolve a conflict by hand',
             body: `<p>Both branches renamed the app in <code>strings.xml</code>. Between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code>=======</code> is your side (the branch you are on). Between <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> is the incoming side. Decide the result, then mark it resolved.</p>`,
             visual(el) {
-              const ours = '    <string name="app_name">Mynet Haber</string>', theirs = '    <string name="app_name">Haber</string>';
+              const ours = '    <string name="app_name">News App</string>', theirs = '    <string name="app_name">Daily News</string>';
               const box = h('div', { class: 'gt-cf', 'aria-label': 'strings.xml' });
               const o = out('');
               let body = null, added = false;
@@ -1144,7 +1144,7 @@ git push`, why: 'Everyone else’s main still has the old commits. After your fo
           function fetch(quiet) {
             const add = R.ids.filter(id => !L.ids.includes(id));
             L.ids.push(...add); const before = L.om; L.om = R.main; draw();
-            if (!quiet) say(o, add.length ? `From github.com:deniz/news-app\n   ${before}..${L.om}  main -> origin/main\n<span class="muted">Downloaded ${add.join(', ')}. origin/main moved. Your main and your files did not change.</span>` : '<span class="muted">Nothing new on GitHub.</span>');
+            if (!quiet) say(o, add.length ? `From github.com:sam/news-app\n   ${before}..${L.om}  main -> origin/main\n<span class="muted">Downloaded ${add.join(', ')}. origin/main moved. Your main and your files did not change.</span>` : '<span class="muted">Nothing new on GitHub.</span>');
             return add;
           }
           function commit() {
@@ -1162,12 +1162,12 @@ git push`, why: 'Everyone else’s main still has the old commits. After your fo
           function push() {
             if (L.main === R.main) { say(o, 'Everything up-to-date'); return; }
             if (!isAnc(all, R.main, L.main)) {
-              say(o, `<span class="bad"> ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:deniz/news-app.git'</span>\n<span class="muted">GitHub has commits you do not have. Pull first, then push.</span>`);
+              say(o, `<span class="bad"> ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:sam/news-app.git'</span>\n<span class="muted">GitHub has commits you do not have. Pull first, then push.</span>`);
               return;
             }
             const add = L.ids.filter(id => !R.ids.includes(id) && isAnc(all, id, L.main));
             R.ids.push(...add); const before = R.main; R.main = L.main; L.om = L.main; draw();
-            say(o, `To github.com:deniz/news-app.git\n   ${before}..${R.main}  main -> main\n<span class="muted">Uploaded ${add.join(', ')}. GitHub's main and your origin/main moved.</span>`);
+            say(o, `To github.com:sam/news-app.git\n   ${before}..${R.main}  main -> main\n<span class="muted">Uploaded ${add.join(', ')}. GitHub's main and your origin/main moved.</span>`);
           }
           reset();
           el.append(
@@ -1176,10 +1176,10 @@ git push`, why: 'Everyone else’s main still has the old commits. After your fo
             row(lab('you'), act('git commit', commit), act('git fetch', () => fetch(false)), act('git pull', pull), act('git push', push), act('reset', reset)),
             h('div', { class: 'gt-place' }, lab('your laptop'), gL.el), o);
         },
-        code: `git clone git@github.com:deniz/news-app.git   # SSH
-git clone https://github.com/deniz/news-app.git   # or HTTPS
+        code: `git clone git@github.com:sam/news-app.git   # SSH
+git clone https://github.com/sam/news-app.git   # or HTTPS
 cd news-app
-git remote -v                     # origin  git@github.com:deniz/news-app.git
+git remote -v                     # origin  git@github.com:sam/news-app.git
 
 git fetch                         # download, update origin/*, touch nothing else
 git status                        # Your branch is behind 'origin/main' by 2 commits
@@ -1204,15 +1204,15 @@ git fetch --all && git branch -vv # refresh first`,
           {
             title: 'SSH keys or HTTPS tokens',
             body: `<p>GitHub needs to know it is you. Over <strong>HTTPS</strong>, Git asks for a username and password, but password sign-in for Git was removed: you enter a <em>personal access token</em> instead, and a credential helper remembers it. Over <strong>SSH</strong>, you create a key pair once, add the public key to your GitHub account, and Git uses it silently. GitHub's docs suggest an Ed25519 key.</p>`,
-            code: `ssh-keygen -t ed25519 -C "deniz@example.com"
+            code: `ssh-keygen -t ed25519 -C "sam@example.com"
 # add ~/.ssh/id_ed25519.pub in GitHub: Settings > SSH and GPG keys
 ssh -T git@github.com             # test the connection
-git remote set-url origin git@github.com:deniz/news-app.git   # switch an HTTPS clone to SSH`,
+git remote set-url origin git@github.com:sam/news-app.git   # switch an HTTPS clone to SSH`,
           },
           {
             title: 'Push a new project to GitHub',
             body: `<p>Create an empty repository on GitHub (no README, so histories do not clash), then connect your local repository to it and push. <code>origin</code> is only a convention; you can name remotes anything.</p>`,
-            code: `git remote add origin git@github.com:deniz/news-app.git
+            code: `git remote add origin git@github.com:sam/news-app.git
 git branch -M main                # make sure the branch is called main
 git push -u origin main`,
           },
@@ -1241,7 +1241,7 @@ git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <c
           { term: 'Personal access token', def: 'A generated secret you use instead of a password when Git talks to GitHub over HTTPS.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Download a repository, and later push a new branch for the first time.', code: 'git [[clone]] git@github.com:deniz/news-app.git\ngit push [[-u|--set-upstream]] origin feature/search', why: '<code>clone</code> copies the repository and sets up origin. <code>-u</code> remembers origin/feature/search as the upstream.' },
+          { type: 'blank', prompt: 'Download a repository, and later push a new branch for the first time.', code: 'git [[clone]] git@github.com:sam/news-app.git\ngit push [[-u|--set-upstream]] origin feature/search', why: '<code>clone</code> copies the repository and sets up origin. <code>-u</code> remembers origin/feature/search as the upstream.' },
           { type: 'bug', prompt: 'Your push was rejected. Tap the line that loses your teammate’s work.', code: 'git switch main\ngit commit -am "Fix crash on empty feed"\ngit push origin main\n# ! [rejected] main -> main (fetch first)\ngit push --force origin main', bug: 4, fix: 'git pull --rebase origin main', why: 'The remote has a commit you do not. Pull it in (merge or rebase), then push again. Force pushing deletes it.' },
         ],
         quiz: [
@@ -1279,10 +1279,10 @@ git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <c
             card.classList.toggle('gt-merged', s.merged);
             const canMerge = checksOk() && s.review === 'approve' && !s.merged;
             card.replaceChildren(
-              h('div', { class: 'gt-pr-t' }, 'Format news dates in Turkish #42'),
-              h('div', { class: 'gt-pr-m' }, `deniz wants to merge ${s.commits} commits into main from feature/date-format`),
+              h('div', { class: 'gt-pr-t' }, 'Show relative news dates #42'),
+              h('div', { class: 'gt-pr-m' }, `sam wants to merge ${s.commits} commits into main from feature/date-format`),
               ...(s.checks || []).map(([n, st]) => h('div', { class: 'gt-chk' }, h('span', { class: `gt-dot gt-${st}` }), `${n} `, h('span', { class: 'gt-tag' }, st === 'run' ? 'in progress' : st === 'pass' ? 'passed' : st === 'fail' ? 'failed' : 'queued'))),
-              h('span', { class: `gt-badge ${s.review === 'approve' ? 'gt-b-ok' : s.review === 'changes' ? 'gt-b-err' : 'gt-b-warn'}` }, s.review === 'approve' ? 'Approved by Elif' : s.review === 'changes' ? 'Elif requested changes' : 'Review required'),
+              h('span', { class: `gt-badge ${s.review === 'approve' ? 'gt-b-ok' : s.review === 'changes' ? 'gt-b-err' : 'gt-b-warn'}` }, s.review === 'approve' ? 'Approved by Maya' : s.review === 'changes' ? 'Maya requested changes' : 'Review required'),
               h('span', { class: `gt-badge ${s.merged ? 'gt-b-ok' : canMerge ? 'gt-b-ok' : ''}` }, s.merged ? (s.deleted ? 'Merged. Branch deleted.' : 'Merged') : canMerge ? 'Ready to merge' : 'Merging is blocked'));
           }
           async function ci() {
@@ -1294,11 +1294,11 @@ git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <c
               s.checks[i][1] = i === 1 && s.broken ? 'fail' : 'pass'; draw();
             }
             s.running = false;
-            say(o, s.broken ? '<span class="bad">unit tests failed:</span> DateFormatterTest > formatsTodayInTurkish expected "Bugün 14:05" but was "Today 14:05".\n<span class="muted">Fix it on the branch and push again.</span>' : '<span class="good">All checks passed.</span>');
+            say(o, s.broken ? '<span class="bad">unit tests failed:</span> DateFormatterTest > formatsTodayRelative expected "Today 14:05" but was "Oct 18, 14:05".\n<span class="muted">Fix it on the branch and push again.</span>' : '<span class="good">All checks passed.</span>');
           }
           function push() {
             if (s.merged) { say(o, 'The PR is merged. Start a new branch for new work.'); return; }
-            if (!s.pushed) { s.pushed = true; draw(); say(o, "To github.com:deniz/news-app.git\n * [new branch]      feature/date-format -> feature/date-format\n<span class=\"muted\">Branch is on GitHub. Now open a pull request.</span>"); return; }
+            if (!s.pushed) { s.pushed = true; draw(); say(o, "To github.com:sam/news-app.git\n * [new branch]      feature/date-format -> feature/date-format\n<span class=\"muted\">Branch is on GitHub. Now open a pull request.</span>"); return; }
             if (s.running) { say(o, 'Wait for the current checks to finish.'); return; }
             s.commits++; const wasBroken = s.broken; s.broken = false;
             say(o, wasBroken ? 'Pushed a fix commit. The PR updates and CI runs again…' : 'Pushed another commit. CI runs again…');
@@ -1313,7 +1313,7 @@ git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <c
           function review(kind) {
             if (!s.open || s.merged) { say(o, 'Nothing to review yet.'); return; }
             s.review = kind; draw();
-            say(o, kind === 'approve' ? 'Elif approved: "Looks good. Nice test."' : 'Elif requested changes: "Please use the device locale instead of hard-coding tr-TR." Push a commit to address it.');
+            say(o, kind === 'approve' ? 'Maya approved: "Looks good. Nice test."' : 'Maya requested changes: "Please use the device locale instead of hard-coding en-US." Push a commit to address it.');
           }
           function merge() {
             if (!s.open) { say(o, 'There is no pull request to merge.'); return; }
@@ -1371,14 +1371,14 @@ gh pr checks`,
             title: 'Write a PR people want to review',
             body: `<p>The description answers three questions: what changed, why, and how to check it. Add screenshots for UI changes. Open a <em>draft</em> PR to share early work: drafts cannot be merged, and code owners are not asked to review until you mark them ready. Review your own diff first; you will catch half the comments yourself.</p>`,
             code: `## What
-Show news dates as "Bugün 14:05" / "Dün" in Turkish.
+Show news dates as "Today 14:05" / "Yesterday".
 
 ## Why
 Users read relative dates faster. Fixes #118.
 
 ## How to test
-1. Set device language to Türkçe
-2. Open the news list: today's items show "Bugün"`,
+1. Set the device language to English
+2. Open the news list: today's items show "Today"`,
           },
           {
             title: 'Reviewing someone else’s PR',

@@ -2996,7 +2996,7 @@ fun NoteActions(note: Note, onDelete: () -> Unit, onShare: (String) -> Unit) {
               let open = false, busy = false;
               const sheet = h('div', { class: 'cmp-ov-sheet' }, h('i', { class: 'cmp-ov-handle' }), h('div', { class: 'cmp-ov-sitem' }, 'WhatsApp'), h('div', { class: 'cmp-ov-sitem' }, 'E-posta'));
               const scrim = h('div', { class: 'cmp-ov-scrim' });
-              const phone = h('div', { class: 'cmp-ov-phone cmp-ov-mini' }, h('div', { class: 'cmp-ov-bar' }, 'Notlar'), h('div', { class: 'cmp-ov-note' }, 'Alışveriş listesi'), scrim, sheet);
+              const phone = h('div', { class: 'cmp-ov-phone cmp-ov-mini' }, h('div', { class: 'cmp-ov-bar' }, 'Notes'), h('div', { class: 'cmp-ov-note' }, 'Shopping list'), scrim, sheet);
               const read = h('div', { class: 'kt' });
               const o = out();
               const paint = (vis) => { read.innerHTML = hl(`showShare = ${open}\nsheetState.isVisible = ${vis}`); };
@@ -3101,7 +3101,7 @@ pendingDelete?.let { note ->
         ],
         visual(el) {
           let menuOpen = false, confirm = false, share = false, dismissOk = true, snackT = 0;
-          const notes = ['Alışveriş listesi', 'Toplantı notları'];
+          const notes = ['Shopping list', 'Meeting notes'];
           const list = h('div', { class: 'cmp-ov-list' });
           const moreBtn = h('button', { class: 'cmp-ov-more', type: 'button', 'aria-label': 'More options', onclick: () => setMenu(true) }, '⋮');
           const menu = h('div', { class: 'cmp-ov-menu', role: 'menu' },
@@ -3118,7 +3118,7 @@ pendingDelete?.let { note ->
             ...['WhatsApp', 'E-posta', 'Copy link'].map(t => h('button', { type: 'button', class: 'cmp-ov-sitem', onclick: () => pick(t) }, t)));
           const snack = h('div', { class: 'cmp-ov-snack', 'aria-live': 'polite' });
           const phone = h('div', { class: 'cmp-ov-phone' },
-            h('div', { class: 'cmp-ov-bar' }, h('span', {}, 'Notlar'), moreBtn), list, catcher, menu, scrim, dialog, sheet, snack);
+            h('div', { class: 'cmp-ov-bar' }, h('span', {}, 'Notes'), moreBtn), list, catcher, menu, scrim, dialog, sheet, snack);
           const read = h('div', { class: 'kt' });
           const o = out();
           const paintList = () => list.replaceChildren(...notes.map(n => h('div', { class: 'cmp-ov-note' }, n)));
@@ -3187,7 +3187,7 @@ pendingDelete?.let { note ->
                 h('label', { class: 'switch', for: 'cmp-ov-dismiss' }, sw, 'onDismissRequest sets the flag'),
                 h('div', { class: 'controls' },
                   act('Press back', back),
-                  act('Reset notes', () => { notes.splice(0, notes.length, 'Alışveriş listesi', 'Toplantı notları'); menuOpen = confirm = share = false; paintList(); paint(); say(o, 'Notes restored.'); })))),
+                  act('Reset notes', () => { notes.splice(0, notes.length, 'Shopping list', 'Meeting notes'); menuOpen = confirm = share = false; paintList(); paint(); say(o, 'Notes restored.'); })))),
             o);
         },
       },
@@ -3511,7 +3511,7 @@ OutlinedTextField(
         ],
         challenges: [
           { type: 'blank', prompt: 'A 4-digit PIN field: digits only, at most 4.', code: 'val pin = [[rememberTextFieldState]]()\nOutlinedTextField(\n    state = pin,\n    label = { Text("PIN") },\n    inputTransformation = InputTransformation.[[maxLength]](4).then(DigitsOnly),\n    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),\n)', why: '<code>rememberTextFieldState</code> creates and saves the state. <code>maxLength</code> rejects the fifth digit before it is stored.' },
-          { type: 'bug', prompt: 'This does not compile: <code>send</code> takes a String. Tap the line.', code: 'val message = rememberTextFieldState()\nOutlinedTextField(state = message, label = { Text("Mesaj") })\nButton(onClick = {\n    chat.send(message.text)\n    message.clearText()\n}) { Text("Gönder") }', bug: 3, fix: '    chat.send(message.text.toString())', why: '<code>state.text</code> is a <code>CharSequence</code> snapshot, not a String. Call <code>toString()</code> when you hand it on.' },
+          { type: 'bug', prompt: 'This does not compile: <code>send</code> takes a String. Tap the line.', code: 'val message = rememberTextFieldState()\nOutlinedTextField(state = message, label = { Text("Message") })\nButton(onClick = {\n    chat.send(message.text)\n    message.clearText()\n}) { Text("Send") }', bug: 3, fix: '    chat.send(message.text.toString())', why: '<code>state.text</code> is a <code>CharSequence</code> snapshot, not a String. Call <code>toString()</code> when you hand it on.' },
         ],
         quiz: [
           { q: 'An OutputTransformation adds dashes to a card number. What does <code>state.text</code> hold?', options: ['The digits with dashes', 'Only the digits the user typed'], a: 1, why: 'Output transformations change the drawing only. The stored text stays plain.' },
@@ -3524,12 +3524,12 @@ OutlinedTextField(
           {
             title: 'Change the text from code',
             body: `<p>Every change goes through the state. <code>edit { }</code> hands you a <code>TextFieldBuffer</code> with <code>insert</code>, <code>replace</code>, <code>append</code>, <code>delete</code> and <code>selectAll()</code>. Shortcuts cover the common cases: <code>setTextAndPlaceCursorAtEnd()</code> replaces everything and puts the cursor at the end, and <code>clearText()</code> empties the field. <code>state.selection</code> tells you where the cursor is.</p>`,
-            code: `val state = rememberTextFieldState("Merhaba Android")
+            code: `val state = rememberTextFieldState("Hello Android")
 
-state.edit { insert(7, ",") }                    // "Merhaba, Android"
-state.edit { replace(9, 16, "Compose") }         // "Merhaba, Compose"
-state.edit { selectAll() }                       // selection = TextRange(0, 16)
-state.setTextAndPlaceCursorAtEnd("Selam")        // selection = TextRange(5, 5)
+state.edit { insert(5, ",") }                    // "Hello, Android"
+state.edit { replace(7, 14, "Compose") }         // "Hello, Compose"
+state.edit { selectAll() }                       // selection = TextRange(0, 14)
+state.setTextAndPlaceCursorAtEnd("Hello")        // selection = TextRange(5, 5)
 state.clearText()                                // selection = TextRange(0, 0)`,
           },
           {
@@ -4293,7 +4293,7 @@ fun ArticleRow(article: Article, onClick: () -> Unit) {
                 .data(article.imageUrl)              // String?; null shows the fallback
                 .crossfade(true)
                 .build(),
-            contentDescription = article.imageAlt,   // "Galata Kulesi at dusk"
+            contentDescription = article.imageAlt,   // "Lighthouse at dusk"
             placeholder = painterResource(R.drawable.image_placeholder),
             error = painterResource(R.drawable.image_broken),
             contentScale = ContentScale.Crop,
@@ -4374,7 +4374,7 @@ Image(painter = rememberAsyncImagePainter(url), contentDescription = null, modif
             code: `// Meaningful: say what it shows
 AsyncImage(
     model = author.photoUrl,
-    contentDescription = stringResource(R.string.cd_author_photo, author.name),  // "Ayşe Demir’s photo"
+    contentDescription = stringResource(R.string.cd_author_photo, author.name),  // "Maya’s photo"
 )
 
 // Decorative: the headline next to it already says it all
@@ -4442,14 +4442,14 @@ implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")`,
           },
         ],
         visual(el) {
-          const URL = 'https://cdn.example.com/galata.jpg';
+          const URL = 'https://cdn.example.com/lighthouse.jpg';
           let ph = true, cf = true, busy = false, model = URL;
           const mem = new Set(), disk = new Set();
           const pic = h('div', { class: 'cmp-im-pic', 'aria-hidden': 'true' }, h('i', { class: 'cmp-im-sun' }), h('i', { class: 'cmp-im-tower' }));
           const phLayer = h('div', { class: 'cmp-im-ph' }, 'placeholder');
           const errLayer = h('div', { class: 'cmp-im-err' }, h('b', {}, '⚠'), 'error');
           const frame = h('div', { class: 'cmp-im-frame' }, phLayer, pic, errLayer);
-          const row = h('div', { class: 'cmp-im-row' }, frame, h('div', { class: 'cmp-im-text' }, h('b', {}, 'Galata Kulesi at dusk'), h('small', {}, 'İstanbul · 3 min read')));
+          const row = h('div', { class: 'cmp-im-row' }, frame, h('div', { class: 'cmp-im-text' }, h('b', {}, 'Lighthouse at dusk'), h('small', {}, 'Travel · 3 min read')));
           const stage = (name, sub) => {
             const pill = h('span', { class: 'cmp-im-pill' }, 'empty');
             const n = h('div', { class: 'cmp-im-stage' }, h('b', {}, name), h('small', {}, sub), pill);
@@ -4464,11 +4464,11 @@ implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")`,
           const read = h('div', { class: 'kt' });
           const o = out();
           const paintRead = () => {
-            read.innerHTML = hl(`AsyncImage(\n    model = ImageRequest.Builder(context)\n        .data(${model === null ? 'null' : model === 'bad' ? '"…/missing.jpg"' : 'url'})\n        .crossfade(${cf})\n        .build(),\n    placeholder = ${ph ? 'painterResource(R.drawable.ph)' : 'null'},\n    error = painterResource(R.drawable.broken),\n    contentDescription = "Galata Kulesi at dusk",\n)`);
+            read.innerHTML = hl(`AsyncImage(\n    model = ImageRequest.Builder(context)\n        .data(${model === null ? 'null' : model === 'bad' ? '"…/missing.jpg"' : 'url'})\n        .crossfade(${cf})\n        .build(),\n    placeholder = ${ph ? 'painterResource(R.drawable.ph)' : 'null'},\n    error = painterResource(R.drawable.broken),\n    contentDescription = "Lighthouse at dusk",\n)`);
           };
           const paintCaches = () => {
-            sMem.pill.textContent = mem.size ? 'galata.jpg' : 'empty';
-            sDisk.pill.textContent = disk.size ? 'galata.jpg' : 'empty';
+            sMem.pill.textContent = mem.size ? 'lighthouse.jpg' : 'empty';
+            sDisk.pill.textContent = disk.size ? 'lighthouse.jpg' : 'empty';
             sMem.pill.classList.toggle('cmp-im-has', mem.size > 0);
             sDisk.pill.classList.toggle('cmp-im-has', disk.size > 0);
           };
@@ -4496,7 +4496,7 @@ implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")`,
               say(o, `${hl('model = null')} <span class="muted">// no request at all. fallback defaults to the error painter.</span>`);
               busy = false; return;
             }
-            const key = m === URL ? 'galata' : 'bad';
+            const key = m === URL ? 'lighthouse' : 'bad';
             if (mem.has(key)) {
               await check(sMem, 160, true); if (!el.isConnected) return;
               show(pic, false); setState('Success(dataSource = MEMORY_CACHE)');
@@ -5395,7 +5395,7 @@ fun rememberAnalytics(user: User): Analytics {
 }
 
 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-    analytics.logView("haber_detay")
+    analytics.logView("article_detail")
 }`,
           },
           {

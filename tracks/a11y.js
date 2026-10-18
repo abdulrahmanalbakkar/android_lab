@@ -342,7 +342,7 @@ fun ProductCard(product: Product, onFavorite: () -> Unit, onAdd: () -> Unit) {
           {
             title: 'Write labels that say what happens',
             body: `<p>A good <code>contentDescription</code> names the action or the content, in a few words. TalkBack adds the role and the hint itself, so leave out “button”, “icon” and “tap to”. Describe what the control does, not how it looks.</p>
-<p>Labels are user-facing text, so they belong in <code>strings.xml</code> like any other text. A hardcoded English label is read in English on a Turkish phone, while TalkBack speaks the role in Turkish around it.</p>`,
+<p>Labels are user-facing text, so they belong in <code>strings.xml</code> like any other text. A hardcoded English label is read in English on a Spanish phone, while TalkBack speaks the role in Spanish around it.</p>`,
             code: `IconButton(onClick = onFavorite) {
     Icon(
         Icons.Default.FavoriteBorder,
@@ -350,7 +350,7 @@ fun ProductCard(product: Product, onFavorite: () -> Unit, onAdd: () -> Unit) {
     )
 }
 // values/strings.xml:     <string name="add_to_favorites">Add to favorites</string>
-// values-tr/strings.xml:  <string name="add_to_favorites">Favorilere ekle</string>`,
+// values-es/strings.xml:  <string name="add_to_favorites">Añadir a favoritos</string>`,
             visual(el) {
               const OPTS = [
                 { src: 'null', say: null, verdict: 'bad', note: 'no label: TalkBack can only say the role' },
@@ -359,12 +359,12 @@ fun ProductCard(product: Product, onFavorite: () -> Unit, onAdd: () -> Unit) {
                 { src: '"Tap to add to favorites"', say: 'Tap to add to favorites', verdict: 'bad', note: 'TalkBack users double-tap, and TalkBack adds its own hint' },
                 { src: '"Add to favorites"', say: 'Add to favorites', verdict: 'good', note: 'the action, in a few words' },
               ];
-              let pick = 4, tr = false, res = false;
+              let pick = 4, es = false, res = false;
               const heart = h('span', { class: 'ay-ico ay-focus', html: ICON.heart });
               const bar = h('div', { class: 'ay-d2-wl-bar', role: 'img', 'aria-label': 'Toolbar with a heart button in focus' }, h('span', { class: 'ay-title' }, 'Trail shoes'), heart);
               const line = h('div', { class: 'kt' });
               const o = out();
-              const trSw = sw('ay-d2-wl-tr', 'Phone language: Turkish');
+              const esSw = sw('ay-d2-wl-es', 'Phone language: Spanish');
               const resSw = sw('ay-d2-wl-res', 'Label from strings.xml');
               const btns = OPTS.map((x, i) => cmd(`contentDescription = ${x.src}`, () => { pick = i; if (i !== 4 && res) { res = false; resSw.input.checked = false; } paint(true); }));
               function paint(anim) {
@@ -372,22 +372,22 @@ fun ProductCard(product: Product, onFavorite: () -> Unit, onAdd: () -> Unit) {
                 const x = OPTS[pick];
                 const useRes = res && pick === 4;
                 line.innerHTML = hl(`Icon(Icons.Default.FavoriteBorder, contentDescription = ${useRes ? 'stringResource(R.string.add_to_favorites)' : x.src})`);
-                const role = tr ? 'Düğme' : 'Button';
-                const label = useRes && tr ? 'Favorilere ekle' : x.say;
+                const role = es ? 'Botón' : 'Button';
+                const label = useRes && es ? 'Añadir a favoritos' : x.say;
                 const spoken = label ? `${label}, ${role}` : role;
                 let verdict = x.verdict, note = x.note;
-                if (pick === 4 && tr && !useRes) { verdict = 'bad'; note = 'hardcoded English on a Turkish phone'; }
-                if (pick === 4 && useRes) note = tr ? 'read from values-tr/strings.xml' : 'read from strings.xml';
+                if (pick === 4 && es && !useRes) { verdict = 'bad'; note = 'hardcoded English on a Spanish phone'; }
+                if (pick === 4 && useRes) note = es ? 'read from values-es/strings.xml' : 'read from strings.xml';
                 if (anim) replay(heart, 'pop');
                 say(o, `TalkBack: <span class="good">"${esc(spoken)}"</span>  <span class="${verdict === 'good' ? 'good' : 'bad'}">// ${esc(note)}</span>`);
               }
-              trSw.input.addEventListener('change', () => { tr = trSw.input.checked; paint(true); });
+              esSw.input.addEventListener('change', () => { es = esSw.input.checked; paint(true); });
               resSw.input.addEventListener('change', () => { res = resSw.input.checked; if (res && pick !== 4) pick = 4; paint(true); });
               paint(false);
               el.append(
                 h('div', { class: 'stage' }, bar), line,
                 h('div', { class: 'controls ay-d2-col-btns' }, btns),
-                h('div', { class: 'controls' }, trSw.el, resSw.el),
+                h('div', { class: 'controls' }, esSw.el, resSw.el),
                 o);
             },
           },
@@ -830,8 +830,8 @@ fun MailRow(mail: Mail, onArchive: (Long) -> Unit, onMarkRead: (Long) -> Unit) {
           },
           {
             title: 'Name the result, not the gesture',
-            body: `<p>The label is all the user hears. “Archive”, “Move up”, “Delete draft” say what will happen. “Swipe left” or “Long press” describe a gesture the user may not be able to make. Use the app’s language, so a Turkish build says “Arşivle”: pass a string resource, not a hard-coded English word.</p>`,
-            code: `val archive = stringResource(R.string.action_archive)   // "Arşivle" in values-tr
+            body: `<p>The label is all the user hears. “Archive”, “Move up”, “Delete draft” say what will happen. “Swipe left” or “Long press” describe a gesture the user may not be able to make. Use the app’s language, so a Spanish build says “Archivar”: pass a string resource, not a hard-coded English word.</p>`,
+            code: `val archive = stringResource(R.string.action_archive)   // "Archivar" in values-es
 Modifier.semantics {
     customActions = listOf(CustomAccessibilityAction(archive) { onArchive(); true })
 }`,
@@ -1220,8 +1220,8 @@ Row(
         .focusGroup()
         .focusProperties { onEnter = { confirm.requestFocus() } },
 ) {
-    TextButton(onClick = onCancel) { Text("Vazgeç") }
-    Button(onClick = onConfirm, Modifier.focusRequester(confirm)) { Text("Onayla") }
+    TextButton(onClick = onCancel) { Text("Cancel") }
+    Button(onClick = onConfirm, Modifier.focusRequester(confirm)) { Text("Confirm") }
 }`,
           },
           {
@@ -2099,7 +2099,7 @@ val photos by viewModel.photos.collectAsStateWithLifecycle()`,
           { term: 'android:appCategory', def: 'A manifest attribute that declares the app’s category. Apps that declare game are exempt from the large-screen rule.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Turn on the API 37 behavior for your debug build, without changing targetSdk.', code: 'adb shell am compat [[enable]] [[UNIVERSAL_RESIZABLE_BY_DEFAULT]] com.example.haber', why: 'The compat framework can switch the change on for a debuggable app. The app is killed so the override takes effect.' },
+          { type: 'blank', prompt: 'Turn on the API 37 behavior for your debug build, without changing targetSdk.', code: 'adb shell am compat [[enable]] [[UNIVERSAL_RESIZABLE_BY_DEFAULT]] com.example.news', why: 'The compat framework can switch the change on for a debuggable app. The app is killed so the override takes effect.' },
           { type: 'bug', prompt: 'On a tablet the app now opens in landscape, and the two-pane layout never appears in portrait split screen. Tap the line that decides the layout wrongly.', code: '@Composable\nfun NewsScreen(state: NewsState) {\n    val config = LocalConfiguration.current\n    val twoPane = config.orientation == Configuration.ORIENTATION_LANDSCAPE\n    if (twoPane) NewsTwoPane(state) else NewsList(state)\n}', bug: 3, fix: '    val twoPane = currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)', why: 'Orientation says nothing about how much room the window has. A wide portrait window and a narrow landscape split both exist. Decide from the window size class.' },
         ],
         quiz: [
@@ -2138,8 +2138,8 @@ val photos by viewModel.photos.collectAsStateWithLifecycle()`,
                 press(btns, btns[wide ? 0 : 1]);
                 scr.className = 'ay-rz-win' + (wide ? ' ay-rz-wide' : ' ay-rz-short') + (fixed ? ' ay-rz-fixed' : '');
                 scr.replaceChildren(h('div', { class: 'ay-rz-form' },
-                  h('b', {}, 'Kaydol'), h('span', { class: 'ay-rz-field' }, 'Ad'), h('span', { class: 'ay-rz-field' }, 'E-posta'), h('span', { class: 'ay-rz-field' }, 'Şifre'),
-                  h('span', { class: 'ay-pill ay-rz-btn' }, 'Kaydol')));
+                  h('b', {}, 'Sign up'), h('span', { class: 'ay-rz-field' }, 'Name'), h('span', { class: 'ay-rz-field' }, 'Email'), h('span', { class: 'ay-rz-field' }, 'Password'),
+                  h('span', { class: 'ay-pill ay-rz-btn' }, 'Sign up')));
                 if (anim) replay(scr, 'pop-soft');
                 const msg = fixed
                   ? '<span class="good">ok:</span> fields keep a readable width, and the column scrolls to the button.'
@@ -2178,10 +2178,10 @@ fun SignUpForm(vm: SignUpViewModel = viewModel()) {
             title: 'Test it before you raise targetSdk',
             body: `<p>You don’t have to change <code>targetSdk</code> to see what happens. The app compatibility framework has a flag, <code>UNIVERSAL_RESIZABLE_BY_DEFAULT</code>, that switches the behavior on. Enable it for a debuggable build on a large-screen emulator or device. The app is killed so the change takes effect on the next start.</p>`,
             code: `# Turn the behavior on for your debug build
-adb shell am compat enable UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.haber
+adb shell am compat enable UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.news
 
 # Back to the normal behavior for your targetSdk
-adb shell am compat reset UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.haber`,
+adb shell am compat reset UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.news`,
           },
         ],
         mistakes: [
@@ -2226,7 +2226,7 @@ adb shell am compat reset UNIVERSAL_RESIZABLE_BY_DEFAULT com.example.haber`,
             const r = rule();
             screen.className = `ay-rz-dev ay-rz-${dev}`;
             const app = h('div', { class: 'ay-rz-app' + (r.honored ? '' : ' ay-rz-fill') },
-              h('div', { class: 'ay-rz-bar' }, 'Haber'),
+              h('div', { class: 'ay-rz-bar' }, 'News'),
               h('div', { class: 'ay-rz-feed' }, h('i'), h('i'), h('i'), h('i')));
             screen.replaceChildren(app);
             if (anim) replay(app, 'pop-soft');

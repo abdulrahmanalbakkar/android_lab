@@ -8,14 +8,13 @@ Live at https://abdulrahmanalbakkar.github.io/android_lab/
 
 ## Features
 
-- **Roadmap** (`#home`): one path from Programming basics to Get the job. Each stage lists its topics as cards (core, optional or project) with progress, and "You are here" marks the topic you're on.
-- **Goals**: New to programming, Growing to senior, Interview prep or Everything. The chosen goal opens its stages and folds the rest; a jump bar scrolls to any stage, and a finish line card shows progress for the goal.
+- **Roadmap** (`#home`): numbered stages from Programming basics to Problem solving, each topic one row with its lesson count and progress. Optional topics and projects are labelled, and finished stages fold to their heading.
 - **Track pages** (`#<track>`) and **lesson pages** (`#<track>.<lesson>`): demo, code, "Pin this" rule, optional Go deeper / Under the hood / Common mistakes, practice, terms and a quiz.
 - **Capstone projects**: guided builds shown as a double-bordered card at the end of their stage. A project page shows "What you'll build" and its steps; each step links the lessons to review first.
-- **Interview practice** (`#interview`): timed, mixed-topic questions drawn from every quiz. Pick topics or a preset, 10/20/30 questions and no limit, 30 s or 60 s per question. Results show a per-topic breakdown, explanations for every miss, and a button that adds the misses to Review. Best scores are kept per setup.
+- **Test yourself** (`#practice`; old `#interview` links redirect): timed, mixed-topic questions drawn from every quiz. Pick topics or a preset, 10/20/30 questions and no limit, 30 s or 60 s per question. Results show a per-topic breakdown, explanations for every miss, and a button that adds the misses to Review. Best scores are kept per setup.
 - **Spaced review** (`#review`): quiz questions come back after 1, 3, 7, 21 and 60 days while you keep getting them right.
 - **Search** (`/`) across tracks, projects, lessons and glossary terms, and a **glossary** (`#glossary`).
-- **Keyboard**: `←` `→` lessons, `/` search, `m` map, `r` review, `i` interview, `g` glossary, `t` theme, `?` all shortcuts. In interview mode, `1`–`4` answer and `Enter` moves on.
+- **Keyboard**: `←` `→` lessons, `/` search, `m` map, `r` review, `p` test yourself, `g` glossary, `t` theme, `?` all shortcuts. In Test yourself, `1`–`4` answer and `Enter` moves on.
 - **Official docs**: each lesson links 1–3 official pages, listed in `js/docs.js` (keys are `track.lesson`).
 - Light and dark themes (System, Light, Dark), works offline once visited, installable as an app.
 
@@ -29,7 +28,7 @@ Progress lives in this browser's `localStorage` under `android-lab:v1`.
 
 **Run step 3 after every change to a track file**, then commit `js/catalog.js` with it. The page loads only the catalog (titles, terms and quizzes, about 140 KB gzipped) and fetches a track's full file the first time one of its lessons opens. If a track file and the catalog disagree, the browser console says so.
 
-The roadmap, search, glossary, level filters, review, interview mode and the offline cache pick it up automatically.
+The roadmap, search, glossary, level filters, review, Test yourself and the offline cache pick it up automatically.
 
 ## Add a capstone project
 

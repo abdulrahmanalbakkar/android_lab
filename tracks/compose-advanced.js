@@ -1062,8 +1062,8 @@ Image(
               function pick(i) {
                 const m = MODES[i];
                 btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
-                chip.replaceChildren(...m.layers.map(k => k === 'txt' ? h('span', { class: 'cx-dr-txt' }, 'İndirim') : h('span', { class: k === 'bg' ? 'cx-dr-bg' : 'cx-dr-scrim' })));
-                if (!m.layers.includes('txt')) chip.append(h('span', { class: 'cx-dr-txt cx-dr-gone' }, 'İndirim'));
+                chip.replaceChildren(...m.layers.map(k => k === 'txt' ? h('span', { class: 'cx-dr-txt' }, 'Sale') : h('span', { class: k === 'bg' ? 'cx-dr-bg' : 'cx-dr-scrim' })));
+                if (!m.layers.includes('txt')) chip.append(h('span', { class: 'cx-dr-txt cx-dr-gone' }, 'Sale'));
                 list.replaceChildren(...m.layers.map((k, j) => h('li', { class: 'drop-in', style: `animation-delay:${j * 0.12}s` }, NAME[k])));
                 replay(chip, 'pop-soft');
                 say(o, `${hl(m.src)} <span class="muted">// ${m.note}</span>`);
@@ -1978,9 +1978,9 @@ Log.d("Shared", "match for \${dish.id}: \${imageState.isMatchFound}")`,
         ],
         visual(el) {
           const DISHES = [
-            { id: 1, name: 'Simit', tone: 'var(--warm)', blurb: 'Sesame ring bread, best with tea.' },
-            { id: 2, name: 'Baklava', tone: 'var(--ok)', blurb: 'Thin layers, pistachio and syrup.' },
-            { id: 3, name: 'Künefe', tone: 'var(--accent)', blurb: 'Served hot, cheese inside.' },
+            { id: 1, name: 'Bagel', tone: 'var(--warm)', blurb: 'Chewy ring bread, best with coffee.' },
+            { id: 2, name: 'Croissant', tone: 'var(--ok)', blurb: 'Thin buttery layers, baked fresh.' },
+            { id: 3, name: 'Pancakes', tone: 'var(--accent)', blurb: 'Served hot, with syrup.' },
           ];
           let shared = true, open = null, busy = false;
           const s = h('input', { type: 'checkbox', id: 'cx-se-on', checked: true });
@@ -1990,7 +1990,7 @@ Log.d("Shared", "match for \${dish.id}: \${imageState.isMatchFound}")`,
             thumbs[d.id] = h('span', { class: 'cx-se-img', style: `background:${d.tone}` });
             return h('button', { class: 'cx-se-card', onclick: () => go(d), 'aria-label': `Open ${d.name}` }, thumbs[d.id], h('span', {}, d.name));
           }));
-          const listScr = h('div', { class: 'cx-se-scr' }, h('p', { class: 'cx-se-h' }, 'Menü'), grid);
+          const listScr = h('div', { class: 'cx-se-scr' }, h('p', { class: 'cx-se-h' }, 'Menu'), grid);
           const hero = h('span', { class: 'cx-se-hero' });
           const title = h('p', { class: 'cx-se-title' });
           const blurb = h('p', { class: 'cx-se-blurb' });
@@ -2741,7 +2741,7 @@ Scaffold(bottomBar = { ShopTabs(selected = tab, onSelect = { tab = it }) }) { pa
 }`,
             visual(el) {
               const TABS = ['Home', 'Search', 'Profile'];
-              const NEXT = { Home: ['Product(42)', 'Product(7)', 'Cart'], Search: ['Results("simit")', 'Product(3)', 'Product(9)'], Profile: ['Orders', 'Order(1001)', 'Help'] };
+              const NEXT = { Home: ['Product(42)', 'Product(7)', 'Cart'], Search: ['Results("bagel")', 'Product(3)', 'Product(9)'], Profile: ['Orders', 'Order(1001)', 'Help'] };
               const stacks = Object.fromEntries(TABS.map(t => [t, [t]]));
               let tab = 'Home';
               const shelf = h('div', { class: 'cx-d2-shelf' });
@@ -2835,7 +2835,7 @@ val backStack = rememberNavBackStack(Home)`,
           const sTitle = h('p', { class: 'cx-scr-title' }), sCode = h('p', { class: 'cx-scr-code' });
           const phone = h('div', { class: 'phone', role: 'img', 'aria-label': 'What NavDisplay shows' }, h('span', { class: 'cx-label' }, 'NavDisplay'), sTitle, sCode);
           const o = out('');
-          const TITLE = k => k === 'Home' ? 'Ana sayfa' : k === 'Cart' ? 'Sepet' : `Ürün #${k.match(/\d+/)[0]}`;
+          const TITLE = k => k === 'Home' ? 'Home' : k === 'Cart' ? 'Cart' : `Product #${k.match(/\d+/)[0]}`;
           function paint() {
             listCode.textContent = `backStack = [${stack.map(e => e.key).join(', ')}]`;
             stack.forEach((e, i) => e.el.classList.toggle('cx-top', i === stack.length - 1));
