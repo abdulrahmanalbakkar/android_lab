@@ -2185,9 +2185,9 @@ fun WaterApp() {
     }
 }
 
-// app/build.gradle.kts, lines from the Navigation release page:
+// app/build.gradle.kts (the navigation-compose line is from its release page):
 // plugins {
-//     kotlin("plugin.serialization") version "2.0.21"   // your project's Kotlin version
+//     kotlin("plugin.serialization") version "2.4.21"   // your project's Kotlin version
 // }
 // dependencies {
 //     implementation("androidx.navigation:navigation-compose:2.10.2")

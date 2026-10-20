@@ -329,7 +329,7 @@ const Lab = (() => {
         nxt ? h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#' + key(t, nxt) }, label, ' →'),
           proj || done === n ? null : h('button', { class: 'btn', onclick() { this.disabled = true; testOut.hidden = false; testOut.replaceChildren(...testOutView(t).flat()); testOut.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' }); } }, 'Already know this? Test out')) : null),
       testOut,
-      builds,
+      ...(builds ? [builds] : []),
       h('section', { class: 'track-lessons', 'aria-label': proj ? 'Steps' : 'Lessons' },
         proj ? h('h2', { class: 'steps-h' }, 'The steps') : levelFilter(wrap, t.lessons, syncEmpty),
         h('ol', { class: 'tline' }, t.lessons.map((l, j) => {

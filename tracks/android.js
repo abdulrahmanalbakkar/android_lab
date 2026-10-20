@@ -295,7 +295,7 @@ Device menu: your virtual phone  >  [[Run]]`, why: 'Empty Activity is the templa
         code: `// build.gradle.kts in the app module: build settings, written in Kotlin
 android {
     namespace = "com.example.hello"
-    compileSdk = 36                          // the Android version the app is built with
+    compileSdk = 37                          // the Android version the app is built with: Android 17
 
     defaultConfig {
         applicationId = "com.example.hello"  // the app's unique ID on phones and on Google Play
