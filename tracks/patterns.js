@@ -1,3003 +1,1389 @@
 /* Design patterns track. Same shape as tracks/kotlin.js.
-   Each pattern shown the idiomatic Kotlin way, with where it appears on Android.
-   Demo styles live in the css string below; every class is prefixed pt-. */
+   Each pattern shown the Kotlin way, with when to leave it out. Demos use the Lab.ui kit only. */
 (() => {
-  const { h, sleep, hl, replay, swap } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const toggle = (id, label, checked, onchange) => {
-    const input = h('input', { type: 'checkbox', id, checked, onchange });
-    return Object.assign(h('label', { class: 'switch', for: id }, input, label), { input });
-  };
-  const card = (title, ...kids) => h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, title), ...kids);
-  const tag = (text, kind = '') => h('span', { class: `pt-tag ${kind}` }, text);
-  const money = c => '$' + (c / 100).toFixed(2);
-
-  const css = `
-.pt-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; min-width: 0; align-items: start; }
-.pt-split.pt-auto { grid-template-columns: minmax(0, 1fr) auto; }
-.pt-col { display: grid; gap: 8px; min-width: 0; align-content: start; }
-.pt-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
-.pt-card { display: grid; gap: 8px; align-content: start; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.2s, background 0.2s, opacity 0.25s; }
-.pt-card.pt-on { border-color: var(--accent); }
-.pt-card.pt-ok { border-color: var(--ok); background: var(--ok-soft); }
-.pt-card.pt-bad { border-color: var(--err); background: var(--err-soft); }
-.pt-card[hidden] { display: none; }
-.pt-card.pt-dim { opacity: 0.45; border-style: dashed; }
-.pt-title { font: 700 0.86rem var(--mono); overflow-wrap: anywhere; }
-.pt-label { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.pt-tag { justify-self: start; font: 600 0.74rem var(--mono); padding: 3px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); overflow-wrap: anywhere; }
-.pt-tag.pt-good { background: var(--ok-soft); color: var(--ok); }
-.pt-tag.pt-warn { background: var(--err-soft); color: var(--err); }
-.pt-tag.pt-acc { background: var(--accent-soft); color: var(--accent); }
-.pt-flash { animation: pt-flash 0.7s ease-out; }
-@keyframes pt-flash { from { background: var(--accent-soft); box-shadow: 0 0 0 6px var(--accent-soft); } }
-.pt-spin { width: 22px; height: 22px; border-radius: 50%; border: 4px dotted var(--accent); }
-.pt-on .pt-spin { animation: spin 0.6s linear infinite; }
-.pt-chain { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; min-width: 0; }
-.pt-chain > .pt-card { flex: 1 1 130px; }
-.pt-num { font: 700 1.7rem var(--display); font-variant-numeric: tabular-nums; }
-.pt-slot { display: grid; place-items: center; height: 46px; min-width: 64px; overflow: hidden; }
-.pt-slot > * { grid-area: 1 / 1; }
-.pt-dash { color: var(--muted); font: 600 1rem var(--mono); }
-.phone.pt-phone { justify-content: flex-start; align-items: stretch; gap: 6px; padding: 14px 10px; }
-.pt-li { padding: 7px 9px; border-radius: 9px; background: var(--sunk); font-size: 0.82rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
-.pt-li small { display: block; font-weight: 400; color: var(--muted); font-size: 0.72rem; }
-.pt-li.pt-new { background: var(--accent-soft); }
-.pt-empty { color: var(--muted); font-size: 0.85rem; text-align: center; margin: auto 0; }
-.pt-steps { display: grid; gap: 4px; min-width: 0; }
-.pt-step { font: 500 0.78rem/1.4 var(--mono); padding: 4px 8px; border-radius: 6px; color: var(--muted); border: 1px solid var(--line); overflow-wrap: anywhere; transition: background 0.2s, border-color 0.2s, color 0.2s; }
-.pt-step.pt-now { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
-.pt-step.pt-done { color: var(--ok); border-color: var(--ok); }
-.pt-step.pt-fail { color: var(--err); border-color: var(--err); background: var(--err-soft); }
-.pt-notif { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; padding: 8px; border-radius: 10px; background: var(--sunk); font-size: 0.78rem; line-height: 1.3; }
-.pt-notif b { overflow-wrap: anywhere; }
-.pt-ic { grid-row: span 3; width: 22px; height: 22px; border-radius: 6px; background: var(--accent); }
-.pt-ic.pt-none { background: transparent; outline: 2px dashed var(--err); outline-offset: -2px; }
-.pt-act { justify-self: start; font: 700 0.72rem var(--mono); color: var(--accent); }
-.pt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.pt-chips .fn { font-size: 0.8rem; padding: 5px 10px; }
-.pt-states { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 8px; }
-.pt-state { display: grid; gap: 4px; justify-items: center; padding: 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); font: 700 0.9rem var(--mono); transition: border-color 0.2s, background 0.2s; }
-.pt-state small { font: 500 0.7rem var(--mono); color: var(--muted); text-align: center; }
-.pt-state.pt-on { border-color: var(--accent); background: var(--accent-soft); }
-.pt-state.pt-next { border-style: dashed; border-color: var(--accent); }
-.cmd.pt-off { opacity: 0.55; }
-/* depth steps */
-.pt-grow { transition: width 0.8s ease-out; }
-.phone.pt-mini-phone { height: 220px; justify-content: flex-start; align-items: stretch; }
-@media (max-width: 640px) {
-  .pt-split, .pt-split.pt-auto { grid-template-columns: minmax(0, 1fr); }
-}
-/* depth pass 2 */
-.pt-d2-cell { min-width: 2.2em; text-align: center; }
-.pt-li.pt-d2-wrong { background: var(--err-soft); color: var(--err); }
-.pt-d2-field { font: 500 0.8rem var(--mono); overflow-wrap: anywhere; }
-.pt-step.pt-d2-skip { opacity: 0.45; text-decoration: line-through; }
-.pt-d2-box { min-height: 52px; padding: 8px; border-radius: 10px; border: 2px dashed var(--accent); transition: border-color 0.25s, background 0.25s; }
-.pt-d2-box.pt-d2-locked { border-style: solid; border-color: var(--ok); background: var(--ok-soft); }
-.pt-li.pt-d2-tie { outline: 2px dashed var(--warm); outline-offset: -2px; }
-.pt-d2-rows { display: grid; gap: 6px; min-width: 0; align-content: start; }
-.pt-d2-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 10px; background: var(--sunk); transition: opacity 0.25s; min-width: 0; }
-.pt-d2-row.pt-d2-fade { opacity: 0.2; }
-.pt-d2-img { width: 40px; height: 40px; border-radius: 8px; background: var(--accent-soft); }
-.pt-d2-img.pt-d2-loading { background: repeating-linear-gradient(45deg, var(--line) 0 6px, var(--surface) 6px 12px); animation: pulse 0.6s infinite; }
-.pt-d2-t { font-weight: 700; font-size: 0.85rem; line-height: 1.25; overflow-wrap: anywhere; min-width: 0; }
-.pt-d2-likes { font: 700 0.85rem var(--mono); }
-.pt-d2-crow { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; font: inherit; color: var(--ink); text-align: left; cursor: pointer; min-width: 0; }
-.pt-d2-crow small { font: 500 0.7rem var(--mono); color: var(--muted); overflow-wrap: anywhere; }
-.pt-d2-crow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.pt-d2-gpos { font: 700 0.85rem var(--mono); color: var(--muted); }
-.pt-d2-a1 { background: var(--accent-soft); }
-.pt-d2-a2 { background: var(--sunk); }
-.pt-d2-a3 { background: var(--warm-soft); }
-.pt-tag.pt-d2-a1, .pt-tag.pt-d2-a2, .pt-tag.pt-d2-a3 { color: var(--ink); }
-.pt-card.pt-d2-ic { border-style: dashed; }
-.pt-d2-val { font: 600 0.82rem var(--mono); overflow-wrap: anywhere; }
-@media (max-width: 480px) { .pt-d2-crow { grid-template-columns: 1.6em minmax(0, 1fr); } .pt-d2-crow small { grid-column: 2; } }
-`;
-
   Lab.addTrack({
     id: 'patterns',
     title: 'Design patterns',
-    description: 'Classic design patterns written the idiomatic Kotlin way, with the places they show up in Android.',
+    description: 'Named answers to problems that keep coming back, written the Kotlin way, and when to leave them out.',
     group: 'Foundations', requires: ['solid'],
-    css,
     lessons: [
       // 1 ─────────────────────────────────────────────
       {
-        id: 'singleton',
-        title: 'Singleton',
-        tagline: 'One instance for the whole app, created on first use.',
-        level: 'beginner',
+        id: 'what-patterns',
+        title: 'What a design pattern is',
+        tagline: 'Good answers to problems that keep coming back, with names.',
+        goals: ['Explain what a design pattern is, and what it is not', 'Spot a pattern you already used in Kotlin', 'Decide when plain code is the better choice'],
+        level: 'beginner', introduces: [],
         body: `
-<p>A singleton is a class with exactly one instance. In Kotlin you write <code>object</code> instead of <code>class</code>. The compiler creates the instance the first time any code touches it, and that creation is thread-safe.</p>
-<p>For one expensive value inside a class, use <code>by lazy</code>. The block runs on the first read and every later read gets the same result.</p>
-<p>A global <code>object</code> has a cost: every test shares it, so state leaks from one test into the next. For anything with state, write a normal class behind an interface and let Hilt keep one copy with <code>@Singleton</code>. The app still gets one instance, and a test can pass in a fresh fake. Run both tests below in each mode.</p>`,
-        code: `// Kotlin object: one instance, created lazily, thread-safe
-object AppClock {
-    fun now(): Long = System.currentTimeMillis()
-}
-
-class FeedScreenState {
-    val formatter by lazy { DateTimeFormatter.ofPattern("d MMM") }  // built on first read
-}
-
-// Stateful service: one instance through DI, swappable in tests
-interface Analytics { fun track(event: String) }
-
-class FirebaseAnalyticsImpl @Inject constructor() : Analytics {
-    override fun track(event: String) { /* send it */ }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class AnalyticsModule {
-    @Binds @Singleton
-    abstract fun bindAnalytics(impl: FirebaseAnalyticsImpl): Analytics
-}
-
-class HomeViewModel @Inject constructor(private val analytics: Analytics) : ViewModel()
-
-// In a test: a fresh fake every time
-val vm = HomeViewModel(FakeAnalytics())`,
-        remember: 'object gives you one instance. DI-scoped gives you one instance you can replace in tests.',
-        terms: [
-          { term: 'object declaration', def: 'A Kotlin class declared with object that has exactly one instance, created lazily on first access.' },
-          { term: 'by lazy', def: 'A property delegate that runs its initializer on the first read and returns the cached value afterwards.' },
-          { term: '@Singleton', def: 'A Hilt scope annotation that keeps one instance of a binding for the lifetime of the application component.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Declare a singleton, and build the database only when it is first read.', code: '[[object]] Clock {\n    fun now() = System.currentTimeMillis()\n}\n\nval db by [[lazy]] { Room.databaseBuilder(app, AppDb::class.java, "app.db").build() }', why: '<code>object</code> declares the single instance. <code>by lazy</code> defers the expensive build to the first read.' },
-          { type: 'bug', prompt: 'This singleton leaks a whole screen. Tap the line that causes it.', code: 'object ImageLoader {\n    private lateinit var context: Context\n\n    fun init(activity: Activity) {\n        context = activity\n    }\n\n    fun load(url: String) = Glide.with(context).load(url)\n}', bug: 4, fix: '        context = activity.applicationContext', why: 'The object lives as long as the process. Holding an Activity keeps it and its whole view tree in memory after it is destroyed. Keep only the application context.' },
-        ],
-        quiz: [
-          { q: 'When is a Kotlin <code>object</code> instance created?', options: ['When the app starts', 'The first time code accesses it', 'Every time you reference it'], a: 1, why: 'Objects are initialized lazily on first access, and only once.' },
-          { q: 'Why prefer a Hilt <code>@Singleton</code> over a global <code>object</code> for an analytics client?', options: ['It is faster', 'Tests can pass a fresh fake through the constructor', 'Objects cannot implement interfaces'], a: 1, why: 'You still get one instance in the app, but tests don’t share its state and can swap it out.' },
-          { q: 'A singleton needs a <code>Context</code>. Which one is safe to store?', options: ['The current Activity', 'The application context', 'A Fragment’s requireContext()'], a: 1, why: 'The application context lives as long as the process, so holding it leaks nothing.' },
-          { q: 'An object’s initializer throws the first time it is used. What does the next access get, later in the same process?', options: ['NoClassDefFoundError', 'A second try at the initializer', 'null'], a: 0, why: 'The JVM marks the class as failed. The first caller gets ExceptionInInitializerError and every later access NoClassDefFoundError, so keep object initializers unable to fail.' },
-          { q: 'A user types a draft that is kept in <code>object DraftHolder { var text = "" }</code>. Android kills the app in the background, and the user comes back. What is text?', options: ['<code>""</code>: a fresh process built a fresh object', 'The draft, restored automatically', 'It crashes with UninitializedPropertyAccessException'], a: 0, why: 'One instance means one per running process. State that must survive belongs in storage like DataStore, Room or SavedStateHandle.' },
-        ],
-        deeper: [
-          {
-            title: 'Class initialization is the lock',
-            body: `<p>The JVM runs a class's static initializer once, the first time the class is used. If two threads touch an <code>object</code> at the same moment, one runs the initializer and the others wait. No <code>synchronized</code> needed.</p>
-<p>The flip side: if the <code>init</code> block throws, the first caller gets <code>ExceptionInInitializerError</code>, and every later access gets <code>NoClassDefFoundError</code> for the rest of the process. Keep object initializers small and unable to fail.</p>`,
-            code: `object Config {
-    val values: Map<String, String> = loadFromAssets()   // runs once, on first use
-}
-
-// Thread 1 and thread 2 call Config.values at the same moment:
-// one runs the initializer, the other waits, both get the same map`,
-            visual(el) {
-              const THREADS = ['main', 'io-1', 'io-2'];
-              let fails = false, busy = false;
-              const tracks = THREADS.map(() => h('div', { class: 'lane-track' }));
-              const got = THREADS.map(() => tag('-'));
-              const o = out('Three threads read Config.values at nearly the same time.');
-              const t = toggle('pt-sg-throw', 'init block throws', false, () => { if (busy) { t.input.checked = fails; return; } fails = t.input.checked; clear(); say(o, fails ? 'loadFromAssets() will throw this time.' : 'loadFromAssets() works.'); });
-              function clear() { tracks.forEach(x => x.replaceChildren()); got.forEach(g => { g.textContent = '-'; g.className = 'pt-tag'; }); }
-              const bar = (track, l, w, cls) => { const b = h('span', { class: `bar ${cls} pt-grow`, style: `left:${l}%;width:0` }); track.append(b); requestAnimationFrame(() => requestAnimationFrame(() => { b.style.width = `${w}%`; })); };
-              async function run() {
-                if (busy) return; busy = true; clear();
-                bar(tracks[0], 0, 55, 'run');
-                bar(tracks[1], 6, 49, 'wait');
-                bar(tracks[2], 12, 43, 'wait');
-                say(o, 'main runs the initializer. io-1 and io-2 wait on the class init lock.');
-                await sleep(1000); if (!el.isConnected) return;
-                if (!fails) {
-                  got.forEach((g, i) => { g.textContent = 'Config@5e1'; g.className = 'pt-tag pt-good'; replay(g, 'pop'); });
-                  say(o, '<span class="good">one instance:</span> the initializer ran once and all three threads got Config@5e1.');
-                } else {
-                  got[0].textContent = 'ExceptionInInitializerError'; got[0].className = 'pt-tag pt-warn'; replay(got[0], 'shake');
-                  await sleep(350); if (!el.isConnected) return;
-                  [1, 2].forEach(i => { got[i].textContent = 'NoClassDefFoundError'; got[i].className = 'pt-tag pt-warn'; replay(got[i], 'shake'); });
-                  say(o, '<span class="bad">broken for good:</span> main got the real error. The waiting threads, and every later caller, get "Could not initialize class Config".');
-                }
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'timeline' }, THREADS.map((n, i) => h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, n), tracks[i]))),
-                h('div', { class: 'pt-col' }, THREADS.map((n, i) => h('div', { class: 'pt-row' }, h('span', { class: 'pt-label' }, n), got[i]))),
-                h('div', { class: 'controls' }, t, cmd('Config.values  // from 3 threads', run)),
-                o);
-            },
-          },
-          {
-            title: 'One per process, not one forever',
-            body: `<p>A singleton lives in memory, so "one instance" really means one per running process. When Android kills your app in the background, the object and everything in it is gone. When the user comes back, a fresh process creates a fresh instance.</p>
-<p>A component declared with <code>android:process=":sync"</code> runs in a second process with its own copy of every object. State that must survive or be shared belongs in storage like DataStore or Room, not in an <code>object</code>.</p>`,
-            code: `object DraftHolder {
-    var text: String = ""          // gone after process death
-}
-
-// AndroidManifest.xml
-// <service android:name=".SyncService" android:process=":sync" />
-// SyncService sees its own DraftHolder, with its own text`,
-            visual(el) {
-              const vals = { app: 0, sync: 0 };
-              let pid = { app: 4120, sync: 4188 }, busy = false;
-              const mk = k => {
-                const num = h('span', { class: 'pt-num' }, '0');
-                const sub = h('span', { class: 'pt-label' });
-                const c = h('div', { class: 'pt-card pt-on' }, h('span', { class: 'pt-title' }, k === 'app' ? 'com.example.news' : 'com.example.news:sync'), sub, h('span', { class: 'pt-label' }, 'Counter.n'), num);
-                return { c, num, sub };
-              };
-              const P = { app: mk('app'), sync: mk('sync') };
-              const o = out('');
-              const paint = () => Object.keys(P).forEach(k => { P[k].num.textContent = vals[k]; P[k].sub.textContent = `pid ${pid[k]}`; });
-              function inc(k) {
-                if (busy) return;
-                vals[k]++; paint(); replay(P[k].num, 'pop');
-                say(o, `${hl('Counter.n++')} <span class="muted">in the ${k === 'app' ? 'app' : ':sync'} process.</span> ${k === 'app' ? 'The sync process' : 'The app process'} still sees ${vals[k === 'app' ? 'sync' : 'app']}.`);
-              }
-              async function kill() {
-                if (busy) return; busy = true;
-                P.app.c.classList.add('leave'); await sleep(450); if (!el.isConnected) return;
-                vals.app = 0; pid.app += 211; paint();
-                P.app.c.classList.remove('leave'); replay(P.app.c, 'drop-in');
-                say(o, '<span class="bad">process death:</span> the user came back to a new process. Counter was created again, so n is 0.');
-                busy = false;
-              }
-              paint();
-              say(o, 'Two processes from one app. Increment in each.');
-              el.append(
-                h('div', { class: 'pt-split' }, P.app.c, P.sync.c),
-                h('div', { class: 'controls' }, cmd('Counter.n++  // app', () => inc('app')), cmd('Counter.n++  // :sync', () => inc('sync')), act('System kills the app process', kill)),
-                o);
-            },
-          },
-          {
-            title: 'A singleton that needs an argument',
-            body: `<p>An <code>object</code> can't take constructor parameters. When the one instance needs a <code>Context</code>, the classic answer is double-checked locking in a companion: a <code>@Volatile</code> field, a fast unlocked read, and a locked second check.</p>
-<p>You will see it in older Room samples. In new code, let Hilt build the database in a <code>@Provides @Singleton</code> function and inject <code>@ApplicationContext</code>.</p>`,
-            code: `@Database(entities = [ArticleEntity::class], version = 1)
-abstract class AppDb : RoomDatabase() {
-    companion object {
-        @Volatile private var instance: AppDb? = null
-
-        fun get(context: Context): AppDb =
-            instance ?: synchronized(this) {
-                instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "app.db")
-                    .build()
-                    .also { instance = it }
-            }
-    }
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>An <code>object</code> compiles to a final class with a private constructor and a static <code>INSTANCE</code> field. The field is set in the class's static initializer, which the JVM runs once, under a lock, the first time the class is used. Java code calls <code>AppClock.INSTANCE.now()</code>.</p>
-<p>A <code>companion object</code> is a nested class named <code>Companion</code>, held in a static field of the outer class. <code>by lazy</code> uses a different mechanism: a <code>SynchronizedLazyImpl</code> with its own lock.</p>`,
-          code: `// Kotlin
-object AppClock { fun now() = System.currentTimeMillis() }
-
-// Roughly the Java it compiles to
-public final class AppClock {
-    public static final AppClock INSTANCE;
-    private AppClock() {}
-    static { INSTANCE = new AppClock(); }   // runs once, on first use
-    public final long now() { return System.currentTimeMillis(); }
-}`,
-        },
-        mistakes: [
-          { title: 'Global mutable state in an object', bad: 'object Session {\n    var user: User? = null\n}\n// any screen, any thread: Session.user = ...', good: 'class SessionRepository @Inject constructor() {\n    private val _user = MutableStateFlow<User?>(null)\n    val user: StateFlow<User?> = _user.asStateFlow()\n    fun signIn(u: User) { _user.value = u }\n}', why: 'A public <code>var</code> in an object can change from anywhere, nobody is told, and every test shares it. An injected class with a <code>StateFlow</code> has one writer and observers.' },
-          { title: 'lateinit setup in a singleton', bad: 'object Api {\n    lateinit var client: OkHttpClient\n    fun init(context: Context) { client = buildClient(context) }\n}\n// a ContentProvider runs before Application.onCreate', good: '@Module @InstallIn(SingletonComponent::class)\nobject ApiModule {\n    @Provides @Singleton\n    fun client(@ApplicationContext c: Context) = buildClient(c)\n}', why: 'Every caller now depends on someone calling <code>init</code> first. A provider, a test or a worker that runs early hits <code>UninitializedPropertyAccessException</code>. Let DI build it on demand.' },
-          { title: 'Companion state shared by every instance', bad: 'class Downloader {\n    companion object { var active = 0 }\n    fun start() { active++ }\n}', good: 'class Downloader {\n    var active = 0\n        private set\n    fun start() { active++ }\n}', why: 'A companion is a single object for the whole class. Two downloaders on two screens count into the same number.' },
-        ],
+<p>Two developers talk about a bug. One says: “I made one settings object that every screen shares, so nobody can make a second one by mistake.” The other says: “Ah, a singleton.” One word did the work of a whole sentence. Programmers keep meeting the same problems, so the good answers got names.</p>
+<p>A <b>design pattern</b> is a named, well-tested shape of code for a problem that keeps coming up: which classes there are, who knows whom, and who calls what. It is not a library you download, and not code to paste. It is more like a recipe: you adapt it to your own program. Most of the names come from a 1994 book on object-oriented design, and developers still use them every day.</p>
+<p>You already know some. <code>object</code> from the Kotlin track is the Singleton pattern. The lambda you hand to <code>sortedBy { }</code> is the Strategy pattern. Kotlin builds several patterns right into the language, so in Kotlin they are often only a few lines long.</p>
+<p>A pattern also costs something: more classes, more names, more to read. It pays off only when its problem is really in your code, like the same <code>when</code> copied into five places. “Just in case” is not a reason. Each lesson in this track starts with the problem, then shows the pattern that fixes it, and ends with when to leave it out.</p>`,
         visual(el) {
-          let created = false, events = [], di = false, busy = false, gen = 0, fresh = 0;
-          const id = () => '@' + (0x3a10 + gen * 0x1f7).toString(16);
-          const inst = h('div', { class: 'pt-card pt-dim' });
-          const fake = h('div', { class: 'pt-card', hidden: true });
-          const o = out('Track an event from any caller, then run the two tests.');
-          const paintInst = () => {
-            inst.className = 'pt-card' + (created ? ' pt-on' : ' pt-dim');
-            inst.replaceChildren(
-              h('span', { class: 'pt-title' }, di ? 'Analytics  @Singleton (Hilt)' : 'object Analytics'),
-              h('span', { class: 'pt-label' }, created ? `instance ${id()}` : 'not created yet'),
-              h('div', { class: 'pt-row' }, events.length ? events.map(e => tag(e, 'pt-acc')) : h('span', { class: 'tip' }, 'no events stored')));
-          };
-          const names = ['HomeScreen', 'SettingsScreen', 'SyncWorker'];
-          const callers = names.map(n => card(n, h('span', { class: 'pt-label' }, 'uses Analytics')));
-          async function track(ci, ev) {
-            if (busy) return; busy = true;
-            callers.forEach(c => c.classList.remove('pt-on'));
-            callers[ci].classList.add('pt-on'); replay(callers[ci], 'pt-flash');
-            await sleep(300);
-            const first = !created;
-            if (first) { created = true; gen++; }
-            events.push(ev); if (events.length > 5) events.shift();
-            paintInst(); replay(inst, first ? 'pop' : 'pt-flash');
-            say(o, first
-              ? `<span class="good">first access:</span> the instance is created now, once. ${id()}`
-              : `${names[ci]} got the same instance ${id()} <span class="muted">// every caller shares it</span>`);
-            busy = false;
-          }
-          async function test(name, ev) {
-            if (busy) return; busy = true;
-            if (di) {
-              fresh++;
-              fake.hidden = false;
-              fake.className = 'pt-card pt-ok';
-              fake.replaceChildren(h('span', { class: 'pt-title' }, 'FakeAnalytics()'), h('span', { class: 'pt-label' }, `new for this test, #${fresh}`), h('div', { class: 'pt-row' }, tag(ev, 'pt-good')));
-              replay(fake, 'drop-in');
-              await sleep(350);
-              say(o, `${name}: <span class="good">PASS</span> <span class="muted">// fresh fake, saw [${ev}]. The app instance was never touched.</span>`);
-            } else {
-              fake.hidden = true;
-              if (!created) { created = true; gen++; }
-              events.push(ev); if (events.length > 5) events.shift();
-              paintInst(); replay(inst, 'pt-flash');
-              await sleep(350);
-              if (events.length === 1) say(o, `${name}: <span class="good">PASS</span> <span class="muted">// lucky: nothing ran before it</span>`);
-              else { inst.classList.add('pt-bad'); replay(inst, 'shake'); say(o, `${name}: <span class="bad">FAIL</span> expected [${ev}] but was [${events.join(', ')}] <span class="muted">// state left over from earlier calls</span>`); }
-            }
-            busy = false;
-          }
-          const mode = toggle('pt-sg-di', 'Inject through Hilt', false, () => {
-            if (busy) { mode.input.checked = di; return; }
-            di = mode.input.checked; created = false; events = []; fake.hidden = true;
-            paintInst(); replay(inst, 'pop');
-            say(o, di ? 'App restarted with a DI-scoped instance. Tests now build their own fake.' : 'App restarted with a global object. Tests reach the same instance as the app.');
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'p1', label: 'One settings store<small>shared by every screen</small>', x: 24, y: 12, tone: 'muted' },
+              { id: 'p2', label: 'Many parts react<small>when the cart changes</small>', x: 24, y: 38, tone: 'muted' },
+              { id: 'p3', label: 'Price rule changes<small>every month</small>', x: 24, y: 64, tone: 'muted' },
+              { id: 'p4', label: 'Add two numbers<small>and print them</small>', x: 24, y: 90, tone: 'muted' },
+              { id: 'n1', label: 'Singleton', x: 78, y: 12, hidden: true },
+              { id: 'n2', label: 'Observer', x: 78, y: 38, hidden: true },
+              { id: 'n3', label: 'Strategy', x: 78, y: 64, hidden: true },
+              { id: 'n4', label: 'No pattern<small>plain code</small>', x: 78, y: 90, tone: 'ok', hidden: true },
+            ],
+            predict: {
+              q: 'The last problem: a program adds two numbers and prints the result. Which pattern does it need?',
+              options: ['Singleton', 'Strategy', 'None: plain code is enough'],
+              a: 2,
+              why: 'There is no recurring problem to solve. A pattern would only add classes to read.',
+            },
+            frames: [
+              { say: 'Four problems from real programs. The first three show up in program after program.' },
+              { show: ['n1'], hl: ['p1', 'n1'], add: [['p1', 'n1', '', 'accent']], say: 'Exactly one of something, reachable from everywhere. So common that its answer has a name: Singleton.' },
+              { show: ['n2'], hl: ['p2', 'n2'], add: [['p2', 'n2', '', 'accent']], say: 'Many parts must hear when one thing changes: Observer.' },
+              { show: ['n3'], hl: ['p3', 'n3'], add: [['p3', 'n3', '', 'accent']], say: 'Swap how one job is done without rewriting the code around it: Strategy.' },
+              { show: ['n4'], hl: ['p4', 'n4'], add: [['p4', 'n4', '', 'ok']], say: 'Adding two numbers needs no pattern. Plain code is the right answer here.' },
+              { hl: ['n1', 'n2', 'n3'], say: 'A name is a shortcut. Say “Observer”, and another developer pictures the whole shape at once.' },
+            ],
           });
-          paintInst();
-          el.append(
-            h('div', { class: 'pt-split' }, h('div', { class: 'pt-col' }, callers), h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'the one instance'), inst, fake)),
-            h('div', { class: 'controls' },
-              cmd('Home: track("open")', () => track(0, 'open')),
-              cmd('Settings: track("theme")', () => track(1, 'theme')),
-              cmd('Worker: track("sync")', () => track(2, 'sync'))),
-            h('div', { class: 'controls' }, mode,
-              act('Run testOpenIsTracked', () => test('testOpenIsTracked', 'open')),
-              act('Run testSyncIsTracked', () => test('testSyncIsTracked', 'sync'))),
-            o);
         },
-        predict: {
-          q: 'Analytics is a global <code>object</code>. The app tracks “open”, then a test checks that only “sync” was tracked. What does the test see?',
-          options: ['Only sync: each test gets a fresh object', 'open and sync: state left over in the one shared instance', 'Nothing: objects reset between calls'],
-          a: 1,
-          why: 'An <code>object</code> has one instance per process, shared by app code and every test. Events recorded earlier are still in it.',
-        },
-        play: `object AppClock {
-    init { println("AppClock created") }
-    fun now() = System.currentTimeMillis()
-}
-
-class Feed {
-    val formatter by lazy { println("formatter built"); "d MMM" }
-}
-
-interface Analytics { val events: List<String>; fun track(e: String) }
-class RecordingAnalytics : Analytics {
-    override val events = mutableListOf<String>()
-    override fun track(e: String) { events += e }
+        code: `// You already used a pattern in the Kotlin track.
+// "Exactly one, shared by everyone" has a name: Singleton.
+object Settings {
+    var darkMode = false
 }
 
 fun main() {
-    println("main starts")
-    AppClock.now(); AppClock.now()          // created once, on first use
-    val feed = Feed()
-    println(feed.formatter); println(feed.formatter)
-    val app = RecordingAnalytics()          // the one instance the app shares
-    app.track("open")
-    val testFake = RecordingAnalytics()     // a test builds its own
-    testFake.track("sync")
-    println("app \${app.events}, test \${testFake.events}")
-    // Change testFake to \`= app\`, like a global object, and run again
+    Settings.darkMode = true
+    println(Settings.darkMode)   // true
 }`,
+        play: `// The same job, written two ways.
+
+// 1. With a pattern it doesn't need: an interface and two classes.
+interface TotalRule {
+    fun total(prices: List<Int>): Int
+}
+
+class AddEverything : TotalRule {
+    override fun total(prices: List<Int>) = prices.sum()
+}
+
+class Receipt(val rule: TotalRule) {
+    fun print(prices: List<Int>) {
+        println("Total: \${rule.total(prices)}")
+    }
+}
+
+// 2. Plain code.
+fun printTotal(prices: List<Int>) {
+    println("Total: \${prices.sum()}")
+}
+
+fun main() {
+    val prices = listOf(4, 6, 10)
+    Receipt(AddEverything()).print(prices)
+    printTotal(prices)
+    // Both print the same. Count the lines each one needs.
+    // The pattern only pays off once there are several rules to swap between.
+}`,
+        remember: 'A design pattern is a named answer to a common problem. Use it when you have that problem, not just in case.',
+        terms: [
+          { term: 'design pattern', def: 'A named, well-tested shape of code for a problem that keeps coming up. You adapt it to your program; it is not a library.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Kotlin gives the Singleton pattern its own keyword. Use it so there is exactly one Settings.', code: `[[object]] Settings {
+    var darkMode = false
+}
+
+fun main() {
+    [[Settings]].darkMode = true
+}`, why: '<code>object</code> makes the one and only Settings, and you use it by its name.' },
+          { type: 'bug', prompt: 'Kotlin says <code>\'total\' hides member of supertype \'TotalRule\' and needs an \'override\' modifier.</code> Tap the line.', code: `interface TotalRule {
+    fun total(prices: List<Int>): Int
+}
+
+class AddEverything : TotalRule {
+    fun total(prices: List<Int>) = prices.sum()
+}`, bug: 5, fix: '    override fun total(prices: List<Int>) = prices.sum()', why: 'Patterns are built from things you know, like interfaces. A function that keeps an interface’s promise needs <code>override</code>.' },
+        ],
+        quiz: [
+          { q: 'What is a design pattern?', options: ['A named, well-tested shape of code for a problem that keeps coming up', 'A library you download and add to your program', 'A rule every program must follow'], a: 0, why: 'It is an idea with a name. You write the code yourself, shaped to your program.' },
+          { q: 'When is a pattern worth adding?', options: ['When the problem it solves is really in your code', 'Always, just in case', 'Only in programs with more than ten classes'], a: 0, why: 'A pattern adds classes and names. That only pays off when it removes a real problem.' },
+          { q: 'Which Kotlin keyword already gives you the Singleton pattern?', options: ['<code>object</code>', '<code>class</code>', '<code>val</code>'], a: 0, why: '<code>object</code> makes exactly one, reachable by its name from everywhere.' },
+        ],
+        docs: [['Kotlin idioms', 'https://kotlinlang.org/docs/idioms.html']],
       },
 
       // 2 ─────────────────────────────────────────────
       {
-        id: 'factory',
-        title: 'Factory and factory functions',
-        tagline: 'Hide how an object gets built behind one call.',
-        level: 'beginner',
+        id: 'singleton',
+        title: 'Singleton',
+        tagline: 'Exactly one, shared by everyone, and the dangers that come with it.',
+        goals: ['Spot the bug that two copies of one thing cause', 'Make a singleton with <code>object</code>', 'Name the dangers of global state, and when to pass an object in instead'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A factory is a function that creates objects for you. The caller asks for a thing and the factory decides which class to build and what to pass in. In Kotlin that is usually a function in a <code>companion object</code>, named <code>of</code>, <code>from</code> or <code>create</code>.</p>
-<p>A companion <code>operator fun invoke</code> lets the call look like a constructor, <code>Logger(debug = true)</code>, while it returns whichever implementation fits. Callers never name the concrete class.</p>
-<p>Android uses a factory for every ViewModel. The system decides <em>when</em> one is needed: the first time, not after a rotation. Your <code>viewModelFactory</code> decides <em>how</em>: which repository and arguments to pass in. Rotate the screen below and watch whether the factory runs.</p>`,
-        code: `interface Logger {
-    fun log(msg: String)
-
-    companion object {
-        // Looks like a constructor, returns the right implementation
-        operator fun invoke(debug: Boolean): Logger = if (debug) ConsoleLogger() else NoOpLogger
-    }
-}
-val logger = Logger(debug = BuildConfig.DEBUG)
-
-class Temperature private constructor(val celsius: Double) {
-    companion object {
-        fun of(text: String): Temperature =
-            if (text.endsWith("F")) Temperature((text.dropLast(1).toDouble() - 32) * 5 / 9)
-            else Temperature(text.removeSuffix("C").toDouble())
-    }
-}
-
-// The ViewModel factory: Android decides when, you decide how
-class DetailViewModel(private val repo: ArticleRepository, private val id: String) : ViewModel()
-
-val detailFactory = viewModelFactory {
-    initializer {
-        val app = this[APPLICATION_KEY] as NewsApp
-        DetailViewModel(app.container.articles, createSavedStateHandle()["id"]!!)
-    }
-}
-
-@Composable
-fun DetailRoute(vm: DetailViewModel = viewModel(factory = detailFactory)) { /* ... */ }`,
-        remember: 'A factory decides how to build. For ViewModels, Android decides when.',
-        terms: [
-          { term: 'Factory function', def: 'A function that creates and returns an object, choosing the concrete class and its arguments for the caller.' },
-          { term: 'operator invoke', def: 'An operator function that lets an object be called like a function, often used in a companion to look like a constructor.' },
-          { term: 'viewModelFactory', def: 'A builder for ViewModelProvider.Factory whose initializer block creates a ViewModel with its dependencies.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Make <code>Logger(debug = true)</code> work on an interface.', code: 'interface Logger {\n    fun log(msg: String)\n    companion [[object]] {\n        operator fun [[invoke]](debug: Boolean): Logger =\n            if (debug) ConsoleLogger() else NoOpLogger\n    }\n}', why: 'A companion object with <code>operator fun invoke</code> makes <code>Logger(...)</code> call the factory.' },
-          { type: 'bug', prompt: 'The detail screen reloads its data on every rotation. Tap the line responsible.', code: '@Composable\nfun DetailRoute(repo: ArticleRepository, id: String) {\n    val vm = DetailViewModel(repo, id)\n    val state by vm.state.collectAsStateWithLifecycle()\n    DetailScreen(state)\n}', bug: 2, fix: '    val vm: DetailViewModel = viewModel { DetailViewModel(repo, id) }', why: 'Calling the constructor builds a new ViewModel on every recomposition and after every rotation. <code>viewModel { }</code> passes your initializer to a factory and keeps the instance in the ViewModelStore.' },
-        ],
-        quiz: [
-          { q: 'You rotate the phone. Does your <code>viewModelFactory</code> initializer run again?', options: ['Yes, the Activity is new', 'No, the existing ViewModel comes back from the ViewModelStore', 'Only on API 34+'], a: 1, why: 'The store survives configuration changes. The factory only runs when no instance exists yet.' },
-          { q: 'What does a companion <code>operator fun invoke</code> let you write?', options: ['<code>Logger.invoke.create()</code>', '<code>Logger(debug = true)</code> on an interface', '<code>new Logger()</code>'], a: 1, why: 'The call looks like a constructor but runs your factory and returns any implementation.' },
-          { q: 'A HorizontalPager shows three DetailViewModel pages from the same owner, each created with <code>viewModel { DetailViewModel(repo, id) }</code> and no key. What do the pages get?', options: ['All three get the first ViewModel', 'Each page gets its own ViewModel', 'It throws on the second page'], a: 0, why: 'The default key is the class name, so the second request finds the first ViewModel and the factory does not run. Pass key = "detail-$id".' },
-          { q: 'What can a factory function do that a constructor can’t?', options: ['Run an init block', 'Take default arguments', 'Return a shared instance, null, or a subtype'], a: 2, why: 'A constructor always makes a new object of exactly its class. emptyList() and toIntOrNull() show the other options.' },
-        ],
-        deeper: [
-          {
-            title: 'A factory can reuse, refuse, or pick a subtype',
-            body: `<p>A constructor has one job: make a new object of exactly that class, every time. A factory function has more freedom. It can hand back a shared instance, return <code>null</code> for bad input, or return any subtype it likes.</p>
-<p>The standard library does all three. <code>emptyList()</code> returns one shared empty list. <code>"12a".toIntOrNull()</code> returns <code>null</code> instead of throwing. Make the constructor <code>private</code> so every caller has to go through the factory and its checks.</p>`,
-            code: `class Quantity private constructor(val value: Int) {
-    companion object {
-        private val small = Array(10) { Quantity(it) }    // built once
-
-        fun of(value: Int): Quantity {
-            require(value >= 0) { "negative: \$value" }
-            return if (value < 10) small[value] else Quantity(value)
-        }
-
-        fun parse(text: String): Quantity? =
-            text.toIntOrNull()?.takeIf { it >= 0 }?.let(::of)
-    }
-}`,
-            visual(el) {
-              const cache = Array.from({ length: 10 }, (_, i) => h('span', { class: 'pt-tag pt-d2-cell' }, String(i)));
-              const fresh = h('div', { class: 'pt-row' }, h('span', { class: 'tip' }, 'none yet'));
-              const resSlot = h('div', { class: 'pt-row' }, tag('-'));
-              const same = tag('same as last result: -');
-              const o = out('');
-              let prev = null, n = 0x7a0, made = 0, busy = false;
-              const addrOf = i => '@' + (0x3c0 + i * 0x10).toString(16);
-              const show = (text, kind, anim = 'pop') => { resSlot.replaceChildren(tag(text, kind)); replay(resSlot.firstElementChild, anim); };
-              function compare(a) {
-                if (prev == null || a == null) { same.textContent = 'same as last result: -'; same.className = 'pt-tag'; }
-                else { const s = prev === a; same.textContent = `same as last result: ${s ? 'yes' : 'no'}`; same.className = `pt-tag ${s ? 'pt-good' : 'pt-acc'}`; replay(same, 'pop'); }
-                prev = a;
-              }
-              async function of(v) {
-                if (busy) return; busy = true;
-                cache.forEach(c => c.classList.remove('pt-acc'));
-                if (v < 10) {
-                  const c = cache[v]; c.classList.add('pt-acc'); replay(c, 'pop');
-                  const a = addrOf(v);
-                  show(`Quantity(${v}) ${a}`, 'pt-good'); compare(a);
-                  say(o, `${hl(`Quantity.of(${v})`)} <span class="good">reused</span> ${a} <span class="muted">// from the cache, nothing allocated</span>`);
-                } else {
-                  n += 0x28; made++;
-                  const a = '@' + n.toString(16);
-                  if (made === 1) fresh.replaceChildren();
-                  fresh.append(tag(`Quantity(${v}) ${a}`, 'pt-acc drop-in'));
-                  while (fresh.children.length > 3) fresh.firstElementChild.remove();
-                  show(`Quantity(${v}) ${a}`, 'pt-acc', 'drop-in'); compare(a);
-                  say(o, `${hl(`Quantity.of(${v})`)} <span class="muted">// outside the cache: a new object on every call</span>`);
-                }
-                await sleep(300); busy = false;
-              }
-              function parse() {
-                if (busy) return;
-                cache.forEach(c => c.classList.remove('pt-acc'));
-                show('null', ''); compare(null);
-                say(o, `${hl('Quantity.parse("12a")')} = null <span class="muted">// bad input is an answer, not a crash. The caller decides.</span>`);
-              }
-              function neg() {
-                if (busy) return;
-                show('IllegalArgumentException', 'pt-warn', 'shake'); compare(null);
-                say(o, `${hl('Quantity.of(-1)')} <span class="bad">IllegalArgumentException:</span> negative: -1 <span class="muted">// the check runs for every caller</span>`);
-              }
-              function ctor() {
-                if (busy) return;
-                show('compile error', 'pt-warn', 'shake');
-                say(o, `${hl('Quantity(3)')} <span class="bad">compile error:</span> the constructor is private <span class="muted">// nobody can skip of()</span>`);
-              }
-              say(o, 'Call the factory. Watch where each result comes from.');
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'cache, built once'), h('div', { class: 'pt-row' }, cache), h('span', { class: 'pt-label' }, 'built on demand'), fresh),
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'last result'), resSlot, same)),
-                h('div', { class: 'controls' }, cmd('Quantity.of(3)', () => of(3)), cmd('Quantity.of(250)', () => of(250)), cmd('Quantity.parse("12a")', parse), cmd('Quantity.of(-1)', neg), cmd('Quantity(3)', ctor)),
-                o);
-            },
-          },
-          {
-            title: 'Same class, two ids: give the ViewModel a key',
-            body: `<p>A <code>ViewModelStore</code> files each ViewModel under a key, and the default key is the class name. Ask the same owner twice for <code>DetailViewModel</code> and you get the first one back, even if your initializer would pass a different id. The factory does not run the second time.</p>
-<p>That bites when one screen shows several items of the same type, such as pages in a <code>HorizontalPager</code>. Pass a <code>key</code> so each id gets its own entry. With Navigation you rarely need it, because every back stack entry has its own store.</p>`,
-            code: `HorizontalPager(state = pagerState) { page ->
-    val id = ids[page]
-    val vm: DetailViewModel = viewModel(key = "detail-\$id") {
-        DetailViewModel(repo, id)
-    }
-    DetailPage(vm)
-}`,
-            visual(el) {
-              let keyed = false, busy = false, n = 0x4b0, made = 0;
-              const store = new Map();
-              const storeBox = h('div', { class: 'pt-col' });
-              const madeTag = tag('');
-              const factory = h('div', { class: 'pt-card' }, h('div', { class: 'pt-row' }, h('div', { class: 'pt-spin' }), h('span', { class: 'pt-title' }, 'initializer')), h('span', { class: 'pt-label' }, 'DetailViewModel(repo, id)'), madeTag);
-              const pages = [7, 9].map((id, i) => {
-                const shows = h('div', { class: 'pt-li' }, 'not opened');
-                return { id, shows, card: h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, `page ${i + 1}: article ${id}`), shows) };
-              });
-              const o = out('');
-              const keyOf = id => (keyed ? `detail-${id}` : 'DefaultKey:…DetailViewModel');
-              function paint() {
-                storeBox.replaceChildren(...(store.size ? [...store].map(([k, v]) => h('div', { class: 'pt-li' + (v.fresh ? ' pt-new drop-in' : '') }, `DetailViewModel(id = ${v.id})`, h('small', {}, `key "${k}" · ${v.addr}`))) : [h('span', { class: 'tip' }, 'empty')]));
-                madeTag.textContent = `ran ${made} time${made === 1 ? '' : 's'}`;
-              }
-              function reset() {
-                store.clear(); made = 0;
-                pages.forEach(p => { p.shows.textContent = 'not opened'; p.shows.className = 'pt-li'; p.card.className = 'pt-card'; });
-                paint();
-              }
-              async function open(p) {
-                if (busy) return; busy = true;
-                const k = keyOf(p.id);
-                replay(p.card, 'pt-flash');
-                await sleep(300); if (!el.isConnected) return;
-                store.forEach(v => { v.fresh = false; });
-                let vm = store.get(k), msg;
-                if (vm) {
-                  paint();
-                  msg = `key "${k}" is already in the store, so the initializer is skipped.`;
-                } else {
-                  factory.classList.add('pt-on'); replay(factory, 'pt-flash');
-                  await sleep(600); if (!el.isConnected) return;
-                  factory.classList.remove('pt-on');
-                  n += 0x1c4; made++;
-                  vm = { id: p.id, addr: '@' + n.toString(16), fresh: true };
-                  store.set(k, vm); paint(); replay(madeTag, 'pop');
-                  msg = `no entry for "${k}": <span class="good">created DetailViewModel(id = ${p.id})</span>`;
-                }
-                const ok = vm.id === p.id;
-                p.shows.textContent = `shows article ${vm.id}`;
-                p.shows.className = 'pt-li ' + (ok ? 'pt-new' : 'pt-d2-wrong');
-                p.card.className = 'pt-card ' + (ok ? 'pt-ok' : 'pt-bad'); replay(p.card, ok ? 'pop-soft' : 'shake');
-                say(o, msg + (ok ? '' : `<div class="line"><span class="bad">wrong article:</span> page for ${p.id} got the ViewModel for ${vm.id}</div>`));
-                busy = false;
-              }
-              const t = toggle('pt-d2-fac-key', 'pass key = "detail-$id"', false, () => {
-                if (busy) { t.input.checked = keyed; return; }
-                keyed = t.input.checked; reset();
-                say(o, keyed ? 'Each id now has its own key. Open both pages.' : 'No key: both pages share the class-name key.');
-              });
-              reset();
-              say(o, 'One screen, two pages, one ViewModelStore. Open both pages.');
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, pages.map(p => p.card)),
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'ViewModelStore'), storeBox, factory)),
-                h('div', { class: 'controls' }, t),
-                h('div', { class: 'controls' }, pages.map(p => cmd(`viewModel { DetailViewModel(repo, ${p.id}) }`, () => open(p)))),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p><code>by viewModels()</code> and Compose's <code>viewModel()</code> both end in <code>ViewModelProvider.get()</code>. It builds a key from the class name, looks it up in the owner's <code>ViewModelStore</code>, which is a plain map, and returns a hit as is. Only on a miss does it call <code>factory.create(modelClass, extras)</code> and store the result.</p>
-<p>The <code>extras</code> are <code>CreationExtras</code>, a small typed map that the owner fills with the Application, the saved-state owner and the screen's arguments. <code>createSavedStateHandle()</code> reads from it. <code>viewModelFactory { initializer { } }</code> builds a factory that runs the initializer registered for the requested class. A companion <code>operator fun invoke</code> is plain sugar: <code>Logger(debug = true)</code> compiles to a call on the <code>Logger.Companion</code> object.</p>`,
-          code: `// Roughly what ViewModelProvider.get does
-fun <T : ViewModel> get(modelClass: KClass<T>): T {
-    val key = "androidx.lifecycle.ViewModelProvider.DefaultKey:\${modelClass.qualifiedName}"
-    store[key]?.let { return it as T }                 // after rotation: found
-    val vm = factory.create(modelClass, extras)        // first time only
-    store.put(key, vm)
-    return vm
-}`,
-        },
-        mistakes: [
-          {
-            title: 'A public constructor next to the factory',
-            bad: `data class Temperature(val celsius: Double) {
-    companion object {
-        fun of(text: String): Temperature = TODO("parse and check")
-    }
-}
-val t = Temperature(-500.0)   // skips every check in of()`,
-            good: `@ConsistentCopyVisibility
-data class Temperature private constructor(val celsius: Double) {
-    companion object {
-        fun of(text: String): Temperature = TODO("parse and check")
-    }
-}`,
-            why: 'A public constructor lets callers skip your checks. Make it private. On a <code>data class</code>, <code>copy()</code> is a second way in: since Kotlin 2.0.20 the compiler warns about it, and <code>@ConsistentCopyVisibility</code> makes <code>copy()</code> private too.',
-          },
-          {
-            title: 'Building heavy parts inside the initializer',
-            bad: `val detailFactory = viewModelFactory {
-    initializer {
-        val api = Retrofit.Builder().baseUrl(BASE_URL).build().create<NewsApi>()
-        DetailViewModel(ArticleRepository(api), createSavedStateHandle()["id"]!!)
-    }
-}`,
-            good: `val detailFactory = viewModelFactory {
-    initializer {
-        val app = this[APPLICATION_KEY] as NewsApp
-        DetailViewModel(app.container.articles, createSavedStateHandle()["id"]!!)
-    }
-}`,
-            why: 'Every new screen now builds its own Retrofit and OkHttp client, each with its own connection pool. A factory should assemble shared parts, not create them. Keep one container, or let Hilt do it.',
-          },
-        ],
+<p>A game has a mute button in its menu. The menu makes a <code>Sound()</code> object, and the game makes its own <code>Sound()</code>. The player taps mute, and every jump still goes “Boing!”. There are two Sound objects, and only the menu’s one was muted.</p>
+<p>The <b>Singleton</b> pattern says: this type has exactly one object, and every part of the program reaches that same one. Many languages need a page of code for it. In Kotlin it is the <code>object</code> you already know: <code>object Sound { var muted = false }</code>. The menu writes <code>Sound.muted = true</code>, the game reads <code>Sound.muted</code>, and there is no second Sound to make by mistake.</p>
+<p>The danger is that a singleton is <b>global state</b>: every function can reach it and change it, without saying so. A function called <code>sneaky()</code> may set the volume to 0, and nothing in its name or its parameters warns you. When something goes wrong, the cause could be anywhere. And the object keeps its values for as long as the program runs, so a change from one part leaks into every other part.</p>
+<p>When not to use it: when there could ever be more than one (players, songs, orders), or when “only one” is true just for now. Then write a normal class, make one object in <code>main</code>, and pass it to whoever needs it, as dependency inversion showed in SOLID. Keep singletons for things that really exist once and hold little changing state.</p>`,
         visual(el) {
-          let vm = '@7c21', made = 1, gen = 1, busy = false, n = 0x7c21;
-          const actTitle = h('span', { class: 'pt-title' });
-          const activity = h('div', { class: 'pt-card pt-on' }, actTitle, h('span', { class: 'pt-label' }, 'asks viewModel(factory)'));
-          const storeSlot = h('div', { class: 'pt-row' });
-          const store = card('ViewModelStore', h('span', { class: 'pt-label' }, 'survives rotation'), storeSlot);
-          const madeTag = tag('');
-          const factory = h('div', { class: 'pt-card' }, h('div', { class: 'pt-row' }, h('div', { class: 'pt-spin' }), h('span', { class: 'pt-title' }, 'detailFactory')), h('span', { class: 'pt-label' }, 'initializer { DetailViewModel(repo, id) }'), madeTag);
-          const o = out('The screen is open and its ViewModel exists. Rotate it.');
-          const paint = () => {
-            actTitle.textContent = `DetailActivity #${gen}`;
-            storeSlot.replaceChildren(vm ? h('span', { class: 'pt-tag pt-acc' }, `DetailViewModel ${vm}`) : h('span', { class: 'tip' }, 'empty'));
-            madeTag.textContent = `initializer ran ${made} time${made === 1 ? '' : 's'}`;
-          };
-          async function ask() {
-            replay(activity, 'pt-flash'); await sleep(300);
-            if (!el.isConnected) return;
-            replay(store, 'pt-flash'); await sleep(300);
-            if (vm) {
-              replay(storeSlot.firstElementChild, 'pop');
-              say(o, `<span class="good">reused</span> DetailViewModel ${vm} <span class="muted">// factory not called, data still loaded</span>`);
-              return;
-            }
-            factory.classList.add('pt-on'); replay(factory, 'pt-flash');
-            await sleep(700);
-            n += 0x1a3; vm = '@' + n.toString(16); made++;
-            factory.classList.remove('pt-on');
-            paint(); replay(storeSlot.firstElementChild, 'drop-in'); replay(madeTag, 'pop');
-            say(o, `<span class="good">created</span> DetailViewModel ${vm} <span class="muted">// no instance in the store, so the factory ran</span>`);
-          }
-          async function rotate() {
-            if (busy) return; busy = true;
-            replay(activity, 'flip'); await sleep(420);
-            gen++; paint();
-            say(o, 'Configuration change: the Activity was destroyed and recreated.');
-            await sleep(400);
-            await ask(); busy = false;
-          }
-          async function finish() {
-            if (busy) return; busy = true;
-            if (!vm) { replay(store, 'shake'); say(o, 'The store is already empty. Open the screen again.'); busy = false; return; }
-            const chip = storeSlot.firstElementChild; chip.classList.add('fly-out');
-            await sleep(400);
-            vm = null; gen++; paint();
-            say(o, '<span class="muted">User pressed back.</span> onCleared() ran and the store is empty.');
-            busy = false;
-          }
-          async function open() {
-            if (busy) return; busy = true;
-            await ask(); busy = false;
-          }
-          const impl = h('div', { class: 'pt-slot' }, h('span', { class: 'chip' }, 'ConsoleLogger'));
-          paint();
-          el.append(
-            h('div', { class: 'pt-chain' }, activity, store, factory),
-            h('div', { class: 'controls' }, act('Rotate', rotate), act('Press back', finish), cmd('viewModel(factory = detailFactory)', open)),
-            o,
-            h('div', { class: 'controls' }, h('span', { class: 'pt-label' }, 'companion invoke'),
-              cmd('Logger(debug = true)', () => { swap(impl, 'ConsoleLogger'); }),
-              cmd('Logger(debug = false)', () => { swap(impl, 'NoOpLogger'); }),
-              impl));
-        },
-        predict: {
-          q: 'The user presses back, then opens the detail screen again. Does your factory run?',
-          options: ['No, the old ViewModel comes back', 'Yes: leaving cleared the ViewModelStore, so a new ViewModel is needed', 'Only if the app process was killed'],
-          a: 1,
-          why: 'Leaving a screen for good calls <code>onCleared()</code> and empties its store. The next visit finds nothing there, so Android asks your factory for a new one.',
-        },
-        play: `interface Logger {
-    fun log(msg: String)
-    companion object {
-        // Looks like a constructor, returns whichever implementation fits
-        operator fun invoke(debug: Boolean): Logger = if (debug) ConsoleLogger() else NoOpLogger
-    }
-}
-private class ConsoleLogger : Logger { override fun log(msg: String) = println("log: $msg") }
-private object NoOpLogger : Logger { override fun log(msg: String) {} }
-
-class Temperature private constructor(val celsius: Double) {
-    companion object {
-        fun of(text: String): Temperature =
-            if (text.endsWith("F")) Temperature((text.dropLast(1).toDouble() - 32) * 5 / 9)
-            else Temperature(text.removeSuffix("C").toDouble())
-    }
+          Lab.ui.codeStepper(el, {
+            code: `class Sound {
+    var muted = false
 }
 
 fun main() {
-    val logger = Logger(debug = true)
-    logger.log("using \${logger::class.simpleName}")
-    for (t in listOf("21C", "70F", "100C")) logger.log("$t = \${"%.1f".format(Temperature.of(t).celsius)} C")
-    println("done")
-    // Change debug = true to false: the logs stop, and no caller changed
+    val menuSound = Sound()
+    val gameSound = Sound()
+    menuSound.muted = true
+    println(menuSound.muted)
+    println(gameSound.muted)
 }`,
+            predict: {
+              q: 'The menu mutes its sound. What does the last line, <code>println(gameSound.muted)</code>, print?',
+              options: ['<code>true</code>', '<code>false</code>'],
+              a: 1,
+              why: 'There are two Sound objects. Muting one leaves the other one loud.',
+            },
+            frames: [
+              { line: 1, say: 'A class: a plan. Every Sound starts with <code>muted = false</code>.' },
+              { line: 6, vars: { 'menuSound.muted': 'false' }, say: 'The menu makes its own Sound object.' },
+              { line: 7, vars: { 'gameSound.muted': 'false' }, say: 'The game makes another one. Now there are two.' },
+              { line: 8, vars: { 'menuSound.muted': 'true' }, say: 'The player taps mute in the menu. Only the menu’s object changes.' },
+              { line: 9, out: 'true', say: 'The menu thinks the sound is off.' },
+              { line: 10, out: 'false', say: 'The game still plays sound. The fix: <code>object Sound</code>, so there is only one Sound to change.' },
+            ],
+          });
+        },
+        code: `object Sound {
+    var muted = false
+}
+
+fun menuMute() {
+    Sound.muted = true
+}
+
+fun playJump() {
+    println(if (Sound.muted) "(silence)" else "Boing!")
+}
+
+fun main() {
+    playJump()   // Boing!
+    menuMute()
+    playJump()   // (silence)
+}`,
+        play: `object Volume {
+    var level = 5
+
+    fun up() {
+        if (level < 10) {
+            level++
+        }
+    }
+}
+
+fun menu() {
+    Volume.up()
+    Volume.up()
+}
+
+fun game() {
+    println("Game plays at volume \${Volume.level}")
+}
+
+fun sneaky() {
+    Volume.level = 0   // nothing in its name says it touches the volume
+}
+
+fun main() {
+    menu()
+    game()
+    sneaky()
+    game()
+    // Every function can reach Volume, so any of them can change it.
+    // Delete the line sneaky() in main and run it again.
+}`,
+        remember: 'object makes a singleton: one object for everyone. Handy, but any code can change it, so keep it for things that truly exist once.',
+        mistakes: [
+          { title: 'A singleton for something there are many of', bad: `object Player {
+    var score = 0
+}
+
+Player.score += 10      // Ada scores
+println(Player.score)   // Sam's turn: 10 already`, good: `class Player(val name: String) {
+    var score = 0
+}
+
+val ada = Player("Ada")
+val sam = Player("Sam")
+ada.score += 10
+println(sam.score)   // 0`, why: 'A two-player game has two players. With <code>object</code> there is only one, so they share a score. Use a class and make one object per player.' },
+        ],
+        terms: [
+          { term: 'singleton', def: 'A design pattern: a type with exactly one object, which every part of the program reaches. In Kotlin: <code>object</code>.' },
+          { term: 'global state', def: 'Values that any part of the program can read and change, like the <code>var</code> properties of a singleton.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make sure the whole game shares one Sound.', code: `[[object]] Sound {
+    var muted = false
+}
+
+fun mute() {
+    [[Sound]].muted = true
+}`, why: '<code>object</code> makes the single Sound, and every function reaches it by its name.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Unresolved reference \'muted\'.</code> on both lines in <code>main</code>. There should be exactly one Settings. Tap the line to change.', code: `class Settings {
+    var muted = false
+}
+
+fun main() {
+    Settings.muted = true
+    println(Settings.muted)
+}`, bug: 0, fix: 'object Settings {', why: 'With <code>class</code>, Settings is only a plan: <code>Settings.muted</code> has no object to belong to. <code>object</code> makes the one Settings that the name stands for.' },
+        ],
+        quiz: [
+          { q: 'The menu and the game each write <code>Sound()</code> for a <code>class Sound</code>. How many Sound objects are there?', options: ['Two', 'One', 'None'], a: 0, why: 'Every <code>Sound()</code> makes a new object. That is how the mute bug happens.' },
+          { q: 'What is the biggest danger of a singleton with <code>var</code> properties?', options: ['Any function can change it without saying so', 'It makes the program slower', 'It can’t have functions'], a: 0, why: 'It is global state. A change can come from anywhere, which makes bugs hard to find.' },
+          { q: 'A chat app shows many messages. Should <code>Message</code> be an <code>object</code>?', options: ['No: there are many messages, so it is a class', 'Yes: every app needs singletons'], a: 0, why: 'A singleton is for something that exists once. Many messages means many objects.' },
+        ],
+        docs: [['Object declarations', 'https://kotlinlang.org/docs/object-declarations.html']],
       },
 
       // 3 ─────────────────────────────────────────────
       {
-        id: 'builder',
-        title: 'Builder',
-        tagline: 'Named and default arguments replace most builders.',
-        level: 'beginner',
+        id: 'factory',
+        title: 'Factory',
+        tagline: 'One function decides which object to make.',
+        goals: ['Recognise creation code that is copied in many places', 'Write a factory function that gives back an interface type', 'Add a new kind of object by changing one place'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>In Java, a builder exists because a constructor with ten parameters is unreadable and most of them are optional. Kotlin solves that in the language. Give parameters default values, pass the ones you need by name, and use <code>copy()</code> to make a variant. A required parameter stays required, and the compiler checks it.</p>
-<p>For a mutable object you configure once, <code>apply { }</code> gives the same chained feel: set properties inside the block and get the object back.</p>
-<p>You still call real builders from Java libraries: <code>NotificationCompat.Builder</code>, <code>Retrofit.Builder</code>, <code>OkHttpClient.Builder</code>. They check required parts only at runtime. Turn off <code>setSmallIcon</code> below and post the notification.</p>`,
-        code: `// Kotlin: named + default arguments
-data class Request(
-    val url: String,                      // required
-    val method: String = "GET",
-    val timeoutMs: Long = 10_000,
-    val headers: Map<String, String> = emptyMap(),
-)
-val feed = Request(url = "https://api.example.com/feed", timeoutMs = 3_000)
-val post = feed.copy(method = "POST")
-
-// apply: configure a mutable object in one expression
-val paint = Paint().apply {
-    color = Color.RED
-    strokeWidth = 4f
-}
-
-// Real builders on Android
-val notification = NotificationCompat.Builder(context, CHANNEL_NEWS)
-    .setSmallIcon(R.drawable.ic_news)     // required, checked only when posted
-    .setContentTitle("Breaking")
-    .setContentText("Tap to read")
-    .setPriority(NotificationCompat.PRIORITY_HIGH)
-    .build()
-
-val retrofit = Retrofit.Builder()
-    .baseUrl("https://api.example.com/")
-    .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-    .build()`,
-        remember: 'In Kotlin, defaults plus names are the builder. Use real builders only where a library gives you one.',
-        terms: [
-          { term: 'Named argument', def: 'An argument passed as name = value, so the call reads clearly and order does not matter.' },
-          { term: 'Default argument', def: 'A parameter value used when the caller leaves that argument out.' },
-          { term: 'Builder pattern', def: 'An object that collects settings through chained calls and creates the final object in build().' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Override only the timeout, then finish the notification.', code: 'val r = Request(url = feedUrl, [[timeoutMs]] = 3_000)\n\nval n = NotificationCompat.Builder(context, CHANNEL_NEWS)\n    .setSmallIcon(R.drawable.ic_news)\n    .setContentTitle("Breaking")\n    .[[build]]()', why: 'Name the one argument that differs from its default. A builder hands over the result in <code>build()</code>.' },
-          { type: 'bug', prompt: 'The app crashes on start with an IllegalArgumentException. Tap the line.', code: 'val retrofit = Retrofit.Builder()\n    .baseUrl("https://api.example.com/v2")\n    .client(okHttpClient)\n    .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))\n    .build()', bug: 1, fix: '    .baseUrl("https://api.example.com/v2/")', why: 'Retrofit requires the base URL to end in <code>/</code> when it has a path. Relative endpoint paths are resolved against it.' },
-        ],
-        quiz: [
-          { q: 'What replaces most builders in Kotlin?', options: ['Interfaces', 'Default and named arguments', 'Extension functions'], a: 1, why: 'Optional parameters get defaults, and callers name only what they change.' },
-          { q: 'You forget a required parameter in <code>Request(...)</code>. When do you find out?', options: ['At compile time', 'When <code>build()</code> runs', 'When the request is sent'], a: 0, why: 'A parameter without a default must be passed, and the compiler enforces it. A builder can only check at runtime.' },
-          { q: 'What does <code>Paint().apply { color = Color.RED }</code> return?', options: ['Unit', 'The Paint', 'Color.RED'], a: 1, why: '<code>apply</code> runs the block on the object and returns that same object.' },
-          { q: 'You forget <code>setSmallIcon</code> on a NotificationCompat.Builder. When do you find out?', options: ['At runtime, when the notification is posted', 'At compile time', 'Never: Android uses the app icon'], a: 0, why: 'A Java builder can only check required parts at runtime. Kotlin parameters without defaults are checked by the compiler.' },
-        ],
-        deeper: [
-          {
-            title: 'Checks live in init, and copy() runs them too',
-            body: `<p>A Java builder checks its values in <code>build()</code>. Kotlin has a better place: an <code>init</code> block with <code>require</code>. It runs on every construction, so an object with a bad value can never exist.</p>
-<p><code>copy()</code> calls the primary constructor, so it runs the same checks. A variant made with <code>copy(timeoutMs = 0)</code> fails exactly like a fresh <code>Request</code> with that value would.</p>`,
-            code: `data class Request(
-    val url: String,
-    val method: String = "GET",
-    val timeoutMs: Long = 10_000,
-) {
-    init {
-        require(url.startsWith("https://")) { "https only: \$url" }
-        require(timeoutMs in 1..60_000) { "timeoutMs out of range: \$timeoutMs" }
-    }
-}
-
-val feed = Request("https://api.example.com/feed")
-val broken = feed.copy(timeoutMs = 0)   // IllegalArgumentException`,
-            visual(el) {
-              const URL = 'https://api.example.com/feed';
-              let n = 0x2f0, busy = false;
-              let cur = { url: URL, method: 'GET', timeoutMs: 10000, addr: '@2f0' };
-              const checks = [
-                { src: 'require(url.startsWith("https://"))', ok: r => r.url.startsWith('https://'), msg: r => `https only: ${r.url}` },
-                { src: 'require(timeoutMs in 1..60_000)', ok: r => r.timeoutMs >= 1 && r.timeoutMs <= 60000, msg: r => `timeoutMs out of range: ${r.timeoutMs}` },
-              ];
-              const rows = checks.map(c => h('div', { class: 'pt-step', html: hl(c.src) }));
-              const objBox = h('div', { class: 'pt-card pt-on' });
-              const o = out('');
-              function paintObj(anim) {
-                objBox.replaceChildren(h('span', { class: 'pt-title' }, `val r: Request ${cur.addr}`),
-                  ...['url', 'method', 'timeoutMs'].map(k => h('span', { class: 'pt-d2-field' }, `${k} = ${typeof cur[k] === 'string' ? `"${cur[k]}"` : cur[k]}`)));
-                if (anim) replay(objBox, 'drop-in');
-              }
-              async function make(src, next) {
-                if (busy) return; busy = true;
-                rows.forEach(x => { x.className = 'pt-step'; });
-                say(o, `${hl(src)} <span class="muted">// runs the primary constructor, so init runs</span>`);
-                for (let i = 0; i < checks.length; i++) {
-                  rows[i].classList.add('pt-now');
-                  await sleep(420); if (!el.isConnected) return;
-                  rows[i].classList.remove('pt-now');
-                  if (!checks[i].ok(next)) {
-                    rows[i].classList.add('pt-fail'); replay(rows[i], 'shake');
-                    say(o, `${hl(src)}<div class="line"><span class="bad">IllegalArgumentException:</span> ${checks[i].msg(next)}</div><div class="line muted">// no object was created, r is unchanged</div>`);
-                    busy = false; return;
-                  }
-                  rows[i].classList.add('pt-done');
-                }
-                n += 0x30; cur = { ...next, addr: '@' + n.toString(16) }; paintObj(true);
-                say(o, `${hl(src)} <span class="good">ok</span> <span class="muted">// new Request ${cur.addr}, both checks passed</span>`);
-                busy = false;
-              }
-              const calls = [
-                ['Request(url = "https://api.example.com/feed")', () => ({ url: URL, method: 'GET', timeoutMs: 10000 })],
-                ['Request(url = "http://api.example.com/feed")', () => ({ url: 'http://api.example.com/feed', method: 'GET', timeoutMs: 10000 })],
-                ['r.copy(timeoutMs = 3_000)', () => ({ ...cur, timeoutMs: 3000 })],
-                ['r.copy(timeoutMs = 0)', () => ({ ...cur, timeoutMs: 0 })],
-                ['r.copy(method = "POST")', () => ({ ...cur, method: 'POST' })],
-              ];
-              paintObj(false);
-              say(o, 'Build a Request, then make variants with copy().');
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'init { }: runs on every construction'), h('div', { class: 'pt-steps' }, rows)),
-                  objBox),
-                h('div', { class: 'controls' }, calls.map(([src, next]) => cmd(src, () => make(src, next())))),
-                o);
-            },
-          },
-          {
-            title: 'Builders in the standard library: buildList and buildString',
-            body: `<p>The standard library ships builders too. Inside <code>buildList { }</code> you get a <code>MutableList</code> to fill with loops and <code>if</code>s. What comes out is a read-only <code>List</code>, so no caller can change it later. <code>buildString</code>, <code>buildMap</code> and <code>buildSet</code> work the same way.</p>
-<p>They replace a common leak: a <code>mutableListOf()</code> filled in a function and returned as mutable. Inside the braces, <code>this</code> is the builder, the same lambda-with-receiver trick that type-safe DSLs use.</p>`,
-            code: `fun menuItems(user: User?, isTablet: Boolean): List<MenuItem> = buildList {
-    add(MenuItem.Home)
-    if (user != null) add(MenuItem.Profile(user.name))
-    else add(MenuItem.SignIn)
-    if (isTablet) addAll(MenuItem.tabletExtras)
-    add(MenuItem.Settings)
-}
-
-val title = buildString {
-    append(article.title)
-    if (article.isLive) append(" · LIVE")
-}`,
-            visual(el) {
-              let user = true, tablet = false, busy = false, built = null;
-              const lines = [
-                { src: 'add(MenuItem.Home)', run: () => ['Home'] },
-                { src: 'if (user != null) add(MenuItem.Profile(user.name))', run: () => (user ? ['Profile(Ada)'] : []) },
-                { src: 'else add(MenuItem.SignIn)', run: () => (user ? [] : ['SignIn']) },
-                { src: 'if (isTablet) addAll(MenuItem.tabletExtras)', run: () => (tablet ? ['SplitView', 'Shortcuts'] : []) },
-                { src: 'add(MenuItem.Settings)', run: () => ['Settings'] },
-              ];
-              const rows = lines.map(l => h('div', { class: 'pt-step', html: hl(l.src) }));
-              const boxLabel = h('span', { class: 'pt-label' });
-              const box = h('div', { class: 'pt-row pt-d2-box' });
-              const o = out('');
-              function fill(items, locked) {
-                box.replaceChildren(...(items.length ? items.map(x => tag(x, 'pt-acc')) : [h('span', { class: 'tip' }, 'empty')]));
-                box.classList.toggle('pt-d2-locked', locked);
-                boxLabel.textContent = locked ? 'List<MenuItem>: read-only, returned' : 'MutableList: only inside the block';
-              }
-              async function run() {
-                if (busy) return; busy = true;
-                built = []; fill([], false);
-                rows.forEach(r => { r.className = 'pt-step'; });
-                say(o, hl(`val menu = menuItems(${user ? 'ada' : 'null'}, isTablet = ${tablet})`));
-                for (let i = 0; i < lines.length; i++) {
-                  rows[i].classList.add('pt-now');
-                  await sleep(380); if (!el.isConnected) return;
-                  const add = lines[i].run();
-                  rows[i].classList.remove('pt-now'); rows[i].classList.add(add.length ? 'pt-done' : 'pt-d2-skip');
-                  if (add.length && !built.length) box.replaceChildren();
-                  add.forEach(x => { built.push(x); box.append(tag(x, 'pt-acc drop-in')); });
-                }
-                await sleep(250); if (!el.isConnected) return;
-                fill(built, true); replay(box, 'pop-soft');
-                say(o, `${hl('buildList')} returned ${built.length} items <span class="muted">// a List, so callers can read it but not change it</span>`);
-                busy = false;
-              }
-              function mutate() {
-                if (busy) return;
-                replay(box, 'shake');
-                say(o, `${hl('menu.add(MenuItem.Debug)')} <span class="bad">compile error:</span> List has no add() <span class="muted">// the mutable view never left buildList</span>`);
-              }
-              const tu = toggle('pt-d2-bl-user', 'signed in', true, () => { if (busy) { tu.input.checked = user; return; } user = tu.input.checked; say(o, `user = ${user ? 'ada' : 'null'}. Build the menu again.`); });
-              const tt = toggle('pt-d2-bl-tab', 'tablet', false, () => { if (busy) { tt.input.checked = tablet; return; } tablet = tt.input.checked; say(o, `isTablet = ${tablet}. Build the menu again.`); });
-              built = ['Home', 'Profile(Ada)', 'Settings']; fill(built, true);
-              say(o, 'The menu for a signed-in phone user is built. Change the inputs and build it again.');
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'buildList { }'), h('div', { class: 'pt-steps' }, rows)),
-                  h('div', { class: 'pt-col' }, boxLabel, box)),
-                h('div', { class: 'controls' }, tu, tt, cmd('menuItems(user, isTablet)', run), cmd('menu.add(MenuItem.Debug)', mutate)),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>Named arguments cost nothing at runtime. The compiler puts them back into parameter order at the call site, and uses temporary variables when it needs to keep your left-to-right evaluation order.</p>
-<p>Default values compile to an extra synthetic constructor or method. It takes the normal parameters plus an <code>int</code> bitmask, one bit per parameter, and a marker argument. A set bit means "use the default". Java callers see only the full signature, unless you add <code>@JvmOverloads</code>, which generates the shorter overloads for them. <code>apply</code> is an <code>inline</code> function, so its block is pasted in place with no lambda object.</p>`,
-          code: `// Kotlin
-Request(url = feedUrl, timeoutMs = 3_000)
-
-// Roughly the bytecode, written as Java
-new Request(feedUrl, null, 3000L, null, 0b1010, null);
-// bit 1 (method) and bit 3 (headers) are set: use their defaults`,
-        },
-        mistakes: [
-          {
-            title: 'let where you meant apply',
-            bad: `val paint = Paint().let {
-    it.color = Color.RED
-    it.strokeWidth = 4f
-}   // paint is Unit`,
-            good: `val paint = Paint().apply {
-    color = Color.RED
-    strokeWidth = 4f
-}`,
-            why: '<code>let</code> returns the lambda’s result, and a block that ends in an assignment returns <code>Unit</code>. <code>apply</code> returns the object itself, which is what a configure block needs.',
-          },
-          {
-            title: 'A Java-style builder written in Kotlin',
-            bad: `class RequestBuilder {
-    private var url: String? = null
-    private var timeoutMs = 10_000L
-    fun url(u: String) = apply { url = u }
-    fun timeout(ms: Long) = apply { timeoutMs = ms }
-    fun build() = Request(url!!, timeoutMs = timeoutMs)
-}`,
-            good: `val request = Request(url = feedUrl, timeoutMs = 3_000)`,
-            why: 'The builder turns a compile-time check into a <code>!!</code> that fails at runtime, and it is one more class to keep in sync. Defaults and named arguments give the same call for free.',
-          },
-          {
-            title: 'Positional arguments of the same type',
-            bad: `data class Notice(val title: String, val text: String)
-
-val n = Notice(article.summary, article.title)   // swapped, still compiles`,
-            good: `val n = Notice(title = article.title, text = article.summary)`,
-            why: 'Two <code>String</code> parameters in the wrong order compile fine. Naming them makes each value say where it goes, and a swap becomes obvious in review.',
-          },
-        ],
+<p>A game reads its levels from a file: “bat, slime, ghost”. The code has to turn each word into an enemy object. Without a plan, the same <code>when (kind) { "bat" -&gt; Bat() ... }</code> gets copied into the level loader, the map editor and the tutorial. Add a new enemy, and you must find every copy. Miss one, and the new enemy is missing there.</p>
+<p>The <b>Factory</b> pattern puts the creating in one place: a function that takes what you know, such as a word, and gives back a ready object. Its return type is the interface, <code>Enemy</code>, not <code>Bat</code> or <code>Slime</code>. Callers don’t need to know which classes exist: they ask for “bat” and get something that can <code>attack()</code>.</p>
+<p><code>fun makeEnemy(kind: String): Enemy? = when (kind) { ... }</code>. For a word it doesn’t know, it gives back <code>null</code>, and the caller decides with <code>?:</code> what to do. A new enemy is one new class plus one new line in the factory; nothing else changes. A factory often lives in a companion object: <code>Player.guest()</code> from the Kotlin track was a small factory too.</p>
+<p>When not to use it: if there is only one class, and callers always know which one they want, the constructor already is the simplest factory. Write <code>Bat()</code>.</p>`,
         visual(el) {
-          const opts = [
-            { k: 'icon', label: 'setSmallIcon', b: '.setSmallIcon(R.drawable.ic_news)', kt: 'icon = R.drawable.ic_news' },
-            { k: 'title', label: 'setContentTitle', b: '.setContentTitle("Breaking")', kt: 'title = "Breaking"' },
-            { k: 'text', label: 'setContentText', b: '.setContentText("Tap to read")', kt: 'text = "Tap to read"' },
-            { k: 'prio', label: 'setPriority', b: '.setPriority(PRIORITY_HIGH)', kt: 'priority = Priority.High' },
-            { k: 'action', label: 'addAction', b: '.addAction(readAction)', kt: 'actions = listOf(readAction)' },
-          ];
-          const on = { icon: true, title: true, text: true, prio: false, action: false };
-          let busy = false;
-          const chain = h('div', { class: 'kt' }), named = h('div', { class: 'kt' });
-          const o = out('Toggle setters, then post the notification.');
-          const shade = h('div', { class: 'phone pt-phone' }, h('p', { class: 'pt-empty' }, 'No notifications'));
-          const chips = opts.map(x => h('button', { class: 'fn' + (on[x.k] ? ' on' : ''), 'aria-pressed': on[x.k], onclick() {
-            if (busy) return;
-            on[x.k] = !on[x.k]; this.classList.toggle('on', on[x.k]); this.setAttribute('aria-pressed', on[x.k]);
-            paint(); replay(chain, 'pop-soft'); replay(named, 'pop-soft');
-          } }, x.label));
-          function paint() {
-            const sel = opts.filter(x => on[x.k]);
-            chain.innerHTML = hl(['NotificationCompat.Builder(context, CHANNEL_NEWS)', ...sel.map(x => '    ' + x.b), '    .build()'].join('\n'));
-            const args = sel.map(x => '    ' + x.kt + ',');
-            named.innerHTML = hl(['Notice(', ...args, ')', on.icon ? '// compiles: every other field has a default' : "// compile error: no value passed for parameter 'icon'"].join('\n'));
-          }
-          async function post() {
-            if (busy) return; busy = true;
-            if (!on.icon) {
-              replay(shade, 'shake');
-              say(o, '<span class="bad">IllegalArgumentException:</span> Invalid notification (no valid small icon) <span class="muted">// the builder accepted it, the system did not</span>');
-              busy = false; return;
-            }
-            const empty = shade.querySelector('.pt-empty'); if (empty) empty.remove();
-            const n = h('div', { class: 'pt-notif drop-in' }, h('span', { class: 'pt-ic' }),
-              h('b', {}, on.title ? 'Breaking' : '(no title)'),
-              h('span', {}, on.text ? 'Tap to read' : ''),
-              h('span', { class: 'pt-row' }, on.prio ? tag('heads-up', 'pt-acc') : null, on.action ? h('span', { class: 'pt-act' }, 'READ') : null));
-            shade.prepend(n);
-            while (shade.children.length > 4) shade.lastElementChild.remove();
-            say(o, `<span class="good">posted</span> with ${opts.filter(x => on[x.k]).length} setters ${on.prio ? '<span class="muted">// priority sets heads-up only on Android 7.1 and lower; 8.0+ uses the channel importance</span>' : ''}`);
-            await sleep(450); busy = false;
-          }
-          paint();
-          el.append(
-            h('div', { class: 'pt-chips' }, chips),
-            h('div', { class: 'pt-split' },
-              h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'Library builder: checked at runtime'), chain, h('span', { class: 'pt-label' }, 'Kotlin named + defaults: checked by the compiler'), named),
-              shade),
-            h('div', { class: 'controls' }, cmd('notificationManager.notify(1, notification)', post)),
-            o);
-        },
-        predict: {
-          q: 'You turn off the title and text setters but keep <code>setSmallIcon</code>, then post the notification. What happens?',
-          options: ['<code>IllegalArgumentException</code>', 'It posts, with no title or text', 'It does not compile'],
-          a: 1,
-          why: 'The builder accepts any mix of setters. The one part the system insists on is a valid small icon, and it checks that only when the notification is posted.',
-        },
-        play: `data class Request(
-    val url: String,                      // required
-    val method: String = "GET",
-    val timeoutMs: Long = 10_000,
-    val headers: Map<String, String> = emptyMap(),
-)
+          Lab.ui.codeStepper(el, {
+            code: `interface Enemy {
+    fun attack(): String
+}
+class Slime : Enemy {
+    override fun attack() = "Slime splashes"
+}
+class Bat : Enemy {
+    override fun attack() = "Bat bites"
+}
 
-class Paint { var color = "black"; var strokeWidth = 1f }
+fun makeEnemy(kind: String): Enemy? = when (kind) {
+    "slime" -> Slime()
+    "bat" -> Bat()
+    else -> null
+}
 
 fun main() {
-    val feed = Request(url = "https://api.example.com/feed", timeoutMs = 3_000)
-    val post = feed.copy(method = "POST", headers = mapOf("Auth" to "token"))
-    println(feed)
-    println(post)
-    val paint = Paint().apply {           // configure, then get the object back
-        color = "red"
-        strokeWidth = 4f
+    val level = listOf("bat", "slime", "ghost")
+    for (kind in level) {
+        val enemy = makeEnemy(kind)
+        println(enemy?.attack() ?: "Unknown enemy: $kind")
     }
-    println("paint \${paint.color} \${paint.strokeWidth}")
-    // Delete \`url = ...,\` from feed: the compiler stops you before anything runs
 }`,
+            predict: {
+              q: 'The level also says <code>"ghost"</code>, and there is no Ghost class. What happens on that turn?',
+              options: ['It prints <code>Unknown enemy: ghost</code>', 'The program crashes', 'It makes a Bat'],
+              a: 0,
+              why: 'The factory gives back <code>null</code> for a word it doesn’t know, and <code>?:</code> picks the fallback text.',
+            },
+            frames: [
+              { line: 11, say: 'The factory: the one place that turns a word into an enemy. It promises an <code>Enemy?</code>, not a Bat or a Slime.' },
+              { line: 18, vars: { level: '[bat, slime, ghost]' }, say: 'The words come from the level file.' },
+              { line: [20, 13], vars: { kind: '"bat"' }, say: '<code>makeEnemy("bat")</code>: the <code>when</code> picks <code>Bat()</code>.' },
+              { line: 21, vars: { enemy: 'a Bat' }, out: 'Bat bites', say: '<code>main</code> only knows it has an Enemy. It calls <code>attack()</code>, and the Bat bites.' },
+              { line: [20, 12], vars: { kind: '"slime"', enemy: 'a Slime' }, say: 'Next word, next object: a Slime this time.' },
+              { line: 21, out: 'Slime splashes', say: 'The same line in <code>main</code>, a different class behind it.' },
+              { line: [20, 14], vars: { kind: '"ghost"', enemy: 'null' }, say: 'No class for “ghost”: the factory gives back <code>null</code>.' },
+              { line: 21, out: 'Unknown enemy: ghost', say: '<code>?.</code> skips the call and <code>?:</code> picks the fallback. To add a Ghost: one class, one line in the factory.' },
+            ],
+          });
+        },
+        code: `interface Shape {
+    fun area(): Double
+}
+
+class Square(val side: Double) : Shape {
+    override fun area() = side * side
+}
+
+class Circle(val radius: Double) : Shape {
+    override fun area() = 3.14 * radius * radius
+}
+
+// The factory: the only place that knows which class goes with which word
+fun makeShape(kind: String, size: Double): Shape? = when (kind) {
+    "square" -> Square(size)
+    "circle" -> Circle(size)
+    else -> null
+}
+
+fun main() {
+    println(makeShape("square", 3.0)?.area())   // 9.0
+    println(makeShape("circle", 1.0)?.area())   // 3.14
+    println(makeShape("star", 2.0)?.area())     // null
+}`,
+        play: `interface Greeting {
+    fun hello(name: String): String
+}
+
+class English : Greeting {
+    override fun hello(name: String) = "Hello, $name!"
+}
+
+class Spanish : Greeting {
+    override fun hello(name: String) = "Hola, $name!"
+}
+
+class Norwegian : Greeting {
+    override fun hello(name: String) = "Hei, $name!"
+}
+
+fun greetingFor(language: String): Greeting = when (language) {
+    "es" -> Spanish()
+    "no" -> Norwegian()
+    else -> English()
+}
+
+fun main() {
+    println(greetingFor("en").hello("Ada"))
+    println(greetingFor("es").hello("Lin"))
+    println(greetingFor("no").hello("Sam"))
+    // Add a class Dutch ("Hallo, $name!") and a line for "nl" in greetingFor.
+    // Then greet someone in Dutch. Nothing else has to know the class Dutch exists.
+}`,
+        remember: 'A factory is one function that decides which class to make and gives back the interface. New kind: one class, one line.',
+        terms: [
+          { term: 'factory', def: 'A function (often in a companion object) whose job is to create objects, so the code that uses them doesn’t need to know which class to make.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish the factory. It gives back a Shape, or nothing for a word it doesn’t know.', code: `fun makeShape(kind: String, size: Double): [[Shape]]? = when (kind) {
+    "square" -> Square(size)
+    "circle" -> Circle(size)
+    else -> [[null]]
+}`, why: 'The return type is the interface, made nullable with <code>?</code>, so the factory can give back <code>null</code> for an unknown word.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Return type mismatch: expected \'Enemy\', actual \'Enemy?\'.</code> The factory must be allowed to give back no enemy. Tap the line.', code: `interface Enemy {
+    fun attack(): String
+}
+class Slime : Enemy {
+    override fun attack() = "Slime splashes"
+}
+class Bat : Enemy {
+    override fun attack() = "Bat bites"
+}
+
+fun makeEnemy(kind: String): Enemy = when (kind) {
+    "slime" -> Slime()
+    "bat" -> Bat()
+    else -> null
+}`, bug: 10, fix: 'fun makeEnemy(kind: String): Enemy? = when (kind) {', why: 'The <code>else</code> branch gives <code>null</code>, so the result type must be nullable: <code>Enemy?</code>.' },
+        ],
+        quiz: [
+          { q: 'Why does <code>makeEnemy</code> return <code>Enemy</code> and not <code>Bat</code>?', options: ['So callers can use any enemy without knowing its class', 'Because Bat is private', 'It makes the program faster'], a: 0, why: 'Callers only rely on the interface. Which class is behind it is the factory’s business.' },
+          { q: 'You add a Ghost enemy. With a factory, what changes?', options: ['One new class and one new line in the factory', 'Every place in the game that makes enemies', 'Nothing: Kotlin finds Ghost on its own'], a: 0, why: 'All the creating lives in one place, so that is the only place to update.' },
+          { q: '<code>Player.guest()</code> in a companion object gives back a ready-made Player. What is it?', options: ['A small factory', 'A singleton', 'A copy of every player'], a: 0, why: 'It is a function whose job is making an object, so it is a factory.' },
+        ],
+        docs: [['Classes: companion objects', 'https://kotlinlang.org/docs/classes.html'], ['Interfaces', 'https://kotlinlang.org/docs/interfaces.html']],
       },
 
       // 4 ─────────────────────────────────────────────
       {
-        id: 'observer',
-        title: 'Observer',
-        tagline: 'Tell everyone who cares when a value changes.',
-        level: 'intermediate',
+        id: 'builder',
+        title: 'Builder',
+        tagline: 'Put an object together step by step, then build it.',
+        goals: ['Build an object step by step with a builder class', 'Use named arguments and <code>apply</code>, Kotlin’s lighter builders', 'Choose between the three'],
+        level: 'intermediate', introduces: ['toList'],
         body: `
-<p>The observer pattern has one subject and many subscribers. When the subject changes, it notifies each subscriber. The classic form is a listener interface with <code>addListener</code> and <code>removeListener</code>.</p>
-<p>Listeners have a sharp edge on Android. If a destroyed Activity forgets to unregister, the subject still holds it. The Activity can’t be garbage collected, and it keeps receiving updates for a screen nobody sees.</p>
-<p>Modern Kotlin exposes a <code>StateFlow</code> instead and collects it with <code>repeatOnLifecycle</code> or <code>collectAsStateWithLifecycle</code>. The lifecycle cancels the collector for you, and a new collector gets the current value right away. Step through a rotation below and watch what the subject still holds.</p>`,
-        code: `// Classic observer: you must remember to unregister
-interface CartListener { fun onCountChanged(count: Int) }
-
-class CartManager {
-    private val listeners = mutableListOf<CartListener>()
-    fun addListener(l: CartListener) { listeners += l }
-    fun removeListener(l: CartListener) { listeners -= l }
-}
-
-// Kotlin: the subject is a StateFlow
-class CartRepository {
-    private val _count = MutableStateFlow(0)
-    val count: StateFlow<Int> = _count.asStateFlow()
-    fun add() = _count.update { it + 1 }
-}
-
-// Activity: collection stops below STARTED and is cancelled on destroy
-lifecycleScope.launch {
-    repeatOnLifecycle(Lifecycle.State.STARTED) {
-        cart.count.collect { badge.text = it.toString() }
-    }
-}
-
-// Compose
-val count by cart.count.collectAsStateWithLifecycle()`,
-        remember: 'A listener you forget to remove is a leak. A lifecycle-aware collector removes itself.',
-        terms: [
-          { term: 'Observer pattern', def: 'A design where a subject keeps a list of subscribers and notifies each one when its state changes.' },
-          { term: 'Listener leak', def: 'A memory leak where a long-lived object still holds a listener that belongs to a destroyed screen.' },
-          { term: 'viewLifecycleOwner', def: 'The lifecycle of a Fragment’s view, which ends in onDestroyView while the Fragment itself may live on.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Expose a read-only count that subscribers can collect.', code: 'class CartRepository {\n    private val _count = [[MutableStateFlow]](0)\n    val count: StateFlow<Int> = _count.[[asStateFlow]]()\n}', why: 'Keep the mutable flow private and hand out a read-only <code>StateFlow</code> view of it.' },
-          { type: 'bug', prompt: 'After navigating away and back, this Fragment updates a dead view and collects twice. Tap the line.', code: 'override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n    super.onViewCreated(view, savedInstanceState)\n    lifecycleScope.launch {\n        repeatOnLifecycle(Lifecycle.State.STARTED) {\n            viewModel.count.collect { binding.badge.text = "$it" }\n        }\n    }\n}', bug: 2, fix: '    viewLifecycleOwner.lifecycleScope.launch {', why: 'A Fragment outlives its view. Tie view work to <code>viewLifecycleOwner</code> so the collector ends in <code>onDestroyView</code>.' },
-        ],
-        quiz: [
-          { q: 'An Activity calls <code>addListener(this)</code> but never removes it. What happens after rotation?', options: ['Nothing, Android removes it', 'The old Activity stays in memory and keeps getting callbacks', 'The app crashes immediately'], a: 1, why: 'The subject still references the destroyed Activity, so it can’t be collected.' },
-          { q: 'A new collector starts on a <code>StateFlow</code> whose value is 3. What does it get first?', options: ['Nothing until the next change', '3, right away', 'Every value since 0'], a: 1, why: 'A StateFlow always has a value and replays the current one to each new collector.' },
-          { q: 'A MutableStateFlow holds 5. You set <code>value = 5</code> again. What do collectors receive?', options: ['5 again', 'Nothing', 'An error'], a: 1, why: 'StateFlow compares the new value with equals and skips equal ones. It holds state, not a stream of every assignment.' },
-          { q: 'What is the problem here?<pre class="code mini"><code>lifecycleScope.launch {\n    vm.count.collect { badge(it) }\n    vm.name.collect { title(it) }\n}</code></pre>', options: ['Both run in parallel, so badge and title flicker', 'name is never collected: collecting a StateFlow never completes', 'It does not compile'], a: 1, why: 'collect on a StateFlow suspends forever, so the next line is never reached. Give each collector its own launch.' },
-          { q: 'After save(), the screen should show a “Saved” snackbar exactly once, even across rotation. Which design fits?', options: ['Put it in a StateFlow and never clear it', 'Keep the message in UI state and clear it with onMessageShown() after showing it', 'Send it on a SharedFlow with no replay'], a: 1, why: 'Uncleared state shows again to the new collector after rotation, and a no-replay event is lost if it fires while nobody collects.' },
-        ],
-        deeper: [
-          {
-            title: 'StateFlow keeps only the latest value',
-            body: `<p>A <code>StateFlow</code> is not a queue. It holds one value. A slow collector that falls behind skips straight to the newest value, and setting a value equal to the current one emits nothing at all.</p>
-<p>That is exactly right for state: the screen only needs to show what is true now. It is wrong for anything where every single item matters, like messages in a chat log.</p>`,
-            code: `val progress = MutableStateFlow(0)
-
-// fast producer
-launch { for (p in 1..5) { progress.value = p; delay(150) } }
-
-// slow collector: may see 0, 2, 5 and never 1, 3 or 4
-launch { progress.collect { p -> drawSlowly(p) } }
-
-progress.value = 5   // same as current: no emission`,
-            visual(el) {
-              let cur = 0, last = null, busy = false, running = false;
-              const sent = h('div', { class: 'pt-row' });
-              const seen = h('div', { class: 'pt-row' });
-              const valueEl = h('div', { class: 'pt-slot' }, h('span', { class: 'chip total' }, '0'));
-              const coll = h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, 'collector (600 ms per value)'), seen);
-              const o = out('');
-              function reset() { cur = 0; last = null; sent.replaceChildren(); seen.replaceChildren(); valueEl.replaceChildren(h('span', { class: 'chip total' }, '0')); }
-              async function collector() {
-                if (running) return; running = true;
-                while (el.isConnected) {
-                  if (cur !== last) {
-                    last = cur;
-                    coll.classList.add('pt-on');
-                    seen.append(tag(String(cur), 'pt-good drop-in'));
-                    [...sent.children].forEach(c => { if (c.textContent === String(cur)) c.className = 'pt-tag pt-good'; });
-                    await sleep(600);
-                    coll.classList.remove('pt-on');
-                  } else if (!busy) break;
-                  else await sleep(50);
-                }
-                running = false;
-              }
-              async function burst() {
-                if (busy) return; busy = true; reset();
-                collector();
-                for (let p = 1; p <= 5; p++) {
-                  await sleep(150); if (!el.isConnected) return;
-                  cur = p; swap(valueEl, String(p));
-                  sent.append(tag(String(p), 'pt-acc'));
-                }
-                busy = false;
-                while (running) { await sleep(100); if (!el.isConnected) return; }
-                [...sent.children].forEach(c => { if (!c.classList.contains('pt-good')) c.className = 'pt-tag'; });
-                const skipped = [...sent.children].filter(c => !c.classList.contains('pt-good')).length;
-                say(o, `<span class="good">conflated:</span> 5 values set, the collector drew ${5 - skipped} of them. ${skipped} grey ones were replaced before it got to them.`);
-              }
-              function same() {
-                if (busy) return;
-                replay(valueEl, 'shake');
-                sent.append(tag(`${cur} (same)`, ''));
-                say(o, `${hl(`state.value = ${cur}`)} <span class="muted">→ equal to the current value, so no collector is woken</span>`);
-              }
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'state.value'), valueEl, h('span', { class: 'pt-label' }, 'set by the producer'), sent),
-                  coll),
-                h('div', { class: 'controls' }, cmd('repeat(5) { state.value = it + 1 }', burst), cmd('state.value = state.value', same)),
-                o);
-              say(o, 'Set five values fast. The collector is slow.');
-            },
-          },
-          {
-            title: 'One-off events are not state',
-            body: `<p>A "Saved" snackbar is an event: show it once. Put it in a <code>StateFlow</code> and it shows again after every rotation, because a new collector gets the current value. Send it on a <code>SharedFlow</code> with no replay and it is lost if it fires while the screen is rotating, since no one is collecting.</p>
-<p>The Android guidance is to keep it as state and clear it. The ViewModel holds the message in its UI state, and the UI calls <code>onMessageShown()</code> once it has displayed it. Rotation can't lose it or repeat it.</p>`,
-            code: `data class EditorUiState(val text: String = "", val message: String? = null)
-
-fun save() = viewModelScope.launch {
-    repo.save(_state.value.text)
-    _state.update { it.copy(message = "Saved") }
-}
-fun onMessageShown() = _state.update { it.copy(message = null) }
-
-// UI
-state.message?.let { msg ->
-    LaunchedEffect(msg) {
-        snackbarHostState.showSnackbar(msg)
-        viewModel.onMessageShown()
-    }
-}`,
-            visual(el) {
-              const MODES = {
-                state: { name: 'StateFlow<String?>', visible: 'shown', during: 'shown after rotation', rotate: 'shown AGAIN', good: [1, 1, 0] },
-                shared: { name: 'SharedFlow (no replay)', visible: 'shown', during: 'lost', rotate: 'nothing', good: [1, 0, 1] },
-                cleared: { name: 'state + onMessageShown()', visible: 'shown, then cleared', during: 'shown after rotation', rotate: 'nothing', good: [1, 1, 1] },
-              };
-              let mode = 'state', busy = false, pending = false, lastShown = false;
-              const phone = h('div', { class: 'phone pt-mini-phone' });
-              const o = out('');
-              const mBtns = Object.entries(MODES).map(([k, m]) => cmd(m.name, () => { if (busy) return; mode = k; pending = false; lastShown = false; press(); blank(); say(o, `${m.name}. Save, then rotate.`); }));
-              const press = () => mBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(MODES)[i] === mode)));
-              const blank = (txt = 'Editor') => phone.replaceChildren(h('p', { class: 'phone-note' }, txt));
-              async function snack(text, cls) {
-                const s = h('div', { class: `pt-notif drop-in ${cls}` }, h('span', { class: 'pt-ic' }), h('b', {}, 'Saved'), h('span', {}, text));
-                phone.append(s);
-                await sleep(1000); if (el.isConnected && s.isConnected) { s.classList.add('fly-out'); await sleep(350); s.remove(); }
-              }
-              async function rotateAnim() { replay(phone, 'flip'); await sleep(420); blank(); }
-              async function saveVisible() {
-                if (busy) return; busy = true; blank();
-                lastShown = mode === 'state';
-                say(o, `${hl('save()')} <span class="muted">while the screen collects →</span> <span class="good">${MODES[mode].visible}</span>`);
-                await snack('', ''); busy = false;
-              }
-              async function saveDuring() {
-                if (busy) return; busy = true;
-                say(o, 'save() finishes while the Activity is being recreated...');
-                await rotateAnim(); if (!el.isConnected) return;
-                const r = MODES[mode].during;
-                lastShown = mode === 'state';
-                if (r === 'lost') { replay(phone, 'shake'); say(o, `<span class="bad">lost:</span> the event fired with no collector, and SharedFlow without replay drops it.`); }
-                else { say(o, `<span class="good">${r}:</span> the new collector read the message from state.`); await snack('', ''); }
-                busy = false;
-              }
-              async function rotate() {
-                if (busy) return; busy = true;
-                await rotateAnim(); if (!el.isConnected) return;
-                if (mode === 'state' && lastShown) { replay(phone, 'shake'); say(o, '<span class="bad">shown again:</span> the StateFlow still holds "Saved", and the new collector gets it at once.'); await snack('again', 'pt-repeat'); }
-                else say(o, `<span class="good">nothing shown</span> <span class="muted">${mode === 'cleared' ? 'because onMessageShown() set it back to null' : mode === 'shared' ? 'because SharedFlow keeps no value' : 'because no message was set yet'}</span>`);
-                busy = false;
-              }
-              press(); blank();
-              say(o, 'Pick how the ViewModel sends "Saved".');
-              el.append(
-                h('div', { class: 'controls' }, mBtns),
-                h('div', { class: 'pt-split pt-auto' },
-                  h('div', { class: 'controls' },
-                    act('save() while visible', saveVisible),
-                    act('save() during a rotation', saveDuring),
-                    act('Rotate', rotate)),
-                  phone),
-                o);
-            },
-          },
-          {
-            title: 'WhileSubscribed(5_000) and rotation',
-            body: `<p><code>stateIn(scope, SharingStarted.WhileSubscribed(5_000), initial)</code> runs the upstream flow only while someone collects. When the last collector leaves, it waits 5 seconds before stopping.</p>
-<p>A rotation drops the collector for well under a second, so the upstream, perhaps a database query or a location listener, keeps running. Leaving the app for longer than 5 seconds stops it and saves battery. When the user returns, collection restarts.</p>`,
-            code: `val feed: StateFlow<List<Article>> = repo.articles()
-    .stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),   // survives rotation
-        initialValue = emptyList(),
-    )`,
-          },
-        ],
-        underHood: {
-          body: `<p>A <code>MutableStateFlow</code> stores a single value. Setting it compares the new value with the old one using <code>equals</code>. If they differ, it stores the new one and wakes any suspended collectors. Each collector then reads whatever the value is at that moment. There is no buffer, which is where conflation comes from.</p>
-<p><code>repeatOnLifecycle(STARTED)</code> launches your block each time the lifecycle reaches <code>STARTED</code> and cancels it when it falls below, at <code>ON_STOP</code>. A collector inside it is a new subscription each time, so it receives the current value immediately.</p>`,
-          code: `// Equivalent behaviour, written by hand
-val state = MutableStateFlow(0)
-state.value = 1        // stored, collectors woken
-state.value = 1        // equal: ignored
-// a collector only ever sees "the latest value it hasn't seen",
-// like flow.distinctUntilChanged() with a buffer of one`,
-        },
-        mistakes: [
-          { title: 'Mutating the list inside a StateFlow', bad: 'private val _items = MutableStateFlow(mutableListOf<Item>())\nfun add(item: Item) {\n    _items.value.add(item)   // same list object: no emission\n}', good: 'private val _items = MutableStateFlow<List<Item>>(emptyList())\nfun add(item: Item) {\n    _items.update { it + item }   // new list: emits\n}', why: 'The flow sees the same object, which equals itself, so collectors are never told. Keep immutable values in a StateFlow and replace them.' },
-          { title: 'Two collects in one coroutine', bad: 'repeatOnLifecycle(Lifecycle.State.STARTED) {\n    vm.title.collect { toolbar.title = it }\n    vm.items.collect { adapter.submitList(it) }   // never runs\n}', good: 'repeatOnLifecycle(Lifecycle.State.STARTED) {\n    launch { vm.title.collect { toolbar.title = it } }\n    launch { vm.items.collect { adapter.submitList(it) } }\n}', why: 'Collecting a StateFlow never completes, so the line after it is never reached. Give each collector its own <code>launch</code>.' },
-          { title: 'Using the deprecated launchWhenStarted', bad: 'lifecycleScope.launchWhenStarted {\n    vm.location.collect { map.moveTo(it) }\n}', good: 'lifecycleScope.launch {\n    repeatOnLifecycle(Lifecycle.State.STARTED) {\n        vm.location.collect { map.moveTo(it) }\n    }\n}', why: '<code>launchWhenStarted</code> only pauses the collector in the background, so the upstream keeps producing. <code>repeatOnLifecycle</code> cancels it and starts again later.' },
-        ],
+<p>A pizza has a size and any number of toppings, added one by one as the customer taps them. A call like <code>Pizza(25, listOf("olives", "basil"), true, false)</code> works, but what is <code>true</code>, and what is <code>false</code>? And you only know the toppings one at a time.</p>
+<p>The <b>Builder</b> pattern puts an object together step by step. A separate builder class collects the parts with small functions, and <code>build()</code> makes the finished object at the end. Each step gives back the builder itself, with <code>return this</code>, so the steps <b>chain</b> with dots: <code>PizzaBuilder().size(25).add("olives").build()</code>. The builder can also refuse at <code>build()</code> when a needed part is missing. And <code>build()</code> hands over a copy of the list, made with <code>toList()</code>, so steps called later on the builder can’t change a pizza that is already finished.</p>
+<p>In Kotlin you often don’t need a builder class. Named and default arguments already make a long constructor readable: <code>Alarm(hour = 6, daily = true)</code> names each value and skips the rest. And for a class with <code>var</code> properties, <code>apply</code> is the step-by-step part: <code>Profile().apply { name = "Lin" }</code> sets the properties and gives back the Profile itself.</p>
+<p>Which one? Named arguments for a fixed set of settings. <code>apply</code> to set up an object whose properties are <code>var</code>. A builder class when the parts arrive one by one, or the finished object must be checked before it exists and stay unchanged afterwards (all <code>val</code>).</p>`,
         visual(el) {
-          Lab.ui.graph(el, {
-            height: 240,
-            nodes: [
-              { id: 'cart', label: 'CartManager<small>listeners</small>', x: 50, y: 15 },
-              { id: 'a1', label: 'Activity #1', x: 17, y: 82 },
-              { id: 'a2', label: 'Activity #2', x: 83, y: 82, hidden: true },
-            ],
+          Lab.ui.codeStepper(el, {
+            code: `class Pizza(val size: Int, val toppings: List<String>)
+
+class PizzaBuilder {
+    private var size = 30
+    private val toppings = mutableListOf<String>()
+
+    fun size(cm: Int): PizzaBuilder {
+        size = cm
+        return this
+    }
+
+    fun add(topping: String): PizzaBuilder {
+        toppings.add(topping)
+        return this
+    }
+
+    fun build() = Pizza(size, toppings.toList())
+}
+
+fun main() {
+    val pizza = PizzaBuilder()
+        .size(25)
+        .add("olives")
+        .add("basil")
+        .build()
+    println("\${pizza.size} cm with \${pizza.toppings}")
+}`,
+            varsTitle: 'Builder and pizza',
             predict: {
-              q: 'After a rotation, both Activities are registered. The count changes once. How many <code>onCountChanged</code> calls happen?',
-              options: ['1, only for the visible screen', '2, one per registered listener', '0, rotation clears listeners'],
-              a: 1,
-              why: 'The subject calls every listener in its list. It has no idea which screen is still alive, so the destroyed one gets a call too.',
+              q: 'Every step ends with <code>return this</code>. What does <code>.size(25)</code> give back?',
+              options: ['The same PizzaBuilder, so <code>.add</code> can be called on it next', 'A finished Pizza', 'Nothing (<code>Unit</code>)'],
+              a: 0,
+              why: '<code>this</code> is the builder the step was called on. Giving it back is what lets the next dot work.',
             },
             frames: [
-              { add: [['cart', 'a1', 'listener']], say: 'Activity #1 calls <code>addListener(this)</code>. The subject now holds a reference to it.' },
-              { add: [['cart', 'a1', 'count = 1', 'accent']], hl: ['a1'], say: '<code>add()</code>: the subject loops over its list and calls <code>onCountChanged(1)</code>. The badge shows 1.' },
-              { show: ['a2'], add: [['cart', 'a1', 'still held', 'err'], ['cart', 'a2', 'listener']], gone: ['a1'], say: 'Rotate. Android destroys #1 and creates #2, which registers too. #1 never called <code>removeListener</code>.' },
-              { add: [['cart', 'a1', 'count = 2', 'err'], ['cart', 'a2', 'count = 2', 'accent']], hl: ['a1', 'a2'], say: 'The next change reaches both. #1 updates a screen nobody sees, and the GC can’t free it while the subject points at it.' },
-              { remove: [['cart', 'a1']], add: [['cart', 'a2', 'listener']], say: 'The fix for listeners: <code>removeListener</code> in the matching lifecycle callback. Now nothing points at #1, so it can be collected.' },
-              { hl: ['cart', 'a2'], say: 'With a <code>StateFlow</code> collected in <code>repeatOnLifecycle</code>, the lifecycle cancels the old collector for you, and the new screen gets the current count at once.' },
+              { line: 21, vars: { 'builder.size': '30', 'builder.toppings': '[]' }, say: 'A new builder with the defaults: 30 cm, no toppings yet. No Pizza exists so far.' },
+              { line: [22, 8, 9], vars: { 'builder.size': '25' }, say: '<code>.size(25)</code> changes the size and gives back <code>this</code>: the builder itself.' },
+              { line: [23, 13, 14], vars: { 'builder.toppings': '[olives]' }, say: 'The next dot calls <code>add</code> on that same builder. One topping.' },
+              { line: [24, 13, 14], vars: { 'builder.toppings': '[olives, basil]' }, say: 'Another step, on the same builder again.' },
+              { line: [25, 17], vars: { 'pizza.size': '25', 'pizza.toppings': '[olives, basil]' }, say: '<code>build()</code> makes the real Pizza from what was collected. <code>toList()</code> copies the toppings, so later <code>add()</code> calls on the builder can’t reach this pizza.' },
+              { line: 26, out: '25 cm with [olives, basil]', say: 'A list prints in square brackets.' },
             ],
           });
         },
-        play: `import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+        code: `// A fixed set of settings: named and default arguments are enough
+class Alarm(
+    val hour: Int,
+    val minute: Int = 0,
+    val sound: String = "Bells",
+    val daily: Boolean = false
+)
 
-fun interface CartListener { fun onCountChanged(count: Int) }
-
-class CartManager {
-    private val listeners = mutableListOf<CartListener>()
-    private var count = 0
-    fun addListener(l: CartListener) { listeners += l }
-    fun removeListener(l: CartListener) { listeners -= l }
-    fun add() { count++; listeners.forEach { it.onCountChanged(count) } }
+// Set up step by step: var properties plus apply
+class Profile {
+    var name = ""
+    var city = ""
+    var darkMode = false
 }
 
-fun main() = runBlocking {
-    val cart = CartManager()
-    val screen1 = CartListener { println("screen 1 badge: $it") }
-    cart.addListener(screen1)
-    cart.add()
-    cart.removeListener(screen1)   // rotation: comment this out and the dead screen keeps listening
-    cart.addListener { println("screen 2 badge: $it") }
-    cart.add()
+fun main() {
+    val alarm = Alarm(hour = 6, minute = 30, daily = true)
+    println("\${alarm.hour}:\${alarm.minute} \${alarm.sound}")   // 6:30 Bells
 
-    val count = MutableStateFlow(3)
-    val job = launch { count.collect { println("collector got $it") } }   // gets 3 right away
-    delay(10); count.value = 4; delay(10)
-    job.cancel()                   // what repeatOnLifecycle does when the screen stops
-    count.value = 5
-    println("done, nobody saw 5")
+    val profile = Profile().apply {
+        name = "Lin"
+        city = "Lisbon"
+        darkMode = true
+    }
+    println("\${profile.name}, \${profile.city}")   // Lin, Lisbon
 }`,
+        play: `class Email(val to: String, val subject: String, val lines: List<String>)
+
+class EmailBuilder {
+    private var to = ""
+    private var subject = "(no subject)"
+    private val lines = mutableListOf<String>()
+
+    fun recipient(address: String): EmailBuilder {
+        to = address
+        return this
+    }
+
+    fun subject(text: String): EmailBuilder {
+        subject = text
+        return this
+    }
+
+    fun line(text: String): EmailBuilder {
+        lines.add(text)
+        return this
+    }
+
+    fun build(): Email? {
+        if (to == "") {
+            return null   // the builder refuses an email with nobody to send it to
+        }
+        // toList() makes a copy, so later line() calls can't reach this email
+        return Email(to, subject, lines.toList())
+    }
+}
+
+fun main() {
+    val email = EmailBuilder()
+        .recipient("ada@example.com")
+        .subject("Trip to Oslo")
+        .line("Hi Ada")
+        .line("The train leaves at 9.")
+        .build()
+    println(email?.subject)
+    println(email?.lines)
+
+    val broken = EmailBuilder().subject("Oops").build()
+    println(broken)
+    // Remove the .subject(...) line from the first email. What does it print now?
+}`,
+        remember: 'A builder collects parts step by step and build() makes the object. In Kotlin, named arguments and apply often do the job with less code.',
+        mistakes: [
+          { title: 'Forgetting build()', bad: `val pizza: Pizza = PizzaBuilder().add("olives")
+// Error: Initializer type mismatch: expected 'Pizza', actual 'PizzaBuilder'.`, good: 'val pizza: Pizza = PizzaBuilder().add("olives").build()', why: 'Every step gives back the builder, not the pizza. Only <code>build()</code> makes the finished object.' },
+        ],
+        terms: [
+          { term: 'builder', def: 'A design pattern: a helper object that collects the parts step by step, then makes the finished object with <code>build()</code>.' },
+          { term: 'chaining', def: 'Calling one function after another with dots, <code>a.size(25).add("olives")</code>, where each call works on what the previous one gave back.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make this step chainable: it must give back the builder itself.', code: `fun add(topping: String): [[PizzaBuilder]] {
+    toppings.add(topping)
+    return [[this]]
+}`, why: 'The return type is the builder, and <code>this</code> is the builder the step was called on.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Return type mismatch: expected \'Unit\', actual \'PizzaBuilder\'.</code> at <code>return this</code>, but the line to fix is another one. Tap it.', code: `class PizzaBuilder {
+    private val toppings = mutableListOf<String>()
+
+    fun add(topping: String) {
+        toppings.add(topping)
+        return this
+    }
+}`, bug: 3, fix: '    fun add(topping: String): PizzaBuilder {', why: 'Without a return type, <code>add</code> gives back <code>Unit</code>, so it can’t return the builder. Write <code>: PizzaBuilder</code>.' },
+        ],
+        quiz: [
+          { q: '<code>class Alarm</code> has a default for every setting except <code>hour</code>. To make <code>Alarm(hour = 6, daily = true)</code>, do you need a builder class?', options: ['No: named and default arguments already do the job', 'Yes: any class with more than two settings needs one'], a: 0, why: 'In Kotlin, named and default arguments cover most of what a builder does for a fixed set of settings.' },
+          { q: 'What does <code>Profile().apply { name = "Lin" }</code> give back?', options: ['The Profile itself, with <code>name</code> set', 'The text <code>"Lin"</code>', '<code>Unit</code>'], a: 0, why: '<code>apply</code> gives back the object it was called on. That is why it works as a builder.' },
+          { q: 'Why does each builder step end with <code>return this</code>?', options: ['So the next step can be chained with a dot', 'To make the finished object', 'To make the builder private'], a: 0, why: 'Giving back the builder lets the next call work on it. <code>build()</code> makes the object.' },
+        ],
+        docs: [['Named arguments', 'https://kotlinlang.org/docs/functions.html#named-arguments'], ['Scope functions: apply', 'https://kotlinlang.org/docs/scope-functions.html']],
       },
 
       // 5 ─────────────────────────────────────────────
       {
-        id: 'strategy',
-        title: 'Strategy',
-        tagline: 'Pass the algorithm in instead of hard-coding it.',
-        level: 'beginner',
+        id: 'observer',
+        title: 'Observer',
+        tagline: 'Subscribe once, and hear about every change.',
+        goals: ['Keep a list of listeners and notify them all', 'Subscribe and unsubscribe with lambdas', 'Know when a direct call is simpler'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A strategy is an interchangeable piece of behaviour. Instead of an <code>if</code> chain inside <code>Checkout</code> for every promotion, <code>Checkout</code> takes a pricing function and calls it. New promotion, new function. <code>Checkout</code> never changes.</p>
-<p>In Kotlin a strategy is usually just a function type, like <code>(List&lt;CartItem&gt;) -&gt; Long</code>, and each strategy is a lambda. Reach for an interface when the strategy needs a name, its own state, or more than one method.</p>
-<p>You already use one every day: <code>Comparator</code> is a sorting strategy. <code>sortedWith(compareBy { it.name })</code> keeps the sort algorithm and swaps only the ordering rule. Swap both strategies below.</p>`,
-        code: `data class CartItem(val name: String, val priceCents: Long, val qty: Int)
-
-typealias Pricing = (List<CartItem>) -> Long
-val List<CartItem>.subtotal: Long get() = sumOf { it.priceCents * it.qty }
-
-val regular: Pricing = { it.subtotal }
-val sale20: Pricing = { it.subtotal * 80 / 100 }
-val memberDeal: Pricing = { items -> items.subtotal.let { if (it >= 40_00) it - 5_00 else it } }
-val threeForTwo: Pricing = { items ->
-    val units = items.flatMap { item -> List(item.qty) { item.priceCents } }
-    if (units.size >= 3) units.sum() - units.min() else units.sum()
-}
-
-class Checkout(var pricing: Pricing = regular) {
-    fun total(items: List<CartItem>): Long = pricing(items)
-}
-
-val checkout = Checkout()
-checkout.pricing = sale20            // swap at runtime
-
-// Sorting strategies: Comparator
-val byName = compareBy<CartItem> { it.name }
-val byPriceDesc = compareByDescending<CartItem> { it.priceCents }
-val rows = cart.sortedWith(byPriceDesc)`,
-        remember: 'Keep the algorithm, swap the rule. In Kotlin the rule is usually a lambda.',
-        terms: [
-          { term: 'Strategy pattern', def: 'A design where an object receives an interchangeable algorithm instead of choosing one internally.' },
-          { term: 'Comparator', def: 'A strategy object that decides the order of two values, used by sortedWith and sorted collections.' },
-          { term: 'typealias', def: 'A Kotlin declaration that gives an existing type, such as a function type, a shorter name.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Build a title ordering and sort with it.', code: 'val byTitle = [[compareBy]]<Article> { it.title.lowercase() }\nval sorted = articles.[[sortedWith]](byTitle)', why: '<code>compareBy</code> creates a Comparator from a key. <code>sortedWith</code> takes any Comparator, so the sort itself never changes.' },
-          { type: 'bug', prompt: 'Tapping “Sort by title” changes nothing on screen. Tap the line.', code: 'var articles: List<Article> = emptyList()\n\nfun applyOrder(order: Comparator<Article>) {\n    articles.sortedWith(order)\n    render(articles)\n}', bug: 3, fix: '    articles = articles.sortedWith(order)', why: '<code>sortedWith</code> returns a new sorted list and leaves the original alone. The result has to be assigned.' },
-        ],
-        quiz: [
-          { q: 'A new “Black Friday” discount arrives. With the strategy pattern, what changes in <code>Checkout</code>?', options: ['A new branch in its when', 'Nothing, you pass it a new Pricing', 'Its constructor signature'], a: 1, why: 'The discount is a new function. Checkout just calls whatever pricing it holds.' },
-          { q: 'When is an interface a better fit than a function type for a strategy?', options: ['Always', 'When it needs a name, state, or several methods', 'Never in Kotlin'], a: 1, why: 'A lambda covers one operation. An interface groups related operations and can hold data.' },
-          { q: 'What is wrong with this comparator for article timestamps in milliseconds?<pre class="code mini"><code>Comparator&lt;Article&gt; { a, b -&gt;\n    (b.publishedMs - a.publishedMs).toInt()\n}</code></pre>', options: ['Nothing, it sorts newest first', 'It sorts oldest first', 'Large gaps overflow Int and flip the sign, so the order breaks'], a: 2, why: 'About 25 days is more than Int.MAX_VALUE milliseconds, so toInt() wraps. compareByDescending { it.publishedMs } never overflows.' },
-          { q: 'Remote config sends a promo name that the app does not know. With <code>pricings[promo] ?: regular</code>, what happens?', options: ['The cart crashes', 'The total is null', 'Checkout uses regular pricing'], a: 2, why: 'The choice lives in one place at the edge, with a safe default. Unknown data falls back instead of breaking Checkout.' },
-        ],
-        deeper: [
-          {
-            title: 'Strategies compose: thenBy breaks ties',
-            body: `<p>A <code>Comparator</code> is a strategy you can combine. <code>compareBy { it.category }.thenByDescending { it.priceCents }</code> sorts by category and breaks ties by price. Each piece is tiny, and the sort itself never changes.</p>
-<p>Ties matter more than they look. Kotlin's <code>sortedWith</code> is stable: items that compare as equal keep the order they arrived in. Without a tie-breaker, that order comes from the server, and it can change between two loads of the same data.</p>`,
-            code: `val order = compareBy<Product> { it.category }
-    .thenByDescending { it.priceCents }
-    .thenBy { it.name }
-
-val rows = products.sortedWith(order)`,
-            visual(el) {
-              const items = [
-                { name: 'Mug', cat: 'Home', p: 1200 }, { name: 'Tea', cat: 'Food', p: 900 },
-                { name: 'Vase', cat: 'Home', p: 1200 }, { name: 'Lamp', cat: 'Home', p: 2400 },
-                { name: 'Honey', cat: 'Food', p: 900 }, { name: 'Beans', cat: 'Food', p: 1800 },
-              ];
-              const KEYS = [
-                { k: 'price', label: 'thenByDescending price', src: '.thenByDescending { it.priceCents }', f: (a, b) => b.p - a.p },
-                { k: 'name', label: 'thenBy name', src: '.thenBy { it.name }', f: (a, b) => a.name.localeCompare(b.name) },
-              ];
-              const on = { price: false, name: false };
-              let input = items.slice();
-              const chain = h('div', { class: 'kt' });
-              const list = h('div', { class: 'pt-col' });
-              const inputRow = h('div', { class: 'pt-row' });
-              const o = out('');
-              const cmpOf = () => {
-                const ks = [(a, b) => a.cat.localeCompare(b.cat), ...KEYS.filter(x => on[x.k]).map(x => x.f)];
-                return (a, b) => { for (const f of ks) { const r = f(a, b); if (r) return r; } return 0; };
-              };
-              function paintChain() {
-                chain.innerHTML = hl(['val order = compareBy<Product> { it.category }', ...KEYS.filter(x => on[x.k]).map(x => '    ' + x.src)].join('\n'));
-                inputRow.replaceChildren(h('span', { class: 'pt-label' }, 'API order'), ...input.map(x => tag(x.name)));
-              }
-              function sortNow(anim) {
-                const cmp = cmpOf();
-                const sorted = input.slice().sort(cmp);
-                let ties = 0;
-                list.replaceChildren(...sorted.map((x, i) => {
-                  const tie = (i > 0 && cmp(sorted[i - 1], x) === 0) || (i < sorted.length - 1 && cmp(x, sorted[i + 1]) === 0);
-                  if (tie) ties++;
-                  return h('div', { class: 'pt-li' + (tie ? ' pt-d2-tie' : '') + (anim ? ' drop-in' : ''), style: anim ? `animation-delay:${i * 50}ms` : null },
-                    x.name, h('small', {}, `${x.cat} · ${money(x.p)}${tie ? ' · tie' : ''}`));
-                }));
-                return ties;
-              }
-              const report = ties => (ties
-                ? `<span class="bad">${ties} rows tie</span> <span class="muted">// their order comes from the API, not from you</span>`
-                : '<span class="good">no ties</span> <span class="muted">// every row has one place, whatever order the API used</span>');
-              const chips = KEYS.map(x => h('button', { class: 'fn', 'aria-pressed': 'false', onclick() {
-                on[x.k] = !on[x.k]; this.classList.toggle('on', on[x.k]); this.setAttribute('aria-pressed', String(on[x.k]));
-                paintChain(); replay(chain, 'pop-soft');
-                say(o, `${on[x.k] ? 'Added' : 'Removed'} ${hl(x.src)}. ${report(sortNow(true))}`);
-              } }, x.label));
-              function sortCmd() { say(o, `${hl('products.sortedWith(order)')} ${report(sortNow(true))}`); }
-              function shuffle() {
-                input = input.slice().reverse(); paintChain(); replay(inputRow, 'pt-flash');
-                const ties = sortNow(true);
-                say(o, ties
-                  ? `Same items, new API order. <span class="bad">The tied rows swapped places.</span> <span class="muted">// stable sort keeps arrival order for ties</span>`
-                  : `Same items, new API order. <span class="good">Same result.</span> <span class="muted">// the comparator decides every position</span>`);
-              }
-              paintChain();
-              say(o, `Sorted by category only. ${report(sortNow(false))}`);
-              el.append(
-                h('div', { class: 'pt-chips' }, chips),
-                h('div', { class: 'pt-split' }, h('div', { class: 'pt-col' }, chain, inputRow), list),
-                h('div', { class: 'controls' }, cmd('products.sortedWith(order)', sortCmd), act('API sends the same items in a new order', shuffle)),
-                o);
-            },
-          },
-          {
-            title: 'Pick the strategy at the edge, with a default',
-            body: `<p>Something still has to choose the strategy. Keep that choice in one place at the edge of the app: a map from a config value to a strategy, with a safe default. <code>Checkout</code> never learns where the choice came from.</p>
-<p>Remote config, A/B tests and user settings then become plain data. An unknown promo name from the server falls back to <code>regular</code> instead of crashing the cart. With Hilt you can build the same map from <code>@IntoMap</code> bindings.</p>`,
-            code: `val pricings: Map<String, Pricing> = mapOf(
-    "regular" to regular,
-    "sale20" to sale20,
-    "member" to memberDeal,
-)
-
-fun pricingFor(promo: String?): Pricing = pricings[promo] ?: regular
-
-checkout.pricing = pricingFor(remoteConfig.getString("promo"))`,
-            visual(el) {
-              const sub = 5320;
-              const MAP = [
-                { key: 'regular', fn: 'regular', f: () => sub, note: 'full price' },
-                { key: 'sale20', fn: 'sale20', f: () => Math.floor(sub * 80 / 100), note: '20% off everything' },
-                { key: 'member', fn: 'memberDeal', f: () => (sub >= 4000 ? sub - 500 : sub), note: '$5 off at $40 or more' },
-              ];
-              let busy = false;
-              const rows = MAP.map(m => h('div', { class: 'pt-step', html: hl(`"${m.key}" to ${m.fn}`) }));
-              const fallback = h('div', { class: 'pt-step', html: hl('?: regular   // unknown or missing') });
-              const cfg = tag('promo = -');
-              const total = h('span', { class: 'pt-num' }, money(sub));
-              const used = tag('regular');
-              const cart = h('div', { class: 'pt-card pt-on' }, h('span', { class: 'pt-title' }, 'Checkout'), h('span', { class: 'pt-label' }, 'pricing'), used, h('span', { class: 'pt-label' }, 'total'), total);
-              const o = out('');
-              async function send(v) {
-                if (busy) return; busy = true;
-                const key = v == null ? null : v;
-                cfg.textContent = `promo = ${v == null ? 'null' : `"${v}"`}`; cfg.className = 'pt-tag pt-acc'; replay(cfg, 'pop');
-                [...rows, fallback].forEach(r => { r.className = 'pt-step'; });
-                say(o, hl(`pricingFor(${v == null ? 'null' : `"${v}"`})`));
-                let hit = null;
-                for (let i = 0; i < MAP.length; i++) {
-                  rows[i].classList.add('pt-now'); await sleep(260); if (!el.isConnected) return;
-                  rows[i].classList.remove('pt-now');
-                  if (MAP[i].key === key) { rows[i].classList.add('pt-done'); hit = MAP[i]; break; }
-                }
-                if (!hit) { fallback.classList.add('pt-now'); await sleep(260); if (!el.isConnected) return; fallback.classList.remove('pt-now'); fallback.classList.add('pt-done'); hit = MAP[0]; }
-                used.textContent = hit.fn; replay(used, 'pop');
-                total.textContent = money(hit.f()); replay(total, 'pop'); replay(cart, 'pt-flash');
-                say(o, `${hl(`pricingFor(${v == null ? 'null' : `"${v}"`})`)} = ${hit.fn} <span class="muted">// ${v === hit.key ? hit.note : 'no match, so the safe default'}. Checkout did not change.</span>`);
-                busy = false;
-              }
-              say(o, 'Remote config decides the promo. Send a few values.');
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'from the server'), cfg, h('span', { class: 'pt-label' }, 'pricings[promo]'), h('div', { class: 'pt-steps' }, rows, fallback)),
-                  cart),
-                h('div', { class: 'controls' }, ['sale20', 'member', 'blackfriday', null].map(v => cmd(`pricingFor(${v == null ? 'null' : `"${v}"`})`, () => send(v)))),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>Since Kotlin 2.0, a lambda stored in a function type compiles through <code>invokedynamic</code>, the same mechanism Java uses for its lambdas, and D8 turns that into small classes for Android. A lambda that captures nothing, like <code>sale20</code>, ends up as one shared instance. A lambda that captures a local variable gets a new object each time the expression runs.</p>
-<p><code>compareBy</code> returns a <code>Comparator</code> that runs your selector on both items and compares the results. <code>thenBy</code> wraps it: it asks the first comparator and only on a tie calls the next one. <code>sortedWith</code> copies the list into an array and calls <code>java.util.Arrays.sort</code> with your comparator. For objects that is TimSort, which is stable.</p>`,
-          code: `// thenBy, roughly
-fun <T> Comparator<T>.thenBy(selector: (T) -> Comparable<*>?): Comparator<T> =
-    Comparator { a, b ->
-        val first = this.compare(a, b)
-        if (first != 0) first else compareValuesBy(a, b, selector)
-    }`,
-        },
-        mistakes: [
-          {
-            title: 'Comparing by subtraction',
-            bad: `val newestFirst = Comparator<Article> { a, b ->
-    (b.publishedAtMillis - a.publishedAtMillis).toInt()
-}`,
-            good: `val newestFirst = compareByDescending<Article> { it.publishedAtMillis }`,
-            why: 'Two timestamps about 25 days apart differ by more than <code>Int.MAX_VALUE</code> milliseconds. <code>toInt()</code> wraps around, the sign flips, and older articles jump to the top. <code>compareBy</code> and <code>compareTo</code> never overflow.',
-          },
-          {
-            title: 'Chaining two sorts the wrong way round',
-            bad: `// wants: by section, then by title
-articles.sortedBy { it.section }.sortedBy { it.title }`,
-            good: `articles.sortedWith(compareBy({ it.section }, { it.title }))`,
-            why: 'The last sort becomes the main key, so this list is ordered by title and section only breaks ties. One comparator with the keys in order says what you mean and sorts once.',
-          },
-          {
-            title: 'A sorted set that drops items',
-            bad: `val cart = sortedSetOf(compareBy<CartItem> { it.priceCents })
-cart += CartItem("Tea", 450, 1)
-cart += CartItem("Coffee", 450, 2)   // ignored: compares as equal`,
-            good: `val cart = sortedSetOf(compareBy<CartItem>({ it.priceCents }, { it.name }))`,
-            why: 'A sorted set treats <code>compare(a, b) == 0</code> as "same item" and keeps only the first. Give the comparator enough keys to tell different items apart.',
-          },
-        ],
+<p>A shop app has a cart. When an item is added, the badge on the cart icon, the total line and a “free delivery” banner must all update. If <code>addItem</code> calls each of them by name, the cart has to know every part of the screen, and every new part means editing the cart again.</p>
+<p>The <b>Observer</b> pattern turns this around. The cart keeps a list of <b>listeners</b>: functions that want to hear about changes. Anyone who cares calls <code>subscribe</code> and hands in a lambda. When the cart changes, it calls every listener in its list, which is called <b>notifying</b> them. The cart doesn’t know who they are. It only knows: call these, with the new count.</p>
+<p>In Kotlin a listener is a lambda with a function type like <code>(Int) -&gt; Unit</code>: it gets the new value and gives nothing back. The list is <code>mutableListOf&lt;(Int) -&gt; Unit&gt;()</code>, and notifying is a loop: <code>for (listener in listeners) { listener(count) }</code>. To stop listening, <code>unsubscribe</code> removes the lambda from the list again.</p>
+<p>Watch out: a listener only hears changes made after it subscribed. A part that is gone but never unsubscribed keeps getting calls. And listeners that set off other listeners are hard to follow. When only one thing will ever react, call it directly or pass one lambda: that is simpler.</p>`,
         visual(el) {
-          const items = [
-            { name: 'Coffee', p: 450, q: 2 }, { name: 'Croissant', p: 320, q: 1 },
-            { name: 'Beans', p: 1800, q: 1 }, { name: 'Mug', p: 1200, q: 1 },
-          ];
-          const sub = items.reduce((s, x) => s + x.p * x.q, 0);
-          const pricings = [
-            { id: 'regular', f: () => sub, note: 'full price' },
-            { id: 'sale20', f: () => Math.floor(sub * 80 / 100), note: '20% off everything' },
-            { id: 'memberDeal', f: () => (sub >= 4000 ? sub - 500 : sub), note: '$5 off at $40 or more' },
-            { id: 'threeForTwo', f: () => { const u = items.flatMap(x => Array(x.q).fill(x.p)); return u.length >= 3 ? u.reduce((a, b) => a + b, 0) - Math.min(...u) : sub; }, note: 'cheapest unit free' },
-          ];
-          const sorts = [
-            { id: 'byName', f: (a, b) => a.name.localeCompare(b.name) },
-            { id: 'byPriceDesc', f: (a, b) => b.p - a.p },
-            { id: 'byQtyDesc', f: (a, b) => b.q - a.q || a.name.localeCompare(b.name) },
-          ];
-          let pricing = pricings[0], sort = sorts[0], shown = sub;
-          const rows = h('div', { class: 'pt-col' });
-          const total = h('span', { class: 'pt-num' }, money(sub));
-          const assign = h('div', { class: 'kt' }), sortLine = h('div', { class: 'kt' });
-          const note = tag('');
-          const checkoutCard = h('div', { class: 'pt-card pt-on' }, h('span', { class: 'pt-title' }, 'Checkout'), assign, h('span', { class: 'pt-label' }, 'total'), total, note);
-          const o = out('Swap a strategy. Checkout’s code stays the same.');
-          const pBtns = pricings.map(x => cmd(x.id, () => setPricing(x)));
-          const sBtns = sorts.map(x => cmd(x.id, () => setSort(x)));
-          function tween(from, to) {
-            const t0 = performance.now();
-            const step = now => {
-              if (!total.isConnected) return;
-              const k = Math.min(1, (now - t0) / 450);
-              total.textContent = money(Math.round(from + (to - from) * k));
-              if (k < 1) requestAnimationFrame(step);
-            };
-            requestAnimationFrame(step);
-          }
-          function paintRows(anim) {
-            rows.replaceChildren(...[...items].sort(sort.f).map((x, i) => h('div', { class: 'pt-li' + (anim ? ' drop-in' : ''), style: anim ? `animation-delay:${i * 70}ms` : null },
-              `${x.name} × ${x.q}`, h('small', {}, `${money(x.p)} each`))));
-          }
-          function paint() {
-            assign.innerHTML = hl(`checkout.pricing = ${pricing.id}`);
-            sortLine.innerHTML = hl(`cart.sortedWith(${sort.id})`);
-            note.textContent = pricing.note;
-            pBtns.forEach((b, i) => b.setAttribute('aria-pressed', pricings[i] === pricing));
-            sBtns.forEach((b, i) => b.setAttribute('aria-pressed', sorts[i] === sort));
-          }
-          function setPricing(x) {
-            pricing = x; paint();
-            const next = x.f(); tween(shown, next);
-            say(o, `${hl('checkout.total(cart)')} = <span class="good">${money(next)}</span> <span class="muted">// subtotal ${money(sub)}, ${x.note}</span>`);
-            shown = next; replay(checkoutCard, 'pt-flash');
-          }
-          function setSort(x) {
-            sort = x; paint(); paintRows(true);
-            say(o, `${hl(`cart.sortedWith(${x.id})`)} <span class="muted">// same sort, different Comparator</span>`);
-          }
-          paint(); paintRows(false);
-          el.append(
-            h('div', { class: 'pt-split' }, h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'cart'), sortLine, rows), checkoutCard),
-            h('div', { class: 'controls' }, h('span', { class: 'pt-label' }, 'pricing'), pBtns),
-            h('div', { class: 'controls' }, h('span', { class: 'pt-label' }, 'order'), sBtns),
-            o);
+          Lab.ui.graph(el, {
+            height: 270,
+            nodes: [
+              { id: 'cart', label: 'Cart<small>list of listeners</small>', x: 50, y: 14 },
+              { id: 'badge', label: 'Badge', x: 17, y: 82, tone: 'muted', hidden: true },
+              { id: 'total', label: 'Total line', x: 50, y: 82, tone: 'muted', hidden: true },
+              { id: 'banner', label: 'Banner', x: 83, y: 82, tone: 'muted', hidden: true },
+            ],
+            predict: {
+              q: 'The total line subscribes after the first item was added. Does it hear about that first item?',
+              options: ['No: it only hears changes after it subscribed', 'Yes: the cart replays every change it ever had'],
+              a: 0,
+              why: 'The cart calls whoever is in its list right now. Nobody gets the past.',
+            },
+            frames: [
+              { say: 'A cart with an empty list of listeners. Nobody is listening yet.' },
+              { show: ['badge'], add: [['cart', 'badge', 'listening', 'weak']], say: 'The badge calls <code>subscribe</code> and hands in its lambda. The cart adds it to its list.' },
+              { hl: ['cart', 'badge'], add: [['cart', 'badge', '1', 'accent']], say: '<code>addItem()</code>: the count is 1. The cart calls every listener in its list, so the badge shows 1.' },
+              { show: ['total'], add: [['cart', 'badge', 'listening', 'weak'], ['cart', 'total', 'listening', 'weak']], say: 'Now the total line subscribes too. It missed item 1: it wasn’t listening yet.' },
+              { hl: ['cart', 'badge', 'total'], add: [['cart', 'badge', '2', 'accent'], ['cart', 'total', '2', 'accent']], say: 'Second item: one loop, two calls. Both hear 2.' },
+              { show: ['banner'], add: [['cart', 'badge', 'listening', 'weak'], ['cart', 'total', 'listening', 'weak'], ['cart', 'banner', 'listening', 'weak']], say: 'A banner subscribes. The cart’s code didn’t change: it still loops over its list.' },
+              { hl: ['cart', 'badge', 'total', 'banner'], add: [['cart', 'badge', '3', 'accent'], ['cart', 'total', '3', 'accent'], ['cart', 'banner', '3', 'accent']], say: 'Third item: three calls. The cart knows none of them by name.' },
+              { gone: ['badge'], remove: [['cart', 'badge']], add: [['cart', 'total', 'listening', 'weak'], ['cart', 'banner', 'listening', 'weak']], say: '<code>unsubscribe</code> takes the badge off the list. From now on it hears nothing.' },
+            ],
+          });
         },
-        predict: {
-          q: 'You swap <code>byName</code> for <code>byPriceDesc</code> in <code>cart.sortedWith(...)</code>. What changes?',
-          options: ['The sort algorithm', 'Only the rule for which of two items goes first', 'The items in the cart'],
-          a: 1,
-          why: '<code>sortedWith</code> keeps one sorting algorithm and asks the Comparator about two items at a time. The Comparator is the swappable strategy.',
-        },
-        play: `data class CartItem(val name: String, val priceCents: Long, val qty: Int)
-typealias Pricing = (List<CartItem>) -> Long
+        code: `class Thermostat {
+    private val listeners = mutableListOf<(Int) -> Unit>()
+    var degrees = 20
+        private set
 
-val List<CartItem>.subtotal: Long get() = sumOf { it.priceCents * it.qty }
-val regular: Pricing = { it.subtotal }
-val sale20: Pricing = { it.subtotal * 80 / 100 }
-val threeForTwo: Pricing = { items ->
-    val units = items.flatMap { item -> List(item.qty) { item.priceCents } }
-    if (units.size >= 3) units.sum() - units.min() else units.sum()
-}
+    fun subscribe(listener: (Int) -> Unit) {
+        listeners.add(listener)
+    }
 
-class Checkout(var pricing: Pricing = regular) {
-    fun total(items: List<CartItem>) = pricing(items)
+    fun unsubscribe(listener: (Int) -> Unit) {
+        listeners.remove(listener)
+    }
+
+    fun change(newDegrees: Int) {
+        degrees = newDegrees
+        for (listener in listeners) {
+            listener(degrees)
+        }
+    }
 }
 
 fun main() {
-    val cart = listOf(CartItem("Coffee", 450, 2), CartItem("Mug", 1200, 1))
-    val checkout = Checkout()
-    for ((name, p) in listOf("regular" to regular, "sale20" to sale20, "3 for 2" to threeForTwo)) {
-        checkout.pricing = p
-        println("$name: \${checkout.total(cart)} cents")
-    }
-    println(cart.sortedWith(compareByDescending { it.priceCents }).map { it.name })
-    // Write your own Pricing lambda and add it to the list. Checkout does not change.
+    val thermostat = Thermostat()
+    val screen: (Int) -> Unit = { println("Screen: $it degrees") }
+    val heater: (Int) -> Unit = { println(if (it < 18) "Heater on" else "Heater off") }
+
+    thermostat.subscribe(screen)
+    thermostat.subscribe(heater)
+    thermostat.change(16)          // Screen: 16 degrees, then Heater on
+    thermostat.unsubscribe(screen)
+    thermostat.change(21)          // Heater off (the screen no longer hears)
 }`,
+        play: `class Newsletter {
+    private val readers = mutableListOf<(String) -> Unit>()
+
+    fun subscribe(reader: (String) -> Unit) {
+        readers.add(reader)
+    }
+
+    fun publish(story: String) {
+        println("Publishing: $story")
+        for (reader in readers) {
+            reader(story)
+        }
+    }
+}
+
+fun main() {
+    val news = Newsletter()
+    news.subscribe { println("  Ada reads: $it") }
+    news.subscribe { println("  Sam saves it for later") }
+    news.publish("Rain in Lisbon")
+    news.subscribe { println("  Lin shares it") }
+    news.publish("Sun in Oslo")
+    // Newsletter never needs to know who Ada, Sam or Lin are.
+    // Add a fourth reader. Which stories will it hear about?
+}`,
+        remember: 'Observer: keep a list of listener lambdas, subscribe adds one, and every change calls them all.',
+        mistakes: [
+          { title: 'Unsubscribing a different lambda', bad: `cart.subscribe { println("Badge shows $it") }
+cart.unsubscribe { println("Badge shows $it") }
+cart.addItem()   // still prints: Badge shows 1`, good: `val badge: (Int) -> Unit = { println("Badge shows $it") }
+cart.subscribe(badge)
+cart.unsubscribe(badge)
+cart.addItem()   // prints nothing`, why: 'Each <code>{ }</code> makes a new lambda, even when the code inside looks the same. <code>remove</code> only finds the very lambda that was added, so keep it in a <code>val</code> and pass that same one both times.' },
+        ],
+        terms: [
+          { term: 'observer', def: 'A design pattern: one object keeps a list of listeners and calls them all when something changes.' },
+          { term: 'listener', def: 'A function handed in to be called later, when something happens. Here a lambda such as <code>(Int) -&gt; Unit</code>.' },
+          { term: 'subscribe', def: 'To add yourself to the list of listeners. <code>unsubscribe</code> takes you off it again.' },
+          { term: 'notify', def: 'To call every listener in the list with the news.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Let anyone subscribe to taps, and tell every listener when the button is tapped.', code: `class Button {
+    private val listeners = mutableListOf<() -> Unit>()
+
+    fun subscribe(listener: () -> Unit) {
+        listeners.[[add]](listener)
+    }
+
+    fun tap() {
+        for (listener in listeners) {
+            [[listener]]()
+        }
+    }
+}`, why: '<code>subscribe</code> adds the lambda to the list. <code>tap</code> notifies by calling each one with <code>()</code>.' },
+          { type: 'bug', prompt: 'It compiles, but nothing reacts when an item is added. Tap the line that should notify each listener.', code: `class Cart {
+    private val listeners = mutableListOf<(Int) -> Unit>()
+    private var count = 0
+
+    fun subscribe(listener: (Int) -> Unit) {
+        listeners.add(listener)
+    }
+
+    fun addItem() {
+        count++
+        for (listener in listeners) {
+            listener
+        }
+    }
+}`, bug: 11, fix: '            listener(count)', why: 'Naming a lambda doesn’t run it. Calling it with <code>(count)</code> does, and hands it the news.' },
+        ],
+        quiz: [
+          { q: 'Two listeners have subscribed. <code>addItem()</code> is called once. How many listener calls happen?', options: ['Two: each listener once', 'One: only the first listener', 'None until you call them by name'], a: 0, why: 'The loop calls every listener in the list.' },
+          { q: 'What does the Observer pattern buy the cart?', options: ['It doesn’t need to know who is listening', 'It turns the cart into a singleton', 'It sorts the listeners by name'], a: 0, why: 'New parts subscribe themselves. The cart’s code stays the same.' },
+          { q: 'A part of the screen goes away but never unsubscribes. What happens?', options: ['The cart keeps calling its listener', 'Its listener is removed on its own'], a: 0, why: 'The lambda stays in the list until someone removes it.' },
+        ],
+        docs: [['Lambdas and function types', 'https://kotlinlang.org/docs/lambdas.html']],
       },
 
       // 6 ─────────────────────────────────────────────
       {
-        id: 'adapter',
-        title: 'Adapter',
-        tagline: 'Make one shape fit where another is expected.',
-        level: 'intermediate',
+        id: 'strategy',
+        title: 'Strategy',
+        tagline: 'Hand in the way a job is done, and swap it when needed.',
+        goals: ['Pull a changing rule out into its own class or lambda', 'Swap a strategy while the program runs', 'Tell when a plain <code>if</code> is enough'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>An adapter converts one interface into another that the caller expects. On Android you meet it in two places.</p>
-<p>First, the data boundary. The server’s JSON shape is a DTO (data transfer object) that you don’t control: snake_case names, epoch seconds, fields that come and go. A small mapper such as <code>ArticleDto.toDomain()</code> adapts it to your own <code>Article</code> model. When the API renames a field, only the DTO and the mapper change.</p>
-<p>Second, <code>RecyclerView.Adapter</code> adapts a list of models to row views. <code>ListAdapter</code> adds <code>DiffUtil</code>, so <code>submitList</code> updates only the rows that changed. Map, bind, then refresh below.</p>`,
-        code: `// Server shape: you don't own it
-@Serializable
-data class ArticleDto(
-    val id: Long,
-    val headline: String,
-    @SerialName("published_at") val publishedAtEpoch: Long,
-    @SerialName("image_url") val imageUrl: String? = null,
-)
-
-// App shape: you do
-data class Article(val id: Long, val title: String, val published: Instant, val image: String?)
-
-fun ArticleDto.toDomain() = Article(
-    id = id,
-    title = headline.trim(),
-    published = Instant.ofEpochSecond(publishedAtEpoch),
-    image = imageUrl,
-)
-
-// RecyclerView adapter: list of Article -> row views
-class ArticleAdapter : ListAdapter<Article, ArticleAdapter.Holder>(Diff) {
-    class Holder(val binding: ItemArticleBinding) : RecyclerView.ViewHolder(binding.root)
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-        Holder(ItemArticleBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-
-    override fun onBindViewHolder(holder: Holder, position: Int) {
-        holder.binding.title.text = getItem(position).title
-    }
-
-    object Diff : DiffUtil.ItemCallback<Article>() {
-        override fun areItemsTheSame(old: Article, new: Article) = old.id == new.id
-        override fun areContentsTheSame(old: Article, new: Article) = old == new
-    }
-}`,
-        remember: 'Map DTOs to your own models at the edge. Adapters make shapes fit; they don’t add behaviour.',
-        terms: [
-          { term: 'DTO', def: 'A data transfer object whose fields mirror an external format such as a JSON response.' },
-          { term: 'Mapper', def: 'A function, often an extension like toDomain(), that converts one model type into another.' },
-          { term: 'ListAdapter', def: 'A RecyclerView.Adapter that diffs each submitted list on a background thread and updates only changed rows.' },
-          { term: 'DiffUtil', def: 'A utility that computes the inserts, removes, moves and changes between two lists.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Finish the mapper and the row binding.', code: 'fun ArticleDto.[[toDomain]]() = Article(\n    id = id,\n    title = headline.trim(),\n    published = Instant.ofEpochSecond(publishedAtEpoch),\n    image = imageUrl,\n)\n\noverride fun onBindViewHolder(holder: Holder, position: Int) {\n    holder.binding.title.text = [[getItem]](position).title\n}', why: 'An extension on the DTO keeps the mapping next to the boundary. <code>ListAdapter.getItem</code> returns the model for a row.' },
-          { type: 'bug', prompt: 'Editing one article’s title makes its row vanish and reappear instead of updating in place. Tap the line.', code: 'object Diff : DiffUtil.ItemCallback<Article>() {\n    override fun areItemsTheSame(old: Article, new: Article) = old == new\n    override fun areContentsTheSame(old: Article, new: Article) = old == new\n}', bug: 1, fix: '    override fun areItemsTheSame(old: Article, new: Article) = old.id == new.id', why: '<code>areItemsTheSame</code> asks “is this the same thing?” and should compare a stable id. Comparing everything turns every edit into a remove plus an insert.' },
-        ],
-        quiz: [
-          { q: 'The API renames <code>headline</code> to <code>title</code>. What should change?', options: ['Every screen that shows a title', 'The DTO and its mapper', 'The RecyclerView adapter'], a: 1, why: 'The domain model and the UI depend on your Article, not on the JSON.' },
-          { q: 'What does <code>ListAdapter</code> add over a plain <code>RecyclerView.Adapter</code>?', options: ['Click handling', 'Diffing on submitList so only changed rows update', 'Paging'], a: 1, why: 'It runs DiffUtil for you and dispatches minimal updates.' },
-          { q: 'You add an item to the same MutableList you submitted before, then call <code>submitList(list)</code> again. What happens?', options: ['Only the new row is inserted', 'It crashes with ConcurrentModificationException', 'Nothing updates: ListAdapter skips a list it already holds'], a: 2, why: 'submitList ignores the very same list object, and the diff would have no old state to compare anyway. Always submit a new list.' },
-          { q: 'In <code>ConcatAdapter(header, articles, footer)</code> the header has 1 item, articles 20, the footer 1. What is the footer row’s bindingAdapterPosition?', options: ['21', '22', '0'], a: 2, why: 'bindingAdapterPosition is the position inside the row’s own adapter. absoluteAdapterPosition would be 21, its place in the whole list.' },
-          { q: 'A like counter ticks often and the whole row blinks and reloads its image. What fixes it?', options: ['Call notifyDataSetChanged()', 'Override getChangePayload and update only the likes view', 'Make areItemsTheSame compare the whole object'], a: 1, why: 'With a payload, the adapter calls the three-argument onBindViewHolder on the same ViewHolder, so there is no cross-fade and no image reload.' },
-        ],
-        deeper: [
-          {
-            title: 'Payloads: update one view, not the whole row',
-            body: `<p>When <code>areContentsTheSame</code> returns false, <code>ListAdapter</code> rebinds the whole row, and the default item animator cross-fades it. For a like counter that ticks often, the row blinks and its image may reload.</p>
-<p>Override <code>getChangePayload</code> to say <em>what</em> changed. The adapter then calls the three-argument <code>onBindViewHolder</code> on the same ViewHolder with that payload, and you update just one view. No cross-fade, no image reload.</p>`,
-            code: `object LikesChanged
-
-object Diff : DiffUtil.ItemCallback<Article>() {
-    override fun areItemsTheSame(old: Article, new: Article) = old.id == new.id
-    override fun areContentsTheSame(old: Article, new: Article) = old == new
-    override fun getChangePayload(old: Article, new: Article): Any? =
-        if (old.copy(likes = new.likes) == new) LikesChanged else null
-}
-
-override fun onBindViewHolder(holder: Holder, position: Int, payloads: List<Any>) {
-    if (LikesChanged in payloads) holder.binding.likes.text = getItem(position).likes.toString()
-    else super.onBindViewHolder(holder, position, payloads)   // full bind
-}`,
-            visual(el) {
-              const data = [
-                { id: 101, title: 'Rain expected all weekend', likes: 12 },
-                { id: 102, title: 'Ferry times change on Monday', likes: 40 },
-                { id: 103, title: 'New park opens downtown', likes: 7 },
-              ];
-              let payloads = false, busy = false, full = 0, partial = 0;
-              data.forEach(a => {
-                a.likesEl = h('b', { class: 'pt-d2-likes' }, String(a.likes));
-                a.img = h('span', { class: 'pt-d2-img' });
-                a.titleEl = h('span', { class: 'pt-d2-t' }, a.title);
-                a.row = h('div', { class: 'pt-d2-row' }, a.img, h('div', { class: 'pt-col' }, a.titleEl, h('span', { class: 'pt-row' }, h('span', { class: 'pt-label' }, 'likes'), a.likesEl)));
-              });
-              const counts = tag('');
-              const o = out('');
-              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
-              const paintCounts = () => { counts.textContent = `full binds ${full} · payload binds ${partial}`; replay(counts, 'pop-soft'); };
-              async function fullBind(a) {
-                full++;
-                a.row.classList.add('pt-d2-fade'); a.img.classList.add('pt-d2-loading');
-                await sleep(420); if (!el.isConnected) return false;
-                a.titleEl.textContent = a.title; a.likesEl.textContent = String(a.likes);
-                a.row.classList.remove('pt-d2-fade');
-                await sleep(380); if (!el.isConnected) return false;
-                a.img.classList.remove('pt-d2-loading');
-                return true;
-              }
-              async function like(a) {
-                if (busy) return; busy = true;
-                a.likes++;
-                const pos = data.indexOf(a);
-                say(o, `${hl(`submitList(list with ${a.id}.likes = ${a.likes})`)} <span class="muted">// only likes changed</span>`);
-                if (payloads) {
-                  partial++;
-                  a.likesEl.textContent = String(a.likes); replay(a.likesEl, 'pop');
-                  ln(`${hl(`onBindViewHolder(holder, ${pos}, [LikesChanged])`)} <span class="muted">// one TextView set, same ViewHolder</span>`);
-                } else {
-                  ln(`<span class="bad">getChangePayload = null</span> <span class="muted">// full rebind: cross-fade, image loads again</span>`);
-                  if (!await fullBind(a)) return;
-                }
-                paintCounts(); busy = false;
-              }
-              async function retitle(a) {
-                if (busy) return; busy = true;
-                a.title = a.title.endsWith(' (updated)') ? a.title.replace(' (updated)', '') : a.title + ' (updated)';
-                const pos = data.indexOf(a);
-                say(o, `${hl(`submitList(list with ${a.id}.title changed)`)}`);
-                ln(`${payloads ? 'title changed too, so getChangePayload returns null.' : 'no payload support.'} <span class="muted">// full bind of row ${pos} is correct here</span>`);
-                if (!await fullBind(a)) return;
-                paintCounts(); busy = false;
-              }
-              const t = toggle('pt-d2-ad-pay', 'override getChangePayload', false, () => {
-                if (busy) { t.input.checked = payloads; return; }
-                payloads = t.input.checked;
-                say(o, payloads ? 'Payloads on. Like an article again.' : 'Payloads off. Every content change is a full bind.');
-              });
-              paintCounts();
-              say(o, 'Tap like a few times and watch the row.');
-              el.append(
-                h('div', { class: 'pt-split' }, h('div', { class: 'pt-d2-rows' }, data.map(a => a.row)), h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'RecyclerView'), counts, t)),
-                h('div', { class: 'controls' }, cmd('like(102)', () => like(data[1])), cmd('like(101)', () => like(data[0])), cmd('retitle(103)', () => retitle(data[2]))),
-                o);
-            },
-          },
-          {
-            title: 'ConcatAdapter: several adapters in one list',
-            body: `<p>A feed often has a header, the articles and a "loading more" footer. Instead of one adapter juggling view types and position offsets, give each part its own adapter and join them with <code>ConcatAdapter</code>. It adapts several adapters into the one adapter a RecyclerView expects.</p>
-<p>Each child keeps its own positions, starting at 0. In a ViewHolder, <code>bindingAdapterPosition</code> is the position inside its own adapter, and <code>absoluteAdapterPosition</code> is the position in the whole list. Show the footer by giving its adapter one item, and hide it by giving it none.</p>`,
-            code: `val header = HeaderAdapter()
-val articles = ArticleAdapter()
-val footer = LoadingFooterAdapter()    // itemCount is 0 or 1
-
-recyclerView.adapter = ConcatAdapter(header, articles, footer)
-
-class LoadingFooterAdapter : RecyclerView.Adapter<FooterHolder>() {
-    var loading = false
-        set(value) {
-            if (field == value) return
-            field = value
-            if (value) notifyItemInserted(0) else notifyItemRemoved(0)
-        }
-    override fun getItemCount() = if (loading) 1 else 0
-    // onCreateViewHolder, onBindViewHolder ...
-}`,
-            visual(el) {
-              let header = true, loading = false, busy = false, next = 0;
-              let items = ['Rain expected all weekend', 'Ferry times change', 'New park opens'];
-              const extra = ['Library extends hours', 'Tram line extended', 'Market moves to Saturday', 'Marathon route set'];
-              const list = h('div', { class: 'pt-d2-rows' });
-              const legend = h('div', { class: 'pt-row' });
-              const o = out('');
-              const children = () => [
-                { name: 'HeaderAdapter', cls: 'pt-d2-a1', rows: header ? ['Top stories'] : [] },
-                { name: 'ArticleAdapter', cls: 'pt-d2-a2', rows: items },
-                { name: 'FooterAdapter', cls: 'pt-d2-a3', rows: loading ? ['Loading more…'] : [] },
-              ];
-              let flat = [];
-              function paint(mark) {
-                flat = []; let g = 0;
-                for (const c of children()) c.rows.forEach((r, local) => flat.push({ c, r, local, g: g++ }));
-                list.replaceChildren(...flat.map(x => h('button', { type: 'button', class: `pt-d2-crow ${x.c.cls}` + (mark && mark(x) ? ' drop-in' : ''), onclick: () => tap(x) },
-                  h('span', { class: 'pt-d2-gpos' }, String(x.g)), h('span', { class: 'pt-d2-t' }, x.r), h('small', {}, `${x.c.name} · ${x.local}`))));
-                legend.replaceChildren(...children().map(c => h('span', { class: `pt-tag ${c.cls}` }, `${c.name}: ${c.rows.length}`)));
-              }
-              function tap(x) {
-                if (busy) return;
-                say(o, `tapped "${x.r}" <div class="line">${hl(`absoluteAdapterPosition = ${x.g}`)}</div><div class="line">${hl(`bindingAdapterPosition = ${x.local}`)} <span class="muted">// inside ${x.c.name}</span></div>`);
-              }
-              function toggleFooter() {
-                if (busy) return;
-                loading = !loading;
-                const g = flat.length - (loading ? 0 : 1);
-                paint(x => x.c.name === 'FooterAdapter');
-                say(o, `${hl(`footer.loading = ${loading}`)} <span class="muted">// footer ${loading ? 'notifyItemInserted(0)' : 'notifyItemRemoved(0)'}: ConcatAdapter reports global position ${g}</span>`);
-              }
-              function add() {
-                if (busy) return;
-                if (next >= extra.length) { replay(list, 'shake'); say(o, 'No more articles on the server. Press Reset.'); return; }
-                const title = extra[next++]; items = [...items, title];
-                paint(x => x.r === title);
-                const x = flat.find(f => f.r === title);
-                say(o, `${hl('articles.submitList(list + article)')} <span class="muted">// local ${x.local} in ArticleAdapter, global ${x.g}${loading ? ', above the footer' : ''}</span>`);
-              }
-              function toggleHeader() {
-                if (busy) return;
-                header = !header;
-                paint(x => header && x.c.name === 'HeaderAdapter');
-                say(o, `${hl(`header.visible = ${header}`)} <span class="muted">// every global position below moved by one. Local positions did not.</span>`);
-              }
-              function tapLast() {
-                const x = [...flat].reverse().find(f => f.c.name === 'ArticleAdapter');
-                if (x) tap(x);
-              }
-              paint();
-              say(o, 'Three adapters, one RecyclerView. Tap a row to see both positions.');
-              el.append(
-                legend, list,
-                h('div', { class: 'controls' }, cmd('articles.submitList(list + article)', add), cmd('footer.loading = !footer.loading', toggleFooter), cmd('header.visible = !header.visible', toggleHeader), act('Tap the last article', tapLast)),
-                o);
-            },
-          },
-          {
-            title: 'One bad item should not sink the feed',
-            body: `<p>A mapper that throws on one malformed item fails the whole response, and the user sees an empty screen. At the edge, decide per item: map what is valid and drop the rest with <code>mapNotNull</code>, logging what you dropped.</p>
-<p>Required fields stay non-null in your own model, so the rest of the app never checks them again. That is the adapter's real value: all the doubt about the server's data lives in one function.</p>`,
-            code: `@Serializable
-data class ArticleDto(
-    val id: Long? = null,
-    val headline: String? = null,
-    @SerialName("published_at") val publishedAtEpoch: Long? = null,
-)
-
-fun ArticleDto.toDomainOrNull(): Article? {
-    val id = id ?: return null
-    val title = headline?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    val published = publishedAtEpoch?.let(Instant::ofEpochSecond) ?: return null
-    return Article(id, title, published, image = null)
-}
-
-val articles = dtos.mapNotNull { dto ->
-    dto.toDomainOrNull().also { if (it == null) Log.w("Feed", "dropped \$dto") }
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>ListAdapter</code> hands the work to an <code>AsyncListDiffer</code>. On <code>submitList</code> it first checks whether you passed the very same list object. If so, it does nothing. Otherwise it runs <code>DiffUtil.calculateDiff</code> on a background thread, comparing the new list with the one on screen, and posts the result to the main thread.</p>
-<p>There the result becomes calls like <code>notifyItemRangeInserted</code> and <code>notifyItemChanged(position, payload)</code>. DiffUtil uses Eugene Myers's difference algorithm, roughly O(N + D²) where D is the number of edits, plus a pass to find moved items. If you submit again before a diff finishes, the older result is thrown away.</p>`,
-          code: `// Inside AsyncListDiffer.submitList, roughly
-if (newList === current) return                 // same object: nothing to do
-val generation = ++maxScheduledGeneration
-backgroundExecutor.execute {
-    val result = DiffUtil.calculateDiff(callbackFor(current, newList))
-    mainThread.execute {
-        if (generation == maxScheduledGeneration) {    // a newer submit wins
-            current = newList
-            result.dispatchUpdatesTo(adapter)          // notifyItemInserted, ...Changed
-        }
-    }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Mutating the list and submitting it again',
-            bad: `val items = mutableListOf<Article>()
-fun onNew(article: Article) {
-    items.add(article)
-    adapter.submitList(items)   // same object: ignored
-}`,
-            good: `var items: List<Article> = emptyList()
-fun onNew(article: Article) {
-    items = items + article
-    adapter.submitList(items)   // new list: diffed
-}`,
-            why: 'ListAdapter skips a list it already holds. Even with a copy, the adapter has been reading the same list you mutated, so the diff has no old state to compare. Always submit a new list.',
-          },
-          {
-            title: 'Formatting server data in onBindViewHolder',
-            bad: `override fun onBindViewHolder(holder: Holder, position: Int) {
-    val dto = getItem(position)
-    holder.binding.date.text = SimpleDateFormat("d MMM", Locale.getDefault())
-        .format(Date(dto.publishedAtEpoch * 1000))
-}`,
-            good: `// map once, at the edge
-data class ArticleRow(val id: Long, val title: String, val dateLabel: String)
-
-override fun onBindViewHolder(holder: Holder, position: Int) {
-    holder.binding.date.text = getItem(position).dateLabel
-}`,
-            why: 'Bind runs every time a row scrolls into view. Building formatters there costs frame time and ties the adapter to the server shape. Map to a ready-to-show model once.',
-          },
-          {
-            title: 'notifyDataSetChanged after every change',
-            bad: `fun update(newItems: List<Article>) {
-    items = newItems
-    notifyDataSetChanged()
-}`,
-            good: `class ArticleAdapter : ListAdapter<Article, ArticleAdapter.Holder>(Diff) { /* ... */ }
-
-adapter.submitList(newItems)`,
-            why: '<code>notifyDataSetChanged</code> says "anything may have changed", so RecyclerView rebinds every visible row and drops all item animations. A diff sends only the real inserts, removes and changes.',
-          },
-        ],
+<p>A checkout adds shipping to the total. First shipping was always 5. Then came “free from 50”, then “express: 15”, then “10% of the total” for a sale. Each rule became one more branch in a growing <code>when</code> inside <code>pay</code>, and every new rule meant editing, and re-checking, code that already worked.</p>
+<p>The <b>Strategy</b> pattern pulls out the part that changes. Each way of working out shipping becomes its own small class behind one interface, <code>Shipping</code>. The checkout holds one Shipping and calls <code>cost(total)</code> without knowing which one it has. You can hand in a different one when you make the checkout, or swap it while the program runs. That is open/closed from SOLID: a new rule is a new class, and <code>Checkout</code> stays as it is.</p>
+<p>In Kotlin a strategy is often a lambda. A property of type <code>(Int) -&gt; Int</code> holds “how to work out shipping”, and <code>{ if (it &gt;= 50) 0 else 5 }</code> is a whole strategy in one line. You have used this already: <code>sortedBy { it.price }</code> takes a strategy for “what to sort by”.</p>
+<p>When not to use it: two fixed choices that will never grow are clearer as an <code>if</code> than as an interface and two classes.</p>`,
         visual(el) {
-          const pool = [
-            { id: 101, headline: ' Rain expected all weekend ', t: 1792310400 },
-            { id: 102, headline: 'Ferry times change on Monday', t: 1792224000 },
-            { id: 103, headline: 'New park opens downtown', t: 1792137600 },
-          ];
-          const extra = { id: 104, headline: 'Library extends opening hours', t: 1792396800 };
-          let dtos = pool.slice(), mapped = [], bound = [], renamed = false, busy = false;
-          const day = t => new Date(t * 1000).toISOString().slice(0, 10);
-          const json = h('div', { class: 'kt' });
-          const mapper = h('div', { class: 'kt' });
-          const domain = h('div', { class: 'pt-col' });
-          const phone = h('div', { class: 'phone pt-phone' });
-          const o = out('The JSON has arrived. Map it, then hand it to the adapter.');
-          const key = () => (renamed ? 'title' : 'headline');
-          function paintJson() {
-            json.innerHTML = hl(dtos.map(d => `{ "id": ${d.id}, "${key()}": "${d.headline.trim().slice(0, 14)}…", "published_at": ${d.t} }`).join('\n'));
-          }
-          function paintMapper() { mapper.innerHTML = hl(`fun ArticleDto.toDomain() = Article(\n    id = id,\n    title = ${key()}.trim(),\n    published = Instant.ofEpochSecond(published_at),\n)`); }
-          const domainCard = (a, anim) => h('div', { class: 'pt-li' + (anim ? ' drop-in' : '') }, `Article(${a.id})`, h('small', {}, `"${a.title}" · ${day(a.t)}`));
-          const row = (a, isNew) => h('div', { class: 'pt-li' + (isNew ? ' pt-new drop-in' : '') }, a.title, h('small', {}, day(a.t)));
-          function paintDomain(anim) { domain.replaceChildren(...(mapped.length ? mapped.map(a => domainCard(a, anim)) : [h('span', { class: 'tip' }, 'No Article objects yet')])); }
-          function paintPhone(newIds = []) { phone.replaceChildren(...(bound.length ? bound.map(a => row(a, newIds.includes(a.id))) : [h('p', { class: 'pt-empty' }, 'No items')])); }
-          async function map() {
-            if (busy) return; busy = true;
-            replay(mapper, 'pt-flash'); await sleep(350);
-            if (!el.isConnected) return;
-            mapped = dtos.map(d => ({ id: d.id, title: d.headline.trim(), t: d.t }));
-            paintDomain(true);
-            say(o, `${hl('dtos.map { it.toDomain() }')} <span class="muted">// trimmed titles, epoch seconds became Instants</span>`);
-            busy = false;
-          }
-          async function submit() {
-            if (busy) return; busy = true;
-            if (!mapped.length) { replay(phone, 'shake'); say(o, '<span class="bad">type mismatch:</span> the adapter takes List&lt;Article&gt;, not List&lt;ArticleDto&gt;. Map first.'); busy = false; return; }
-            const before = new Map(bound.map(a => [a.id, a]));
-            const added = mapped.filter(a => !before.has(a.id)).map(a => a.id);
-            const changed = mapped.filter(a => before.has(a.id) && before.get(a.id).title !== a.title).length;
-            bound = mapped.slice(); paintPhone(added);
-            say(o, `DiffUtil: <span class="good">${added.length} inserted</span>, ${changed} changed, ${bound.length - added.length - changed} untouched`);
-            await sleep(400); busy = false;
-          }
-          async function refresh() {
-            if (busy) return; busy = true;
-            if (dtos.some(d => d.id === extra.id)) { say(o, 'Nothing new on the server. Reset to try again.'); busy = false; return; }
-            dtos = [extra, ...dtos]; paintJson(); replay(json, 'pt-flash');
-            say(o, 'The server sent one new article. Map it and submit again.');
-            busy = false;
-          }
-          function rename() {
-            if (busy) return;
-            renamed = !renamed; paintJson(); paintMapper();
-            replay(json, 'pt-flash'); replay(mapper, 'pt-flash');
-            say(o, `JSON key is now "${key()}". <span class="good">2 places changed:</span> ArticleDto and toDomain(). <span class="muted">// Article, the adapter and the screen are untouched</span>`);
-          }
-          paintJson(); paintMapper(); paintDomain(false); paintPhone();
-          el.append(
-            h('div', { class: 'pt-chain' },
-              card('ArticleDto (JSON)', json),
-              card('mapper', mapper, h('span', { class: 'pt-label' }, 'Article'), domain),
-              h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'RecyclerView'), phone)),
-            h('div', { class: 'controls' },
-              cmd('dtos.map { it.toDomain() }', map),
-              cmd('adapter.submitList(articles)', submit),
-              act('Server sends a new article', refresh),
-              act('API renames a field', rename)),
-            o);
-        },
-        predict: {
-          q: 'The server sends one new article and you submit the new list. What does <code>ListAdapter</code> do to the rows already on screen?',
-          options: ['Rebinds all of them', 'Leaves them alone and inserts only the new row', 'Nothing changes until you call <code>notifyDataSetChanged()</code>'],
-          a: 1,
-          why: 'DiffUtil compares the old and new lists by id and content. Unchanged rows are left alone, and only the difference is applied.',
-        },
-        play: `import java.time.Instant
+          Lab.ui.codeStepper(el, {
+            code: `interface Shipping {
+    fun cost(total: Int): Int
+}
 
-// Server shape: you don't own it
-data class ArticleDto(val id: Long, val headline: String, val published_at: Long, val image_url: String? = null)
-// App shape: you do
-data class Article(val id: Long, val title: String, val published: Instant, val image: String?)
+class Standard : Shipping {
+    override fun cost(total: Int) = 5
+}
 
-fun ArticleDto.toDomain() = Article(
-    id = id,
-    title = headline.trim(),
-    published = Instant.ofEpochSecond(published_at),
-    image = image_url,
-)
+class FreeOver50 : Shipping {
+    override fun cost(total: Int) = if (total >= 50) 0 else 5
+}
+
+class Checkout(var shipping: Shipping) {
+    fun pay(total: Int) = total + shipping.cost(total)
+}
 
 fun main() {
-    val fromServer = listOf(
-        ArticleDto(101, "  Rain expected all weekend ", 1792310400),
-        ArticleDto(102, "Ferry times change on Monday", 1792224000, "https://img.example.com/102.jpg"),
-    )
-    val articles = fromServer.map { it.toDomain() }
-    articles.forEach { println("\${it.id} [\${it.title}] \${it.published} image=\${it.image}") }
-    // Rename headline to title in ArticleDto: only the DTO and toDomain() need edits
+    val checkout = Checkout(Standard())
+    println(checkout.pay(60))
+    checkout.shipping = FreeOver50()
+    println(checkout.pay(60))
 }`,
+            predict: {
+              q: 'The same checkout pays 60 twice, but the strategy is swapped in between. What does the second <code>println</code> print?',
+              options: ['<code>60</code>', '<code>65</code>', '<code>0</code>'],
+              a: 0,
+              why: 'FreeOver50 charges 0 shipping for 60, so the checkout asks for 60 + 0.',
+            },
+            frames: [
+              { line: [1, 2], say: 'One job, several ways to do it: “work out the shipping”. The interface names the job.' },
+              { line: [6, 10], say: 'Two strategies: always 5, or free from 50 up. Each one is a small class of its own.' },
+              { line: 18, vars: { 'checkout.shipping': 'Standard' }, say: 'The checkout gets a strategy handed in. It only knows it has a Shipping.' },
+              { line: [19, 14, 6], out: '65', say: '<code>pay(60)</code> asks its strategy. Standard says 5, so 60 + 5.' },
+              { line: 20, vars: { 'checkout.shipping': 'FreeOver50' }, say: 'Swap the strategy while the program runs. Checkout’s code stays the same.' },
+              { line: [21, 14, 10], out: '60', say: 'The same call with the new strategy: 60 is at least 50, so shipping is 0.' },
+            ],
+          });
+        },
+        code: `// A lambda as the strategy: no interface, no extra classes
+class Checkout(var shipping: (Int) -> Int) {
+    fun pay(total: Int) = total + shipping(total)
+}
+
+fun main() {
+    val checkout = Checkout { 5 }       // a lambda that always gives 5
+    println(checkout.pay(30))           // 35
+
+    checkout.shipping = { if (it >= 50) 0 else 5 }
+    println(checkout.pay(60))           // 60
+
+    checkout.shipping = { it / 10 }     // 10% of the total
+    println(checkout.pay(30))           // 33
+}`,
+        play: `interface Move {
+    fun next(position: Int): Int
+}
+
+class Walk : Move {
+    override fun next(position: Int) = position + 1
+}
+
+class Jump : Move {
+    override fun next(position: Int) = position + 3
+}
+
+class Robot(val name: String, var move: Move) {
+    var position = 0
+
+    fun step() {
+        position = move.next(position)
+        println("$name is at $position")
+    }
+}
+
+fun main() {
+    val robot = Robot("Rex", Walk())
+    robot.step()
+    robot.step()
+    robot.move = Jump()   // swap the strategy while the program runs
+    robot.step()
+    // Write a class Back : Move that goes 1 step back, and give it to Rex.
+    // Robot itself never changes.
+}`,
+        remember: 'Strategy: put each way of doing a job behind one interface or function type, hand one in, swap it when needed.',
+        terms: [
+          { term: 'strategy', def: 'A design pattern: one job with several ways to do it. Each way is a separate object or lambda that you hand in and can swap.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Use the shipping strategy in <code>pay</code>, then switch to free shipping.', code: `class Checkout(var shipping: (Int) -> Int) {
+    fun pay(total: Int) = total + [[shipping]](total)
+}
+
+fun main() {
+    val checkout = Checkout { 5 }
+    checkout.shipping = { [[0]] }   // free shipping today
+    println(checkout.pay(20))       // 20
+}`, why: '<code>shipping</code> holds a lambda, so <code>shipping(total)</code> runs it. A lambda that gives 0 is the free-shipping strategy.' },
+          { type: 'bug', prompt: 'Kotlin says <code>\'cost\' overrides nothing.</code> and won’t accept Express as a Shipping. Tap the line.', code: `interface Shipping {
+    fun cost(total: Int): Int
+}
+
+class Express {
+    override fun cost(total: Int) = 15
+}
+
+class Checkout(var shipping: Shipping)
+
+fun main() {
+    val checkout = Checkout(Express())
+}`, bug: 4, fix: 'class Express : Shipping {', why: 'Express has the right function, but it never promised to be a Shipping. <code>: Shipping</code> makes it keep the interface, so it can be handed in.' },
+        ],
+        quiz: [
+          { q: 'A new rule arrives: shipping costs 2 on Sundays. With the Strategy pattern, what do you change?', options: ['Write one new Shipping class (or lambda)', 'Edit the <code>pay</code> function in Checkout', 'Edit every existing rule'], a: 0, why: 'The checkout only knows the interface. A new rule is new code, not an edit to old code.' },
+          { q: 'Which of these is a strategy you have already used?', options: ['The lambda in <code>sortedBy { it.price }</code>', '<code>listOf(1, 2, 3)</code>', '<code>println("Hi")</code>'], a: 0, why: 'You hand <code>sortedBy</code> the rule for what to sort by. Swap the lambda, get a different order.' },
+          { q: 'There are exactly two ways to charge shipping, and that will never change. What is the best choice?', options: ['An <code>if</code>', 'An interface and two classes'], a: 0, why: 'A pattern earns its extra classes when rules keep coming. For two fixed choices, an <code>if</code> is clearer.' },
+        ],
+        docs: [['Lambdas and function types', 'https://kotlinlang.org/docs/lambdas.html'], ['Interfaces', 'https://kotlinlang.org/docs/interfaces.html']],
       },
 
       // 7 ─────────────────────────────────────────────
       {
-        id: 'decorator',
-        title: 'Decorator',
-        tagline: 'Wrap an object to add behaviour without changing it.',
-        level: 'intermediate',
+        id: 'adapter',
+        title: 'Adapter',
+        tagline: 'Make a class you can’t change fit the interface you need.',
+        goals: ['Recognise when two pieces of code don’t fit together', 'Write an adapter class that translates between them', 'Know when changing the code is better than wrapping it'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A decorator implements the same interface as the object it wraps. It does a little extra work, such as caching, logging or retrying, and passes the call on to the inner object. Callers can’t tell the difference, so you stack wrappers like layers.</p>
-<p>Kotlin makes this short with class delegation. <code>class LoggingRepo(inner: Repo) : Repo by inner</code> forwards every member to <code>inner</code>, and you override only the one you decorate.</p>
-<p>OkHttp interceptors are the same idea as a chain: each one can change the request, call <code>chain.proceed()</code> to pass it on, and inspect the response on the way back. Follow two calls for the same user through the layers below.</p>`,
-        code: `interface UserRepository { suspend fun user(id: Long): User }
-
-class NetworkUserRepository(private val api: UserApi) : UserRepository {
-    override suspend fun user(id: Long) = api.user(id).toDomain()
-}
-
-class CachingUserRepository(private val inner: UserRepository) : UserRepository {
-    private val cache = ConcurrentHashMap<Long, User>()
-    override suspend fun user(id: Long) = cache[id] ?: inner.user(id).also { cache[id] = it }
-}
-
-class LoggingUserRepository(private val inner: UserRepository) : UserRepository by inner {
-    override suspend fun user(id: Long): User {
-        val start = System.nanoTime()
-        return inner.user(id).also {
-            Log.d("Repo", "user($id) in \${(System.nanoTime() - start) / 1_000_000} ms")
-        }
-    }
-}
-
-val repo: UserRepository =
-    LoggingUserRepository(CachingUserRepository(NetworkUserRepository(api)))
-
-// OkHttp: interceptors decorate every call in order
-val client = OkHttpClient.Builder()
-    .addInterceptor(AuthInterceptor(tokens))
-    .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
-    .build()`,
-        remember: 'Same interface in, same interface out, one extra behaviour per layer.',
-        terms: [
-          { term: 'Decorator pattern', def: 'A wrapper that implements the same interface as the object it wraps and adds behaviour around its calls.' },
-          { term: 'Class delegation', def: 'Kotlin’s by keyword in a class header, which forwards all interface members to another object.' },
-          { term: 'Interceptor', def: 'An OkHttp hook that receives the request chain, can modify the request or response, and calls proceed to continue.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Finish the caching decorator.', code: 'class Caching(private val inner: Repo) : [[Repo]] {\n    private val cache = ConcurrentHashMap<Long, User>()\n    override suspend fun user(id: Long) =\n        cache[id] ?: [[inner]].user(id).also { cache[id] = it }\n}', why: 'The decorator implements the same interface and delegates a cache miss to the object it wraps.' },
-          { type: 'bug', prompt: 'Requests reach the server without the Authorization header. Tap the line.', code: 'class AuthInterceptor(private val tokens: TokenStore) : Interceptor {\n    override fun intercept(chain: Interceptor.Chain): Response {\n        val request = chain.request().newBuilder()\n            .header("Authorization", "Bearer \${tokens.current()}")\n            .build()\n        return chain.proceed(chain.request())\n    }\n}', bug: 5, fix: '        return chain.proceed(request)', why: 'Requests are immutable. <code>newBuilder().build()</code> makes a new one, and that new request is the one to pass on.' },
-        ],
-        quiz: [
-          { q: 'What must a decorator have in common with the object it wraps?', options: ['The same constructor', 'The same interface', 'The same package'], a: 1, why: 'Callers depend on the interface, so the wrapper can stand in for the original anywhere.' },
-          { q: 'In <code>Logging(Caching(Network(api)))</code>, a second call for the same id is a cache hit. Does the log line still print?', options: ['Yes, Logging wraps Caching', 'No, the cache short-circuits everything'], a: 0, why: 'The outer layer sees every call. Only the layers inside the cache are skipped.' },
-          { q: 'What does <code>: UserRepository by inner</code> do?', options: ['Inherits from inner’s class', 'Forwards every interface member you don’t override to inner', 'Makes inner lazy'], a: 1, why: 'Class delegation generates the forwarding methods, so you write only the decorated one.' },
-          { q: 'A response comes straight from OkHttp’s cache. How many times does a network interceptor run for that call?', options: ['0', '1', '2'], a: 0, why: 'A network interceptor sits next to the socket, so it runs only for requests that really go out. An application interceptor would still run once.' },
-          { q: 'Which failure should RetryingUserRepository retry?', options: ['An IOException from a dropped connection', 'An HTTP 404', 'A CancellationException'], a: 0, why: 'Retry only errors that can go away. A 404 fails the same way every time, and cancellation must pass through so the scope can stop.' },
-        ],
-        deeper: [
-          {
-            title: 'Application and network interceptors sit at different depths',
-            body: `<p>OkHttp gives you two places to add a decorator. An <em>application</em> interceptor, added with <code>addInterceptor</code>, wraps the outside of the chain. It runs once per call, even when the response comes from the cache, and it never sees redirects.</p>
-<p>A <em>network</em> interceptor, added with <code>addNetworkInterceptor</code>, sits next to the socket. It runs once for every request that really goes out, so twice for a redirect, and not at all for a cache hit. Put auth and app-level logging outside. Put anything that must see the real wire traffic inside.</p>`,
-            code: `val client = OkHttpClient.Builder()
-    .cache(Cache(context.cacheDir.resolve("http"), 10L * 1024 * 1024))
-    .addInterceptor(AuthInterceptor(tokens))            // once per call
-    .addNetworkInterceptor(WireLoggingInterceptor())    // once per network request
-    .build()`,
-            visual(el) {
-              const L = [
-                { k: 'call', name: 'newCall(request).execute()', sub: 'your code' },
-                { k: 'app', name: 'addInterceptor', sub: 'application interceptor' },
-                { k: 'retry', name: 'RetryAndFollowUp', sub: 'built in: redirects' },
-                { k: 'cache', name: 'CacheInterceptor', sub: 'built in' },
-                { k: 'net', name: 'addNetworkInterceptor', sub: 'network interceptor' },
-                { k: 'server', name: 'server', sub: 'api.example.com' },
-              ];
-              const C = {};
-              let ran = { app: 0, net: 0 }, cached = false, busy = false;
-              L.forEach(x => {
-                const note = tag(x.k === 'app' || x.k === 'net' ? 'ran 0×' : 'idle');
-                C[x.k] = h('div', { class: 'pt-card' + (x.k === 'app' || x.k === 'net' ? ' pt-d2-ic' : '') }, h('div', { class: 'pt-row' }, h('span', { class: 'pt-title' }, x.name), h('span', { class: 'pt-label' }, x.sub)), note);
-                C[x.k].note = note;
-              });
-              const o = out('');
-              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
-              async function hit(k, text, kind = 'pt-acc') {
-                const c = C[k];
-                if (k === 'app' || k === 'net') { ran[k]++; text = `ran ${ran[k]}× · ${text}`; }
-                c.classList.add('pt-on'); c.note.textContent = text; c.note.className = `pt-tag ${kind}`; replay(c, 'pt-flash');
-                await sleep(300); c.classList.remove('pt-on');
-                return el.isConnected;
-              }
-              function idle() { L.forEach(x => { const c = C[x.k]; c.note.className = 'pt-tag'; c.note.textContent = x.k === 'app' || x.k === 'net' ? `ran ${ran[x.k]}×` : x.k === 'cache' ? (cached ? '1 response stored' : 'empty') : 'idle'; }); }
-              async function feed() {
-                if (busy) return; busy = true; idle();
-                const before = { ...ran };
-                say(o, hl('GET /feed'));
-                if (!await hit('call', 'waiting')) return;
-                if (!await hit('app', 'request out')) return;
-                if (!await hit('retry', 'passing on')) return;
-                if (cached) {
-                  if (!await hit('cache', 'HIT', 'pt-good')) return;
-                  ln('<span class="good">served from cache</span> <span class="muted">// nothing below the cache runs</span>');
-                } else {
-                  if (!await hit('cache', 'miss', 'pt-warn')) return;
-                  if (!await hit('net', 'on the wire')) return;
-                  if (!await hit('server', '200 OK', 'pt-good')) return;
-                  cached = true; C.cache.note.textContent = 'stored'; C.cache.note.className = 'pt-tag pt-good';
-                  ln('<span class="good">200 OK</span> from the network, now cached');
-                }
-                ln(`application interceptor <b>+${ran.app - before.app}</b>, network interceptor <b>+${ran.net - before.net}</b>`);
-                busy = false;
-              }
-              async function moved() {
-                if (busy) return; busy = true; idle();
-                const before = { ...ran };
-                say(o, hl('GET /old-feed  // the server moved it'));
-                if (!await hit('call', 'waiting')) return;
-                if (!await hit('app', 'request out')) return;
-                if (!await hit('retry', 'passing on')) return;
-                if (!await hit('cache', 'miss', 'pt-warn')) return;
-                if (!await hit('net', '/old-feed')) return;
-                if (!await hit('server', '301 → /v2/feed', 'pt-warn')) return;
-                if (!await hit('retry', 'follow redirect', 'pt-warn')) return;
-                ln('<span class="muted">// RetryAndFollowUp sends a second request</span>');
-                if (!await hit('cache', 'miss', 'pt-warn')) return;
-                if (!await hit('net', '/v2/feed')) return;
-                if (!await hit('server', '200 OK', 'pt-good')) return;
-                ln(`application interceptor <b>+${ran.app - before.app}</b>, network interceptor <b>+${ran.net - before.net}</b> <span class="muted">// one call, two requests on the wire</span>`);
-                busy = false;
-              }
-              function clear() {
-                if (busy) return;
-                cached = false; idle(); replay(C.cache, 'pop');
-                say(o, `${hl('client.cache?.evictAll()')} <span class="muted">// the next GET /feed goes to the network</span>`);
-              }
-              idle();
-              say(o, 'Send a few requests. Watch how often each interceptor runs.');
-              el.append(
-                h('div', { class: 'pt-col' }, L.map(x => C[x.k])),
-                h('div', { class: 'controls' }, cmd('GET /feed', feed), cmd('GET /old-feed', moved), cmd('client.cache?.evictAll()', clear)),
-                o);
-            },
-          },
-          {
-            title: 'A retry decorator for suspend calls',
-            body: `<p>Retrying is a classic decorator: same interface, one extra behaviour. Wrap the repository, catch failures that may pass, wait a little longer each time, and give up after a few tries.</p>
-<p>Two rules keep it safe. Retry only errors that can go away, like <code>IOException</code>, never a 404 or a bug. And let cancellation through: <code>delay</code> is cancellable, so when the user leaves and the scope is cancelled, the wait ends at once and no further try starts.</p>`,
-            code: `class RetryingUserRepository(
-    private val inner: UserRepository,
-    private val maxAttempts: Int = 3,
-) : UserRepository by inner {
-    override suspend fun user(id: Long): User {
-        var wait = 500L
-        repeat(maxAttempts - 1) {
-            try {
-                return inner.user(id)
-            } catch (e: IOException) {      // CancellationException is not an IOException
-                delay(wait)
-                wait *= 2
-            }
-        }
-        return inner.user(id)               // last try: let the error out
-    }
-}`,
-            visual(el) {
-              const SPAN = 2800, K = 0.9;
-              let busy = false, t = 0;
-              const track = h('div', { class: 'lane-track' });
-              const o = out('');
-              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
-              const bar = (dur, cls) => {
-                const b = h('span', { class: `bar ${cls} pt-grow`, style: `left:${(t / SPAN) * 100}%;width:0` });
-                track.append(b);
-                requestAnimationFrame(() => requestAnimationFrame(() => { b.style.width = `${(dur / SPAN) * 100}%`; }));
-                t += dur; return b;
-              };
-              async function attempt(n, fails) {
-                const b = bar(300, 'run');
-                await sleep(300 * K + 250); if (!el.isConnected) return null;
-                if (fails) { b.className = 'bar block'; ln(`try ${n}: <span class="bad">IOException</span> <span class="muted">// timeout</span>`); }
-                else ln(`try ${n}: <span class="good">User(42, "Ada")</span>`);
-                return !fails;
-              }
-              async function wait(ms, cut) {
-                const d = cut ? ms * 0.4 : ms;
-                const b = bar(d, 'wait');
-                ln(`${hl(`delay(${ms})`)}`);
-                await sleep(d * K + 200); if (!el.isConnected) return false;
-                if (cut) { b.className = 'bar block'; return false; }
-                return true;
-              }
-              async function run(kind) {
-                if (busy) return; busy = true;
-                track.replaceChildren(); t = 0;
-                say(o, hl(`repo.user(42)  // ${kind === 'flaky' ? 'network flaky' : kind === 'down' ? 'offline' : 'user leaves'}`));
-                const plan = kind === 'flaky' ? [true, true, false] : [true, true, true];
-                let waitMs = 500;
-                for (let i = 0; i < 3; i++) {
-                  const ok = await attempt(i + 1, plan[i]);
-                  if (ok == null) return;
-                  if (ok) { ln('<span class="good">returned</span> <span class="muted">// the caller never saw the two failures</span>'); busy = false; return; }
-                  if (i === 2) { ln('<span class="bad">IOException</span> thrown to the caller <span class="muted">// out of tries: show an error</span>'); busy = false; return; }
-                  if (kind === 'leave' && i === 0) {
-                    const goOn = await wait(waitMs, true);
-                    if (!el.isConnected) return;
-                    if (!goOn) { ln('<span class="bad">user pressed Back:</span> viewModelScope cancelled <div class="line muted">// delay threw CancellationException. Not an IOException, so no retry.</div>'); busy = false; return; }
-                  }
-                  if (!await wait(waitMs, false)) return;
-                  waitMs *= 2;
-                }
-                busy = false;
-              }
-              say(o, 'Pick a network. Bars show tries, dashed bars show waits.');
-              el.append(
-                h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'repo.user(42)'), track)),
-                h('div', { class: 'controls' }, cmd('repo.user(42)  // network flaky', () => run('flaky')), cmd('repo.user(42)  // offline', () => run('down')), cmd('repo.user(42)  // user leaves', () => run('leave'))),
-                o);
-            },
-          },
-          {
-            title: 'Delegation is not inheritance',
-            body: `<p>With <code>by inner</code>, calls are forwarded <em>to</em> the inner object, and inside it <code>this</code> is the inner object. If <code>NetworkUserRepository.team()</code> calls its own <code>user()</code>, it calls the plain network version. The caching layer never sees those calls.</p>
-<p>That keeps layers independent, which is usually what you want. Just don't expect a decorator to change how the inner object talks to itself. If those inner calls need the extra behaviour too, decorate one level lower, for example the <code>UserApi</code>.</p>`,
-            code: `class NetworkUserRepository(private val api: UserApi) : UserRepository {
-    override suspend fun user(id: Long) = api.user(id).toDomain()
-    override suspend fun team(ids: List<Long>) = ids.map { user(it) }   // this.user: no cache
-}
-
-class CachingUserRepository(private val inner: UserRepository) : UserRepository by inner {
-    private val cache = ConcurrentHashMap<Long, User>()
-    override suspend fun user(id: Long) = cache[id] ?: inner.user(id).also { cache[id] = it }
-}
-
-val repo = CachingUserRepository(NetworkUserRepository(api))
-repo.team(listOf(42, 42))   // two network calls: team() was forwarded, user() inside it was not cached`,
-          },
-        ],
-        underHood: {
-          body: `<p>Class delegation is plain generated code. For <code>class LoggingUserRepository(inner: UserRepository) : UserRepository by inner</code>, the compiler keeps <code>inner</code> in a private final field and writes a forwarding method for every interface member you did not override. No reflection and no runtime proxy are involved.</p>
-<p>OkHttp's chain is a list of interceptors and an index. <code>chain.proceed(request)</code> makes the next chain with the index plus one and calls that interceptor. After your application interceptors come the built-in ones: retry and follow-ups, the bridge that adds headers like <code>Accept-Encoding</code>, the cache, the connection setup, then your network interceptors, and finally the one that writes to the socket. The response travels back up the same stack.</p>`,
-          code: `// What ": UserRepository by inner" generates, roughly
-class LoggingUserRepository(inner: UserRepository) : UserRepository {
-    private val delegate: UserRepository = inner       // named $$delegate_0 in bytecode
-    override suspend fun team(ids: List<Long>) = delegate.team(ids)   // generated
-    override suspend fun user(id: Long): User { /* your override */ TODO() }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Calling proceed() twice without closing',
-            bad: `override fun intercept(chain: Interceptor.Chain): Response {
-    val first = chain.proceed(chain.request())
-    if (first.code == 401) {
-        tokens.refresh()
-        return chain.proceed(chain.request().withToken(tokens.current()))
-    }
-    return first
-}`,
-            good: `override fun intercept(chain: Interceptor.Chain): Response {
-    val first = chain.proceed(chain.request())
-    if (first.code == 401) {
-        first.close()                      // free the connection first
-        tokens.refresh()
-        return chain.proceed(chain.request().withToken(tokens.current()))
-    }
-    return first
-}`,
-            why: 'OkHttp requires the previous response body to be closed before an interceptor proceeds again. Otherwise the second call fails with an <code>IllegalStateException</code>. For 401s, OkHttp’s <code>Authenticator</code> is the hook built for exactly this.',
-          },
-          {
-            title: 'Extending the class instead of wrapping it',
-            bad: `class CachingUserRepository(api: UserApi) : NetworkUserRepository(api) {
-    private val cache = ConcurrentHashMap<Long, User>()
-    override suspend fun user(id: Long) = cache[id] ?: super.user(id).also { cache[id] = it }
-}`,
-            good: `class CachingUserRepository(private val inner: UserRepository) : UserRepository by inner {
-    private val cache = ConcurrentHashMap<Long, User>()
-    override suspend fun user(id: Long) = cache[id] ?: inner.user(id).also { cache[id] = it }
-}`,
-            why: 'The subclass can only cache the network repository, needs it to be <code>open</code>, and can’t be stacked with other layers in a different order. A wrapper takes any <code>UserRepository</code>, including a fake in tests.',
-          },
-          {
-            title: 'Retrying errors that will never pass',
-            bad: `} catch (e: HttpException) {
-    delay(wait)        // retries 404 and 401 too
-    wait *= 2
-}`,
-            good: `} catch (e: HttpException) {
-    if (e.code() !in 500..599) throw e
-    delay(wait)
-    wait *= 2
-}`,
-            why: 'A 404 or 401 fails the same way every time, so retrying only adds delay and server load. Retry server errors and I/O failures, and pass client errors straight up.',
-          },
-        ],
+<p>Your weather app works with a <code>Thermometer</code> interface that has one function, <code>celsius()</code>. Another team gives you their sensor class. It works, but it has <code>fahrenheit()</code>, not <code>celsius()</code>, and you can’t change it: it isn’t your code. Your <code>report</code> function only accepts Thermometers.</p>
+<p>The <b>Adapter</b> pattern is a travel plug adapter for code. You write a small class that keeps your interface on the outside and holds the other object on the inside: <code>class SensorAdapter(private val sensor: OldSensor) : Thermometer</code>. Its <code>celsius()</code> calls <code>sensor.fahrenheit()</code> and converts the answer. To the rest of your app it is one more Thermometer.</p>
+<p>Neither side changes. <code>report</code> still only knows Thermometer, and the sensor class stays as it was. All the translating lives in the adapter: different names, different units, or extra steps such as “connect first, then send”. It is composition from the oop track: the adapter has a sensor and passes calls on to it.</p>
+<p>When not to use it: if both pieces of code are yours, change one to fit the other instead of adding a class in between. An adapter is for code you can’t, or shouldn’t, edit.</p>`,
         visual(el) {
           Lab.ui.flow(el, {
             nodes: [
-              { id: 'log', label: 'Logging', sub: 'times the call' },
-              { id: 'cache', label: 'Caching', sub: 'map by id' },
-              { id: 'net', label: 'Network', sub: 'api.user(id)' },
-              { id: 'srv', label: 'Server', sub: '/users/42' },
+              { id: 'report', label: 'report()', sub: 'needs a Thermometer' },
+              { id: 'adapter', label: 'SensorAdapter', sub: 'a Thermometer outside' },
+              { id: 'sensor', label: 'OldSensor', sub: 'only has fahrenheit()' },
             ],
             predict: {
-              q: 'A second <code>repo.user(42)</code> follows the first. Where does it turn back?',
-              options: ['At the server: decorators always reach the real object', 'At Caching', 'At Logging'],
-              a: 1,
-              why: 'Caching stored User 42 on the first call. It returns that copy without calling its inner layer, so Network and the server never see the second call.',
+              q: '<code>report</code> accepts only a Thermometer. OldSensor has <code>fahrenheit()</code> and no <code>celsius()</code>. Can you pass an OldSensor to <code>report</code> directly?',
+              options: ['No: it doesn’t keep the Thermometer promise', 'Yes: Kotlin converts it for you'],
+              a: 0,
+              why: 'OldSensor never promised to be a Thermometer, so it doesn’t compile. That is the gap the adapter fills.',
             },
             frames: [
-              { say: '<code>Logging(Caching(Network(api)))</code>: each layer holds the next. Follow <code>user(42)</code> twice.' },
-              { at: 'log', packet: 'user(42)', say: 'The call enters the outer layer. Logging notes the start time and calls its inner object.' },
-              { at: 'cache', packet: 'user(42)', say: 'Caching has nothing for 42 yet, so it passes the call on.' },
-              { at: 'net', packet: 'GET /users/42', say: 'Network turns it into an HTTP request.' },
-              { at: 'srv', packet: '200 OK', tone: 'ok', mark: { srv: 'ok' }, say: 'The server answers.' },
-              { at: 'cache', packet: 'User 42', tone: 'ok', mark: { cache: 'ok' }, say: 'On the way back, Caching stores User 42 in its map.' },
-              { at: 'log', packet: 'User 42', tone: 'ok', say: 'Logging prints how long the call took, then returns the user.' },
-              { at: 'log', packet: 'user(42)', say: 'Second call for the same user. It enters through Logging again.' },
-              { at: 'cache', packet: 'User 42', tone: 'ok', say: 'Caching finds 42 and returns it at once. The layers below never hear about it.' },
-              { at: 'log', packet: 'User 42', tone: 'ok', say: 'Logging still logs, a much shorter time now. Each layer only knows the interface of the one inside it.' },
+              { say: '<code>report</code> only talks to Thermometers. OldSensor isn’t one, and you can’t edit it.' },
+              { at: 'report', packet: 'celsius()', say: '<code>report</code> asks for <code>celsius()</code>, the only thing it knows.' },
+              { at: 'adapter', packet: 'celsius()', mark: { adapter: 'accent' }, say: 'The adapter keeps the Thermometer promise, so the call can reach it.' },
+              { at: 'sensor', packet: 'fahrenheit()', say: 'Inside, the adapter calls what the sensor really has: <code>fahrenheit()</code>.' },
+              { at: 'sensor', packet: '68.0', tone: 'warm', say: 'The sensor answers in its own unit: 68.0.' },
+              { at: 'adapter', packet: '20.0', tone: 'ok', say: 'The adapter converts: (68.0 − 32) × 5 / 9 is 20.0.' },
+              { at: 'report', packet: '20.0', tone: 'ok', mark: { report: 'ok' }, say: '<code>report</code> prints <code>It is 20.0 degrees</code>. Neither report nor OldSensor changed.' },
             ],
           });
         },
-        play: `interface UserRepository { fun user(id: Long): String }
-
-class NetworkUserRepository : UserRepository {
-    var calls = 0
-    override fun user(id: Long): String { calls++; println("  network: GET /users/$id"); return "User $id" }
+        code: `interface Thermometer {
+    fun celsius(): Double
 }
 
-class CachingUserRepository(private val inner: UserRepository) : UserRepository {
-    private val cache = HashMap<Long, String>()
-    override fun user(id: Long) = cache.getOrPut(id) { inner.user(id) }
+// From another team. You can't change this class.
+class OldSensor {
+    fun fahrenheit() = 68.0
 }
 
-class LoggingUserRepository(private val inner: UserRepository) : UserRepository by inner {
-    override fun user(id: Long): String {
-        println("log: user($id) called")
-        return inner.user(id).also { println("log: user($id) -> $it") }
-    }
+class SensorAdapter(private val sensor: OldSensor) : Thermometer {
+    override fun celsius() = (sensor.fahrenheit() - 32) * 5 / 9
+}
+
+fun report(t: Thermometer) {
+    println("It is \${t.celsius()} degrees")
 }
 
 fun main() {
-    val network = NetworkUserRepository()
-    val repo: UserRepository = LoggingUserRepository(CachingUserRepository(network))
-    repo.user(42)
-    repo.user(42)
-    repo.user(7)
-    println("network calls: \${network.calls}")
-    // Remove the CachingUserRepository layer and count again
+    val old = OldSensor()
+    report(SensorAdapter(old))   // It is 20.0 degrees
 }`,
+        play: `interface Distance {
+    fun km(): Double
+}
+
+class Trip(val kilometers: Double) : Distance {
+    override fun km() = kilometers
+}
+
+// An old class that only knows miles
+class MilesCounter(val miles: Double)
+
+class MilesAdapter(private val counter: MilesCounter) : Distance {
+    override fun km() = counter.miles * 1.6
+}
+
+fun total(parts: List<Distance>): Double {
+    var sum = 0.0
+    for (part in parts) {
+        sum += part.km()
+    }
+    return sum
+}
+
+fun main() {
+    val parts = listOf(Trip(10.0), MilesAdapter(MilesCounter(5.0)), Trip(2.0))
+    println("Total: \${total(parts)} km")
+    // total() only knows Distance. The adapter lets the miles join in.
+    // Add one more MilesAdapter to the list.
+}`,
+        remember: 'An adapter keeps the interface your code expects on the outside and calls the class you can’t change on the inside.',
+        terms: [
+          { term: 'adapter', def: 'A design pattern: a class that keeps the interface your code expects on the outside, and calls a different class on the inside, translating between them.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Let a MilesCounter be used anywhere a Distance is expected.', code: `class MilesAdapter(private val counter: MilesCounter) : [[Distance]] {
+    override fun km() = [[counter]].miles * 1.6
+}`, why: 'The adapter keeps the Distance promise on the outside and reads the counter it holds on the inside.' },
+          { type: 'bug', prompt: 'On a mild day the report says <code>It is 68.0 degrees</code> Celsius. Celsius is (F − 32) × 5 / 9. Tap the wrong line.', code: `interface Thermometer {
+    fun celsius(): Double
+}
+
+class OldSensor {
+    fun fahrenheit() = 68.0
+}
+
+class SensorAdapter(private val sensor: OldSensor) : Thermometer {
+    override fun celsius() = sensor.fahrenheit()
+}`, bug: 9, fix: '    override fun celsius() = (sensor.fahrenheit() - 32) * 5 / 9', why: 'The adapter passes the call on but forgets to translate. Converting the unit is its whole job.' },
+        ],
+        quiz: [
+          { q: 'You can’t edit OldSensor, and <code>report</code> needs a Thermometer. What does the adapter do?', options: ['Keeps the Thermometer promise and calls OldSensor inside', 'Changes OldSensor’s code', 'Copies OldSensor’s code into report'], a: 0, why: 'It sits between the two and translates, so neither side has to change.' },
+          { q: 'Both classes are yours, and both are easy to change. Do you need an adapter?', options: ['Usually not: change one to fit the other', 'Yes, always'], a: 0, why: 'An extra class in between only pays off for code you can’t or shouldn’t edit.' },
+          { q: 'With <code>km() = counter.miles * 1.6</code>, what is <code>MilesAdapter(MilesCounter(5.0)).km()</code>?', options: ['<code>8.0</code>', '<code>5.0</code>', '<code>3.1</code>'], a: 0, why: '5.0 × 1.6 is 8.0.' },
+        ],
+        docs: [['Interfaces', 'https://kotlinlang.org/docs/interfaces.html']],
       },
 
       // 8 ─────────────────────────────────────────────
       {
-        id: 'facade',
-        title: 'Facade',
-        tagline: 'One simple front door to a messy subsystem.',
-        level: 'intermediate',
+        id: 'decorator',
+        title: 'Decorator',
+        tagline: 'Wrap an object to add something, layer by layer.',
+        goals: ['Add behaviour by wrapping instead of making subclasses', 'Stack wrappers in any order', 'Forward the rest with <code>by</code>'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A facade gives callers a small, simple API and hides the parts behind it. The callers don’t know which classes exist back there or in what order they run.</p>
-<p>On Android the Repository is the usual facade. The ViewModel sees two calls: <code>articles()</code> returns a <code>Flow</code> and <code>refresh()</code> fetches new data. Behind them sit a Retrofit API, a Room DAO, two mappers and the rule that Room is the single source of truth.</p>
-<p>Because the UI only reads from Room, going offline changes nothing for it: the cached list stays on screen and <code>refresh()</code> just fails. Turn the network off and refresh below.</p>`,
-        code: `class ArticleRepository(
-    private val dao: ArticleDao,     // Room
-    private val api: NewsApi,        // Retrofit
-) {
-    // The UI reads only from Room
-    fun articles(): Flow<List<Article>> =
-        dao.observeAll().map { rows -> rows.map { it.toDomain() } }
-
-    // Network writes into Room; Room's Flow then emits the new list
-    suspend fun refresh() {
-        val fresh = api.latest()
-        dao.upsertAll(fresh.map { it.toEntity() })
-    }
-}
-
-class FeedViewModel(private val repo: ArticleRepository) : ViewModel() {
-    val feed: StateFlow<List<Article>> = repo.articles()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    fun onPullToRefresh() = viewModelScope.launch {
-        try { repo.refresh() } catch (e: IOException) { /* show "offline" */ }
-    }
-}`,
-        remember: 'The ViewModel asks the Repository. Only the Repository knows Room and Retrofit exist.',
-        terms: [
-          { term: 'Facade pattern', def: 'A class that offers a simple interface to a group of more complex classes and hides how they work together.' },
-          { term: 'Leaky abstraction', def: 'An abstraction that forces callers to know details it was meant to hide, such as exposing a DAO from a repository.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'The ViewModel should talk only to the facade.', code: 'class ArticleRepository(private val dao: ArticleDao, private val api: NewsApi) {\n    fun articles(): Flow<List<Article>> = TODO()\n    suspend fun refresh(): Unit = TODO()\n}\n\nclass FeedViewModel(private val repo: [[ArticleRepository]]) : ViewModel() {\n    val feed = repo.[[articles]]()\n        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())\n    fun onRefresh() = viewModelScope.launch { repo.[[refresh]]() }\n}', why: 'The ViewModel depends on one class with two calls. It never sees the DAO or the API.' },
-          { type: 'bug', prompt: 'The feed is empty offline even though Room has yesterday’s articles. Tap the line.', code: 'class ArticleRepository(private val dao: ArticleDao, private val api: NewsApi) {\n    fun articles(): Flow<List<Article>> = flow { emit(api.latest().map { it.toDomain() }) }\n\n    suspend fun refresh() {\n        dao.upsertAll(api.latest().map { it.toEntity() })\n    }\n}', bug: 1, fix: '    fun articles(): Flow<List<Article>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }', why: 'The UI stream reads the network, so it fails offline and never shows what Room stored. Read from Room and let <code>refresh()</code> fill it.' },
-        ],
-        quiz: [
-          { q: 'Which classes should <code>FeedViewModel</code> know about?', options: ['ArticleDao and NewsApi', 'ArticleRepository only', 'All three'], a: 1, why: 'The repository is the facade. Everything behind it can change without touching the ViewModel.' },
-          { q: 'The network is down and the user pulls to refresh. With Room as the source of truth, what does the screen show?', options: ['An empty list', 'The last cached articles plus an offline message', 'A crash'], a: 1, why: 'The UI stream comes from Room, which still has data. Only the refresh call fails.' },
-          { q: 'The refresh rule is 15 minutes and the cache was synced 3 minutes ago. Someone starts collecting articles(). What happens?', options: ['The repository calls the network first and then emits', 'Nothing is emitted until a refresh succeeds', 'The cached rows are sent and no network call is made'], a: 2, why: 'Only the repository knows the staleness rule. Fresh enough means Room alone, and the ViewModel code never changes.' },
-          { q: 'What should refresh() return so the facade doesn’t leak Retrofit to the ViewModel?', options: ['Retrofit’s Response<T>', 'A small sealed RefreshResult that the app owns', 'Nothing, and let HttpException escape'], a: 1, why: 'Translate at the boundary. The ViewModel then handles your own cases, and swapping the HTTP library doesn’t touch it.' },
-          { q: 'Two composables each collect <code>repo.articles()</code> directly, without stateIn. What happens?', options: ['They share one collection automatically', 'Two Room observers run, with two queries after every write', 'The second collect throws'], a: 1, why: 'A cold Flow is a recipe, run again for each collector. stateIn in the ViewModel collects once and shares the latest value.' },
-        ],
-        deeper: [
-          {
-            title: 'The facade decides when to call the network',
-            body: `<p>Callers should not decide when data is stale. Put that rule behind the facade. <code>articles()</code> still reads Room, and when someone starts collecting, it also checks how old the cache is. Fresh enough: no network call. Too old: refresh in the background while the old list stays on screen.</p>
-<p>This is often called stale-while-revalidate. The ViewModel's code does not change at all. Only the repository knows the 15-minute rule, so you can tune it in one place.</p>`,
-            code: `fun articles(): Flow<List<Article>> = channelFlow {
-    launch {
-        if (isStale()) {
-            try { refresh() } catch (e: IOException) { /* keep showing the cache */ }
-        }
-    }
-    dao.observeAll()
-        .map { rows -> rows.map { it.toDomain() } }
-        .collect { send(it) }          // cached rows go out at once
-}
-
-private suspend fun isStale() =
-    clock.millis() - syncPrefs.lastSyncMillis() > 15.minutes.inWholeMilliseconds`,
-            visual(el) {
-              const fresh = ['Bridge reopens after repairs', 'Tram line extended north', 'Market moves to Saturdays', 'City marathon route set'];
-              let room = ['Rain expected all weekend', 'New park opens downtown'], age = 3, n = 0, busy = false;
-              const phone = h('div', { class: 'phone pt-phone' });
-              const ageTag = tag('');
-              const steps = h('div', { class: 'pt-steps' });
-              const o = out('');
-              const ln = html => o.append(h('div', { class: 'line drop-in', html }));
-              const paintAge = () => { ageTag.textContent = `last sync ${age} min ago`; ageTag.className = 'pt-tag ' + (age > 15 ? 'pt-warn' : 'pt-good'); };
-              const paintPhone = added => phone.replaceChildren(...room.map(t => h('div', { class: 'pt-li' + (added && added.includes(t) ? ' pt-new drop-in' : '') }, t)));
-              async function step(label, ms = 420, cls = 'pt-done') {
-                const s = h('div', { class: 'pt-step pt-now drop-in' }, label);
-                steps.append(s);
-                await sleep(ms);
-                s.classList.remove('pt-now'); s.classList.add(cls);
-                return el.isConnected;
-              }
-              async function collect() {
-                if (busy) return; busy = true;
-                steps.replaceChildren(); phone.replaceChildren(h('p', { class: 'pt-empty' }, 'loading…'));
-                say(o, hl('repo.articles().collect { show(it) }'));
-                if (!await step('dao.observeAll(): emit cached rows')) return;
-                paintPhone(room.slice()); ln(`<span class="good">on screen at once:</span> ${room.length} cached articles`);
-                const stale = age > 15;
-                if (!await step(`isStale()? last sync ${age} min ago`, 420, stale ? 'pt-fail' : 'pt-done')) return;
-                if (!stale) { ln('<span class="muted">// fresh enough: no network call at all</span>'); busy = false; return; }
-                if (!await step('launch { refresh() }: in parallel', 300)) return;
-                if (!await step('api.latest() → dao.upsertAll()', 750)) return;
-                const added = [fresh[n++ % fresh.length]];
-                room = [...added, ...room].slice(0, 5); age = 0; paintAge(); replay(ageTag, 'pop');
-                if (!await step('Room emits again')) return;
-                paintPhone(added);
-                ln('<span class="good">updated:</span> Room emitted the new row. The ViewModel did nothing new.');
-                busy = false;
-              }
-              function pass() {
-                if (busy) return;
-                age += 20; paintAge(); replay(ageTag, 'pop');
-                say(o, `<span class="muted">// time passes. The cache is now ${age} minutes old.</span>`);
-              }
-              paintAge(); paintPhone();
-              say(o, 'The cache was synced 3 minutes ago. Start collecting, then let time pass and collect again.');
-              el.append(
-                h('div', { class: 'pt-split' }, phone, h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'inside ArticleRepository'), ageTag, steps)),
-                h('div', { class: 'controls' }, cmd('repo.articles()  // screen starts collecting', collect), act('20 minutes pass', pass)),
-                o);
-            },
-          },
-          {
-            title: 'Errors leave the facade as your own types',
-            body: `<p>If <code>refresh()</code> lets <code>HttpException</code> or <code>SerializationException</code> escape, the ViewModel must import Retrofit and kotlinx.serialization to handle them. The facade leaks, and any exception the ViewModel forgot crashes the app.</p>
-<p>Translate at the boundary instead. The repository catches what its parts throw and returns a small sealed type the app owns. The ViewModel turns that into a message, and you could swap Retrofit for Ktor without touching it.</p>`,
-            code: `sealed interface RefreshResult {
-    data object Ok : RefreshResult
-    data object Offline : RefreshResult
-    data object SignedOut : RefreshResult
-    data object BadData : RefreshResult
-    data class ServerError(val code: Int) : RefreshResult
-}
-
-suspend fun refresh(): RefreshResult = try {
-    dao.upsertAll(api.latest().map { it.toEntity() })
-    RefreshResult.Ok
-} catch (e: IOException) {
-    RefreshResult.Offline
-} catch (e: HttpException) {
-    if (e.code() == 401) RefreshResult.SignedOut else RefreshResult.ServerError(e.code())
-} catch (e: SerializationException) {
-    RefreshResult.BadData
-}`,
-            visual(el) {
-              const CASES = [
-                { label: 'server answers 200', thrown: null, result: 'RefreshResult.Ok', ui: 'Updated just now', io: true },
-                { label: 'no network', thrown: 'UnknownHostException', result: 'RefreshResult.Offline', ui: 'You are offline. Showing saved stories.', io: true },
-                { label: 'token expired: 401', thrown: 'HttpException: HTTP 401', result: 'RefreshResult.SignedOut', ui: 'Please sign in again.' },
-                { label: 'server down: 503', thrown: 'HttpException: HTTP 503', result: 'RefreshResult.ServerError(503)', ui: 'Server trouble. Try again soon.' },
-                { label: 'broken JSON', thrown: 'SerializationException', result: 'RefreshResult.BadData', ui: 'Something went wrong on our side.' },
-              ];
-              let mapped = true, busy = false;
-              const mk = title => { const v = h('div', { class: 'pt-d2-val' }, '-'); return { v, c: card(title, v) }; };
-              const inside = mk('inside the repository'), across = mk('crosses the facade'), ui = mk('FeedViewModel shows');
-              const o = out('');
-              const set = (x, text, cls) => { x.v.textContent = text; x.c.className = 'pt-card ' + (cls || ''); replay(x.c, 'pt-flash'); };
-              async function run(cs) {
-                if (busy) return; busy = true;
-                [inside, across, ui].forEach(x => set(x, '…', ''));
-                say(o, `${hl('repo.refresh()')} <span class="muted">// ${cs.label}</span>`);
-                await sleep(350); if (!el.isConnected) return;
-                set(inside, cs.thrown ? `throws ${cs.thrown}` : 'rows saved', cs.thrown ? 'pt-bad' : 'pt-ok');
-                await sleep(450); if (!el.isConnected) return;
-                if (mapped) {
-                  set(across, cs.result, cs.thrown ? 'pt-on' : 'pt-ok');
-                  await sleep(450); if (!el.isConnected) return;
-                  set(ui, cs.ui, cs.thrown ? 'pt-on' : 'pt-ok');
-                  o.append(h('div', { class: 'line drop-in', html: `<span class="good">handled</span> <span class="muted">// the ViewModel only knows RefreshResult</span>` }));
-                } else if (!cs.thrown || cs.io) {
-                  set(across, cs.thrown ? `${cs.thrown} (an IOException)` : 'Unit', cs.thrown ? 'pt-on' : 'pt-ok');
-                  await sleep(450); if (!el.isConnected) return;
-                  set(ui, cs.ui, cs.thrown ? 'pt-on' : 'pt-ok');
-                  o.append(h('div', { class: 'line drop-in', html: `<span class="muted">// caught by the ViewModel's catch (e: IOException)</span>` }));
-                } else {
-                  set(across, cs.thrown, 'pt-bad');
-                  await sleep(450); if (!el.isConnected) return;
-                  set(ui, 'app crashed', 'pt-bad'); replay(ui.c, 'shake');
-                  o.append(h('div', { class: 'line drop-in', html: `<span class="bad">uncaught ${cs.thrown.split(':')[0]}</span> in viewModelScope <span class="muted">// the ViewModel only caught IOException</span>` }));
-                }
-                busy = false;
-              }
-              const t = toggle('pt-d2-fac-map', 'repository returns RefreshResult', true, () => {
-                if (busy) { t.input.checked = mapped; return; }
-                mapped = t.input.checked;
-                [inside, across, ui].forEach(x => set(x, '-', ''));
-                say(o, mapped ? 'The facade translates every failure.' : 'Raw exceptions now cross the facade. The ViewModel catches only IOException.');
-              });
-              say(o, 'Pick what happens on the server.');
-              el.append(
-                h('div', { class: 'pt-chain' }, inside.c, across.c, ui.c),
-                h('div', { class: 'controls' }, t),
-                h('div', { class: 'controls' }, CASES.map(cs => act(cs.label, () => run(cs)))),
-                o);
-            },
-          },
-          {
-            title: 'When one facade is not enough',
-            body: `<p>A repository per kind of data keeps each facade small. When a screen needs several of them combined, don't grow one repository into a class that knows everything. Add a use case: a small class in the domain layer that combines repositories for one job, often with a single <code>operator fun invoke</code>.</p>
-<p>The domain layer is optional. Add use cases when the same logic is needed by several ViewModels, or when a ViewModel gets crowded. Don't add them by default.</p>`,
-            code: `class GetFeedWithAuthorsUseCase(
-    private val articles: ArticleRepository,
-    private val authors: AuthorRepository,
-) {
-    operator fun invoke(): Flow<List<ArticleWithAuthor>> =
-        combine(articles.articles(), authors.authors()) { list, people ->
-            val byId = people.associateBy { it.id }
-            list.map { ArticleWithAuthor(it, byId[it.authorId]) }
-        }
-}
-
-// FeedViewModel
-val feed = getFeedWithAuthors()
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())`,
-          },
-        ],
-        underHood: {
-          body: `<p>Calling <code>repo.articles()</code> does no work. It returns a cold <code>Flow</code>: a recipe. Each <code>collect</code> runs the recipe again from the start, so two collectors mean two Room observers, two queries after every write and two rounds of mapping.</p>
-<p>That is why the ViewModel ends the chain with <code>stateIn</code>. It collects the upstream once in <code>viewModelScope</code> and shares the latest value with every UI collector. The facade stays cheap to call, and the decision to share sits in the class that knows how the screen uses the data.</p>`,
-          code: `val a = repo.articles()   // nothing runs yet
-val b = repo.articles()   // still nothing
-
-launch { a.collect { } }  // Room observer #1: query, map
-launch { b.collect { } }  // Room observer #2: query, map again
-
-// One upstream, any number of collectors
-val feed = repo.articles()
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())`,
-        },
-        mistakes: [
-          {
-            title: 'Exposing the parts behind the facade',
-            bad: `class ArticleRepository(val dao: ArticleDao, val api: NewsApi) { /* ... */ }
-
-// FeedViewModel
-val rows = repo.dao.observeAll()`,
-            good: `class ArticleRepository(
-    private val dao: ArticleDao,
-    private val api: NewsApi,
-) { /* ... */ }`,
-            why: 'Public constructor properties hand the DAO and the API to every caller. Once a ViewModel uses them, you can’t change storage without changing the UI.',
-          },
-          {
-            title: 'A one-shot read for data that changes',
-            bad: `suspend fun articles(): List<Article> =
-    dao.getAll().map { it.toDomain() }`,
-            good: `fun articles(): Flow<List<Article>> =
-    dao.observeAll().map { rows -> rows.map { it.toDomain() } }`,
-            why: 'The screen reads once and never hears about rows that <code>refresh()</code> writes later. A Flow from Room delivers every write to the UI.',
-          },
-          {
-            title: 'Launching work on a scope made up on the spot',
-            bad: `fun refresh() {
-    CoroutineScope(Dispatchers.IO).launch {
-        dao.upsertAll(api.latest().map { it.toEntity() })
-    }
-}`,
-            good: `suspend fun refresh() {
-    dao.upsertAll(api.latest().map { it.toEntity() })
-}`,
-            why: 'Nobody cancels that scope, and the caller can’t wait for the result or see the error. Make it <code>suspend</code> and let the caller’s scope own the work. Use an injected application scope only for work that must outlive the screen.',
-          },
-        ],
+<p>A café app: a coffee costs 250 cents. Milk adds 50, syrup adds 70, and a customer can have both, or syrup twice. A subclass for every mix, <code>CoffeeWithMilk</code>, <code>CoffeeWithMilkAndSyrup</code> and so on, gets out of hand fast: every new extra doubles the count.</p>
+<p>The <b>Decorator</b> pattern wraps instead. <code>Milk</code> is a Drink, and it holds another Drink inside. Its <code>price()</code> asks the inner drink for its price and adds 50. Wrap as many layers as you like, in any order: <code>Syrup(Milk(Coffee()))</code>. Each layer adds its part and passes the call on.</p>
+<p>An adapter wraps an object too. The difference: an adapter changes the interface to fit; a decorator keeps the same interface and adds behaviour.</p>
+<p>When an interface has many functions and a decorator changes only one, forwarding all the others by hand is dull work. Class delegation from the oop track does it for you: in <code>class HappyHour(private val inner: Drink) : Drink by inner</code>, everything HappyHour doesn’t override goes straight to <code>inner</code>. When not to use it: if every drink always gets the extra, put it in the class itself. And many layers make it hard to see what really runs.</p>`,
         visual(el) {
-          const fresh = ['Bridge reopens after repairs', 'Tram line extended north', 'Market moves to Saturdays', 'City marathon route announced'];
-          let room = ['Rain expected all weekend', 'New park opens downtown'], online = true, busy = false, next = 0;
-          const phone = h('div', { class: 'phone pt-phone' });
-          const roomTag = tag(''), netTag = tag('');
-          const roomC = card('Room · ArticleDao', roomTag), netC = card('Retrofit · NewsApi', netTag), mapC = card('Mappers', tag('Dto → Entity → Article'));
-          const steps = h('div', { class: 'pt-steps' });
-          const o = out('The screen is collecting repo.articles(). Refresh it.');
-          const paint = newOnes => {
-            roomTag.textContent = `${room.length} rows`;
-            netTag.textContent = online ? 'online' : 'offline'; netTag.className = `pt-tag ${online ? 'pt-good' : 'pt-warn'}`;
-            phone.replaceChildren(...room.map(t => h('div', { class: 'pt-li' + (newOnes && newOnes.includes(t) ? ' pt-new drop-in' : '') }, t)));
-          };
-          async function run(list) {
-            steps.replaceChildren(...list.map(s => h('div', { class: 'pt-step' }, s.label)));
-            const els = [...steps.children];
-            for (let i = 0; i < list.length; i++) {
-              els[i].classList.add('pt-now'); if (list[i].card) { list[i].card.classList.add('pt-on'); replay(list[i].card, 'pt-flash'); }
-              await sleep(480);
-              if (!el.isConnected) return false;
-              els[i].classList.remove('pt-now');
-              if (list[i].card) list[i].card.classList.remove('pt-on');
-              const ok = list[i].run ? list[i].run() : true;
-              if (!ok) { els[i].classList.add('pt-fail'); els.slice(i + 1).forEach(x => { x.style.opacity = 0.35; }); return false; }
-              els[i].classList.add('pt-done');
-            }
-            return true;
-          }
-          async function refresh() {
-            if (busy) return; busy = true;
-            let added = [];
-            const ok = await run([
-              { label: 'api.latest()', card: netC, run: () => online },
-              { label: 'map ArticleDto → ArticleEntity', card: mapC },
-              { label: 'dao.upsertAll(entities)', card: roomC, run: () => { added = [fresh[next % fresh.length]]; next++; room = [...added, ...room].slice(0, 5); return true; } },
-              { label: 'Room Flow emits → map to Article', card: mapC },
-            ]);
-            if (!el.isConnected) return;
-            if (ok) { paint(added); say(o, `${hl('repo.refresh()')} <span class="good">done</span> <span class="muted">// the screen updated because Room emitted, not because refresh returned data</span>`); }
-            else { replay(netC, 'shake'); say(o, `${hl('repo.refresh()')} <span class="bad">IOException:</span> Unable to resolve host <span class="muted">// the cached ${room.length} articles stay on screen</span>`); }
-            busy = false;
-          }
-          async function observe() {
-            if (busy) return; busy = true;
-            phone.replaceChildren();
-            await run([
-              { label: 'dao.observeAll()', card: roomC },
-              { label: 'map ArticleEntity → Article', card: mapC },
-              { label: 'emit to the ViewModel', run: () => { paint(room); return true; } },
-            ]);
-            if (!el.isConnected) return;
-            say(o, `${hl('repo.articles()')} <span class="good">${room.length} articles from Room</span> <span class="muted">// no network needed${online ? '' : ', works offline'}</span>`);
-            busy = false;
-          }
-          const net = toggle('pt-fac-net', 'Network on', true, () => {
-            if (busy) { net.input.checked = online; return; }
-            online = net.input.checked; paint(); replay(netC, 'pop');
-            say(o, online ? 'Back online.' : 'Offline. The ViewModel’s code does not change.');
-          });
-          paint();
-          el.append(
-            h('div', { class: 'pt-split' },
-              h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'FeedViewModel sees'),
-                h('div', { class: 'controls' }, cmd('repo.articles()', observe), cmd('repo.refresh()', refresh)), phone),
-              h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'ArticleRepository hides'), steps, h('div', { class: 'pt-chain' }, netC, mapC, roomC))),
-            h('div', { class: 'controls' }, net),
-            o);
-        },
-        predict: {
-          q: 'Online, you call <code>repo.refresh()</code>. Why does the list on screen update?',
-          options: ['<code>refresh()</code> returns the new list to the ViewModel', '<code>refresh()</code> writes to Room, and the Room Flow the screen collects emits again', 'The ViewModel polls the API'],
-          a: 1,
-          why: 'The UI only reads from Room. The network writes into Room, and Room’s Flow sends the new rows to whoever collects them.',
-        },
-        play: `import java.io.IOException
-
-class Api(var online: Boolean) {
-    fun latest(): List<String> =
-        if (online) listOf("Bridge reopens", "Tram extended") else throw IOException("Unable to resolve host")
+          Lab.ui.codeStepper(el, {
+            code: `interface Drink {
+    fun price(): Int
+    fun name(): String
 }
-class Dao { val rows = mutableListOf("Market moves to Saturdays") }
 
-class ArticleRepository(private val dao: Dao, private val api: Api) {   // the facade
-    fun articles(): List<String> = dao.rows.toList()                   // the UI reads only local data
-    fun refresh() { val fresh = api.latest(); dao.rows.clear(); dao.rows += fresh }
+class Coffee : Drink {
+    override fun price() = 250
+    override fun name() = "Coffee"
+}
+
+class Milk(private val inner: Drink) : Drink {
+    override fun price() = inner.price() + 50
+    override fun name() = inner.name() + " + milk"
+}
+
+class Syrup(private val inner: Drink) : Drink {
+    override fun price() = inner.price() + 70
+    override fun name() = inner.name() + " + syrup"
 }
 
 fun main() {
-    val api = Api(online = false)
-    val repo = ArticleRepository(Dao(), api)
-    repeat(2) {
-        try { repo.refresh(); println("refresh ok") }
-        catch (e: IOException) { println("refresh failed: \${e.message}") }
-        println("screen shows \${repo.articles()}")
-        api.online = true
-    }
-    // Start with online = true and compare the first screen
+    val order = Syrup(Milk(Coffee()))
+    println(order.name())
+    println(order.price())
 }`,
+            varsTitle: 'The order',
+            predict: {
+              q: 'Prices are in cents: coffee 250, milk +50, syrup +70. What does <code>order.price()</code> print?',
+              options: ['<code>370</code>', '<code>250</code>', '<code>320</code>'],
+              a: 0,
+              why: 'Each layer adds its part to what the layer inside it says: 250 + 50 + 70.',
+            },
+            frames: [
+              { line: 22, stack: ['main'], vars: { order: 'Syrup(Milk(Coffee))' }, say: 'Three layers: a Coffee, wrapped in Milk, wrapped in Syrup. Every layer is a Drink.' },
+              { line: [23, 18, 13, 8], out: 'Coffee + milk + syrup', say: '<code>name()</code> goes in layer by layer, and each layer adds its words on the way back out.' },
+              { line: [24, 17], stack: ['main', 'Syrup.price'], say: '<code>price()</code> on the outer layer. Syrup first asks its inner drink.' },
+              { line: 12, stack: ['main', 'Syrup.price', 'Milk.price'], say: 'Milk asks its inner drink too.' },
+              { line: 7, stack: ['main', 'Syrup.price', 'Milk.price', 'Coffee.price'], say: 'The Coffee in the middle answers: 250.' },
+              { line: 12, stack: ['main', 'Syrup.price', 'Milk.price'], say: 'Back in Milk: 250 + 50 is 300.' },
+              { line: 17, stack: ['main', 'Syrup.price'], say: 'Back in Syrup: 300 + 70 is 370.' },
+              { line: 24, stack: ['main'], out: '370', say: 'One call on the outside; three layers, each adding its part.' },
+            ],
+          });
+        },
+        code: `interface Drink {
+    fun price(): Int
+    fun name(): String
+    fun size(): String
+}
+
+class Tea : Drink {
+    override fun price() = 200
+    override fun name() = "Tea"
+    override fun size() = "Large"
+}
+
+// "by inner": everything this class doesn't override goes straight to inner
+class HappyHour(private val inner: Drink) : Drink by inner {
+    override fun price() = inner.price() / 2
+}
+
+fun main() {
+    val tea = HappyHour(Tea())
+    println(tea.name())    // Tea
+    println(tea.size())    // Large
+    println(tea.price())   // 100
+}`,
+        play: `interface Message {
+    fun text(): String
+}
+
+class Plain(private val words: String) : Message {
+    override fun text() = words
+}
+
+class Shout(private val inner: Message) : Message {
+    override fun text() = inner.text() + "!!!"
+}
+
+class Signed(private val inner: Message, private val name: String) : Message {
+    override fun text() = inner.text() + " - " + name
+}
+
+class Framed(private val inner: Message) : Message {
+    override fun text() = "[ " + inner.text() + " ]"
+}
+
+fun main() {
+    val hello = Plain("See you in Oslo")
+    println(hello.text())
+    println(Shout(hello).text())
+    println(Signed(Shout(hello), "Ada").text())
+    println(Framed(Signed(hello, "Sam")).text())
+    // Swap the order: Signed(Framed(hello), "Sam"). What changes?
+}`,
+        remember: 'A decorator is the same interface wrapped around another object: it adds its part and passes the call on. by inner forwards the rest.',
+        mistakes: [
+          { title: 'Forgetting to ask the inner object', bad: `class Milk(private val inner: Drink) : Drink {
+    override fun price() = 50
+    override fun name() = inner.name() + " + milk"
+}
+// Milk(Coffee()).price() is 50: the coffee is lost`, good: `class Milk(private val inner: Drink) : Drink {
+    override fun price() = inner.price() + 50
+    override fun name() = inner.name() + " + milk"
+}
+// Milk(Coffee()).price() is 300`, why: 'A decorator adds to what the inner object does. If it doesn’t call the inner object, it replaces it instead.' },
+        ],
+        terms: [
+          { term: 'decorator', def: 'A design pattern: a class that keeps the same interface as the object it holds, adds something, and passes the call on.' },
+          { term: 'wrap', def: 'To hold another object inside and stand in front of it, so calls go through you first.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Write a Sugar decorator that adds 20 to any drink.', code: `class Sugar(private val inner: Drink) : [[Drink]] {
+    override fun price() = [[inner]].price() + 20
+    override fun name() = inner.name() + " + sugar"
+}`, why: 'A decorator is itself a Drink, and adds its part to what the inner drink says.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Class \'HappyHour\' is not abstract and does not implement abstract member: fun name(): String</code>. HappyHour should pass <code>name()</code> on to the inner drink. Tap the line.', code: `interface Drink {
+    fun price(): Int
+    fun name(): String
+}
+
+class HappyHour(private val inner: Drink) : Drink {
+    override fun price() = inner.price() / 2
+}`, bug: 5, fix: 'class HappyHour(private val inner: Drink) : Drink by inner {', why: '<code>by inner</code> forwards every function HappyHour doesn’t write itself, so <code>name()</code> goes to the inner drink.' },
+        ],
+        quiz: [
+          { q: 'Coffee costs 250 and Milk adds 50. What does <code>Milk(Milk(Coffee())).price()</code> give?', options: ['<code>350</code>', '<code>300</code>', '<code>250</code>'], a: 0, why: 'Two Milk layers, each adding 50 to what is inside: 250 + 50 + 50.' },
+          { q: 'What is the difference between a decorator and an adapter?', options: ['A decorator keeps the same interface and adds behaviour; an adapter changes the interface to fit', 'There is no difference', 'A decorator needs inheritance; an adapter doesn’t'], a: 0, why: 'Both wrap an object. The adapter translates, the decorator adds.' },
+          { q: 'In <code>class HappyHour(private val inner: Drink) : Drink by inner</code>, HappyHour doesn’t write <code>name()</code>. What does <code>name()</code> do?', options: ['It calls <code>inner.name()</code>', 'It doesn’t compile', 'It gives back an empty text'], a: 0, why: '<code>by inner</code> forwards every function you don’t override to <code>inner</code>.' },
+        ],
+        docs: [['Delegation', 'https://kotlinlang.org/docs/delegation.html']],
       },
 
       // 9 ─────────────────────────────────────────────
       {
-        id: 'state-machine',
-        title: 'State machine',
-        tagline: 'A fixed set of states and the only moves between them.',
-        level: 'advanced',
+        id: 'facade',
+        title: 'Facade',
+        tagline: 'One simple front door for a job that needs many parts.',
+        goals: ['Spot the same sequence of calls repeated in many places', 'Write a facade class with one simple function', 'Keep a facade small, and the parts still usable'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A screen is always in exactly one state: idle, loading, showing data, or showing an error. Model that with a <code>sealed interface UiState</code>. Separate booleans like <code>isLoading</code> and <code>error</code> allow combinations that make no sense, like loading and failed at once.</p>
-<p>Inputs become events. A pure function <code>reduce(state, event)</code> returns the next state. It is a state machine: it lists which events each state accepts, and every other event leaves the state as it is. A late <code>Loaded</code> that arrives after the user went back to Idle simply does nothing.</p>
-<p>The ViewModel holds one <code>MutableStateFlow&lt;UiState&gt;</code> and applies the reducer with <code>update</code>. The reducer has no Android in it, so plain unit tests cover every transition. Step through a run below, including events the current state does not accept.</p>`,
-        code: `sealed interface UiState {
-    data object Idle : UiState
-    data object Loading : UiState
-    data class Success(val items: List<Article>) : UiState
-    data class Error(val message: String) : UiState
-}
-
-sealed interface FeedEvent {
-    data object Load : FeedEvent
-    data class Loaded(val items: List<Article>) : FeedEvent
-    data class Failed(val message: String) : FeedEvent
-    data object Retry : FeedEvent
-}
-
-fun reduce(state: UiState, event: FeedEvent): UiState = when (state) {
-    UiState.Idle -> if (event is FeedEvent.Load) UiState.Loading else state
-    UiState.Loading -> when (event) {
-        is FeedEvent.Loaded -> UiState.Success(event.items)
-        is FeedEvent.Failed -> UiState.Error(event.message)
-        else -> state
-    }
-    is UiState.Success -> if (event is FeedEvent.Load) UiState.Loading else state
-    is UiState.Error -> if (event is FeedEvent.Retry) UiState.Loading else state
-}
-
-class FeedViewModel : ViewModel() {
-    private val _state = MutableStateFlow<UiState>(UiState.Idle)
-    val state: StateFlow<UiState> = _state.asStateFlow()
-    fun send(event: FeedEvent) = _state.update { reduce(it, event) }
-}`,
-        remember: 'One sealed state, one reducer. Anything the reducer doesn’t allow can’t happen.',
-        terms: [
-          { term: 'State machine', def: 'A model with a fixed set of states and rules saying which input moves which state to which next state.' },
-          { term: 'Reducer', def: 'A pure function that takes the current state and an event and returns the next state.' },
-          { term: 'Transition', def: 'One allowed move from one state to another, triggered by a specific event.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Declare the closed set of states and apply the reducer atomically.', code: 'sealed [[interface|class]] UiState {\n    data object Loading : UiState\n    data class Success(val items: List<Article>) : UiState\n}\n\nfun send(event: FeedEvent) = _state.[[update]] { reduce(it, event) }', why: 'A sealed type lets <code>when</code> check every state. <code>update</code> reads and writes the flow atomically, so two quick events can’t overwrite each other.' },
-          { type: 'bug', prompt: 'This reducer won’t compile. Tap the wrong line.', code: 'fun reduce(state: UiState, event: FeedEvent): UiState = when (state) {\n    UiState.Idle -> if (event is FeedEvent.Load) UiState.Loading else state\n    UiState.Loading -> when (event) {\n        is FeedEvent.Loaded -> UiState.Success(event.items)\n        is FeedEvent.Failed -> UiState.Error(event.message)\n        else -> state\n    }\n    UiState.Success -> if (event is FeedEvent.Load) UiState.Loading else state\n    is UiState.Error -> if (event is FeedEvent.Retry) UiState.Loading else state\n}', bug: 7, fix: '    is UiState.Success -> if (event is FeedEvent.Load) UiState.Loading else state', why: '<code>Success</code> is a data class with many instances, so it needs a type check with <code>is</code>. Only <code>data object</code> states can be matched by value.' },
-        ],
-        quiz: [
-          { q: 'Why a sealed <code>UiState</code> instead of <code>isLoading</code>, <code>items</code> and <code>error</code> fields?', options: ['It uses less memory', 'Impossible combinations can’t be represented', 'StateFlow requires sealed types'], a: 1, why: 'Three independent fields allow states like loading with an error. A sealed type allows exactly one state at a time.' },
-          { q: 'The state is <code>Idle</code> and a late <code>Loaded</code> event arrives. What does the reducer return?', options: ['Success', 'Idle, unchanged', 'It throws'], a: 1, why: 'Idle accepts only Load. Every other event falls through to <code>else state</code>.' },
-          { q: 'Why is a pure reducer easy to test?', options: ['It needs an emulator', 'Same input always gives the same output, with no Android types', 'Hilt generates its tests'], a: 1, why: 'You call <code>reduce(state, event)</code> and assert on the result. No dispatcher, no lifecycle.' },
-          { q: 'The state is Loading and the user taps Load three more times. With effects triggered on transitions, how many requests start?', options: ['None more: the reducer ignores Load while loading', 'Three more', 'One more'], a: 0, why: 'The reducer returns the same state, so there is no transition into Loading and no effect fires.' },
-          { q: 'Two coroutines run <code>_state.value = reduce(_state.value, e)</code> at nearly the same time. What can happen?', options: ['Both events apply in order', 'It deadlocks', 'One event is lost: both read the same old state'], a: 2, why: 'Both compute from the same old value and the second write erases the first. update { } retries on the newer state, so neither event is lost.' },
-          { q: 'A search screen must survive process death. What goes into SavedStateHandle?', options: ['The Loading state', 'The full list of results', 'The query, so init can send Submit again'], a: 2, why: 'Save only the inputs needed to restart the machine. Loading means nothing in a new process, and big lists should be reloaded.' },
-        ],
-        deeper: [
-          {
-            title: 'Side effects run on transitions',
-            body: `<p>The reducer stays pure: it never starts a network call. Instead, the ViewModel compares the state before and after an event. When the state <em>enters</em> <code>Loading</code>, it launches the request. When the request ends, the result comes back in as another event.</p>
-<p>A nice result: a second <code>Load</code> while already loading is ignored by the reducer, so no second request starts. Tap <code>send(Load)</code> several times quickly.</p>`,
-            code: `fun send(event: FeedEvent) {
-    var entered: UiState? = null
-    _state.update { old -> reduce(old, event).also { new -> entered = new.takeIf { new != old } } }
-    if (entered == UiState.Loading) fetch()      // effect only on a real transition
-}
-
-private fun fetch() = viewModelScope.launch {
-    val event = try {
-        FeedEvent.Loaded(repo.latest())
-    } catch (e: IOException) {
-        FeedEvent.Failed("No connection")
-    }
-    send(event)
-}`,
-            visual(el) {
-              const T = { Idle: { Load: 'Loading' }, Loading: { Loaded: 'Success', Failed: 'Error' }, Success: { Load: 'Loading' }, Error: { Retry: 'Loading' } };
-              let state = 'Idle', fail = false, reqs = 0;
-              const stateEl = h('div', { class: 'pt-slot' }, h('span', { class: 'chip' }, 'Idle'));
-              const log = h('div', { class: 'pt-steps' });
-              const count = tag('requests started: 0');
-              const o = out('');
-              const ft = toggle('pt-sm-fail', 'network fails', false, () => { fail = ft.input.checked; });
-              const logLine = (text, cls = '') => { log.prepend(h('div', { class: `pt-step drop-in ${cls}`, html: text })); while (log.children.length > 5) log.lastElementChild.remove(); };
-              function send(e) {
-                const to = T[state][e];
-                if (!to) { logLine(`${hl(`reduce(${state}, ${e})`)} = ${hl(state)}  <span class="muted">ignored</span>`); replay(stateEl, 'shake'); say(o, `${state} does not accept ${e}. <span class="muted">No new request.</span>`); return; }
-                const from = state; state = to; swap(stateEl, to);
-                logLine(`${hl(`reduce(${from}, ${e})`)} = ${hl(to)}`, 'pt-done');
-                if (to === 'Loading') {
-                  reqs++; count.textContent = `requests started: ${reqs}`; replay(count, 'pop');
-                  logLine('effect: launch fetch()  GET /feed', 'pt-now');
-                  say(o, `<span class="good">entered Loading</span>, so the ViewModel started one request.`);
-                  setTimeout(() => { if (el.isConnected && state === 'Loading') send(fail ? 'Failed' : 'Loaded'); }, 1400);
-                } else say(o, `${hl(to)} <span class="muted">${to === 'Error' ? 'Retry is the only way out.' : 'Load to refresh.'}</span>`);
-              }
-              say(o, 'Send Load, then tap it again while loading.');
-              el.append(
-                h('div', { class: 'pt-split' },
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'state'), stateEl, count),
-                  h('div', { class: 'pt-col' }, h('span', { class: 'pt-label' }, 'reducer and effects'), log)),
-                h('div', { class: 'controls' }, ft, cmd('send(Load)', () => send('Load')), cmd('send(Retry)', () => send('Retry'))),
-                o);
-            },
-          },
-          {
-            title: 'Two events at once: why update',
-            body: `<p>Events can arrive from different coroutines at nearly the same time: a network result on one, a tap on another. With <code>_state.value = reduce(_state.value, e)</code>, both read the same old state, and the second write erases the first.</p>
-<p><code>update { }</code> reads, computes and then writes only if the state is still the one it read. If another write got there first, it runs the reducer again on the newer state. Neither event is lost.</p>`,
-            visual(el) {
-              let atomic = false, busy = false;
-              const lanes = ['Loaded(items)', 'Bookmark(7)'].map(n => ({ name: n, steps: h('div', { class: 'pt-row' }) }));
-              const result = h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, 'final state'), h('span', { class: 'pt-label' }, '-'));
-              const o = out('');
-              const t = toggle('pt-sm-atomic', 'use _state.update { }', false, () => { if (busy) { t.input.checked = atomic; return; } atomic = t.input.checked; clear(); say(o, atomic ? 'update {}: compare-and-set, retry on conflict.' : 'value = reduce(value, e): read, then blind write.'); });
-              function clear() { lanes.forEach(l => l.steps.replaceChildren()); result.className = 'pt-card'; result.lastChild.textContent = '-'; }
-              const add = (l, text, kind = '') => { const s = tag(text, `${kind} drop-in`); l.steps.append(s); return s; };
-              async function run() {
-                if (busy) return; busy = true; clear();
-                const [a, b] = lanes;
-                const st = async ms => { await sleep(ms); return el.isConnected; };
-                add(a, 'read v1 {items: [], marks: []}'); add(b, 'read v1 {items: [], marks: []}');
-                if (!await st(600)) return;
-                add(a, 'reduce → items: 3'); add(b, 'reduce → marks: [7]');
-                if (!await st(600)) return;
-                add(a, 'write v2', 'pt-good');
-                if (!await st(500)) return;
-                if (!atomic) {
-                  add(b, 'write v2′ (overwrites)', 'pt-warn');
-                  result.className = 'pt-card pt-bad'; result.lastChild.textContent = '{ items: [], marks: [7] }'; replay(result, 'shake');
-                  say(o, '<span class="bad">lost update:</span> Bookmark was computed from v1, so its write threw away the three loaded items.');
-                } else {
-                  add(b, 'CAS fails: state is v2', 'pt-warn');
-                  if (!await st(500)) return;
-                  add(b, 'read v2, reduce again', 'pt-acc');
-                  if (!await st(500)) return;
-                  add(b, 'write v3', 'pt-good');
-                  result.className = 'pt-card pt-ok'; result.lastChild.textContent = '{ items: 3, marks: [7] }'; replay(result, 'pop');
-                  say(o, '<span class="good">both kept:</span> the second reducer ran twice, the second time on the newer state.');
-                }
-                busy = false;
-              }
-              say(o, 'Two events reach the ViewModel at the same moment.');
-              el.append(
-                h('div', { class: 'pt-col' }, lanes.map(l => h('div', { class: 'pt-card' }, h('span', { class: 'pt-title' }, `send(${l.name})`), l.steps))),
-                result,
-                h('div', { class: 'controls' }, t, h('button', { class: 'btn primary small', onclick: run }, 'Send both')),
-                o);
-            },
-          },
-          {
-            title: 'Surviving process death',
-            body: `<p>The state machine lives in the ViewModel, which dies with the process. Save only the inputs you need to rebuild it in <code>SavedStateHandle</code>, such as the selected tab or a search query. Don't save <code>Loading</code> or big lists: reload them.</p>
-<p>When the new process starts, read the saved input and send the event that gets the machine moving again.</p>`,
-            code: `class SearchViewModel(
-    private val saved: SavedStateHandle,
-    private val repo: SearchRepository,
-) : ViewModel() {
-    private val _state = MutableStateFlow<UiState>(UiState.Idle)
-    val state = _state.asStateFlow()
-
-    init {
-        saved.get<String>("query")?.let { send(SearchEvent.Submit(it)) }   // restart after death
-    }
-
-    fun send(event: SearchEvent) {
-        if (event is SearchEvent.Submit) saved["query"] = event.query
-        _state.update { reduce(it, event) }
-    }
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>update</code> is a short loop in kotlinx.coroutines. It reads the value, calls your function, and tries <code>compareAndSet</code>. If another coroutine changed the value in between, the set fails and the loop runs your function again on the new value.</p>
-<p>So the reducer may run more than once for one event. That is safe only because it is pure. A <code>when</code> over a sealed type compiles to a chain of <code>instanceof</code> checks, and <code>data object</code> branches compare with <code>equals</code>.</p>`,
-          code: `// kotlinx.coroutines
-public inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
-    while (true) {
-        val prevValue = value
-        val nextValue = function(prevValue)
-        if (compareAndSet(prevValue, nextValue)) {
-            return
-        }
-    }
-}`,
-        },
-        mistakes: [
-          { title: 'Side effects inside update', bad: '_state.update {\n    analytics.log("load")      // may run twice\n    reduce(it, FeedEvent.Load)\n}', good: '_state.update { reduce(it, FeedEvent.Load) }\nanalytics.log("load")', why: 'Under contention <code>update</code> calls its lambda again. Anything with a side effect inside it can happen twice. Keep the lambda pure.' },
-          { title: 'Starting work for an event the machine ignored', bad: 'fun send(event: FeedEvent) {\n    _state.update { reduce(it, event) }\n    if (event is FeedEvent.Load) fetch()   // even while already Loading\n}', good: 'fun send(event: FeedEvent) {\n    var started = false\n    _state.update { old ->\n        reduce(old, event).also { started = it is UiState.Loading && old !is UiState.Loading }\n    }\n    if (started) fetch()\n}', why: 'The reducer refused the second <code>Load</code>, but the ViewModel fired a second request anyway. Trigger effects from the transition, not from the event.' },
-        ],
+<p>Movie night at home: dim the lights to 10%, lower the screen, switch the projector on, then show the film. Every place in the app that starts a movie repeats those four calls, in that order. One day someone forgets to lower the screen, and the film plays on the wall.</p>
+<p>The <b>Facade</b> pattern puts one simple front in front of a group of parts. (A facade is the front of a building: what you see from the street.) A <code>MovieNight</code> class gets the lights, screen and projector through its constructor and offers one function, <code>start(movie)</code>, that calls them in the right order. Callers learn one call instead of four.</p>
+<p>The parts don’t disappear. Code that only wants to dim the lights can still use <code>Lights</code> directly. A facade is a shortcut for the common job, not a wall around the parts. Because it gets its parts passed in (dependency injection, from the SOLID track), you choose which objects it uses. Make <code>Lights</code> an interface, as dependency inversion asks, and you could hand it a different kind of lights too.</p>
+<p>When not to use it: a facade around a single call adds nothing. And watch for a facade that keeps growing until it does everything in the app: then it is one big class with many reasons to change, the opposite of single responsibility.</p>`,
         visual(el) {
           Lab.ui.graph(el, {
-            height: 280,
+            height: 290,
             nodes: [
-              { id: 'idle', label: 'Idle', x: 50, y: 12, tone: 'muted' },
-              { id: 'loading', label: 'Loading', x: 50, y: 48 },
-              { id: 'success', label: 'Success<small>items</small>', x: 17, y: 86, tone: 'ok' },
-              { id: 'error', label: 'Error<small>message</small>', x: 83, y: 86, tone: 'err' },
+              { id: 'main', label: 'main', x: 50, y: 10 },
+              { id: 'night', label: 'MovieNight<small>start(movie)</small>', x: 50, y: 46, tone: 'ok', hidden: true },
+              { id: 'lights', label: 'Lights', x: 15, y: 86, tone: 'muted' },
+              { id: 'screen', label: 'Screen', x: 50, y: 86, tone: 'muted' },
+              { id: 'projector', label: 'Projector', x: 85, y: 86, tone: 'muted' },
             ],
             predict: {
-              q: 'The screen is in <code>Error</code>. Which event is the only way out?',
-              options: ['<code>Load</code>', '<code>Retry</code>', '<code>Loaded</code>'],
-              a: 1,
-              why: 'The reducer’s Error branch accepts only <code>Retry</code>, which moves to Loading. Every other event returns the same Error state.',
+              q: 'With the facade in place, how many calls does <code>main</code> need to start a movie?',
+              options: ['One: <code>start(movie)</code>', 'Four: one per step', 'None'],
+              a: 0,
+              why: 'The facade knows the steps and their order. Its caller makes one call.',
             },
             frames: [
-              { add: [['idle', 'loading', 'Load', 'weak'], ['loading', 'success', 'Loaded', 'weak'], ['loading', 'error', 'Failed', 'weak']], hl: ['idle'], say: 'Dashed arrows are transitions the reducer allows. The screen starts in Idle.' },
-              { hl: ['idle'], say: 'A late <code>Loaded</code> arrives. Idle has no arrow for it, so <code>reduce</code> returns Idle unchanged.' },
-              { add: [['idle', 'loading', 'Load', 'accent']], hl: ['loading'], say: '<code>Load</code>: Idle → Loading. The ViewModel starts the request.' },
-              { add: [['loading', 'error', 'Failed', 'err']], hl: ['error'], say: 'The request times out. <code>Failed("timeout")</code>: Loading → Error.' },
-              { hl: ['error'], say: 'Taps on Load, or a late Loaded, do nothing here. Error has one way out.' },
-              { remove: [['loading', 'error']], add: [['error', 'loading', 'Retry', 'accent']], hl: ['loading'], say: '<code>Retry</code>: Error → Loading.' },
-              { add: [['loading', 'success', 'Loaded', 'ok']], hl: ['success'], say: '<code>Loaded(items)</code>: Loading → Success. From here, <code>Load</code> goes back to Loading for a refresh.' },
+              { add: [['main', 'lights'], ['main', 'screen'], ['main', 'projector']], say: 'Without a facade, <code>main</code> talks to every part itself and must know the right order.' },
+              { hl: ['main', 'lights', 'screen', 'projector'], say: 'Every place in the app that starts a movie repeats these calls. Forget one, and the film plays on the wall.' },
+              { show: ['night'], remove: [['main', 'lights'], ['main', 'screen'], ['main', 'projector']], add: [['main', 'night', 'start()', 'accent'], ['night', 'lights'], ['night', 'screen'], ['night', 'projector']], say: 'A facade in between. <code>main</code> makes one call; MovieNight knows the steps.' },
+              { hl: ['night', 'lights'], add: [['night', 'lights', 'dim(10)', 'accent']], say: 'MovieNight calls <code>lights.dim(10)</code>, which prints <code>Lights at 10%</code>…' },
+              { hl: ['night', 'screen'], add: [['night', 'lights'], ['night', 'screen', 'lower()', 'accent']], say: '…then <code>screen.lower()</code>: <code>Screen down</code>…' },
+              { hl: ['night', 'projector'], add: [['night', 'screen'], ['night', 'projector', 'on(), show()', 'accent']], say: '…then <code>Projector on</code> and <code>Showing Northern Lights</code>. Always in this order.' },
+              { hl: ['main', 'lights'], add: [['night', 'projector'], ['main', 'lights', 'dim(50)', 'weak']], say: 'The parts are still there. To only change the lights, <code>main</code> can still use Lights directly.' },
             ],
           });
         },
-        play: `sealed interface UiState {
-    data object Idle : UiState
-    data object Loading : UiState
-    data class Success(val items: List<String>) : UiState
-    data class Error(val message: String) : UiState
+        code: `class Lights {
+    fun dim(percent: Int) = println("Lights at $percent%")
 }
-sealed interface FeedEvent {
-    data object Load : FeedEvent
-    data class Loaded(val items: List<String>) : FeedEvent
-    data class Failed(val message: String) : FeedEvent
-    data object Retry : FeedEvent
+class Screen {
+    fun lower() = println("Screen down")
+}
+class Projector {
+    fun on() = println("Projector on")
+    fun show(movie: String) = println("Showing $movie")
 }
 
-fun reduce(state: UiState, event: FeedEvent): UiState = when (state) {
-    UiState.Idle -> if (event is FeedEvent.Load) UiState.Loading else state
-    UiState.Loading -> when (event) {
-        is FeedEvent.Loaded -> UiState.Success(event.items)
-        is FeedEvent.Failed -> UiState.Error(event.message)
-        else -> state
+// The facade: one call for the whole job, in the right order
+class MovieNight(
+    private val lights: Lights,
+    private val screen: Screen,
+    private val projector: Projector
+) {
+    fun start(movie: String) {
+        lights.dim(10)
+        screen.lower()
+        projector.on()
+        projector.show(movie)
     }
-    is UiState.Success -> if (event is FeedEvent.Load) UiState.Loading else state
-    is UiState.Error -> if (event is FeedEvent.Retry) UiState.Loading else state
 }
 
 fun main() {
-    var state: UiState = UiState.Idle
-    for (e in listOf(FeedEvent.Loaded(listOf("late")), FeedEvent.Load, FeedEvent.Failed("timeout"), FeedEvent.Retry, FeedEvent.Loaded(listOf("A", "B")))) {
-        val next = reduce(state, e)
-        println("$state + $e -> $next\${if (next == state) "  (ignored)" else ""}")
-        state = next
-    }
-    // Add FeedEvent.Retry at the end of the list: what does Success do with it?
+    val night = MovieNight(Lights(), Screen(), Projector())
+    night.start("Northern Lights")
+    // Lights at 10%
+    // Screen down
+    // Projector on
+    // Showing Northern Lights
 }`,
+        play: `class Kettle {
+    fun boil() = println("Water boiling")
+}
+class Grinder {
+    fun grind(grams: Int) = println("Ground $grams g of beans")
+}
+class Cups {
+    var left = 2
+    fun take(): Boolean {
+        if (left == 0) {
+            return false
+        }
+        left -= 1
+        return true
+    }
+}
+
+class CoffeeMachine(
+    private val kettle: Kettle,
+    private val grinder: Grinder,
+    private val cups: Cups
+) {
+    fun makeCoffee() {
+        if (!cups.take()) {
+            println("No clean cups!")
+            return
+        }
+        grinder.grind(15)
+        kettle.boil()
+        println("Coffee is ready")
+    }
+}
+
+fun main() {
+    val machine = CoffeeMachine(Kettle(), Grinder(), Cups())
+    machine.makeCoffee()
+    machine.makeCoffee()
+    machine.makeCoffee()
+    // The caller only knows makeCoffee(). Add a class Milk with a function froth(),
+    // pass a Milk() into CoffeeMachine, and call froth() inside makeCoffee.
+    // The three makeCoffee() calls in main stay the same.
+}`,
+        remember: 'A facade is one simple function in front of several parts, calling them in the right order. The parts stay usable on their own.',
+        terms: [
+          { term: 'facade', def: 'A design pattern: one class with a simple function that runs a common job across several parts, in the right order.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish the facade: dim the lights, then switch on the projector and show the movie.', code: `class MovieNight(private val lights: Lights, private val projector: Projector) {
+    fun start(movie: String) {
+        [[lights]].dim(10)
+        projector.on()
+        projector.[[show]](movie)
+    }
+}`, why: 'The facade calls the parts it was given, in order. Callers only see <code>start</code>.' },
+          { type: 'bug', prompt: 'Every order is charged 40, whatever the amount. Tap the wrong line.', code: `class OrderService(
+    private val stock: Stock,
+    private val payment: Payment,
+    private val courier: Courier
+) {
+    fun placeOrder(item: String, amount: Int, city: String) {
+        stock.reserve(item)
+        payment.charge(40)
+        courier.book(city)
+    }
+}`, bug: 7, fix: '        payment.charge(amount)', why: 'The facade must pass on what its caller gave it. A fixed number ignores the <code>amount</code> parameter.' },
+        ],
+        quiz: [
+          { q: 'What does a facade give its callers?', options: ['One simple call for a job that needs several parts', 'A copy of every part', 'A list of listeners'], a: 0, why: 'The facade knows the steps and their order, so callers don’t have to.' },
+          { q: 'MovieNight is in place. Can other code still use <code>Lights</code> on its own?', options: ['Yes: the parts are still there', 'No: the facade hides them for good'], a: 0, why: 'A facade is a shortcut for the common job, not a wall.' },
+          { q: 'A facade has grown to 40 functions covering the whole app. What is the risk?', options: ['It has become one big class with many reasons to change', 'None: a bigger facade is a better facade'], a: 0, why: 'That breaks single responsibility. Keep a facade to one job, or split it.' },
+        ],
+        docs: [['Classes', 'https://kotlinlang.org/docs/classes.html']],
+      },
+
+      // 10 ────────────────────────────────────────────
+      {
+        id: 'state-machine',
+        title: 'State machine',
+        tagline: 'Always in exactly one state, and only allowed moves between them.',
+        goals: ['Replace contradicting Booleans with one state', 'Write the transitions in one function with <code>when</code>', 'Use a sealed interface when a state carries data'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>A music player keeps <code>isPlaying</code> and <code>isPaused</code> as two Booleans. A bug sets both to <code>true</code>. Is it playing or paused? The screen shows the play button and the pause button at once. Two Booleans make four combinations, and only three of them make sense.</p>
+<p>A <b>state machine</b> lists the states something can be in, and it is always in exactly one of them. Things that happen are <b>events</b>: for a door, open, close, lock and unlock. A <b>transition</b> is a rule: in this state, this event leads to that state. An event with no rule for the current state changes nothing.</p>
+<p>In Kotlin, an enum holds the states and another holds the events, and one function holds every transition: <code>fun next(door: Door, action: Action): Door = when (door) { ... }</code>. A <code>when</code> over an enum must cover every value, so a new state with no rules yet stops the program compiling until you add them. When a state needs its own data, like a percent while loading or a reason for a failure, use a sealed interface instead of an enum, as in the code below.</p>
+<p>When not to use it: something with two states and one switch, like a lamp that is on or off, is fine as one Boolean. Reach for a state machine once the states, and the rules about which moves are allowed, start to multiply.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `enum class Door { OPEN, CLOSED, LOCKED }
+enum class Action { OPEN, CLOSE, LOCK, UNLOCK }
+
+fun next(door: Door, action: Action): Door = when (door) {
+    Door.OPEN -> if (action == Action.CLOSE) Door.CLOSED else door
+    Door.CLOSED -> when (action) {
+        Action.OPEN -> Door.OPEN
+        Action.LOCK -> Door.LOCKED
+        else -> door
+    }
+    Door.LOCKED -> if (action == Action.UNLOCK) Door.CLOSED else door
+}
+
+fun main() {
+    var door = Door.OPEN
+    door = next(door, Action.LOCK)
+    println(door)
+    door = next(door, Action.CLOSE)
+    door = next(door, Action.LOCK)
+    println(door)
+    door = next(door, Action.OPEN)
+    println(door)
+}`,
+            predict: {
+              q: 'The door is open, and someone tries to lock it. What does the first <code>println(door)</code> print?',
+              options: ['<code>OPEN</code>', '<code>LOCKED</code>', '<code>CLOSED</code>'],
+              a: 0,
+              why: 'From OPEN, only CLOSE leads anywhere. Locking an open door is not a transition, so the state stays OPEN.',
+            },
+            frames: [
+              { line: [1, 2, 4], say: 'The states, the events, and <code>next</code>, which holds every transition. <code>Door.OPEN</code> is a state; <code>Action.OPEN</code> is something someone does.' },
+              { line: 15, vars: { door: 'OPEN' }, say: 'The door starts open. It is in exactly one state.' },
+              { line: [16, 5], vars: { door: 'OPEN' }, say: 'LOCK while OPEN: only CLOSE moves an open door, so <code>next</code> gives back the same state.' },
+              { line: 17, out: 'OPEN', say: 'You can’t lock an open door. The rule for that lives in one place.' },
+              { line: [18, 5], vars: { door: 'CLOSED' }, say: 'CLOSE while OPEN is a transition: now CLOSED.' },
+              { line: [19, 8], vars: { door: 'LOCKED' }, say: 'LOCK while CLOSED: now LOCKED.' },
+              { line: 20, out: 'LOCKED', say: 'Two events, two moves, each one allowed by a rule.' },
+              { line: [21, 11, 22], out: 'LOCKED', say: 'OPEN while LOCKED has no rule, so it stays LOCKED. No mix like “open and locked” can ever happen.' },
+            ],
+          });
+        },
+        code: `sealed interface Download
+object Waiting : Download
+class Loading(val percent: Int) : Download
+class Done(val size: Int) : Download
+class Failed(val reason: String) : Download
+
+// Every allowed move between states, in one place
+fun progress(state: Download, percent: Int): Download = when (state) {
+    Waiting -> Loading(percent)
+    // 12 is the file's size in MB, made up for this example
+    is Loading -> if (percent >= 100) Done(12) else Loading(percent)
+    is Done -> state          // finished: nothing changes it any more
+    is Failed -> state
+}
+
+fun show(state: Download): String = when (state) {
+    Waiting -> "Waiting..."
+    is Loading -> "Loading \${state.percent}%"
+    is Done -> "Done: \${state.size} MB"
+    is Failed -> "Failed: \${state.reason}"
+}
+
+fun main() {
+    var state: Download = Waiting
+    println(show(state))                 // Waiting...
+    state = progress(state, 40)
+    println(show(state))                 // Loading 40%
+    state = progress(state, 100)
+    println(show(state))                 // Done: 12 MB
+    state = progress(state, 50)
+    println(show(state))                 // Done: 12 MB (no going back)
+}`,
+        play: `enum class Light { RED, GREEN, YELLOW }
+
+fun next(light: Light): Light = when (light) {
+    Light.RED -> Light.GREEN
+    Light.GREEN -> Light.YELLOW
+    Light.YELLOW -> Light.RED
+}
+
+fun main() {
+    var light = Light.RED
+    for (tick in 1..5) {
+        println("Tick $tick: $light")
+        light = next(light)
+    }
+    // The light is always in exactly one state, and next() lists every move.
+    // Add a state FLASHING that comes after YELLOW and goes to RED.
+    // Kotlin points at the when until you handle it.
+}`,
+        remember: 'A state machine is in exactly one state at a time. Events move it only along the transitions you wrote, all in one when.',
+        mistakes: [
+          { title: 'Booleans that can contradict each other', bad: `class Player {
+    var isPlaying = false
+    var isPaused = false
+}
+// Nothing stops isPlaying and isPaused both being true`, good: `enum class PlayerState { STOPPED, PLAYING, PAUSED }
+
+class Player {
+    var state = PlayerState.STOPPED
+}`, why: 'With one <code>state</code> the player is always in exactly one of the three. The impossible fourth combination can’t even be written.' },
+        ],
+        terms: [
+          { term: 'state machine', def: 'A design where something is always in exactly one of a fixed set of states, and only the listed transitions move it to another.' },
+          { term: 'event', def: 'Something that happens and may change the state, such as someone pressing Lock.' },
+          { term: 'transition', def: 'A rule: in state A, event E leads to state B.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A traffic light goes red, then green, then yellow, then red again. Finish its transitions.', code: `enum class Light { RED, GREEN, YELLOW }
+
+fun next(light: Light): Light = [[when]] (light) {
+    Light.RED -> Light.GREEN
+    Light.GREEN -> Light.[[YELLOW]]
+    Light.YELLOW -> Light.RED
+}`, why: 'One <code>when</code> over the enum holds every transition, and Kotlin checks that every state has one.' },
+          { type: 'bug', prompt: 'After yellow the light should turn red, but it goes back to green. Tap the wrong line.', code: `enum class Light { RED, GREEN, YELLOW }
+
+fun next(light: Light): Light = when (light) {
+    Light.RED -> Light.GREEN
+    Light.GREEN -> Light.YELLOW
+    Light.YELLOW -> Light.GREEN
+}`, bug: 5, fix: '    Light.YELLOW -> Light.RED', why: 'Every transition lives in one place, so a wrong move is one line to find and fix.' },
+        ],
+        quiz: [
+          { q: 'A player has <code>var isPlaying</code> and <code>var isPaused</code>. How many combinations can the two make?', options: ['Four, and one of them makes no sense', 'Three', 'Two'], a: 0, why: 'Two Booleans give 2 × 2 = 4 combinations. Playing and paused at once is the impossible one.' },
+          { q: 'With the door rules above, the door is LOCKED and the event OPEN arrives. What is the state after?', options: ['<code>LOCKED</code>', '<code>OPEN</code>', '<code>CLOSED</code>'], a: 0, why: 'From LOCKED, only UNLOCK leads anywhere. Any other event leaves the state as it is.' },
+          { q: 'One state needs its own data, like a percent while loading. Which Kotlin tool fits?', options: ['A sealed interface with a class for that state', 'An enum plus a few Booleans', 'A plain String'], a: 0, why: 'Each member of a sealed family can carry its own properties, and <code>when</code> still checks you handled them all.' },
+        ],
+        docs: [['Enum classes', 'https://kotlinlang.org/docs/enum-classes.html'], ['Sealed classes and interfaces', 'https://kotlinlang.org/docs/sealed-classes.html']],
       },
     ],
   });

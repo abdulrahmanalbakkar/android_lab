@@ -103,10 +103,10 @@ const Lab = (() => {
   // The roadmap. Order inside a stage is the suggested order. A track not listed here can set `stage: '<title>'`
   // (it joins that stage, optional if `optional: true`) or lands in "More" at the end.
   const STAGES = [
-    { title: 'Programming basics', blurb: 'Write Kotlin and use Git with confidence', tracks: ['kotlin', 'git', 'kdeep'], optional: ['kdeep'] },
-    { title: 'Computer science foundations', blurb: 'What runs under your app: OS, network, database, runtime', tracks: ['os', 'net', 'db', 'concurrency', 'runtime', 'sweng'], optional: ['os', 'net', 'db', 'concurrency', 'runtime', 'sweng'] },
+    { title: 'Programming basics', blurb: 'From your first line of code to Kotlin and Git', tracks: ['start', 'kotlin', 'git', 'kdeep'], optional: ['kdeep'] },
+    { title: 'Computer science foundations', blurb: 'What runs under your app: OS, network, database, concurrency', tracks: ['os', 'net', 'db', 'concurrency', 'sweng'], optional: ['os', 'net', 'db', 'concurrency', 'sweng'] },
     { title: 'Think in objects', blurb: 'Design code that is easy to change', tracks: ['oop', 'solid', 'patterns', 'capkotlin'] },
-    { title: 'Your first app', blurb: 'Screens, state and navigation', tracks: ['android', 'compose', 'tools', 'views'], optional: ['views'] },
+    { title: 'Your first app', blurb: 'Screens, state and navigation', tracks: ['android', 'compose', 'tools', 'views', 'runtime'], optional: ['views', 'runtime'] },
     { title: 'Async and data', blurb: 'Load, store and stream without freezing the UI', tracks: ['coroutines', 'flow', 'data'] },
     { title: 'Architecture', blurb: 'Layers, DI and a real app end to end', tracks: ['arch', 'capapp'] },
     { title: 'Quality', blurb: 'Tested, fast and usable by everyone', tracks: ['testing', 'perf', 'a11y', 'compose2', 'capquality'], optional: ['compose2'] },
@@ -309,6 +309,7 @@ const Lab = (() => {
     setTimeout(() => loadTrack(t).catch(() => {}), 300); // warm up: the first lesson then opens instantly
     const n = t.lessons.length, done = doneCount(t), nxt = nextLesson(t), proj = isProject(t);
     const wrap = h('div', { class: 'wrap track-page' + (proj ? ' project' : ''), style: `--hue:${hue(t)}` });
+    const testOut = h('section', { class: 'quiz test-out', hidden: true, 'aria-label': 'Test out' });
     const empty = h('p', { class: 'muted-text tline-empty', hidden: true }, 'No lessons at this level in this track.');
     const syncEmpty = () => { empty.hidden = proj || state.level === 'all' || t.lessons.some(l => l.level === state.level); };
     const label = !nxt ? null : done === n ? `Start again: ${nxt.title}` : `${done ? 'Continue' : proj ? 'Start building' : 'Start'}: ${nxt.title}`;
@@ -325,7 +326,9 @@ const Lab = (() => {
         h('p', { class: 'lede' }, t.description),
         progressBar(done, n),
         softNote(t),
-        nxt ? h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#' + key(t, nxt) }, label, ' →')) : null),
+        nxt ? h('div', { class: 'actions' }, h('a', { class: 'btn primary', href: '#' + key(t, nxt) }, label, ' →'),
+          proj || done === n ? null : h('button', { class: 'btn', onclick() { this.disabled = true; testOut.hidden = false; testOut.replaceChildren(...testOutView(t).flat()); testOut.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' }); } }, 'Already know this? Test out')) : null),
+      testOut,
       builds,
       h('section', { class: 'track-lessons', 'aria-label': proj ? 'Steps' : 'Lessons' },
         proj ? h('h2', { class: 'steps-h' }, 'The steps') : levelFilter(wrap, t.lessons, syncEmpty),
@@ -343,6 +346,42 @@ const Lab = (() => {
         empty));
     syncEmpty();
     return wrap;
+  }
+
+  // Test out of a track: up to 10 questions spread over its lessons. 8 of 10 (80%) marks every lesson done.
+  // Otherwise it points at the first lesson with a miss, so the learner starts where their knowledge ends.
+  function testOutView(t) {
+    const picks = t.lessons.filter(l => l.quiz && l.quiz.length).map(l => ({ l, q: l.quiz[Math.floor(Math.random() * l.quiz.length)] }));
+    const step = Math.max(1, picks.length / 10);
+    const set = Array.from({ length: Math.min(10, picks.length) }, (_, i) => picks[Math.floor(i * step)]);
+    let left = set.length, right = 0;
+    const missed = [];
+    const out = h('div', {});
+    return [
+      h('h2', {}, `Test out of ${t.title}`),
+      h('p', { class: 'muted-text' }, `${set.length} questions from across the track. Get ${Math.ceil(set.length * 0.8)} right and every lesson is marked done. These answers don’t change your Review schedule.`),
+      set.map(({ l, q }) => questionView(q, '', ok => {
+        if (ok) right++; else missed.push(l);
+        if (--left) return;
+        if (right >= Math.ceil(set.length * 0.8)) {
+          t.lessons.forEach(x => { state.done[key(t, x)] = true; });
+          save();
+          const ns = nextStage(t);
+          out.append(h('div', { class: 'done-note drop-in' }, `${right} of ${set.length}. You know this track: all lessons marked done.`,
+            ns ? h('a', { class: 'btn primary small', href: '#' + ns.id }, `Next: ${ns.title} →`) : h('a', { class: 'btn small', href: '#home' }, 'Back to the map')));
+        } else {
+          const first = t.lessons.find(x => missed.includes(x));
+          out.append(h('div', { class: 'done-note warn drop-in' }, `${right} of ${set.length}. Start here, where it got new:`,
+            h('a', { class: 'btn primary small', href: '#' + key(t, first) }, `${first.title} →`)));
+        }
+      }, false)),
+      out,
+    ];
+  }
+  // The next track on the roadmap after t (skipping optional ones and finished ones).
+  function nextStage(t) {
+    const order = STAGES.flatMap(s => s.tracks.filter(id => !(s.optional || []).includes(id)));
+    return order.slice(order.indexOf(t.id) + 1).map(trackById).find(x => x && doneCount(x) < x.lessons.length);
   }
 
   function questionView(q, id, onAnswer, record = true) {
@@ -376,17 +415,34 @@ const Lab = (() => {
     const showViz = (fn, v) => { try { fn(v); } catch (e) { console.error(e); v.replaceChildren(h('p', { class: 'muted-text' }, 'This demo could not start. Reload the page to get the latest version.')); } };
     const resetViz = () => { viz.replaceChildren(); showViz(l.visual, viz); };
 
-    let left = l.quiz.length;
+    let left = l.quiz.length, right = 0, skipping = false;
+    const goNext = () => next ? h('a', { class: 'btn primary small', href: '#' + key(t, next) }, `Next: ${next.title} →`) : h('a', { class: 'btn small', href: '#' + t.id }, `Back to ${t.title}`);
+    const skipNote = h('p', { class: 'skip-note', hidden: true }, 'Answer these. Get them all right and the lesson is marked done, so you can move on.');
     const quiz = h('section', { class: 'quiz' },
       h('h2', {}, 'Check yourself'),
+      skipNote,
       h('p', { class: 'muted-text' }, 'These questions come back in Review: tomorrow, then after 3, 7, 21 and 60 days while you keep getting them right.'),
-      l.quiz.map((q, i) => questionView(q, `${key(t, l)}.${i}`, () => {
+      l.quiz.map((q, i) => questionView(q, `${key(t, l)}.${i}`, ok => {
+        if (ok) right++;
         if (--left) return;
+        if (skipping && right < l.quiz.length) {
+          quiz.append(h('div', { class: 'done-note warn drop-in' }, `${right} of ${l.quiz.length} right. Worth a read: the lesson starts at the top.`,
+            h('button', { class: 'btn small', onclick() { window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' }); } }, 'Read the lesson ↑')));
+          return;
+        }
         state.done[key(t, l)] = true; save();
         items[idx].classList.add('done');
-        quiz.append(h('div', { class: 'done-note drop-in' }, proj ? 'Step complete.' : 'Lesson complete.',
-          next ? h('a', { class: 'btn primary small', href: '#' + key(t, next) }, `Next: ${next.title} →`) : h('a', { class: 'btn small', href: '#' + t.id }, `Back to ${t.title}`)));
+        quiz.append(h('div', { class: 'done-note drop-in' }, skipping ? 'You already know this one. Marked done.' : proj ? 'Step complete.' : 'Lesson complete.', goNext()));
       })));
+    // l.goals: 2-3 short lines, "what you'll be able to do". Shown at the top so readers can tell if the lesson is new to them.
+    const goals = l.goals && l.goals.length ? h('aside', { class: 'goals' }, h('span', { class: 'goals-label' }, proj ? 'In this step' : 'In this lesson'),
+      h('ul', {}, l.goals.map(g => h('li', { html: g })))) : null;
+    const knowIt = proj ? null : h('button', { class: 'btn small ghost know-it', onclick() {
+      skipping = true; skipNote.hidden = false;
+      quiz.setAttribute('tabindex', '-1');
+      quiz.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+      quiz.focus({ preventScroll: true });
+    } }, 'I already know this →');
 
     const bench = h('section', { class: 'bench', 'aria-label': 'Interactive demo' },
       h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick: resetViz }, 'Reset')),
@@ -421,7 +477,7 @@ const Lab = (() => {
           h('div', { class: 'ba-good' }, h('span', { class: 'ba-tag' }, 'After'), code(m.good))),
         h('p', { class: 'why', html: m.why })))) : null;
     const docs = docsView(DOCS[key(t, l)] || l.docs);
-    const terms = l.terms && l.terms.length ? h('section', { class: 'terms' }, h('h2', {}, 'Terms'), h('dl', {}, l.terms.map(x => [h('dt', {}, x.term), h('dd', {}, x.def)]))) : null;
+    const terms = l.terms && l.terms.length ? h('section', { class: 'terms' }, h('h2', {}, 'Terms'), h('dl', {}, l.terms.map(x => [h('dt', {}, x.term), h('dd', { html: x.def })]))) : null;
     const sections = [['Demo', bench], ['Code', snippet], ['Run it', run], ['Pin', pin], ['Go deeper', deeper], ['Under the hood', hood], ['Mistakes', mistakes], ['Practice', practice], ['Terms', terms], ['Docs', docs], ['Check yourself', quiz]].filter(([, el]) => el);
     const toc = h('nav', { class: 'toc', 'aria-label': 'On this page' }, h('span', { class: 'toc-label' }, 'On this page'),
       sections.map(([label, el]) => h('button', { type: 'button', onclick() {
@@ -438,7 +494,8 @@ const Lab = (() => {
         h('header', { class: 'lesson-head' },
           h('p', { class: 'eyebrow lesson-eyebrow' }, `${proj ? 'Step' : 'Lesson'} ${idx + 1} of ${t.lessons.length}`, levelBadge(l)),
           h('h1', {}, l.title),
-          h('p', { class: 'lede' }, l.tagline)),
+          h('p', { class: 'lede' }, l.tagline),
+          goals, knowIt),
         reviewFirst(l),
         toc,
         h('div', { class: 'prose', html: l.body }),
@@ -562,7 +619,7 @@ const Lab = (() => {
         h('p', { class: 'lede' }, 'Each term links back to the lesson that explains it. Press / to search for one.')),
       h('nav', { class: 'az', 'aria-label': 'Jump to letter' }, Object.keys(groups).map(k => h('a', { href: '#glossary', onclick(e) { e.preventDefault(); document.getElementById('g-' + k).scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth' }); } }, k))),
       Object.entries(groups).map(([k, xs]) => h('section', { class: 'g-group', id: 'g-' + k }, h('h2', {}, k),
-        h('dl', {}, xs.map(x => [h('dt', {}, x.term), h('dd', {}, x.def, ' ', h('a', { href: '#' + key(x.t, x.l) }, `${x.t.title} · ${x.l.title} →`))])))));
+        h('dl', {}, xs.map(x => [h('dt', {}, x.term), h('dd', { html: x.def + ' ' }, h('a', { href: '#' + key(x.t, x.l) }, `${x.t.title} · ${x.l.title} →`))])))));
   }
 
   // ponytail: linear scan over a few hundred lessons/terms per keystroke. Fine until thousands; then build an inverted index.
@@ -585,8 +642,8 @@ const Lab = (() => {
       }
     }
     for (const x of allTerms()) {
-      const s = score(x.term, x.def);
-      if (s) hits.push({ s, href: '#' + key(x.t, x.l), title: x.term, sub: x.def });
+      const s = score(x.term, x.def.replace(/<[^>]+>/g, ''));
+      if (s) hits.push({ s, href: '#' + key(x.t, x.l), title: x.term, sub: x.def.replace(/<[^>]+>/g, '') });
     }
     return hits.sort((a, b) => b.s - a.s).slice(0, 8);
   }

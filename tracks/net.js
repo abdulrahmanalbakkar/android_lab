@@ -1,5 +1,5 @@
 /* Computer networks track. Same shape as tracks/kotlin.js.
-   University-style networking fundamentals (layers, IP, DNS, TCP/UDP, TLS, HTTP versions, latency, debugging),
+   Beginner networking fundamentals (packets, IP, DNS, TCP/UDP, HTTP, TLS, HTTP versions, latency, debugging),
    each tied back to what happens inside an Android app. Every class is prefixed nw-.
    All IP addresses in demos come from the documentation ranges (RFC 5737) or private ranges (RFC 1918, RFC 6598). */
 (() => {
@@ -193,1074 +193,677 @@
   const lessons = [];
 
   // 1 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'layers',
-    title: 'Layers and packets',
-    tagline: 'One API call becomes a stack of headers, each read by a different machine.',
-    level: 'beginner',
-    body: `
-<p>Networks are built in <em>layers</em>. Each layer solves one problem and trusts the layer below it for the rest. The TCP/IP model, written down in RFC 1122, has four: <b>application</b> (HTTP, DNS), <b>transport</b> (TCP, UDP), <b>internet</b> (IP) and <b>link</b> (Wi-Fi, LTE, Ethernet). TLS sits between HTTP and TCP and encrypts what HTTP hands down.</p>
-<p>Sending data means <em>encapsulation</em>. Each layer takes what the layer above gave it, adds its own header in front, and passes the bundle down. TCP adds ports and sequence numbers. IP adds source and destination addresses. The link layer adds the address of the next device only. A router opens the bundle down to the IP header, picks the next hop, and wraps it in a fresh link frame. It never reads your HTTP.</p>
-<p>So when your app calls <code>api.getHeadlines()</code>, a lot happens below Retrofit: a DNS lookup, a TCP connection, a TLS handshake, then your JSON split into segments, packets and frames. Every later lesson in this track is one of those layers. (For the Retrofit side of the same call, see <a href="#data.net">Retrofit and kotlinx.serialization</a>.) Step through the demo and watch the request get wrapped, then unwrapped on the server.</p>`,
-    code: `interface NewsApi {
-    @GET("v1/headlines")
-    suspend fun headlines(): List<Headline>        // what you write: application layer
-}
-
-// One client for the whole app. It owns DNS, sockets, TLS and the connection pool.
-val client = OkHttpClient()
-
-val api: NewsApi = Retrofit.Builder()
-    .baseUrl("https://api.example.com/")
-    .client(client)
-    .addConverterFactory(Json.asConverterFactory("application/json".toMediaType()))
-    .build()
-    .create(NewsApi::class.java)
-
-// What happens below this one call:
-//   DNS:        api.example.com -> 198.51.100.80
-//   Transport:  TCP connect to port 443
-//   TLS:        handshake, then HTTP bytes go inside encrypted records
-//   Internet:   records split into IP packets addressed to 198.51.100.80
-//   Link:       each packet framed for Wi-Fi or LTE, one hop at a time
-val headlines = api.headlines()`,
-    remember: 'Each layer adds a header on the way down and strips it on the way up. Routers read only up to IP.',
-    visual(el) {
-      const L = [
-        { name: 'Application', proto: 'HTTP' },
-        { name: 'Security', proto: 'TLS' },
-        { name: 'Transport', proto: 'TCP' },
-        { name: 'Internet', proto: 'IP' },
-        { name: 'Link', proto: 'Wi-Fi / LTE' },
-      ];
-      const TAGS = [
-        null,
-        '<b>TLS record</b> · 5 B header · encrypted data · 16 B auth tag',
-        '<b>TCP segment</b> · 20 B header · port 51034 → 443 · seq 1',
-        '<b>IPv4 packet</b> · 20 B header · 192.168.1.23 → 198.51.100.80 · TTL 64',
-        '<b>Wi-Fi frame</b> · phone MAC → router MAC · checksum',
-      ];
-      const items = L.map(x => h('li', {}, h('b', {}, x.proto), x.name));
-      const pkt = h('div', { class: 'nw-col' });
-      const view = h('div', { class: 'nw-split' }, h('ol', { class: 'nw-layers', 'aria-label': 'Layers' }, items), pkt);
-      let lastDepth = 0;
-      player(el, {
-        view,
-        speed: 1500,
-        build: () => [
-          { depth: 1, on: 0, where: 'In the app', msg: 'The app builds an HTTP request: a method, a path, headers. To HTTP it is just text. Press Step.' },
-          { depth: 2, on: 1, enc: true, msg: 'TLS encrypts the request into a <b>record</b>. Anyone on the path now sees random-looking bytes.' },
-          { depth: 3, on: 2, enc: true, msg: 'TCP adds <b>ports</b> (which app on each machine) and a <b>sequence number</b> so the server can put bytes back in order.' },
-          { depth: 4, on: 3, enc: true, msg: 'IP adds the <b>source and destination addresses</b>. This is the only header routers need.' },
-          { depth: 5, on: 4, enc: true, msg: 'The link layer frames it for <b>one hop</b>: phone to Wi-Fi router. Then it goes out as radio waves.' },
-          { depth: 5, on: 3, enc: true, hop: true, where: 'After the first router', msg: 'At the router: the Wi-Fi frame is thrown away, IP <b>TTL</b> drops to 63, a new frame is built for the next hop. TCP, TLS and HTTP are not touched. (Home routers also rewrite the source address: see the next lesson.)' },
-          { depth: 1, on: 0, where: 'At the server', msg: 'At the server each layer strips its own header in reverse: link, IP, TCP (puts segments in order), TLS (decrypts). HTTP sees the exact text the app sent.' },
-        ],
-        paint(f) {
-          items.forEach((li, k) => li.classList.toggle('nw-on', k === f.on));
-          let node = h('div', { class: `nw-payload ${f.enc ? 'nw-enc' : ''}` }, f.enc ? '17 03 03 00 a1 · 9f 3c e0 71 b4 0d … (ciphertext)' : 'GET /v1/headlines HTTP/1.1  Host: api.example.com  Accept: application/json');
-          for (let k = 1; k < f.depth; k++) {
-            let tag = TAGS[k];
-            if (f.hop && k === 3) tag = '<b>IPv4 packet</b> · 20 B header · 203.0.113.7 → 198.51.100.80 · TTL 63';
-            if (f.hop && k === 4) tag = '<b>Fiber frame</b> · router → next router · new checksum';
-            node = h('div', { class: 'nw-box', 'data-l': String(k) }, h('div', { class: 'nw-tag', html: tag }), node);
-            if (k === f.depth - 1 && (f.depth > lastDepth || f.hop)) node.classList.add('drop-in');
-          }
-          lastDepth = f.depth;
-          pkt.replaceChildren(label(f.where || 'On the wire'), node);
-        },
-      });
-    },
-    deeper: [
-      {
-        title: 'Why layers at all',
-        body: `<p>Layers let each piece change on its own. Your phone moves from Wi-Fi to LTE and the link layer changes completely, but IP, TCP and HTTP do not care. Servers moved from HTTP/1.1 to HTTP/2 without any router being replaced. The rule that makes this work: a layer only talks to the same layer on the other side, through the services of the layer below.</p>
-<p>The older OSI model has seven layers. Courses still use its numbers ("a layer 4 load balancer" means it works on TCP/UDP, "layer 7" means it reads HTTP). The internet itself runs on the four-layer TCP/IP model.</p>`,
-      },
-      {
-        title: 'Overhead: headers cost bytes',
-        body: `<p>Every packet pays for its headers. IPv4 and TCP headers are at least 20 bytes each, and TLS adds a few bytes per record plus an authentication tag. A packet on most links carries up to about 1500 bytes, so a large download is mostly payload. A tiny request like an analytics ping is mostly headers, and HTTP headers (cookies, user agent, auth tokens) are often bigger than the JSON body.</p>
-<p>That is one reason to batch many small events into one request: you pay the header cost once.</p>`,
-      },
-      {
-        title: 'Where your Android code sits',
-        body: `<p>Your code lives at the application layer. OkHttp handles HTTP framing, TLS (through the platform's security provider) and connection reuse. The Android kernel runs TCP and IP. The modem and Wi-Fi chip run the link layer. You never build a TCP header, but you see each layer in errors: <code>UnknownHostException</code> is DNS, <code>ConnectException</code> and <code>SocketTimeoutException</code> are TCP, <code>SSLHandshakeException</code> is TLS, and a 500 status is HTTP.</p>`,
-        code: `try {
-    api.headlines()
-} catch (e: UnknownHostException) {      // DNS: name did not resolve (often: offline)
-} catch (e: SSLHandshakeException) {     // TLS: certificate or protocol problem
-} catch (e: SocketTimeoutException) {    // TCP: connect or read took too long
-} catch (e: IOException) {               // other transport failures
-} catch (e: HttpException) {             // HTTP: server answered with 4xx or 5xx
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>On the phone, OkHttp writes bytes into a socket. The kernel's TCP stack cuts them into segments sized to fit the path (the MSS: about 1460 bytes on a typical 1500-byte link), keeps a copy of each until it is acknowledged, and hands them to IP. IP picks the interface from the routing table (Wi-Fi or cellular) and the driver frames them. Receiving runs the same path backwards, and the kernel only wakes your read when bytes arrive in order.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Treating every IOException the same',
-        bad: 'catch (e: IOException) {\n    showError("Server error")\n}',
-        good: 'catch (e: UnknownHostException) {\n    showError("No connection")\n} catch (e: IOException) {\n    showError("Network problem, try again")\n}',
-        why: 'An <code>IOException</code> means the request never got a full HTTP answer, so it is a network problem, not a server error. Knowing which layer failed lets you show the right message and decide whether a retry makes sense.',
-      },
-    ],
-    terms: [
-      { term: 'Encapsulation', def: 'Wrapping data from a higher layer with a lower layer’s header, layer by layer, on the way down.' },
-      { term: 'TCP/IP model', def: 'The four-layer model the internet uses: application, transport, internet, link (RFC 1122).' },
-      { term: 'Packet', def: 'A unit of data with an IP header. Routers forward packets one at a time, independently.' },
-      { term: 'TTL', def: 'Time to live: a counter in the IP header that each router decrements, so lost packets do not loop forever.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Fill in the layer that adds each header.', code: '// ports and sequence numbers -> [[TCP|transport]]\n// source and destination address -> [[IP|internet]]\n// encryption of the HTTP bytes -> [[TLS]]', why: 'TCP (transport) adds ports and sequence numbers, IP (internet) adds addresses, and TLS encrypts what HTTP hands down.' },
-      { type: 'bug', prompt: 'The comment says which layer failed. One comment is wrong. Tap it.', code: 'try { api.headlines() }\ncatch (e: UnknownHostException) { } // DNS could not resolve the name\ncatch (e: SSLHandshakeException) { } // TLS handshake failed\ncatch (e: HttpException) { } // the TCP connection was refused', bug: 3, fix: 'catch (e: HttpException) { } // the server answered with an HTTP error status', why: 'Retrofit throws <code>HttpException</code> when a full HTTP response came back with a non-2xx code. A refused TCP connection is a <code>ConnectException</code>.' },
-    ],
-    predict: {
-      q: "At the first router, what happens to the Wi-Fi frame around your packet?",
-      options: ["It travels with the packet all the way to the server","It is thrown away, and a new frame is built for the next hop","TLS encrypts it"],
-      a: 1,
-      why: "A link-layer frame covers one hop only. The router strips it, lowers the IP TTL, and wraps the packet in a fresh frame for the next link.",
-    },
-    quiz: [
-      { q: 'A packet crosses three routers between your phone and the server. Which header do the routers read to forward it?', options: ['The HTTP request line', 'The IP header', 'The TLS record header', 'The TCP header'], a: 1, why: 'Routers work at the internet layer. They read the destination IP address and pick the next hop. Everything above IP is just payload to them.' },
-      { q: 'Put the sending side in order for one HTTPS request.', options: ['HTTP → TLS → TCP → IP → link', 'IP → TCP → TLS → HTTP → link', 'HTTP → TCP → TLS → IP → link', 'link → IP → TCP → TLS → HTTP'], a: 0, why: 'Encapsulation goes down the stack. HTTP text is encrypted by TLS, TCP carries the TLS records, IP addresses the segments, and the link layer frames each packet.' },
-      { q: 'Your phone switches from Wi-Fi to LTE. Which layer changes completely?', options: ['Application', 'Transport', 'Link', 'None of them'], a: 2, why: 'Wi-Fi and LTE are different link layers with different frames and radios. The layers above stay the same protocols, even though, as the next lesson shows, the IP address changes too.' },
-      { q: 'A tiny analytics event of 40 bytes is sent as its own HTTPS request. What is true?', options: ['Most bytes on the wire are headers, not the event', 'Headers are compressed away, so only 40 bytes travel', 'TCP merges it with other apps’ data', 'IP removes HTTP headers to save space'], a: 0, why: 'IP, TCP and TLS overhead plus HTTP headers easily reach hundreds of bytes, so a 40-byte event is a small part of the packet. Batching events spreads that cost.' },
-    ],
-  });
+  
 
   // 2 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'ip-routing',
-    title: 'IP addresses, NAT and switching networks',
-    tagline: 'Your phone’s address is private, shared, and changes when you walk out the door.',
-    level: 'beginner',
-    body: `
-<p>Every device on the internet is reached through an <b>IP address</b>. IPv4 addresses are 32 bits (<code>198.51.100.80</code>), which gives about 4 billion, too few for every phone. IPv6 addresses are 128 bits (<code>2001:db8::1</code>) and do not run out. Many mobile networks give phones an IPv6 address, often next to an IPv4 one.</p>
-<p>The IPv4 shortage is solved with <b>NAT</b>. Your home router gives the phone a <em>private</em> address such as <code>192.168.1.23</code> (RFC 1918 reserves 10/8, 172.16/12 and 192.168/16 for this). When a packet leaves, the router rewrites the source to its one <em>public</em> address and a free port, and remembers the mapping so replies find their way back. Mobile carriers do the same at a larger scale (carrier-grade NAT), often with addresses from <code>100.64.0.0/10</code>.</p>
-<p>A TCP connection is identified by four values: source IP, source port, destination IP, destination port. When you walk out of Wi-Fi onto cellular, your address changes, so the old connections stop matching and die. Android moves the <em>default network</em> and later closes connections on the old one. Your app has to open new ones; long-lived streams like the ones in <a href="#data.realtime">real-time updates</a> must reconnect themselves. Step through it in the demo.</p>`,
-    code: `// Watch the default network instead of polling "am I online?"
-val cm = context.getSystemService(ConnectivityManager::class.java)
-
-val callback = object : ConnectivityManager.NetworkCallback() {
-    override fun onAvailable(network: Network) {
-        // A new default network. Wait for capabilities before deciding anything.
-    }
-
-    override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-        val online = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-        _network.value = NetState(online, unmetered)   // e.g. pause big prefetches on metered
-    }
-
-    override fun onLost(network: Network) {
-        _network.value = NetState(online = false, unmetered = false)
-    }
-}
-
-cm.registerDefaultNetworkCallback(callback)
-// ... and cm.unregisterNetworkCallback(callback) when you no longer need it`,
-    remember: 'A connection is pinned to four values: two addresses, two ports. Change networks and you need new connections.',
-    visual(el) {
-      Lab.ui.graph(el, {
-        height: 300,
-        nodes: [
-          { id: 'ph', label: 'Phone<small>Wi-Fi 192.168.1.23</small>', x: 17, y: 12 },
-          { id: 'nat', label: 'Home router<small>203.0.113.7</small>', x: 17, y: 50, tone: 'warm' },
-          { id: 'srv', label: 'Server<small>198.51.100.80</small>', x: 83, y: 50, tone: 'muted' },
-          { id: 'map', label: 'NAT table<small>:51034 ↔ :40112</small>', x: 17, y: 88, tone: 'warm', hidden: true },
-          { id: 'cell', label: 'Phone<small>LTE 100.64.23.7</small>', x: 50, y: 12, hidden: true },
-          { id: 'cg', label: 'Carrier NAT<small>192.0.2.44</small>', x: 83, y: 88, tone: 'warm', hidden: true },
-        ],
-        predict: {
-          q: 'The phone opens a connection from <code>192.168.1.23:51034</code>. Which source address does the server see?',
-          options: ['<code>192.168.1.23:51034</code>, the phone’s own address', 'The router’s public address, with a port the router picked', 'None: NAT hides the source completely'],
-          a: 1,
-          why: 'A private address cannot be routed on the internet. The router rewrites the source to its public address and a free port, and remembers the mapping for the replies.',
-        },
-        frames: [
-          { say: 'The phone is on home Wi-Fi with a <em>private</em> address. Follow one TCP connection to the API.' },
-          { add: [['ph', 'nat', 'SYN :51034']], say: 'The phone sends SYN from <code>192.168.1.23:51034</code>. That address only means something inside the home network.' },
-          { show: ['map'], hl: ['nat', 'map'], add: [['nat', 'map', 'stores'], ['nat', 'srv', 'from .7:40112', 'warm']], say: 'The router rewrites the source to <code>203.0.113.7:40112</code> and stores the mapping in its NAT table.' },
-          { remove: [['nat', 'map']], add: [['ph', 'nat', '', 'ok'], ['nat', 'srv', 'open', 'ok']], hl: ['srv'], say: 'Replies to port 40112 are mapped back to the phone. The server sees the four values <code>203.0.113.7:40112 → 198.51.100.80:443</code>.' },
-          { show: ['cell', 'cg'], gone: ['ph', 'map'], remove: [['ph', 'nat']], add: [['cell', 'cg']], say: 'The user walks outside. Cellular becomes the default network: a new address behind the carrier’s NAT.' },
-          { hl: ['srv'], add: [['nat', 'srv', 'old 4-tuple', 'err']], say: 'Packets now come from <code>192.0.2.44</code>, which match none of the old four values. Android closes connections on the old network. <b>This connection is dead.</b>' },
-          { gone: ['nat'], remove: [['nat', 'srv']], add: [['cg', 'srv', 'new SYN', 'ok']], say: 'The app has to open a new connection: new handshake, new NAT mapping. OkHttp retries on a new one; a WebSocket must reconnect itself.' },
-        ],
-      });
-    },
-    deeper: [
-      {
-        title: 'Routing: one hop at a time',
-        body: `<p>No device knows the whole path. Each router has a <em>routing table</em> that maps address prefixes to a next hop, and picks the longest prefix that matches the destination. Your phone's table is tiny: local network directly, everything else to the default gateway. Backbone routers learn routes from each other with BGP. Each hop is independent, so two packets of the same download can take different paths and arrive out of order. TCP fixes the order.</p>`,
-      },
-      {
-        title: 'IPv6 and Happy Eyeballs',
-        body: `<p>With IPv6 there is no address shortage, so phones get globally routable addresses and NAT is not needed for that reason. Many carriers run IPv6-only networks and translate to IPv4 servers at the edge (NAT64). A server can have both an IPv4 (A record) and an IPv6 (AAAA record) address. Clients race them: start one, start the other a moment later if the first is slow, keep whichever connects first. This is called <em>Happy Eyeballs</em> (RFC 8305), and it hides broken IPv6 paths from users.</p>`,
-      },
-      {
-        title: 'Emulator addresses',
-        body: `<p>The Android emulator has its own private network. Inside it, <code>10.0.2.2</code> is an alias for your computer's loopback (127.0.0.1), and <code>10.0.2.3</code> is the first DNS server. So a backend running on your laptop at <code>localhost:8080</code> is reached from the emulator at <code>http://10.0.2.2:8080</code>, not <code>localhost</code>, which would mean the emulator itself.</p>`,
-        code: `// debug build only: talk to the server running on your laptop
-val baseUrl = if (BuildConfig.DEBUG) "http://10.0.2.2:8080/" else "https://api.example.com/"`,
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Assuming Wi-Fi means free and fast',
-        bad: 'val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)\nif (isWifi) prefetchAllVideos()',
-        good: 'val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)\nif (unmetered) prefetchAllVideos()',
-        why: 'A phone hotspot is Wi-Fi but bills the user. Android’s docs say to check <code>NET_CAPABILITY_NOT_METERED</code> rather than the transport type, and to read bandwidth from the capabilities instead of guessing.',
-      },
-      {
-        title: 'Calling localhost from the emulator',
-        bad: 'val baseUrl = "http://localhost:8080/"',
-        good: 'val baseUrl = "http://10.0.2.2:8080/"',
-        why: 'Inside the emulator, <code>localhost</code> is the emulator. <code>10.0.2.2</code> is the alias for your computer’s loopback. Cleartext HTTP also needs a debug network security config if the app targets Android 9 (API 28) or higher.',
-      },
-    ],
-    terms: [
-      { term: 'NAT', def: 'Network address translation: a router rewrites private source addresses and ports to its public address, and maps replies back.' },
-      { term: 'Private address', def: 'An address from a range reserved for local networks (10/8, 172.16/12, 192.168/16) that is not routed on the public internet.' },
-      { term: 'Default network', def: 'The network Android uses for new connections; it can change at any time, for example from cellular to validated Wi-Fi.' },
-      { term: 'Four-tuple', def: 'Source IP, source port, destination IP and destination port: the values that identify one TCP connection.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'React when the default network changes.', code: 'cm.[[registerDefaultNetworkCallback]](object : ConnectivityManager.NetworkCallback() {\n    override fun [[onLost]](network: Network) {\n        _online.value = false\n    }\n})', why: '<code>registerDefaultNetworkCallback</code> tracks whichever network is the default. <code>onLost</code> runs when that network stops being the default.' },
-      { type: 'bug', prompt: 'This app prefetches large videos on networks that bill the user. Tap the broken line.', code: 'override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {\n    val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)\n    val free = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)\n    if (validated && free) prefetch()\n}', bug: 2, fix: '    val free = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)', why: 'Wi-Fi can be metered (a phone hotspot). Ask about the property you care about, <code>NOT_METERED</code>, not the radio type.' },
-    ],
-    quiz: [
-      { q: 'Two phones on the same home Wi-Fi call the same API. What source address does the server see?', options: ['The same public address, with different ports', 'Each phone’s private 192.168.x.x address', 'The router’s private address', 'The phones’ MAC addresses'], a: 0, why: 'NAT rewrites both phones’ packets to the router’s one public address and gives each flow its own port, so replies can be told apart.' },
-      { q: 'A user downloads a file on Wi-Fi, then walks out of range. What happens to the download’s TCP connection?', options: ['It moves to cellular automatically', 'It dies; the app must open a new connection and resume', 'It pauses until Wi-Fi comes back, then continues', 'NAT forwards it to the new network'], a: 1, why: 'The connection is tied to the old address and port. Android closes connections on the old network. To survive, the app reconnects, ideally with an HTTP Range request to resume.' },
-      { q: 'Which check fits "only prefetch when it won’t cost the user money"?', options: ['Check for the <code>TRANSPORT_WIFI</code> transport', 'Check the <code>NOT_METERED</code> capability', 'Check the <code>INTERNET</code> capability', 'Ping a public server'], a: 1, why: '<code>NOT_METERED</code> describes billing directly. Wi-Fi can be a metered hotspot, and <code>INTERNET</code> only says the network is meant to reach the internet.' },
-    ],
-  });
+  
 
   // 3 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'dns',
-    title: 'DNS: names to addresses',
-    tagline: 'Before the first byte of your request, someone has to find the server.',
-    level: 'intermediate',
-    body: `
-<p>Your code knows <code>api.example.com</code>. IP needs an address. <b>DNS</b> turns one into the other. It is a distributed, hierarchical database: the <em>root</em> servers know who runs <code>.com</code>, the <code>.com</code> servers know who runs <code>example.com</code>, and that domain's <em>authoritative</em> server knows the address of <code>api.example.com</code>.</p>
-<p>Your phone does not walk that tree itself. It asks a <b>recursive resolver</b> (your carrier's, your router's, or a Private DNS provider), which does the walking and returns the final answer. Every answer carries a <b>TTL</b>, in seconds, that says how long it may be cached. The OS and the resolver both cache, so most lookups are answered without leaving the phone or the resolver.</p>
-<p>That is why the first request after app start is slower: it may pay for a DNS lookup (one or more round trips) before TCP even starts. Step through one cold lookup, then a second one that the cache answers.</p>`,
-    code: `// OkHttp asks a Dns for addresses. The default, Dns.SYSTEM, uses the OS resolver and its cache.
-class TimedDns(private val delegate: Dns = Dns.SYSTEM) : Dns {
-    override fun lookup(hostname: String): List<InetAddress> {
-        val start = SystemClock.elapsedRealtime()
-        try {
-            return delegate.lookup(hostname)    // throws UnknownHostException if it fails
-        } finally {
-            val took = SystemClock.elapsedRealtime() - start
-            Log.d("Net", "DNS " + hostname + " took " + took + " ms")
-        }
-    }
-}
-
-val client = OkHttpClient.Builder()
-    .dns(TimedDns())
-    .build()`,
-    remember: 'DNS answers are cached for their TTL. The cold first lookup is the slow one.',
-    visual(el) {
-      Lab.ui.flow(el, {
-        nodes: [
-          { id: 'app', label: 'App', sub: 'OkHttp' },
-          { id: 'os', label: 'Phone OS', sub: 'DNS cache' },
-          { id: 'rec', label: 'Resolver', sub: 'recursive' },
-          { id: 'root', label: 'Root', sub: 'knows .com' },
-          { id: 'tld', label: '.com TLD', sub: 'knows example.com' },
-          { id: 'auth', label: 'Name server', sub: 'authoritative' },
-        ],
-        predict: {
-          q: 'The phone looked up <code>api.example.com</code> 60 seconds ago, and the record has TTL 300. The app asks again. Who answers?',
-          options: ['The authoritative server for example.com', 'The recursive resolver', 'The phone’s own cache, without sending a packet'],
-          a: 2,
-          why: 'The answer may be cached for its TTL. 60 seconds is well inside 300, so the OS cache answers and nothing leaves the device.',
-        },
-        frames: [
-          { say: 'Cold start: the phone and the resolver have empty caches. The app needs an address for <code>api.example.com</code>.' },
-          { at: 'app', packet: 'api.example.com?', say: 'OkHttp asks the system resolver. No TCP connection can start until this returns.' },
-          { at: 'os', packet: 'miss', tone: 'warm', say: 'The phone’s cache is empty, so the query goes to the recursive resolver: one round trip.' },
-          { at: 'rec', packet: 'miss', tone: 'warm', say: 'The resolver has nothing cached either. It starts at the top of the tree.' },
-          { at: 'root', packet: 'ask .com', tone: 'warm', say: 'A root server does not know the address. It refers the resolver to the <code>.com</code> servers.' },
-          { at: 'tld', packet: 'ask ns1.example.com', tone: 'warm', say: 'The <code>.com</code> server refers it to example.com’s own name server.' },
-          { at: 'auth', packet: 'A 198.51.100.80 · TTL 300', tone: 'ok', mark: { auth: 'ok' }, say: 'The authoritative server has the record: the address, valid for 300 seconds.' },
-          { at: 'rec', packet: 'cached 300 s', tone: 'ok', mark: { rec: 'ok' }, say: 'The resolver caches the answer and returns it. The next user who asks gets it in one round trip.' },
-          { at: 'os', packet: '198.51.100.80', tone: 'ok', mark: { os: 'ok' }, say: 'The phone caches it too and hands it to OkHttp. Now TCP can start. That cold lookup cost several round trips.' },
-          { at: 'app', packet: 'cache hit', tone: 'ok', mark: { app: 'ok' }, say: 'A minute later the app asks again. The phone’s cache answers in well under a millisecond.' },
-        ],
-      });
-    },
-    deeper: [
-      {
-        title: 'What a DNS answer contains',
-        body: `<p>DNS stores <em>records</em>. <code>A</code> holds an IPv4 address, <code>AAAA</code> an IPv6 address, <code>CNAME</code> says "this name is an alias of that one" (common with CDNs), <code>MX</code> is for mail, and <code>HTTPS</code>/<code>SVCB</code> records can tell a client up front that a server speaks HTTP/3. A lookup often returns several addresses. OkHttp tries them in order, and an address that fails becomes a different <em>route</em> for the next attempt.</p>`,
-      },
-      {
-        title: 'Transport and privacy',
-        body: `<p>Classic DNS sends questions in plain UDP to port 53. RFC 1035 limited UDP answers to 512 bytes and told clients to retry over TCP when an answer is truncated (EDNS raised that limit later). Plain DNS is readable by anyone on the path. Encrypted variants, DNS over TLS and DNS over HTTPS, hide which names you look up. Android's <em>Private DNS</em> setting (Android 9+) encrypts lookups for the whole phone, using DNS over TLS (newer versions can also use DNS over HTTPS with some providers), without any app change.</p>`,
-      },
-      {
-        title: 'TTL is a trade-off for the server team',
-        body: `<p>A long TTL means fewer lookups and faster apps, but when the backend moves to a new address, some users keep hitting the old one until their caches expire. A short TTL makes moves fast but costs more lookups. Teams often lower the TTL a day before a planned migration and raise it again after. For you, the client side: never cache an address yourself forever. Let the resolver honor the TTL.</p>`,
-        code: `// Don't do this: the server may move, and this app will never know
-val pinnedAddress = InetAddress.getByName("api.example.com")   // looked up once at startup
-// Instead, give OkHttp the host name every time and let DNS caching work`,
-      },
-    ],
-    underHood: {
-      body: `<p>On Android, <code>InetAddress.getByName</code> and OkHttp's <code>Dns.SYSTEM</code> call into the system resolver, which caches answers for their TTL, so most of your app's lookups never leave the phone. Apps that do their own DNS (not through the system resolver) can check <code>LinkProperties.isPrivateDnsActive()</code> so they don’t send plain queries when the user asked for encrypted ones.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Building a new OkHttpClient per request',
-        bad: 'suspend fun load() = OkHttpClient().newCall(req).await()',
-        good: '// one client, injected everywhere\nclass Repo(private val client: OkHttpClient) {\n    suspend fun load() = client.newCall(req).await()\n}',
-        why: 'A fresh client has an empty connection pool, so every call pays DNS, TCP and TLS again. One shared client reuses warm connections and skips all three.',
-      },
-    ],
-    terms: [
-      { term: 'Recursive resolver', def: 'The DNS server that walks the hierarchy on your behalf and returns the final answer, caching along the way.' },
-      { term: 'Authoritative server', def: 'The DNS server that holds the actual records for a domain.' },
-      { term: 'TTL (DNS)', def: 'How many seconds a DNS answer may be cached before it must be looked up again.' },
-      { term: 'A / AAAA record', def: 'DNS records that map a name to an IPv4 (A) or IPv6 (AAAA) address.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Plug a custom DNS into OkHttp.', code: 'class LoggingDns : [[Dns]] {\n    override fun lookup(hostname: String): List<InetAddress> =\n        Dns.[[SYSTEM]].lookup(hostname).also { Log.d("Net", "resolved " + hostname) }\n}', why: 'OkHttp’s <code>Dns</code> interface has one method, <code>lookup</code>. <code>Dns.SYSTEM</code> is the default implementation backed by the OS resolver.' },
-      { type: 'bug', prompt: 'After the backend moved to new servers, this app kept calling the old address. Tap the line that caused it.', code: 'object Backend {\n    private val address = InetAddress.getByName("api.example.com")\n    fun url(path: String) = "https://api.example.com/" + path\n    fun ip() = address\n}', bug: 1, fix: '    fun address(): InetAddress = InetAddress.getByName("api.example.com")', why: 'Resolving once and keeping the result ignores the TTL. Resolve when you connect (or let OkHttp do it) so cached answers expire as the server intends.' },
-    ],
-    quiz: [
-      { q: 'The first API call after a cold start takes 400 ms longer than the rest. Which part of the delay is DNS most likely responsible for?', options: ['None; DNS is always cached', 'The lookup before TCP starts, since nothing is cached yet', 'Decoding the JSON', 'TLS certificate checking'], a: 1, why: 'A cold lookup may need round trips to the resolver, and the resolver may walk the tree. Later calls hit the cache. (TCP and TLS setup also add to the first call; the next lessons cover them.)' },
-      { q: 'Order the servers a recursive resolver asks when nothing is cached.', options: ['Root → TLD → authoritative', 'Authoritative → TLD → root', 'TLD → root → authoritative', 'Only the authoritative server'], a: 0, why: 'Each level refers the resolver one step down the name: the root knows the TLD servers, the TLD knows the domain’s servers, and those hold the record.' },
-      { q: 'A record has TTL 300. The resolver cached it 200 seconds ago and gives it to your phone. How long may your phone cache it?', options: ['300 seconds', 'About 100 seconds', 'Forever', '0 seconds'], a: 1, why: 'Resolvers hand out the remaining TTL. The record expires at the same moment everywhere, roughly 100 seconds from now.' },
-      { q: 'A user turns on Private DNS in Android settings. What changes for your app?', options: ['You must switch to a DNS-over-HTTPS library', 'Nothing in your code; the system resolver encrypts lookups', 'Lookups stop being cached', 'The app needs a new permission'], a: 1, why: 'Private DNS is a system setting. The OS resolver sends queries encrypted, and apps using the system resolver get it for free.' },
-    ],
-  });
+  
 
   // 4 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'tcp-udp',
-    title: 'TCP vs UDP',
-    tagline: 'Reliable and ordered, or fast and on your own.',
-    level: 'intermediate',
-    body: `
-<p><b>TCP</b> gives the app a reliable, ordered byte stream on top of IP, which loses, duplicates and reorders packets. It starts with a <em>three-way handshake</em> (SYN, SYN-ACK, ACK) that agrees on starting sequence numbers, so it costs one round trip before any data. Every byte is numbered. The receiver sends <em>acknowledgments</em>, and the sender retransmits what was not acknowledged.</p>
-<p>TCP also runs <b>congestion control</b>. It starts slowly (<em>slow start</em>), grows its sending window while ACKs come back, and cuts the window when it sees loss, because loss usually means a queue somewhere is full. This keeps the internet from collapsing, but it also means a fresh connection cannot use the full bandwidth right away.</p>
-<p>The price of order is <b>head-of-line blocking</b>: if packet 2 is lost, packets 3, 4 and 5 sit in the receiver's buffer until 2 is resent. <b>UDP</b> skips all of this: no handshake, no ACKs, no order, 8-byte header. Each datagram arrives or doesn't. That suits live audio, video calls and games, where late data is useless, and it is the base QUIC builds on. Lose a packet in both modes and compare.</p>`,
-    code: `// TCP through OkHttp: tune how long each phase may take
-val client = OkHttpClient.Builder()
-    .connectTimeout(10, TimeUnit.SECONDS)    // TCP connect to the server
-    .readTimeout(10, TimeUnit.SECONDS)       // max gap between incoming bytes
-    .callTimeout(30, TimeUnit.SECONDS)       // the whole call, DNS to last byte
-    .build()
-
-// UDP: one datagram, no connection, no delivery guarantee
-suspend fun sendPing(host: String, port: Int) = withContext(Dispatchers.IO) {
-    DatagramSocket().use { socket ->
-        val bytes = "ping".toByteArray()
-        val packet = DatagramPacket(bytes, bytes.size, InetAddress.getByName(host), port)
-        socket.send(packet)                     // returns at once; it may never arrive
-    }
-}`,
-    remember: 'TCP buys order and reliability with a handshake, ACKs and head-of-line blocking. UDP gives you none of it.',
-    visual(el) {
-      let mode = 'tcp', lose = true, connected = false, tok = 0, busy = false;
-      const seq = h('div', { class: 'nw-seq' });
-      const slots = [1, 2, 3, 4, 5].map(n => h('span', { class: 'nw-slot' }, String(n)));
-      const appLine = h('span', { class: 'nw-stat' }, 'nothing yet');
-      const msg = out('Pick TCP or UDP, then press <b>Send 5 packets</b>.');
-      const clear = () => { seq.replaceChildren(seqHead()); slots.forEach(s => { s.className = 'nw-slot'; }); appLine.textContent = 'nothing yet'; };
-      const add = async (node, t, wait = 520) => { seq.append(node); await sleep(wait); return t === tok && el.isConnected; };
-      const slot = (n, cls) => { slots[n - 1].className = `nw-slot ${cls}`; replay(slots[n - 1], 'pop-soft'); };
-      const delivered = () => slots.filter(s => s.classList.contains('nw-got')).map(s => s.textContent).join(', ') || 'nothing yet';
-      async function connect(t) {
-        if (!(await add(arrow('SYN · seq=100', 'r'), t))) return false;
-        if (!(await add(arrow('SYN,ACK · seq=300 ack=101', 'l'), t))) return false;
-        if (!(await add(arrow('ACK · ack=301', 'r'), t))) return false;
-        connected = true;
-        return add(arrow('connection open: 1 round trip spent, no data sent yet', 'r', 'nw-note-row'), t, 300);
-      }
-      async function send() {
-        if (busy) return;
-        busy = true; const t = ++tok; clear();
-        const done = () => { busy = false; };
-        if (mode === 'tcp') {
-          if (!connected) { say(msg, 'TCP must open a connection first: the three-way handshake.'); if (!(await connect(t))) return done(); }
-          say(msg, 'Sending five segments…');
-          for (let n = 1; n <= 5; n++) {
-            const lost = lose && n === 2;
-            if (!(await add(arrow(`segment ${n}${lost ? ' (lost on the way)' : ''}`, 'r', lost ? 'nw-lost' : ''), t, 380))) return done();
-            if (lost) continue;
-            if (!lose || n === 1) { slot(n, 'nw-got'); if (!(await add(arrow(`ACK ${n + 1}`, 'l'), t, 300))) return done(); }
-            else { slot(n, 'nw-held'); if (!(await add(arrow(`ACK 2 (duplicate: still missing 2)`, 'l', 'nw-warmc'), t, 300))) return done(); }
-            appLine.textContent = delivered();
-          }
-          if (lose) {
-            say(msg, `The app has only segment 1. <b>3, 4 and 5 arrived</b> but wait in the buffer: TCP may only hand bytes up in order. That is head-of-line blocking.`);
-            if (!(await add(arrow('3 duplicate ACKs → fast retransmit, window cut', 'r', 'nw-note-row'), t, 1400))) return done();
-            if (!(await add(arrow('segment 2 (retransmit)', 'r', 'nw-warmc'), t, 450))) return done();
-            [2, 3, 4, 5].forEach(n => slot(n, 'nw-got'));
-            appLine.textContent = delivered();
-            if (!(await add(arrow('ACK 6 (everything up to 5)', 'l'), t, 300))) return done();
-            say(msg, '<span class="good">All five delivered, in order</span>, one extra round trip late. The sender also cut its congestion window roughly in half, so the next data goes out slower.');
-          } else say(msg, '<span class="good">All five delivered in order.</span> Each ACK names the next byte expected. Turn on loss to see recovery.');
-        } else {
-          connected = false;
-          say(msg, 'UDP: no handshake. Datagrams go out at once.');
-          for (let n = 1; n <= 5; n++) {
-            const lost = lose && n === 2;
-            if (!(await add(arrow(`datagram ${n}${lost ? ' (lost)' : ''}`, 'r', lost ? 'nw-lost' : ''), t, 380))) return done();
-            if (!lost) slot(n, 'nw-got');
-            appLine.textContent = delivered();
-          }
-          if (lose) slot(2, 'nw-gone');
-          say(msg, lose ? '1, 3, 4 and 5 reached the app <b>immediately</b>. 2 is gone for good and nobody will resend it. A voice call just plays 20 ms of silence; a file transfer would be corrupt.' : 'All arrived this time, with zero setup cost. Nothing guaranteed it.');
-        }
-        busy = false;
-      }
-      const modeP = picker('protocol', [{ label: 'TCP', v: 'tcp' }, { label: 'UDP', v: 'udp' }], it => { tok++; busy = false; mode = it.v; connected = false; clear(); say(msg, it.v === 'tcp' ? 'TCP: connection first, then numbered, acknowledged segments.' : 'UDP: independent datagrams, no connection.'); });
-      const loseB = toggle('Lose packet 2', on => { lose = on; }, true);
-      el.append(modeP,
-        h('div', { class: 'nw-stage' }, seq, h('div', { class: 'nw-row' }, label('server app has'), h('div', { class: 'nw-slots' }, slots)), h('div', { class: 'nw-row' }, label('handed to app'), appLine)),
-        h('div', { class: 'controls' }, act('Send 5 packets', send), loseB, act('Close connection', () => { tok++; busy = false; connected = false; clear(); say(msg, 'Closed. The next TCP send starts with a handshake again.'); })),
-        msg);
-      clear();
-    },
-    deeper: [
-      {
-        title: 'Slow start: why new connections are slow',
-        body: `<p>A new TCP connection does not know how fast the path is. It starts with a small <em>congestion window</em> (a common initial window is 10 segments, about 14 KB) and roughly doubles it every round trip while ACKs arrive. So the first 14 KB arrive after one round trip, the next 28 KB after another, and so on. On a 100 ms mobile link, a fresh connection needs several round trips to get to full speed. A <em>reused</em> connection has already grown its window. This is a second big reason to keep connections alive and share one client.</p>`,
-      },
-      {
-        title: 'When UDP wins',
-        body: `<p>Pick UDP when late data is worthless or when you need your own rules for reliability. Voice and video calls (WebRTC) send media over UDP, because a resent audio frame would arrive after it should have played. Games send the latest position many times per second; a lost one is replaced by the next. QUIC, and so HTTP/3, runs on UDP but rebuilds reliability <em>per stream</em> in user space, which removes TCP's cross-stream blocking. For normal REST and file downloads in an Android app, you use TCP (or QUIC) through a library, never raw UDP.</p>`,
-      },
-      {
-        title: 'Closing and timeouts',
-        body: `<p>TCP closes with FIN segments from each side. The side that closes first waits in <code>TIME_WAIT</code> for twice the maximum segment lifetime, so late packets from the old connection cannot confuse a new one. Mobile networks add a twist: carrier NATs drop idle mappings after a while. A connection that was silent for minutes may be dead without either side knowing, and the next write just times out. OkHttp's pool evicts idle connections and retries a failed call on a new connection when it safely can.</p>`,
-      },
-    ],
-    underHood: {
-      body: `<p>RFC 5681 defines the classic algorithm. While the window is below a threshold, it grows by about one segment per ACK (exponential per round trip). Above it, it grows by about one segment per round trip. Three duplicate ACKs trigger <em>fast retransmit</em> of the missing segment and halve the threshold. A full timeout is worse: the window falls back to one segment. Modern stacks use variants such as CUBIC or BBR, but the shape is the same.</p>`,
-      code: `// Rough model of slow start: segments in flight per round trip
-var cwnd = 10                    // initial window (segments)
-repeat(4) { rtt ->
-    println("RTT " + rtt + ": " + cwnd + " segments")
-    cwnd *= 2                    // every ACKed segment adds one
-}
-// RTT 0: 10, RTT 1: 20, RTT 2: 40, RTT 3: 80`,
-    },
-    mistakes: [
-      {
-        title: 'Using readTimeout as a total deadline',
-        bad: 'OkHttpClient.Builder()\n    .readTimeout(15, TimeUnit.SECONDS)   // "the call ends after 15 s"',
-        good: 'OkHttpClient.Builder()\n    .readTimeout(15, TimeUnit.SECONDS)\n    .callTimeout(30, TimeUnit.SECONDS)   // the real upper bound',
-        why: 'The read timeout is the longest gap between bytes, so a server trickling one byte every 10 s never trips it. <code>callTimeout</code> bounds the whole call.',
-      },
-    ],
-    terms: [
-      { term: 'Three-way handshake', def: 'SYN, SYN-ACK, ACK: how TCP opens a connection and agrees on starting sequence numbers. Costs one round trip.' },
-      { term: 'Congestion window', def: 'How much unacknowledged data a TCP sender allows in flight. It grows while ACKs arrive and shrinks on loss.' },
-      { term: 'Head-of-line blocking', def: 'Later data waiting behind one lost or slow piece because delivery must stay in order.' },
-      { term: 'UDP', def: 'A transport with no connection, no acknowledgments and no ordering, with an 8-byte header (RFC 768).' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Bound the whole call to 30 seconds, and the TCP connect to 10.', code: 'val client = OkHttpClient.Builder()\n    .[[connectTimeout]](10, TimeUnit.SECONDS)\n    .[[callTimeout]](30, TimeUnit.SECONDS)\n    .build()', why: '<code>connectTimeout</code> covers opening the TCP socket. <code>callTimeout</code> covers the entire call from DNS to the last byte.' },
-      { type: 'bug', prompt: 'This sends a game position update. The comment states a wrong guarantee. Tap it.', code: 'DatagramSocket().use { socket ->\n    val data = encode(position)\n    socket.send(DatagramPacket(data, data.size, server, 7777))\n    // the server now has the position, in order with the previous ones\n}', bug: 3, fix: '    // the datagram may be lost, duplicated or reordered; the next update replaces it', why: 'UDP guarantees neither delivery nor order (RFC 768). Game protocols accept that and send fresh state often.' },
-    ],
-    predict: {
-      q: "Over UDP, datagram 2 of 5 is lost. What reaches the receiving app?",
-      options: ["Nothing until datagram 2 is resent","Datagrams 1, 3, 4 and 5, right away; 2 never arrives","All five, because UDP resends lost data"],
-      a: 1,
-      why: "UDP has no ACKs and no retransmission. Each datagram is independent, so the others are delivered at once and the lost one is simply gone.",
-    },
-    quiz: [
-      { q: 'Packet 2 of 5 is lost on a TCP connection. What does the receiving app see first?', options: ['Packets 1, 3, 4, 5, then 2', 'Packet 1, then nothing until 2 is resent, then 2–5 together', 'All five at once, after a timeout', 'An exception in the app'], a: 1, why: 'TCP hands bytes up in order. 3–5 are buffered until the retransmitted 2 arrives. That wait is head-of-line blocking.' },
-      { q: 'How many round trips does a TCP handshake cost before the client can send its first data byte?', options: ['0', '1', '2', '3'], a: 1, why: 'SYN goes out, SYN-ACK comes back. The client can send its ACK together with the first data, so one round trip.' },
-      { q: 'A video call app must choose a transport for live audio. Which fits best?', options: ['TCP, because audio must be complete', 'UDP, because a late audio frame is useless and retransmits add delay', 'HTTP/1.1 polling', 'Either; they behave the same on Wi-Fi'], a: 1, why: 'Retransmitting audio means it plays late or blocks newer audio. UDP lets the app skip losses and keep the call real-time.' },
-      { q: 'A new connection downloads a 200 KB image slower than the same download on a reused connection. Why?', options: ['TLS encrypts the first bytes twice', 'Slow start: the new connection’s window starts small and grows each round trip', 'UDP is used for new connections', 'DNS runs again for every packet'], a: 1, why: 'Congestion control starts cautious and doubles the window per round trip. A reused connection has already grown its window.' },
-      { q: 'What does TCP do when the sender sees three duplicate ACKs?', options: ['Closes the connection', 'Resends the missing segment right away and cuts its window', 'Ignores them', 'Switches to UDP'], a: 1, why: 'Duplicate ACKs mean later data arrived but one segment is missing. Fast retransmit resends it without waiting for a timeout, and congestion control backs off.' },
-    ],
-  });
+  
 
   // 5 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'tls',
-    title: 'TLS and HTTPS',
-    tagline: 'Encryption, integrity and proof that you are talking to the real server.',
-    level: 'intermediate',
-    body: `
-<p><b>TLS</b> gives a connection three things: <em>confidentiality</em> (nobody on the path can read it), <em>integrity</em> (nobody can change it unnoticed) and <em>authentication</em> (the server proves who it is). HTTPS is just HTTP sent inside TLS.</p>
-<p>Authentication works through <b>certificates</b>. The server sends a certificate for <code>api.example.com</code>, signed by an intermediate certificate authority, which is signed by a root CA. Android ships a set of trusted root CAs. The client checks every signature up the <em>chain of trust</em>, checks the dates, and checks that the name matches the host it dialed. If any check fails, the handshake fails with <code>SSLHandshakeException</code>.</p>
-<p>In TLS 1.3 (RFC 8446, on by default since Android 10) the handshake costs one round trip: the client sends its key share in the first message, and both sides derive the same keys from that exchange. Run the handshake, then try an intercepting proxy, then a pinned app whose server changed keys. The <a href="#security.network">network security</a> lesson covers the app-side setup.</p>`,
-    code: `// Pinning with OkHttp. Always ship a backup pin, and agree it with the server team.
-val pinner = CertificatePinner.Builder()
-    .add("api.example.com", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")  // current key
-    .add("api.example.com", "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=")  // backup key
-    .build()
-
-val client = OkHttpClient.Builder()
-    .certificatePinner(pinner)
-    .build()
-
-// A mismatch fails the call with SSLPeerUnverifiedException ("Certificate pinning failure!").
-// Android's own guidance: pinning is not recommended for most apps, because a CA or key
-// change on the server breaks every installed copy until users update.`,
-    remember: 'The chain must reach a trusted root, match the host name and be in date. Pin only with backups and an expiry.',
-    visual(el) {
-      const SC = {
-        normal: { root: 'Public root CA', where: 'in Android system store', ok: true },
-        proxy: { root: 'Debug Proxy CA', where: 'user-installed certificate', ok: false },
-        pinned: { root: 'Another public root CA', where: 'in Android system store', ok: true, pin: true },
-      };
-      let sc = 'normal';
-      const seq = h('div', { class: 'nw-seq' });
-      const cert = (name, sub) => {
-        const mark = h('span', { class: 'nw-mark' }, '·');
-        const small = h('small', {}, sub);
-        const n = h('div', { class: 'nw-cert' }, h('b', {}, name), mark, small);
-        n.set = (st, s) => { n.className = `nw-cert ${st === true ? 'nw-good' : st === false ? 'nw-bad' : ''}`; mark.textContent = st === true ? '✓' : st === false ? '✕' : '·'; if (s) small.textContent = s; };
-        return n;
-      };
-      const leaf = cert('api.example.com', 'leaf certificate · not checked yet');
-      const inter = cert('Intermediate CA', 'signed the leaf');
-      const root = cert('Root CA', 'signed the intermediate');
-      const chain = h('div', { class: 'nw-chain' }, leaf, h('span', { class: 'nw-cert-link' }, '↑ signed by'), inter, h('span', { class: 'nw-cert-link' }, '↑ signed by'), root);
-      const rtt = h('b', {}, '0');
-      const p = player(el, {
-        top: picker('scenario', [{ label: 'Normal', v: 'normal' }, { label: 'Intercepting proxy', v: 'proxy' }, { label: 'Pinned, server changed CA', v: 'pinned' }], it => { sc = it.v; p.reset(); }),
-        view: [seq, h('div', { class: 'nw-row' }, label('certificate chain'), h('span', { class: 'nw-stat' }, 'TLS round trips: ', rtt)), chain],
-        speed: 1500,
-        build() {
-          const s = SC[sc];
-          const fr = [
-            { rows: [], msg: 'A TCP connection to api.example.com:443 is open. Nothing is encrypted yet. Press Step.' },
-            { rows: [['ClientHello · TLS 1.3, cipher suites, key share, SNI=api.example.com, ALPN h2', 'r']], rtt: 0, msg: 'The client offers versions and ciphers and sends its half of a key exchange right away. SNI names the host; ALPN offers HTTP/2.' },
-            { rows: [['ServerHello · chosen cipher, server key share', 'l']], rtt: 1, msg: 'The server picks and sends its key share. Both sides can now compute the same secret. <b>Everything after this is encrypted.</b>' },
-            { rows: [['{EncryptedExtensions ALPN=h2} {Certificate} {CertificateVerify} {Finished}', 'l', 'nw-warmc']], rtt: 1, msg: 'In the same flight: the chosen protocol, the certificate chain, a signature proving the server holds the private key, and Finished.' },
-            { chain: 'check', rtt: 1, msg: 'The client checks the chain: each signature, the dates, and that the leaf names <b>api.example.com</b>.' },
-          ];
-          if (!s.ok) {
-            fr.push({ chain: 'badroot', rtt: 1, rows: [['alert: bad certificate', 'r', 'nw-lost']], msg: '<span class="bad">SSLHandshakeException.</span> The root is a <b>user-installed</b> CA. Apps targeting Android 7.0 (API 24) or later trust only system CAs by default. To debug with a proxy, trust it in <code>debug-overrides</code> of the network security config, which applies to debuggable builds only.' });
-            return fr;
-          }
-          if (s.pin) {
-            fr.push({ chain: 'ok', rtt: 1, msg: 'The chain is valid: it reaches a trusted system root. But this app pins keys…' });
-            fr.push({ chain: 'pinfail', rtt: 1, rows: [['connection closed by the app', 'r', 'nw-lost']], msg: '<span class="bad">SSLPeerUnverifiedException: Certificate pinning failure!</span> The server team moved to a new CA and key. None of the pinned hashes match, so every installed copy of the app is cut off until users update. A backup pin they control would have avoided it.' });
-            return fr;
-          }
-          fr.push({ chain: 'ok', rtt: 1, msg: '<span class="good">Chain trusted</span>: leaf → intermediate → a root in the Android system store, name matches, in date.' });
-          fr.push({ chain: 'ok', rtt: 1, rows: [['{Finished} + GET /v1/headlines (encrypted)', 'r']], msg: 'The client sends Finished and its first request <b>in the same flight</b>. TLS 1.3 cost one round trip on top of TCP’s one.' });
-          fr.push({ chain: 'ok', rtt: 1, rows: [['{HTTP/2 200 + JSON}', 'l']], msg: '<span class="good">Response.</span> Total before the first response byte on a fresh connection: TCP 1 RTT + TLS 1 RTT + request 1 RTT. A reused connection skips the first two.' });
-          return fr;
-        },
-        paint(f, i, frames) {
-          seq.replaceChildren(seqHead());
-          frames.slice(0, i + 1).forEach(x => (x.rows || []).forEach(([t, d, c]) => seq.append(arrow(t, d, c || ''))));
-          rtt.textContent = String(f.rtt || 0);
-          const s = SC[sc];
-          if (!f.chain) { leaf.set(null, 'leaf certificate · not checked yet'); inter.set(null, 'signed the leaf'); root.set(null, `${s.root} · ${s.where}`); return; }
-          leaf.set(true, 'name matches · valid dates');
-          inter.set(true, 'signature on leaf checks out');
-          if (f.chain === 'check') root.set(null, `${s.root} · ${s.where}`);
-          else if (f.chain === 'badroot') root.set(false, `${s.root} · user CA, not trusted by default`);
-          else if (f.chain === 'pinfail') { root.set(true, `${s.root} · trusted`); leaf.set(false, 'public key hash not in the pin set'); }
-          else root.set(true, `${s.root} · ${s.where}`);
-        },
-      });
-    },
-    deeper: [
-      {
-        title: 'Network security config',
-        body: `<p>Android lets you set TLS rules in XML instead of code: <code>res/xml/network_security_config.xml</code>, referenced from the manifest with <code>android:networkSecurityConfig</code>. For apps that target Android 9 (API 28) or higher, cleartext HTTP is blocked by default, and for apps that target Android 7.0 (API 24) or higher, user-added CAs are not trusted by default. The config can allow cleartext for one debug host, add your own CA, trust a proxy only in debuggable builds, or pin keys with an expiry date.</p>`,
-        code: `<!-- res/xml/network_security_config.xml -->
-<network-security-config>
-    <domain-config>
-        <domain includeSubdomains="true">api.example.com</domain>
-        <pin-set expiration="2027-06-01">
-            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
-            <pin digest="SHA-256">BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=</pin>
-        </pin-set>
-    </domain-config>
-    <debug-overrides>
-        <trust-anchors>
-            <certificates src="user" />   <!-- lets a debugging proxy work in debug builds only -->
-        </trust-anchors>
-    </debug-overrides>
-</network-security-config>`,
-      },
-      {
-        title: 'Pinning: the trade-off',
-        body: `<p>Pinning means the app accepts only certificates whose public key hash is in a list you ship. It defends against a wrongly issued certificate from a trusted CA. The cost is operational: if the server changes key or CA and the app was not updated in time, every installed copy stops working, and users on old versions stay broken. Android's documentation recommends against pinning for most apps. If you must: pin a backup key you control, set an expiration, and agree on it with whoever runs the servers. The expiration is a trade-off: after that date the app stops enforcing pins, so it keeps working, but it also loses the extra protection pinning gave.</p>`,
-      },
-      {
-        title: 'Session resumption and 0-RTT',
-        body: `<p>After a full handshake the server can give the client a ticket. Next time, the client resumes with it and skips the certificate work. TLS 1.3 also defines <em>0-RTT</em> early data, sent before the handshake finishes, but it can be replayed by an attacker, so it is only safe for idempotent requests. The practical speed-up for apps is connection reuse: a pooled connection pays zero handshakes.</p>`,
-      },
-    ],
-    underHood: {
-      body: `<p>The pin is a SHA-256 hash of the certificate's <em>SubjectPublicKeyInfo</em>, the encoded public key, not of the whole certificate. That is why a server can renew its certificate with the same key and keep pins valid. OkHttp checks pins after a successful TLS handshake and before the connection is used, and accepts if at least one pinned key appears in the server's chain.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Trusting every certificate to make an error go away',
-        bad: 'val trustAll = object : X509TrustManager {\n    override fun checkServerTrusted(chain: Array<X509Certificate>, type: String) {}\n    // ...\n}',
-        good: '// Fix the server chain (send the intermediate), or for a debug proxy:\n// <debug-overrides> in network_security_config.xml',
-        why: 'An empty trust manager accepts any certificate, so anyone on the network can read and change traffic. A common real cause is a server that does not send its intermediate certificate; fix it on the server.',
-      },
-      {
-        title: 'One pin, no expiry',
-        bad: '.add("api.example.com", "sha256/AAAA...=")',
-        good: '.add("api.example.com", "sha256/AAAA...=")   // current\n.add("api.example.com", "sha256/BBBB...=")   // backup you control',
-        why: 'With one pin, any key change locks every user out. A backup pin (and an expiry, in the XML config) gives the server team a way to rotate safely.',
-      },
-    ],
-    terms: [
-      { term: 'TLS', def: 'Transport Layer Security: encrypts and authenticates a connection. HTTPS is HTTP over TLS.' },
-      { term: 'Chain of trust', def: 'Leaf certificate signed by an intermediate CA, signed by a root CA the device already trusts.' },
-      { term: 'Certificate pinning', def: 'Accepting only certificates whose public key hash is on a list shipped in the app.' },
-      { term: 'Network security config', def: 'An XML file that sets an app’s TLS rules: cleartext, trusted CAs, debug overrides and pins.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Point the manifest at the security config, then allow a debugging proxy in debug builds only.', code: '<application android:[[networkSecurityConfig]]="@xml/network_security_config">\n\n<network-security-config>\n    <[[debug-overrides]]>\n        <trust-anchors><certificates src="user" /></trust-anchors>\n    </debug-overrides>\n</network-security-config>', why: 'The manifest attribute is <code>android:networkSecurityConfig</code>. <code>debug-overrides</code> is ignored unless the app is debuggable, so release builds stay strict.' },
-      { type: 'bug', prompt: 'This pinning setup locks every user out the day the server rotates its key. Tap the line to change.', code: 'val pinner = CertificatePinner.Builder()\n    .add("api.example.com", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")\n    .build()\nval client = OkHttpClient.Builder().certificatePinner(pinner).build()', bug: 1, fix: '    .add("api.example.com", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=")', why: 'A single pin has no plan B. Add a backup key the server team holds, so they can switch to it without breaking installed apps.' },
-    ],
-    predict: {
-      q: "In a TLS 1.3 handshake, from which point on is everything encrypted?",
-      options: ["From the ClientHello","Right after the ServerHello","Only after both Finished messages"],
-      a: 1,
-      why: "The ClientHello and ServerHello carry the two key shares. As soon as both sides have them they derive keys, so the certificate and everything after it travel encrypted.",
-    },
-    quiz: [
-      { q: 'You install a debugging proxy’s CA on your phone, but your app (target API 35) fails with SSLHandshakeException. Why?', options: ['The proxy uses UDP', 'Apps targeting API 24+ do not trust user-installed CAs by default', 'TLS 1.3 forbids proxies', 'The app needs the INTERNET permission'], a: 1, why: 'Since Android 7.0, user CAs are opt-in. Trust them in <code>debug-overrides</code> so only debuggable builds accept the proxy.' },
-      { q: 'Put the TLS 1.3 server flight in order.', options: ['ServerHello → Certificate → CertificateVerify → Finished', 'Certificate → ServerHello → Finished → CertificateVerify', 'Finished → ServerHello → Certificate', 'CertificateVerify → Certificate → ServerHello'], a: 0, why: 'ServerHello carries the key share. Then, encrypted: EncryptedExtensions, Certificate, CertificateVerify (proof of the private key) and Finished.' },
-      { q: 'Which check does NOT happen during normal certificate validation?', options: ['The leaf’s name matches the host', 'Each certificate is signed by the next one up', 'The root is in the trusted store', 'The server’s IP address is in the certificate’s country'], a: 3, why: 'Validation checks signatures up to a trusted root, validity dates and the host name. Location has nothing to do with it.' },
-      { q: 'A news app with millions of users, many on old versions, asks whether to pin. Which answer fits Android’s guidance?', options: ['Pin one leaf certificate for maximum safety', 'Avoid pinning; if required, pin a backup key and set an expiry', 'Pin the root CA of every user', 'Disable certificate checks and rely on pinning only'], a: 1, why: 'Android recommends against pinning for most apps because a server change can break every old install. If pinning is required, backups and expiry limit the damage.' },
-      { q: 'On a fresh connection, how many round trips pass before the first response byte with TCP + TLS 1.3?', options: ['1', '2', '3', '5'], a: 2, why: 'TCP handshake 1, TLS 1.3 handshake 1, then the request and response 1. Reusing a connection skips the first two.' },
-    ],
-  });
+  
 
   // 6 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'http-versions',
-    title: 'HTTP/1.1, HTTP/2 and HTTP/3',
-    tagline: 'Same requests and responses, very different use of the connection.',
-    level: 'advanced',
-    body: `
-<p>All HTTP versions share the same meaning: methods, status codes, headers. What changes is how they use the connection. <b>HTTP/1.1</b> sends text, one request at a time per connection. Keep-alive lets the next request reuse the connection, but a slow response blocks everything queued behind it. Clients work around it by opening several connections, each with its own handshakes and slow start.</p>
-<p><b>HTTP/2</b> (RFC 9113) is binary and <em>multiplexed</em>: many requests run as independent streams on <em>one</em> TCP connection, and headers are compressed (HPACK). One connection, one handshake, one warm congestion window. But all streams share one TCP byte stream, so a single lost packet stalls them all: TCP's head-of-line blocking is still there.</p>
-<p><b>HTTP/3</b> (RFC 9114) runs on <b>QUIC</b> (RFC 9000) over UDP. QUIC combines the transport and TLS 1.3 handshakes into one round trip and recovers loss per stream, so one lost packet only delays the stream it belonged to. Its connection IDs also let a connection survive an address change. Compare the waterfalls, then add a lost packet.</p>`,
-    code: `// One OkHttpClient for the app: one pool, warm connections, HTTP/2 when the server offers it.
-@Provides @Singleton
-fun okHttp(): OkHttpClient = OkHttpClient.Builder()
-    .connectionPool(ConnectionPool())       // default: up to 5 idle connections, kept 5 minutes
-    .build()
-
-// See what was negotiated (ALPN in the TLS handshake picks h2 or http/1.1)
-val response = client.newCall(request).execute()
-Log.d("Net", "protocol=" + response.protocol)    // h2 or http/1.1
-
-// Need a sibling client with other timeouts? Share the pool and dispatcher.
-val uploads = client.newBuilder()
-    .writeTimeout(2, TimeUnit.MINUTES)
-    .build()`,
-    remember: 'HTTP/2 multiplexes on one TCP connection; HTTP/3 does it on QUIC so one loss stalls one stream. Reuse beats any version.',
-    visual(el) {
-      const R = 100, SCALE = 2000;
-      const names = ['/feed', '/user', '/ads', '/img/1.webp', '/img/2.webp', '/img/3.webp'];
-      let mode = 'h1', warm = false, loss = false;
-      function model() {
-        const rows = names.map(() => []);
-        let conns = 1;
-        if (mode === 'h1') {
-          let t = 0; conns = 6;
-          rows.forEach((segs, i) => {
-            segs.push({ s: t, e: t + 2 * R, c: 'nw-setup' }); t += 2 * R;
-            segs.push({ s: t, e: t + R, c: '' }); t += R;
-            if (loss && i === 2) { segs.push({ s: t, e: t + R, c: 'nw-stall' }); t += R; }
-          });
-        } else if (mode === 'ka') {
-          let t = 0;
-          if (!warm) { rows[0].push({ s: 0, e: 2 * R, c: 'nw-setup' }); t = 2 * R; }
-          rows.forEach((segs, i) => {
-            if (t > 0 && i > 0) segs.push({ s: 0, e: t, c: 'nw-wait' });
-            segs.push({ s: t, e: t + R, c: '' }); t += R;
-            if (loss && i === 2) { segs.push({ s: t, e: t + R, c: 'nw-stall' }); t += R; }
-          });
-        } else {
-          const setup = warm ? 0 : mode === 'h2' ? 2 * R : R;
-          if (setup) rows[0].push({ s: 0, e: setup, c: 'nw-setup' });
-          rows.forEach((segs, i) => {
-            segs.push({ s: setup, e: setup + R, c: '' });
-            const stalled = loss && (mode === 'h2' || i === 2);
-            if (stalled) segs.push({ s: setup + R, e: setup + 2 * R, c: 'nw-stall' });
-          });
-        }
-        const end = Math.max(...rows.flat().map(s => s.e));
-        return { rows, end, conns };
-      }
-      const tracks = names.map(() => h('div', { class: 'nw-wf-track' }));
-      const wf = h('div', { class: 'nw-wf' }, names.map((n, i) => [h('span', { class: 'nw-wf-name', title: n }, n), tracks[i]]),
-        h('span', {}), h('div', { class: 'nw-axis' }, ['0', '500', '1000', '1500', '2000 ms'].map(x => h('span', {}, x))));
-      const total = h('b', { class: 'nw-big' }, '—');
-      const meta = h('span', { class: 'nw-stat' });
-      const msg = out('');
-      const NOTES = {
-        h1: 'HTTP/1.1, a new connection per request, one after another: every request pays TCP + TLS (2 RTT) again. Warm has no effect; nothing is reused.',
-        ka: 'HTTP/1.1 keep-alive on one connection: one handshake, but requests queue <b>one at a time</b>. The grey part is waiting in line.',
-        h2: 'HTTP/2: one connection, all six streams in flight together. One handshake, one warm window.',
-        h3: 'HTTP/3 over QUIC: transport and TLS handshake in <b>one</b> round trip, then multiplexed streams like HTTP/2.',
-      };
-      function paint() {
-        const m = model();
-        tracks.forEach((tr, i) => {
-          tr.replaceChildren(...m.rows[i].map(sg => {
-            const seg = h('span', { class: `nw-seg ${sg.c}`, style: `left:${(sg.s / SCALE) * 100}%` });
-            if (sg.c === 'nw-wait') seg.style.background = 'var(--line)';
-            seg.dataset.w = `${((sg.e - sg.s) / SCALE) * 100}%`;
-            seg.dataset.d = String(sg.c === 'nw-wait' ? 0 : sg.s);
-            seg.dataset.ms = String(sg.c === 'nw-wait' ? sg.e : sg.e - sg.s);
-            return seg;
-          }));
-        });
-        requestAnimationFrame(() => requestAnimationFrame(() => tracks.forEach(tr => tr.querySelectorAll('.nw-seg').forEach(seg => {
-          seg.style.transition = `width ${seg.dataset.ms}ms linear ${seg.dataset.d}ms`;
-          seg.style.width = seg.dataset.w;
-        }))));
-        total.textContent = ms(m.end);
-        const hs = mode === 'h1' ? 6 : warm ? 0 : 1;
-        meta.textContent = `${m.conns} connection${m.conns > 1 ? 's' : ''} · ${hs} handshake${hs === 1 ? '' : 's'} · RTT ${R} ms`;
-        let note = NOTES[mode];
-        if (loss) note += mode === 'h2' ? ' <span class="bad">One lost packet stalls every stream</span>: they all share one TCP byte stream.' : mode === 'h3' ? ' <span class="good">The lost packet only stalls /ads</span>; QUIC recovers per stream.' : ' The lost packet delays /ads and everything queued after it.';
-        say(msg, note);
-      }
-      const modeP = picker('version', [{ label: 'HTTP/1.1 new conns', v: 'h1' }, { label: 'HTTP/1.1 keep-alive', v: 'ka' }, { label: 'HTTP/2', v: 'h2' }, { label: 'HTTP/3', v: 'h3' }], it => { mode = it.v; paint(); });
-      el.append(modeP,
-        h('div', { class: 'nw-stage' }, h('div', { class: 'nw-row' }, total, meta), wf,
-          h('div', { class: 'nw-legend' }, h('span', { style: '--c: var(--warm)' }, 'handshake'), h('span', { style: '--c: var(--accent)' }, 'request + response'), h('span', { style: '--c: var(--err)' }, 'stalled by loss'), h('span', { style: '--c: var(--line)' }, 'queued'))),
-        h('div', { class: 'controls' }, toggle('Connection already warm', on => { warm = on; paint(); }), toggle('Lose one packet', on => { loss = on; paint(); }), act('Replay', paint)),
-        msg);
-      paint();
-    },
-    deeper: [
-      {
-        title: 'Why OkHttp keeps connections alive',
-        body: `<p>Every new connection costs DNS, a TCP handshake, a TLS handshake and a cold congestion window. On a 100 ms mobile link that is easily 300 ms before the first useful byte. OkHttp's <code>ConnectionPool</code> keeps finished connections open (by default up to 5 idle connections for 5 minutes) and hands them to the next request for the same address. With HTTP/2, many concurrent calls share a single pooled connection. This only works if the whole app shares one <code>OkHttpClient</code>; use <code>newBuilder()</code> to make variants that share the pool.</p>`,
-      },
-      {
-        title: 'How a client picks the version',
-        body: `<p>HTTP/2 is negotiated inside the TLS handshake with <em>ALPN</em>: the client offers <code>h2, http/1.1</code> and the server picks. No extra round trip. HTTP/3 needs a different transport, so the client first learns about it, for example from an <code>Alt-Svc: h3=":443"</code> response header or a DNS HTTPS record, and then tries QUIC on a later connection. OkHttp itself negotiates HTTP/2 or HTTP/1.1; it does not implement QUIC. For HTTP/3 on Android, use Cronet (Chromium's network stack, available as a library), directly or through the Cronet transport for OkHttp.</p>`,
-      },
-      {
-        title: 'QUIC connection migration',
-        body: `<p>A TCP connection dies when the phone's address changes (lesson 2). A QUIC connection is identified by <em>connection IDs</em> chosen by the endpoints, not by the address and port. When the phone moves from Wi-Fi to cellular, the client can keep using the same connection from its new address (RFC 9000 lets only clients migrate). For a user walking out the door mid-download, that is the difference between a stall and a retry.</p>`,
-      },
-    ],
-    underHood: {
-      body: `<p>HTTP/2 splits each message into frames (HEADERS, DATA) tagged with a stream ID, and interleaves frames from different streams on the connection. Flow control works per stream and per connection. HPACK keeps a table of headers already sent on this connection, so a repeated <code>Authorization</code> or <code>User-Agent</code> becomes a one-byte index. RFC 9113 states plainly that it does not address TCP head-of-line blocking; that was the motivation for QUIC.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'A new client per feature',
-        bad: 'class NewsRepo { private val client = OkHttpClient() }\nclass UserRepo { private val client = OkHttpClient() }',
-        good: 'class NewsRepo(private val client: OkHttpClient)\nclass UserRepo(private val client: OkHttpClient)   // same injected instance',
-        why: 'Each client has its own pool and threads. Two clients to the same host means two connections, two handshakes and half the reuse.',
-      },
-      {
-        title: 'Expecting HTTP/2 to fix a lossy network',
-        bad: '// "We switched to HTTP/2, so stalls on bad 4G are gone"',
-        good: '// HTTP/2 removes queuing, not TCP loss stalls.\n// HTTP/3 (QUIC) recovers loss per stream.',
-        why: 'On HTTP/2 every stream shares one TCP byte stream, so a single lost packet holds all of them. That is the case HTTP/3 was designed for.',
-      },
-    ],
-    terms: [
-      { term: 'Multiplexing', def: 'Running many request/response exchanges at once over one connection, as interleaved streams.' },
-      { term: 'QUIC', def: 'A transport over UDP with built-in TLS 1.3, per-stream loss recovery and connection IDs (RFC 9000). HTTP/3 runs on it.' },
-      { term: 'ALPN', def: 'A TLS extension where the client offers application protocols (h2, http/1.1) and the server picks one during the handshake.' },
-      { term: 'Connection pool', def: 'OkHttp’s store of open connections, reused by later requests to the same address.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Make a client with a longer write timeout that still shares the app’s connection pool.', code: 'val uploads = client.[[newBuilder]]()\n    .writeTimeout(2, TimeUnit.MINUTES)\n    .[[build]]()', why: '<code>newBuilder()</code> copies the client’s settings and shares its connection pool and dispatcher, so warm connections are reused.' },
-      { type: 'bug', prompt: 'Every image request opens a new connection. Tap the line that causes it.', code: 'class ImageLoader {\n    suspend fun load(url: String): ByteArray = withContext(Dispatchers.IO) {\n        val client = OkHttpClient()\n        client.newCall(Request.Builder().url(url).build()).execute().use { it.body.bytes() }\n    }\n}', bug: 2, fix: '        val client = sharedClient   // one OkHttpClient for the whole app', why: 'A client built inside the function has an empty pool each time, so nothing is reused. Inject or share one client.' },
-    ],
-    predict: {
-      q: "HTTP/1.1 keep-alive, one warm connection, RTT 100 ms. Six small requests. About how long until all six are done?",
-      options: ["About 100 ms","About 600 ms: one request at a time","About 1,200 ms"],
-      a: 1,
-      why: "HTTP/1.1 has one request in flight per connection. Each waits for the one before, so six requests cost six round trips.",
-    },
-    quiz: [
-      { q: 'An app loads six small resources from one host on a warm HTTP/2 connection. Roughly how long does it take with RTT 100 ms?', options: ['About 100 ms', 'About 600 ms', 'About 300 ms', 'About 1800 ms'], a: 0, why: 'All six streams go out together on the existing connection, so they finish after about one round trip. On HTTP/1.1 keep-alive they would queue: about 600 ms.' },
-      { q: 'On a lossy network, why can HTTP/3 beat HTTP/2?', options: ['It compresses more', 'QUIC recovers loss per stream, so one lost packet does not stall the others', 'It skips encryption', 'It uses more TCP connections'], a: 1, why: 'HTTP/2 shares one TCP byte stream, so a loss blocks all streams until the retransmit. QUIC streams are independent.' },
-      { q: 'How does a client agree on HTTP/2 with a server, without an extra round trip?', options: ['ALPN inside the TLS handshake', 'A DNS TXT record', 'A first HTTP/1.1 request with Upgrade', 'It always tries HTTP/2 first over UDP'], a: 0, why: 'The client lists h2 and http/1.1 in ALPN, and the server picks in its reply. The TLS handshake already happens, so it is free.' },
-      { q: 'Your app has a Retrofit service and a separate image loader, each with <code>OkHttpClient()</code>. What do you lose?', options: ['Nothing; OkHttp shares pools globally', 'Connection reuse between them: two pools, duplicate handshakes', 'HTTP/2 support', 'TLS 1.3'], a: 1, why: 'The pool belongs to the client. Share one instance (or derive with <code>newBuilder()</code>) so both use the same warm connections.' },
-    ],
-  });
+  
 
   // 7 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'latency',
-    title: 'Latency, bandwidth and the radio',
-    tagline: 'On mobile, round trips and radio wake-ups cost more than bytes.',
-    level: 'intermediate',
-    body: `
-<p><b>Bandwidth</b> is how many bits per second a link carries. <b>Latency</b> is how long one bit takes to get there; the round-trip time (<b>RTT</b>) is there and back. A download takes roughly <em>round trips × RTT + size ÷ bandwidth</em>. On mobile, RTT is often tens to hundreds of milliseconds, and for the small JSON responses most apps fetch, the round trips dominate. More bandwidth does not help a chain of five dependent calls; fewer round trips does.</p>
-<p>The radio adds a second cost: <b>battery</b>. A cellular radio has power states. It wakes to full power to transfer, then stays in high-power states for several seconds after the last byte (the <em>tail</em>) in case more data comes. Android's docs use a 3G example: about 5 seconds at full power and 12 more at low power after each transfer. So ten small requests spread over a minute keep the radio awake far longer than one batched request.</p>
-<p>The rules follow: avoid sequential chains, send independent calls in parallel, batch small background work, prefetch what the user will likely need, compress, and cache. Play with RTT and strategy below.</p>`,
-    code: `// Independent calls: run them in parallel, so the screen waits ~1 RTT instead of 3
-suspend fun loadHome(): Home = coroutineScope {
-    val feed = async { api.feed() }
-    val weather = async { api.weather() }
-    val user = async { api.me() }
-    Home(feed.await(), weather.await(), user.await())
-}
-
-// Small background events: queue them and send in one request, at a time the system picks
-val upload = OneTimeWorkRequestBuilder<UploadEventsWorker>()
-    .setConstraints(
-        Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-    )
-    .setInitialDelay(15, TimeUnit.MINUTES)     // collect more events per radio wake-up
-    .build()
-WorkManager.getInstance(context)
-    .enqueueUniqueWork("upload-events", ExistingWorkPolicy.KEEP, upload)`,
-    remember: 'Count round trips, not bytes. Parallelize what is independent, batch what can wait.',
-    visual(el) {
-      let rtt = 100, n = 5, bw = 10, strategy = 'seq', cold = true;
-      const KB = 20;
-      const slider = (name, min, max, step, val, fmt, on) => {
-        const o = h('output', {}, fmt(val));
-        const inp = h('input', { type: 'range', min, max, step, value: val, 'aria-label': name, oninput() { o.textContent = fmt(+this.value); on(+this.value); paint(); } });
-        return h('label', { class: 'nw-slider' }, h('span', {}, name), inp, o);
-      };
-      const bar = h('div', { class: 'nw-bar', role: 'img', 'aria-label': 'Time breakdown' });
-      const total = h('b', { class: 'nw-big' }, '');
-      const meta = h('span', { class: 'nw-stat' });
-      const msg = out('');
-      function paint() {
-        const setup = cold ? 3 * rtt : 0;
-        const trips = strategy === 'seq' ? n : 1;
-        const reqs = strategy === 'batch' ? 1 : n;
-        const lat = trips * rtt;
-        const xfer = (n * KB * 8) / (bw * 1000) * 1000;
-        const sum = setup + lat + xfer;
-        const parts = [
-          cold && { v: rtt, c: 'var(--warm-soft)', t: 'DNS' }, cold && { v: rtt, c: 'var(--warm)', t: 'TCP' }, cold && { v: rtt, c: 'var(--warm-soft)', t: 'TLS' },
-          ...Array.from({ length: trips }, (_, k) => ({ v: rtt, c: k % 2 ? 'var(--accent)' : 'var(--accent-soft)', t: trips > 1 ? `RTT ${k + 1}` : 'RTT' })),
-          { v: xfer, c: 'var(--ok-soft)', t: 'data' },
-        ].filter(Boolean);
-        bar.replaceChildren(...parts.map(p => h('span', { style: `flex-grow:${p.v};--c:${p.c}`, title: `${p.t}: ${ms(p.v)}` }, p.t)));
-        total.textContent = ms(sum);
-        meta.textContent = `${reqs} request${reqs > 1 ? 's' : ''} · ${trips} round trip${trips > 1 ? 's' : ''} after setup · ${n * KB} KB`;
-        const share = Math.round(((setup + lat) / sum) * 100);
-        say(msg, `<b>${share}%</b> of the time is waiting on round trips, ${100 - share}% is moving bytes. ${share > 70 ? 'More bandwidth would barely help here. Cut round trips: parallelize, batch, or reuse a warm connection.' : 'Here bandwidth matters: compress responses, request smaller images, or page the data.'}`);
-      }
-      el.append(
-        h('div', { class: 'controls' }, label('network'), act('Wi-Fi ~20 ms', () => setRtt(20)), act('Good 4G ~60 ms', () => setRtt(60)), act('Weak signal ~400 ms', () => setRtt(400))),
-        h('div', { class: 'nw-stage' },
-          slider('RTT', 10, 800, 10, rtt, v => `${v} ms`, v => { rtt = v; }),
-          slider('Requests', 1, 12, 1, n, v => String(v), v => { n = v; }),
-          slider('Bandwidth', 1, 100, 1, bw, v => `${v} Mbps`, v => { bw = v; }),
-          h('div', { class: 'nw-row' }, total, meta), bar),
-        picker('strategy', [{ label: 'Sequential (each waits)', v: 'seq' }, { label: 'Parallel on HTTP/2', v: 'par' }, { label: 'One batched request', v: 'batch' }], it => { strategy = it.v; paint(); }),
-        h('div', { class: 'controls' }, toggle('Cold start (DNS + TCP + TLS)', on => { cold = on; paint(); }, true)),
-        msg);
-      const rttIn = el.querySelector('input');
-      function setRtt(v) { rtt = v; rttIn.value = v; rttIn.dispatchEvent(new Event('input')); }
-      paint();
-    },
-    deeper: [
-      {
-        title: 'The radio tail, visualized',
-        body: `<p>This strip is one minute, one cell per second, using the 3G example from Android's docs: each transfer keeps the radio at full power for its duration plus 5 s, then 12 s at low power. Compare six small requests every ten seconds with the same data sent at once. The numbers on a modern LTE or 5G network differ and are set by the carrier, but the shape, a long tail after each burst, is the same.</p>`,
-        visual(el) {
-          const cells = Array.from({ length: 60 }, () => h('i'));
-          const stat = h('span', { class: 'nw-stat' });
-          const msg = out('');
-          function run(starts, dur) {
-            const st = Array(60).fill('');
-            for (const s of starts) for (let k = s; k < 60; k++) {
-              if (k < s + dur) st[k] = 'nw-tx';
-              else if (k < s + dur + 5) { if (st[k] !== 'nw-tx') st[k] = 'nw-full'; }
-              else if (k < s + dur + 17) { if (!st[k]) st[k] = 'nw-low'; }
-            }
-            cells.forEach((c, k) => { c.className = ''; setTimeout(() => { c.className = st[k]; }, k * 25); });
-            const tx = st.filter(x => x === 'nw-tx').length, full = st.filter(x => x === 'nw-full').length, low = st.filter(x => x === 'nw-low').length;
-            stat.innerHTML = `transferring <b>${tx}s</b> · full-power tail <b>${full}s</b> · low power <b>${low}s</b> · idle <b>${60 - tx - full - low}s</b>`;
-            say(msg, starts.length > 1 ? '<span class="bad">The radio never rests.</span> Each request starts before the previous tail ends.' : '<span class="good">One burst, one tail, then 40 s of standby.</span> Same data, a fraction of the radio time.');
-          }
-          el.append(h('div', { class: 'nw-stage' }, h('div', { class: 'nw-strip', role: 'img', 'aria-label': 'Radio state per second over one minute' }, cells), stat,
-            h('div', { class: 'nw-legend' }, h('span', { style: '--c: var(--accent)' }, 'transfer'), h('span', { style: '--c: var(--err)' }, 'full power tail'), h('span', { style: '--c: var(--warm)' }, 'low power'), h('span', { style: '--c: var(--sunk)' }, 'standby'))),
-          h('div', { class: 'controls' }, act('6 requests, every 10 s', () => run([0, 10, 20, 30, 40, 50], 1)), act('Batched: 1 request', () => run([0], 3))), msg);
-          run([0, 10, 20, 30, 40, 50], 1);
-        },
-      },
-      {
-        title: 'Compression and payload size',
-        body: `<p>Bytes still matter on slow links and metered plans. OkHttp adds <code>Accept-Encoding: gzip</code> to requests and transparently decompresses gzip responses, so text APIs are usually compressed already if the server agrees. Bigger wins come from sending less: request image sizes that match the view, use WebP or AVIF, page long lists, and use HTTP caching (<code>Cache-Control</code>, <code>ETag</code>) so a repeat request costs a 304 instead of the whole body.</p>`,
-      },
-      {
-        title: 'Prefetch, but not blindly',
-        body: `<p>Downloading what the user is likely to open next turns many small wake-ups into one. The trade-off is waste: data the user never looks at still costs battery and money. Android's guidance is to prefetch in larger, less frequent chunks, and to scale it to the connection, for example only prefetching videos on an unmetered network. Background prefetch belongs in <a href="#background.workmanager">WorkManager</a> with network constraints, so the system can line it up with other work. Repeat requests are cheapest when a <a href="#data.caching">cache</a> answers them.</p>`,
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Sequential awaits for independent data',
-        bad: 'val feed = api.feed()\nval weather = api.weather()\nval user = api.me()          // three round trips, one after another',
-        good: 'coroutineScope {\n    val feed = async { api.feed() }\n    val weather = async { api.weather() }\n    val user = async { api.me() }\n}',
-        why: 'Each <code>await</code> in a row adds a full round trip. Independent calls started together share the time, and on HTTP/2 they share one connection too.',
-      },
-      {
-        title: 'Uploading every analytics event at once',
-        bad: 'fun track(event: Event) = scope.launch { api.send(event) }',
-        good: 'fun track(event: Event) {\n    queue.add(event)          // send in batches with WorkManager\n}',
-        why: 'Each tiny request wakes the radio and pays its tail. Batching sends the same data with far fewer wake-ups.',
-      },
-    ],
-    terms: [
-      { term: 'RTT', def: 'Round-trip time: how long a packet takes to reach the server and the reply to come back.' },
-      { term: 'Bandwidth', def: 'How many bits per second a link can carry.' },
-      { term: 'Radio tail', def: 'The seconds a cellular radio stays in a high-power state after the last transfer, waiting for more data.' },
-      { term: 'Batching', def: 'Collecting several small transfers and sending them together, to pay round trips and radio wake-ups once.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Load two independent things in parallel.', code: 'suspend fun load() = coroutineScope {\n    val a = [[async]] { api.feed() }\n    val b = async { api.me() }\n    Home(a.[[await]](), b.await())\n}', why: '<code>async</code> starts each call immediately; <code>await</code> waits for the result. Both requests are in flight at once.' },
-      { type: 'bug', prompt: 'This screen waits for three round trips although the calls don’t depend on each other. Tap the line that serializes them.', code: 'suspend fun loadHome() = coroutineScope {\n    val feed = async { api.feed() }.await()\n    val weather = async { api.weather() }\n    Home(feed, weather.await())\n}', bug: 1, fix: '    val feed = async { api.feed() }', why: 'Calling <code>await()</code> right after <code>async</code> waits for the feed before the weather call even starts. Start both, then await.' },
-    ],
-    predict: {
-      q: "RTT 100 ms, five small calls that each wait for the one before, on a warm connection. Bandwidth doubles. What happens to the load time?",
-      options: ["It roughly halves","It barely changes: the round trips dominate","It doubles"],
-      a: 1,
-      why: "Five dependent calls cost five round trips. Small responses take almost no transfer time, so more bandwidth hardly helps; fewer round trips would.",
-    },
-    quiz: [
-      { q: 'RTT is 200 ms, bandwidth 50 Mbps. A screen makes 4 dependent calls with 5 KB responses each. What dominates the load time?', options: ['Bandwidth', 'Round trips (about 800 ms)', 'JSON parsing', 'DNS only'], a: 1, why: '20 KB at 50 Mbps is about 3 ms. Four sequential round trips at 200 ms are 800 ms. Cut round trips, not bytes.' },
-      { q: 'Why does batching small background requests save battery on cellular?', options: ['Batched data is compressed better', 'Each wake-up keeps the radio in high-power states for seconds after the transfer; fewer wake-ups mean less tail time', 'The radio uses less power for big packets', 'Batches skip TLS'], a: 1, why: 'The tail after each transfer costs more than the transfer itself for small requests. One wake-up instead of ten removes nine tails.' },
-      { q: 'A user is on a weak signal with a 400 ms RTT. Which change helps the home screen the most?', options: ['Doubling the server’s bandwidth', 'Starting the three independent calls in parallel on one warm connection', 'Switching JSON to XML', 'Adding a larger read timeout'], a: 1, why: 'At high RTT, each round trip costs 400 ms. Parallel calls on a reused connection turn three round trips (plus setup) into about one.' },
-    ],
-  });
+  
 
   // 8 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'debugging',
-    title: 'Debugging the network',
-    tagline: 'Split a slow call into DNS, connect, TLS and server time before you fix anything.',
-    level: 'advanced',
-    body: `
-<p>"The app is slow" is never one problem. A call's time splits into phases: <b>DNS</b> lookup, TCP <b>connect</b>, <b>TLS</b> handshake, sending the request, waiting for the first response byte (<b>TTFB</b>, mostly server work plus one round trip), and downloading the body. Each phase points at a different fix: DNS and connect point at the network or at missing connection reuse, a long TTFB points at the server, a long download points at payload size or bandwidth.</p>
-<p>Android Studio's <b>Network Inspector</b> (View › Tool Windows › App Inspection) shows each request your app makes through <code>HttpsURLConnection</code> or OkHttp, including Retrofit, with headers, bodies and timing, and lets you set rules that rewrite responses for testing. OkHttp's <code>EventListener</code> gives exact per-phase timestamps in code. A proxy like mitmproxy or Charles shows raw traffic (with a debug-only trust config), and <code>curl</code> reproduces a call outside the app.</p>
-<p>Step through the demo. Each lane is one call, and the longest bar says what to fix.</p>`,
-    code: `// Log per-phase timings for every call. Use a factory: one listener per call.
-class TimingListener : EventListener() {
-    private var start = 0L
-    private fun log(name: String) {
-        val now = System.nanoTime()
-        if (name == "callStart") start = now
-        Log.d("Net", name + " +" + (now - start) / 1_000_000 + " ms")
-    }
-    override fun callStart(call: Call) = log("callStart")
-    override fun dnsStart(call: Call, domainName: String) = log("dnsStart")
-    override fun dnsEnd(call: Call, domainName: String, inetAddressList: List<InetAddress>) = log("dnsEnd")
-    override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) = log("connectStart")
-    override fun secureConnectStart(call: Call) = log("secureConnectStart")
-    override fun secureConnectEnd(call: Call, handshake: Handshake?) = log("secureConnectEnd")
-    override fun connectionAcquired(call: Call, connection: Connection) = log("connectionAcquired")
-    override fun responseHeadersStart(call: Call) = log("responseHeadersStart")   // ~TTFB
-    override fun callEnd(call: Call) = log("callEnd")
-}
-
-val client = OkHttpClient.Builder()
-    .eventListenerFactory { TimingListener() }     // debug builds only
-    .build()`,
-    remember: 'Measure the phases first: DNS, connect, TLS, TTFB, download. Each one has a different owner and fix.',
-    visual(el) {
-      Lab.ui.timeline(el, {
-        lanes: ['Cold call', 'Warm call', 'Slow DNS', 'Slow server', 'Big body'],
-        span: 2100,
-        predict: {
-          q: 'The app makes the same request twice in a row through one shared <code>OkHttpClient</code>. What does the second call skip?',
-          options: ['Nothing: every call does DNS, connect and TLS', 'DNS, connect and TLS: it reuses the pooled connection', 'Only the DNS lookup'],
-          a: 1,
-          why: 'OkHttp keeps the connection in its pool. The second call gets <code>connectionAcquired</code> straight away and only pays for the request and response.',
-        },
-        frames: [
-          { say: 'Each lane is one call. OkHttp’s <code>EventListener</code> timestamps every phase. Each bar is a phase: setup (DNS, connect, TLS), waiting for the server, then the body (example timings).' },
-          { bars: [{ lane: 0, from: 0, to: 170, tone: 'warm' }, { lane: 0, from: 170, to: 310, tone: 'accent' }, { lane: 0, from: 310, to: 340, tone: 'ok' }], say: 'Cold call: DNS, connect and TLS take 170 ms before the request is sent. Normal for the first call.' },
-          { bars: [{ lane: 1, from: 0, to: 140, tone: 'accent' }, { lane: 1, from: 140, to: 170, tone: 'ok' }], say: 'Warm call: the connection came from the pool, so there is no setup at all.' },
-          { bars: [{ lane: 2, from: 0, to: 1300, label: 'DNS', tone: 'warm' }, { lane: 2, from: 1300, to: 1425, tone: 'warm' }, { lane: 2, from: 1425, to: 1565, tone: 'accent' }, { lane: 2, from: 1565, to: 1595, tone: 'ok' }], say: '<code>dnsStart</code> to <code>dnsEnd</code> took 1.3 s. A slow resolver or network, not your server.' },
-          { bars: [{ lane: 3, from: 0, to: 1600, label: 'waiting for the first byte', tone: 'accent' }, { lane: 3, from: 1600, to: 1630, tone: 'ok' }], say: 'No setup, but 1.6 s until <code>responseHeadersStart</code>. The network is fine; the server is slow to answer.' },
-          { bars: [{ lane: 4, from: 0, to: 140, tone: 'accent' }, { lane: 4, from: 140, to: 2040, label: 'downloading the body', tone: 'ok' }], say: 'The body takes 1.9 s to arrive. Too many bytes for this link: page the list, shrink images, check gzip.' },
-        ],
-      });
-    },
-    deeper: [
-      {
-        title: 'Network Inspector',
-        body: `<p>Run a debuggable build, open <b>View › Tool Windows › App Inspection</b>, pick the <b>Network Inspector</b> tab and select your process. The timeline shows traffic over time; select a range to list the requests in it. Each request shows size, status, duration, headers and body, and the Thread View shows which thread made it, handy for spotting calls on the wrong dispatcher. <b>Rules</b> rewrite status codes, headers or bodies of matching responses, so you can test a 500 or an empty list without touching the server.</p>`,
-      },
-      {
-        title: 'curl: reproduce outside the app',
-        body: `<p>If a call is slow in the app, run the same request from your computer. If curl is slow too, it is not your app's code. curl's <code>-w</code> option prints timings measured from the start of the call, so subtract neighbours to get each phase. <code>time_starttransfer</code> minus <code>time_appconnect</code> is roughly the server's TTFB.</p>`,
-        code: `curl -s -o /dev/null https://api.example.com/v1/headlines \\
-  -H "Authorization: Bearer $TOKEN" \\
-  -w "dns     %{time_namelookup}\\nconnect %{time_connect}\\ntls     %{time_appconnect}\\nttfb    %{time_starttransfer}\\ntotal   %{time_total}\\nproto   %{http_version}\\n"`,
-      },
-      {
-        title: 'Proxies and logging',
-        body: `<p>An intercepting proxy (mitmproxy, Charles, Proxyman) sits between the phone and the internet and decrypts HTTPS with its own CA. For your app to accept it, trust user CAs in <code>debug-overrides</code> only (lesson 5). For quick logs without a proxy, OkHttp's <code>HttpLoggingInterceptor</code> prints requests and responses to Logcat. Add it to debug builds only, and redact the <code>Authorization</code> header so tokens never land in logs (see <a href="#data.auth">auth tokens</a>).</p>`,
-        code: `if (BuildConfig.DEBUG) {
-    val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BASIC
-        redactHeader("Authorization")
-    }
-    builder.addInterceptor(logging)
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>OkHttp calls <code>EventListener</code> methods on the thread running the call, at fixed points: <code>callStart</code>, then <code>dnsStart</code>/<code>dnsEnd</code>, <code>connectStart</code>, <code>secureConnectStart</code>/<code>secureConnectEnd</code>, <code>connectEnd</code>, <code>connectionAcquired</code>, request and response header and body events, <code>connectionReleased</code> and <code>callEnd</code>. A pooled connection skips the DNS and connect events entirely, which is how you can count reuse in production metrics. Keep listeners cheap: they run inside every call.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'One shared listener with a timing field',
-        bad: 'object Timing : EventListener() {\n    var start = 0L      // overwritten by concurrent calls\n}\nbuilder.eventListener(Timing)',
-        good: 'builder.eventListenerFactory { TimingListener() }   // one per call',
-        why: 'Calls run at the same time. A single listener’s field is overwritten by each new call, so the timings mix. A factory makes a fresh listener per call.',
-      },
-      {
-        title: 'Logging bodies and tokens in release',
-        bad: 'builder.addInterceptor(HttpLoggingInterceptor().apply { level = Level.BODY })',
-        good: 'if (BuildConfig.DEBUG) builder.addInterceptor(HttpLoggingInterceptor().apply {\n    level = Level.BASIC; redactHeader("Authorization")\n})',
-        why: 'Body logging in release writes user data and tokens to Logcat and slows every call. Keep it to debug builds, with secrets redacted.',
-      },
-    ],
-    terms: [
-      { term: 'TTFB', def: 'Time to first byte: from sending the request to receiving the first byte of the response. Mostly server time plus one round trip.' },
-      { term: 'Network Inspector', def: 'Android Studio’s App Inspection tool that lists an app’s HttpsURLConnection and OkHttp requests with timing, headers and bodies.' },
-      { term: 'EventListener', def: 'An OkHttp callback interface that reports each phase of a call (DNS, connect, TLS, headers, body) as it happens.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Measure TLS time and attach a fresh listener to every call.', code: 'override fun [[secureConnectStart]](call: Call) = mark("tls start")\noverride fun secureConnectEnd(call: Call, handshake: Handshake?) = mark("tls end")\n\nOkHttpClient.Builder().[[eventListenerFactory]] { TimingListener() }', why: '<code>secureConnectStart</code>/<code>secureConnectEnd</code> bracket the TLS handshake. <code>eventListenerFactory</code> creates one listener per call so state does not mix.' },
-      { type: 'bug', prompt: 'This log shows a "slow server", but one line is wrong about where the time went. Tap it.', code: '+0 ms     callStart\n+0 ms     connectionAcquired (pooled)\n+2 ms     requestHeadersEnd\n+1650 ms  responseHeadersStart   // slow DNS lookup\n+1680 ms  callEnd', bug: 3, fix: '+1650 ms  responseHeadersStart   // server took ~1.6 s to answer (TTFB)', why: 'The connection came from the pool, so there was no DNS or connect. The gap before the first response header is waiting for the server.' },
-    ],
-    quiz: [
-      { q: 'A call shows: dns 0, connect 0, tls 0, TTFB 1800 ms, download 20 ms. Where is the problem?', options: ['The phone’s DNS resolver', 'The server’s processing time', 'Missing connection reuse', 'The response is too large'], a: 1, why: 'No setup means a pooled connection, and the download is tiny. Nearly all the time is waiting for the server’s first byte.' },
-      { q: 'Your cold-start API call spends 60% in DNS + connect + TLS, and later calls do too. What do you check first?', options: ['Whether the app creates a new OkHttpClient per call', 'Whether JSON parsing is slow', 'The server’s database indexes', 'The image sizes'], a: 0, why: 'Setup on every call means nothing is reused. The usual cause is a client per call or per repository instead of one shared client.' },
-    ],
-  });
+  
 
   Lab.addTrack({
-    id: 'net',
+    id: 'net', lang: 'shell',
     title: 'Computer networks',
-    description: 'How data really moves under your app: layers, IP, DNS, TCP and UDP, TLS, HTTP/2 and HTTP/3, latency and debugging.',
+    description: 'What happens between your app and a server, step by step: packets, addresses, DNS, TCP and UDP, HTTP, HTTPS, HTTP versions, speed and finding what broke.',
     requires: ['kotlin'],
     css,
-    lessons,
+    lessons: [
+      {
+        id: 'what-network',
+        title: 'What a network is',
+        tagline: 'Computers passing small packets of data, one asking and one answering.',
+        goals: ['Say what a network and a packet are', 'Tell the client from the server in a conversation', 'Ask a server for a page with <code>curl</code>'],
+        level: 'beginner', introduces: ['curl', 'https'],
+        body: `
+<p>Ada taps Send on a photo for her friend Sam in Oslo. A second later it is on Sam’s phone. Almost every app does something like this: it sends data to another computer and gets data back. This track shows what happens in between.</p>
+<p>A <em>network</em> is a group of computers connected so they can send each other data, by cable or by radio such as Wi-Fi. The internet is a huge network made of many smaller ones. Data does not travel in one big piece. It is cut into small <em>packets</em>, each holding at most about 1,500 bytes of data (roughly 1,500 letters’ worth). Each packet carries a label: where it is going and where it came from. Most packets also carry a number. Packets can take different roads and arrive in any order, and the numbers let the receiver put them back together.</p>
+<p>Most conversations on a network have two roles. The <em>client</em> asks: the app on Ada’s phone. The <em>server</em> answers: a computer that is always on, waiting for requests, such as the one that stores the photos. It is a role, not a kind of machine: your laptop can be a server too.</p>
+<p>In the terminal, <code>curl</code> is a small client. <code>curl https://example.com</code> asks the server at <code>example.com</code> for its page and prints the answer. The <code>https://</code> at the start says how to talk to the server; the s stands for secure. curl comes with macOS, Linux and Windows 10 or newer. In Windows PowerShell, type <code>curl.exe</code>, because there <code>curl</code> on its own starts a different command.</p>`,
+        visual(el) {
+          const slots = (list, cls) => h('div', { class: 'nw-slots' }, list.length ? list.map(n => h('span', { class: `nw-slot ${cls}` }, String(n))) : h('span', { class: 'nw-note' }, 'nothing yet'));
+          const node = (title, sub, list, cls, on, extra) => h('div', { class: `nw-node${on ? ' nw-on' : ''}` }, h('h4', {}, title), h('span', { class: 'nw-sub' }, sub), slots(list, cls), extra || null);
+          const box = h('div', { class: 'nw-net' });
+          const stage = h('div', { class: 'ui-stage' }, h('div', { class: 'nw-stage' }, box));
+          const frames = [
+            { phone: [], net: [], srv: [], msg: 'photo_lisbon.jpg, 3 MB', on: 'phone', say: 'Ada’s app is the <b>client</b>. It wants to send a photo to the <b>server</b> that stores messages for Sam.' },
+            { phone: [1, 2, 3, 4], net: [], srv: [], on: 'phone', say: 'The photo is cut into <b>packets</b>. Each one gets a label: to the server, from Ada’s phone, number 1 to 4. (A real photo needs thousands of packets.)' },
+            { phone: [2, 4], net: [1, 3], srv: [], on: 'net', say: 'The packets leave one by one. In the network, each packet finds its own way.' },
+            { phone: [], net: [4, 2], srv: [3, 1], on: 'srv', say: 'Packet 3 took a quicker road and arrived first. That is normal.' },
+            { phone: [], net: [], srv: [3, 1, 4, 2], on: 'srv', say: 'All four are here, in the order they arrived: 3, 1, 4, 2.' },
+            { phone: [], net: [], srv: [1, 2, 3, 4], done: true, on: 'srv', say: 'The numbers on the labels let the server put them back in order. The photo is whole again.' },
+            { phone: [], net: [], srv: [1, 2, 3, 4], done: true, reply: true, on: 'phone', say: 'The server answers with a small packet: “Saved”. The client asked, the server answered.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'A photo is cut into 4 packets, and they take different roads. In what order do they arrive?',
+              options: ['Always 1, 2, 3, 4', 'Maybe mixed up; the receiver puts them back in order', 'All at once, glued together'],
+              a: 1,
+              why: 'Each packet travels on its own, so a later one can overtake an earlier one. Their numbers let the receiver rebuild the data.',
+            },
+            draw(f) {
+              box.replaceChildren(
+                node('Ada’s phone', 'client', f.phone, 'nw-held', f.on === 'phone', f.reply ? pill('Saved', 'nw-ok') : f.msg ? pill(f.msg, 'nw-acc') : null),
+                node('Network', 'many roads', f.net, 'nw-held', f.on === 'net'),
+                node('Server', 'always on, waiting', f.srv, f.done ? 'nw-got' : 'nw-held', f.on === 'srv', f.done ? pill('photo_lisbon.jpg', 'nw-ok') : null));
+            },
+          });
+        },
+        code: `# curl is a client: it asks a server for a page.
+curl https://example.com
+# The server's answer is printed: the page's text
+# (written in HTML, the language of web pages)
+
+# In Windows PowerShell, add .exe:
+curl.exe https://example.com`,
+        remember: 'Data travels in small numbered packets. The client asks, the server answers.',
+        terms: [
+          { term: 'network', def: 'Computers connected so they can send each other data. The internet is a network of networks.' },
+          { term: 'packet', def: 'A small piece of data with a label saying where it goes and where it came from, usually with a number too.' },
+          { term: 'client', def: 'The side that asks, such as an app or <code>curl</code>.' },
+          { term: 'server', def: 'The side that waits for requests and answers them.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Ask the server at <code>example.com</code> for its page.', code: '[[curl]] https://example.com', why: '<code>curl</code> is a client: it sends the request and prints the answer.' },
+          { type: 'bug', prompt: 'The second command prints <code>curl: (1) Protocol "htps" not supported or disabled in libcurl</code>. Tap the wrong line.', code: 'curl https://example.com\ncurl htps://example.org', bug: 1, fix: 'curl https://example.org', why: 'The address must start with <code>https://</code>. curl did not recognise <code>htps</code>, so it never contacted the server.' },
+        ],
+        quiz: [
+          { q: 'Ada’s app asks for new messages, and a computer in a data centre (a building full of servers) sends them. Which one is the server?', options: ['Ada’s app', 'The computer in the data centre', 'Both are servers'], a: 1, why: 'The server is the side that waits and answers. The app that asks is the client.' },
+          { q: 'Why do most packets carry a number?', options: ['So the receiver can put the pieces back in order', 'To make packets travel faster', 'To count how much the data costs'], a: 0, why: 'Packets can arrive in any order. The numbers let the receiver rebuild the original data.' },
+          { q: 'Can a laptop be a server?', options: ['No, servers are special machines', 'Yes: any computer that waits for requests and answers them is a server'], a: 1, why: 'Client and server are roles in a conversation, not kinds of machines.' },
+        ],
+        docs: [['MDN: How does the Internet work?', 'https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/How_does_the_Internet_work']],
+      },
+
+      {
+        id: 'ip', ignore: ['::'],
+        title: 'Addresses and routing',
+        tagline: 'Every device has an address, and routers pass packets along hop by hop.',
+        goals: ['Read an IP address', 'Explain what a router does with a packet', 'List the hops to a server with <code>traceroute</code>'],
+        level: 'beginner', introduces: ['traceroute', 'tracert'],
+        body: `
+<p>A letter needs an address on the envelope, or the post office can’t deliver it. A packet is the same. The label on every packet holds two addresses: where it goes and where it came from.</p>
+<p>Every device on a network has an <em>IP address</em> (IP stands for Internet Protocol, the rules for addressing packets). The common kind is four numbers from 0 to 255 with dots between them, like <code>192.168.1.23</code>. There is also a newer, longer kind, IPv6, written like <code>2001:db8::1</code>. Most addresses in this track come from ranges set aside for examples, so yours will look different. Addresses starting with <code>192.168.</code> or <code>10.</code> are ranges used inside home and office networks, so your router may really be <code>192.168.1.1</code>.</p>
+<p>Ada’s phone has no cable to every server in the world. It hands each packet to a <em>router</em>: the Wi-Fi box at home is one. A router looks at the destination address and passes the packet to the next router that is closer to it, like a signpost at a crossing. Each step from one router to the next is a <em>hop</em>. Reaching a server across the world can take 10 to 20 hops, in a fraction of a second.</p>
+<p><code>traceroute example.com</code> lists every hop on the way, on macOS and Linux. On Windows the command is <code>tracert example.com</code>. If Linux says <code>command not found</code>, try <code>tracepath example.com</code>, which is usually installed. Some routers don’t reply to traceroute and show up as <code>* * *</code>. They still pass the packets along.</p>`,
+        visual(el) {
+          const hops = [
+            ['Ada’s laptop', '192.168.1.23', 'the client'],
+            ['Home router', '192.168.1.1', 'the Wi-Fi box'],
+            ['Provider router', '100.64.0.1', 'her internet provider'],
+            ['Silent router', '* * *', 'does not answer traceroute'],
+            ['Router far away', '198.51.100.7', 'another network'],
+            ['example.com', '203.0.113.10', 'the server'],
+          ];
+          const route = (upto, ms = {}) => el2 => el2.append(h('div', { class: 'nw-hops' }, hops.map(([n, ip, sub], k) => h('div', { class: `nw-hop${k === upto ? ' nw-on' : ''}${k > upto ? ' nw-dim' : ''}${k === 5 && upto === 5 ? ' nw-hit' : ''}` }, h('b', {}, k ? `${k}. ${n}` : n), h('span', { class: 'nw-ms' }, ms[k] || ''), h('small', {}, `${ip} · ${sub}`)))));
+          Lab.ui.terminal(el, {
+            panelTitle: 'The route',
+            predict: {
+              q: 'Hop 3 shows <code>* * *</code> instead of an address. Do Ada’s packets still reach the server?',
+              options: ['No, the route is broken at hop 3', 'Yes: that router passes packets on, it only ignores traceroute', 'Only half of them'],
+              a: 1,
+              why: 'Many routers are set up not to answer traceroute’s test packets. The later hops still answer, so the road through hop 3 works.',
+            },
+            frames: [
+              { panel: route(0), say: 'Ada’s laptop sits at home on Wi-Fi. Which routers do her packets pass on their way to <code>example.com</code>?' },
+              { cmd: 'traceroute example.com', out: 'traceroute to example.com (203.0.113.10), 30 hops max, 60 byte packets', panel: route(0), say: 'First traceroute finds the server’s IP address, <code>203.0.113.10</code>. It will try at most 30 hops.' },
+              { out: ' 1  192.168.1.1 (192.168.1.1)  1.912 ms  1.801 ms  1.756 ms', panel: route(1, { 1: '1.8 ms' }), say: 'Hop 1 is the home router. traceroute tests each hop three times and prints how long each answer took, in milliseconds (ms, thousandths of a second).' },
+              { out: ' 2  100.64.0.1 (100.64.0.1)  8.934 ms  9.102 ms  8.877 ms', panel: route(2, { 1: '1.8 ms', 2: '9 ms' }), say: 'Hop 2 is a router at Ada’s internet provider. Farther away, so the times grow.' },
+              { out: ' 3  * * *', panel: route(3, { 1: '1.8 ms', 2: '9 ms', 3: 'no reply' }), say: 'Hop 3 did not answer. Each <code>*</code> is a test with no reply.' },
+              { out: ' 4  198.51.100.7 (198.51.100.7)  14.215 ms  14.098 ms  14.330 ms', panel: route(4, { 1: '1.8 ms', 2: '9 ms', 3: 'no reply', 4: '14 ms' }), say: 'Hop 4 answers, so packets did get past hop 3.' },
+              { out: ' 5  203.0.113.10 (203.0.113.10)  15.402 ms  15.377 ms  15.519 ms', panel: route(5, { 1: '1.8 ms', 2: '9 ms', 3: 'no reply', 4: '14 ms', 5: '15 ms' }), say: 'Hop 5 is the server itself. Five hops, about 15 ms. To a server on another continent it can be 15 hops and 150 ms.' },
+            ],
+          });
+        },
+        code: `# macOS and Linux: list the hops to a server
+traceroute example.com
+# traceroute to example.com (203.0.113.10), 30 hops max, 60 byte packets
+#  1  192.168.1.1 (192.168.1.1)  1.912 ms  1.801 ms  1.756 ms
+#  2  100.64.0.1 (100.64.0.1)  8.934 ms  9.102 ms  8.877 ms
+#  3  * * *
+#  4  198.51.100.7 (198.51.100.7)  14.215 ms  14.098 ms  14.330 ms
+#  5  203.0.113.10 (203.0.113.10)  15.402 ms  15.377 ms  15.519 ms
+
+# Windows: the same idea, a slightly different layout
+tracert example.com`,
+        remember: 'Every device has an IP address. Routers pass each packet one hop closer to its destination.',
+        terms: [
+          { term: 'IP address', def: 'The number that identifies a device on a network, like <code>192.168.1.23</code>.' },
+          { term: 'router', def: 'A device that passes packets on toward their destination. Your Wi-Fi box is one.' },
+          { term: 'hop', def: 'One step of a packet’s trip. <code>traceroute</code> prints one line per hop, naming the router (or server) reached.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'On macOS or Linux, list the hops from your computer to <code>example.com</code>.', code: '[[traceroute]] example.com', why: '<code>traceroute</code> prints one line per hop. On Windows the command is <code>tracert</code>.' },
+          { type: 'bug', prompt: 'These should all be IP addresses of the common kind. One of them can’t be. Tap it.', code: '192.168.1.1\n203.0.113.10\n192.168.1.300\n10.0.0.2', bug: 2, fix: '192.168.1.30', why: 'Each of the four numbers goes from 0 to 255, so <code>300</code> is not allowed.' },
+        ],
+        quiz: [
+          { q: 'What does a router do with a packet?', options: ['Reads the data inside and answers it', 'Looks at the destination address and passes it one hop closer', 'Stores it until the server asks for it'], a: 1, why: 'A router is a signpost: it only needs the destination address to choose the next hop.' },
+          { q: 'A traceroute ends with hop 12 being the server. How many routers did the packets pass before the server?', options: ['11', '12', '13'], a: 0, why: 'Hops 1 to 11 are routers; hop 12 is the server itself.' },
+          { q: 'Which command lists the hops on Windows?', options: ['<code>traceroute</code>', '<code>tracert</code>', '<code>curl</code>'], a: 1, why: 'Windows names it <code>tracert</code>. macOS and Linux use <code>traceroute</code>.' },
+        ],
+        docs: [['MDN: IP address', 'https://developer.mozilla.org/en-US/docs/Glossary/IP_Address']],
+      },
+
+      {
+        id: 'dns',
+        title: 'Names to addresses',
+        tagline: 'DNS turns a name like example.com into an IP address, and remembers it.',
+        goals: ['Explain what a DNS lookup does', 'Look up a name with <code>nslookup</code>', 'Say why the second lookup is faster'],
+        level: 'beginner', introduces: ['nslookup'],
+        body: `
+<p>You type <code>example.com</code>, not <code>203.0.113.10</code>. People remember names, but packets need IP addresses. So before your app can send anything, it has to find out which address belongs to the name.</p>
+<p>That is the job of <em>DNS</em>, the Domain Name System: the internet’s phone book. A <em>DNS lookup</em> asks “what is the address of <code>example.com</code>?”. Your device asks a <em>resolver</em>, a DNS server run by your Wi-Fi router or your internet provider. If the resolver doesn’t know, it asks further DNS servers, step by step, until it reaches the one that is in charge of <code>example.com</code>.</p>
+<p>Every answer comes with a <em>TTL</em> (time to live): how many seconds it may be kept. Your phone and the resolver keep answers in a <em>cache</em>, a short-term memory, so the next lookup of the same name takes no time at all.</p>
+<p>Try <code>nslookup example.com</code>. It works on macOS, Linux and Windows. If you misspell the name, the answer is <code>NXDOMAIN</code>: no such name exists (Windows writes <code>Non-existent domain</code>).</p>`,
+        visual(el) {
+          const rows = [['Phone’s cache', 'on the phone itself'], ['Resolver', 'your router or provider'], ['Root servers', 'know where .com is'], ['.com servers', 'know where example.com is'], ['example.com’s DNS server', 'in charge of example.com']];
+          const list = h('div', { class: 'nw-hops' });
+          const caches = h('div', { class: 'nw-caches' });
+          const total = h('div', { class: 'nw-row' });
+          const stage = h('div', { class: 'ui-stage' }, h('div', { class: 'nw-stage' }, total, list, caches));
+          const A = 'example.com → 203.0.113.10';
+          const frames = [
+            { on: [], ms: {}, pc: '', rc: '', t: '', say: 'Ada types <code>example.com</code>. Before her phone can connect, it needs the IP address. Both caches are empty.' },
+            { on: [0], ms: { 0: 'empty' }, pc: '', rc: '', t: '', say: 'First the phone checks its own cache. Nothing there.' },
+            { on: [1], ms: { 0: 'empty', 1: 'not cached' }, pc: '', rc: '', t: '', say: 'It asks the resolver. The resolver has never seen this name either.' },
+            { on: [2, 3], ms: { 0: 'empty', 1: 'not cached', 2: '“ask .com”', 3: '“ask example.com’s server”' }, pc: '', rc: '', t: '', say: 'The resolver asks the root servers (the top of DNS, which know who handles <code>.com</code>), which send it to the <code>.com</code> servers, which send it to the server in charge of <code>example.com</code>.' },
+            { on: [4], hit: 4, ms: { 0: 'empty', 1: 'not cached', 2: '“ask .com”', 3: '“ask example.com’s server”', 4: '203.0.113.10' }, pc: '', rc: '', t: '', say: 'That server knows: <code>203.0.113.10</code>, and it may be kept for 300 seconds. That is the TTL.' },
+            { on: [1], ms: { 0: 'empty', 1: 'saved' }, pc: A + ' (300 s)', rc: A + ' (300 s)', t: '120 ms', say: 'The resolver saves the answer and passes it to the phone, which saves it too. The whole lookup took about 120 ms.' },
+            { on: [0], hit: 0, dim: [1, 2, 3, 4], ms: { 0: 'found' }, pc: A + ' (240 s left)', rc: A + ' (240 s left)', t: '0 ms', say: 'A minute later Ada opens the site again. The phone’s cache has the answer: 0 ms, nobody is asked.' },
+            { on: [1], hit: 1, dim: [2, 3, 4], ms: { 0: 'empty', 1: 'found' }, pc: '(Sam’s phone: empty)', rc: A + ' (230 s left)', t: '4 ms', say: 'Sam, on the same Wi-Fi, looks up the same name. His phone’s cache is empty, but the shared resolver remembers: 4 ms.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'The first lookup of <code>example.com</code> took 120 ms. One minute later Ada looks it up again (TTL 300 seconds). About how long does it take?',
+              options: ['120 ms again', 'Almost 0 ms: the answer is still in the cache', 'Longer, the servers are busier'],
+              a: 1,
+              why: 'The answer may be kept for 300 seconds. After 60 seconds it is still fresh, so nobody needs to be asked.',
+            },
+            draw(f) {
+              total.replaceChildren(label('lookup time'), h('span', { class: 'nw-big' }, f.t || '…'));
+              list.replaceChildren(...rows.map(([n, sub], k) => h('div', { class: `nw-hop${f.hit === k ? ' nw-hit' : f.on.includes(k) ? ' nw-on' : ''}${(f.dim || []).includes(k) ? ' nw-dim' : ''}` }, h('b', {}, n), h('span', { class: 'nw-ms' }, f.ms[k] || ''), h('small', {}, sub))));
+              caches.replaceChildren(
+                h('div', { class: 'nw-cache' }, h('span', { class: 'nw-th' }, 'phone’s cache'), f.pc || '(empty)'),
+                h('div', { class: 'nw-cache' }, h('span', { class: 'nw-th' }, 'resolver’s cache'), f.rc || '(empty)'));
+            },
+          });
+        },
+        code: `nslookup example.com
+# Server:		192.168.1.1
+# Address:	192.168.1.1#53
+#
+# Non-authoritative answer:
+# Name:	example.com
+# Address: 203.0.113.10
+
+# The first two lines name the resolver that answered.
+# "Non-authoritative" means the resolver passed the answer on;
+# it did not come straight from the server in charge of example.com.`,
+        remember: 'DNS turns a name into an IP address. Answers are cached for TTL seconds, so repeats are fast.',
+        mistakes: [
+          { title: 'A typo in the name', bad: `nslookup exmaple.com
+# ** server can't find exmaple.com: NXDOMAIN`, good: `nslookup example.com
+# Address: 203.0.113.10`, why: 'NXDOMAIN means “no such name”. DNS works fine; the name is wrong. An app shows this as “can’t reach server”, so check the spelling first.' },
+        ],
+        terms: [
+          { term: 'DNS, DNS lookup', def: 'The Domain Name System. A lookup asks it for the IP address that belongs to a name.' },
+          { term: 'resolver', def: 'The DNS server your device asks, usually run by your router or internet provider.' },
+          { term: 'cache, TTL', def: 'A cache is a short-term memory of answers. The TTL says how many seconds an answer may stay in it.' },
+          { term: 'NXDOMAIN', def: 'The DNS answer for a name that does not exist.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Look up the IP address of <code>example.com</code>.', code: '[[nslookup]] example.com', why: '<code>nslookup</code> asks your resolver and prints the address it gets back.' },
+          { type: 'bug', prompt: 'Ada wants the address of <code>example.com</code>, but one command prints <code>** server can\'t find exmaple.com: NXDOMAIN</code>. Tap it.', code: 'nslookup example.org\nnslookup exmaple.com', bug: 1, fix: 'nslookup example.com', why: 'The letters <code>m</code> and <code>a</code> are swapped. DNS only knows names that really exist.' },
+        ],
+        quiz: [
+          { q: 'An answer comes with a TTL of 300. What does that mean?', options: ['The server is 300 km away', 'The answer may be kept in a cache for 300 seconds', 'The lookup took 300 ms'], a: 1, why: 'TTL means time to live: how long a cache may keep the answer before asking again.' },
+          { q: '<code>nslookup</code> prints <code>NXDOMAIN</code>. What happened?', options: ['The name does not exist', 'The server is down', 'The internet connection is broken'], a: 0, why: 'DNS answered, and the answer was “no such name”. Check the spelling.' },
+          { q: 'Why does a DNS lookup happen before the app sends its request?', options: ['Packets need an IP address, not a name', 'To check the password', 'To make the request smaller'], a: 0, why: 'Routers only understand IP addresses, so the name must be turned into one first.' },
+        ],
+        docs: [['MDN: DNS', 'https://developer.mozilla.org/en-US/docs/Glossary/DNS']],
+      },
+
+      {
+        id: 'tcp-udp',
+        title: 'TCP and UDP',
+        tagline: 'Two ways to send packets: carefully and complete, or fast and fire-and-forget.',
+        goals: ['Explain what TCP adds: a connection, order and resending', 'Say when UDP is the better choice', 'Read the port number in an address'],
+        level: 'beginner', introduces: ['-v', 'localhost'],
+        body: `
+<p>Packets get lost: a weak Wi-Fi signal, a busy router. For a chat message, every letter must arrive, in order. For a video call, a packet that comes back a second late is useless; the call should keep going. The two main ways of sending packets match these two needs.</p>
+<p><em>TCP</em> is the careful one. Before any data, the two sides open a <em>connection</em> with three short messages, the handshake: “can we talk?”, “yes”, “great”. Then every packet is numbered, the receiver confirms what it got, and anything missing is sent again. The app on the other side always gets complete data, in order. Web pages, messages and almost all app traffic use TCP.</p>
+<p><em>UDP</em> skips all that: no connection, no confirmations, no resending. Each packet is sent once. UDP packets carry no number for ordering, so the app gets them as they come. That makes it faster, so video calls, online games and DNS lookups use it.</p>
+<p>One server can run many programs, so an address alone is not enough. A <em>port</em> number picks the program, like a flat number in a building: 443 for secure web pages, 80 for plain ones, 53 for DNS. <code>curl -v</code> (v for verbose, “tell me everything”) shows the connection being made. <code>localhost</code> is a name that always means your own computer.</p>`,
+        visual(el) {
+          const seq = h('div', { class: 'nw-seq' });
+          const got = h('div', { class: 'nw-slots' });
+          const head = h('div', { class: 'nw-row' });
+          const stage = h('div', { class: 'ui-stage' }, h('div', { class: 'nw-stage' }, head, seq, h('div', { class: 'nw-row' }, label('the app on the server got'), got)));
+          const hs = [['Can we talk?', 'r'], ['Yes, I hear you', 'l'], ['Great', 'r']];
+          const frames = [
+            { p: 'TCP', m: [], g: [], say: 'Ada’s phone sends three packets to a server with <b>TCP</b>. Watch what happens before the data.' },
+            { p: 'TCP', m: hs, g: [], say: 'The handshake opens a connection. It costs one trip there and back before any data moves.' },
+            { p: 'TCP', m: [...hs, ['packet 1', 'r'], ['packet 2', 'r', 'nw-lost'], ['packet 3', 'r']], g: [], say: 'Three packets go out. Packet 2 is lost on the way.' },
+            { p: 'TCP', m: [...hs, ['packet 1', 'r'], ['packet 2', 'r', 'nw-lost'], ['packet 3', 'r'], ['Got 1 and 3. Where is 2?', 'l']], g: [], hold: true, say: 'The server confirms what arrived. It holds packet 3 back: the app must get the data in order.' },
+            { p: 'TCP', m: [...hs, ['packet 1', 'r'], ['packet 2', 'r', 'nw-lost'], ['packet 3', 'r'], ['Got 1 and 3. Where is 2?', 'l'], ['packet 2, sent again', 'r', 'nw-warmc'], ['Got all 3', 'l']], g: [1, 2, 3], say: 'The phone sends packet 2 again. Now the app gets 1, 2, 3: complete, in order, a little later.' },
+            { p: 'UDP', m: [['packet 1', 'r'], ['packet 2', 'r', 'nw-lost'], ['packet 3', 'r']], g: [1, '', 3], say: 'Now the same with <b>UDP</b>. No handshake: the packets go out at once. Packet 2 is lost again.' },
+            { p: 'UDP', m: [['packet 1', 'r'], ['packet 2', 'r', 'nw-lost'], ['packet 3', 'r'], ['(nobody asks for packet 2)', 'l', 'nw-note-row']], g: [1, '', 3], say: 'Nobody notices and nothing is resent. In a video call that is a tiny glitch, better than freezing to wait.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'With TCP, packet 2 of 3 is lost on the way. What does the app on the server end up with?',
+              options: ['Packets 1 and 3 only', 'All three, in order: the missing one is sent again', 'Nothing: the whole connection starts over'],
+              a: 1,
+              why: 'TCP notices the gap, asks again, and only hands data to the app once it is complete and in order.',
+            },
+            draw(f) {
+              head.replaceChildren(pill(f.p, f.p === 'TCP' ? 'nw-acc' : 'nw-warm'), h('span', { class: 'nw-note' }, f.p === 'TCP' ? 'careful: connection, confirmations, resending' : 'fast: no connection, sent once'));
+              seq.replaceChildren(seqHead('Phone', 'Server'), ...f.m.map(([t, d, c]) => arrow(t, d, c || '')));
+              got.replaceChildren(...[0, 1, 2].map(k => {
+                const v = f.g[k];
+                if (f.hold && k === 0) return h('span', { class: 'nw-slot nw-held' }, '1');
+                if (f.hold && k === 2) return h('span', { class: 'nw-slot nw-held' }, '3');
+                return h('span', { class: `nw-slot${v ? ' nw-got' : f.g.length ? ' nw-gone' : ''}` }, v ? String(v) : f.g.length ? '✕' : '');
+              }));
+            },
+          });
+        },
+        code: `# -v shows the connection being made (output shortened)
+curl -v https://example.com
+# * Host example.com:443 was resolved.
+# * IPv6: (none)
+# * IPv4: 203.0.113.10
+# *   Trying 203.0.113.10:443...
+# * Connected to example.com (203.0.113.10) port 443
+# IPv4/IPv6: the addresses DNS found (this server has no IPv6 one)
+
+# Nothing on your own computer listens on port 8080:
+curl http://localhost:8080
+# curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn't connect to server`,
+        remember: 'TCP: a connection, every packet confirmed and in order. UDP: sent once, fast. A port picks the program.',
+        terms: [
+          { term: 'TCP', def: 'A way of sending that opens a connection, confirms every packet and resends lost ones.' },
+          { term: 'UDP', def: 'A way of sending without a connection: each packet is sent once, nothing is resent.' },
+          { term: 'connection', def: 'An agreement between two sides to exchange data, opened by a handshake.' },
+          { term: 'port', def: 'A number that picks a program on a computer, such as 443 for secure web pages.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Secure web pages use one port number. Fill it in.', code: 'curl -v https://example.com\n# * Connected to example.com (203.0.113.10) port [[443]]', why: '443 is the port for <code>https://</code> addresses. Plain <code>http://</code> uses 80.' },
+          { type: 'bug', prompt: 'Ada runs a small test server (a program she wrote that answers requests) on her own computer, on port 8080. One command asks the wrong port. Tap it.', code: 'cd projects\ncurl http://localhost:8008', bug: 1, fix: 'curl http://localhost:8080', why: 'The port after <code>:</code> must match the one the server listens on. Nothing answers on 8008.' },
+        ],
+        quiz: [
+          { q: 'A video call loses one packet. Which way of sending fits a call better?', options: ['TCP: wait until the packet is sent again', 'UDP: skip it and keep the call going'], a: 1, why: 'For live audio and video, late data is useless. UDP keeps things moving.' },
+          { q: 'What does a port number choose?', options: ['The computer', 'The program on that computer', 'The router'], a: 1, why: 'The IP address finds the computer; the port finds the program on it.' },
+          { q: 'Why does TCP cost a little time before the first data moves?', options: ['The handshake must go there and back first', 'TCP packets are bigger', 'The server must restart'], a: 0, why: 'The connection opens with a handshake, one trip there and back, before any data is sent.' },
+        ],
+        docs: [['MDN: TCP', 'https://developer.mozilla.org/en-US/docs/Glossary/TCP']],
+      },
+
+      {
+        id: 'http',
+        title: 'HTTP',
+        tagline: 'The request and the response: how apps and servers talk.',
+        goals: ['Name the parts of an HTTP request and response', 'Read status codes like 200 and 404', 'Send a GET and a POST with <code>curl</code>'],
+        level: 'beginner', introduces: ['-i', '-d', 'GET', 'POST'], ignore: ['value'],
+        body: `
+<p>The connection is open. Now the app and the server need a shared language, so the server knows what is being asked. On the web and in almost every app, that language is <em>HTTP</em>.</p>
+<p>The client sends a <em>request</em>. Its first line has a <em>method</em> and a path: <code>GET /weather?city=Oslo</code>. <code>GET</code> means “give me this”; <code>POST</code> means “here is something new, store it”. The part after <code>?</code> adds details, here which city. Then come <em>headers</em>, one per line in the form <code>Name: value</code>, with extra information such as which server the request is for.</p>
+<p>The server sends back a <em>response</em>. Its first line has a <em>status code</em>: <code>200 OK</code> means it worked, <code>201 Created</code> that something new was stored, <code>404 Not Found</code> that the path doesn’t exist. Codes starting with 2 mean success, 4 a mistake in the request, 5 a problem on the server. Headers follow, such as <code>Content-Type</code>, then a blank line, then the body: the data itself.</p>
+<p><code>curl -i</code> prints the response with its headers. <code>curl -v</code> also shows the request, with lines starting <code>&gt;</code> going out and <code>&lt;</code> coming back. <code>curl -d</code> sends data in a POST. Put addresses that contain <code>?</code> in quotes: some terminals treat <code>?</code> as a special character. This lesson uses <code>http://</code> to keep the output short; the next one explains <code>https://</code>. On Windows PowerShell, remember to type <code>curl.exe</code>.</p>`,
+        visual(el) {
+          const e = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const note = (t, d) => `<p class="nw-note"><b>${t}</b><br>${d}</p>`;
+          Lab.ui.terminal(el, {
+            panelTitle: 'What you see',
+            predict: {
+              q: 'Ada asks for <code>/wether</code>, a misspelled path. The server is running fine. What status code comes back?',
+              options: ['<code>200 OK</code>', '<code>404 Not Found</code>', '<code>500</code>, a server error'],
+              a: 1,
+              why: 'The server works; it has nothing at that path. 4xx codes mean the request was wrong.',
+            },
+            frames: [
+              { cmd: 'curl -v "http://example.com/weather?city=Oslo"', out: e('* Host example.com:80 was resolved.\n* IPv6: (none)\n* IPv4: 203.0.113.10\n*   Trying 203.0.113.10:80...\n* Connected to example.com (203.0.113.10) port 80'), panel: note('Lines with *', 'curl telling you what it does: DNS lookup, then a TCP connection to port 80.'), say: 'Ada asks for the weather in Oslo. First the steps from earlier lessons: the address, then the connection.' },
+              { out: e('> GET /weather?city=Oslo HTTP/1.1\n> Host: example.com\n> User-Agent: curl/8.5.0\n> Accept: */*\n> '), panel: note('Lines with &gt;: the request', 'Method <code>GET</code>, the path, the HTTP version, then headers. The empty line ends the request.'), say: 'This is the request curl sends. Each header is <code>Name: value</code>. <code>Host</code> says which site the request is for. <code>User-Agent</code> names the client; <code>Accept: */*</code> says any kind of answer is fine.' },
+              { out: e('< HTTP/1.1 200 OK'), panel: note('The status line', '<code>200 OK</code>: it worked.'), say: 'The response starts with the status code. 200 means success.' },
+              { out: e('< Server: ExampleServer\n< Date: Mon, 19 Oct 2026 09:41:00 GMT\n< Content-Type: application/json\n< Content-Length: 25\n< '), panel: note('Response headers', '<code>Content-Type</code> says what kind of data follows; <code>Content-Length</code> how many bytes (characters) the body has.'), say: 'Response headers describe the answer. <code>application/json</code> is a text format for data that apps read easily.' },
+              { out: e('{"city":"Oslo","temp":7}\n* Connection #0 to host example.com left intact'), panel: note('The body', 'The data itself: Oslo, 7 degrees.'), say: 'After the blank line comes the body. curl keeps the connection open in case another request follows.' },
+              { cmd: 'curl -i http://example.com/wether', out: e('HTTP/1.1 404 Not Found\nServer: ExampleServer\nDate: Mon, 19 Oct 2026 09:41:00 GMT\nContent-Type: text/plain\nContent-Length: 10\n\nNot found'), panel: note('404 Not Found', 'The server answered fine. There is nothing at <code>/wether</code>.'), say: '<code>-i</code> shows only the response, with its headers. A typo in the path gives 404.' },
+              { cmd: 'curl -i -d text=Hi http://example.com/messages', out: e('HTTP/1.1 201 Created\nServer: ExampleServer\nDate: Mon, 19 Oct 2026 09:41:00 GMT\nContent-Type: application/json\nContent-Length: 10\n\n{"id":42}'), panel: note('POST', '<code>-d</code> sends data, so curl uses <code>POST</code>. <code>201 Created</code>: stored as message 42.'), say: 'To send something new, use POST. curl switches to POST by itself when you add <code>-d</code>.' },
+            ],
+          });
+        },
+        code: `# Read: GET, response with headers
+curl -i "http://example.com/weather?city=Oslo"
+# HTTP/1.1 200 OK
+# Server: ExampleServer
+# Date: Mon, 19 Oct 2026 09:41:00 GMT
+# Content-Type: application/json
+# Content-Length: 25
+#
+# {"city":"Oslo","temp":7}
+
+# Send: -d makes it a POST
+curl -i -d text=Hi http://example.com/messages
+# HTTP/1.1 201 Created
+# ...
+# {"id":42}`,
+        remember: 'A request has a method, a path and headers. A response has a status code, headers and a body.',
+        mistakes: [
+          { title: 'A ? without quotes', bad: `curl -i http://example.com/weather?city=Oslo
+# zsh: no matches found: http://example.com/weather?city=Oslo`, good: `curl -i "http://example.com/weather?city=Oslo"`, why: 'zsh, the program behind the macOS terminal, treats <code>?</code> as a pattern for file names. Quotes pass the address to curl exactly as written. (Other terminals may run the command fine, but the quotes never hurt.)' },
+        ],
+        terms: [
+          { term: 'HTTP, request, response', def: 'HTTP is the language of the web. The client sends a request, the server sends back a response.' },
+          { term: 'method', def: 'The first word of a request: <code>GET</code> to read, <code>POST</code> to send something new.' },
+          { term: 'status code', def: 'The number at the start of a response: 2xx success, 4xx mistake in the request, 5xx problem on the server.' },
+          { term: 'header', def: 'A line of extra information, <code>Name: value</code>, such as <code>Content-Type: application/json</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'The server has nothing at the requested path. Fill in the status code.', code: 'HTTP/1.1 [[404]] Not Found', why: '404 means “not found”: the server works, the path does not exist.' },
+          { type: 'bug', prompt: 'Ada wants to send a new message, but this request only reads. Tap the wrong line.', code: '> GET /messages HTTP/1.1\n> Host: example.com\n> Content-Length: 7', bug: 0, fix: '> POST /messages HTTP/1.1', why: 'GET reads; sending something new to store is a POST.' },
+        ],
+        quiz: [
+          { q: 'A response starts with <code>HTTP/1.1 500 Internal Server Error</code>. Whose problem is it?', options: ['The request was wrong', 'Something broke on the server', 'The network is down'], a: 1, why: '5xx codes mean the server failed. The network worked: an answer came back.' },
+          { q: 'Which method fits “show me today’s weather”?', options: ['<code>GET</code>', '<code>POST</code>'], a: 0, why: 'Reading something is a GET. POST sends something new.' },
+          { q: 'What is <code>Content-Type: application/json</code>?', options: ['A header', 'A status code', 'The body'], a: 0, why: 'It has the form <code>Name: value</code>, so it is a header. It describes the body.' },
+        ],
+        docs: [['MDN: Overview of HTTP', 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview'], ['MDN: HTTP response status codes', 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status']],
+      },
+
+      {
+        id: 'tls',
+        title: 'HTTPS and TLS',
+        tagline: 'Locking the conversation so only the two ends can read it.',
+        goals: ['Explain what encryption and a certificate do', 'Follow a TLS handshake in <code>curl -v</code>', 'Recognise certificate errors'],
+        level: 'beginner', introduces: ['-k'],
+        body: `
+<p>Ada sends a message from café Wi-Fi. On the way, her packets pass the café’s router and many others. Plain HTTP can be read by every one of them, password included. The <code>s</code> in <code>https://</code> fixes that.</p>
+<p>HTTPS is HTTP inside <em>TLS</em> (Transport Layer Security). TLS uses <em>encryption</em>: it scrambles the data so that only the two ends hold the key to unscramble it. Everyone in between sees which server Ada talks to, but not what she sends or receives.</p>
+<p>But how does the phone know it is really talking to <code>example.com</code> and not a fake? The server shows a <em>certificate</em>: a digital ID card that says “this is example.com”, with an expiry date, signed by a certificate authority, an organisation your device already trusts.</p>
+<p>All of this happens in the TLS <em>handshake</em>, right after the TCP connection opens and before any HTTP: hello messages, the certificate, and agreeing on keys. If the certificate is expired, signed by someone unknown, or made for another name, curl stops with error 60 instead of sending anything.</p>`,
+        visual(el) {
+          const e = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const step = (n, on) => el2 => el2.append(h('div', { class: 'nw-hops' }, ['TCP connection', 'Hello messages, agree on keys', 'Check the certificate', 'Encrypted HTTP'].map((t, k) => h('div', { class: `nw-hop${k < n ? ' nw-hit' : k === n ? ' nw-on' : ' nw-dim'}${on === 'bad' && k === n ? ' nw-dim' : ''}` }, h('b', {}, t), h('span', { class: 'nw-ms' }, k < n ? 'done' : k === n ? (on === 'bad' ? 'failed' : 'now') : ''), h('small', {}, ['port 443, as in lesson 4', 'Client hello, Server hello', 'name, expiry date, who signed it', 'nobody in between can read it'][k])))));
+          const fail = el2 => el2.append(h('div', { class: 'nw-chain' }, h('div', { class: 'nw-cert nw-bad' }, h('b', {}, 'Certificate rejected'), h('span', { class: 'nw-mark' }, '✕'), h('small', {}, 'curl stops before sending any HTTP'))));
+          const tail = 'More details here: https://curl.se/docs/sslcerts.html';
+          Lab.ui.terminal(el, {
+            panelTitle: 'TLS steps',
+            predict: {
+              q: 'A server’s certificate expired yesterday. What does curl do?',
+              options: ['Shows the page with a warning at the end', 'Stops before sending the request, with an error', 'Renews the certificate'],
+              a: 1,
+              why: 'An expired certificate can’t prove who the server is, so curl refuses to talk to it at all.',
+            },
+            frames: [
+              { cmd: 'curl -v "https://example.com/weather?city=Oslo"', out: e('* Host example.com:443 was resolved.\n* IPv6: (none)\n* IPv4: 203.0.113.10\n*   Trying 203.0.113.10:443...\n* Connected to example.com (203.0.113.10) port 443'), panel: step(1), say: 'The same weather request, now with <code>https://</code>. The TCP connection opens on port 443. (Output shortened by removing some lines.)' },
+              { out: e('* TLSv1.3 (OUT), TLS handshake, Client hello (1):\n* TLSv1.3 (IN), TLS handshake, Server hello (2):\n* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):'), panel: step(2), say: 'The TLS handshake begins. <code>OUT</code> is what curl sends, <code>IN</code> what it receives. The hellos agree on how to encrypt.' },
+              { out: e('* TLSv1.3 (IN), TLS handshake, Certificate (11):\n* TLSv1.3 (IN), TLS handshake, CERT verify (15):\n* TLSv1.3 (IN), TLS handshake, Finished (20):\n* TLSv1.3 (OUT), TLS handshake, Finished (20):\n* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519 / RSASSA-PSS'), panel: step(2), say: 'The server sends its certificate, and both sides finish the handshake. SSL is the old name of TLS; curl still uses both. The rest of that last line names the encryption methods; you can skip it.' },
+              { out: e('* Server certificate:\n*  subject: CN=example.com\n*  start date: Oct 19 14:22:06 2026 GMT\n*  expire date: Jan 17 14:22:06 2027 GMT\n*  subjectAltName: host "example.com" matched cert\'s "example.com"\n*  issuer: O=Example Trust; CN=Example Trust Root CA\n*  SSL certificate verify ok.'), panel: step(3), say: 'The certificate. <code>subject</code> is who it is for, <code>issuer</code> who signed it; <code>CN</code> means name. It is for <code>example.com</code>, valid until January, signed by a certificate authority curl trusts: <code>verify ok</code>.' },
+              { out: e('> GET /weather?city=Oslo HTTP/2\n> Host: example.com\n> User-Agent: curl/8.5.0\n> Accept: */*\n> \n< HTTP/2 200 \n< server: ExampleServer\n< date: Mon, 19 Oct 2026 09:41:00 GMT\n< content-type: application/json\n< content-length: 25\n< \n{"city":"Oslo","temp":7}'), panel: step(4), say: 'Only now does HTTP start, encrypted on the way. Over HTTPS this server speaks <code>HTTP/2</code>, a newer version of HTTP that writes header names in lower case. The request and response mean the same as before.' },
+              { cmd: 'curl https://old.example.com', clear: true, out: e(`curl: (60) SSL certificate problem: certificate has expired\n${tail}`), panel: fail, say: 'Another server, whose certificate has expired. curl stops: error 60. Not a single HTTP line was sent.' },
+              { cmd: 'curl https://shop.example.com', out: e(`curl: (60) SSL: no alternative certificate subject name matches target host name 'shop.example.com'\n${tail}`), panel: fail, say: 'Here the server shows a certificate made for a different name. It might be a fake, so curl stops again. (curl prints a few more lines of advice after each error.)' },
+            ],
+          });
+        },
+        code: `# https:// turns on TLS (output shortened)
+curl -v https://example.com
+# * TLSv1.3 (OUT), TLS handshake, Client hello (1):
+# * TLSv1.3 (IN), TLS handshake, Server hello (2):
+# * TLSv1.3 (IN), TLS handshake, Certificate (11):
+# *  subject: CN=example.com
+# *  expire date: Jan 17 14:22:06 2027 GMT
+# *  SSL certificate verify ok.
+
+# A server with an expired certificate:
+curl https://old.example.com
+# curl: (60) SSL certificate problem: certificate has expired`,
+        remember: 'HTTPS = HTTP inside TLS: encrypted, and the certificate proves who the server is.',
+        mistakes: [
+          { title: 'Switching the check off', bad: `curl -k https://old.example.com
+# -k skips the certificate check`, good: `curl https://old.example.com
+# curl: (60) SSL certificate problem: certificate has expired
+# Tell the people who run the server.`, why: '<code>-k</code> makes the error go away by trusting any server, including a fake one. The certificate is the problem; the server needs a new one.' },
+        ],
+        terms: [
+          { term: 'TLS, HTTPS', def: 'TLS encrypts a connection and checks who the server is. HTTPS is HTTP sent inside TLS.' },
+          { term: 'encryption', def: 'Scrambling data so only someone with the key can read it.' },
+          { term: 'certificate', def: 'A server’s digital ID card: its name, an expiry date, and the signature of a trusted certificate authority.' },
+          { term: 'handshake', def: 'The opening messages of a connection. In TLS they agree on keys and check the certificate.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Fetch the page with encryption turned on.', code: 'curl [[https]]://example.com', why: 'The <code>s</code> in <code>https</code> means the request travels inside TLS.' },
+          { type: 'bug', prompt: 'These commands fetch the weather and log Ada in. One sends her password where every router on the way can read it. Tap it.', code: 'curl https://example.com/weather\ncurl -d password=sesame http://example.com/login', bug: 1, fix: 'curl -d password=sesame https://example.com/login', why: 'With <code>http://</code> the password travels unencrypted. <code>https://</code> puts it inside TLS, so only the server can read it.' },
+        ],
+        quiz: [
+          { q: 'Ada uses HTTPS on café Wi-Fi. What can the café’s router see?', options: ['Everything, including her messages', 'Which server she talks to, but not what she sends or receives', 'Nothing at all'], a: 1, why: 'The router must see the server’s address to pass the packets on, but the contents are encrypted.' },
+          { q: 'What does a certificate prove?', options: ['That the server is fast', 'That the server really is the name you asked for', 'That the data has no viruses'], a: 1, why: 'It is an ID card signed by someone your device trusts.' },
+          { q: 'When does the TLS handshake happen?', options: ['After the TCP connection opens, before any HTTP', 'After the HTTP response', 'Before the DNS lookup'], a: 0, why: 'Order: DNS, TCP, TLS, then HTTP inside the encrypted connection.' },
+        ],
+        docs: [['Android: Security with network protocols', 'https://developer.android.com/privacy-and-security/security-ssl']],
+      },
+
+      {
+        id: 'http-versions',
+        title: 'HTTP/1.1, 2 and 3',
+        tagline: 'Same requests, faster delivery: sharing one connection, then moving to QUIC.',
+        goals: ['Explain why HTTP/1.1 makes requests wait in line', 'Describe multiplexing in HTTP/2', 'Say what HTTP/3 and QUIC change'],
+        level: 'beginner', introduces: ['-I', '--http1.1'], ignore: ['time'],
+        body: `
+<p>One screen of an app can need twenty images. How fast they all arrive depends a lot on which version of HTTP the app and the server speak.</p>
+<p>With <em>HTTP/1.1</em>, one connection carries one request at a time: the next one waits until the previous answer is complete. Clients open a few connections side by side to cope, each with its own handshakes. <em>HTTP/2</em> sends many requests over a single connection at the same time, each in its own numbered stream. That is <em>multiplexing</em>: the pieces of different answers travel mixed together and are sorted out at the other end.</p>
+<p>HTTP/2 still runs on TCP, and TCP hands over data only in order. If one packet is lost, every stream waits for it to be resent, even streams that had nothing to do with it. <em>HTTP/3</em> runs on <em>QUIC</em> instead, a newer protocol built on UDP that does the resending itself, for each stream separately. QUIC also sets up faster, because it does the connection and TLS handshakes together.</p>
+<p>You don’t write requests differently: methods, headers and status codes stay the same. Client and server agree on the version by themselves. <code>curl -I</code> asks only for the status line and the headers, and its first line shows the version. In HTTP/2 the header names are written in lower case.</p>`,
+        visual(el) {
+          const span = 300;
+          const pct = v => `${(v / span) * 100}%`;
+          const names = ['image A', 'image B', 'image C'];
+          const tracks = names.map(() => h('div', { class: 'nw-wf-track' }));
+          const ver = h('div', { class: 'nw-row' });
+          const wf = h('div', { class: 'nw-wf' }, names.map((n, k) => [h('span', { class: 'nw-wf-name' }, n), tracks[k]]));
+          const legend = h('div', { class: 'nw-legend' }, h('span', { style: '--c: var(--accent)' }, 'downloading'), h('span', { style: '--c: var(--err)' }, 'waiting for a lost packet'));
+          const stage = h('div', { class: 'ui-stage' }, h('div', { class: 'nw-stage' }, ver, wf, h('div', { class: 'nw-axis' }, h('span', {}, '0 ms'), h('span', {}, '150 ms'), h('span', {}, '300 ms')), legend));
+          const frames = [
+            { v: '', rows: [[], [], []], say: 'An app screen needs three images from the same server. Each one takes about 100 ms, mostly waiting for the answer to travel back.' },
+            { v: 'HTTP/1.1', rows: [[[0, 100]], [], []], say: '<b>HTTP/1.1</b>, one connection: image A is requested and arrives.' },
+            { v: 'HTTP/1.1', rows: [[[0, 100]], [[100, 200]], [[200, 300]]], say: 'B had to wait for A, and C for B. One at a time: 300 ms.' },
+            { v: 'HTTP/2', rows: [[[0, 120]], [[0, 120]], [[0, 120]]], say: '<b>HTTP/2</b>: all three go out at once on one connection, in three streams. Done in about 120 ms.' },
+            { v: 'HTTP/2, one packet lost', rows: [[[0, 40], [40, 140, 'nw-stall'], [140, 220]], [[0, 40], [40, 140, 'nw-stall'], [140, 220]], [[0, 40], [40, 140, 'nw-stall'], [140, 220]]], say: 'Now a packet of image A is lost. TCP delivers in order, so B and C wait too until it is resent: 220 ms.' },
+            { v: 'HTTP/3 (QUIC), one packet lost', rows: [[[0, 40], [40, 140, 'nw-stall'], [140, 220]], [[0, 120]], [[0, 120]]], say: '<b>HTTP/3</b> on QUIC: only image A waits. B and C arrive at 120 ms as if nothing happened.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'With HTTP/2, one packet of image A is lost. What happens to images B and C on the same connection?',
+              options: ['They keep arriving normally', 'They wait too, until the lost packet is resent', 'They are downloaded again from the start'],
+              a: 1,
+              why: 'HTTP/2 runs on TCP, which hands data over only in order. One gap holds up everything behind it.',
+            },
+            draw(f) {
+              ver.replaceChildren(label('version'), f.v ? pill(f.v, 'nw-acc') : pill('none yet', 'nw-ghost'));
+              tracks.forEach((t, k) => t.replaceChildren(...f.rows[k].map(([a, b, c]) => h('span', { class: `nw-seg${c ? ' ' + c : ''}`, style: `left:${pct(a)};width:${pct(b - a)}` }))));
+            },
+          });
+        },
+        code: `# -I asks only for the status line and headers.
+# The first line shows the HTTP version.
+curl -I https://example.com
+# HTTP/2 200
+# content-type: text/html
+# ...
+
+# Ask for HTTP/1.1 instead:
+curl -I --http1.1 https://example.com
+# HTTP/1.1 200 OK
+# Content-Type: text/html
+# ...`,
+        remember: 'HTTP/1.1: one request at a time per connection. HTTP/2: many at once on one TCP connection. HTTP/3: the same on QUIC.',
+        terms: [
+          { term: 'multiplexing', def: 'Sending many requests and answers at the same time over one connection, each in its own stream.' },
+          { term: 'HTTP/2', def: 'The HTTP version that multiplexes requests over a single TCP connection.' },
+          { term: 'HTTP/3, QUIC', def: 'HTTP/3 runs on QUIC, a protocol built on UDP that resends lost packets per stream and sets up faster.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Ask only for the status line and headers, to see which HTTP version the server speaks.', code: 'curl [[-I]] https://example.com\n# HTTP/2 200', why: '<code>-I</code> asks for the headers only, and the first line names the version.' },
+          { type: 'bug', prompt: 'One of these statements is wrong. Tap it.', code: 'HTTP/1.1: one request at a time per connection\nHTTP/2: many requests share one connection\nHTTP/2: runs on UDP\nHTTP/3: runs on QUIC', bug: 2, fix: 'HTTP/2: runs on TCP', why: 'HTTP/2 runs on TCP. That is why one lost packet holds up all of its streams.' },
+        ],
+        quiz: [
+          { q: 'What does multiplexing mean in HTTP/2?', options: ['Many requests at once over one connection', 'Sending each request twice', 'Opening one connection per image'], a: 0, why: 'Each request gets its own stream, and all streams share the connection.' },
+          { q: 'HTTP/3 runs on which protocol?', options: ['TCP', 'QUIC, built on UDP', 'DNS'], a: 1, why: 'QUIC brings its own resending per stream, on top of UDP.' },
+          { q: 'The server switches from HTTP/1.1 to HTTP/2. What changes in the requests you write?', options: ['Every method gets a new name', 'Nothing: methods, headers and status codes stay the same', 'You must add a version header to each request'], a: 1, why: 'The version changes how requests travel, not what they mean.' },
+        ],
+        docs: [['MDN: Evolution of HTTP', 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Evolution_of_HTTP']],
+      },
+
+      {
+        id: 'latency',
+        title: 'Latency and bandwidth',
+        tagline: 'Why a fast connection can still feel slow: round trips.',
+        goals: ['Tell latency from bandwidth', 'Measure a round trip with <code>ping</code>', 'Count the round trips before a first response'],
+        level: 'beginner', introduces: ['ping', '-c'], ignore: ['time', 'limit'],
+        body: `
+<p>At home on Wi-Fi, Ada’s app opens in a blink. On a train with mobile data, the same screen takes seconds, even though her plan promises a “fast” connection. The word fast hides two different things.</p>
+<p><em>Bandwidth</em> is how much data can flow per second, like the width of a pipe. <em>Latency</em> is how long one packet takes to get there, like the length of the pipe. A trip there and back is a <em>round trip</em>, and its time is the RTT (round-trip time). On home Wi-Fi it is often 20 to 30 ms to a nearby server; on mobile data, often 50 to 150 ms, more on a weak signal.</p>
+<p>Small requests are limited by round trips, not by bandwidth. Count them for a first request to a new server: one for DNS, one for the TCP handshake, one for TLS, one for the HTTP request and response. Four round trips: about 120 ms on Wi-Fi, 600 ms at 150 ms each. That is why apps reuse open connections and ask for several things in one request.</p>
+<p><code>ping</code> sends a tiny packet and times the reply, so it measures the RTT. On macOS and Linux, <code>-c 4</code> stops after 4 packets (c for count). On Windows, <code>ping</code> sends 4 by default.</p>`,
+        visual(el) {
+          const B = (lane, from, to, label, tone) => ({ lane, from, to, label, tone });
+          Lab.ui.timeline(el, {
+            lanes: ['Wi-Fi<br>RTT 30 ms', 'Mobile<br>RTT 150 ms'], span: 800, unit: 'ms',
+            predict: {
+              q: 'A first request needs 4 round trips. On Wi-Fi each takes 30 ms. On mobile data each takes 150 ms, with the same bandwidth. About how long does the request take on mobile?',
+              options: ['120 ms, the bandwidth is the same', '600 ms: four round trips of 150 ms', '150 ms, one round trip'],
+              a: 1,
+              why: 'Every round trip waits for the slow trip there and back. Bandwidth does not help with that.',
+            },
+            frames: [
+              { say: 'The same first request to a new server, on Wi-Fi and on mobile data. Each bar is one round trip.' },
+              { bars: [B(0, 0, 30, 'DNS', 'muted'), B(1, 0, 150, 'DNS', 'muted')], say: 'Round trip 1: the DNS lookup. 30 ms on Wi-Fi, 150 ms on mobile.' },
+              { bars: [B(0, 30, 60, 'TCP', 'warm'), B(1, 150, 300, 'TCP', 'warm')], say: 'Round trip 2: the TCP handshake.' },
+              { bars: [B(0, 60, 90, 'TLS', 'warm'), B(1, 300, 450, 'TLS', 'warm')], say: 'Round trip 3: the TLS handshake. Still no data for the app.' },
+              { bars: [B(0, 90, 120, 'GET', 'accent'), B(1, 450, 600, 'GET', 'accent')], marks: [{ at: 600, label: '600 ms', tone: 'err' }], say: 'Round trip 4: the request and its response. Wi-Fi is done at 120 ms; mobile at 600 ms.' },
+              { bars: [B(0, 120, 150, 'GET', 'ok'), B(1, 600, 750, 'GET', 'ok')], say: 'A second request on the same open connection needs only one round trip: no DNS, TCP or TLS again. Reusing connections saves a lot on mobile.' },
+            ],
+          });
+        },
+        code: `# Linux shown; macOS looks very similar. Windows: ping 192.168.1.1
+ping -c 4 192.168.1.1
+# PING 192.168.1.1 (192.168.1.1) 56(84) bytes of data.
+# 64 bytes from 192.168.1.1: icmp_seq=1 ttl=64 time=2.31 ms
+# 64 bytes from 192.168.1.1: icmp_seq=2 ttl=64 time=1.87 ms
+# 64 bytes from 192.168.1.1: icmp_seq=3 ttl=64 time=2.05 ms
+# 64 bytes from 192.168.1.1: icmp_seq=4 ttl=64 time=1.96 ms
+#
+# --- 192.168.1.1 ping statistics ---
+# 4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+# rtt min/avg/max/mdev = 1.874/2.049/2.312/0.164 ms
+# icmp_seq numbers the pings. ttl here is a different thing from DNS:
+# a hop limit on the packet. Last line: min, average and max time;
+# mdev says how much they varied.
+
+# A server on another continent: about 150 ms per round trip
+ping -c 4 203.0.113.10
+# 64 bytes from 203.0.113.10: icmp_seq=1 ttl=54 time=148 ms
+# ...
+# rtt min/avg/max/mdev = 148.214/152.674/161.390/5.236 ms`,
+        remember: 'Bandwidth is how much per second; latency is how long each trip takes. Small requests wait on round trips.',
+        terms: [
+          { term: 'bandwidth', def: 'How much data a connection can carry per second.' },
+          { term: 'latency', def: 'How long data takes to travel from one end to the other.' },
+          { term: 'round trip, RTT', def: 'A trip there and back. The RTT is its time, measured by <code>ping</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'On macOS or Linux, ping the home router exactly 4 times.', code: 'ping [[-c]] 4 192.168.1.1', why: '<code>-c</code> sets the count. Without it, <code>ping</code> keeps going until you press <kbd>Ctrl</kbd>+<kbd>C</kbd> (hold Ctrl and press C, which stops a running command).' },
+          { type: 'bug', prompt: 'Ada counts the round trips for a first request to a new server. One line is wrong. Tap it.', code: 'DNS lookup: 1 round trip\nTCP handshake: 1 round trip\nTLS handshake: 1 round trip\nHTTP request and response: 0 round trips', bug: 3, fix: 'HTTP request and response: 1 round trip', why: 'The request goes there and the response comes back: one more round trip, four in total.' },
+        ],
+        quiz: [
+          { q: 'An app makes 30 tiny requests, one after another, on mobile data. What slows it down most?', options: ['Bandwidth', 'Latency: 30 round trips', 'The size of the images'], a: 1, why: 'Tiny requests carry little data. The time goes into waiting for 30 trips there and back.' },
+          { q: 'What does <code>ping</code> measure?', options: ['Bandwidth', 'Round-trip time', 'The number of hops'], a: 1, why: 'It times a tiny packet there and back.' },
+          { q: 'Why is a second request on an open connection faster than the first?', options: ['It skips the DNS, TCP and TLS round trips', 'The server remembers the answer', 'It uses UDP'], a: 0, why: 'The connection is already set up, so only the request’s own round trip is left.' },
+        ],
+        docs: [['MDN: Latency', 'https://developer.mozilla.org/en-US/docs/Glossary/Latency']],
+      },
+
+      {
+        id: 'debugging',
+        title: 'Seeing network traffic',
+        tagline: 'When a request fails, find out which step broke.',
+        goals: ['Match a curl error to the step that failed', 'Tell a network failure from an HTTP error status', 'Explain what a debugging proxy shows'],
+        level: 'beginner', introduces: ['--connect-timeout'],
+        body: `
+<p>Ada’s app shows “Something went wrong”. That tells her nothing. Was the name wrong, the server off, the certificate expired, or did the server answer with an error? Each step of this track fails in its own way, and the error message says which one.</p>
+<p>Run the same request with curl and read the error. <code>(6) Could not resolve host</code>: DNS failed, often a typo or no internet at all. <code>(7) Couldn't connect to server</code>: the TCP connection was refused, so nothing listens on that port. <code>(28) Timeout was reached</code>: packets went out but no answer came, for example when a network blocks them. <code>(60) SSL certificate problem</code>: TLS failed. A status code like 404 or 500 is different: the network worked, and the server answered.</p>
+<p>To see the traffic itself, <code>curl -v</code> shows every step. For an app, developers use a <em>proxy</em>: a program in the middle that the device sends all its requests through, which records each request and response so you can read them. Android Studio, the program used to build Android apps, has a Network Inspector that shows an app’s requests the same way.</p>
+<p><code>--connect-timeout 5</code> tells curl to give up after 5 seconds when no connection is made.</p>`,
+        visual(el) {
+          const e = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const steps = ['DNS', 'TCP', 'TLS', 'HTTP'];
+          const board = (fail, msg) => el2 => el2.append(h('div', { class: 'nw-col' }, h('div', { class: 'nw-row' }, steps.map((s, k) => pill(s, fail < 0 ? 'nw-ghost' : k < fail ? 'nw-ok' : k === fail ? 'nw-err' : 'nw-ghost'))), h('p', { class: 'nw-note', html: msg })));
+          const tail = 'More details here: https://curl.se/docs/sslcerts.html';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Which step failed?',
+            predict: {
+              q: 'curl prints <code>curl: (6) Could not resolve host: exmaple.com</code>. Which step failed?',
+              options: ['DNS', 'TCP', 'TLS', 'HTTP'],
+              a: 0,
+              why: '“Resolve” means turning the name into an address. The name has a typo, so DNS found nothing.',
+            },
+            frames: [
+              { panel: board(-1, 'Every request goes through these steps in order: DNS, TCP, TLS, then HTTP.'), say: 'Five requests, each failing in a different place. Read the message, then find the step.' },
+              { cmd: 'curl https://exmaple.com', out: e('curl: (6) Could not resolve host: exmaple.com'), panel: board(0, '<b>DNS</b>: the name could not be turned into an address. Check the spelling and the internet connection.'), say: 'Error 6: DNS. The name is misspelled.' },
+              { cmd: 'curl http://localhost:8080', out: e("curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn't connect to server"), panel: board(1, '<b>TCP</b>: the computer refused the connection. Nothing is listening on port 8080.'), say: 'Error 7: TCP. Ada forgot to start her test server.' },
+              { cmd: 'curl --connect-timeout 5 https://example.com', out: e('curl: (28) Failed to connect to example.com port 443 after 5001 ms: Timeout was reached'), panel: board(1, '<b>TCP</b>, no answer at all: something on the way drops the packets.'), say: 'Error 28: the packets went out and nothing came back within 5 seconds. Here Ada’s network blocks the connection.' },
+              { cmd: 'curl https://old.example.com', out: e(`curl: (60) SSL certificate problem: certificate has expired\n${tail}`), panel: board(2, '<b>TLS</b>: the certificate was rejected, so no HTTP was sent.'), say: 'Error 60: TLS. The server needs a new certificate.' },
+              { cmd: 'curl -i https://example.com/wether', out: e('HTTP/2 404 \nserver: ExampleServer\ndate: Mon, 19 Oct 2026 09:41:00 GMT\ncontent-type: text/plain\ncontent-length: 10\n\nNot found'), panel: board(3, '<b>HTTP</b>: DNS, TCP and TLS all worked. The server answered 404: the path is wrong.'), say: 'No curl error here. A status code means the network did its job; the request itself needs fixing.' },
+            ],
+          });
+        },
+        code: `curl https://exmaple.com
+# curl: (6) Could not resolve host: exmaple.com           -> DNS
+
+curl http://localhost:8080
+# curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn't connect to server   -> TCP
+
+curl --connect-timeout 5 https://example.com
+# curl: (28) Failed to connect to example.com port 443 after 5001 ms: Timeout was reached   -> TCP: no answer
+
+curl https://old.example.com
+# curl: (60) SSL certificate problem: certificate has expired   -> TLS
+
+curl -i https://example.com/wether
+# HTTP/2 404      -> the network worked, the path is wrong`,
+        remember: 'Find the failing step: DNS (6), TCP (7, 28), TLS (60). A status code means the server answered.',
+        terms: [
+          { term: 'timeout', def: 'Giving up after waiting a set time for an answer that never came.' },
+          { term: 'proxy', def: 'A program in the middle that requests pass through. A debugging proxy records them so you can read them.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Which step failed here?', code: 'curl: (6) Could not resolve host: exmaple.com\n# failed step: [[DNS]]', why: 'Resolving a host means a DNS lookup. The name has a typo.' },
+          { type: 'bug', prompt: 'Ada’s cheat sheet has one wrong line. Tap it.', code: '(6) Could not resolve host -> DNS\n(7) Couldn\'t connect to server -> TCP\n(60) SSL certificate problem -> HTTP\n404 Not Found -> the server answered', bug: 2, fix: '(60) SSL certificate problem -> TLS', why: 'Certificates are checked in the TLS handshake, before any HTTP is sent.' },
+        ],
+        quiz: [
+          { q: 'curl prints <code>HTTP/1.1 500 Internal Server Error</code>. Did the network work?', options: ['No, the connection failed', 'Yes: DNS, TCP and TLS worked, and the server answered with an error'], a: 1, why: 'Any status code means a response arrived. The problem is inside the server.' },
+          { q: 'What does a debugging proxy do?', options: ['Makes requests faster', 'Sits in the middle and records each request and response', 'Fixes broken certificates'], a: 1, why: 'All traffic passes through it, so you can read every request and response.' },
+          { q: '<code>curl http://localhost:8080</code> gives error 7. What is the likely cause?', options: ['A typo in the name', 'Nothing is running on port 8080', 'An expired certificate'], a: 1, why: '<code>localhost</code> always resolves, and plain <code>http://</code> has no certificate. The computer refused the connection: no program listens on that port.' },
+        ],
+        docs: [['Android Studio: Network Inspector', 'https://developer.android.com/studio/debug/network-profiler'], ['curl man page', 'https://curl.se/docs/manpage.html']],
+      },
+    ],
   });
 })();

@@ -1,2509 +1,1964 @@
 /* OOP basics track. Same shape as tracks/kotlin.js.
-   Principles, not syntax: Kotlin class/interface syntax lives in the Kotlin track. SOLID lives in tracks/solid.js.
-   Demo styles live in the css string below; every class is prefixed oo-. */
+   Design ideas, not syntax: Kotlin class/interface syntax lives in the Kotlin track. SOLID lives in tracks/solid.js.
+   Demos use the Lab.ui kit only. */
 (() => {
-  const { h, sleep, hl, replay } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const kt = src => h('div', { class: 'kt', html: hl(src) });
-  const pill = (text, cls = '') => h('span', { class: `oo-pill ${cls}` }, text);
-  const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
-
-  const css = `
-.oo-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 14px; min-width: 0; }
-.oo-card { display: grid; gap: 10px; align-content: start; padding: 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--bg); min-width: 0; transition: border-color 0.25s, opacity 0.25s; }
-.oo-card.oo-on { border-color: var(--accent); }
-.oo-card.oo-bad { border-color: var(--err); }
-.oo-card.oo-good { border-color: var(--ok); }
-.oo-card.oo-warn { border-color: var(--warm); }
-.oo-card.oo-dim { opacity: 0.5; }
-.oo-title { font: 700 0.9rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
-.oo-label { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.oo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
-.oo-pill { font: 600 0.8rem var(--mono); padding: 4px 10px; border-radius: 8px; background: var(--surface); border: 2px solid var(--ink); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; transition: opacity 0.25s, border-color 0.25s, background 0.25s; }
-.oo-pill.oo-acc { border-color: var(--accent); background: var(--accent-soft); }
-.oo-pill.oo-warn { border-color: var(--warm); background: var(--warm-soft); }
-.oo-pill.oo-err { border-color: var(--err); background: var(--err-soft); }
-.oo-pill.oo-ok { border-color: var(--ok); background: var(--ok-soft); }
-.oo-pill.oo-ghost { border-style: dashed; border-color: var(--muted); color: var(--muted); background: transparent; }
-.oo-stat { font: 600 0.8rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.oo-stat b { color: var(--ink); }
-.oo-flash { animation: oo-flash 0.8s ease-out; }
-@keyframes oo-flash { from { box-shadow: 0 0 0 6px var(--accent-soft); background: var(--accent-soft); } }
-.oo-code { display: grid; background: var(--code-bg); border-radius: 12px; padding: 10px; overflow-x: auto; min-width: 0; }
-.oo-line { font: 500 0.82rem/1.6 var(--mono); color: var(--code-ink); white-space: pre; padding: 1px 8px; border-radius: 6px; border: 1px solid transparent; transition: background 0.2s, border-color 0.2s; }
-.oo-line.oo-cur { background: rgba(255, 212, 121, 0.14); border-color: var(--t-f); }
-.oo-line.oo-ln-ok { background: rgba(158, 223, 165, 0.15); border-color: var(--t-k); }
-.oo-line.oo-ln-err { background: rgba(255, 138, 155, 0.18); border-color: var(--t-e); }
-.oo-label.oo-raw { text-transform: none; letter-spacing: 0; }
-.kt.oo-wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
-.oo-switches { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-
-/* 1 encapsulation */
-.oo-vault { display: grid; gap: 8px; padding: 10px; border-radius: 10px; border: 2px dashed var(--accent); background: var(--surface); min-width: 0; }
-.oo-vault.oo-open { border-color: var(--err); }
-.oo-items { display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; align-items: center; }
-
-/* 2 composition */
-.oo-tree { display: grid; gap: 6px; min-width: 0; }
-.oo-node { font: 500 0.78rem var(--mono); padding: 5px 9px; border-radius: 8px; background: var(--surface); border: 1.5px solid var(--line); overflow-wrap: anywhere; min-width: 0; transition: border-color 0.25s, background 0.25s; }
-.oo-node.oo-sub { margin-left: 18px; position: relative; }
-.oo-node.oo-sub::before { content: ""; position: absolute; left: -12px; top: 50%; width: 9px; border-top: 1.5px solid var(--line); }
-.oo-node.oo-cur { border-color: var(--accent); background: var(--accent-soft); }
-.oo-node.oo-hot { border-color: var(--warm); background: var(--warm-soft); }
-
-/* 3 polymorphism */
-.oo-impls { display: grid; gap: 8px; min-width: 0; }
-.oo-impl { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font: 500 0.78rem var(--mono); min-width: 0; transition: border-color 0.2s, background 0.2s; }
-.oo-impl b { overflow-wrap: anywhere; }
-.oo-impl.oo-hit { border-color: var(--accent); background: var(--accent-soft); }
-.oo-impl .oo-sent { color: var(--muted); min-height: 1.4em; overflow-wrap: anywhere; }
-/* depth pass 2: encapsulation, composition, abstraction */
-.oo-enc-grid { display: grid; gap: 6px; min-width: 0; }
-.oo-enc-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--line); min-width: 0; transition: border-color 0.2s, background 0.2s; }
-.oo-enc-row .kt { padding: 4px 8px; font-size: 0.78rem; }
-.oo-enc-row.oo-enc-yes { border-color: var(--ok); }
-.oo-enc-row.oo-enc-no { border-color: var(--err); background: var(--err-soft); }
-@media (max-width: 600px) { .oo-enc-row { grid-template-columns: minmax(0, 1fr) auto; } .oo-enc-row .kt { grid-column: 1 / -1; grid-row: 2; } }
-.phone.oo-cps-phone { justify-content: flex-start; align-items: stretch; height: 250px; gap: 6px; }
-.phone.oo-cps-phone .item { font-size: 0.8rem; padding: 7px 9px; }
-.oo-cps-bar { font: 700 0.72rem var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; overflow-wrap: anywhere; }
-.oo-cps-spin { align-self: center; margin-top: 36px; width: 28px; height: 28px; border-radius: 50%; border: 4px solid var(--sunk); border-top-color: var(--accent); animation: spin 0.7s linear infinite; }
-/* depth pass 3: objects, identity, inheritance, delegation, choosing, cohesion, domain */
-.oo-obj-heap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 10px; min-width: 0; min-height: 60px; align-items: start; }
-.oo-obj { display: grid; gap: 6px; padding: 10px; border-radius: 12px; border: 2px solid var(--accent); background: var(--surface); min-width: 0; }
-.oo-obj-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; align-items: center; min-width: 0; }
-.oo-obj-field { font: 500 0.8rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
-.oo-id-buckets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; min-width: 0; }
-.oo-id-bucket { display: grid; gap: 6px; align-content: start; justify-items: start; min-height: 64px; padding: 6px; border-radius: 10px; border: 1.5px dashed var(--line); background: var(--surface); min-width: 0; }
-.oo-id-bucket .oo-label { font-size: 0.65rem; }
-.oo-id-list { display: grid; gap: 6px; min-width: 0; align-content: start; }
-.oo-id-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); min-width: 0; transition: opacity 0.4s, transform 0.4s; }
-.oo-id-row.oo-id-gone { opacity: 0; transform: translateX(30px); }
-.oo-inh-trace { max-height: 230px; overflow-y: auto; }
-.oo-inh-trace .oo-line, .oo-dlg-log .oo-line, .oo-id-list + .oo-code .oo-line { white-space: pre-wrap; overflow-wrap: anywhere; }
-.oo-dlg-stack { min-width: 0; }
-.oo-dlg-layer { display: grid; gap: 6px; padding: 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); min-width: 0; transition: border-color 0.2s, background 0.2s; }
-.oo-dlg-layer .oo-dlg-layer { background: var(--surface); }
-.oo-dlg-layer .oo-dlg-layer .oo-dlg-layer { background: var(--bg); }
-.oo-dlg-layer.oo-dlg-core { border-style: dashed; }
-.oo-dlg-layer.oo-dlg-hot { border-color: var(--accent); background: var(--accent-soft); }
-.oo-dlg-head { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; min-width: 0; }
-.oo-dlg-head .oo-title { font-size: 0.78rem; }
-.oo-dlg-log { max-height: 240px; overflow-y: auto; align-content: start; }
-.oo-ia-qs { display: grid; gap: 2px; }
-.oo-ia-q { align-items: flex-start; font-weight: 500; }
-.oo-ia-row { grid-template-columns: minmax(0, 1fr) auto; }
-.oo-coh-grid { display: grid; gap: 3px; align-items: center; min-width: 0; }
-.oo-coh-f { writing-mode: vertical-rl; transform: rotate(180deg); font: 600 0.68rem var(--mono); color: var(--muted); justify-self: center; padding: 2px 0; transition: color 0.2s; }
-.oo-coh-f.oo-coh-hotf { color: var(--err); }
-.oo-coh-m { font: 500 0.7rem var(--mono); overflow-wrap: anywhere; min-width: 0; padding: 2px 4px; border-radius: 6px; }
-.oo-coh-m.oo-coh-hotm { background: var(--err-soft); }
-.oo-coh-cell { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 5px; background: var(--surface); }
-.oo-coh-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); transition: background 0.3s, transform 0.3s; }
-.oo-coh-dot.oo-coh-hotd { background: var(--err); transform: scale(1.3); }
-.oo-coh-dot.oo-coh-g0 { background: var(--accent); }
-.oo-coh-dot.oo-coh-g1 { background: var(--ok); }
-.oo-coh-dot.oo-coh-g2 { background: var(--warm); }
-.oo-coh-dot.oo-coh-g3 { background: var(--muted); }
-.oo-coh-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; min-width: 0; }
-.oo-card.oo-coh-cls { gap: 6px; padding: 10px; background: var(--bg); }
-.oo-card.oo-coh-b0 { border-color: var(--accent); }
-.oo-card.oo-coh-b1 { border-color: var(--ok); }
-.oo-card.oo-coh-b2 { border-color: var(--warm); }
-.oo-card.oo-coh-b3 { border-color: var(--muted); }
-.oo-coh-mods { display: grid; gap: 6px; min-width: 0; }
-.oo-dom-spec { margin: 0; line-height: 2; font-size: 0.95rem; overflow-wrap: anywhere; }
-.oo-dom-word { font: inherit; font-weight: 600; color: var(--ink); background: var(--warm-soft); border: 1.5px dashed var(--warm); border-radius: 6px; padding: 0 5px; cursor: pointer; }
-.oo-dom-word:hover { border-style: solid; }
-.oo-dom-word.oo-dom-done { background: var(--ok-soft); border: 1.5px solid var(--ok); }
-.oo-dom-model { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; min-width: 0; }
-.oo-card.oo-dom-card { gap: 8px; padding: 10px; }
-.oo-dom-card .kt { font-size: 0.78rem; }
-`;
-
   Lab.addTrack({
     id: 'oop',
     title: 'OOP basics',
-    description: 'How to think in objects: identity, encapsulation, polymorphism, inheritance versus composition, abstraction, cohesion and domain modelling, with Kotlin and Android examples.',
+    description: 'How to design with objects: modelling real things, identity, encapsulation, composition and inheritance, polymorphism, abstraction, cohesion and domain modelling, all in plain Kotlin.',
     group: 'Foundations',
     requires: ['kotlin'],
-    css,
     lessons: [
-      // 1 ─────────────────────────────────────────────
       {
         id: 'objects',
-        title: 'Objects: state, behaviour, identity',
-        tagline: 'A class is the blueprint. Each object has its own data, its own methods and its own identity.',
-        level: 'beginner',
+        title: 'Objects model things',
+        tagline: 'Read the problem: things become classes, actions become functions.',
+        goals: ['Turn a short description into classes (the nouns) and functions (the verbs)', 'Decide which class a rule belongs in: the one that holds its data', 'Spot a rule that is repeated outside its object'],
+        level: 'beginner', introduces: [],
         body: `
-<p>An object bundles three things. <em>State</em> is the data it holds right now, like an article's title and like count. <em>Behaviour</em> is what it can do, its methods, which read and change that state. <em>Identity</em> means it is one particular thing in memory, separate from every other object, even one with the same data.</p>
-<p>A class describes the shape. It holds no article data by itself. Each call like <code>Article("Final 2-2")</code> builds a new <em>instance</em> with its own copy of the state. Liking one article does not touch another.</p>
-<p>A variable does not contain the object. It holds a <em>reference</em> to it. <code>val c = a</code> copies the reference, so <code>a</code> and <code>c</code> are two names for one object. Step through below and watch which object each name points at.</p>`,
-        code: `class Article(val title: String) {      // the blueprint
-    var likes = 0                         // state
-        private set
-
-    fun like() { likes++ }                // behaviour that changes the state
-    fun isPopular() = likes >= 100        // behaviour that reads it
-}
-
-val a = Article("Final 2-2")              // instance 1
-val b = Article("Final 2-2")              // instance 2, same data, different object
-val c = a                                 // no new object: a second reference
-
-c.like()
-println(a.likes)   // 1: a and c point to the same object
-println(b.likes)   // 0: b is a different object`,
-        remember: 'State plus the methods that use it, in one object. Variables hold references, not objects.',
-        terms: [
-          { term: 'Object (instance)', def: 'One concrete thing built from a class, with its own state and identity.' },
-          { term: 'State', def: 'The values an object’s properties hold at a given moment.' },
-          { term: 'Behaviour', def: 'The methods an object offers, which read or change its state.' },
-          { term: 'Reference', def: 'What a variable holds: a pointer to an object, not the object itself. Copying it gives another name for the same object.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Make <code>b</code> a second name for the article <code>a</code>, so the like shows up through <code>a</code>.', code: 'val a = [[Article]]("Final 2-2")\nval b = [[a]]\nb.like()\nprintln(a.likes)   // 1', why: '<code>Article(...)</code> builds an object. <code>val b = a</code> copies only the reference, so both names reach the same object.' },
-          { type: 'bug', prompt: 'Two counters should count separately, but <code>first.count</code> prints 1. Tap the line that causes it.', code: 'class Counter {\n    var count = 0\n    fun inc() { count++ }\n}\nval first = Counter()\nval second = first\nsecond.inc()\nprintln(first.count)   // expected 0', bug: 5, fix: 'val second = Counter()', why: '<code>val second = first</code> creates no object. Call the constructor to get a second, independent counter.' },
-        ],
-        quiz: [
-          { q: '<code>val x = Article("A")</code> then <code>val y = x</code>. How many Article objects exist?', options: ['Two', 'One, with two references to it', 'None until you call a method'], a: 1, why: 'Only a constructor call builds an object. Assigning copies the reference.' },
-          { q: 'Where does the data of an article live?', options: ['In the class', 'In each object', 'In the variable'], a: 1, why: 'The class only describes the shape. Each instance holds its own values, and a variable points at one instance.' },
-          { q: '<code>val a = Article("A")</code>. Can you call <code>a.like()</code> and change its likes?', options: ['No, a is a val', 'Yes: val fixes the reference, not the object'], a: 1, why: '<code>val</code> means <code>a</code> always points at the same object. Whether that object can change depends on its own properties.' },
-          { q: 'What does this print?<pre class="code mini"><code>class Draft(var title: String)\nfun clean(d: Draft) { d.title = d.title.trim() }\n\nval draft = Draft(" Final 2-2 ")\nclean(draft)\nprintln("[" + draft.title + "]")</code></pre>', options: ['<code>[ Final 2-2 ]</code>', 'It does not compile: parameters are val', '<code>[Final 2-2]</code>'], a: 2, why: 'The function gets a copy of the reference, not of the object, so it changes the caller’s Draft. Parameters being val only stops d from pointing elsewhere.' },
-          { q: 'A singleton keeps a reference to the Activity that set it up. The user leaves that screen. What happens?', options: ['The Activity, its views and bitmaps stay in memory', 'The garbage collector frees the Activity anyway', 'The app crashes at once'], a: 0, why: 'An object lives while something reachable points to it, and a singleton lives as long as the process. Keep the application context, or no context at all.' },
-        ],
-        deeper: [
-          {
-            title: 'Tell the object, don’t ask for its data',
-            body: `<p>When a decision only needs an object's own data, put the method on the object. Code that pulls fields out and decides elsewhere spreads the rule across many screens, and each copy can drift.</p>
-<p>Here the paywall rule lives in <code>Article</code>. The list screen, the detail screen and the share sheet all ask the same question the same way.</p>`,
-            code: `// Asking: every caller re-implements the rule
-if (article.isPremium && !user.hasSubscription && article.freeViewsLeft == 0) showPaywall()
-
-// Telling: the object that owns the data decides
-class Article(/* ... */) {
-    fun canBeReadBy(user: User): Boolean =
-        !isPremium || user.hasSubscription || freeViewsLeft > 0
-}
-
-if (!article.canBeReadBy(user)) showPaywall()`,
-          },
-          {
-            title: 'Passing an object passes the reference',
-            body: `<p>A function parameter gets a copy of the reference, never a copy of the object. If the function changes the object, the caller sees it. Kotlin parameters are always read-only, so the function can't point the caller's variable somewhere else, but it can still change what is inside.</p>
-<p>That is why it pays to make objects that cross layers immutable. A <code>data class</code> with only <code>val</code> properties can be passed anywhere without surprises.</p>`,
-            code: `class Draft(var title: String)
-
-fun clean(d: Draft) {
-    d.title = d.title.trim()     // changes the caller's object
-    // d = Draft("x")            // error: parameters are val
-}
-
-val draft = Draft("  Final 2-2 ")
-clean(draft)
-println("[" + draft.title + "]")   // [Final 2-2]`,
-          },
-          {
-            title: 'An object lives while something points to it',
-            body: `<p>Nobody frees objects by hand on Android. The garbage collector removes an object once nothing reachable refers to it any more. So an object's lifetime is decided by who holds references to it.</p>
-<p>This is how memory leaks happen. A singleton that keeps a reference to an Activity keeps the whole screen, its views and their bitmaps alive after the user leaves it. Hold the application context, or better, don't hold a context in long-lived objects at all.</p>`,
-            code: `object ImageCache {
-    var context: Context? = null      // set from an Activity: leaks it
-}
-
-// Better: keep only the application context, which lives as long as the app
-class ImageCache(context: Context) {
-    private val appContext = context.applicationContext
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>On the JVM, <code>Article("Final")</code> compiles to three steps: allocate memory for a new object on the heap, then call its constructor (<code>&lt;init&gt;</code>) to fill in the fields. The variable gets a reference to that heap object.</p>
-<p>Each object stores its own fields plus a small header the runtime uses for things like its class. Methods are not copied into each object. They live once with the class, and a call passes the object in as <code>this</code>.</p>`,
-          code: `// Kotlin
-val a = Article("Final")
-
-// Bytecode, simplified
-NEW Article                    // allocate, fields zeroed
-DUP
-LDC "Final"
-INVOKESPECIAL Article.<init>(String)   // run the constructor
-ASTORE a                       // a now holds the reference`,
-        },
-        mistakes: [
-          { title: 'Thinking val freezes the object', bad: 'class Settings { var darkMode = false }\n\nval settings = Settings()\nsettings.darkMode = true   // compiles: the object changed', good: 'data class Settings(val darkMode: Boolean = false)\n\nval settings = Settings()\nval dark = settings.copy(darkMode = true)', why: '<code>val</code> only stops the variable from pointing elsewhere. To make the object itself unchangeable, give it <code>val</code> properties.' },
-          { title: 'Data in one class, behaviour in a helper', bad: 'class Article(var likes: Int)\n\nobject ArticleUtils {\n    fun like(a: Article) { a.likes++ }\n    fun isPopular(a: Article) = a.likes >= 100\n}', good: 'class Article {\n    var likes = 0\n        private set\n    fun like() { likes++ }\n    fun isPopular() = likes >= 100\n}', why: 'Splitting state from the methods that use it forces the state to be public, and anyone can change it without going through the rules.' },
-        ],
+<p>A library app must remember, for every book, whether it is out on loan, and it must refuse to lend a book that is already out. Members may hold at most 3 books. Before writing any code, you have to decide: which classes does this app need, and where does each of those rules go?</p>
+<p>You already give classes properties and functions (<a href="#kotlin.methods">Functions inside a class</a>). This lesson is about choosing them. Describing real things in code is called <em>modelling</em>, and programs are often built from objects that stand for real things: a book, a member, a lift.</p>
+<p>A good way to start is to read a short description of the problem. The things in it (nouns) become classes. What they know becomes properties. What they do (verbs) becomes functions. “A <em>member</em> <em>borrows</em> a <em>book</em>. A book is either out or on the shelf.” gives you a Member class, a Book class, an <code>isOut</code> property and a <code>borrow</code> function.</p>
+<p>Then put each rule next to the data it is about. “Not already out” is about a book, so the check lives in <code>Book.lend()</code>. “At most 3 books” is about what a member holds, so it lives in <code>Member.borrow()</code>. Each rule is written once, and every part of the app asks the object instead of repeating the check.</p>`,
         visual(el) {
           Lab.ui.graph(el, {
-            height: 260,
+            height: 400,
             nodes: [
-              { id: 'a', label: 'a<small>val</small>', x: 17, y: 15, hidden: true },
-              { id: 'c', label: 'c<small>val</small>', x: 17, y: 50, hidden: true },
-              { id: 'b', label: 'b<small>val</small>', x: 17, y: 85, hidden: true },
-              { id: 'o1', label: 'Article @1a2f<small>own likes</small>', x: 72, y: 28, hidden: true },
-              { id: 'o2', label: 'Article @7c40<small>own likes</small>', x: 72, y: 80, hidden: true },
+              { id: 's1', label: '“A member borrows a book.”', x: 24, y: 9, tone: 'muted', hidden: true },
+              { id: 's3', label: '“A member holds at most 3 books.”', x: 24, y: 32, tone: 'muted', hidden: true },
+              { id: 's2', label: '“A book is out or on the shelf.”', x: 24, y: 62, tone: 'muted', hidden: true },
+              { id: 'member', label: 'class Member<small>name, books</small>', x: 76, y: 9, hidden: true },
+              { id: 'borrow', label: 'borrow(book)<small>at most 3</small>', x: 76, y: 32, tone: 'ok', hidden: true },
+              { id: 'book', label: 'class Book<small>title, isOut</small>', x: 76, y: 62, hidden: true },
+              { id: 'lend', label: 'lend()<small>not already out</small>', x: 76, y: 88, tone: 'ok', hidden: true },
             ],
             predict: {
-              q: 'After <code>c.like()</code>, what do <code>a.likes</code> and <code>b.likes</code> print?',
-              options: ['1 and 0', '0 and 0', '1 and 1', '0 and 1'],
+              q: 'The rule “a member holds at most 3 books”: where should its check live?',
+              options: ['In Member', 'In Book', 'In every screen that lends books'],
               a: 0,
-              why: '<code>val c = a</code> copies a reference, not the object. <code>a</code> and <code>c</code> reach the same object, and <code>b</code> is a separate one.',
+              why: 'The rule is about what a member holds, and Member keeps that list. So the check goes next to it, written once.',
             },
             frames: [
-              { say: 'The class <code>Article</code> is only a shape. No objects exist yet, so there is nothing to point at.' },
-              { show: ['a', 'o1'], add: [['a', 'o1']], say: '<code>val a = Article("Final 2-2")</code> builds object @1a2f on the heap. <code>a</code> holds a reference to it, not the object itself.' },
-              { show: ['b', 'o2'], add: [['b', 'o2']], say: '<code>val b = Article("Final 2-2")</code> runs the constructor again: a second object, @7c40, with the same title and its own likes.' },
-              { show: ['c'], add: [['c', 'o1', '', 'accent']], hl: ['c', 'o1'], say: '<code>val c = a</code> builds nothing. It copies the reference, so <code>c</code> points at @1a2f too.' },
-              { add: [['c', 'o1', 'like()', 'accent']], hl: ['o1'], say: '<code>c.like()</code> follows the arrow from <code>c</code> and changes @1a2f: its likes go from 0 to 1.' },
-              { add: [['a', 'o1', 'likes = 1', 'ok']], hl: ['a', 'o1'], say: '<code>a.likes</code> follows a different name to the same object, so it prints 1.' },
-              { add: [['b', 'o2', 'likes = 0', 'ok']], hl: ['b', 'o2'], say: '<code>b.likes</code> prints 0. Same data at the start, but a different object, so the like never reached it.' },
+              { show: ['s1', 's3', 's2'], say: 'Start from a short description of the problem, before any code.' },
+              { show: ['member', 'book'], add: [['s1', 'member', 'noun', 'accent'], ['s2', 'book', 'noun', 'accent']], hl: ['member', 'book'], say: 'The nouns, <em>member</em> and <em>book</em>, become classes.' },
+              { hl: ['s2', 'book'], say: 'What a thing knows becomes a property. A book knows whether it is out: <code>isOut</code>. A member knows which books they hold: <code>books</code>.' },
+              { show: ['borrow'], add: [['member', 'borrow']], hl: ['s1', 'borrow'], say: 'The verb, <em>borrows</em>, becomes a function. The member is the one who borrows, so <code>borrow</code> goes in Member.' },
+              { show: ['lend'], add: [['book', 'lend']], hl: ['lend'], say: 'To be borrowed, a book must be lent. Book gets <code>lend()</code>, the only code that changes <code>isOut</code>.' },
+              { add: [['s3', 'borrow', 'rule', 'ok']], hl: ['s3', 'borrow'], say: '“At most 3” is about the member’s books, so the check goes in <code>Member.borrow()</code>.' },
+              { add: [['s2', 'lend', 'rule', 'ok']], hl: ['s2', 'lend'], say: '“Not already out” is about the book, so the check goes in <code>Book.lend()</code>. Each rule lives next to its data, written once.' },
             ],
           });
         },
-        play: `class Article(val title: String) {
-    var likes = 0
+        code: `class Book(val title: String) {
+    var isOut = false
         private set
 
-    fun like() { likes++ }
-}
-
-fun main() {
-    val a = Article("Final 2-2")
-    val b = Article("Final 2-2")   // same data, a different object
-    val c = a                      // no new object: a second name for a
-
-    c.like()
-    c.like()
-    b.like()
-
-    println("a.likes = \${a.likes}")
-    println("b.likes = \${b.likes}")
-    println("c.likes = \${c.likes}")
-    println("a === c: \${a === c}, a === b: \${a === b}")
-    // Change \`val c = a\` to \`val c = Article("Final 2-2")\` and run again
-}`,
-      },
-
-      // 2 ─────────────────────────────────────────────
-      {
-        id: 'identity',
-        title: 'Identity vs equality',
-        tagline: 'Same object, or same value? === asks the first, == asks the second.',
-        level: 'beginner',
-        body: `
-<p>Two questions sound alike but are not. <em>Identity</em>: are these the same object in memory? Kotlin asks it with <code>===</code>. <em>Equality</em>: do these two objects mean the same thing? Kotlin asks it with <code>==</code>, which calls <code>equals()</code>.</p>
-<p>A plain class inherits <code>equals()</code> from <code>Any</code>, and that version only checks identity. Two <code>Tag("kotlin")</code> objects are then not equal. A <code>data class</code> generates <code>equals()</code> and <code>hashCode()</code> from its constructor properties, so the same two tags are equal.</p>
-<p>Hash-based collections ask <code>hashCode()</code> first to pick a bucket, then <code>equals()</code> inside it. So the rule is: equal objects must return the same hash code. Break it and a <code>HashSet</code> keeps “duplicates”. Step through both classes below.</p>`,
-        code: `class Tag(val name: String)                 // equals = identity
-data class Label(val name: String)          // equals = same name
-
-val a = Tag("kotlin"); val b = Tag("kotlin")
-a == b        // false: Any.equals compares identity
-a === b       // false: two objects
-
-val x = Label("kotlin"); val y = Label("kotlin")
-x == y        // true: generated equals compares name
-x === y       // false: still two objects
-hashSetOf(x, y).size   // 1
-
-// Lists on screen ask both questions
-object ArticleDiff : DiffUtil.ItemCallback<Article>() {
-    override fun areItemsTheSame(old: Article, new: Article) = old.id == new.id   // same item?
-    override fun areContentsTheSame(old: Article, new: Article) = old == new      // same content?
-}`,
-        remember: '=== asks “same object?”, == asks “same value?”. Override equals and hashCode together, or use a data class.',
-        terms: [
-          { term: 'Referential equality (===)', def: 'True only when both references point to the same object.' },
-          { term: 'Structural equality (==)', def: 'Calls equals() to decide whether two objects mean the same value.' },
-          { term: 'equals/hashCode contract', def: 'If two objects are equal, their hashCode() results must be equal too, or hash-based collections misbehave.' },
-          { term: 'Stable key', def: 'A value, usually an id, that names one item for its whole life, used by lists to track items across updates.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Tell DiffUtil how to recognise the same article, and when its row needs a rebind.', code: 'override fun areItemsTheSame(old: Article, new: Article) =\n    old.[[id]] == new.id\noverride fun areContentsTheSame(old: Article, new: Article) =\n    old [[==]] new', why: 'Same item means same id, even if the title changed. Same content is full equality, which a data class gives you.' },
-          { type: 'bug', prompt: '<code>ArticleId("42") in read</code> prints <code>false</code>. Tap the line that breaks the contract.', code: 'class ArticleId(val raw: String) {\n    override fun equals(other: Any?) =\n        other is ArticleId && other.raw == raw\n    override fun hashCode() = System.identityHashCode(this)\n}\nval read = hashSetOf(ArticleId("42"))\nprintln(ArticleId("42") in read)', bug: 3, fix: '    override fun hashCode() = raw.hashCode()', why: 'The two ids are equal but hash to different buckets, so the set never compares them. Hash from the same fields equals uses.' },
-        ],
-        quiz: [
-          { q: '<code>class User(val id: Int)</code>. What is <code>User(1) == User(1)</code>?', options: ['true', 'false'], a: 1, why: 'A plain class inherits equals() from Any, which compares identity. These are two objects.' },
-          { q: 'Which pair is correct for DiffUtil?', options: ['areItemsTheSame: ==, areContentsTheSame: id', 'areItemsTheSame: id, areContentsTheSame: ==', 'both: ==='], a: 1, why: 'Items match by a stable id. Then full equality decides whether the row must be redrawn.' },
-          { q: 'You override equals() but not hashCode(). What breaks first?', options: ['== between two objects', 'HashSet and HashMap lookups', 'toString()'], a: 1, why: '== uses only equals(). Hash collections look in a bucket chosen by hashCode() first, so equal objects can be missed.' },
-          { q: 'What is <code>Tag("a") == Tag("a")</code>?<pre class="code mini"><code>class Tag(val name: String) {\n    fun equals(other: Tag) = name == other.name\n}</code></pre>', options: ['<code>false</code>', '<code>true</code>', 'It does not compile'], a: 0, why: '== only calls equals(other: Any?). This method is a separate overload that never runs, so Any’s identity check decides.' },
-          { q: 'With <code>@JvmInline value class ArticleId(val raw: String)</code>, what is <code>ArticleId("42") === ArticleId("42")</code>?', options: ['<code>false</code>', 'A compile error', '<code>true</code>'], a: 1, why: 'A value class may be a bare String in one place and a wrapper in another, so identity has no stable meaning. Kotlin only allows == on them.' },
-          { q: 'A LazyColumn shows articles with no key, and each row remembers whether it is expanded. A new article is inserted at the top. What happens to the expanded state?', options: ['It moves down with its article', 'Every row collapses', 'It stays at its position, so it now belongs to a different article'], a: 2, why: 'Without a key, state is tied to the position. key = { it.id } tells Compose which item is which, so state moves with the item.' },
-        ],
-        deeper: [
-          {
-            title: 'Writing equals by hand: the contract',
-            body: `<p>Most of the time a data class is the answer. When you do write <code>equals()</code>, it must be reflexive (<code>a == a</code>), symmetric (if <code>a == b</code> then <code>b == a</code>), transitive, consistent over time, and false for <code>null</code>. And <code>hashCode()</code> must use the same fields.</p>
-<p>The signature matters. <code>==</code> only calls <code>equals(other: Any?)</code>. A method named <code>equals(other: Tag)</code> is just an overload, and <code>==</code> ignores it.</p>`,
-            code: `class Tag(val name: String) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true          // fast path: identity
-        if (other !is Tag) return false          // also handles null
-        return name.equals(other.name, ignoreCase = true)
-    }
-    override fun hashCode() = name.lowercase().hashCode()   // same rule as equals
-}
-
-Tag("Kotlin") == Tag("kotlin")             // true
-hashSetOf(Tag("Kotlin"), Tag("kotlin")).size   // 1`,
-          },
-          {
-            title: 'Same item, new content: DiffUtil',
-            body: `<p>A list adapter must tell an <em>edited</em> item from a <em>different</em> item. DiffUtil asks <code>areItemsTheSame</code> first. If that says yes, it asks <code>areContentsTheSame</code> to decide whether to rebind the row.</p>
-<p>Compare items with full equality and every edit looks like “old item removed, new item inserted”. The row animates out and back in and loses its state. Give an article a like below with each rule.</p>`,
-            visual(el) {
-              const base = [{ id: 1, title: 'New metro line opens', likes: 4 }, { id: 2, title: 'Final ends 2-2', likes: 10 }, { id: 3, title: 'Rain expected Friday', likes: 1 }];
-              let list = base.map(x => ({ ...x })), rule = 'id', busy = false;
-              const rows = h('div', { class: 'oo-id-list' });
-              const ops = h('div', { class: 'oo-code' });
-              const o = out('');
-              const ruleLine = h('div', { class: 'kt oo-wrap' });
-              const btns = [cmd('old.id == new.id', () => setRule('id')), cmd('old == new', () => setRule('eq'))];
-              function paint() {
-                rows.replaceChildren(...list.map(a => { const r = h('div', { class: 'oo-id-row' }, h('span', { class: 'oo-title' }, a.title), pill(`♥ ${a.likes}`)); r.dataset.id = a.id; return r; }));
-                ruleLine.innerHTML = hl(`override fun areItemsTheSame(old: Article, new: Article) =\n    ${rule === 'id' ? 'old.id == new.id' : 'old == new'}`);
-                press(btns, btns[rule === 'id' ? 0 : 1]);
-              }
-              function setRule(r) { if (busy) return; rule = r; paint(); ops.replaceChildren(); say(o, 'Now give article 2 a like.'); }
-              async function likeTwo() {
-                if (busy) return; busy = true;
-                const next = list.map(a => a.id === 2 ? { ...a, likes: a.likes + 1 } : a);
-                ops.replaceChildren();
-                const row = [...rows.children].find(r => r.dataset.id === '2');
-                const line = (t, cls = '') => ops.append(h('div', { class: `oo-line ${cls} drop-in`, html: hl(t) }));
-                if (rule === 'id') {
-                  line('areItemsTheSame(2, 2) = true');
-                  await sleep(350); if (!el.isConnected) return;
-                  line('areContentsTheSame = false  // likes changed', 'oo-cur');
-                  await sleep(350); if (!el.isConnected) return;
-                  list = next; row.lastChild.textContent = `♥ ${list[1].likes}`; row.classList.add('oo-flash'); replay(row.lastChild, 'pop');
-                  line('notifyItemChanged(1)', 'oo-ln-ok');
-                  say(o, '<span class="good">one change:</span> the same row is rebound in place. Scroll position and row state stay.');
-                } else {
-                  line('areItemsTheSame(old 2, new 2) = false  // likes differ');
-                  await sleep(350); if (!el.isConnected) return;
-                  row.classList.add('oo-id-gone');
-                  line('notifyItemRemoved(1)', 'oo-ln-err');
-                  await sleep(500); if (!el.isConnected) return;
-                  list = next; paint();
-                  const fresh = [...rows.children].find(r => r.dataset.id === '2'); fresh.classList.add('drop-in');
-                  line('notifyItemInserted(1)', 'oo-ln-err');
-                  say(o, '<span class="bad">remove + insert:</span> DiffUtil thinks this is a different article. The row animates out and in, and any state in it is gone.');
-                }
-                busy = false;
-              }
-              function reset() { if (busy) return; list = base.map(x => ({ ...x })); paint(); ops.replaceChildren(); say(o, 'Likes reset.'); }
-              paint();
-              say(o, 'Pick a rule for areItemsTheSame, then submit a list where article 2 has one more like.');
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'same item if'), btns),
-                ruleLine,
-                h('div', { class: 'oo-pair' }, rows, ops),
-                h('div', { class: 'controls' }, cmd('submitList(newList)', likeTwo), act('Reset likes', reset)),
-                o);
-            },
-          },
-          {
-            title: 'Compose keys are identity for rows',
-            body: `<p>A <code>LazyColumn</code> ties each item's remembered state to its position by default. Insert an article at the top and every row's state shifts by one. A <code>key</code> tells Compose which item is which, so state moves with the item.</p>
-<p>The key must be stable and unique, so use the id, not the index or the whole object. Its type must also be one <code>Bundle</code> can store, such as a <code>String</code>, <code>Long</code> or <code>Int</code>, so that <code>rememberSaveable</code> inside the row can be restored.</p>`,
-            code: `LazyColumn {
-    items(articles, key = { it.id }) { article ->   // id: same item across updates
-        var expanded by rememberSaveable { mutableStateOf(false) }
-        ArticleRow(article, expanded, onToggle = { expanded = !expanded })
-    }
-}`,
-          },
-          {
-            title: 'Value classes have no identity',
-            body: `<p>A <code>value class</code> may be stored as the bare underlying value in one place and as a wrapper object in another. Asking “same object?” has no stable answer, so Kotlin forbids <code>===</code> on value classes. Only <code>==</code> is allowed.</p>
-<p>That is a hint about modelling. An id or an amount of money has no identity of its own: two equal ones are interchangeable. An article does have identity, which its id stands for.</p>`,
-            code: `@JvmInline
-value class ArticleId(val raw: String)
-
-val a = ArticleId("42"); val b = ArticleId("42")
-a == b      // true
-a === b     // compile error: identity is not defined for value classes`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>a == b</code> compiles to a null-safe call: <code>a?.equals(b) ?: (b === null)</code>. <code>===</code> compiles to a direct reference comparison, one JVM instruction (<code>if_acmpne</code>). For a type that is a primitive at runtime, like <code>Int</code>, <code>===</code> behaves the same as <code>==</code>.</p>
-<p>A data class's generated <code>hashCode()</code> combines each constructor property's hash as <code>result * 31 + next</code>. Properties declared in the class body are left out of both <code>equals()</code> and <code>hashCode()</code>.</p>`,
-          code: `data class Label(val name: String, val color: Int)
-
-// generated, simplified
-override fun hashCode(): Int {
-    var result = name.hashCode()
-    result = result * 31 + color.hashCode()
-    return result
-}
-override fun equals(other: Any?): Boolean {
-    if (this === other) return true
-    if (other !is Label) return false
-    return name == other.name && color == other.color
-}`,
-        },
-        mistakes: [
-          { title: 'An array inside a data class', bad: 'data class Gallery(val urls: Array<String>)\n\nGallery(arrayOf("a.jpg")) == Gallery(arrayOf("a.jpg"))   // false', good: 'data class Gallery(val urls: List<String>)\n\nGallery(listOf("a.jpg")) == Gallery(listOf("a.jpg"))     // true', why: 'Arrays don’t override <code>equals()</code>, so the generated check compares array identity. Use a <code>List</code>, or compare arrays with <code>contentEquals()</code>.' },
-          { title: 'An equals overload instead of an override', bad: 'class Tag(val name: String) {\n    fun equals(other: Tag) = name == other.name\n}\nTag("a") == Tag("a")   // false', good: 'class Tag(val name: String) {\n    override fun equals(other: Any?) = other is Tag && other.name == name\n    override fun hashCode() = name.hashCode()\n}', why: '<code>==</code> only calls <code>equals(other: Any?)</code>. A method with another parameter type is a separate overload and never runs.' },
-          { title: 'Using the position as a list key', bad: 'items(articles.size, key = { index -> index }) { i ->\n    ArticleRow(articles[i])\n}', good: 'items(articles, key = { it.id }) { article ->\n    ArticleRow(article)\n}', why: 'An index names a slot, not an article. After an insert, every row’s key points at a different article and state lands on the wrong row.' },
-        ],
-        visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'class Tag(val name: String)\ndata class Label(val name: String)\n\nval a = Tag("kotlin")\nval b = Tag("kotlin")\nprintln(a == b)\nprintln(a === b)\nval x = Label("kotlin")\nval y = Label("kotlin")\nprintln(x == y)\nprintln(x === y)\nprintln(hashSetOf(a, b).size)\nprintln(hashSetOf(x, y).size)',
-            predict: {
-              q: 'For the two <code>Label("kotlin")</code> objects, what do <code>x == y</code> and <code>x === y</code> print?',
-              options: ['true and true', 'true and false', 'false and false'],
-              a: 1,
-              why: 'A data class generates <code>equals()</code> from its properties, so <code>==</code> is true. <code>===</code> still asks “same object?”, and there are two.',
-            },
-            frames: [
-              { say: 'Two classes with the same property. Only one is a <code>data class</code>. Step through and watch what each check compares.' },
-              { line: [4, 5], vars: { a: 'Tag @51c2', b: 'Tag @7e09' }, say: 'Two <code>Tag</code> objects with the same name. Two constructor calls, so two objects.' },
-              { line: 6, out: 'false', say: '<code>==</code> calls <code>equals()</code>. A plain class inherits it from <code>Any</code>, which only checks identity. Different objects, so false.' },
-              { line: 7, out: 'false', say: '<code>===</code> asks the same question directly: same object? No.' },
-              { line: [8, 9], vars: { x: 'Label @3b1a', y: 'Label @0f44' }, say: 'Two <code>Label</code> objects. The compiler generated <code>equals()</code> and <code>hashCode()</code> from <code>name</code>.' },
-              { line: 10, out: 'true', say: 'The generated <code>equals()</code> compares <code>name</code>, so the two labels are equal.' },
-              { line: 11, out: 'false', say: 'Equal, but still two objects in memory. <code>===</code> is false.' },
-              { line: 12, out: '2', say: 'A set asks <code>hashCode()</code> first. Tag’s hash comes from the object, so the two tags land in different buckets and both stay.' },
-              { line: 13, out: '1', say: 'Label’s hash comes from <code>name</code>: same bucket, then <code>equals()</code> says equal, so the set keeps one.' },
-            ],
-          });
-        },
-        play: `class Tag(val name: String)
-data class Label(val name: String)
-
-fun main() {
-    val a = Tag("kotlin"); val b = Tag("kotlin")
-    println("Tag:   a == b \${a == b}, a === b \${a === b}")
-    println("Tag set size: \${hashSetOf(a, b).size}")
-
-    val x = Label("kotlin"); val y = Label("kotlin")
-    println("Label: x == y \${x == y}, x === y \${x === y}")
-    println("Label set size: \${hashSetOf(x, y).size}")
-    println("hash codes: \${x.hashCode()} and \${y.hashCode()}")
-    // Remove the word \`data\` from Label and run again
-}`,
-      },
-
-      // 3 ─────────────────────────────────────────────
-      {
-        id: 'encapsulation',
-        title: 'Encapsulation',
-        tagline: 'Hide the state. Expose a read-only view and a few safe methods.',
-        level: 'beginner',
-        body: `
-<p>Encapsulation means a class owns its state. Outside code can read it, but only the class's own methods can change it. Those methods are where the rules live, like "a cart holds at most 3 items".</p>
-<p>In Kotlin the usual pattern is a <em>backing property</em>: a <code>private</code> mutable value, plus a public read-only view of it. A ViewModel keeps a <code>private val _state = MutableStateFlow(...)</code> and exposes <code>val state: StateFlow</code>. A plain class keeps a private <code>MutableList</code> and exposes a <code>List</code>.</p>
-<p>A read-only view is a promise at compile time. If callers need a snapshot that can never change under them, return <code>_items.toList()</code>. Flip the switch below to see what goes wrong when the mutable list leaks out.</p>`,
-        code: `class CartViewModel : ViewModel() {
-    private val _items = MutableStateFlow<List<Item>>(emptyList())
-    val items: StateFlow<List<Item>> = _items.asStateFlow()
-
-    fun add(item: Item) {
-        if (_items.value.size >= MAX_ITEMS) return   // the rule lives here
-        _items.update { it + item }
-    }
-
-    companion object { const val MAX_ITEMS = 3 }
-}
-
-class Playlist {
-    private val _songs = mutableListOf<Song>()
-    val songs: List<Song> get() = _songs   // read-only view
-
-    fun add(song: Song) { if (song !in _songs) _songs += song }
-}`,
-        remember: 'Private mutable inside, read-only view outside. Every change goes through a method that checks the rules.',
-        terms: [
-          { term: 'Encapsulation', def: 'Keeping a class’s state private so that only its own methods can change it.' },
-          { term: 'Backing property', def: 'A private mutable property, often named with an underscore, that a public read-only property exposes.' },
-          { term: 'Invariant', def: 'A rule about an object’s state that must always hold, such as a cart never holding more than three items.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Hide the mutable list and expose a read-only view.', code: 'class Playlist {\n    [[private]] val _songs = mutableListOf<Song>()\n    val songs: [[List]]<Song> get() = _songs\n}', why: 'The <code>private</code> list can only be changed inside <code>Playlist</code>. The public type <code>List</code> has no <code>add</code> or <code>remove</code>.' },
-          { type: 'bug', prompt: 'A screen calls <code>vm.items.value = emptyList()</code> and wipes the cart. Tap the line that allows it.', code: 'class CartViewModel : ViewModel() {\n    private val _items = MutableStateFlow<List<Item>>(emptyList())\n    val items: MutableStateFlow<List<Item>> = _items\n\n    fun add(item: Item) {\n        _items.update { it + item }\n    }\n}', bug: 2, fix: '    val items: StateFlow<List<Item>> = _items.asStateFlow()', why: 'Typing the public property as <code>MutableStateFlow</code> hands out write access. Expose <code>StateFlow</code>, and use <code>asStateFlow()</code> so callers can’t cast it back.' },
-        ],
-        quiz: [
-          { q: 'Why expose <code>StateFlow</code> instead of <code>MutableStateFlow</code> from a ViewModel?', options: ['StateFlow is faster', 'Only the ViewModel should be able to change the state', 'Compose can’t collect a MutableStateFlow'], a: 1, why: 'The read-only type lets the UI observe the state while every change still goes through the ViewModel’s methods.' },
-          { q: '<code>val songs: List&lt;Song&gt; get() = _songs</code>. Can the list a caller holds change later?', options: ['No, List is immutable', 'Yes, it is a read-only view of the same MutableList'], a: 1, why: '<code>List</code> only hides the write methods. The object behind it is still <code>_songs</code>. Return <code>_songs.toList()</code> for a frozen snapshot.' },
-          { q: 'Where should a rule like “at most 3 items” live?', options: ['In every screen that adds items', 'In the method of the class that owns the items', 'In a comment'], a: 1, why: 'If only the owning class can change the list, its <code>add</code> method is the one place the rule has to be checked.' },
-          { q: 'A ViewModel exposes <code>val items: StateFlow&lt;List&lt;Item&gt;&gt; = _items.asStateFlow()</code>. A screen writes <code>(vm.items as MutableStateFlow).value = emptyList()</code>. What happens?', options: ['It clears the cart', 'It compiles, then throws ClassCastException', 'It does not compile'], a: 1, why: 'asStateFlow() wraps the flow in a separate read-only class, so the downcast fails at runtime. Exposing _items directly as StateFlow would let the cast succeed.' },
-          { q: 'A member is marked <code>protected</code> in Kotlin. Who can call it?', options: ['The class, its subclasses and the rest of its package', 'The class and its subclasses', 'All code in the same module'], a: 1, why: 'Unlike Java, Kotlin’s protected does not open a member to the package. internal is the modifier for module-wide access.' },
-        ],
-        deeper: [
-          {
-            title: 'private set: one value, read-only from outside',
-            body: `<p>A backing property is the tool for collections and flows. For a single value there is a shorter form: a public <code>var</code> with a <code>private set</code>. Everyone can read it, and only the class can assign it.</p>
-<p>The rule still lives in a method. Here <code>withdraw()</code> refuses to go below zero, and no caller can skip it by writing <code>balance = -50</code>.</p>`,
-            code: `class Wallet {
-    var balance: Long = 0
-        private set
-
-    fun deposit(cents: Long) {
-        require(cents > 0)
-        balance += cents
-    }
-
-    fun withdraw(cents: Long): Boolean {
-        if (cents > balance) return false   // the rule
-        balance -= cents
+    fun lend(): Boolean {
+        if (isOut) {
+            return false            // the book's rule: not already out
+        }
+        isOut = true
         return true
     }
 }
 
-wallet.balance           // ok: anyone can read it
-wallet.balance = -50     // error: the setter is private in 'Wallet'`,
-          },
-          {
-            title: 'Four levels of visibility',
-            body: `<p>Kotlin has four visibility modifiers. <code>private</code> means inside this class, or inside this file for a top-level declaration. <code>protected</code> adds subclasses. <code>internal</code> means anywhere in the same Gradle module. <code>public</code> is the default and means everywhere.</p>
-<p>Unlike Java, <code>protected</code> does not open a member to the rest of the package. In a multi-module app, <code>internal</code> is how a <code>:feature:cart</code> module keeps its helpers away from <code>:app</code>. Pick a modifier for <code>reset()</code> and see who may call it.</p>`,
-            visual(el) {
-              const MODS = ['private', 'protected', 'internal', 'public'];
-              const CALLERS = [
-                { where: 'inside Cart', src: 'fun clearAll() = reset()', rank: 0 },
-                { where: 'subclass PromoCart, same module', src: 'fun expire() = reset()', rank: 1 },
-                { where: 'CartScreen.kt in :feature:cart', src: 'cart.reset()', rank: 2 },
-                { where: 'MainActivity.kt in :app', src: 'cart.reset()', rank: 3 },
-              ];
-              let mod = 'private', busy = false;
-              const decl = h('div', { class: 'kt' });
-              const rows = CALLERS.map(c => {
-                const res = h('span', { class: 'oo-pill oo-ghost' }, '?');
-                const r = h('div', { class: 'oo-enc-row' }, h('span', { class: 'oo-label oo-raw' }, c.where), h('div', { class: 'kt', html: hl(c.src) }), res);
-                r.res = res; return r;
-              });
-              const o = out('');
-              const btns = MODS.map(m => cmd(m, () => pick(m)));
-              async function pick(m) {
-                if (busy) return; busy = true;
-                mod = m; press(btns, btns[MODS.indexOf(m)]);
-                decl.innerHTML = hl(`// module :feature:cart\nopen class Cart {\n    ${m} fun reset() { /* ... */ }\n}`);
-                replay(decl, 'pop-soft');
-                rows.forEach(r => { r.className = 'oo-enc-row'; r.res.className = 'oo-pill oo-ghost'; r.res.textContent = '?'; });
-                const reach = MODS.indexOf(m);
-                let ok = 0;
-                for (let i = 0; i < rows.length; i++) {
-                  await sleep(220); if (!el.isConnected) return;
-                  const yes = CALLERS[i].rank <= reach;
-                  if (yes) ok++;
-                  rows[i].classList.add(yes ? 'oo-enc-yes' : 'oo-enc-no');
-                  rows[i].res.className = `oo-pill ${yes ? 'oo-ok' : 'oo-err'}`;
-                  rows[i].res.textContent = yes ? 'compiles' : 'error';
-                  replay(rows[i].res, yes ? 'pop' : 'shake');
-                }
-                say(o, ok === rows.length
-                  ? `<span class="good">public:</span> every caller in every module can reach reset().`
-                  : `${hl(`${m} fun reset()`)} <span class="muted">→ ${ok} of ${rows.length} callers compile. The others get:</span> <span class="bad">Cannot access 'reset': it is ${m} in 'Cart'</span>`);
-                busy = false;
-              }
-              decl.innerHTML = hl('// module :feature:cart\nopen class Cart {\n    private fun reset() { /* ... */ }\n}');
-              press(btns, btns[0]);
-              say(o, 'Pick a modifier for reset(). Each caller then tries to compile.');
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'modifier'), btns),
-                decl,
-                h('div', { class: 'oo-enc-grid' }, rows),
-                o);
-            },
-          },
+class Member(val name: String) {
+    private val books = mutableListOf<Book>()
+
+    fun borrow(book: Book): Boolean {
+        if (books.size >= 3) {
+            return false            // the member's rule: at most 3 books
+        }
+        if (!book.lend()) {
+            return false
+        }
+        books.add(book)
+        return true
+    }
+}
+
+fun main() {
+    val ada = Member("Ada")
+    val sam = Member("Sam")
+    val book = Book("Blue Harbor")
+    println(ada.borrow(book))   // true
+    println(sam.borrow(book))   // false: the book is already out
+}`,
+        play: `class Lift(val topFloor: Int) {
+    var floor = 0
+        private set
+
+    fun up() {
+        if (floor < topFloor) {
+            floor += 1
+        }
+    }
+
+    fun down() {
+        if (floor > 0) {
+            floor -= 1
+        }
+    }
+}
+
+fun main() {
+    val lift = Lift(3)
+    lift.up()
+    lift.up()
+    println("Floor \${lift.floor}")
+    lift.down()
+    lift.down()
+    lift.down()
+    println("Floor \${lift.floor}")
+    // Add a function goTo(target: Int) that calls up() or down() until the lift is there.
+    // (If the target is above topFloor or below 0, do nothing.) Try lift.goTo(2).
+}`,
+        remember: 'Nouns in the description become classes, verbs become functions. Each rule goes in the class that holds the data it is about.',
+        mistakes: [
+          { title: 'Writing the rule outside the object', bad: `// in main, and again on every screen that lends books
+if (!book.isOut) {
+    book.isOut = true
+}`, good: `book.lend()   // the rule is written once, inside Book`, why: 'Copies of a rule drift apart: fix one and the others stay wrong. With <code>private set</code> on <code>isOut</code>, the first version doesn’t even compile, and that is the point.' },
         ],
-        underHood: {
-          body: `<p>Visibility is checked by the compiler, and most of it is also written into the bytecode. A <code>private</code> member is a JVM private member. For a private property with default accessors, Kotlin generates no getter or setter at all and the class uses the field directly. <code>private set</code> keeps the public getter and hides only the setter.</p>
-<p><code>internal</code> has no JVM equivalent. It compiles to <code>public</code>, and the JVM names of internal members get the module name appended, which keeps Java code from calling them by accident. <code>asStateFlow()</code> wraps the flow in a separate read-only class, so casting it back to <code>MutableStateFlow</code> fails at runtime.</p>`,
-          code: `// Kotlin
-class Cart {
+        terms: [
+          { term: 'modelling', def: 'Describing real things in code: the things become classes, what they know becomes properties, what they do becomes functions.' },
+          { term: 'behaviour', def: 'What an object can do: its member functions, like <code>lend()</code>. A rule about the object’s data belongs in its behaviour.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Model this: “A <b>ticket</b> has a seat number. A ticket can be <b>scanned</b> only once.” Fill in the class name and the function name.', code: `class [[Ticket]](val seat: Int) {
+    var used = false
+        private set
+
+    fun [[scan]](): Boolean {
+        if (used) {
+            return false
+        }
+        used = true
+        return true
+    }
+}`, why: 'The noun, ticket, becomes the class. The verb, scan, becomes its function. The “only once” rule lives inside <code>scan()</code>, next to <code>used</code>, the data it is about.' },
+          { type: 'bug', prompt: 'Tapping twice should print <code>2</code>, but it prints <code>-2</code>. Tap the line that is wrong.', code: `class Counter {
     var count = 0
         private set
-    internal fun reset() { count = 0 }
+
+    fun tap() {
+        count -= 1
+    }
 }
 
-// JVM, simplified
-public final class Cart {
-    private int count;
-    public final int getCount()           // public getter
-    // no public setter for count
-    public final void reset$<module>()    // internal: public, but renamed
-}`,
-        },
-        mistakes: [
-          { title: 'A read-only list of mutable items', bad: 'data class Item(val name: String, var price: Int)\n\nclass Cart {\n    private val _items = mutableListOf<Item>()\n    val items: List<Item> get() = _items\n}\ncart.items[0].price = 0   // free shopping', good: 'data class Item(val name: String, val price: Int)\n\nclass Cart {\n    private val _items = mutableListOf<Item>()\n    val items: List<Item> get() = _items\n    fun reprice(name: String, price: Int) { /* checks */ }\n}', why: 'A read-only <code>List</code> stops callers from adding or removing, but not from changing what is inside. Make the items immutable too, and route changes through the owner.' },
-          { title: 'A public var with the rule in every caller', bad: 'class Account { var balance = 0L }\n\n// in three different screens\nif (account.balance >= cost) account.balance -= cost', good: 'class Account {\n    var balance = 0L\n        private set\n    fun pay(cost: Long): Boolean {\n        if (cost > balance) return false\n        balance -= cost\n        return true\n    }\n}', why: 'Each caller copies the check, and one day a new screen forgets it. Put the rule in the class and make the setter private.' },
-          { title: 'Handing out an array', bad: 'class Scores {\n    private val _top = IntArray(3)\n    val top: IntArray get() = _top\n}\nscores.top[0] = 999   // compiles', good: 'class Scores {\n    private val _top = IntArray(3)\n    val top: List<Int> get() = _top.toList()\n}', why: 'Arrays have no read-only type, so every reference to one can write to it. Expose a <code>List</code> copy instead.' },
+fun main() {
+    val c = Counter()
+    c.tap()
+    c.tap()
+    println(c.count)
+}`, bug: 5, fix: '        count += 1', why: 'The behaviour is in one place, so the fix is in one place too: <code>tap()</code> should add 1.' },
         ],
-        visual(el) {
-          const MAX = 3, pool = ['Tea', 'Eggs', 'Bread', 'Cake', 'Jam', 'Rice'];
-          let items = ['Milk'], leak = false, k = 0;
-          const list = h('div', { class: 'oo-items' });
-          const vault = h('div', { class: 'oo-vault' }, h('span', { class: 'oo-label oo-raw' }, 'private val _items: MutableList<String>'), list);
-          const decl = h('div', { class: 'kt oo-wrap' });
-          const rule = h('span', { class: 'oo-pill oo-ok' });
-          const card = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-title' }, 'class Cart'), vault,
-            h('span', { class: 'oo-label' }, 'what outside code sees'), decl, h('div', { class: 'oo-row' }, h('span', { class: 'oo-label' }, 'rule'), rule));
-          const o = out('Add items through the method, then try reaching into the list from outside.');
-          const sw = h('input', { type: 'checkbox', id: 'oo-enc-leak' });
-          const next = () => pool[k++ % pool.length];
-          function paint() {
-            decl.innerHTML = hl(leak ? 'val items: MutableList<String> = _items' : 'val items: List<String> get() = _items');
-            vault.classList.toggle('oo-open', leak);
-            const broken = items.length > MAX;
-            rule.textContent = broken ? `broken: ${items.length} items > ${MAX}` : `at most ${MAX} items: holds`;
-            rule.className = `oo-pill ${broken ? 'oo-err' : 'oo-ok'}`;
-            card.classList.toggle('oo-bad', broken); card.classList.toggle('oo-on', !broken);
-          }
-          function addChip(name, cls) { const c = pill(name, `${cls} drop-in`); list.append(c); }
-          sw.addEventListener('change', () => { leak = sw.checked; paint(); say(o, leak ? '<span class="bad">warning:</span> the mutable list is now public. Outside code can skip add().' : '<span class="good">ok:</span> outside code only gets a read-only List.'); });
-          function viaMethod() {
-            const name = next();
-            if (items.length >= MAX) { replay(card, 'shake'); say(o, `${hl(`cart.add("${name}")`)} <span class="muted">→</span> <span class="bad">rejected:</span> add() checked the rule, cart is full`); return; }
-            items.push(name); addChip(name, 'oo-acc'); paint();
-            say(o, `${hl(`cart.add("${name}")`)} <span class="muted">→</span> <span class="good">ok:</span> ${items.length} of ${MAX}`);
-          }
-          function fromOutside() {
-            const name = next();
-            if (!leak) { replay(decl, 'shake'); say(o, `${hl(`cart.items.add("${name}")`)} <span class="muted">→</span> <span class="bad">compile error:</span> Unresolved reference 'add'. List is read-only.`); return; }
-            items.push(name); addChip(name, items.length > MAX ? 'oo-err' : 'oo-warn'); paint();
-            if (items.length > MAX) replay(card, 'shake');
-            say(o, `${hl(`cart.items.add("${name}")`)} <span class="muted">→</span> ${items.length > MAX ? '<span class="bad">compiles and runs:</span> the rule in add() never ran' : '<span class="bad">compiles:</span> it skipped add(), and nothing checked'}`);
-          }
-          function clear() { items = []; list.replaceChildren(); paint(); say(o, `${hl('cart.clear()')} <span class="muted">→</span> empty`); }
-          items.forEach(n => addChip(n, 'oo-acc')); paint();
-          el.append(
-            h('div', { class: 'stage' }, card),
-            h('label', { class: 'switch', for: 'oo-enc-leak' }, sw, 'Expose _items as a public MutableList'),
-            h('div', { class: 'controls' }, cmd('cart.add("Tea")', viaMethod), cmd('cart.items.add("Cake")', fromOutside), cmd('cart.clear()', clear)),
-            o);
-        },
-        predict: {
-          q: 'The cart allows at most 3 items, but its list is exposed as a public <code>MutableList</code>. Outside code calls <code>cart.items.add(...)</code> on a full cart. What happens?',
-          options: ['A compile error', '<code>add()</code> rejects it and the rule holds', 'It works, and the cart ends up with 4 items'],
-          a: 2,
-          why: 'The 3-item check lives in <code>Cart.add()</code>. Code that reaches the mutable list directly never runs it. A read-only <code>List</code> would stop that call at compile time.',
-        },
-        play: `class Cart {
-    private val _items = mutableListOf<String>()
-    val items: List<String> get() = _items     // read-only view of the same list
+        quiz: [
+          { q: '“A <em>lamp</em> can be <em>switched</em> on.” Which word most likely becomes a class?', options: ['lamp', 'switched', 'on'], a: 0, why: 'A lamp is a thing (a noun), so it becomes a class. <em>Switched</em> is something done to it, so it becomes a function.' },
+          { q: 'A shop app says: “A customer adds items to a basket.” Which word most likely becomes a function?', options: ['adds', 'customer', 'basket'], a: 0, why: 'Verbs are things an object does. Customer and basket are things, so they are more likely classes.' },
+          { q: 'Where should the rule “a book that is out can’t be lent” live?', options: ['Inside <code>Book</code>, in <code>lend()</code>', 'In every screen that lends books', 'In <code>main</code>'], a: 0, why: 'Next to the data it is about, written once. Every screen then calls <code>book.lend()</code>.' },
+        ],
+        docs: [['Classes', 'https://kotlinlang.org/docs/classes.html']],
+      },
 
-    fun add(item: String): Boolean {
-        if (_items.size >= MAX) return false   // the rule lives here
-        _items += item
+      {
+        id: 'identity',
+        title: 'Same object or equal object',
+        tagline: 'A variable points to an object, and two names can point to the same one.',
+        goals: ['Explain what <code>val b = a</code> copies', 'Ask “same object?” with <code>===</code> and “equal?” with <code>==</code>', 'Make a real copy of a data class object with <code>copy()</code>'],
+        level: 'beginner', introduces: ['==='],
+        body: `
+<p>Sam marks a book as out through one variable, and another variable suddenly says the book is out too. Nothing is broken: both names point at the same book. Knowing when two names share one object saves you from some very confusing bugs.</p>
+<p>A variable doesn’t hold the object itself. It holds a <em>reference</em>: think of it as an arrow pointing at the object, which lives somewhere in the computer’s memory. <code>val b = a</code> copies the arrow, not the object. Now <code>a</code> and <code>b</code> are two names for one object, and a change made through <code>b</code> shows up through <code>a</code>. Each constructor call, like <code>Book("Blue Harbor")</code>, makes a new, separate object.</p>
+<p>So there are two different questions. “Are these the very same object?” is about <em>identity</em>, and Kotlin asks it with <code>===</code> (three equals signs). “Do these two mean the same thing?” is about <em>equality</em>, asked with <code>==</code>. For a plain class, <code>==</code> checks identity too. For a data class, <code>==</code> compares the property values, as you saw earlier: two separate points with the same numbers are equal, but not identical.</p>
+<p>Passing an object to a function passes the arrow as well. The function can change the object, and the caller sees the change.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'a', label: 'a', x: 12, y: 16, tone: 'muted', hidden: true },
+              { id: 'b', label: 'b', x: 12, y: 46, tone: 'muted', hidden: true },
+              { id: 'c', label: 'c', x: 12, y: 86, tone: 'muted', hidden: true },
+              { id: 'o1', label: 'Book #1<small>"Blue Harbor"</small>', x: 68, y: 30, hidden: true },
+              { id: 'out', label: 'isOut = true', x: 68, y: 56, tone: 'warm', hidden: true },
+              { id: 'o2', label: 'Book #2<small>"Blue Harbor"</small>', x: 68, y: 86, hidden: true },
+            ],
+            predict: {
+              q: '<code>val b = a</code>, then <code>b.lend()</code>. What does <code>println(a.isOut)</code> print?',
+              options: ['<code>true</code>', '<code>false</code>', 'An error'],
+              a: 0,
+              why: '<code>a</code> and <code>b</code> point at the same book, so a change through one is seen through the other.',
+            },
+            frames: [
+              { show: ['a', 'o1'], add: [['a', 'o1']], say: '<code>val a = Book("Blue Harbor")</code> makes a book object. <code>a</code> holds an arrow to it.' },
+              { show: ['b'], add: [['b', 'o1', '', 'accent']], say: '<code>val b = a</code> copies the arrow. No new book: <code>b</code> points at the same object.' },
+              { show: ['c', 'o2'], add: [['c', 'o2']], say: '<code>val c = Book("Blue Harbor")</code> calls the constructor again: a second object with the same title.' },
+              { show: ['out'], add: [['o1', 'out', '', 'warm']], hl: ['b', 'o1'], say: '<code>b.lend()</code> follows b’s arrow and lends book #1.' },
+              { hl: ['a', 'o1'], say: '<code>println(a.isOut)</code> prints <code>true</code>: a’s arrow leads to the same book. <code>c.isOut</code> is still <code>false</code>.' },
+              { hl: ['a', 'b'], say: '<code>a === b</code> is <code>true</code>: one object. <code>a === c</code> is <code>false</code>: same title, two different objects.' },
+            ],
+          });
+        },
+        code: `class Cup(var tea: String)
+data class Point(val x: Int, val y: Int)
+
+fun refill(cup: Cup) {
+    cup.tea = "mint"
+}
+
+fun main() {
+    val mine = Cup("black")
+    refill(mine)
+    println(mine.tea)      // mint: the function got an arrow to the same cup
+
+    val p = Point(1, 2)
+    val q = Point(1, 2)
+    println(p == q)        // true: same values
+    println(p === q)       // false: two different objects
+}`,
+        play: `class Box(var label: String)
+data class Size(val w: Int, val h: Int)
+
+fun main() {
+    val a = Box("toys")
+    val b = a
+    b.label = "books"
+    println(a.label)
+    println(a === b)
+
+    val big = Size(3, 4)
+    val same = Size(3, 4)
+    println(big == same)
+    println(big === same)
+    // Make c = Box("books"). Is a == c? Is a === c? Guess first, then print.
+}`,
+        remember: 'val b = a copies the arrow, not the object. === asks “same object?”; == asks “equal?”.',
+        mistakes: [
+          { title: 'Expecting val b = a to make a copy', bad: `data class Note(var text: String)
+
+val first = Note("milk")
+val backup = first          // the same object
+first.text = "eggs"
+println(backup.text)        // eggs`, good: `data class Note(var text: String)
+
+val first = Note("milk")
+val backup = first.copy()   // a new object
+first.text = "eggs"
+println(backup.text)        // milk`, why: '<code>=</code> only copies the arrow. <code>copy()</code> builds a new object with the same values, so changing one leaves the other alone.' },
+        ],
+        terms: [
+          { term: 'reference', def: 'What a variable holds for an object: an arrow to it, not the object itself. <code>val b = a</code> copies the arrow.' },
+          { term: 'identity', def: 'Being one particular object. <code>a === b</code> is <code>true</code> only when both point at the same object.' },
+          { term: 'equality', def: 'Meaning the same thing, asked with <code>==</code>. A data class compares property values; a plain class compares identity.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print whether <code>x</code> and <code>y</code> are the very same object.', code: `class Key(val code: Int)
+
+fun main() {
+    val x = Key(7)
+    val y = x
+    println(x [[===]] y)
+}`, why: '<code>===</code> asks about identity. <code>y</code> is a second name for the same key, so it prints <code>true</code>.' },
+          { type: 'bug', prompt: '<code>spare</code> should be another name for the very same key, so this should print <code>true</code>. It prints <code>false</code>. Tap the line to fix.', code: `class Key(val code: Int)
+
+fun main() {
+    val mine = Key(42)
+    val spare = Key(42)
+    println(mine === spare)
+}`, bug: 4, fix: '    val spare = mine', why: '<code>Key(42)</code> calls the constructor, which always makes a new object. <code>val spare = mine</code> copies the arrow instead.' },
+        ],
+        quiz: [
+          { q: 'After <code>val a = Book("Rain")</code> and <code>val b = a</code>, how many Book objects exist?', options: ['One', 'Two', 'None'], a: 0, why: 'Only one constructor call. <code>b</code> is a second arrow to the same book.' },
+          { q: '<code>data class P(val x: Int)</code>. What do <code>P(1) == P(1)</code> and <code>P(1) === P(1)</code> give?', options: ['<code>true</code> and <code>false</code>', '<code>true</code> and <code>true</code>', '<code>false</code> and <code>false</code>'], a: 0, why: 'Equal values, but each <code>P(1)</code> is a separate object.' },
+          { q: '<code>fun refill(c: Cup) { c.tea = "mint" }</code>. After <code>refill(mine)</code>, what is <code>mine.tea</code>?', options: ['<code>"mint"</code>', 'What it was before', 'It doesn’t compile'], a: 0, why: 'The function got an arrow to the same cup, so its change is the caller’s change.' },
+        ],
+        docs: [['Equality', 'https://kotlinlang.org/docs/equality.html']],
+      },
+
+      {
+        id: 'encapsulation',
+        title: 'Encapsulation: keeping data valid',
+        tagline: 'Write each rule once, and let only the class change its data.',
+        goals: ['Name a rule an object must always keep (its invariant)', 'Check the rule in every function that changes the state', 'Share a list without letting others change it'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>A bus has 40 seats. If the booking app ever says 43 seats are booked, three people are left standing at the stop, and nobody knows which line of code let it happen. Some facts about an object must always be true.</p>
+<p>A rule like “booked seats are never below 0 and never more than the seats on the bus” is called an <em>invariant</em>: something that holds for the whole life of the object. While its invariants hold, the object’s state is <em>valid</em>.</p>
+<p>Encapsulation is how a class protects its invariants. You already know the tools, <code>private</code> and <code>private set</code>. The design idea: if only the class’s own functions can change the state, and each of them checks the rule before it changes anything, the rule can’t break. When something does go wrong, you look in one class, not in the whole program.</p>
+<p>Watch out for lists. A <code>val</code> property holding a <code>mutableListOf</code> can’t point to a new list, but anyone can still <code>add</code> to it. Keep the mutable list <code>private</code>, and show the outside a read-only <code>List</code> through a getter.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `class Bus(val seats: Int) {
+    var booked = 0
+        private set
+
+    fun book(count: Int): Boolean {
+        if (count <= 0 || booked + count > seats) {
+            return false
+        }
+        booked += count
         return true
     }
+}
 
-    companion object { const val MAX = 3 }
+fun main() {
+    val bus = Bus(40)
+    println(bus.book(38))
+    println(bus.book(3))
+    println(bus.book(2))
+    println(bus.booked)
+}`,
+            predict: {
+              q: '38 seats are booked on a 40-seat bus. What does <code>bus.book(3)</code> print?',
+              options: ['<code>false</code>', '<code>true</code>', 'It crashes'],
+              a: 0,
+              why: '38 + 3 is 41, more than 40. The check refuses and nothing changes.',
+            },
+            frames: [
+              { line: [1, 2, 3], say: 'The invariant: <code>booked</code> stays between 0 and <code>seats</code>. Only Bus can change <code>booked</code>.' },
+              { line: 15, vars: { 'bus.seats': '40', 'bus.booked': '0' }, say: 'A new bus starts valid: 0 of 40 seats booked.' },
+              { line: [16, 6, 9], vars: { 'bus.booked': '38' }, out: 'true', say: '38 more still fits in 40, so the check passes and the seats are booked.' },
+              { line: [17, 6, 7], out: 'false', say: '38 + 3 = 41 is more than 40. The check refuses before anything changes.' },
+              { line: [18, 9], vars: { 'bus.booked': '40' }, out: 'true', say: '38 + 2 = 40 fits exactly. The bus is full, and still valid.' },
+              { line: 19, out: '40', say: 'Writing <code>bus.booked = 43</code> in <code>main</code> would not compile. Nobody can skip the rule.' },
+            ],
+          });
+        },
+        code: `class Party(val maxGuests: Int) {
+    private val guests = mutableListOf<String>()
+
+    val guestList: List<String>
+        get() = guests
+
+    fun invite(name: String): Boolean {
+        if (guests.size >= maxGuests || guests.contains(name)) {
+            return false
+        }
+        guests.add(name)
+        return true
+    }
+}
+
+fun main() {
+    val party = Party(2)
+    println(party.invite("Ada"))   // true
+    println(party.invite("Ada"))   // false: already invited
+    println(party.invite("Sam"))   // true
+    println(party.invite("Lin"))   // false: full
+    println(party.guestList)       // [Ada, Sam]
+}`,
+        play: `class Thermostat {
+    var target = 20
+        private set
+
+    fun warmer() {
+        if (target < 28) {
+            target += 1
+        }
+    }
+
+    fun cooler() {
+        if (target > 12) {
+            target -= 1
+        }
+    }
+}
+
+fun main() {
+    val t = Thermostat()
+    for (i in 1..10) {
+        t.warmer()
+    }
+    println(t.target)
+    // The rule: target always stays between 12 and 28.
+    // Add fun setTo(degrees: Int) that keeps the rule too, then try t.setTo(40).
+}`,
+        remember: 'Name the invariant, let only the class change its state, and check the rule in every function that changes it.',
+        mistakes: [
+          { title: 'Letting the mutable list out', bad: `class Party(val maxGuests: Int) {
+    val guests = mutableListOf<String>()
+}
+
+party.guests.add("Ada")
+party.guests.add("Sam")
+party.guests.add("Lin")   // 3 guests at a party for 2`, good: `class Party(val maxGuests: Int) {
+    private val guests = mutableListOf<String>()
+    val guestList: List<String>
+        get() = guests
+}
+
+party.guestList.add("Lin")   // doesn't compile`, why: 'Outside code gets a read-only <code>List</code>, which has no <code>add</code>, so Kotlin stops it with <code>Unresolved reference \'add\'.</code> The only way in is a function like <code>invite()</code> that checks the rule.' },
+        ],
+        terms: [
+          { term: 'invariant', def: 'A rule about an object that must always be true, like “booked is never more than seats”.' },
+          { term: 'valid', def: 'An object is valid while all its invariants hold.' },
+          { term: 'encapsulation', def: 'Keeping state private so only the class’s own functions change it, and those functions keep the rules.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A glass must never hold more than its size. Protect the water level.', code: `class Glass(val size: Int) {
+    var water = 0
+        [[private]] set
+
+    fun pour(amount: Int) {
+        if (amount > 0 && water + amount <= [[size]]) {
+            water += amount
+        }
+    }
+}`, why: '<code>private set</code> means only <code>pour()</code> can change the water, and <code>pour()</code> checks the size first.' },
+          { type: 'bug', prompt: 'A tank should never hold less than 0 litres, but this prints <code>-10</code>. Tap the line that lets the rule break.', code: `class Tank(val capacity: Int) {
+    var fuel = 0
+        private set
+
+    fun fill(litres: Int) {
+        if (litres > 0 && fuel + litres <= capacity) {
+            fuel += litres
+        }
+    }
+
+    fun use(litres: Int) {
+        if (litres > 0) {
+            fuel -= litres
+        }
+    }
+}
+
+fun main() {
+    val tank = Tank(50)
+    tank.fill(30)
+    tank.use(40)
+    println(tank.fuel)
+}`, bug: 11, fix: '        if (litres > 0 && litres <= fuel) {', why: 'Every function that changes the state has to keep the invariant. <code>fill()</code> did; <code>use()</code> forgot. Now it prints <code>30</code>.' },
+        ],
+        quiz: [
+          { q: 'What is an invariant?', options: ['A rule about an object that must always be true', 'A property that is a <code>val</code>', 'A function that never changes'], a: 0, why: 'Like “booked seats never go over the seats on the bus”.' },
+          { q: '<code>val items = mutableListOf&lt;String&gt;()</code> is a public property. Can outside code add to it?', options: ['Yes: <code>val</code> only stops it pointing to another list', 'No: <code>val</code> makes the list unchangeable'], a: 0, why: 'The arrow is fixed, but the list it points at can still change. Keep it private.' },
+          { q: 'The app says 43 of 40 seats are booked. With good encapsulation, where do you look first?', options: ['In Bus’s own functions', 'Everywhere in the program', 'In <code>main</code>'], a: 0, why: 'Only Bus’s functions can change <code>booked</code>, so the bug has to be there.' },
+        ],
+        docs: [['Visibility modifiers', 'https://kotlinlang.org/docs/visibility-modifiers.html']],
+      },
+      {
+        id: 'composition',
+        title: 'Composition',
+        tagline: 'Build a bigger object from smaller parts it has.',
+        goals: ['Build a class from parts it keeps as properties (“has a”)', 'Let an object do its work by asking its parts', 'Reuse one part class in several bigger classes'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>A phone has a battery and a camera. You could write one big Phone class that tracks the battery level, counts the photos and checks the power, all mixed together. Then a drone needs a battery too, and you copy half of that code.</p>
+<p><em>Composition</em> means building an object from smaller objects, its <em>parts</em>. The phone <em>has a</em> battery: a property that holds a Battery object. Each part is a small class with one job and its own rules. The bigger object does its work by asking its parts. The phone doesn’t change the battery level itself; it calls <code>battery.use(30)</code> and listens to the answer.</p>
+<p>This pays off in three ways. Each part is small enough to understand on its own. Parts can be reused: a Drone can have a Battery too, with no copied code. And a part can be handed in through the constructor, as in <code>Drone(Battery())</code>, so the code that makes the drone decides which battery it gets.</p>
+<p>A quick test: if you can say “an X <em>has a</em> Y”, then Y is a good part for X.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `class Battery {
+    var level = 100
+        private set
+
+    fun use(amount: Int): Boolean {
+        if (amount > level) {
+            return false
+        }
+        level -= amount
+        return true
+    }
+}
+
+class Camera {
+    var photos = 0
+        private set
+
+    fun shoot() {
+        photos += 1
+    }
+}
+
+class Phone {
+    private val battery = Battery()
+    private val camera = Camera()
+
+    fun takePhoto(): String {
+        if (!battery.use(30)) {
+            return "Battery too low"
+        }
+        camera.shoot()
+        return "Photo \${camera.photos}, battery \${battery.level}%"
+    }
+}
+
+fun main() {
+    val phone = Phone()
+    println(phone.takePhoto())
+    println(phone.takePhoto())
+    println(phone.takePhoto())
+    println(phone.takePhoto())
+}`,
+            predict: {
+              q: 'The battery starts at 100 and each photo uses 30. What does the fourth <code>takePhoto()</code> print?',
+              options: ['<code>Battery too low</code>', '<code>Photo 4, battery -20%</code>', '<code>Photo 4, battery 0%</code>'],
+              a: 0,
+              why: 'After three photos the level is 10. The battery’s own rule refuses to give 30.',
+            },
+            frames: [
+              { line: [1, 14], say: 'Two small classes, each with one job and its own rule. A Battery can’t give more than it has; a Camera counts photos.' },
+              { line: [23, 24, 25], say: 'A Phone <em>has a</em> battery and <em>has a</em> camera. It keeps them as private properties: its parts.' },
+              { line: 37, vars: { 'battery.level': '100', 'camera.photos': '0' }, say: 'Making a Phone makes its parts too.' },
+              { line: [38, 28, 9], vars: { 'battery.level': '70' }, say: '<code>takePhoto()</code> doesn’t touch the level itself. It asks its battery: “can you give 30?” Yes.' },
+              { line: [31, 19, 32], vars: { 'camera.photos': '1' }, out: 'Photo 1, battery 70%', say: 'Then it asks the camera to shoot, and builds its answer from what the parts report.' },
+              { line: [39, 40], vars: { 'battery.level': '10', 'camera.photos': '3' }, out: 'Photo 2, battery 40%\nPhoto 3, battery 10%', say: 'Two more photos. Each part keeps its own state.' },
+              { line: [41, 28, 29], out: 'Battery too low', say: 'The battery’s rule says no: 30 is more than 10. The phone only had to listen.' },
+            ],
+          });
+        },
+        code: `class Battery {
+    var level = 100
+        private set
+
+    fun use(amount: Int): Boolean {
+        if (amount > level) {
+            return false
+        }
+        level -= amount
+        return true
+    }
+}
+
+class Drone(private val battery: Battery) {
+    fun fly(minutes: Int): String {
+        if (!battery.use(minutes * 5)) {
+            return "Not enough power"
+        }
+        return "Flew $minutes min, \${battery.level}% left"
+    }
+}
+
+fun main() {
+    val drone = Drone(Battery())   // the same Battery class, a new user
+    println(drone.fly(10))         // Flew 10 min, 50% left
+    println(drone.fly(12))         // Not enough power
+}`,
+        play: `class Engine {
+    var running = false
+        private set
+
+    fun start() {
+        running = true
+    }
+
+    fun stop() {
+        running = false
+    }
+}
+
+class Radio {
+    var station = "off"
+        private set
+
+    fun tune(name: String) {
+        station = name
+    }
+}
+
+class Car(private val engine: Engine, private val radio: Radio) {
+    fun drive(): String {
+        engine.start()
+        radio.tune("News")
+        return "Driving, radio: \${radio.station}"
+    }
+
+    fun park(): String {
+        engine.stop()
+        return "Parked, engine running: \${engine.running}"
+    }
+}
+
+fun main() {
+    val car = Car(Engine(), Radio())
+    println(car.drive())
+    println(car.park())
+    // Write a class Boat that has its own Engine, and a fun sail() that starts it.
+}`,
+        remember: 'Composition: build an object from parts it has (“has a”), and let it do its work by asking those parts.',
+        mistakes: [
+          { title: 'Copying a part’s code into every class', bad: `class Phone {
+    var level = 100
+    // battery rules written here...
+}
+
+class Drone {
+    var level = 100
+    // ...and copied here
+}`, good: `class Phone(private val battery: Battery)
+
+class Drone(private val battery: Battery)`, why: 'Two copies of the battery rules drift apart: fix a bug in one and the other keeps it. One Battery class, used as a part by both, has one copy to fix.' },
+        ],
+        terms: [
+          { term: 'composition', def: 'Building an object from other objects it keeps as properties, and doing the work by asking them.' },
+          { term: 'has a', def: 'The test for composition: “a phone has a battery”, so Battery is a part of Phone.' },
+          { term: 'part', def: 'An object kept inside another as a property, like the <code>battery</code> in a Phone.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A bike has two wheels. Give it its front wheel, then ask the wheel to spin.', code: `class Wheel {
+    fun spin() = "spinning"
+}
+
+class Bike {
+    private val front = [[Wheel]]()
+    private val back = Wheel()
+
+    fun ride() = "Front \${front.[[spin]]()}, back \${back.spin()}"
+}`, why: 'Each wheel is a part: a property holding a Wheel object. <code>ride()</code> works by asking its parts.' },
+          { type: 'bug', prompt: 'Kotlin says <code>No value passed for parameter \'lamp\'.</code> Tap the line to fix.', code: `class Lamp {
+    var on = false
+        private set
+
+    fun switch() {
+        on = !on
+    }
+}
+
+class Room(private val lamp: Lamp) {
+    fun enter(): String {
+        lamp.switch()
+        return "Lamp on: \${lamp.on}"
+    }
+}
+
+fun main() {
+    val room = Room()
+    println(room.enter())
+}`, bug: 17, fix: '    val room = Room(Lamp())', why: 'Room gets its part through the constructor, so whoever makes a Room has to hand it a Lamp.' },
+        ],
+        quiz: [
+          { q: 'Which pair fits composition best?', options: ['A car and its engine', 'A dog and an animal', 'A square and a shape'], a: 0, why: '“A car has an engine.” The other two are “is a” sentences.' },
+          { q: 'In <code>class Phone { private val battery = Battery() }</code>, how should Phone use power?', options: ['Call <code>battery.use(30)</code>', 'Change <code>battery.level</code> directly', 'Copy the Battery code into Phone'], a: 0, why: 'The part keeps its own rules. The phone asks; the battery decides.' },
+          { q: 'Why hand a part in through the constructor, as in <code>Drone(Battery())</code>?', options: ['The code making the drone picks its battery', 'It makes the drone faster', 'Kotlin requires it for every part'], a: 0, why: 'The drone works with any Battery it is given. Making it yourself inside the class also works, but then the class always picks.' },
+        ],
+        docs: [['Classes', 'https://kotlinlang.org/docs/classes.html']],
+      },
+
+      {
+        id: 'inheritance',
+        title: 'Inheritance, carefully',
+        tagline: 'Build on a class only when “is a” is always true, and know what that ties you to.',
+        goals: ['Use the “is a” test before writing <code>: Parent()</code>', 'Explain how a change inside a parent can break a child', 'Call the parent’s version with <code>super</code>, not your own function again'],
+        level: 'intermediate', introduces: [], ignore: ['entries'],
+        body: `
+<p>You met inheritance in the Kotlin track: <code>class Dog(name: String) : Animal(name)</code> gives Dog everything Animal has. It is quick to write. It also ties the child to the parent’s insides more tightly than you might expect, so it is worth using with care.</p>
+<p>First, the <em>is a</em> test. Say it out loud: “a savings account is an account”, always, everywhere the program uses accounts. Then inheritance fits. “A car is an engine” is false: a car <em>has</em> an engine, and that is composition. If the sentence is true only sometimes, the parent is the wrong choice.</p>
+<p>Second, the risk. A child depends on how the parent works inside, not only on what it offers. Below, CountingLogbook counts entries by overriding both <code>add</code> and <code>addAll</code>. That worked while the parent’s <code>addAll</code> put entries in the list directly, with <code>entries.add(e)</code>. Then someone tidied the parent so that its <code>addAll</code> calls <code>add(e)</code>. Logbook still works perfectly on its own, but the child now counts every entry twice, and its code never changed. This is called the <em>fragile base class</em> problem (“base class” is another name for the parent).</p>
+<p>So build on classes that were made to be parents (that is why Kotlin asks for <code>open</code>), and only for an “is a” that will stay true.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `open class Logbook {
+    private val entries = mutableListOf<String>()
+
+    open fun add(entry: String) {
+        entries.add(entry)
+    }
+
+    open fun addAll(list: List<String>) {
+        for (e in list) {
+            add(e)
+        }
+    }
+}
+
+class CountingLogbook : Logbook() {
+    var count = 0
+
+    override fun add(entry: String) {
+        count += 1
+        super.add(entry)
+    }
+
+    override fun addAll(list: List<String>) {
+        count += list.size
+        super.addAll(list)
+    }
+}
+
+fun main() {
+    val log = CountingLogbook()
+    log.addAll(listOf("start", "stop", "pause"))
+    println(log.count)
+}`,
+            predict: {
+              q: 'Line 10 used to be <code>entries.add(e)</code>, and the program printed <code>3</code>. Now it is <code>add(e)</code>. What does it print?',
+              options: ['<code>6</code>', '<code>3</code>', '<code>0</code>'],
+              a: 0,
+              why: 'The parent’s loop now calls <code>add</code>, which on this object is the child’s counting <code>add</code>. Every entry is counted twice.',
+            },
+            frames: [
+              { line: [8, 9, 10], say: 'The parent was tidied: <code>addAll</code> now calls <code>add(e)</code>. On its own, Logbook works exactly as before.' },
+              { line: [15, 18, 23], say: 'The child counts in both <code>add</code> and <code>addAll</code>. Its author knew the old parent, where <code>addAll</code> didn’t call <code>add</code>.' },
+              { line: [31, 24], vars: { 'log.count': '3' }, say: 'The child’s <code>addAll</code> runs: 3 entries, so count becomes 3. Right, so far.' },
+              { line: [25, 10], say: '<code>super.addAll</code> runs the parent’s loop. But this object is a CountingLogbook, so <code>add(e)</code> runs the child’s <code>add</code>.' },
+              { line: [19, 20], vars: { 'log.count': '4' }, say: 'The child’s <code>add</code> counts "start" again. The same happens for "stop" and "pause".' },
+              { line: 32, vars: { 'log.count': '6' }, out: '6', say: 'A count of 6 for 3 entries. The child never changed; a tidy-up inside the parent broke it.' },
+            ],
+          });
+        },
+        code: `open class Account(val owner: String) {
+    var balance = 0
+        private set
+
+    fun deposit(amount: Int) {
+        if (amount > 0) {
+            balance += amount
+        }
+    }
+}
+
+// A savings account is an account, always: inheritance fits.
+class SavingsAccount(owner: String) : Account(owner) {
+    fun addInterest() {
+        deposit(balance / 100)
+    }
+}
+
+fun main() {
+    val s = SavingsAccount("Lin")
+    s.deposit(500)
+    s.addInterest()
+    println(s.balance)   // 505
+}`,
+        play: `open class Notebook {
+    private val pages = mutableListOf<String>()
+
+    fun pageCount() = pages.size
+
+    open fun write(text: String) {
+        pages.add(text)
+    }
+
+    open fun writeAll(texts: List<String>) {
+        for (t in texts) {
+            write(t)
+        }
+    }
+}
+
+class CountingNotebook : Notebook() {
+    var written = 0
+
+    override fun write(text: String) {
+        written += 1
+        super.write(text)
+    }
+
+    override fun writeAll(texts: List<String>) {
+        written += texts.size
+        super.writeAll(texts)
+    }
+}
+
+fun main() {
+    val book = CountingNotebook()
+    book.writeAll(listOf("Mon", "Tue"))
+    println("Pages: \${book.pageCount()}, counted: \${book.written}")
+    // Counted 4 for 2 pages. Delete the writeAll override in CountingNotebook
+    // and run again. Then change Notebook's loop to pages.add(t): what breaks now?
+}`,
+        remember: 'Inherit only when “X is a Y” is always true, from a class made to be a parent. A child depends on its parent’s insides, so a change there can break it.',
+        mistakes: [
+          { title: 'Inheriting only to borrow code', bad: `open class Engine {
+    fun start() = "Engine on"
+}
+
+class Car : Engine()   // a car is not an engine`, good: `class Engine {
+    fun start() = "Engine on"
+}
+
+class Car(private val engine: Engine) {
+    fun drive() = engine.start()
+}`, why: 'The first version compiles and even runs, but now every Car counts as an Engine and can be passed anywhere an Engine is wanted. A car <em>has</em> an engine: that is composition.' },
+        ],
+        terms: [
+          { term: 'is a', def: 'The test for inheritance: “a savings account is an account” must be true always, not only sometimes.' },
+          { term: 'base class', def: 'Another name for a parent class, the class others build on.' },
+          { term: 'fragile base class', def: 'When a change inside a parent breaks a child that didn’t change, because the child relied on how the parent worked inside.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A bike is a vehicle, always. Let Vehicle be a parent, and let Bike build on it with 2 wheels.', code: `[[open]] class Vehicle(val wheels: Int) {
+    fun describe() = "$wheels wheels"
+}
+
+class Bike : [[Vehicle]](2)`, why: '<code>open</code> lets Vehicle be a parent. <code>: Vehicle(2)</code> says a Bike is a Vehicle and passes 2 to its constructor.' },
+          { type: 'bug', prompt: 'This should print <code>Hi, Ada!</code>, but it crashes with <code>StackOverflowError</code> (a function that keeps calling itself until the program runs out of room). Tap the line.', code: `open class Greeter {
+    open fun greet(name: String) = "Hi, $name"
+}
+
+class LoudGreeter : Greeter() {
+    override fun greet(name: String): String = greet(name) + "!"
+}
+
+fun main() {
+    println(LoudGreeter().greet("Ada"))
+}`, bug: 5, fix: '    override fun greet(name: String): String = super.greet(name) + "!"', why: 'Inside LoudGreeter, <code>greet(name)</code> calls LoudGreeter’s own <code>greet</code>, which calls itself again, over and over, until the program runs out of room. <code>super.greet</code> runs the parent’s version.' },
+        ],
+        quiz: [
+          { q: 'Which sentence passes the “is a” test?', options: ['A savings account is an account', 'A car is an engine', 'A phone is a battery'], a: 0, why: 'It is true always. The other two are “has a”: composition.' },
+          { q: 'What is the fragile base class problem?', options: ['A change inside a parent breaks a child that didn’t change', 'A parent class can’t be changed at all', 'A child class has too many functions'], a: 0, why: 'The child relied on how the parent worked inside, and that changed.' },
+          { q: 'Why does Kotlin ask for <code>open</code> before a class can be a parent?', options: ['So being built on is a choice the class’s author made', 'To make the class run faster', 'Because open classes can’t have properties'], a: 0, why: 'A class meant to be a parent is written and changed with its children in mind.' },
+        ],
+        docs: [['Inheritance', 'https://kotlinlang.org/docs/inheritance.html']],
+      },
+
+      {
+        id: 'composition-vs-inheritance',
+        title: 'Choosing between them',
+        tagline: 'Composition or inheritance? Count what each one costs.',
+        goals: ['Spot when inheritance multiplies into too many classes', 'Swap a part while the program runs, using composition', 'Pick composition or inheritance for a new case'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>A robot game has robots that move on wheels or on legs, and carry a claw or a laser. With inheritance, every combination needs its own class: WheelClaw, WheelLaser, LegClaw, LegLaser. Add tracks as a third way to move, and you need more classes again. The family keeps growing.</p>
+<p>With composition, a robot <em>has</em> a mover and <em>has</em> a tool. Each kind of mover and each kind of tool is one small class that keeps an interface, <code>Mover</code> or <code>Tool</code>. Any mover goes with any tool, so tracks means one new class. And because a part is a property, a <code>var tool</code> can be swapped while the program runs. A parent class, on the other hand, is fixed the moment the object is made.</p>
+<p>Inheritance has its strengths too. It is less code: the child gets all of the parent’s functions without writing a line for each one. It fits when the “is a” sentence is always true, the family is small and clear, and the parent was made to be built on.</p>
+<p>A good habit: start with composition. Use inheritance for a real, lasting “is a” in a small family. If the combinations start to multiply, or a child only wants part of what the parent does, go back to parts. This kind of weighing up is called a <em>trade-off</em>: each choice gives you something and costs you something.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 360,
+            nodes: [
+              { id: 'robot', label: 'Robot', x: 50, y: 7, hidden: true },
+              { id: 'wr', label: 'WheelRobot', x: 25, y: 27, hidden: true },
+              { id: 'lr', label: 'LegRobot', x: 75, y: 27, hidden: true },
+              { id: 'wc', label: 'WheelClaw', x: 12, y: 47, tone: 'warm', hidden: true },
+              { id: 'wl', label: 'WheelLaser', x: 37, y: 47, tone: 'warm', hidden: true },
+              { id: 'lc', label: 'LegClaw', x: 63, y: 47, tone: 'warm', hidden: true },
+              { id: 'll', label: 'LegLaser', x: 88, y: 47, tone: 'warm', hidden: true },
+              { id: 'comp', label: 'Robot<small>has a mover, has a tool</small>', x: 50, y: 70, tone: 'ok', hidden: true },
+              { id: 'wheels', label: 'Wheels', x: 12, y: 93, tone: 'muted', hidden: true },
+              { id: 'legs', label: 'Legs', x: 37, y: 93, tone: 'muted', hidden: true },
+              { id: 'claw', label: 'Claw', x: 63, y: 93, tone: 'muted', hidden: true },
+              { id: 'laser', label: 'Laser', x: 88, y: 93, tone: 'muted', hidden: true },
+            ],
+            predict: {
+              q: 'Two ways to move (wheels, legs) and two tools (claw, laser). With one class per combination, how many robot classes are on the bottom row?',
+              options: ['4', '2', '3'],
+              a: 0,
+              why: '2 movers times 2 tools is 4, and every new mover or tool adds a whole set more.',
+            },
+            frames: [
+              { show: ['robot', 'wr', 'lr'], add: [['wr', 'robot', 'is a'], ['lr', 'robot', 'is a']], say: 'Inheritance: a WheelRobot is a Robot, a LegRobot is a Robot. So far, two children.' },
+              { show: ['wc', 'wl', 'lc', 'll'], add: [['wc', 'wr'], ['wl', 'wr'], ['lc', 'lr'], ['ll', 'lr']], say: 'Now each one needs a claw or a laser. Every pair gets its own class: 4 on the bottom row, 7 classes in all.' },
+              { hl: ['wc', 'wl', 'lc', 'll'], say: 'Tracks as a third way to move? TrackRobot, TrackClaw and TrackLaser: 3 more classes. Each new kind multiplies.' },
+              { show: ['comp', 'wheels', 'legs', 'claw', 'laser'], add: [['comp', 'wheels', 'has a', 'accent'], ['comp', 'claw', 'has a', 'accent']], say: 'Composition: one Robot class that has a mover and a tool. Wheels and Legs keep <code>Mover</code>; Claw and Laser keep <code>Tool</code>.' },
+              { remove: [['comp', 'claw']], add: [['comp', 'laser', 'has a', 'accent']], hl: ['comp', 'laser'], say: '<code>bot.tool = Laser()</code>: a part can be swapped while the program runs. Any mover goes with any tool.' },
+              { hl: ['comp'], say: 'Tracks is now one new class that keeps <code>Mover</code>. With Tracks that is 5 small part classes; the inheritance family needs 10.' },
+            ],
+          });
+        },
+        code: `interface Mover {
+    fun move(): String
+}
+
+interface Tool {
+    fun use(): String
+}
+
+class Wheels : Mover {
+    override fun move() = "rolls"
+}
+
+class Legs : Mover {
+    override fun move() = "walks"
+}
+
+class Claw : Tool {
+    override fun use() = "grabs"
+}
+
+class Robot(private val mover: Mover, var tool: Tool) {
+    fun work() = "Robot \${mover.move()} and \${tool.use()}"
+}
+
+fun main() {
+    val bot = Robot(Legs(), Claw())
+    println(bot.work())          // Robot walks and grabs
+    val rover = Robot(Wheels(), Claw())
+    println(rover.work())        // Robot rolls and grabs
+}`,
+        play: `interface Mover {
+    fun move(): String
+}
+
+interface Tool {
+    fun use(): String
+}
+
+class Wheels : Mover {
+    override fun move() = "rolls"
+}
+
+class Legs : Mover {
+    override fun move() = "walks"
+}
+
+class Claw : Tool {
+    override fun use() = "grabs"
+}
+
+class Brush : Tool {
+    override fun use() = "sweeps"
+}
+
+class Robot(private val mover: Mover, var tool: Tool) {
+    fun work() = "Robot \${mover.move()} and \${tool.use()}"
+}
+
+fun main() {
+    val bot = Robot(Wheels(), Claw())
+    println(bot.work())
+    bot.tool = Brush()
+    println(bot.work())
+    // Add a Mover called Propeller ("flies") and build a flying robot with a Brush.
+}`,
+        remember: 'Start with composition: parts combine freely and can be swapped. Use inheritance for a true, lasting “is a” in a small family.',
+        terms: [
+          { term: 'trade-off', def: 'A choice where each option gives you something and costs you something, like less code (inheritance) against free combining (composition).' },
+          { term: 'combination', def: 'One pick from each group, like wheels with a laser. With inheritance each combination needs its own class.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A clock has an alarm sound, and any Sound will do. Fill in the part’s type and the call to it.', code: `interface Sound {
+    fun play(): String
+}
+
+class Bell : Sound {
+    override fun play() = "ding"
+}
+
+class Clock(private val alarm: [[Sound]]) {
+    fun ring() = "Wake up: \${alarm.[[play]]()}"
+}`, why: 'The part’s type is the interface, so any Sound fits: a Bell today, something else tomorrow.' },
+          { type: 'bug', prompt: 'Kotlin says <code>\'val\' cannot be reassigned.</code> at <code>bot.tool = Brush()</code>. The robot should be able to swap tools. Tap the line to fix.', code: `interface Tool {
+    fun use(): String
+}
+
+class Claw : Tool {
+    override fun use() = "grabs"
+}
+
+class Brush : Tool {
+    override fun use() = "sweeps"
+}
+
+class Robot(val tool: Tool) {
+    fun work() = "Robot \${tool.use()}"
+}
+
+fun main() {
+    val bot = Robot(Claw())
+    bot.tool = Brush()
+    println(bot.work())
+}`, bug: 12, fix: 'class Robot(var tool: Tool) {', why: 'A part that should be swappable has to be a <code>var</code>. Now it prints <code>Robot sweeps</code>.' },
+        ],
+        quiz: [
+          { q: 'Robots have 3 kinds of mover and 2 kinds of tool. With composition, how many part classes do you write?', options: ['5', '6', '9'], a: 0, why: '3 movers plus 2 tools. With one class per combination you would need 6 at the bottom alone.' },
+          { q: 'Which one can change while the program runs?', options: ['A <code>var tool: Tool</code> part', 'The parent class of an object', 'Neither'], a: 0, why: 'A part is a property, so a <code>var</code> can point to a new part. The parent is fixed when the object is made.' },
+          { q: 'When is inheritance a good fit?', options: ['A small family where “is a” is always true', 'Whenever two classes share one function', 'When you need many combinations'], a: 0, why: 'Many combinations and shared bits of code are both better handled with parts.' },
+        ],
+        docs: [['Inheritance', 'https://kotlinlang.org/docs/inheritance.html'], ['Interfaces', 'https://kotlinlang.org/docs/interfaces.html']],
+      },
+
+      {
+        id: 'polymorphism',
+        title: 'Polymorphism',
+        tagline: 'One call, many behaviours, or one when over every kind: where each kind’s code lives.',
+        goals: ['Compare a <code>when</code> over kinds with one override per class', 'Explain how the real object, not the variable’s type, picks the code that runs', 'Choose by what grows: new kinds favour overrides, new operations favour sealed and <code>when</code>'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>A delivery app quotes a price and a time. At first there are bikes and vans, so you write <code>when (kind) { "bike" -> ... "van" -> ... }</code> in the price function, and another <code>when</code> in the time function. Then drones arrive, and you have to find every <code>when</code> in the app that asks about kinds and add a branch to each. Miss one, and somewhere a drone quietly costs 0.</p>
+<p>You saw the other way in <a href="#kotlin.interfaces">Promises a class keeps</a>: an interface, with each class writing its own version of the function. The code that quotes a price only says <code>d.cost(km)</code>, and what that does depends on which object is behind <code>d</code>. One call, many behaviours: that is <em>polymorphism</em> (Greek for “many shapes”). The variable’s type, <code>Delivery</code>, decides what you may call; the real object decides which code runs, worked out while the program runs. That is called <em>dynamic dispatch</em>.</p>
+<p>Here is why it matters for design. It decides where each kind’s code lives. With a <code>when</code> in every function, a bike’s price is in one place and its time in another. With overrides, everything about bikes sits in the Bike class, and adding Drone means writing one new class: <code>quote</code> and every other caller stay exactly as they are.</p>
+<p>A <code>when</code> isn’t always wrong. With a sealed family and no <code>else</code>, Kotlin finds every <code>when</code> that needs a new branch for you. And overrides have their own cost: a new <em>operation</em>, like a label for each kind, means editing every class. So pick by what grows. New kinds keep coming: overrides. A fixed set of kinds that keeps getting new operations: sealed and <code>when</code>.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 400,
+            nodes: [
+              { id: 'hA', label: 'A: a <code>when</code> in each function', x: 25, y: 6, tone: 'muted' },
+              { id: 'hB', label: 'B: an override in each class', x: 75, y: 6, tone: 'muted' },
+              { id: 'fcost', label: 'cost(kind)<small>bike, van</small>', x: 25, y: 23, hidden: true },
+              { id: 'nA1', label: '+ drone branch', x: 25, y: 34, tone: 'err', hidden: true },
+              { id: 'fmin', label: 'minutes(kind)<small>bike, van</small>', x: 25, y: 49, hidden: true },
+              { id: 'nA2', label: '+ drone branch', x: 25, y: 60, tone: 'err', hidden: true },
+              { id: 'flabel', label: 'label(kind)<small>new function</small>', x: 25, y: 76, tone: 'ok', hidden: true },
+              { id: 'cbike', label: 'Bike<small>cost, minutes</small>', x: 75, y: 23, hidden: true },
+              { id: 'nB1', label: '+ label()', x: 75, y: 34, tone: 'err', hidden: true },
+              { id: 'cvan', label: 'Van<small>cost, minutes</small>', x: 75, y: 49, hidden: true },
+              { id: 'nB2', label: '+ label()', x: 75, y: 60, tone: 'err', hidden: true },
+              { id: 'cdrone', label: 'Drone<small>new class</small>', x: 75, y: 76, tone: 'ok', hidden: true },
+              { id: 'nB3', label: '+ label()', x: 75, y: 87, tone: 'err', hidden: true },
+            ],
+            predict: {
+              q: 'Drones arrive. Version A has a <code>when</code> in <code>cost</code> and in <code>minutes</code>. Version B has a Bike and a Van class. How many places change in each?',
+              options: ['A: 2 functions. B: 1 new class', 'A: 1 function. B: 2 classes', 'Both: 1 place'],
+              a: 0,
+              why: 'In A, every <code>when</code> over kinds needs a drone branch. In B, the new Drone class brings its own answers, and nothing else changes.',
+            },
+            frames: [
+              { show: ['fcost', 'fmin'], say: 'Version A: two functions, each with a <code>when (kind)</code> over bike and van. A bike’s code is split across both.' },
+              { show: ['cbike', 'cvan'], say: 'Version B: an interface <code>Delivery</code> with <code>cost</code> and <code>minutes</code>. Bike and Van each override both, so all of a bike’s code is in Bike.' },
+              { show: ['nA1', 'nA2'], hl: ['fcost', 'fmin'], say: 'A new kind, drone. In A, every function with a <code>when</code> over kinds needs a new branch: here 2, in a real app maybe many more.' },
+              { show: ['cdrone'], hl: ['cdrone'], say: 'In B, Drone is one new class with its own <code>cost</code> and <code>minutes</code>. The callers only say <code>d.cost(km)</code>, so none of them change.' },
+              { show: ['flabel'], hl: ['flabel'], say: 'Now the other way round: a new <em>operation</em>, a label for each kind. In A, that is one new function with one <code>when</code>.' },
+              { show: ['nB1', 'nB2', 'nB3'], hl: ['cbike', 'cvan', 'cdrone'], say: 'In B, every class needs a new override: 3 edits. So each style is cheap for one kind of change.' },
+              { hl: ['hA', 'hB'], say: 'Pick by what grows. New kinds keep coming: B, overrides. A fixed set of kinds getting new operations: A, as a sealed family with no <code>else</code>, so Kotlin points at every <code>when</code> for you.' },
+            ],
+          });
+        },
+        code: `interface Delivery {
+    fun cost(km: Int): Int
+    fun minutes(km: Int): Int
+}
+
+class Bike : Delivery {          // everything about bikes, in one place
+    override fun cost(km: Int) = 2 + km
+    override fun minutes(km: Int) = km * 4
+}
+
+class Drone : Delivery {         // a new kind: one new class
+    override fun cost(km: Int) = 15
+    override fun minutes(km: Int) = km
+}
+
+fun quote(d: Delivery, km: Int) {
+    println("\${d.cost(km)} for \${d.minutes(km)} min")
+}
+
+fun main() {
+    quote(Bike(), 5)    // 7 for 20 min
+    quote(Drone(), 5)   // 15 for 5 min
+}`,
+        play: `interface Discount {
+    fun priceAfter(price: Int): Int
+}
+
+class NoDiscount : Discount {
+    override fun priceAfter(price: Int) = price
+}
+
+class HalfPrice : Discount {
+    override fun priceAfter(price: Int) = price / 2
+}
+
+class MinusTen : Discount {
+    override fun priceAfter(price: Int) = if (price > 10) price - 10 else 0
+}
+
+fun checkout(price: Int, offers: List<Discount>) {
+    for (offer in offers) {
+        println(offer.priceAfter(price))
+    }
+}
+
+fun main() {
+    checkout(40, listOf(NoDiscount(), HalfPrice(), MinusTen()))
+    // Add a class MinusQuarter : Discount (price - price / 4) and put it in the list.
+    // checkout() itself never needs to change.
+}`,
+        remember: 'Polymorphism: one call, and the real object decides which override runs. Overrides make new kinds cheap; sealed and when make new operations cheap. Pick by what grows.',
+        mistakes: [
+          { title: 'Asking “which kind are you?” with a String and an else', bad: `fun cost(kind: String, km: Int): Int {
+    return when (kind) {
+        "bike" -> 2 + km
+        "van" -> 10 + km * 2
+        else -> 0
+    }
+}
+
+println(cost("drone", 5))   // 0: nobody told cost() about drones`, good: `interface Delivery {
+    fun cost(km: Int): Int
+}
+
+class Drone : Delivery {
+    override fun cost(km: Int) = 15
+}`, why: 'A <code>when</code> over String kinds with an <code>else</code> has to be updated by hand for every new kind, in every place it appears, and Kotlin can’t warn you. With an override, the new class carries its own answer.' },
+        ],
+        terms: [
+          { term: 'polymorphism', def: 'One call that behaves differently depending on the object behind it, like <code>d.cost(km)</code> on a Bike or a Drone.' },
+          { term: 'dynamic dispatch', def: 'Picking which override runs from the real object, while the program runs. The variable’s type only decides what you may call.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'This used to be <code>when (kind) { "taxi" -> 3 + km * 2  "bus" -> 2 }</code>. Now each kind answers for itself. Fill in the gaps.', code: `interface Ride {
+    fun fare(km: Int): Int
+}
+
+class Taxi : Ride {
+    override fun fare(km: Int) = 3 + km * 2
+}
+
+class Bus : Ride {
+    [[override]] fun fare(km: Int) = 2
+}
+
+fun printFare(r: Ride) {
+    println(r.[[fare]](10))
+}
+
+fun main() {
+    printFare(Taxi())
+    printFare(Bus())
+}`, why: 'Bus writes its own version with <code>override</code>. <code>printFare</code> makes one call, <code>r.fare(10)</code>, and prints <code>23</code> for the taxi and <code>2</code> for the bus.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Argument type mismatch: actual type is \'Torch\', but \'Candle\' was expected.</code> <code>show</code> should work for any light. Tap the line.', code: `interface Light {
+    fun glow(): String
+}
+
+class Candle : Light {
+    override fun glow() = "flicker"
+}
+
+class Torch : Light {
+    override fun glow() = "beam"
+}
+
+fun show(light: Candle) {
+    println(light.glow())
+}
+
+fun main() {
+    show(Torch())
+}`, bug: 12, fix: 'fun show(light: Light) {', why: 'Ask for the interface, not one class that keeps it. Then any Light fits, and it prints <code>beam</code>.' },
+        ],
+        quiz: [
+          { q: '<code>val d: Delivery = Van()</code>. Whose <code>cost</code> runs for <code>d.cost(5)</code>?', options: ['Van’s', 'Delivery’s', 'Bike’s'], a: 0, why: 'The real object decides, and it is a Van. Delivery only promises <code>cost</code>; it has no body to run.' },
+          { q: 'A delivery app gets a new kind of vehicle every month. Which style keeps each change small?', options: ['An interface with one class per kind', 'A <code>when</code> over kinds in every function', 'One big class with a Boolean per kind'], a: 0, why: 'New kinds are what grows, so each one should be a single new class. The callers stay the same.' },
+          { q: 'A sealed family of shapes is fixed, but keeps getting new operations: area, outline, a label. Which style keeps each change small?', options: ['A <code>when</code> with no <code>else</code> per operation', 'A new override in every shape class', 'A <code>when</code> with an <code>else</code> branch'], a: 0, why: 'A new operation is then one new function. With no <code>else</code>, Kotlin also checks that every shape is handled.' },
+        ],
+        docs: [['Interfaces', 'https://kotlinlang.org/docs/interfaces.html'], ['Sealed classes and interfaces', 'https://kotlinlang.org/docs/sealed-classes.html']],
+      },
+
+      {
+        id: 'abstraction',
+        title: 'Abstraction',
+        tagline: 'Show a simple surface, and hide the detail behind it.',
+        goals: ['Design a class whose public functions say what, not how', 'Keep the steps private so they can change freely', 'Tell abstraction apart from encapsulation'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>To drive a car you use a steering wheel and two pedals. You don’t time the fuel or choose the gear ratios yourself. The car hides hundreds of details behind a few controls. That is why anyone can drive it, and why a mechanic can replace the engine without every driver learning to drive again.</p>
+<p><em>Abstraction</em> means giving something a simple surface and hiding the detail behind it. In a class, the surface is its public functions and properties: everything other code can use. A good surface is small, and named after what the caller wants, like <code>next()</code> or <code>makeTea()</code>, not after how it is done. The steps stay <code>private</code>.</p>
+<p>You use abstraction all the time. <code>println</code> and <code>listOf</code> have plenty of code inside, and you have never needed to see it. The Playlist below hides a position and a bit of arithmetic behind one word, <code>next()</code>. Callers can’t depend on detail they can’t see, so the inside can change later without touching them.</p>
+<p>Abstraction and encapsulation work together, but they answer different questions. Encapsulation: how do I keep this data valid? Abstraction: how little does the caller need to know?</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `class Playlist(private val songs: List<String>) {
+    private var index = 0
+
+    fun next(): String {
+        val song = songs[index]
+        index = (index + 1) % songs.size
+        return song
+    }
+}
+
+fun main() {
+    val mix = Playlist(listOf("Rain", "Tides", "Echo"))
+    println(mix.next())
+    println(mix.next())
+    println(mix.next())
+    println(mix.next())
+}`,
+            predict: {
+              q: 'Three songs, and <code>next()</code> is called a fourth time. What does it print?',
+              options: ['<code>Rain</code>', '<code>Echo</code>', 'It crashes: there is no fourth song'],
+              a: 0,
+              why: 'The playlist wraps around to the start. The caller doesn’t need to know how.',
+            },
+            frames: [
+              { line: 4, say: 'The surface: one public function, <code>next()</code>. That is all a caller has to know.' },
+              { line: [1, 2], say: 'The detail: a private list and a private position. Callers can’t see or touch either one.' },
+              { line: [13, 5, 6], vars: { index: '1' }, out: 'Rain', say: 'Give back the song at the position, then move the position one on.' },
+              { line: [14, 5, 6], vars: { index: '2' }, out: 'Tides', say: 'Same steps, the next song.' },
+              { line: [15, 6], vars: { index: '0' }, out: 'Echo', say: '(2 + 1) % 3 is 0: the remainder sends the position back to the start.' },
+              { line: [16, 5], vars: { index: '1' }, out: 'Rain', say: 'Round again. <code>main</code> never saw an index or a <code>%</code>.' },
+            ],
+          });
+        },
+        code: `class Clock {
+    private var minutes = 0
+
+    fun tick(m: Int) {
+        minutes = (minutes + m) % (24 * 60)
+    }
+
+    fun time(): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        val mm = if (m < 10) "0$m" else "$m"
+        return "$h:$mm"
+    }
+}
+
+fun main() {
+    val clock = Clock()
+    clock.tick(65)
+    println(clock.time())   // 1:05
+    clock.tick(1440)
+    println(clock.time())   // 1:05: a whole day later
+}`,
+        play: `class Kettle {
+    private var water = 0
+    private var temperature = 20
+
+    fun makeTea(): String {
+        fill()
+        boil()
+        return pour()
+    }
+
+    private fun fill() {
+        water = 500
+    }
+
+    private fun boil() {
+        while (temperature < 100) {
+            temperature += 20
+        }
+    }
+
+    private fun pour(): String {
+        water -= 250
+        return "Tea at $temperature degrees, $water ml left"
+    }
+}
+
+fun main() {
+    val kettle = Kettle()
+    println(kettle.makeTea())
+    // The caller knows one word: makeTea(). Try kettle.boil() here and read the error.
+}`,
+        remember: 'Keep the public surface small and named after what the caller wants. Keep the how private, so it can change.',
+        mistakes: [
+          { title: 'A surface made of steps', bad: `kettle.fill()
+kettle.boil()
+kettle.pour()   // every caller must know the steps, in order`, good: `kettle.makeTea()   // the steps are the kettle's business`, why: 'When callers run the steps themselves, someone runs them in the wrong order, and every caller has to change when the steps change.' },
+        ],
+        terms: [
+          { term: 'abstraction', def: 'Giving something a simple surface and hiding the detail behind it, so callers only need to know what it does.' },
+          { term: 'surface', def: 'Everything other code can use from a class: its public functions and properties.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Callers should only see a summary, never the raw count. Hide the count.', code: `class Counter {
+    [[private]] var clicks = 0
+
+    fun click() {
+        clicks += 1
+    }
+
+    fun summary() = "Clicked $clicks times"
+}
+
+fun main() {
+    val c = Counter()
+    c.click()
+    c.click()
+    println(c.[[summary]]())
+}`, why: 'The surface is <code>click()</code> and <code>summary()</code>. The count is detail, so it is private. This prints <code>Clicked 2 times</code>.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Cannot access \'fun boil(): Unit\': it is private in \'Kettle\'.</code> Use the kettle’s surface instead. Tap the line.', code: `class Kettle {
+    private var temperature = 20
+
+    fun makeTea(): String {
+        boil()
+        return "Tea at $temperature degrees"
+    }
+
+    private fun boil() {
+        temperature = 100
+    }
+}
+
+fun main() {
+    val kettle = Kettle()
+    kettle.boil()
+}`, bug: 15, fix: '    println(kettle.makeTea())', why: '<code>boil()</code> is a step, hidden on purpose. The surface is <code>makeTea()</code>, which prints <code>Tea at 100 degrees</code>.' },
+        ],
+        quiz: [
+          { q: 'Which is the better surface for a music player class?', options: ['<code>play()</code> and <code>next()</code>', '<code>setIndex()</code>, <code>readFile()</code> and <code>startSpeaker()</code>'], a: 0, why: 'They say what the caller wants. The other set exposes how it is done.' },
+          { q: 'Playlist changes how it stores its songs inside. What must callers of <code>next()</code> change?', options: ['Nothing', 'Every call to <code>next()</code>', 'Only the first call'], a: 0, why: 'They only ever used the surface, and the surface stayed the same.' },
+          { q: 'Which question does abstraction answer?', options: ['How little does the caller need to know?', 'How do I keep this data valid?', 'Which class is the parent?'], a: 0, why: 'Keeping data valid is encapsulation. The two often work together.' },
+        ],
+        docs: [['Visibility modifiers', 'https://kotlinlang.org/docs/visibility-modifiers.html']],
+      },
+
+      {
+        id: 'interface-or-abstract',
+        title: 'Interface or abstract class',
+        tagline: 'Two ways to describe a family. Pick by what the family shares.',
+        goals: ['Write an <code>abstract class</code> with an <code>abstract fun</code>', 'Explain why you can’t make an object of an abstract class', 'Choose between an interface and an abstract class'],
+        level: 'intermediate', introduces: ['abstract'],
+        body: `
+<p>A zoo app has many animals. Each one makes its own sound, but every animal also has a name and a meal count, and is fed in the same way. An interface can promise <code>sound()</code>, but it can’t store a name or a count. An <code>open</code> parent class can store them, but then someone could make a plain <code>Animal</code>, which makes no sense: what sound would it make?</p>
+<p>An <em>abstract class</em> sits in between. <code>abstract class Animal(val name: String)</code> can have a constructor, properties and finished functions, like any class. It can also have <code>abstract fun sound(): String</code>: a function with no body, which every child must <code>override</code>. That is the “abstract member” from the error you met when a class forgot an interface function. Because it is unfinished on purpose, Kotlin won’t let you make an object of an abstract class: <code>Animal("Cat")</code> doesn’t compile. Abstract classes and functions are already open, so you don’t write <code>open</code>.</p>
+<p>How to choose. An interface is mostly a promise: no constructor, no stored values, and a class can keep several. (An interface may give a function a ready body too; what it can’t do is store values or take a constructor.) An abstract class can share stored values and code with its children, but a class has only one parent. So describe what something <em>can do</em> with an interface (Swimmer, Chargeable). Use an abstract class when close relatives share data and code, and the “is a” test holds. When in doubt, start with an interface.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `interface Swimmer {
+    fun swim(): String
+}
+
+abstract class Animal(val name: String) {
+    var meals = 0
+
+    abstract fun sound(): String
+
+    fun feed() {
+        meals += 1
+        println("$name meals: $meals")
+    }
+}
+
+class Duck : Animal("Duck"), Swimmer {
+    override fun sound() = "Quack"
+    override fun swim() = "paddles"
+}
+
+fun main() {
+    val d = Duck()
+    d.feed()
+    println(d.sound())
+    println("Duck \${d.swim()}")
+}`,
+            predict: {
+              q: 'Could <code>main</code> also say <code>val a = Animal("Cat")</code>?',
+              options: ['No: Animal is abstract', 'Yes: Animal has a constructor', 'Yes, but <code>sound()</code> would give back nothing'],
+              a: 0,
+              why: 'An abstract class is unfinished on purpose. Only its children can be made.',
+            },
+            frames: [
+              { line: [1, 2], say: 'An interface: only a promise. No constructor, nothing stored.' },
+              { line: [5, 6], say: 'An abstract class can have a constructor and stored values, like any class: a name and a meal count.' },
+              { line: 8, say: '<code>abstract fun</code>: no body. Every child must write its own. Because of this gap, nobody can make a plain Animal.' },
+              { line: [10, 11, 12], say: 'A finished function, shared by every animal.' },
+              { line: 16, say: 'One parent class, <code>Animal("Duck")</code>, with parentheses. Plus an interface, without. More interfaces could follow after commas.' },
+              { line: [22, 23, 11, 12], vars: { 'd.name': '"Duck"', 'd.meals': '1' }, out: 'Duck meals: 1', say: '<code>feed()</code> comes from the abstract parent, ready to use.' },
+              { line: [24, 25, 17, 18], out: 'Quack\nDuck paddles', say: '<code>sound()</code> and <code>swim()</code> are Duck’s own overrides.' },
+            ],
+          });
+        },
+        code: `abstract class Shape(val name: String) {
+    abstract fun area(): Double
+
+    fun describe() = "$name, area \${area()}"
+}
+
+class Square(val side: Double) : Shape("Square") {
+    override fun area() = side * side
+}
+
+class Circle(val radius: Double) : Shape("Circle") {
+    override fun area() = 3.14 * radius * radius
+}
+
+fun main() {
+    println(Square(2.0).describe())   // Square, area 4.0
+    println(Circle(1.0).describe())   // Circle, area 3.14
+    // Shape("Blob") would not compile: Shape is abstract
+}`,
+        play: `interface Chargeable {
+    fun charge(): String
+}
+
+abstract class Gadget(val name: String) {
+    var battery = 100
+        private set
+
+    abstract fun drain(): Int
+
+    fun useIt() {
+        battery -= drain()
+        println("$name: $battery%")
+    }
+}
+
+class Watch : Gadget("Watch"), Chargeable {
+    override fun drain() = 5
+    override fun charge() = "Watch on its stand"
+}
+
+class Tablet : Gadget("Tablet") {
+    override fun drain() = 20
+}
+
+fun main() {
+    val watch = Watch()
+    val tablet = Tablet()
+    watch.useIt()
+    tablet.useIt()
+    tablet.useIt()
+    println(watch.charge())
+    // Make Tablet keep Chargeable too. Then try Gadget("Box") and read the error.
+}`,
+        remember: 'Interface: a promise of what a class can do; a class can keep many. Abstract class: shared values and code for close relatives, with abstract functions the children fill in; one parent only, and no objects of its own.',
+        mistakes: [
+          { title: 'Two abstract classes as parents', bad: `abstract class Flyer {
+    abstract fun fly(): String
+}
+
+abstract class Swimmer {
+    abstract fun swim(): String
+}
+
+class Duck : Flyer(), Swimmer() {   // error
+    override fun fly() = "flaps"
+    override fun swim() = "paddles"
+}`, good: `interface Flyer {
+    fun fly(): String
+}
+
+interface Swimmer {
+    fun swim(): String
+}
+
+class Duck : Flyer, Swimmer {
+    override fun fly() = "flaps"
+    override fun swim() = "paddles"
+}`, why: 'A class has only one parent class. Kotlin says <code>Only one class can appear in a supertype list.</code> Abilities like flying and swimming are interfaces, and a class can keep as many as it needs.' },
+        ],
+        terms: [
+          { term: 'abstract class', def: 'A class that can’t be made into an object itself. It can hold values and finished functions, plus abstract functions for its children to write.' },
+          { term: 'abstract function', def: 'A function with no body, like <code>abstract fun sound(): String</code>. Every child must <code>override</code> it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Every report prints its title the same way, but each kind writes its own body. Make Report unfinished on purpose.', code: `[[abstract]] class Report(val title: String) {
+    [[abstract]] fun body(): String
+
+    fun print() {
+        println(title)
+        println(body())
+    }
+}
+
+class Weekly : Report("This week") {
+    override fun body() = "All good"
+}`, why: 'The class is abstract because <code>body()</code> has no body yet. Weekly fills it in, and <code>Weekly().print()</code> prints both lines.' },
+          { type: 'bug', prompt: 'Kotlin says <code>\'water\' hides member of supertype \'Plant\' and needs an \'override\' modifier.</code> Tap the line.', code: `abstract class Plant(val name: String) {
+    abstract fun water(): String
+}
+
+class Cactus : Plant("Cactus") {
+    fun water() = "Once a month"
+}
+
+fun main() {
+    println(Cactus().water())
+}`, bug: 5, fix: '    override fun water() = "Once a month"', why: 'Filling in an abstract function is an override, so it needs the word, the same as with an interface.' },
+        ],
+        quiz: [
+          { q: 'Which one can hold a stored value with a starting value, like <code>var meals = 0</code>?', options: ['An abstract class', 'An interface', 'Neither'], a: 0, why: 'An interface only promises. An abstract class is a class, so it can store values.' },
+          { q: 'A Duck must be both a <code>Swimmer</code> and a <code>Flyer</code>. Which choice is sure to compile?', options: ['Both are interfaces', 'Both are abstract classes'], a: 0, why: 'A class can keep many interfaces but has only one parent class.' },
+          { q: 'Animal is an abstract class. What happens with <code>Animal("Cat")</code>?', options: ['It doesn’t compile', 'It makes an animal with no sound', 'It crashes when <code>sound()</code> is called'], a: 0, why: 'Kotlin stops it before the program runs: <code>Cannot create an instance of an abstract class.</code>' },
+        ],
+        docs: [['Abstract classes', 'https://kotlinlang.org/docs/classes.html#abstract-classes'], ['Interfaces', 'https://kotlinlang.org/docs/interfaces.html']],
+      },
+      {
+        id: 'delegation',
+        title: 'Delegation in design',
+        tagline: 'Hand the work to a helper object, and let Kotlin write the forwarding.',
+        goals: ['Pass calls on to a helper object instead of inheriting from a class', 'Use <code>by</code> to let Kotlin write the forwarding functions', 'Override only the functions that should behave differently'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>Remember the CountingLogbook that broke when its parent was tidied? The class wanted everything a logbook does, plus a counter. You can get that without inheriting: keep a logbook as a part, and pass each call on to it.</p>
+<p>That is <em>delegation</em>: an object hands a job to a helper object, called its <em>delegate</em>. Written by hand, each function is one line that passes the call on, like <code>override fun size() = inner.size()</code>. That is called <em>forwarding</em>. With three functions it is fine; with twenty it is a chore, so Kotlin can write the forwarding for you.</p>
+<p>In <code>class CountingLogbook(private val inner: Logbook) : Logbook by inner</code>, the part <code>by inner</code> means: keep the Logbook interface by forwarding every call to <code>inner</code>. You met <code>by</code> in <code>by lazy</code>, where it handed a property’s value over to <code>lazy</code>. Here it hands a whole interface over to an object. It works with interfaces, not with classes.</p>
+<p>Then override only what should be different: <code>add</code> and <code>addAll</code> count, then forward. Everything else, like <code>size()</code>, is forwarded without a line of your code. And the fragile parent problem is gone: when the helper’s <code>addAll</code> calls <code>add</code>, it calls its own <code>add</code>, not yours, so nothing is counted twice.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `interface Logbook {
+    fun add(entry: String)
+    fun addAll(list: List<String>)
+    fun size(): Int
+}
+
+class SimpleLogbook : Logbook {
+    private val entries = mutableListOf<String>()
+
+    override fun add(entry: String) {
+        entries.add(entry)
+    }
+
+    override fun addAll(list: List<String>) {
+        for (e in list) {
+            add(e)
+        }
+    }
+
+    override fun size() = entries.size
+}
+
+class CountingLogbook(private val inner: Logbook) : Logbook by inner {
+    var count = 0
+
+    override fun add(entry: String) {
+        count += 1
+        inner.add(entry)
+    }
+
+    override fun addAll(list: List<String>) {
+        count += list.size
+        inner.addAll(list)
+    }
+}
+
+fun main() {
+    val log = CountingLogbook(SimpleLogbook())
+    log.addAll(listOf("start", "stop", "pause"))
+    println(log.count)
+    println(log.size())
+}`,
+            predict: {
+              q: 'SimpleLogbook’s <code>addAll</code> calls <code>add(e)</code>, like the tidied parent that counted 6. What does <code>log.count</code> print this time?',
+              options: ['<code>3</code>', '<code>6</code>', '<code>0</code>'],
+              a: 0,
+              why: 'The helper’s <code>add(e)</code> runs the helper’s own <code>add</code>. The counting <code>add</code> is never called from inside it.',
+            },
+            frames: [
+              { line: [1, 2, 3, 4], say: 'Logbook is now an interface. SimpleLogbook keeps it, and its <code>addAll</code> calls <code>add(e)</code>, like the tidied parent did.' },
+              { line: 23, say: '<code>: Logbook by inner</code>: CountingLogbook keeps Logbook by forwarding calls to <code>inner</code>, its delegate. No parent class at all.' },
+              { line: 38, vars: { 'log.count': '0' }, say: 'The helper is handed in through the constructor, like any part.' },
+              { line: [39, 32, 33], vars: { 'log.count': '3' }, say: 'Our <code>addAll</code> counts 3 entries, then forwards to <code>inner.addAll</code>.' },
+              { line: [15, 16, 11], say: 'Inside SimpleLogbook, <code>add(e)</code> is SimpleLogbook’s own <code>add</code>. Our counting <code>add</code> isn’t involved.' },
+              { line: 40, out: '3', say: 'Counted once per entry. The helper can change inside without breaking us.' },
+              { line: [41, 20], out: '3', say: 'We never wrote <code>size()</code>. <code>by inner</code> forwarded it to the helper.' },
+            ],
+          });
+        },
+        code: `interface Speaker {
+    fun hello(): String
+    fun bye(): String
+}
+
+class Polite : Speaker {
+    override fun hello() = "Good morning"
+    override fun bye() = "Goodbye"
+}
+
+// By hand: every function forwards to the helper.
+class Robot(private val voice: Speaker) : Speaker {
+    override fun hello() = voice.hello()
+    override fun bye() = voice.bye()
+}
+
+// With by: Kotlin writes the forwarding. Override only what differs.
+class LoudRobot(private val voice: Speaker) : Speaker by voice {
+    override fun hello() = voice.hello() + "!"
+}
+
+fun main() {
+    println(Robot(Polite()).hello())       // Good morning
+    println(LoudRobot(Polite()).hello())   // Good morning!
+    println(LoudRobot(Polite()).bye())     // Goodbye
+}`,
+        play: `interface Storage {
+    fun save(key: String, value: String)
+    fun load(key: String): String?
+    fun keys(): Int
+}
+
+class MemoryStorage : Storage {
+    private val data = mutableMapOf<String, String>()   // empty: String keys, String values
+
+    override fun save(key: String, value: String) {
+        data[key] = value
+    }
+
+    override fun load(key: String): String? = data[key]
+
+    override fun keys() = data.size
+}
+
+class LoggingStorage(private val inner: Storage) : Storage by inner {
+    override fun save(key: String, value: String) {
+        println("Saving $key")
+        inner.save(key, value)
+    }
+}
+
+fun main() {
+    val store = LoggingStorage(MemoryStorage())
+    store.save("city", "Oslo")
+    store.save("name", "Lin")
+    println(store.load("city"))
+    println(store.keys())
+    // Override load() too, so it prints "Loading city" first.
+}`,
+        remember: 'Delegation: keep a helper and pass calls on to it. class X(private val inner: I) : I by inner forwards every function you don’t override.',
+        mistakes: [
+          { title: 'Overriding and forgetting to forward', bad: `override fun add(entry: String) {
+    count += 1
+    // forgot: inner.add(entry)
+}`, good: `override fun add(entry: String) {
+    count += 1
+    inner.add(entry)
+}`, why: 'An override replaces the forwarding for that one function. If it doesn’t call the helper, the entry is counted but never stored.' },
+        ],
+        terms: [
+          { term: 'delegation', def: 'Handing a job to a helper object instead of doing it yourself or inheriting it.' },
+          { term: 'delegate', def: 'The helper object that receives the calls, like <code>inner</code> in <code>Logbook by inner</code>.' },
+          { term: 'forwarding', def: 'A function that only passes the call on to the delegate, like <code>override fun size() = inner.size()</code>. <code>by</code> writes these for you.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Shy greets in its own way, but waves exactly like its helper. Let Kotlin forward the rest to <code>helper</code>.', code: `interface Greeter {
+    fun greet(): String
+    fun wave(): String
+}
+
+class Friendly : Greeter {
+    override fun greet() = "Hi"
+    override fun wave() = "o/"
+}
+
+class Shy(private val helper: Greeter) : Greeter [[by]] [[helper]] {
+    override fun greet() = "...hi"
+}`, why: '<code>by helper</code> forwards <code>wave()</code>. Only <code>greet()</code> is overridden, so <code>Shy(Friendly())</code> says <code>...hi</code> and waves <code>o/</code>.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Class \'SafePrinter\' is not abstract and does not implement abstract member: fun status(): String</code>. The status should come from the helper. Tap the line.', code: `interface Printer {
+    fun print(text: String): String
+    fun status(): String
+}
+
+class OfficePrinter : Printer {
+    override fun print(text: String) = "Printed: $text"
+    override fun status() = "Ready"
+}
+
+class SafePrinter(private val inner: Printer) : Printer {
+    override fun print(text: String) = if (text == "") "Nothing to print" else inner.print(text)
+}
+
+fun main() {
+    val p = SafePrinter(OfficePrinter())
+    println(p.print("Menu"))
+    println(p.status())
+}`, bug: 10, fix: 'class SafePrinter(private val inner: Printer) : Printer by inner {', why: 'Without <code>by inner</code>, SafePrinter promised all of Printer but wrote only <code>print</code>. With it, <code>status()</code> is forwarded and prints <code>Ready</code>.' },
+        ],
+        quiz: [
+          { q: 'In <code>class A(private val b: Speaker) : Speaker by b</code>, A doesn’t override <code>bye()</code>. Whose <code>bye()</code> runs?', options: ['<code>b</code>’s', 'A’s own, empty one', 'None: it doesn’t compile'], a: 0, why: '<code>by b</code> forwards every function A doesn’t write itself.' },
+          { q: 'Why does the counting logbook built with <code>by</code> count 3, not 6?', options: ['The helper’s <code>addAll</code> calls the helper’s own <code>add</code>', '<code>by</code> skips <code>addAll</code>', 'The count is reset after each call'], a: 0, why: 'There is no parent whose code calls back into ours. The helper only ever calls itself.' },
+          { q: 'Which line forwards the Storage interface to a helper called <code>inner</code>?', options: ['<code>class Logged(private val inner: Storage) : Storage by inner</code>', '<code>class Logged : Storage(inner)</code>', '<code>class Logged by Storage</code>'], a: 0, why: 'The helper comes in through the constructor; <code>: Storage by inner</code> keeps the interface by forwarding to it.' },
+        ],
+        docs: [['Delegation', 'https://kotlinlang.org/docs/delegation.html']],
+      },
+
+      {
+        id: 'cohesion-coupling',
+        title: 'Cohesion and coupling',
+        tagline: 'Code is easy to change when each class has one focus and classes are linked loosely.',
+        goals: ['Spot a class that does unrelated jobs (low cohesion)', 'Spot code that reaches into another class’s insides (tight coupling)', 'Count which classes a change touches, and bring that number down'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>A shop app needs one small change: the cart should store its prices in a map instead of a list. If four classes break, that small change takes a day. If one class changes, it takes ten minutes. The difference comes from two qualities of a design.</p>
+<p><em>Cohesion</em> is how well the things inside one class belong together. A Cart that holds prices and adds them up has high cohesion: one focus. A class that adds up prices, writes emails and formats dates has low cohesion: three unrelated reasons to change, tangled in one place.</p>
+<p><em>Coupling</em> is how much one class depends on another. Tight coupling means reaching into another class’s insides, like a Receipt that loops over <code>cart.prices</code> itself. Then any change to how Cart stores its prices breaks the Receipt. Loose coupling means using only what the other class offers on its surface, like <code>cart.total()</code>. Then Cart can change inside as much as it likes.</p>
+<p>Aim for high cohesion and loose coupling. What you have learned so far all helps: encapsulation and abstraction keep the insides private, so other classes can only couple to the surface.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'cart', label: 'Cart', x: 30, y: 14 },
+              { id: 'items', label: 'prices<small>inside Cart</small>', x: 80, y: 14, tone: 'warm' },
+              { id: 'receipt', label: 'Receipt', x: 12, y: 86, tone: 'muted' },
+              { id: 'banner', label: 'Banner', x: 46, y: 86, tone: 'muted' },
+              { id: 'report', label: 'Report', x: 82, y: 86, tone: 'muted' },
+            ],
+            predict: {
+              q: 'Receipt, Banner and Report all read Cart’s list of prices themselves. Cart switches that list to a map. How many classes need changes?',
+              options: ['4', '1', '3'],
+              a: 0,
+              why: 'Cart itself, plus all three classes that reached inside it.',
+            },
+            frames: [
+              { add: [['cart', 'items', 'has'], ['receipt', 'items', 'reads'], ['banner', 'items', 'reads'], ['report', 'items', 'reads']], say: 'Tight coupling: Receipt, Banner and Report each go into Cart’s list and work with it themselves.' },
+              { hl: ['items'], say: 'One decision inside Cart: the prices move from a list to a map.' },
+              { add: [['receipt', 'items', 'breaks', 'err'], ['banner', 'items', 'breaks', 'err'], ['report', 'items', 'breaks', 'err']], hl: ['receipt', 'banner', 'report'], say: 'Every class that reached inside breaks. Four classes to change, for one decision inside Cart.' },
+              { remove: [['receipt', 'items'], ['banner', 'items'], ['report', 'items']], add: [['receipt', 'cart', 'total()', 'accent'], ['banner', 'cart', 'count()', 'accent'], ['report', 'cart', 'total()', 'accent']], say: 'Loose coupling: Cart keeps its prices private and offers <code>total()</code> and <code>count()</code>. The others use only those.' },
+              { add: [['cart', 'items', 'map now', 'ok']], hl: ['cart', 'items'], say: 'The same change again, list to map. Only Cart’s own code changes; <code>total()</code> still gives back a number.' },
+              { hl: ['cart'], say: 'Cart has high cohesion too: everything in it is about the prices in the cart. Emails and dates belong in other classes.' },
+            ],
+          });
+        },
+        code: `class Cart {
+    private val prices = mutableListOf<Int>()
+
+    fun add(price: Int) {
+        prices.add(price)
+    }
+
+    fun total() = prices.sum()
+}
+
+class Receipt(private val cart: Cart) {
+    fun text() = "Total: \${cart.total()}"   // only Cart's surface
 }
 
 fun main() {
     val cart = Cart()
-    cart.add("Milk"); cart.add("Tea")
-    val view = cart.items              // a view: follows the cart
-    val copy = cart.items.toList()     // a snapshot: never changes
-    for (item in listOf("Eggs", "Bread")) println("add($item) -> \${cart.add(item)}")
-    println("view: $view")
-    println("copy: $copy")
-    // cart.items.add("Cake")   // remove the // : it does not compile, List has no add()
+    cart.add(30)
+    cart.add(12)
+    println(Receipt(cart).text())   // Total: 42
 }`,
-      },
-
-      // 4 ─────────────────────────────────────────────
-      {
-        id: 'polymorphism',
-        title: 'Polymorphism',
-        tagline: 'One call, many behaviours. The object decides at runtime.',
-        level: 'beginner',
-        body: `
-<p>Polymorphism lets code call a method on a type without knowing which class is behind it. <code>broadcast()</code> takes a <code>List&lt;Sender&gt;</code> and calls <code>send()</code> on each. A push sender sends a push, an email sender sends an email.</p>
-<p>The choice happens at runtime and is called <em>dynamic dispatch</em>. The variable’s declared type decides which methods you may call. The object’s real class decides which body runs.</p>
-<p>Android uses this everywhere. The framework holds your screen as an <code>Activity</code> and calls <code>onCreate()</code>, and your <code>override</code> runs. One limit: extension functions are picked from the declared type at compile time, so they don’t dispatch like members.</p>`,
-        code: `interface Sender {
-    fun send(msg: String)
-}
-class PushSender(private val fcm: FcmClient) : Sender {
-    override fun send(msg: String) = fcm.notify(msg)
-}
-class EmailSender(private val mail: MailApi) : Sender {
-    override fun send(msg: String) = mail.post(msg)
+        play: `class Cart {
+    val prices = mutableListOf<Int>()
 }
 
-fun broadcast(senders: List<Sender>, msg: String) {
-    senders.forEach { it.send(msg) }   // which send()? decided at runtime
-}
-
-broadcast(listOf(PushSender(fcm), EmailSender(mail)), "Sale ends tonight")`,
-        remember: 'The declared type decides what you can call. The real object decides what runs.',
-        terms: [
-          { term: 'Polymorphism', def: 'Using one interface or base type to work with objects of many classes, each with its own behaviour.' },
-          { term: 'Dynamic dispatch', def: 'Choosing which override of a method to run at runtime, based on the object’s actual class.' },
-          { term: 'Static dispatch', def: 'Choosing which function to call at compile time from the declared type, as Kotlin does for extension functions.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Make <code>SmsSender</code> a real implementation and hold both senders in one list.', code: 'interface Sender { fun send(msg: String) }\nclass SmsSender : Sender {\n    [[override]] fun send(msg: String) = println("sms: $msg")\n}\nval senders: List<[[Sender]]> = listOf(SmsSender(), PushSender())\nsenders.forEach { it.send("Hi") }', why: '<code>override</code> marks the body that dispatch will pick. A <code>List&lt;Sender&gt;</code> can hold any implementation.' },
-          { type: 'bug', prompt: 'This prints <code>generic</code>, but it should print <code>push</code>. Tap the line that can never take part in dispatch.', code: 'open class Sender {\n    open fun label() = "generic"\n}\nclass PushSender : Sender()\nfun PushSender.label() = "push"\nval s: Sender = PushSender()\nprintln(s.label())', bug: 4, fix: '// move it into PushSender as: override fun label() = "push"', why: 'An extension is chosen from the declared type, and a member with the same signature always wins over it. Only an <code>override</code> joins dynamic dispatch.' },
-        ],
-        quiz: [
-          { q: '<code>val s: Sender = EmailSender()</code>. Which <code>send()</code> runs for <code>s.send("Hi")</code>?', options: ['Sender’s, because that is the declared type', 'EmailSender’s, because that is the real object', 'It does not compile'], a: 1, why: 'Member calls dispatch on the runtime class of the object.' },
-          { q: 'You add a <code>ChatSender</code>. What changes in <code>broadcast()</code>?', options: ['A new branch for ChatSender', 'Nothing', 'Its parameter type'], a: 1, why: 'It calls <code>send()</code> through the interface, so any new implementation works without touching it.' },
-          { q: 'With the Animal and Cat code above, what does <code>greet(x)</code> return for <code>val x: Animal = Cat()</code>?', options: ['"Hello, cat"', 'It does not compile: the call is ambiguous', '"Hello, animal"'], a: 2, why: 'Overloads are chosen at compile time from the declared type, Animal. Only overrides like x.speak() look at the real object.' },
-          { q: 'An Activity overrides <code>onCreate</code> and never calls <code>super.onCreate(savedInstanceState)</code>. What happens?', options: ['The screen works, just a little slower', 'Android throws SuperNotCalledException', 'It does not compile'], a: 1, why: 'The framework’s own setup lives in the parent body. Android checks that it ran and throws when it didn’t.' },
-          { q: 'TrackedActivity declares <code>final override fun onCreate</code>. HomeActivity extends it and tries to override onCreate. What happens?', options: ['A compile error: onCreate is final', 'Both bodies run, parent first', 'Only HomeActivity’s body runs'], a: 0, why: 'final override stops further overrides, so subclasses can only fill in the onCreateScreen hook. They can’t forget the fixed steps.' },
-        ],
-        deeper: [
-          {
-            title: 'Overloads are picked at compile time',
-            body: `<p>Overriding and overloading look alike, but they are decided at different moments. An override is picked at runtime from the real object. An overload, meaning two functions with the same name and different parameter types, is picked at compile time from the declared type.</p>
-<p>So with <code>val x: Animal = Cat()</code>, <code>x.speak()</code> runs the cat's code, but <code>greet(x)</code> calls the <code>Animal</code> overload. Change the declared type below and compare both calls.</p>`,
-            code: `open class Animal { open fun speak() = "..." }
-class Cat : Animal() { override fun speak() = "Meow" }
-
-fun greet(a: Animal) = "Hello, animal"
-fun greet(c: Cat) = "Hello, cat"
-
-val x: Animal = Cat()
-x.speak()     // "Meow": override, chosen at runtime
-greet(x)      // "Hello, animal": overload, chosen at compile time`,
-            visual(el) {
-              const DECLS = [
-                { src: 'val x: Animal = Cat()', decl: 'Animal', obj: 'Cat' },
-                { src: 'val x: Cat = Cat()', decl: 'Cat', obj: 'Cat' },
-                { src: 'val x: Animal = Animal()', decl: 'Animal', obj: 'Animal' },
-              ];
-              let d = DECLS[0], busy = false;
-              const card = (src, when) => { const c = h('div', { class: 'oo-impl' }, h('b', { html: hl(src) }), h('span', { class: 'oo-sent' }, when)); return c; };
-              const F = {
-                speakA: card('Animal.speak() = "..."', 'override, runtime'),
-                speakC: card('Cat.speak() = "Meow"', 'override, runtime'),
-                greetA: card('greet(a: Animal)', 'overload, compile time'),
-                greetC: card('greet(c: Cat)', 'overload, compile time'),
-              };
-              const o = out('');
-              const dBtns = DECLS.map(x => cmd(x.src, () => { if (busy) return; d = x; press(dBtns, dBtns[DECLS.indexOf(x)]); Object.values(F).forEach(c => c.classList.remove('oo-hit')); say(o, `Declared type <b>${x.decl}</b>, real object <b>${x.obj}</b>.`); }));
-              async function call(kind) {
-                if (busy) return; busy = true;
-                Object.values(F).forEach(c => c.classList.remove('oo-hit'));
-                const pick = kind === 'speak' ? (d.obj === 'Cat' ? F.speakC : F.speakA) : (d.decl === 'Cat' ? F.greetC : F.greetA);
-                await sleep(250); if (!el.isConnected) return;
-                pick.classList.add('oo-hit'); replay(pick, 'pop');
-                if (kind === 'speak') say(o, `${hl('x.speak()')} <span class="muted">→ looks at the object:</span> <b>${d.obj}</b> <span class="muted">→</span> ${hl(d.obj === 'Cat' ? '"Meow"' : '"..."')}`);
-                else say(o, `${hl('greet(x)')} <span class="muted">→ looks at the declared type:</span> <b>${d.decl}</b> <span class="muted">→</span> ${hl(d.decl === 'Cat' ? '"Hello, cat"' : '"Hello, animal"')}${d.decl !== d.obj ? ' <span class="bad">even though x is a Cat</span>' : ''}`);
-                await sleep(300); busy = false;
-              }
-              press(dBtns, dBtns[0]);
-              say(o, 'Pick a declaration, then call both functions.');
-              el.append(
-                h('div', { class: 'controls' }, dBtns),
-                h('div', { class: 'oo-pair' },
-                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'members (dynamic)'), h('div', { class: 'oo-impls' }, F.speakA, F.speakC)),
-                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'overloads (static)'), h('div', { class: 'oo-impls' }, F.greetA, F.greetC))),
-                h('div', { class: 'controls' }, cmd('x.speak()', () => call('speak')), cmd('greet(x)', () => call('greet'))),
-                o);
-            },
-          },
-          {
-            title: 'super: run the parent body too',
-            body: `<p>An override replaces the parent's body. If the parent did real work, call it with <code>super.method()</code>. Every layer of the class tree then runs, from the top down.</p>
-<p>Android checks this for lifecycle methods. An Activity whose <code>onCreate</code> skips <code>super.onCreate()</code> throws <code>SuperNotCalledException</code>, because the framework's own setup never ran. Turn off a <code>super</code> call below and create the screen.</p>`,
-            visual(el) {
-              const LAYERS = [
-                { name: 'HomeActivity', body: 'setContentView(...)', sup: 'home' },
-                { name: 'BaseActivity', body: 'analytics.screen(name)', sup: 'base' },
-                { name: 'AppCompatActivity', body: 'restore state, set up window', sup: null },
-              ];
-              const calls = { home: true, base: true };
-              let busy = false;
-              const nodes = LAYERS.map(l => h('div', { class: 'oo-node' + (l.sup ? '' : '') }, `${l.name}.onCreate(): ${l.body}`));
-              nodes.slice(1).forEach(n => n.classList.add('oo-sub'));
-              const log = h('div', { class: 'oo-code' });
-              const o = out('Both super calls are on. Create the Activity.');
-              const toggles = ['home', 'base'].map(k => {
-                const id = `oo-poly-super-${k}`;
-                const inp = h('input', { type: 'checkbox', id, checked: true });
-                inp.addEventListener('change', () => { if (busy) { inp.checked = calls[k]; return; } calls[k] = inp.checked; say(o, `${k === 'home' ? 'HomeActivity' : 'BaseActivity'} ${inp.checked ? 'calls' : 'skips'} super.onCreate().`); });
-                return h('label', { class: 'switch', for: id }, inp, `${k === 'home' ? 'HomeActivity' : 'BaseActivity'} calls super`);
-              });
-              const line = (t, cls = '') => { const l = h('div', { class: `oo-line ${cls} drop-in`, html: hl(t) }); log.append(l); };
-              async function create() {
-                if (busy) return; busy = true;
-                nodes.forEach(n => n.classList.remove('oo-cur', 'oo-hot'));
-                log.replaceChildren();
-                let i = 0;
-                for (; i < LAYERS.length; i++) {
-                  nodes[i].classList.add('oo-cur'); replay(nodes[i], 'pop');
-                  line(`${LAYERS[i].name}.onCreate()`);
-                  await sleep(450); if (!el.isConnected) return;
-                  if (!LAYERS[i].sup || !calls[LAYERS[i].sup]) break;
-                }
-                for (let j = i + 1; j < LAYERS.length; j++) nodes[j].classList.add('oo-hot');
-                if (i === LAYERS.length - 1) {
-                  line('// every layer ran', 'oo-ln-ok');
-                  say(o, '<span class="good">created:</span> each override did its part, then handed up with super.');
-                } else {
-                  line('SuperNotCalledException', 'oo-ln-err'); replay(nodes[0], 'shake');
-                  say(o, `<span class="bad">SuperNotCalledException:</span> Activity HomeActivity did not call through to super.onCreate() <span class="muted">(${LAYERS.slice(i + 1).map(l => l.name).join(' and ')} never ran)</span>`);
-                }
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'oo-pair' }, h('div', { class: 'oo-tree' }, nodes), log),
-                h('div', { class: 'oo-switches' }, toggles),
-                h('div', { class: 'controls' }, cmd('startActivity(homeIntent)', create)),
-                o);
-            },
-          },
-          {
-            title: 'final override: make the order impossible to forget',
-            body: `<p>An <code>override</code> is itself open, so a subclass of a subclass can override it again. Write <code>final override</code> to stop that. A base class can then run the fixed steps itself and offer a separate hook for the part that varies.</p>
-<p>This is the template method idea. The base class owns the order, and subclasses can't forget <code>super</code> because they never override the method that calls it.</p>`,
-            code: `abstract class TrackedActivity : AppCompatActivity() {
-    final override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        analytics.screen(screenName)
-        onCreateScreen(savedInstanceState)     // the part subclasses fill in
-    }
-    protected abstract val screenName: String
-    protected abstract fun onCreateScreen(savedInstanceState: Bundle?)
-}
-
-class HomeActivity : TrackedActivity() {
-    override val screenName = "home"
-    override fun onCreateScreen(savedInstanceState: Bundle?) = setContent { HomeRoute() }
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>A member call compiles to <code>invokevirtual</code>, or <code>invokeinterface</code> for an interface type. The JVM looks the method up on the object's runtime class, using a per-class method table. The JIT often turns a call site that only ever sees one class into a direct call, so dispatch is usually cheap.</p>
-<p>An extension function compiles to a static method that takes the receiver as its first parameter. The call is <code>invokestatic</code>, fixed at compile time from the declared type. That is why extensions never dispatch like members.</p>`,
-          code: `// Kotlin
-s.send("Hi")       // s: Sender, an interface
-p.label()          // label() is an extension on PushSender
-
-// Bytecode, simplified
-invokeinterface Sender.send(String)          // resolved on the object at runtime
-invokestatic  SendersKt.label(PushSender)    // fixed when compiled`,
-        },
-        mistakes: [
-          { title: 'Type checks instead of an override', bad: 'fun icon(s: Sender): Int = when (s) {\n    is PushSender -> R.drawable.ic_bell\n    is EmailSender -> R.drawable.ic_mail\n    else -> R.drawable.ic_unknown\n}', good: 'interface Sender {\n    val icon: Int\n    fun send(msg: String)\n}\nclass PushSender : Sender {\n    override val icon = R.drawable.ic_bell\n    override fun send(msg: String) { /* ... */ }\n}', why: 'Every new sender falls into <code>else</code> and quietly gets the wrong icon. Put the behaviour on the type, and the compiler asks each new class for it.' },
-          { title: 'Overriding equals without hashCode', bad: 'class Tag(val name: String) {\n    override fun equals(other: Any?) =\n        other is Tag && other.name == name\n}\nsetOf(Tag("kt"), Tag("kt")).size   // 2', good: 'data class Tag(val name: String)\n\nsetOf(Tag("kt"), Tag("kt")).size   // 1', why: '<code>HashSet</code> calls the overridden <code>hashCode</code> first. Equal objects with different hash codes land in different buckets. Override both, or use a data class.' },
-        ],
-        visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'interface Sender { fun send(m: String) }\nclass PushSender : Sender {\n    override fun send(m: String) =\n        println("push: $m")\n}\nclass EmailSender : Sender {\n    override fun send(m: String) =\n        println("email: $m")\n}\nfun broadcast(\n    to: List<Sender>, m: String,\n) = to.forEach { it.send(m) }\nval all: List<Sender> =\n    listOf(PushSender(), EmailSender())\nbroadcast(all, "Sale ends tonight")',
-            predict: {
-              q: 'What does <code>broadcast(all, "Sale ends tonight")</code> do?',
-              options: ['Prints a push line, then an email line', 'Nothing: <code>Sender.send</code> has no body', 'It does not compile: <code>it</code> is a Sender, not a PushSender'],
-              a: 0,
-              why: 'The compiler only checks that <code>Sender</code> has <code>send()</code>. At runtime each call runs the body of the object’s real class, in list order.',
-            },
-            frames: [
-              { say: 'One interface, two classes, and a function that only knows the interface.' },
-              { line: [13, 14], stack: ['main()'], vars: { all: '[PushSender, EmailSender]' }, say: 'The list is declared as <code>List&lt;Sender&gt;</code>. The objects inside are a PushSender and an EmailSender.' },
-              { line: 15, stack: ['main()', 'broadcast(all, msg)'], say: '<code>broadcast</code> takes Senders. It never names a concrete class.' },
-              { line: 12, stack: ['main()', 'broadcast(all, msg)'], vars: { it: 'PushSender', 'declared as': 'Sender' }, say: '<code>it</code> is declared as <code>Sender</code>, so the compiler allows <code>send()</code>. Which body runs is decided now, at runtime.' },
-              { line: [3, 4], stack: ['main()', 'broadcast(all, msg)', 'PushSender.send(msg)'], out: 'push: Sale ends tonight', say: 'The real class of this object is PushSender, so its override runs.' },
-              { line: 12, stack: ['main()', 'broadcast(all, msg)'], vars: { it: 'EmailSender' }, say: 'Same line, same call, next object.' },
-              { line: [7, 8], stack: ['main()', 'broadcast(all, msg)', 'EmailSender.send(msg)'], out: 'email: Sale ends tonight', say: 'This time the real class is EmailSender, so its body runs. One line of source, two different bodies: dynamic dispatch.' },
-              { line: 15, stack: ['main()'], vars: { it: null, 'declared as': null }, say: 'Back in <code>main</code>. <code>broadcast</code> worked with both classes while knowing only <code>Sender</code>.' },
-            ],
-          });
-        },
-        play: `interface Sender {
-    fun send(msg: String)
-}
-
-class PushSender : Sender {
-    override fun send(msg: String) = println("push:  $msg")
-}
-
-class EmailSender : Sender {
-    override fun send(msg: String) = println("email: Subject \\"$msg\\"")
-}
-
-fun broadcast(senders: List<Sender>, msg: String) {
-    senders.forEach { it.send(msg) }   // which send()? decided at runtime
-}
-
-open class Animal { open fun sound() = "..." }
-class Cat : Animal() { override fun sound() = "meow" }
-fun Animal.kind() = "animal"           // extensions are picked by the declared type
-fun Cat.kind() = "cat"
-
-fun main() {
-    broadcast(listOf(PushSender(), EmailSender()), "Sale ends tonight")
-    val pet: Animal = Cat()
-    println("member: \${pet.sound()}, extension: \${pet.kind()}")
-    // Add a class SmsSender : Sender and put it in the list. broadcast() stays the same.
-}`,
-      },
-
-      // 5 ─────────────────────────────────────────────
-      {
-        id: 'composition',
-        title: 'Inheritance vs composition',
-        tagline: 'Build behaviour from parts you plug in, not from a deep class tree.',
-        level: 'beginner',
-        body: `
-<p>Inheritance says “a <code>TrackedScreen</code> <em>is a</em> <code>BaseScreen</code>”. The subclass gets all the parent’s code and is tied to every detail of it. Composition says “a <code>Screen</code> <em>has</em> a logger and an analytics tracker”. The class holds parts and calls them.</p>
-<p>Trees break down when features combine. Logging, analytics and pull-to-refresh in any mix need a subclass per mix, and every subclass depends on the base. Change the base and all of them can break. This is the <em>fragile base class</em> problem.</p>
-<p>Kotlin nudges you toward composition: classes and members are <code>final</code> unless you mark them <code>open</code>. Inherit when there is a real “is a” relationship you control, like your own <code>sealed</code> hierarchy or a framework class such as <code>ViewModel</code>. Toggle features below and compare how both designs grow.</p>`,
-        code: `// Inheritance: behaviour baked into a class tree
-open class BaseScreen {
-    open fun onShown() { Log.d("Screen", "shown") }
-}
-class TrackedScreen : BaseScreen() {
-    override fun onShown() { super.onShown(); Analytics.track("view") }
-}
-
-// Composition: behaviour plugged in as parts
-fun interface ScreenPart { fun onShown(screen: String) }
-
-class Screen(private val name: String, private val parts: List<ScreenPart>) {
-    fun onShown() = parts.forEach { it.onShown(name) }
-}
-
-val logging = ScreenPart { name -> Log.d("Screen", "$name shown") }
-val analytics = ScreenPart { name -> Analytics.track("screen_view", name) }
-
-val home = Screen("home", listOf(logging, analytics))
-val settings = Screen("settings", listOf(analytics))`,
-        remember: 'Has-a beats is-a. Plug parts into a class instead of growing a subclass for every combination.',
-        terms: [
-          { term: 'Composition', def: 'Building a class’s behaviour by holding other objects and calling them, instead of inheriting from a parent class.' },
-          { term: 'Fragile base class', def: 'The problem where a change in a parent class silently breaks subclasses that depend on its details.' },
-          { term: 'Final by default', def: 'Kotlin’s rule that classes and members can’t be subclassed or overridden unless they are marked open.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Kotlin classes are final by default. Allow <code>Circle</code> to extend <code>Shape</code> and override <code>draw()</code>.', code: '[[open]] class Shape {\n    [[open]] fun draw() {}\n}\nclass Circle : Shape() {\n    override fun draw() {}\n}', why: 'Both the class and the member need <code>open</code>. Each one is an explicit decision to let subclasses depend on it.' },
-          { type: 'bug', prompt: 'Creating a <code>ProfileScreen</code> crashes with a NullPointerException. Tap the line that causes it.', code: 'open class Screen {\n    init {\n        render()\n    }\n    open fun render() {}\n}\nclass ProfileScreen : Screen() {\n    private val title = "Profile"\n    override fun render() {\n        println(title.length)\n    }\n}', bug: 2, fix: '        // remove it: call render() after the object is built', why: 'The base class runs <code>init</code> first, so the override runs before <code>title</code> is set. Calling open members from a constructor is a classic fragile base class trap.' },
-        ],
-        quiz: [
-          { q: 'You need screens with any mix of logging, analytics and refresh. How many subclasses can a pure inheritance design need?', options: ['3', 'Up to 8, one per combination', '1'], a: 1, why: 'Three on/off features give 2 × 2 × 2 = 8 combinations. Composition needs one Screen class and three parts.' },
-          { q: 'What does “fragile base class” describe?', options: ['A base class with too few methods', 'A change in a parent class breaking subclasses that rely on its details', 'A class marked final'], a: 1, why: 'Subclasses see the parent’s internals, so a change there can ripple into every one of them.' },
-          { q: 'Without any modifier, can you subclass a Kotlin class?', options: ['Yes', 'No, it is final until you mark it open'], a: 1, why: 'Kotlin makes inheritance opt-in with <code>open</code>.' },
-          { q: 'You want to test FeedScreen without touching the network. With the composition design, what do you do?', options: ['Pass a fake FeedLoader to its constructor', 'Subclass FeedScreen and override refresh()', 'Turn off Wi-Fi on the test device'], a: 0, why: 'The loader is just a part the screen holds. Any object with the FeedLoader interface fits, and the screen’s own code stays the same.' },
-        ],
-        deeper: [
-          {
-            title: 'Swap a part at runtime',
-            body: `<p>Inherited behaviour is fixed the moment you write <code>class X : Y()</code>. A part is just a property, so you choose it when the object is built, or swap it later. Tests rely on this: pass a fake part and the screen never touches the network.</p>
-<p>Plug different loaders into the same <code>FeedScreen</code> and refresh. The screen's own code stays the same.</p>`,
-            code: `interface FeedLoader { suspend fun load(): List<String> }
-
-class FeedScreen(private var loader: FeedLoader) {
-    fun use(other: FeedLoader) { loader = other }
-    suspend fun refresh(): List<String> = loader.load()
-}
-
-val screen = FeedScreen(NetworkLoader(api))
-screen.use(CacheLoader(dao))                  // swap at runtime
-
-val fake = object : FeedLoader {
-    override suspend fun load() = listOf("Fake 1", "Fake 2")
-}
-val underTest = FeedScreen(fake)              // no network in tests`,
-            visual(el) {
-              const LOADERS = [
-                { name: 'NetworkLoader', ms: 1100, note: 'fresh from the server', items: ['New metro line opens', 'Final ends 2-2', 'Rain expected Friday'] },
-                { name: 'CacheLoader', ms: 150, note: 'cached 2 h ago', items: ['New metro line opens', 'Final ends 2-2'] },
-                { name: 'FakeLoader', ms: 60, note: 'fixed test data', items: ['Fake 1', 'Fake 2'] },
-              ];
-              let cur = LOADERS[0], busy = false;
-              const code = h('div', { class: 'oo-code' });
-              const phone = h('div', { class: 'phone oo-cps-phone', 'aria-label': 'Feed screen preview' });
-              const o = out('');
-              function paintCode(fresh) {
-                code.replaceChildren(
-                  h('div', { class: 'oo-line', html: hl('class FeedScreen(private var loader: FeedLoader)') }),
-                  h('div', { class: `oo-line${fresh ? ' oo-ln-ok drop-in' : ''}`, html: hl(`loader = ${cur.name}()`) }),
-                  h('div', { class: 'oo-line', html: hl('suspend fun refresh() = loader.load()') }));
-              }
-              const phoneBar = () => h('span', { class: 'oo-cps-bar' }, `Feed · ${cur.name}`);
-              function paintPhone(items, note) {
-                phone.replaceChildren(phoneBar(), ...items.map((t, i) => h('div', { class: 'item drop-in', style: `animation-delay:${i * 80}ms` }, t)), h('span', { class: 'phone-note' }, note));
-              }
-              const btns = LOADERS.map(L => cmd(`screen.use(${L.name}())`, () => {
-                if (busy) return;
-                cur = L; press(btns, btns[LOADERS.indexOf(L)]); paintCode(true);
-                phone.firstElementChild.replaceWith(phoneBar());
-                say(o, `<span class="good">swapped:</span> FeedScreen now holds a ${L.name}. Same object, same code, new part.`);
-              }));
-              async function refresh() {
-                if (busy) return; busy = true;
-                phone.replaceChildren(phoneBar(), h('div', { class: 'oo-cps-spin', 'aria-label': 'Loading' }));
-                code.children[2].classList.add('oo-cur');
-                say(o, `${hl('screen.refresh()')} <span class="muted">→ calls</span> ${hl(`${cur.name}.load()`)}`);
-                await sleep(cur.ms + 250); if (!el.isConnected) return;
-                code.children[2].classList.remove('oo-cur');
-                paintPhone(cur.items, cur.note);
-                say(o, `${hl(`${cur.name}.load()`)} <span class="muted">→</span> ${cur.items.length} items, ${cur.note}.`);
-                busy = false;
-              }
-              press(btns, btns[0]); paintCode(false); paintPhone(LOADERS[0].items, LOADERS[0].note);
-              say(o, 'Swap the loader, then refresh.');
-              el.append(
-                h('div', { class: 'oo-pair' }, h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'one class'), code), phone),
-                h('div', { class: 'controls' }, btns),
-                h('div', { class: 'controls' }, cmd('screen.refresh()', refresh)),
-                o);
-            },
-          },
-          {
-            title: 'Delegation with by: composition without the boilerplate',
-            body: `<p>Sometimes a class should <em>be</em> an interface and hand most of the work to a part. Writing a forwarding method for every member is tedious. <code>by</code> makes the compiler write them, and you override only what you change.</p>
-<p>This is still composition. <code>LoggingList</code> holds a list. It does not extend any list class, so it can't break when one changes. The Delegation and decorators lesson in this track goes further.</p>`,
-            code: `class LoggingList<T>(private val inner: MutableList<T> = mutableListOf()) :
-    MutableList<T> by inner {
-
-    override fun add(element: T): Boolean {
-        Log.d("List", "add $element")
-        return inner.add(element)
-    }
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>Kotlin compiles classes and members as <code>final</code> unless you write <code>open</code>, so nothing outside your control can override them. A part is a private field, and calling it is one ordinary method call that the JIT can often inline.</p>
-<p>For <code>MutableList&lt;T&gt; by inner</code>, the compiler generates a method for every interface member you didn't write yourself. Each one forwards to the delegate, which is stored in a field. You get composition with about as little source code as inheritance.</p>`,
-          code: `// What "by inner" generates, simplified
-class LoggingList<T>(private val inner: MutableList<T>) : MutableList<T> {
-    override val size: Int get() = inner.size
-    override fun get(index: Int): T = inner.get(index)
-    override fun remove(element: T): Boolean = inner.remove(element)
-    // ...one forwarder per member you did not override
-    override fun add(element: T): Boolean { /* yours */ }
-}`,
-        },
-        mistakes: [
-          { title: 'Extending a class to reuse its code', bad: 'open class HttpClient {\n    fun get(url: String): String = TODO()\n    fun post(url: String, body: String): String = TODO()\n}\nclass UserRepository : HttpClient() {\n    fun user(id: String) = get("/users/$id")\n}\nrepo.post("/admin/reset", "")   // also part of the API now', good: 'class UserRepository(private val http: HttpClient) {\n    fun user(id: String) = http.get("/users/$id")\n}', why: 'Inheriting for reuse makes every public method of the parent part of your class. Holding the client exposes only what you choose.' },
-          { title: 'Subclassing a view to add one helper', bad: 'class MyRecyclerView(context: Context, attrs: AttributeSet?) :\n    RecyclerView(context, attrs) {\n    fun scrollToTopSmooth() = smoothScrollToPosition(0)\n}', good: 'fun RecyclerView.scrollToTopSmooth() =\n    smoothScrollToPosition(0)', why: 'To get one helper, every layout has to switch to <code>MyRecyclerView</code>. An extension function adds it to every <code>RecyclerView</code> without inheriting anything.' },
-        ],
-        visual(el) {
-          const feats = [{ k: 'Logging', part: 'LoggerPart' }, { k: 'Analytics', part: 'AnalyticsPart' }, { k: 'Refresh', part: 'RefreshPart' }];
-          const on = new Set(['Logging']);
-          const nameOf = set => (feats.filter(f => set.has(f.k)).map(f => f.k).join('') || 'Plain') + 'Screen';
-          const seen = new Map();
-          const tree = h('div', { class: 'oo-tree' }, h('div', { class: 'oo-node' }, 'open class BaseScreen'));
-          const treeStat = h('span', { class: 'oo-stat' });
-          const treeCard = h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'Inheritance: a subclass per mix'), tree, treeStat);
-          const parts = feats.map(f => pill(f.part));
-          const compUse = h('div', { class: 'kt oo-wrap' });
-          const compStat = h('span', { class: 'oo-stat' });
-          const compCard = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'Composition: one class, plug parts'),
-            kt('class Screen(parts: List<ScreenPart>)'), h('div', { class: 'oo-row' }, parts), compUse, compStat);
-          const o = out('Toggle features. The tree grows a class per new mix. The composed screen only swaps parts.');
-          let busy = false;
-          function paint(fresh) {
-            const name = nameOf(on);
-            if (!seen.has(name)) {
-              const node = h('div', { class: 'oo-node oo-sub drop-in' }, `class ${name} : BaseScreen()`);
-              seen.set(name, node); tree.append(node); fresh = true;
-            }
-            seen.forEach((n, nm) => n.classList.toggle('oo-cur', nm === name));
-            if (!fresh) replay(seen.get(name), 'pop');
-            parts.forEach((p, i) => { const plugged = on.has(feats[i].k); p.className = `oo-pill ${plugged ? 'oo-acc' : 'oo-ghost'}`; });
-            const used = feats.filter(f => on.has(f.k)).map(f => f.part.replace('Part', '').toLowerCase());
-            compUse.innerHTML = hl(`Screen("home", listOf(${used.join(', ')}))`);
-            treeStat.innerHTML = `classes: <b>${seen.size + 1}</b> <span>(max ${2 ** feats.length + 1})</span>`;
-            compStat.innerHTML = `classes: <b>${feats.length + 1}</b> <span>(always)</span>`;
-            return fresh;
-          }
-          const boxes = feats.map(f => {
-            const id = `oo-cmp-${f.k.toLowerCase()}`;
-            const inp = h('input', { type: 'checkbox', id, checked: on.has(f.k) });
-            inp.addEventListener('change', () => {
-              if (inp.checked) on.add(f.k); else on.delete(f.k);
-              const fresh = paint(false);
-              const p = parts[feats.indexOf(f)]; replay(p, 'pop');
-              say(o, fresh ? `<span class="bad">tree:</span> new subclass ${nameOf(on)}. <span class="good">composed:</span> ${inp.checked ? 'plugged in' : 'unplugged'} ${f.part}.` : `<span class="muted">tree:</span> reuses ${nameOf(on)}. <span class="good">composed:</span> ${inp.checked ? 'plugged in' : 'unplugged'} ${f.part}.`);
-            });
-            return h('label', { class: 'switch', for: id }, inp, f.k);
-          });
-          async function editLogging() {
-            if (busy) return; busy = true;
-            const nodes = [tree.firstElementChild, ...seen.values()];
-            nodes.forEach(n => { n.classList.add('oo-hot'); replay(n, 'shake'); });
-            parts[0].className = 'oo-pill oo-warn'; replay(parts[0], 'shake');
-            say(o, `Logging code changed. <span class="bad">tree:</span> it lives in BaseScreen, so all ${nodes.length} classes need retesting. <span class="good">composed:</span> only LoggerPart.`);
-            await sleep(1600);
-            nodes.forEach(n => n.classList.remove('oo-hot'));
-            if (el.isConnected) paint(true);
-            busy = false;
-          }
-          paint(true);
-          el.append(
-            h('div', { class: 'oo-pair' }, treeCard, compCard),
-            h('div', { class: 'oo-switches' }, boxes),
-            h('div', { class: 'controls' }, act('Change the logging code', editLogging)),
-            o);
-        },
-        predict: {
-          q: 'The logging code changes. In the inheritance design it lives in <code>BaseScreen</code>. What needs retesting?',
-          options: ['Only the screens that log', 'Every class in the tree', 'Nothing, it is a small change'],
-          a: 1,
-          why: 'Every subclass inherits BaseScreen’s code, so a change there reaches all of them. In the composed design only <code>LoggerPart</code> changes.',
-        },
-        play: `fun interface ScreenPart { fun onShown(screen: String) }
-
-class Screen(private val name: String, private val parts: List<ScreenPart>) {
-    fun onShown() = parts.forEach { it.onShown(name) }
-}
-
-val logging = ScreenPart { name -> println("log: $name shown") }
-val analytics = ScreenPart { name -> println("track: screen_view $name") }
-val refresh = ScreenPart { name -> println("refresh: reload $name data") }
-
-fun main() {
-    val home = Screen("home", listOf(logging, analytics, refresh))
-    val settings = Screen("settings", listOf(analytics))
-    home.onShown()
-    settings.onShown()
-    // Give settings the logging part too. No new class needed.
-}`,
-      },
-
-      // 6 ─────────────────────────────────────────────
-      {
-        id: 'inheritance',
-        title: 'Inheritance done right',
-        tagline: 'Inherit only for a real is-a, and design the base class for it, or keep it final.',
-        level: 'intermediate',
-        body: `
-<p>Inheritance shares two things at once: a type (“a <code>HomeViewModel</code> is a <code>ViewModel</code>”) and code. The type part is the reason to use it. If you only want the code, hold an object instead, as the composition lesson showed.</p>
-<p>A real is-a holds everywhere the parent is used, and for the object's whole life. A subclass also depends on <em>how</em> the parent calls its own methods. When the parent's <code>addAll()</code> happens to call <code>add()</code>, an override of <code>add()</code> runs inside <code>addAll()</code> too. That hidden detail is called <em>self-use</em>, and when the parent changes it, subclasses break without any change of their own.</p>
-<p>That is why Kotlin makes classes and members <code>final</code> unless marked <code>open</code>. Each <code>open</code> is a promise to keep that behaviour stable. Below, a subclass counts added articles. Switch the library version and the override style: no choice works for both versions.</p>`,
-        code: `// A base class designed for inheritance: few, documented hooks
-abstract class ArticleStore {
-    private val items = mutableListOf<Article>()
-    val size: Int get() = items.size
-
-    fun add(a: Article) {            // final: subclasses can't change the order
-        items += a
-        onAdded(a)
-    }
-    fun addAll(list: List<Article>) = list.forEach { add(it) }   // documented: calls add()
-
-    protected open fun onAdded(a: Article) {}   // the one hook
-}
-
-class CountingStore : ArticleStore() {
-    var count = 0
-        private set
-    override fun onAdded(a: Article) { count++ }   // right for add() and addAll()
-}`,
-        remember: 'Inherit for a lasting is-a. Make the base final, or open a few documented hooks and keep the rest final.',
-        terms: [
-          { term: 'Is-a relationship', def: 'A subtype that can stand in for its parent everywhere, for its whole lifetime.' },
-          { term: 'Self-use', def: 'A class calling its own overridable methods internally, which makes subclasses depend on that call pattern.' },
-          { term: 'Hook method', def: 'A protected open method a base class calls at a documented point, so subclasses can add behaviour without overriding the main logic.' },
-          { term: 'Sealed hierarchy', def: 'A class or interface whose direct subtypes are all known at compile time, so the set of cases is closed.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Let subclasses react to each added article without overriding <code>add()</code> itself.', code: 'abstract class ArticleStore {\n    private val items = mutableListOf<Article>()\n    fun add(a: Article) { items += a; onAdded(a) }\n    protected [[open]] fun onAdded(a: Article) {}\n}', why: '<code>add()</code> stays final, so the order of steps can’t be broken. The hook is the only thing a subclass can change.' },
-          { type: 'bug', prompt: 'The base <code>addAll()</code> calls <code>add()</code> for each item. After <code>addAll()</code> of 3 articles, <code>count</code> is 6. Tap the line that double counts.', code: 'class CountingStore : ArticleStore() {\n    var count = 0\n    override fun add(a: Article) { count++; super.add(a) }\n    override fun addAll(list: List<Article>) {\n        count += list.size\n        super.addAll(list)\n    }\n}', bug: 4, fix: '        // remove: the base addAll() already calls add() for each item', why: 'Self-use: <code>super.addAll()</code> calls the overridden <code>add()</code>, which counts again. And if the base ever stops calling <code>add()</code>, removing this line breaks it the other way. That is why a final method with a hook is safer.' },
-        ],
-        quiz: [
-          { q: 'A free user can upgrade to premium while the app runs. How should you model it?', options: ['class PremiumUser : User()', 'class User(val plan: Plan) with plan as state', 'open class User and cast'], a: 1, why: 'An object can’t change its class. A role that changes over time is state, not a subclass.' },
-          { q: 'Why does Kotlin make classes final by default?', options: ['Final classes use less memory', 'So that every place a subclass can hook in is a deliberate choice', 'Because Kotlin has no inheritance'], a: 1, why: 'An open member is a promise to subclasses. Opt-in keeps those promises few and intentional.' },
-          { q: 'What is the safest way to let subclasses add behaviour to <code>add()</code>?', options: ['Make add() open', 'Keep add() final and call a protected open hook from it', 'Make every method open'], a: 1, why: 'The base keeps control of the order of steps, and subclasses get one documented place to plug in.' },
-          { q: 'The parent’s <code>addAll()</code> calls <code>add()</code> for each item. What is count after <code>addAll(listOf(a, b, c))</code>?<pre class="code mini"><code>override fun add(x: Article) { count++; super.add(x) }\noverride fun addAll(list: List&lt;Article&gt;) {\n    count += list.size; super.addAll(list)\n}</code></pre>', options: ['6', '3', '0'], a: 0, why: 'addAll adds 3, then the parent’s addAll calls the overridden add three times, which adds 3 more. This hidden self-use is why the base class should offer one documented hook.' },
-          { q: 'A subclass overrides a parent method only to throw UnsupportedOperationException. What does that tell you?', options: ['It is not a real is-a; the ability belongs in its own type', 'It is fine if the exception has a clear message', 'The parent method should be made open'], a: 0, why: 'Code that holds the parent type expects every method to work. If a subclass must refuse one, split that ability into a separate interface.' },
-        ],
-        deeper: [
-          {
-            title: 'A role that changes is state, not a subclass',
-            body: `<p>The is-a test has a time part. A premium user can cancel, and a draft article gets published. An object can't change its class, so modelling these as subclasses forces you to build a new object and copy everything over, and every reference to the old one is now stale.</p>
-<p>Keep the thing as one class and make the role a property. A sealed type or an enum lists the possible roles.</p>`,
-            code: `// Fragile: the type is frozen at construction
-open class User(val id: UserId)
-class PremiumUser(id: UserId) : User(id)
-
-// Better: one user, a plan that can change
-enum class Plan { Free, Premium }
-data class User(val id: UserId, val plan: Plan) {
-    val showsAds: Boolean get() = plan == Plan.Free
-}
-
-val upgraded = user.copy(plan = Plan.Premium)`,
-          },
-          {
-            title: 'Sealed: inheritance with a closed list',
-            body: `<p>Inheritance is safest when you own every subclass. A <code>sealed</code> class or interface allows subtypes only in the same module and package, so the compiler knows the full list. A <code>when</code> over it needs no <code>else</code>, and adding a case makes every incomplete <code>when</code> fail to compile.</p>
-<p>This is the is-a you can trust: a <code>Loading</code> really is a <code>FeedState</code>, and nobody outside can add a surprise case.</p>`,
-            code: `sealed interface FeedState {
-    data object Loading : FeedState
-    data class Content(val articles: List<Article>) : FeedState
-    data class Error(val message: String) : FeedState
-}
-
-fun render(s: FeedState) = when (s) {     // exhaustive, no else
-    FeedState.Loading -> showSpinner()
-    is FeedState.Content -> showList(s.articles)
-    is FeedState.Error -> showError(s.message)
-}`,
-          },
-          {
-            title: 'Framework base classes are built for it',
-            body: `<p>Android's own base classes are designed for inheritance. <code>ViewModel</code>, <code>CoroutineWorker</code> and <code>FirebaseMessagingService</code> each document the methods you override and when they are called. That is the hook pattern from this lesson, done by the library authors.</p>
-<p>Inherit from these, override the documented hooks, and keep your own code in parts you hold. A <code>BaseActivity</code> full of shared helpers is where inheritance in apps usually goes wrong.</p>`,
-            code: `@HiltWorker
-class SyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
-    private val repo: NewsRepository,
-) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result =       // the documented hook
-        runCatching { repo.sync() }
-            .fold({ Result.success() }, { Result.retry() })
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>A subclass object contains the parent's fields too. Its constructor first runs the parent's constructor, then its own initialisers, which is why a parent that calls an open method from <code>init</code> can reach a subclass field before it is set.</p>
-<p>Kotlin marks classes and methods without <code>open</code> as <code>final</code> in the bytecode. A call to a final method can't be redirected by a subclass, so the JIT can call it directly or inline it.</p>`,
-          code: `// Kotlin
-class CountingStore : ArticleStore() { var count = 0 }
-
-// JVM, simplified
-public final class CountingStore extends ArticleStore {
-    private int count;
-    public CountingStore() {
-        super();          // ArticleStore's fields and init run first
-        this.count = 0;   // then ours
-    }
-}`,
-        },
-        mistakes: [
-          { title: 'A BaseActivity grab bag', bad: 'open class BaseActivity : AppCompatActivity() {\n    protected fun showToast(msg: String) { /* ... */ }\n    protected fun track(event: String) { /* ... */ }\n    protected fun hideKeyboard() { /* ... */ }\n}\nclass HomeActivity : BaseActivity()', good: 'fun Activity.hideKeyboard() { /* ... */ }\n\nclass HomeActivity : AppCompatActivity() {\n    @Inject lateinit var analytics: Analytics\n}', why: 'Every screen inherits every helper, and the base grows forever. Extension functions and injected parts give each screen only what it uses.' },
-          { title: 'Overriding to switch a feature off', bad: 'open class Player {\n    open fun seek(ms: Long) { /* ... */ }\n}\nclass LivePlayer : Player() {\n    override fun seek(ms: Long) = throw UnsupportedOperationException()\n}', good: 'interface Player { fun play() }\ninterface Seekable { fun seek(ms: Long) }\nclass LivePlayer : Player\nclass VodPlayer : Player, Seekable', why: 'If a subclass has to refuse a parent method, it is not really an is-a. Split the ability into its own type.' },
-        ],
-        visual(el) {
-          let lib = 'v1', sub = 'both', count = 0, size = 0, busy = false;
-          const baseCode = h('div', { class: 'kt oo-wrap' });
-          const subCode = h('div', { class: 'kt oo-wrap' });
-          const trace = h('div', { class: 'oo-code oo-inh-trace' });
-          const cPill = h('span', { class: 'oo-pill' }), sPill = h('span', { class: 'oo-pill' }), verdict = h('span', { class: 'oo-pill' });
-          const o = out('');
-          const libBtns = [act('library v1', () => setLib('v1')), act('library v2', () => setLib('v2'))];
-          const subBtns = [act('override add + addAll', () => setSub('both')), act('override add only', () => setSub('add'))];
-          function paint() {
-            press(libBtns, libBtns[lib === 'v1' ? 0 : 1]); press(subBtns, subBtns[sub === 'both' ? 0 : 1]);
-            baseCode.innerHTML = hl(`// ${lib}\nopen class ArticleStore {\n    open fun add(a: Article) {\n        items += a\n    }\n    open fun addAll(list: List<Article>) =\n        ${lib === 'v1' ? 'list.forEach { add(it) }' : 'items.addAll(list)'}\n        ${lib === 'v1' ? '// calls add()' : '// bulk, no add()'}\n}`);
-            subCode.innerHTML = hl(`class CountingStore :\n    ArticleStore() {\n    override fun add(a: Article) {\n        count++\n        super.add(a)\n    }${sub === 'both' ? '\n    override fun addAll(\n        list: List<Article>,\n    ) {\n        count += list.size\n        super.addAll(list)\n    }' : ''}\n}`);
-            cPill.textContent = `count = ${count}`; sPill.textContent = `items.size = ${size}`;
-            const ok = count === size;
-            verdict.textContent = ok ? 'count matches' : 'count is wrong';
-            verdict.className = `oo-pill ${ok ? 'oo-ok' : 'oo-err'}`; cPill.className = `oo-pill ${ok ? 'oo-acc' : 'oo-err'}`;
-          }
-          function fresh(msg) { count = 0; size = 0; trace.replaceChildren(); paint(); if (msg) say(o, msg); }
-          function setLib(v) { if (busy) return; lib = v; fresh(v === 'v2' ? 'Library v2 made addAll() faster: it no longer calls add(). Your subclass did not change.' : 'Library v1: addAll() calls add() for each item.'); }
-          function setSub(s) { if (busy) return; sub = s; fresh(s === 'add' ? 'CountingStore now counts only in add().' : 'CountingStore counts in add() and in addAll().'); }
-          const steps = n => {
-            const st = [];
-            if (sub === 'both') st.push(['CountingStore.addAll: count += ' + n, n, 0], ['super.addAll(list)', 0, 0]);
-            if (lib === 'v1') for (let i = 0; i < n; i++) st.push(['ArticleStore.addAll → add(item)   // self-use', 0, 0], ['CountingStore.add: count++', 1, 0], ['ArticleStore.add: items += item', 0, 1]);
-            else st.push(['ArticleStore.addAll: items.addAll(list)', 0, n]);
-            return st;
-          };
-          async function run(st, label) {
-            if (busy) return; busy = true;
-            trace.replaceChildren();
-            say(o, `${hl(label)} <span class="muted">→ watch the calls</span>`);
-            for (const [t, dc, ds] of st) {
-              const line = h('div', { class: `oo-line drop-in${dc ? ' oo-cur' : ''}`, html: hl(t) });
-              trace.append(line);
-              count += dc; size += ds; paint();
-              if (dc) replay(cPill, 'pop');
-              await sleep(260); if (!el.isConnected) return;
-            }
-            const ok = count === size;
-            if (!ok) replay(verdict, 'shake');
-            say(o, ok ? `<span class="good">correct:</span> count ${count}, size ${size}. <span class="muted">Now switch the library version.</span>`
-              : `<span class="bad">count ${count}, size ${size}:</span> ${count > size ? 'the base addAll() called the overridden add(), so items were counted twice.' : 'the base addAll() stopped calling add(), so nothing counted them.'}`);
-            busy = false;
-          }
-          paint();
-          say(o, 'Call addAll() with 3 articles. Then switch the library version and try again.');
-          el.append(
-            h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'base'), libBtns),
-            h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'subclass'), subBtns),
-            h('div', { class: 'oo-pair' },
-              h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'library code (not yours)'), baseCode),
-              h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'your subclass'), subCode)),
-            h('div', { class: 'controls' }, cmd('store.addAll(listOf(a1, a2, a3))', () => { if (busy) return; fresh(); run(steps(3), 'store.addAll(listOf(a1, a2, a3))'); }), cmd('store.add(a4)', () => run([['CountingStore.add: count++', 1, 0], ['ArticleStore.add: items += item', 0, 1]], 'store.add(a4)'))),
-            h('div', { class: 'oo-row' }, cPill, sPill, verdict),
-            trace, o);
-        },
-        predict: {
-          q: 'Library v2 makes <code>addAll()</code> copy the list in bulk, without calling <code>add()</code>. Your subclass counts only in <code>add()</code>. What is <code>count</code> after <code>addAll</code> of 3 articles?',
-          options: ['3', '0', '6'],
-          a: 1,
-          why: 'Your count relied on a private detail of the parent: that <code>addAll()</code> calls <code>add()</code>. v2 changed that detail, so your override never runs.',
-        },
-        play: `// Library code you don't own
-open class Store {
-    protected val items = mutableListOf<String>()
-    val size get() = items.size
-    open fun add(a: String) { items += a }
-    open fun addAll(list: List<String>) { list.forEach { add(it) } }   // self-use: calls add()
-}
-
-// Your subclass relies on that detail
-class CountingStore : Store() {
-    var count = 0
-        private set
-    override fun add(a: String) { count++; super.add(a) }
-}
-
-fun main() {
-    val store = CountingStore()
-    store.addAll(listOf("a1", "a2", "a3"))
-    store.add("a4")
-    println("count = \${store.count}, size = \${store.size}")
-    // A new library version: change Store.addAll to \`{ items.addAll(list) }\` and run again
-}`,
-      },
-
-      // 7 ─────────────────────────────────────────────
-      {
-        id: 'delegation',
-        title: 'Delegation and decorators',
-        tagline: 'Wrap an object behind the same interface, forward to it, and change only what you need.',
-        level: 'intermediate',
-        body: `
-<p>Delegation is composition with the same face. A wrapper implements an interface, holds another object of that interface, and forwards calls to it. Callers can't tell the difference, so a wrapper can go anywhere the original could.</p>
-<p>A <em>decorator</em> is a wrapper that adds one thing before or after forwarding: logging, caching, retrying. Each decorator is a small class with one job, and you stack them in any order. Kotlin's <code>by</code> writes the forwarding for every member you don't override.</p>
-<p>Unlike a subclass, a wrapper sees only the interface. It can't depend on the inner object's private call pattern, so the self-use trap from the inheritance lesson can't reach it. Step through three calls below and watch the call stack.</p>`,
-        code: `interface NewsRepository {
-    suspend fun latest(): List<Article>
-    suspend fun byId(id: ArticleId): Article?
-}
-
-class CachingNewsRepository(private val inner: NewsRepository) : NewsRepository by inner {
-    private var cache: List<Article>? = null
-    override suspend fun latest() = cache ?: inner.latest().also { cache = it }
-    // byId() is forwarded to inner by the compiler
-}
-
-class LoggingNewsRepository(private val inner: NewsRepository) : NewsRepository by inner {
-    override suspend fun latest(): List<Article> {
-        val started = System.nanoTime()
-        return inner.latest().also {
-            Log.d("News", "latest(): " + it.size + " in " + (System.nanoTime() - started) / 1_000_000 + " ms")
+class Receipt(private val cart: Cart) {
+    fun text(): String {
+        var sum = 0
+        for (p in cart.prices) {
+            sum += p
         }
+        return "Total: $sum"
     }
 }
 
-// Stack them where the app is wired, for example in a Hilt module
-val repo: NewsRepository = LoggingNewsRepository(CachingNewsRepository(NetworkNewsRepository(api)))`,
-        remember: 'Same interface outside, the real object inside. Override what you add, let by forward the rest.',
-        terms: [
-          { term: 'Delegation', def: 'Handing a call to another object that does the work, instead of inheriting the code.' },
-          { term: 'Decorator', def: 'A wrapper with the same interface as the object it wraps, adding one behaviour around the forwarded call.' },
-          { term: 'Delegate', def: 'The inner object a wrapper forwards to. With by, the compiler stores it and writes the forwarding methods.' },
-          { term: 'Forwarding method', def: 'A method whose whole body calls the same method on the delegate.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Forward every member of <code>NewsRepository</code> to <code>inner</code>, except the ones you override.', code: 'class CachingRepo(private val inner: NewsRepository) :\n    NewsRepository [[by]] [[inner]] {\n    override suspend fun latest() = cache ?: inner.latest().also { cache = it }\n}', why: '<code>NewsRepository by inner</code> makes the compiler write forwarders for every member you didn’t write yourself.' },
-          { type: 'bug', prompt: 'Calling <code>latest()</code> on this wrapper crashes with <code>StackOverflowError</code>. Tap the line.', code: 'class LoggingRepo(private val inner: NewsRepository) : NewsRepository by inner {\n    override suspend fun latest(): List<Article> {\n        Log.d("Repo", "latest()")\n        return latest()\n    }\n}', bug: 3, fix: '        return inner.latest()', why: 'Inside the override, <code>latest()</code> means <code>this.latest()</code>, the override itself, so it calls itself forever. Forward to the delegate explicitly.' },
-        ],
-        quiz: [
-          { q: 'A delegate’s <code>refresh()</code> calls its own <code>latest()</code>. Your wrapper overrides <code>latest()</code>. Which one runs inside <code>refresh()</code>?', options: ['The wrapper’s override', 'The delegate’s own latest()'], a: 1, why: 'The delegate knows nothing about the wrapper. Overrides in the wrapper are not called from the delegate’s members.' },
-          { q: 'Why can decorators be stacked in any combination?', options: ['They all extend the same base class', 'Each one takes and implements the same interface', 'Kotlin sorts them automatically'], a: 1, why: 'Every layer is a NewsRepository that wraps a NewsRepository, so any layer can wrap any other.' },
-          { q: 'Where should the stack of decorators be built?', options: ['Inside each ViewModel', 'In one wiring place, such as a DI module', 'Inside NetworkNewsRepository'], a: 1, why: 'Callers just ask for a NewsRepository. One place decides which layers it has.' },
-          { q: 'What does <code>repo.latest()</code> use?<pre class="code mini"><code>class SwitchableRepo(var current: NewsRepository) :\n    NewsRepository by current\n\nval repo = SwitchableRepo(networkRepo)\nrepo.current = offlineRepo\nrepo.latest()</code></pre>', options: ['<code>offlineRepo</code>', '<code>networkRepo</code>', 'It throws IllegalStateException'], a: 1, why: 'by current is evaluated once in the constructor and stored in a hidden field. Reassigning the property doesn’t move the forwarders.' },
-          { q: 'One dialog needs a dark theme while the rest of the screen stays light. What do you do?', options: ['Change the Activity’s theme and change it back', 'Wrap the context: <code>ContextThemeWrapper(context, R.style.Theme_App_Dark)</code>', 'Subclass the Activity for the dialog'], a: 1, why: 'ContextThemeWrapper is a decorator: same Context interface, a different theme, and the original context is untouched.' },
-        ],
-        deeper: [
-          {
-            title: 'The delegate never calls your overrides',
-            body: `<p>This is the opposite of inheritance. With a subclass, the parent's internal calls can land in your overrides. With <code>by</code>, the delegate is a separate object. When its <code>refresh()</code> calls <code>latest()</code>, it calls its own <code>latest()</code>, never the wrapper's.</p>
-<p>That makes wrappers predictable, but it also means an override only affects calls that come <em>through the wrapper</em>. If you need the inner object's own calls to change, decorating is not enough.</p>`,
-            code: `interface Feed {
-    fun latest(): List<String>
-    fun refresh() = println("refreshed " + latest().size)   // calls latest()
-}
-class RemoteFeed : Feed { override fun latest() = listOf("a", "b", "c") }
-
-class FilteredFeed(inner: Feed) : Feed by inner {
-    override fun latest() = listOf("a")
-}
-
-val f = FilteredFeed(RemoteFeed())
-f.latest().size   // 1: the override
-f.refresh()       // "refreshed 3": forwarded, and RemoteFeed uses its own latest()`,
-          },
-          {
-            title: 'The delegate is fixed when the object is built',
-            body: `<p><code>by inner</code> evaluates <code>inner</code> once, in the constructor, and stores it in a hidden field. Forwarded calls always go to that stored object. If the constructor parameter is a <code>var</code> and you assign a new value later, the forwarders don't follow.</p>
-<p>When the target really has to change at runtime, write the forwarding by hand against a <code>var</code>, or hold the switch inside the delegate.</p>`,
-            code: `class SwitchableRepo(var current: NewsRepository) : NewsRepository by current
-
-val repo = SwitchableRepo(networkRepo)
-repo.current = offlineRepo
-repo.latest()     // still networkRepo: the forwarders use the value from construction`,
-          },
-          {
-            title: 'Android ships decorators too',
-            body: `<p><code>ContextWrapper</code> holds a base <code>Context</code> and forwards to it, and its subclasses change a few things. <code>ContextThemeWrapper</code> swaps the theme and forwards everything else. An <code>Activity</code> is itself one of these wrappers.</p>
-<p>So when a dialog or a Compose <code>AndroidView</code> needs a different theme, you wrap the context instead of changing the original.</p>`,
-            code: `val darkContext = ContextThemeWrapper(context, R.style.Theme_App_Dark)
-val view = LayoutInflater.from(darkContext).inflate(R.layout.card, parent, false)
-// Same Context interface, different theme. The original context is unchanged.`,
-          },
-        ],
-        underHood: {
-          body: `<p>For <code>NewsRepository by inner</code>, the compiler adds a private final field (named like <code>$$delegate_0</code>) and sets it in the constructor. For each interface member you didn't override, it writes an ordinary method that calls the same member on that field. There is no reflection and no proxy at runtime.</p>
-<p>This also explains the two rules above. The field is set once, so reassigning the constructor property does nothing. And the delegate is a separate object, so its own <code>this</code> is itself, not the wrapper.</p>`,
-          code: `// JVM, simplified
-public final class CachingNewsRepository implements NewsRepository {
-    private final NewsRepository inner;
-    private final NewsRepository $$delegate_0;   // set once in the constructor
-
-    public Object byId(ArticleId id, Continuation c) {
-        return $$delegate_0.byId(id, c);          // generated forwarder
-    }
-    public Object latest(Continuation c) { /* your override */ }
-}`,
-        },
-        mistakes: [
-          { title: 'A decorator that extends the concrete class', bad: 'open class NetworkNewsRepository(api: NewsApi) : NewsRepository { /* ... */ }\n\nclass CachingNewsRepository(api: NewsApi) : NetworkNewsRepository(api) {\n    override suspend fun latest() = cache ?: super.latest()\n}', good: 'class CachingNewsRepository(private val inner: NewsRepository) :\n    NewsRepository by inner {\n    override suspend fun latest() = cache ?: inner.latest()\n}', why: 'The subclass version can only cache the network repository, and only once. The wrapper caches any NewsRepository, including another decorator or a fake.' },
-          { title: 'Forwarding by hand and forgetting one', bad: 'class LoggingPrefs(private val inner: SharedPreferences) : SharedPreferences {\n    override fun getString(k: String?, d: String?) = inner.getString(k, d)\n    override fun getInt(k: String?, d: Int) = inner.getInt(k, d)\n    // ...12 more, one of them copied wrong\n}', good: 'class LoggingPrefs(private val inner: SharedPreferences) :\n    SharedPreferences by inner {\n    override fun edit(): SharedPreferences.Editor =\n        inner.edit().also { Log.d("Prefs", "edit") }\n}', why: 'Hand-written forwarders are noise where copy-paste bugs hide. With <code>by</code>, only the method you change is in the file.' },
-        ],
-        visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'class Caching(val inner: Repo) :\n    Repo by inner {\n    var cache: List<Article>? = null\n    override fun latest() = cache\n        ?: inner.latest()\n            .also { cache = it }\n}\nclass Logging(val inner: Repo) :\n    Repo by inner {\n    override fun latest() =\n        inner.latest()\n            .also { log("${it.size} items") }\n}\nval repo: Repo =\n    Logging(Caching(Network()))\nrepo.latest()\nrepo.latest()\nrepo.byId(7)',
-            predict: {
-              q: 'The second <code>repo.latest()</code> runs. Which objects does that call reach?',
-              options: ['Logging, Caching and Network', 'Logging and Caching only', 'Caching only, because it holds the data'],
-              a: 1,
-              why: 'Every call enters through the outermost wrapper. Caching already holds the list, so it returns without calling its inner Network.',
-            },
-            frames: [
-              { say: 'Two wrappers around a network repository. Each one holds the next as <code>inner</code>.' },
-              { line: [14, 15], stack: ['main()'], vars: { repo: 'Logging → Caching → Network', cache: 'null' }, say: 'Callers see one <code>Repo</code>. They can’t tell how many layers are inside.' },
-              { line: [10, 11], stack: ['main()', 'Logging.latest()'], say: '<code>repo.latest()</code> enters Logging, the outer layer. It forwards to its inner object.' },
-              { line: 5, stack: ['main()', 'Logging.latest()', 'Caching.latest()'], say: 'Caching has nothing stored yet, so it calls its own inner.' },
-              { line: 5, stack: ['main()', 'Logging.latest()', 'Caching.latest()', 'Network.latest()'], out: 'GET /latest', say: 'Network does the real work.' },
-              { line: [6, 12], stack: ['main()', 'Logging.latest()'], vars: { cache: '[2 articles]' }, out: 'log: 2 items', say: 'On the way back, Caching stores the list and Logging writes its line.' },
-              { line: [17, 4], stack: ['main()', 'Logging.latest()', 'Caching.latest()'], say: 'Second call. Logging forwards again, and Caching finds the list. Network is not called.' },
-              { line: 12, stack: ['main()', 'Logging.latest()'], out: 'log: 2 items', say: 'Logging logs anyway. It only sees its inner object, not whether a cache answered.' },
-              { line: 18, stack: ['main()', 'Logging.byId(7)  by inner', 'Caching.byId(7)  by inner', 'Network.byId(7)'], out: 'GET /articles/7', say: 'Neither wrapper overrides <code>byId()</code>. <code>by inner</code> forwards it straight to Network: no log, no cache.' },
-            ],
-          });
-        },
-        play: `interface NewsRepository {
-    fun latest(): List<String>
-    fun byId(id: Int): String
-}
-
-class NetworkNewsRepository : NewsRepository {
-    override fun latest(): List<String> { println("  network: GET /latest"); return listOf("Bridge reopens", "Tram extended") }
-    override fun byId(id: Int): String { println("  network: GET /articles/$id"); return "Article $id" }
-}
-
-class CachingNewsRepository(private val inner: NewsRepository) : NewsRepository by inner {
-    private var cache: List<String>? = null
-    override fun latest() = cache ?: inner.latest().also { cache = it }
-}
-
-class LoggingNewsRepository(private val inner: NewsRepository) : NewsRepository by inner {
-    override fun latest(): List<String> {
-        println("log: latest() called")
-        return inner.latest().also { println("log: got \${it.size} items") }
-    }
+class Banner(private val cart: Cart) {
+    fun text() = "\${cart.prices.size} items in your cart"
 }
 
 fun main() {
-    val repo: NewsRepository = LoggingNewsRepository(CachingNewsRepository(NetworkNewsRepository()))
-    println(repo.latest())
-    println(repo.latest())   // the cache answers: no network line
-    println(repo.byId(7))    // forwarded by \`by inner\`: no log line
-    // Swap the layers: CachingNewsRepository(LoggingNewsRepository(...)) and compare the log
+    val cart = Cart()
+    cart.prices.add(30)
+    cart.prices.add(12)
+    println(Receipt(cart).text())
+    println(Banner(cart).text())
+    // Receipt and Banner reach into Cart's list: they are tightly coupled.
+    // Give Cart fun add(price: Int), fun total() and fun count(), make prices private,
+    // then change Receipt, Banner and main to use only those three.
 }`,
-      },
-
-      // 8 ─────────────────────────────────────────────
-      {
-        id: 'abstraction',
-        title: 'Abstraction',
-        tagline: 'Depend on what something does, not how it does it.',
-        level: 'intermediate',
-        body: `
-<p>Abstraction means showing callers only the part they need. Pull-to-refresh code needs something it can <code>refresh()</code>. It does not care whether that thing is a news screen, a cache or a sync job.</p>
-<p>Kotlin gives you two tools. An <em>interface</em> is a contract: methods and abstract properties, optionally with default bodies, and no stored state. A class can implement many. An <em>abstract class</em> can hold state, take constructor parameters and share code. A class can extend only one.</p>
-<p>Reach for an interface first. Use an abstract class when several subclasses truly share state or a fixed sequence of steps. Build a class below and see what the compiler allows and what each caller gets to see.</p>`,
-        code: `// Interface: a contract. No state, many per class.
-interface Refreshable {
-    suspend fun refresh()
-}
-
-// Abstract class: shared state and code. Only one per class.
-abstract class BaseScreen(protected val name: String) {
-    private var shownCount = 0
-    fun onShown() { shownCount++; Log.d("Screen", "$name shown $shownCount times") }
-    abstract fun render()
-}
-
-class HomeScreen(private val repo: NewsRepository) : BaseScreen("home"), Refreshable {
-    override fun render() { /* draw headlines */ }
-    override suspend fun refresh() = repo.sync()
-}
-
-// The pull-to-refresh code only knows "what", never "how"
-suspend fun onPull(target: Refreshable) = target.refresh()`,
-        remember: 'Interface: a contract, many per class, no state. Abstract class: shared state and code, only one.',
+        remember: 'High cohesion: each class has one focus. Loose coupling: classes use each other only through their surfaces. Then a change stays in one place.',
+        mistakes: [
+          { title: 'One class with three jobs', bad: `class Shop {
+    fun total(prices: List<Int>) = prices.sum()
+    fun welcomeEmail(name: String) = "Hello $name, thanks for joining"
+    fun shortDate(day: Int, month: Int) = "$day/$month"
+}`, good: `class Cart { /* prices and their total */ }
+class Mailer { /* email texts */ }
+class Dates { /* date formats */ }`, why: 'Three unrelated reasons to change share one class. Editing the email text means editing the class that adds up prices too. Split it so each class has one focus.' },
+        ],
         terms: [
-          { term: 'Abstraction', def: 'Exposing only what callers need to use something while hiding how it works.' },
-          { term: 'Interface vs abstract class', def: 'An interface is a stateless contract a class can implement many of, while an abstract class can hold state and a class can extend only one.' },
-          { term: 'Abstract member', def: 'A method or property declared without a body that every concrete subclass must implement.' },
+          { term: 'cohesion', def: 'How well the things inside one class belong together. High cohesion: one clear focus.' },
+          { term: 'coupling', def: 'How much one class depends on another. Tight: it reaches into the other’s insides. Loose: it uses only the other’s surface.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Share the dispatcher across repositories and force each one to implement <code>refresh()</code>.', code: '[[abstract]] class Repository(protected val dispatcher: CoroutineDispatcher) {\n    [[abstract]] suspend fun refresh()\n}', why: 'An abstract class can take a constructor parameter and keep it as state. The abstract method has no body, so every subclass must provide one.' },
-          { type: 'bug', prompt: 'This interface won’t compile. Tap the wrong line.', code: 'interface Cache {\n    val size: Int = 0\n    fun put(key: String, value: String)\n    fun get(key: String): String?\n}', bug: 1, fix: '    val size: Int   // each implementation provides it', why: 'Interfaces can’t store state, so a property initializer is not allowed. Declare it abstract, or give it a getter like <code>get() = 0</code>.' },
-        ],
-        quiz: [
-          { q: 'Can a class extend two abstract classes?', options: ['Yes', 'No, only one class can appear in the supertype list', 'Only if both are open'], a: 1, why: 'A class has one superclass. It can implement any number of interfaces.' },
-          { q: 'A function takes <code>target: Refreshable</code>. What can it call on a <code>HomeScreen</code> passed in?', options: ['Everything HomeScreen has', 'Only what Refreshable declares'], a: 1, why: 'The parameter type is the caller’s view. It sees <code>refresh()</code> and nothing else.' },
-          { q: 'When is an abstract class the better fit?', options: ['When subclasses share state or a fixed sequence of steps', 'Whenever you need a contract', 'When you want many supertypes'], a: 0, why: 'Shared state and constructor logic are what an abstract class adds over an interface.' },
-          { q: 'Which signature leaks how the data is fetched?', options: ['<code>suspend fun latest(): List&lt;Article&gt;</code>', '<code>fun articles(): Flow&lt;List&lt;Article&gt;&gt;</code>', '<code>suspend fun fetch(): Response&lt;List&lt;ArticleDto&gt;&gt;</code>'], a: 2, why: 'Response and DTO types tell every caller it is Retrofit and HTTP. Your own types fit a network source, a database and a fake equally well.' },
-          { q: 'SessionTimer takes a <code>fun interface Clock { fun now(): Instant }</code>. How does a test give it a fixed time?', options: ['Pass a lambda: <code>SessionTimer { Instant.parse("2026-01-01T10:00:00Z") }</code>', 'Change the emulator’s system clock', 'Subclass Instant'], a: 0, why: 'A fun interface can be implemented with a lambda, so faking it takes one line.' },
-        ],
-        deeper: [
-          {
-            title: 'Default methods and the diamond',
-            body: `<p>Interface methods can have a default body. An implementing class gets it for free and may override it. The interface still holds no state, so a default body can only use other members of the interface.</p>
-<p>If a class implements two interfaces with the same default method, Kotlin won't pick one for you. The class must override it, and it can call either parent with <code>super&lt;Name&gt;.method()</code>.</p>`,
-            code: `interface Clickable { fun describe() = "clickable" }
-interface Focusable { fun describe() = "focusable" }
+          { type: 'blank', prompt: 'Let Receipt use only what Cart offers. Give Cart’s function a name, and call it.', code: `class Cart {
+    private val prices = mutableListOf<Int>()
 
-class ChipView : Clickable, Focusable {
-    override fun describe() =
-        super<Clickable>.describe() + " and " + super<Focusable>.describe()
-}`,
-            visual(el) {
-              const BODIES = [
-                { src: '// no override', uses: null },
-                { src: 'override fun describe() = super<Clickable>.describe()', uses: ['c'], out: '"clickable"' },
-                { src: 'override fun describe() = super<Focusable>.describe()', uses: ['f'], out: '"focusable"' },
-                { src: 'override fun describe() =\n    super<Clickable>.describe() + " and " + super<Focusable>.describe()', uses: ['c', 'f'], out: '"clickable and focusable"' },
-                { src: 'override fun describe() = "chip"', uses: [], out: '"chip"' },
-              ];
-              let body = BODIES[0], busy = false;
-              const ifc = (name, ret) => h('div', { class: 'oo-impl' }, h('b', { html: hl(`interface ${name}`) }), h('span', { html: hl(`fun describe() = "${ret}"`) }));
-              const C = ifc('Clickable', 'clickable'), F = ifc('Focusable', 'focusable');
-              const cls = h('div', { class: 'kt oo-wrap' });
-              const clsCard = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'your class'), cls);
-              const o = out('');
-              const LABELS = ['none', 'super<Clickable>', 'super<Focusable>', 'both', 'own body'];
-              const btns = BODIES.map((b, i) => act(LABELS[i], () => { if (busy) return; body = b; paint(); say(o, b.uses ? 'Now call it.' : 'No override. Try calling it.'); }));
-              function paint() {
-                press(btns, btns[BODIES.indexOf(body)]);
-                cls.innerHTML = hl(`class ChipView : Clickable, Focusable {\n    ${body.src.replace(/\n/g, '\n    ')}\n}`);
-                clsCard.className = `oo-card ${body.uses ? 'oo-on' : 'oo-bad'}`;
-                [C, F].forEach(x => x.classList.remove('oo-hit'));
-              }
-              async function call() {
-                if (busy) return; busy = true;
-                [C, F].forEach(x => x.classList.remove('oo-hit'));
-                if (!body.uses) {
-                  replay(clsCard, 'shake'); replay(C, 'pop'); replay(F, 'pop');
-                  say(o, `<span class="bad">compile error:</span> Class 'ChipView' must override 'describe' because it inherits multiple implementations of it.`);
-                  await sleep(400); busy = false; return;
-                }
-                replay(clsCard, 'pop');
-                for (const u of body.uses) {
-                  await sleep(350); if (!el.isConnected) return;
-                  const t = u === 'c' ? C : F; t.classList.add('oo-hit'); replay(t, 'pop');
-                }
-                await sleep(300); if (!el.isConnected) return;
-                say(o, `${hl('ChipView().describe()')} = ${hl(body.out)}${body.uses.length ? '' : ' <span class="muted">(neither default ran)</span>'}`);
-                busy = false;
-              }
-              paint();
-              say(o, 'Both interfaces bring a describe() body. Choose what ChipView does.');
-              el.append(
-                h('div', { class: 'oo-pair' }, h('div', { class: 'oo-impls' }, C, F), clsCard),
-                h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'override'), btns),
-                h('div', { class: 'controls' }, cmd('ChipView().describe()', call)),
-                o);
-            },
-          },
-          {
-            title: 'Leaky abstractions',
-            body: `<p>An abstraction leaks when its signature tells callers how it works. <code>suspend fun fetch(): Response&lt;List&lt;ArticleDto&gt;&gt;</code> says "Retrofit" to everyone. The day you add a Room cache, the cache has to pretend to be an HTTP response, and every caller keeps handling HTTP status codes.</p>
-<p>Describe results in your own types. <code>suspend fun latest(): List&lt;Article&gt;</code> fits a network source, a database and a test fake equally well.</p>`,
-            visual(el) {
-              const IFACE = {
-                leaky: 'interface NewsSource {\n    suspend fun fetch(): Response<List<ArticleDto>>\n}',
-                clean: 'interface NewsSource {\n    suspend fun latest(): List<Article>\n}',
-              };
-              const IMPL = {
-                leaky: {
-                  Retrofit: [['override suspend fun fetch() = api.headlines()', 0]],
-                  Room: [['override suspend fun fetch() =', 0], ['    Response.success(dao.all().map { it.toDto() })', 1]],
-                  Fake: [['override suspend fun fetch() =', 0], ['    Response.success(listOf(ArticleDto("1", "Title")))', 1]],
-                },
-                clean: {
-                  Retrofit: [['override suspend fun latest() =', 0], ['    api.headlines().map { it.toArticle() }', 0]],
-                  Room: [['override suspend fun latest() =', 0], ['    dao.all().map { it.toArticle() }', 0]],
-                  Fake: [['override suspend fun latest() =', 0], ['    listOf(Article("Title"))', 0]],
-                },
-              };
-              const CALLER = {
-                leaky: [['val res = source.fetch()', 0], ['if (res.isSuccessful) show(res.body().orEmpty().map { it.toArticle() })', 1], ['else showError(res.code())', 1]],
-                clean: [['show(source.latest())', 0]],
-              };
-              let style = 'leaky', impl = 'Retrofit';
-              const iBox = h('div', { class: 'kt oo-wrap' });
-              const implBox = h('div', { class: 'oo-code' });
-              const callBox = h('div', { class: 'oo-code' });
-              const stat = h('span', { class: 'oo-stat' });
-              const o = out('');
-              const render = (box, rows, leakOk) => box.replaceChildren(...rows.map(([t, leak]) => h('div', { class: `oo-line${leak && !leakOk ? ' oo-ln-err' : ''} drop-in`, html: hl(t) })));
-              const sBtns = [cmd('fun fetch(): Response<...>', () => setStyle('leaky')), cmd('fun latest(): List<Article>', () => setStyle('clean'))];
-              const iBtns = ['Retrofit', 'Room', 'Fake'].map(k => cmd(`${k}NewsSource`, () => setImpl(k)));
-              function paint() {
-                press(sBtns, sBtns[style === 'leaky' ? 0 : 1]); press(iBtns, iBtns[['Retrofit', 'Room', 'Fake'].indexOf(impl)]);
-                iBox.innerHTML = hl(IFACE[style]);
-                render(implBox, IMPL[style][impl], impl === 'Retrofit');
-                render(callBox, CALLER[style], false);
-                const n = (impl === 'Retrofit' ? 0 : IMPL[style][impl].filter(r => r[1]).length) + CALLER[style].filter(r => r[1]).length;
-                stat.innerHTML = `lines outside the network code that know about HTTP: <b>${n}</b>`;
-              }
-              function setStyle(s) {
-                style = s; paint();
-                say(o, s === 'leaky' ? 'The contract returns a Retrofit Response. Now plug in other sources.' : `<span class="good">The contract speaks in your own Article type.</span> ${impl}NewsSource fits, and the ViewModel shrinks to one line.`);
-              }
-              function setImpl(k) {
-                impl = k; paint();
-                if (style === 'leaky' && k !== 'Retrofit') { replay(implBox, 'shake'); say(o, `<span class="bad">compiles, but leaks:</span> ${k}NewsSource has to wrap its data in a fake HTTP Response, and the ViewModel still checks status codes that can't happen.`); }
-                else if (style === 'leaky') say(o, 'With Retrofit behind it, the leak looks harmless. The red lines are the price every caller pays.');
-                else say(o, `<span class="good">${k}NewsSource fits:</span> the ViewModel line never changes.`);
-              }
-              setStyle('leaky');
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'contract'), sBtns), iBox,
-                h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'implementation'), iBtns),
-                h('div', { class: 'oo-pair' },
-                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'implementation'), implBox),
-                  h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'ViewModel'), callBox)),
-                stat, o);
-            },
-          },
-          {
-            title: 'fun interface: an abstraction you can write as a lambda',
-            body: `<p>An interface with exactly one abstract method can be declared <code>fun interface</code>. Then any lambda with the right shape can implement it, which makes small abstractions cheap to fake.</p>
-<p>A clock is the classic case. Production code asks for a <code>Clock</code>, and a test passes a lambda that always returns the same time.</p>`,
-            code: `fun interface Clock { fun now(): Instant }
-
-class SessionTimer(private val clock: Clock) {
-    private val start = clock.now()
-    fun expired(): Boolean =
-        Duration.between(start, clock.now()) > Duration.ofMinutes(30)
-}
-
-val real = SessionTimer { Instant.now() }
-val frozen = SessionTimer { Instant.parse("2026-01-01T10:00:00Z") }`,
-          },
-        ],
-        underHood: {
-          body: `<p>A Kotlin interface compiles to a JVM interface. A property like <code>val size: Int</code> becomes an abstract <code>getSize()</code> method with no field behind it, which is why an interface property can't have an initializer.</p>
-<p>Default bodies changed in Kotlin 2.2. They now compile to real JVM default methods, plus a <code>DefaultImpls</code> class kept for code compiled with older settings. Before 2.2 the body lived only in <code>DefaultImpls</code>, and each implementing class got a generated method that forwarded to it. An abstract class is an ordinary JVM abstract class, with fields and a constructor.</p>`,
-          code: `// Kotlin
-interface Cache {
-    val size: Int
-    fun isEmpty() = size == 0
-}
-
-// JVM, simplified (Kotlin 2.2 and later)
-public interface Cache {
-    int getSize();                                        // no field
-    default boolean isEmpty() { return getSize() == 0; }
-}`,
-        },
-        mistakes: [
-          { title: 'An abstract class with no state', bad: 'abstract class Refreshable {\n    abstract suspend fun refresh()\n}\nclass NewsViewModel : ViewModel(), Refreshable()\n// error: only one class may appear in a supertype list', good: 'interface Refreshable {\n    suspend fun refresh()\n}\nclass NewsViewModel : ViewModel(), Refreshable {\n    override suspend fun refresh() { /* ... */ }\n}', why: 'A pure contract in an abstract class uses up the single superclass slot. With no shared state, make it an interface.' },
-          { title: 'Casting back to the concrete class', bad: 'suspend fun onPull(target: Refreshable) {\n    target.refresh()\n    (target as HomeScreen).scrollToTop()\n}', good: 'interface Refreshable {\n    suspend fun refresh()\n    fun scrollToTop()\n}\nsuspend fun onPull(target: Refreshable) {\n    target.refresh()\n    target.scrollToTop()\n}', why: 'The cast ties the caller to one class again and throws <code>ClassCastException</code> for every other one. If callers need it, it belongs in the contract.' },
-          { title: 'Providing the implementation type', bad: '@Provides\nfun newsRepository(db: AppDb): RoomNewsRepository =\n    RoomNewsRepository(db.newsDao())', good: '@Provides\nfun newsRepository(db: AppDb): NewsRepository =\n    RoomNewsRepository(db.newsDao())', why: 'With the concrete return type, every class that injects it asks for <code>RoomNewsRepository</code>. Declare the interface as the type, and the implementation stays swappable.' },
-        ],
-        visual(el) {
-          const supers = [
-            { id: 'base', src: 'BaseScreen()', kind: 'class', gives: [['val name', 'inherited'], ['fun onShown()', 'inherited'], ['fun render()', 'implement']] },
-            { id: 'sync', src: 'BaseSyncer()', kind: 'class', gives: [['var lastSync', 'inherited'], ['fun sync()', 'implement']] },
-            { id: 'refresh', src: 'Refreshable', kind: 'interface', gives: [['fun refresh()', 'implement']] },
-            { id: 'track', src: 'Trackable', kind: 'interface', gives: [['val screenName', 'implement'], ['fun trackView()', 'inherited']] },
-          ];
-          const on = new Set(['base', 'refresh']);
-          let viewAs = 'HomeScreen';
-          const decl = h('div', { class: 'kt oo-wrap' });
-          const status = h('span', { class: 'oo-pill' });
-          const members = h('div', { class: 'oo-row' });
-          const caller = h('div', { class: 'kt' });
-          const sees = h('div', { class: 'oo-row' });
-          const buildCard = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'Your class'), decl, status, h('span', { class: 'oo-label' }, 'members'), members);
-          const viewCard = h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'What a caller sees'), caller, sees);
-          const o = out('Toggle supertypes. Then pick the type a caller holds.');
-          const chosen = () => supers.filter(s => on.has(s.id));
-          function paint() {
-            const cs = chosen(), classes = cs.filter(s => s.kind === 'class');
-            const list = [...classes, ...cs.filter(s => s.kind === 'interface')];
-            decl.innerHTML = hl(`class HomeScreen${list.length ? ' : ' + list.map(s => s.src).join(', ') : ''}`);
-            const bad = classes.length > 1;
-            status.textContent = bad ? 'error: Only one class may appear in a supertype list' : 'compiles';
-            status.className = `oo-pill ${bad ? 'oo-err' : 'oo-ok'}`;
-            buildCard.classList.toggle('oo-bad', bad); buildCard.classList.toggle('oo-on', !bad);
-            members.replaceChildren(...(cs.length ? cs.flatMap(s => s.gives.map(([m, how]) => pill(how === 'implement' ? `override ${m}` : m, how === 'implement' ? 'oo-warn' : 'oo-acc'))) : [h('span', { class: 'tip' }, 'No supertypes yet.')]));
-            const opts = ['HomeScreen', ...cs.map(s => s.src.replace('()', ''))];
-            if (!opts.includes(viewAs)) viewAs = 'HomeScreen';
-            viewBtns.forEach(b => { b.hidden = !opts.includes(b.dataset.t); b.setAttribute('aria-pressed', String(b.dataset.t === viewAs)); });
-            caller.innerHTML = hl(`fun use(x: ${viewAs})`);
-            const src = viewAs === 'HomeScreen' ? cs : cs.filter(s => s.src.replace('()', '') === viewAs);
-            const ms = src.flatMap(s => s.gives.map(g => g[0]));
-            sees.replaceChildren(...(ms.length ? ms.map(m => pill(m.replace(/^(val|var|fun) /, 'x.'), 'oo-acc')) : [h('span', { class: 'tip' }, 'Only HomeScreen’s own members.')]));
-            replay(sees, 'pop-soft');
-          }
-          const viewBtns = ['HomeScreen', ...supers.map(s => s.src.replace('()', ''))].map(t => {
-            const b = cmd(`x: ${t}`, () => { viewAs = t; paint(); say(o, t === 'HomeScreen' ? 'Holding the concrete class: every member is visible, and the caller is tied to HomeScreen.' : `Holding ${t}: the caller sees only that contract, so any class with it would do.`); });
-            b.dataset.t = t; return b;
-          });
-          const toggles = supers.map(s => {
-            const id = `oo-abs-${s.id}`;
-            const inp = h('input', { type: 'checkbox', id, checked: on.has(s.id) });
-            inp.addEventListener('change', () => {
-              if (inp.checked) on.add(s.id); else on.delete(s.id);
-              paint(); replay(decl, 'pop-soft');
-              const classes = chosen().filter(x => x.kind === 'class').length;
-              if (classes > 1) { replay(buildCard, 'shake'); say(o, '<span class="bad">compile error:</span> a class extends at most one class. Make one of them an interface or a part you hold.'); }
-              else say(o, `${s.kind === 'class' ? 'abstract class' : 'interface'} ${s.src.replace('()', '')} ${inp.checked ? 'added' : 'removed'}. <span class="muted">Orange members are yours to implement.</span>`);
-            });
-            return h('label', { class: 'switch', for: id }, inp, h('span', { html: hl(s.kind === 'class' ? `abstract class ${s.src.replace('()', '')}` : `interface ${s.src}`) }));
-          });
-          paint();
-          el.append(
-            h('div', { class: 'oo-switches' }, toggles),
-            h('div', { class: 'oo-pair' }, buildCard, viewCard),
-            h('div', { class: 'controls' }, viewBtns),
-            o);
-        },
-        predict: {
-          q: '<code>abstract class BaseScreen</code> has <code>fun onShown()</code> with a body and <code>abstract fun render()</code>. Which must <code>HomeScreen</code> write itself?',
-          options: ['Both', 'Only <code>render()</code>', 'Neither: the abstract class supplies them'],
-          a: 1,
-          why: 'An abstract class can share finished code like <code>onShown()</code>. Abstract members have no body, so every subclass has to override them.',
-        },
-        play: `interface Refreshable { fun refresh(): String }
-
-abstract class BaseScreen(protected val name: String) {
-    private var shownCount = 0
-    fun onShown() { shownCount++; println("$name shown $shownCount times") }
-    abstract fun render()
-}
-
-class HomeScreen : BaseScreen("home"), Refreshable {
-    override fun render() = println("home: draw headlines")
-    override fun refresh() = "home: synced"
-}
-
-class CacheJob : Refreshable {
-    override fun refresh() = "cache: cleared"
-}
-
-fun onPull(target: Refreshable) = println(target.refresh())   // knows "what", never "how"
-
-fun main() {
-    val home = HomeScreen()
-    home.onShown(); home.onShown(); home.render()
-    onPull(home)
-    onPull(CacheJob())
-    // Make CacheJob extend BaseScreen("cache") too. What must it add before it compiles?
-}`,
-      },
-
-      // 9 ─────────────────────────────────────────────
-      {
-        id: 'interface-or-abstract',
-        title: 'Interfaces vs abstract classes: choosing',
-        tagline: 'Answer four questions about state, setup, supertypes and change, and the choice mostly makes itself.',
-        level: 'intermediate',
-        body: `
-<p>The abstraction lesson showed what each one can hold. This one is about picking. Ask four questions. Does the shared code need stored state? Does setup need constructor parameters or checks in <code>init</code>? Will implementers already have a superclass, like <code>ViewModel</code> or <code>Activity</code>? Will one class need to play several roles?</p>
-<p>A class has one superclass slot, so the last two questions push hard toward an interface. The first two push toward an abstract class, because an interface can't store state or run a constructor.</p>
-<p>When both pulls are real, use both: an interface as the type everyone depends on, plus an optional abstract class that implements it and holds the shared state. Implementers that can spare their superclass slot extend the helper. The rest implement the interface directly. Answer the questions below.</p>`,
-        code: `// The type callers depend on
-interface ArticleSource {
-    val name: String
-    suspend fun latest(): List<Article>
-}
-
-// Optional helper: shared state and a checked constructor
-abstract class CachedArticleSource(
-    final override val name: String,
-    private val ttl: Duration,
-) : ArticleSource {
-    init { require(ttl.isPositive()) { "ttl must be positive" } }
-
-    private var cached: List<Article> = emptyList()
-    private var fetchedAt = TimeSource.Monotonic.markNow()
-
-    final override suspend fun latest(): List<Article> {
-        if (cached.isEmpty() || fetchedAt.elapsedNow() > ttl) {
-            cached = fetch(); fetchedAt = TimeSource.Monotonic.markNow()
-        }
-        return cached
+    fun add(price: Int) {
+        prices.add(price)
     }
-    protected abstract suspend fun fetch(): List<Article>
+
+    fun [[total]]() = prices.sum()
 }
 
-class RssSource(private val rss: RssApi) : CachedArticleSource("RSS", 10.minutes) {
-    override suspend fun fetch() = rss.items().map { it.toArticle() }
-}
+class Receipt(private val cart: Cart) {
+    fun text() = "Total: \${cart.[[total]]()}"
+}`, why: 'Receipt now depends only on <code>total()</code>, not on how Cart stores its prices.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Cannot access \'val prices: MutableList&lt;Int&gt;\': it is private in \'Cart\'.</code> (<code>MutableList&lt;Int&gt;</code> is the type of a <code>mutableListOf&lt;Int&gt;()</code>.) Tap the line that reaches inside.', code: `class Cart {
+    private val prices = mutableListOf<Int>()
 
-// Already has a superclass: implements the interface directly
-class PinnedViewModel : ViewModel(), ArticleSource {
-    private val pinned = MutableStateFlow(emptyList<Article>())
-    override val name = "Pinned"
-    override suspend fun latest() = pinned.value
-}`,
-        remember: 'Depend on an interface. Add an abstract helper class only when implementers truly share state or setup.',
-        terms: [
-          { term: 'Skeletal implementation', def: 'An abstract class that implements an interface and does most of the work, leaving a few abstract members to subclasses.' },
-          { term: 'Superclass slot', def: 'The single place in a class header for a class to extend. Interfaces don’t use it, so a class can add as many as it needs.' },
-          { term: 'Default method', def: 'An interface member with a body. Implementers get it for free and may override it.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Build a read-only list of articles by implementing only <code>size</code> and <code>get</code>.', code: 'class Page(private val items: List<Article>) : [[AbstractList]]<Article>() {\n    override val [[size]]: Int get() = items.size\n    override fun get(index: Int) = items[index]\n}', why: '<code>AbstractList</code> is the standard library’s skeletal implementation of <code>List</code>. You write two members, and <code>contains</code>, <code>indexOf</code>, iteration and the rest come from the helper.' },
-          { type: 'bug', prompt: 'You added <code>trending()</code> to an interface with 12 implementations, and none of them compile now. Tap the line to change so they all keep compiling.', code: 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n    suspend fun trending(): List<Article>\n}', bug: 2, fix: '    suspend fun trending(): List<Article> = latest().take(5)', why: 'A new abstract member is a new obligation for every implementer. A default body keeps old implementers compiling, and each can override it when it has something better.' },
-        ],
-        quiz: [
-          { q: 'Implementers are ViewModels. Which do you use for the shared contract?', options: ['An abstract class', 'An interface', 'Either works'], a: 1, why: 'A ViewModel already uses its superclass slot on ViewModel. Only an interface still fits.' },
-          { q: 'Every implementation needs the same cache field and a checked constructor. What fits?', options: ['An interface with a cache property', 'An abstract class (often implementing an interface)', 'An object'], a: 1, why: 'Stored state and init checks need a class. Keep the interface as the type if callers should not care.' },
-          { q: 'You add a member with a default body to a widely used interface. What happens to existing implementers?', options: ['They all stop compiling', 'They keep compiling and inherit the default', 'They must be made abstract'], a: 1, why: 'Only new abstract members create new obligations. A default body is inherited.' },
-          { q: 'You add an abstract <code>fun trending(): List&lt;Article&gt;</code> to an interface that five classes implement. What happens?', options: ['All five stop compiling until they implement it', 'Nothing changes for them', 'Only the classes whose callers use trending() break'], a: 0, why: 'A new abstract member is a new obligation for every implementer. Give it a default body built from existing members and nobody breaks.' },
-          { q: 'With the Endpoint class above, what happens on <code>DebugEndpoint()</code>?', options: ['It does not compile', 'It throws IllegalArgumentException when the object is built', 'It works, because the check is only in the parent'], a: 1, why: 'The parent’s init runs for every subclass, before the subclass’s own initialisers. The http URL fails the require.' },
-        ],
-        deeper: [
-          {
-            title: 'Evolving a contract',
-            body: `<p>Interfaces outlive their first version. Adding an abstract member breaks every implementer at once. Adding a member with a body breaks nobody. An abstract class has the same choice: a new <code>abstract</code> method breaks subclasses, a new <code>open</code> method with a body does not.</p>
-<p>So plan new members with a sensible default, built from members that already exist. Add <code>trending()</code> both ways below.</p>`,
-            visual(el) {
-              const IMPLS = ['RssSource', 'ApiSource', 'FakeSource'];
-              let mode = 'none', busy = false;
-              const iface = h('div', { class: 'kt oo-wrap' });
-              const rows = IMPLS.map(n => { const r = h('div', { class: 'oo-enc-row oo-ia-row' }, h('span', { class: 'oo-title' }, `class ${n} : ArticleSource`), h('span', { class: 'oo-pill oo-ok' }, 'compiles')); return r; });
-              const o = out('');
-              const SRC = {
-                none: 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n}',
-                abs: 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n    suspend fun trending(): List<Article>\n}',
-                def: 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n    suspend fun trending(): List<Article> = latest().take(5)\n}',
-              };
-              async function set(m) {
-                if (busy) return; busy = true;
-                mode = m; iface.innerHTML = hl(SRC[m]); replay(iface, 'pop-soft');
-                for (const r of rows) {
-                  await sleep(220); if (!el.isConnected) return;
-                  const bad = m === 'abs';
-                  r.className = `oo-enc-row oo-ia-row ${bad ? 'oo-enc-no' : 'oo-enc-yes'}`;
-                  r.lastChild.className = `oo-pill ${bad ? 'oo-err' : 'oo-ok'}`;
-                  r.lastChild.textContent = bad ? 'error: trending() not implemented' : (m === 'def' ? 'inherits default' : 'compiles');
-                  replay(r.lastChild, bad ? 'shake' : 'pop');
-                }
-                say(o, m === 'abs' ? '<span class="bad">3 of 3 implementers fail.</span> In a real app this is every source, in every module.' : m === 'def' ? '<span class="good">all compile.</span> Each source can override trending() later, when it has real data.' : 'One method. All implementers compile.');
-                busy = false;
-              }
-              iface.innerHTML = hl(SRC.none);
-              say(o, 'Add trending() to the interface.');
-              el.append(iface,
-                h('div', { class: 'controls' }, cmd('suspend fun trending(): List<Article>', () => set('abs')), cmd('= latest().take(5)', () => set('def')), act('Undo', () => set('none'))),
-                h('div', { class: 'oo-enc-grid' }, rows), o);
-            },
-          },
-          {
-            title: 'Only a class can guard its construction',
-            body: `<p>An interface has no constructor, so it can't check its inputs. If every implementation must reject a blank name or a negative timeout, either repeat the check in each one, or put it in an abstract class's <code>init</code> where it runs for every subclass automatically.</p>
-<p>The check in the base runs before the subclass's own initialisers, so it is safe to rely on in the subclass.</p>`,
-            code: `abstract class Endpoint(val baseUrl: String) {
-    init {
-        require(baseUrl.startsWith("https://")) { "baseUrl must use https" }
+    fun add(price: Int) {
+        prices.add(price)
     }
+
+    fun total() = prices.sum()
 }
 
-class NewsEndpoint : Endpoint("https://api.example.com/")   // ok
-class DebugEndpoint : Endpoint("http://10.0.2.2:8080/")     // throws when built`,
-          },
-          {
-            title: 'Sealed interface or sealed class?',
-            body: `<p>The same choice shows up with sealed types. A <code>sealed interface</code> lets its cases be any kind of type, including enum classes and objects that already extend something else, and one class can belong to two sealed interfaces. A <code>sealed class</code> lets the cases share state through its constructor.</p>
-<p>For UI state and results, a sealed interface is usually enough. Reach for a sealed class when every case carries the same field.</p>`,
-            code: `sealed interface LoadError
-enum class NetworkError : LoadError { Offline, Timeout }
-data class ServerError(val code: Int) : LoadError
-
-sealed class Notice(val id: Long) {          // every case has an id
-    class Breaking(id: Long, val title: String) : Notice(id)
-    class Promo(id: Long, val url: String) : Notice(id)
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>In the class file, a class names exactly one superclass and a list of interfaces. That is the whole reason for the single slot. The superclass's constructor runs as the first step of the subclass's constructor. Interfaces have no constructor at all.</p>
-<p>An abstract class's fields live inside each subclass object. An interface's properties are only abstract getter methods, so each implementer must supply its own storage, or a getter that computes the value.</p>`,
-          code: `// JVM, simplified
-public final class RssSource
-    extends CachedArticleSource        // one superclass
-    implements ArticleSource { ... }   // any number of interfaces
-
-public interface ArticleSource {
-    String getName();                  // no field behind it
-    Object latest(Continuation c);
-}`,
-        },
-        mistakes: [
-          { title: 'An abstract class just to share helpers', bad: 'abstract class BaseRepository {\n    protected fun <T> retrying(block: () -> T): T = TODO()\n    protected fun log(msg: String) = Log.d("Repo", msg)\n}\nclass NewsRepository : BaseRepository()', good: 'suspend fun <T> retrying(times: Int = 2, block: suspend () -> T): T = TODO()\n\nclass NewsRepository(private val logger: Logger) {\n    suspend fun latest() = retrying { /* ... */ }\n}', why: 'There is no shared state, so the base class only burns the superclass slot and ties every repository to it. Top-level functions and injected parts do the same job.' },
-          { title: 'Faking state in an interface', bad: 'interface Pageable {\n    val loaded: MutableList<Article>   // every implementer must expose one\n    fun loadMore() { loaded += fetchPage() }\n    fun fetchPage(): List<Article>\n}', good: 'abstract class Pager {\n    private val loaded = mutableListOf<Article>()\n    val items: List<Article> get() = loaded\n    fun loadMore() { loaded += fetchPage() }\n    protected abstract fun fetchPage(): List<Article>\n}', why: 'The interface forces each class to publish its mutable list, so anyone can change it. Real shared state belongs in a class that keeps it private.' },
-        ],
-        visual(el) {
-          const Q = [
-            { k: 'state', label: 'Shared code needs stored state' },
-            { k: 'ctor', label: 'Setup needs constructor params or init checks' },
-            { k: 'super', label: 'Implementers already extend a class' },
-            { k: 'roles', label: 'One class plays several roles' },
-          ];
-          const on = new Set();
-          const verdict = h('span', { class: 'oo-pill' });
-          const why = h('div', { class: 'oo-row' });
-          const sk = h('div', { class: 'kt oo-wrap' });
-          const card = h('div', { class: 'oo-card oo-on' }, h('span', { class: 'oo-label' }, 'verdict'), verdict, why, sk);
-          const o = out('');
-          function decide() {
-            const needClass = on.has('state') || on.has('ctor');
-            const needIface = on.has('super') || on.has('roles');
-            if (needClass && needIface) return { v: 'interface + abstract helper', cls: 'oo-warn',
-              src: 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n}\n\nabstract class CachedSource(\n    ttl: Duration,\n) : ArticleSource {\n    private var cache = emptyList<Article>()\n    // ...shared caching\n}\n\nclass RssSource : CachedSource(10.minutes)\nclass PinnedViewModel :\n    ViewModel(), ArticleSource' };
-            if (needClass) return { v: 'abstract class', cls: 'oo-acc',
-              src: 'abstract class CachedSource(private val ttl: Duration) {\n    init { require(ttl.isPositive()) }\n    private var cached: List<Article> = emptyList()\n    protected abstract suspend fun fetch(): List<Article>\n}' };
-            return { v: 'interface', cls: 'oo-ok',
-              src: on.has('roles') ? 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n}\ninterface Searchable {\n    suspend fun search(q: String): List<Article>\n}\n\nclass ApiSource : ArticleSource, Searchable' : 'interface ArticleSource {\n    suspend fun latest(): List<Article>\n}' };
-          }
-          function paint(changed) {
-            const d = decide();
-            verdict.textContent = d.v; verdict.className = `oo-pill ${d.cls}`;
-            sk.innerHTML = hl(d.src);
-            const reasons = [];
-            if (on.has('state')) reasons.push(['needs a class: interfaces store no state', 'oo-acc']);
-            if (on.has('ctor')) reasons.push(['needs a class: interfaces have no constructor', 'oo-acc']);
-            if (on.has('super')) reasons.push(['needs an interface: superclass slot taken', 'oo-ok']);
-            if (on.has('roles')) reasons.push(['needs interfaces: one class, many types', 'oo-ok']);
-            if (!reasons.length) reasons.push(['nothing forces a class: default to an interface', 'oo-ghost']);
-            why.replaceChildren(...reasons.map(([t, c]) => pill(t, c)));
-            if (changed) { replay(verdict, 'pop'); say(o, `<span class="muted">verdict:</span> <b>${d.v}</b>`); }
-          }
-          const boxes = Q.map(q => {
-            const id = `oo-ia-${q.k}`;
-            const inp = h('input', { type: 'checkbox', id });
-            inp.addEventListener('change', () => { if (inp.checked) on.add(q.k); else on.delete(q.k); paint(true); });
-            return h('label', { class: 'switch oo-ia-q', for: id }, inp, q.label);
-          });
-          const presets = [
-            ['Implementers are ViewModels', ['super']],
-            ['3 HTTP sources sharing a TTL cache', ['state', 'ctor']],
-            ['Cached sources, one is a ViewModel', ['state', 'super']],
-          ].map(([label, ks]) => act(label, () => { on.clear(); ks.forEach(k => on.add(k)); Q.forEach((q, i) => { boxes[i].firstChild.checked = on.has(q.k); }); paint(true); }));
-          paint(false);
-          say(o, 'Tick what is true for your case, or load an example.');
-          el.append(
-            h('div', { class: 'oo-ia-qs' }, boxes),
-            h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'examples'), presets),
-            card, o);
-        },
-        predict: {
-          q: 'The shared code needs a stored cache, and one implementer is already a ViewModel. What fits?',
-          options: ['An abstract class', 'An interface', 'An interface, plus an abstract helper class that implements it'],
-          a: 2,
-          why: 'The ViewModel has used its one superclass slot, so the type everyone depends on must be an interface. The cache needs state, which an abstract helper can hold for the implementers that are free to extend it.',
-        },
-        play: `interface ArticleSource {
-    val name: String
-    fun latest(): List<String>
-}
-
-// Optional helper: shared state and a checked constructor
-abstract class CachedSource(final override val name: String, private val maxUses: Int) : ArticleSource {
-    init { require(maxUses > 0) { "maxUses must be positive" } }
-    private var cached: List<String> = emptyList()
-    private var uses = 0
-    final override fun latest(): List<String> {
-        if (cached.isEmpty() || uses >= maxUses) { cached = fetch(); uses = 0; println("  $name fetched") }
-        uses++
-        return cached
-    }
-    protected abstract fun fetch(): List<String>
-}
-
-class RssSource : CachedSource("RSS", maxUses = 2) {
-    override fun fetch() = listOf("rss item")
-}
-
-open class Holder                      // stands in for a superclass like ViewModel
-class PinnedSource : Holder(), ArticleSource {
-    override val name = "Pinned"
-    override fun latest() = listOf("pinned item")
+class Receipt(private val cart: Cart) {
+    fun text() = "Total: \${cart.prices.sum()}"
 }
 
 fun main() {
-    val sources: List<ArticleSource> = listOf(RssSource(), PinnedSource())
-    repeat(3) { sources.forEach { println("\${it.name}: \${it.latest()}") } }
-    // Change maxUses = 2 to 0 and run again
-}`,
-      },
-
-      // 10 ─────────────────────────────────────────────
-      {
-        id: 'cohesion-coupling',
-        title: 'Cohesion and coupling',
-        tagline: 'Keep together what changes together. Keep apart what doesn’t, and point dependencies at stable things.',
-        level: 'intermediate',
-        body: `
-<p><em>Cohesion</em> is how much the parts of one class belong together. You can check it without opinions: list the methods, list the fields, and mark which method uses which field. If the methods fall into groups that never share a field, the class is several classes sharing a file.</p>
-<p><em>Coupling</em> is how much a class knows about others: how many types it imports, and how deep it reaches into them. Each one is a reason it may have to change when someone else changes.</p>
-<p>Aim for high cohesion and low coupling. The single responsibility lesson asked <em>who</em> requests changes. This one measures. Below is a <code>NewsViewModel</code> that grew. Group the matrix by shared fields and see the classes hiding in it.</p>`,
-        code: `// Before: 4 groups of methods that share no fields
-class NewsViewModel(
-    private val api: NewsApi,
-    private val dao: BookmarkDao,
-    private val locale: Locale,
-    private val analytics: FirebaseAnalytics,
-) : ViewModel() {
-    fun load() { /* api, articles */ }
-    fun search(q: String) { /* articles, query */ }
-    fun toggleBookmark(id: String) { /* dao, bookmarks */ }
-    fun formatDate(t: Instant): String { /* locale */ TODO() }
-    fun trackScroll(depth: Int) { /* analytics */ }
-}
-
-// After: each class is cohesive, and the ViewModel knows fewer types
-class NewsViewModel(
-    private val news: NewsRepository,
-    private val bookmarks: BookmarkRepository,
-    private val dates: ArticleDateFormatter,
-    private val tracker: ScrollTracker,
-) : ViewModel()`,
-        remember: 'Methods that share fields belong together. Each type a class knows is one more reason for it to change.',
-        terms: [
-          { term: 'Cohesion', def: 'How closely the parts of a class or module relate. High cohesion: its methods work on the same data toward one purpose.' },
-          { term: 'Coupling', def: 'How much one class or module depends on, and knows about, others.' },
-          { term: 'Fan-in', def: 'How many modules depend on a given module. High fan-in means a change there ripples widely.' },
-          { term: 'Law of Demeter', def: 'A guideline to talk only to your direct collaborators, not to the objects they return, so you don’t depend on their insides.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Use <code>:core:data</code> inside this module without exposing it to modules that depend on you.', code: 'dependencies {\n    [[implementation]](project(":core:data"))\n}', why: '<code>implementation</code> keeps the dependency off the compile classpath of your consumers, so they can’t couple to it, and a change in it recompiles fewer modules. <code>api</code> would export it.' },
-          { type: 'bug', prompt: 'This button knows the ViewModel, its repository and the database table. Tap the line that couples it too tightly.', code: 'class BookmarkButton(private val vm: NewsViewModel) {\n    fun onClick(id: String) {\n        vm.repository.dao.insert(BookmarkEntity(id))\n    }\n}', bug: 2, fix: '        vm.toggleBookmark(id)', why: 'The chain reaches through two objects into a Room entity. Any change to the repository or the table breaks a button. Ask your direct collaborator to do it.' },
+    val cart = Cart()
+    cart.add(5)
+    println(Receipt(cart).text())
+}`, bug: 11, fix: '    fun text() = "Total: ${cart.total()}"', why: 'The private list is Cart’s business. Use its surface, <code>total()</code>, and it prints <code>Total: 5</code>.' },
         ],
         quiz: [
-          { q: 'Two groups of methods in a class never touch the same field. What does that suggest?', options: ['High cohesion', 'Two classes in one file', 'Nothing, it is normal'], a: 1, why: 'Methods that share no data have no reason to live together. Split along the groups.' },
-          { q: '<code>:core:model</code> is used by every other module. How often should it change?', options: ['Often, it is central', 'Rarely: every change ripples to all its dependents', 'It doesn’t matter'], a: 1, why: 'High fan-in makes a module expensive to change. Keep it small and stable, and keep volatile code where few depend on it.' },
-          { q: 'Which is the loosest coupling?', options: ['Receiving an id String', 'Holding a concrete repository', 'Reaching into repo.dao'], a: 0, why: 'Plain data carries no behaviour to depend on. Each step down the list knows more about someone else’s internals.' },
-          { q: 'A composable reads <code>article.author.profile.avatar.url</code>. What is the better design?', options: ['Map once to a UI model with <code>authorAvatarUrl</code> and read that', 'Add ?. to every step of the chain', 'Wrap the line in try/catch'], a: 0, why: 'The chain couples the screen to four classes and their shape. One mapper that knows the structure keeps a future change in one place.' },
-          { q: ':feature:news declares Retrofit with <code>api</code> instead of <code>implementation</code>. What does that change?', options: ['Retrofit becomes visible to every module that depends on :feature:news', 'Nothing, the two are aliases', 'Retrofit is no longer visible to :feature:news itself'], a: 0, why: 'api exports the dependency to consumers, so more modules couple to it and recompile when it changes. implementation keeps it inside.' },
+          { q: 'A class adds up prices, sends emails and formats dates. What is the problem?', options: ['Low cohesion: three unrelated jobs', 'Tight coupling to Cart', 'Nothing'], a: 0, why: 'Each job is a separate reason to change. They belong in separate classes.' },
+          { q: 'Which line is loosely coupled to Cart?', options: ['<code>cart.total()</code>', '<code>cart.prices.sum()</code>'], a: 0, why: 'It uses Cart’s surface. The other depends on how Cart stores its prices inside.' },
+          { q: 'How do private properties help keep coupling loose?', options: ['Other classes can only use the surface, so they can’t depend on the insides', 'Private code runs faster', 'They make classes shorter'], a: 0, why: 'What others can’t reach, they can’t depend on, so it is free to change.' },
         ],
-        deeper: [
-          {
-            title: 'Point dependencies at stable things',
-            body: `<p>A change ripples to everything that depends on what changed, directly or through others. So the cost of changing a module grows with how many modules sit above it.</p>
-<p>Arrange modules so that the ones many others depend on are the ones that rarely change, like plain models. Code that changes every sprint, like a feature screen, should sit where almost nothing depends on it. Pick a module below and change it.</p>`,
-            visual(el) {
-              const MODS = [
-                { k: ':app', deps: [':feature:news', ':feature:bookmarks'] },
-                { k: ':feature:news', deps: [':core:data', ':core:ui', ':core:model'] },
-                { k: ':feature:bookmarks', deps: [':core:data', ':core:ui', ':core:model'] },
-                { k: ':core:data', deps: [':core:model'] },
-                { k: ':core:ui', deps: [':core:model'] },
-                { k: ':core:model', deps: [] },
-              ];
-              let busy = false;
-              const nodes = {};
-              const grid = h('div', { class: 'oo-coh-mods' }, MODS.map(m => { const n = h('div', { class: 'oo-node' }, h('b', {}, m.k), h('span', { class: 'oo-stat' }, m.deps.length ? ` → ${m.deps.join(', ')}` : ' → nothing')); nodes[m.k] = n; return n; }));
-              const o = out('');
-              const dependents = k => {
-                const out2 = new Set(), todo = [k];
-                while (todo.length) { const x = todo.pop(); MODS.forEach(m => { if (m.deps.includes(x) && !out2.has(m.k)) { out2.add(m.k); todo.push(m.k); } }); }
-                return [...out2];
-              };
-              async function change(k) {
-                if (busy) return; busy = true;
-                Object.values(nodes).forEach(n => n.classList.remove('oo-cur', 'oo-hot'));
-                nodes[k].classList.add('oo-cur'); replay(nodes[k], 'pop');
-                const ds = dependents(k);
-                for (const d of ds) { await sleep(220); if (!el.isConnected) return; nodes[d].classList.add('oo-hot'); replay(nodes[d], 'shake'); }
-                say(o, ds.length ? `Change ${k} <span class="muted">→</span> <span class="${ds.length > 2 ? 'bad' : 'good'}">${ds.length} module${ds.length > 1 ? 's' : ''} to rebuild and retest</span> <span class="muted">(${ds.join(', ')})</span>` : `Change ${k} <span class="muted">→</span> <span class="good">nothing depends on it.</span>`);
-                busy = false;
-              }
-              say(o, 'Change a module and see what has to be rebuilt.');
-              el.append(grid, h('div', { class: 'controls' }, MODS.map(m => act(`change ${m.k}`, () => change(m.k)))), o);
-            },
-          },
-          {
-            title: 'Talk to friends, not to strangers',
-            body: `<p>A chain like <code>article.author.profile.avatar.url</code> couples your code to four classes and the shape of each. If the profile moves the avatar, every chain in the app breaks.</p>
-<p>Ask the nearest object for what you need, and let it decide where that comes from. This is the Law of Demeter. Data-only chains on your own immutable models are fine. The problem is reaching through objects that have behaviour and change.</p>`,
-            code: `// Couples the screen to Author, Profile and Avatar
-AsyncImage(model = article.author.profile.avatar.url, contentDescription = null)
-
-// The mapper that builds UI state knows the structure, once
-data class ArticleUi(val title: String, val authorAvatarUrl: String?)
-fun Article.toUi() = ArticleUi(title, author.profile.avatar?.url)
-
-AsyncImage(model = ui.authorAvatarUrl, contentDescription = null)`,
-          },
-          {
-            title: 'Low cohesion across files: shotgun surgery',
-            body: `<p>Cohesion can also be too low in the other direction. If one small rule is copied into six screens, a change to it means editing six files and hoping you found them all. That is <em>shotgun surgery</em>.</p>
-<p>Code that always changes together should live together, even if it ends up in one larger class. File size is not the measure. What changes together is.</p>`,
-            code: `// Spread over 6 screens
-if (BuildConfig.FLAVOR == "eu" && user.isSignedIn && remoteConfig.getBoolean("live_scores")) { /* ... */ }
-
-// One place owns the rule
-class LiveScoresPolicy(private val config: FirebaseRemoteConfig, private val market: Market) {
-    fun canShow(user: User): Boolean =
-        market == Market.EU && user.isSignedIn && config.getBoolean("live_scores")
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>Gradle makes module coupling concrete. With <code>implementation</code>, a dependency is visible only to the module that declares it. With <code>api</code>, it is exported to every module that depends on that module.</p>
-<p>That changes build cost. If an <code>implementation</code> dependency changes its API, Gradle recompiles it and the modules that depend on it directly. If an <code>api</code> dependency changes, every module that can see it recompiles. Low coupling shows up as faster builds.</p>`,
-          code: `// :core:data/build.gradle.kts
-dependencies {
-    api(project(":core:model"))        // consumers see Article: part of our API
-    implementation(libs.retrofit)      // consumers can't import Retrofit types
-    implementation(libs.room.runtime)
-}`,
-        },
-        mistakes: [
-          { title: 'A ViewModel that knows the libraries', bad: 'class NewsViewModel(\n    private val retrofit: Retrofit,\n    private val db: AppDatabase,\n    private val firebase: FirebaseAnalytics,\n) : ViewModel()', good: 'class NewsViewModel(\n    private val news: NewsRepository,\n    private val tracker: ScreenTracker,\n) : ViewModel()', why: 'Swapping Retrofit, the database or the analytics vendor now edits the ViewModel and every test that builds it. Depend on small types you own.' },
-          { title: 'Grouping by kind instead of by purpose', bad: 'utils/\n    DateUtils.kt\n    StringUtils.kt\n    ViewUtils.kt\nhelpers/\n    BookmarkHelper.kt', good: 'news/\n    ArticleDateFormatter.kt\n    NewsRepository.kt\nbookmarks/\n    BookmarkRepository.kt', why: 'A utils folder collects unrelated code because it has the same shape. Put code next to the feature it serves, so one change stays in one place.' },
-        ],
-        visual(el) {
-          const F = ['articles', 'locale', 'bookmarks', 'api', 'analytics', 'query', 'dao'];
-          const M = [
-            { k: 'load()', uses: ['articles', 'api'], g: 0 },
-            { k: 'formatDate(t)', uses: ['locale'], g: 2 },
-            { k: 'toggleBookmark(id)', uses: ['bookmarks', 'dao'], g: 1 },
-            { k: 'search(q)', uses: ['articles', 'query'], g: 0 },
-            { k: 'trackScroll(d)', uses: ['analytics'], g: 3 },
-            { k: 'isBookmarked(id)', uses: ['bookmarks'], g: 1 },
-            { k: 'refresh()', uses: ['articles', 'api'], g: 0 },
-          ];
-          const G = [['NewsViewModel', 'articles, query, api'], ['BookmarkRepository', 'bookmarks, dao'], ['ArticleDateFormatter', 'locale'], ['ScrollTracker', 'analytics']];
-          const FG = { articles: 0, query: 0, api: 0, bookmarks: 1, dao: 1, locale: 2, analytics: 3 };
-          const CHANGES = [
-            { label: 'API v2 renames fields', f: ['api'] },
-            { label: 'Bookmarks sync to server', f: ['bookmarks', 'dao'] },
-            { label: '“Today” for today’s dates', f: ['locale'] },
-            { label: 'New analytics vendor', f: ['analytics'] },
-          ];
-          let grouped = false, busy = false;
-          const table = h('div', { class: 'oo-coh-grid' });
-          const stat = h('div', { class: 'oo-row' });
-          const split = h('div', { class: 'oo-coh-split' });
-          const o = out('');
-          const pairsShare = ms => { let s = 0, t = 0; for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) { t++; if (ms[i].uses.some(u => ms[j].uses.includes(u))) s++; } return t ? Math.round(100 * s / t) : 100; };
-          function paint(hotF = []) {
-            const fs = grouped ? [...F].sort((a, b) => FG[a] - FG[b]) : F;
-            const ms = grouped ? [...M].sort((a, b) => a.g - b.g) : M;
-            table.style.gridTemplateColumns = `minmax(0, 1fr) repeat(${fs.length}, 22px)`;
-            table.replaceChildren(h('span', {}),
-              ...fs.map(f => h('span', { class: `oo-coh-f${hotF.includes(f) ? ' oo-coh-hotf' : ''}` }, f)),
-              ...ms.flatMap(m => {
-                const hit = m.uses.some(u => hotF.includes(u));
-                return [h('span', { class: `oo-coh-m${hit ? ' oo-coh-hotm' : ''}`, html: hl(m.k) }),
-                  ...fs.map(f => h('span', { class: `oo-coh-cell${grouped ? ' oo-coh-g' + FG[f] : ''}` }, m.uses.includes(f) ? h('span', { class: `oo-coh-dot${grouped ? ' oo-coh-g' + m.g : ''}${hit && m.uses.includes(f) ? ' oo-coh-hotd' : ''}` }) : null))];
-              }));
-            stat.replaceChildren(pill(`method pairs sharing a field: ${pairsShare(M)}%`, pairsShare(M) < 50 ? 'oo-err' : 'oo-ok'), pill('outside types it knows: 4', 'oo-warn'));
-          }
-          async function group() {
-            if (busy) return; busy = true;
-            grouped = !grouped; paint(); replay(table, 'pop-soft');
-            say(o, grouped ? 'Sorted by shared fields: <span class="good">four blocks</span> appear, and no block shares a field with another.' : 'Back to the order the methods were written in.');
-            busy = false;
-          }
-          async function doSplit() {
-            if (busy) return; busy = true;
-            if (!grouped) { grouped = true; paint(); await sleep(400); if (!el.isConnected) return; }
-            split.replaceChildren();
-            for (let i = 0; i < G.length; i++) {
-              const ms = M.filter(m => m.g === i);
-              split.append(h('div', { class: `oo-card oo-coh-cls oo-coh-b${i} drop-in` }, h('span', { class: 'oo-title' }, G[i][0]), h('span', { class: 'oo-stat' }, G[i][1]), h('div', { class: 'oo-row' }, ms.map(m => pill(m.k))), pill(`pairs sharing: ${pairsShare(ms)}%`, 'oo-ok')));
-              await sleep(260); if (!el.isConnected) return;
-            }
-            say(o, '<span class="good">Four cohesive classes.</span> The ViewModel now holds four small types it owns, instead of four libraries.');
-            busy = false;
-          }
-          function change(c) {
-            if (busy) return;
-            paint(c.f);
-            const hitM = M.filter(m => m.uses.some(u => c.f.includes(u)));
-            say(o, `“${c.label}” <span class="muted">→ touches</span> ${hitM.map(m => hl(m.k)).join(', ')} <span class="muted">only. Yet the whole NewsViewModel gets edited, reviewed and retested.</span>`);
-          }
-          paint();
-          say(o, 'Dots show which method uses which field. Group them, or send a change request.');
-          el.append(
-            h('div', { class: 'oo-card' }, h('span', { class: 'oo-label oo-raw' }, 'NewsViewModel: methods × fields'), table, stat),
-            h('div', { class: 'controls' }, act('Group by shared fields', group), act('Split into classes', doSplit)),
-            h('div', { class: 'controls' }, h('span', { class: 'oo-label' }, 'change request'), CHANGES.map(c => act(c.label, () => change(c)))),
-            split, o);
-        },
-        predict: {
-          q: 'Group the seven <code>NewsViewModel</code> methods so that methods sharing a field end up together. How many groups appear?',
-          options: ['1', '2', '4', '7'],
-          a: 2,
-          why: '<code>load</code>, <code>search</code> and <code>refresh</code> share <code>articles</code>. The two bookmark methods share <code>bookmarks</code>. <code>formatDate</code> and <code>trackScroll</code> each stand alone. Four groups is four classes in one file.',
-        },
-        play: `fun main() {
-    // Which fields each method of a grown NewsViewModel touches
-    val uses = mapOf(
-        "load()" to setOf("api", "articles"),
-        "search(q)" to setOf("articles", "query"),
-        "toggleBookmark(id)" to setOf("dao", "bookmarks"),
-        "isBookmarked(id)" to setOf("bookmarks"),
-        "formatDate(t)" to setOf("locale"),
-        "trackScroll(d)" to setOf("analytics"),
-    )
-    // Merge methods into one group when they share a field
-    val groups = mutableListOf<Pair<MutableSet<String>, MutableSet<String>>>()
-    for ((method, fields) in uses) {
-        val touching = groups.filter { (_, f) -> f.any { it in fields } }
-        val merged = mutableSetOf(method) to fields.toMutableSet()
-        touching.forEach { merged.first += it.first; merged.second += it.second }
-        groups.removeAll(touching)
-        groups += merged
-    }
-    groups.forEachIndexed { i, (methods, fields) -> println("class \${i + 1}: $methods uses $fields") }
-    println("\${groups.size} groups: \${if (groups.size > 1) "low cohesion, split it" else "cohesive"}")
-    // Make formatDate(t) also use "articles" and run again
-}`,
+        docs: [['Guide to app architecture', 'https://developer.android.com/topic/architecture']],
       },
 
-      // 11 ─────────────────────────────────────────────
       {
         id: 'domain-modeling',
-        title: 'Modeling a domain',
-        tagline: 'Turn a feature description into types that make wrong states hard to write.',
-        level: 'advanced',
+        title: 'Modelling a domain',
+        tagline: 'Turn a description of a problem into types that make mistakes hard to write.',
+        goals: ['Pick the right tool for each part of a description: class, data class, enum or sealed', 'Put each rule in the class that owns the data', 'Let the compiler point to every place a new case must be handled'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>Start from the words of the feature, not from the database or the screen. Nouns become types. Verbs become methods, usually on a repository or the object that owns the data. Rules like “never empty” become checks that run when an object is built.</p>
-<p>Two kinds of types come out. An <em>entity</em> has identity that lasts while its data changes: an article is the same article after its headline is fixed, and its id says so. A <em>value object</em> is defined by its value alone: an <code>ArticleId</code> or a category slug. Value objects are small, immutable, and compared with <code>==</code>.</p>
-<p>The payoff is that the compiler starts checking the business rules. An <code>ArticleId</code> can't be passed where a <code>UserId</code> is expected, and an <code>Article</code> with a blank title can't exist. Click the highlighted words below to build the model of a news app.</p>`,
-        code: `@JvmInline value class ArticleId(val raw: String) {
-    init { require(raw.isNotBlank()) { "ArticleId is blank" } }
-}
-@JvmInline value class CategorySlug(val raw: String)
-
-data class Category(val slug: CategorySlug, val name: String)
-
-data class Article(                      // entity: identified by id
-    val id: ArticleId,
-    val title: String,
-    val publishedAt: Instant,
-    val category: CategorySlug,
-    val isBreaking: Boolean,
-) {
-    init { require(title.isNotBlank()) { "Article " + id.raw + " has a blank title" } }
-}
-
-data class Bookmark(val articleId: ArticleId, val savedAt: Instant)   // points by id
-
-interface ArticleRepository {
-    fun articles(category: CategorySlug): Flow<List<Article>>
-}
-interface BookmarkStore {                // local, so it works offline
-    fun all(): Flow<List<Bookmark>>
-    suspend fun toggle(id: ArticleId)
-}`,
-        remember: 'Nouns become types, rules become init checks, ids get their own types, and states become sealed cases.',
-        terms: [
-          { term: 'Entity', def: 'A domain object with lasting identity, usually an id, that stays the same thing while its data changes.' },
-          { term: 'Value object', def: 'A small immutable type defined only by its value, such as an id or an amount, compared with ==.' },
-          { term: 'Primitive obsession', def: 'Using raw String, Int or Boolean for domain ideas, so the compiler can’t tell them apart.' },
-          { term: 'Illegal state', def: 'A combination of values that should never happen but that the types still allow.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Make an article id a zero-cost wrapper that can never be blank.', code: '@JvmInline\n[[value]] class ArticleId(val raw: String) {\n    init { [[require]](raw.isNotBlank()) { "ArticleId is blank" } }\n}', why: 'A value class wraps one value with almost no runtime cost, and its <code>init</code> check runs every time one is built. <code>require</code> throws <code>IllegalArgumentException</code> when the condition is false.' },
-          { type: 'bug', prompt: 'An editor fixes a headline, but the bookmarks screen keeps showing the old one. Tap the line that stores too much.', code: 'data class Bookmark(\n    val article: Article,\n    val savedAt: Instant,\n)', bug: 1, fix: '    val articleId: ArticleId,', why: 'The bookmark froze a copy of the article. Store the id and look the article up, so there is one source of truth for its data.' },
-        ],
-        quiz: [
-          { q: 'Which is a value object in a news app?', options: ['Article', 'CategorySlug', 'BookmarkStore'], a: 1, why: 'Two equal slugs are interchangeable. An article has identity, and a store is a service with behaviour.' },
-          { q: 'Where should “a title is never blank” be enforced?', options: ['In every screen that shows titles', 'In Article’s init block', 'In the database only'], a: 1, why: 'If the constructor checks it, no Article with a blank title can exist anywhere in the app.' },
-          { q: 'Why model screen state as a sealed type instead of isLoading, error and articles fields together?', options: ['It is shorter to write', 'It rules out combinations like loading with an error at the same time', 'Compose requires it'], a: 1, why: 'Separate flags allow every combination. Sealed cases allow exactly the states you list.' },
-          { q: 'What happens on <code>ArticleId("")</code> with the model above?', options: ['It builds an ArticleId with an empty raw value', 'It throws IllegalArgumentException from the init check', 'It does not compile'], a: 1, why: 'The init block still runs for a value class, even when no wrapper object is created. A blank id can’t exist.' },
-          { q: 'What does <code>article.copy(title = "")</code> do?', options: ['Returns an article with a blank title', 'Throws, because copy() runs the init check too', 'Returns null'], a: 1, why: 'copy() calls the primary constructor, so every invariant in init is checked again. Once an Article exists, it is valid.' },
-          { q: 'The server sends 50 articles, and one has a malformed date. With <code>dtos.mapNotNull { it.toDomainOrNull() }</code>, what does the user see?', options: ['An empty screen', 'A crash', '49 articles; the bad one is dropped and can be logged'], a: 2, why: 'The mapper catches the failure per item at the edge. The rest of the app only ever sees valid Article objects.' },
-        ],
-        deeper: [
-          {
-            title: 'Give ids their own types',
-            body: `<p>When every id is a <code>String</code>, swapping two arguments compiles and quietly writes the wrong row. A value class per id turns that into a compile error, and on the JVM it is usually stored as the bare string, so it costs almost nothing.</p>
-<p>Call the bookmark function both ways, with and without value classes.</p>`,
-            code: `@JvmInline value class UserId(val raw: String)
-@JvmInline value class ArticleId(val raw: String)
-
-fun saveBookmark(user: UserId, article: ArticleId) { /* ... */ }
-
-saveBookmark(article.id, user.id)   // compile error: argument type mismatch`,
-            visual(el) {
-              let typed = false, busy = false;
-              const sig = h('div', { class: 'kt oo-wrap' });
-              const res = h('div', { class: 'oo-row' });
-              const o = out('');
-              const sw = h('input', { type: 'checkbox', id: 'oo-dom-typed' });
-              function paint() { sig.innerHTML = hl(typed ? 'fun saveBookmark(user: UserId, article: ArticleId)' : 'fun saveBookmark(userId: String, articleId: String)'); res.replaceChildren(); }
-              sw.addEventListener('change', () => { typed = sw.checked; paint(); say(o, typed ? 'Ids are now separate types.' : 'Ids are plain Strings.'); });
-              async function callIt(swapped) {
-                if (busy) return; busy = true;
-                const expr = swapped ? 'saveBookmark(article.id, user.id)' : 'saveBookmark(user.id, article.id)';
-                res.replaceChildren();
-                await sleep(200); if (!el.isConnected) return;
-                if (!swapped) { res.append(pill('user = "u-7"', 'oo-ok drop-in'), pill('article = "a-42"', 'oo-ok drop-in')); say(o, `${hl(expr)} <span class="muted">→</span> <span class="good">saved correctly</span>`); }
-                else if (!typed) { res.append(pill('user = "a-42"', 'oo-err drop-in'), pill('article = "u-7"', 'oo-err drop-in')); replay(res, 'shake'); say(o, `${hl(expr)} <span class="muted">→</span> <span class="bad">compiles and runs.</span> <span class="muted">A bookmark for user "a-42" now exists. Nobody notices until a bug report.</span>`); }
-                else { replay(sig, 'shake'); say(o, `${hl(expr)} <span class="muted">→</span> <span class="bad">compile error:</span> argument type mismatch, UserId expected but ArticleId given. <span class="good">Caught before it ships.</span>`); }
-                busy = false;
-              }
-              paint();
-              say(o, 'Call it the right way, then with the arguments swapped.');
-              el.append(h('label', { class: 'switch', for: 'oo-dom-typed' }, sw, 'Use value classes for ids'), sig,
-                h('div', { class: 'controls' }, cmd('saveBookmark(user.id, article.id)', () => callIt(false)), cmd('saveBookmark(article.id, user.id)', () => callIt(true))),
-                res, o);
-            },
-          },
-          {
-            title: 'Check invariants in init, map at the edges',
-            body: `<p>An <code>init</code> block with <code>require</code> runs on every construction, including <code>copy()</code>. Once the check passes, every function that receives an <code>Article</code> can trust it and skip its own checks.</p>
-<p>Server data is not under your control, so don't let a bad JSON field crash the app. Convert DTOs to domain objects in one mapper, catch the failure there, and drop or report the bad item.</p>`,
-            code: `fun ArticleDto.toDomainOrNull(): Article? = runCatching {
-    Article(
-        id = ArticleId(id),
-        title = title.orEmpty(),
-        publishedAt = Instant.parse(published_at),
-        category = CategorySlug(category),
-        isBreaking = flags.contains("breaking"),
-    )
-}.getOrNull()                       // bad item: skip it, log it
-
-val articles = dtos.mapNotNull { it.toDomainOrNull() }`,
-            visual(el) {
-              const TRIES = [
-                { src: 'Article(ArticleId("a-42"), title = "Final 2-2", ...)', ok: true, msg: 'built. Every function that gets it can trust the title.' },
-                { src: 'Article(ArticleId("a-43"), title = "   ", ...)', ok: false, msg: 'IllegalArgumentException: Article a-43 has a blank title' },
-                { src: 'ArticleId("")', ok: false, msg: 'IllegalArgumentException: ArticleId is blank' },
-                { src: 'good.copy(title = "")', ok: false, msg: 'IllegalArgumentException: Article a-42 has a blank title  (copy() runs init too)' },
-              ];
-              const o = out('');
-              const gate = h('div', { class: 'oo-vault' }, h('span', { class: 'oo-label oo-raw' }, 'init { require(title.isNotBlank()) }'), h('div', { class: 'oo-items' }));
-              el.append(h('div', { class: 'controls' }, TRIES.map(t => cmd(t.src, () => {
-                const box = gate.lastChild;
-                if (t.ok) { box.append(pill('Article a-42', 'oo-ok drop-in')); replay(gate, 'pop'); }
-                else { gate.classList.add('oo-open'); replay(gate, 'shake'); setTimeout(() => gate.classList.remove('oo-open'), 700); }
-                say(o, `${hl(t.src)} <span class="muted">→</span> <span class="${t.ok ? 'good' : 'bad'}">${t.msg}</span>`);
-              }))), gate, o);
-              say(o, 'Try to build articles. Only valid ones get through.');
-            },
-          },
-          {
-            title: 'Make illegal states unrepresentable',
-            body: `<p>A screen state with <code>isLoading</code>, <code>error</code> and <code>articles</code> as separate fields allows eight combinations, and only four make sense. Nothing stops a loading spinner on top of an error message.</p>
-<p>A sealed interface lists the states that can really happen. Each case carries only the data it needs, and a <code>when</code> over it must handle every case.</p>`,
-            code: `// 2 × 2 × 2 = 8 combinations, 4 of them nonsense
-data class FeedUi(val isLoading: Boolean, val error: String?, val articles: List<Article>)
-
-// Exactly the states that exist
-sealed interface FeedUiState {
-    data object Loading : FeedUiState
-    data object Empty : FeedUiState
-    data class Content(val articles: List<Article>, val refreshing: Boolean) : FeedUiState
-    data class Error(val message: String) : FeedUiState
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>A value class compiles to its underlying type wherever possible. A function that takes <code>ArticleId</code> takes a <code>String</code> in the bytecode, with a mangled name so it can't clash with a real <code>String</code> overload. The wrapper object is only allocated when the value is used as another type, for example as the element type of a <code>List&lt;ArticleId&gt;</code>.</p>
-<p>The <code>init</code> block still runs. Construction goes through a static check method, so <code>ArticleId("")</code> throws even though no wrapper object is created.</p>`,
-          code: `// Kotlin
-fun open(id: ArticleId) { /* ... */ }
-
-// JVM, simplified
-public static final void open-<hash>(String id)   // takes the raw String
-public static String constructor-impl(String raw) {
-    require(!raw.isBlank())                       // init runs here
-    return raw
-}`,
-        },
-        mistakes: [
-          { title: 'Strings for everything', bad: 'fun saveBookmark(userId: String, articleId: String)\nfun open(articleId: String, categorySlug: String)', good: 'fun saveBookmark(user: UserId, article: ArticleId)\nfun open(article: ArticleId, category: CategorySlug)', why: 'Every swap compiles. Value classes make each id a separate type at almost no runtime cost.' },
-          { title: 'Modelling from the API response', bad: 'data class Article(\n    val id: String?,\n    val title: String?,\n    val published_at: String?,\n    val flags: List<String>?,\n)', good: 'data class Article(\n    val id: ArticleId,\n    val title: String,\n    val publishedAt: Instant,\n    val isBreaking: Boolean,\n)\n// ArticleDto keeps the server shape; a mapper converts it', why: 'The server’s nullable, stringly shape spreads into every screen, and each one handles nulls differently. Keep the DTO at the edge and give the app a clean model.' },
-        ],
+<p>A small library asks for an app: “Members, each with a card number, borrow books. A book is on the shelf, on loan to a member until a due day, or lost. A book on loan can’t be lent again.” Before writing any logic, decide which types the program has. Good types make many mistakes impossible even to write.</p>
+<p>The <em>domain</em> is the part of the world a program is about: here, members, books and loans. Modelling the domain means turning its words into types, with the tools you know. A plain value described by its data, like a member with a card number and a name, is a <code>data class</code>. A thing with a life and rules, like a book that gets lent, is a class with private state and functions. A fixed list of simple choices is an <code>enum class</code>. Either-or cases where some carry their own data, like “on loan to Ada until day 17”, are a <code>sealed interface</code> with one member per case.</p>
+<p>Then each rule goes into the class that owns the data: “a book on loan can’t be lent again” lives in <code>Book.lendTo()</code>. Notice what the types rule out. A book can’t be lost and on loan at once, because it has exactly one state. A loan can’t forget its member, because <code>OnLoan</code> can’t be made without one. And if the library later adds a case, like “being repaired”, every <code>when</code> that doesn’t handle it stops compiling and shows you where to update.</p>
+<p>Two small details in the code below. <code>is</code> also works in an <code>if</code>: <code>if (state is OnLoan)</code>. And <code>state</code> is a <code>var</code>, so Kotlin won’t trust a check on it, because it could change in between. Copy it into a <code>val</code> first (<code>val s = book.state</code>), and the <code>is OnLoan</code> smart cast in the <code>when</code> works.</p>`,
         visual(el) {
-          const WORDS = {
-            articles: { kind: 'entity', cls: 'oo-acc', src: 'data class Article(\n    val id: ArticleId,\n    val title: String,\n    val publishedAt: Instant,\n    val category: CategorySlug,\n    val isBreaking: Boolean,\n)' },
-            id: { kind: 'value object', cls: 'oo-ok', src: '@JvmInline value class ArticleId(val raw: String)' },
-            category: { kind: 'value object', cls: 'oo-ok', src: '@JvmInline value class CategorySlug(val raw: String)\ndata class Category(val slug: CategorySlug, val name: String)' },
-            'never empty': { kind: 'invariant', cls: 'oo-warn', src: '// in Article\ninit { require(title.isNotBlank()) }' },
-            breaking: { kind: 'state', cls: 'oo-acc', src: '// in Article\nval isBreaking: Boolean' },
-            browse: { kind: 'behaviour', cls: 'oo-warn', src: 'interface ArticleRepository {\n    fun articles(category: CategorySlug): Flow<List<Article>>\n}' },
-            bookmark: { kind: 'value object', cls: 'oo-ok', src: 'data class Bookmark(val articleId: ArticleId, val savedAt: Instant)' },
-            offline: { kind: 'behaviour', cls: 'oo-warn', src: 'interface BookmarkStore {   // backed by Room\n    fun all(): Flow<List<Bookmark>>\n    suspend fun toggle(id: ArticleId)\n}' },
-          };
-          const found = new Set();
-          const model = h('div', { class: 'oo-dom-model' });
-          const count = h('span', { class: 'oo-stat' });
-          const o = out('');
-          const w = k => { const b = h('button', { class: 'oo-dom-word', type: 'button', onclick: () => pick(k, b) }, k); return b; };
-          const spec = h('p', { class: 'oo-dom-spec' },
-            'Readers ', w('browse'), ' ', w('articles'), ' by ', w('category'), '. Every article has its own ', w('id'), ', a title that is ', w('never empty'), ', a publish time and a category. ',
-            'Articles marked ', w('breaking'), ' get a red badge. Readers can ', w('bookmark'), ' an article and see their bookmarks ', w('offline'), '.');
-          function paintCount() { count.innerHTML = `found <b>${found.size}</b> of ${Object.keys(WORDS).length}`; }
-          function pick(k, btn) {
-            const d = WORDS[k];
-            if (found.has(k)) { const c = model.querySelector(`[data-k="${k}"]`); if (c) { c.classList.add('oo-flash'); replay(c, 'oo-flash'); } return; }
-            found.add(k); btn.classList.add('oo-dom-done');
-            const card = h('div', { class: 'oo-card oo-dom-card drop-in', 'data-k': k }, h('div', { class: 'oo-row' }, pill(d.kind, d.cls), h('span', { class: 'oo-label oo-raw' }, `“${k}”`)), kt(d.src));
-            card.querySelector('.kt').classList.add('oo-wrap');
-            model.prepend(card); paintCount();
-            const hint = { entity: 'a thing with its own identity: it gets an id and keeps it.', 'value object': 'defined by its value alone. Small, immutable, compared with ==.', invariant: 'a rule. It becomes a check in init, so no invalid object can exist.', state: 'data the object carries.', behaviour: 'a verb. It becomes a method on the type that owns the data.' }[d.kind];
-            say(o, found.size === Object.keys(WORDS).length ? '<span class="good">Model complete.</span> Eight words, a handful of small types, and two rules the compiler and init enforce.' : `<b>${k}</b> <span class="muted">→</span> ${d.kind}: ${hint}`);
-          }
-          paintCount();
-          say(o, 'Tap the highlighted words in the feature description.');
-          el.append(h('div', { class: 'oo-card' }, h('span', { class: 'oo-label' }, 'feature description'), spec, count), model, o);
+          Lab.ui.graph(el, {
+            height: 430,
+            nodes: [
+              { id: 'p1', label: '“members”<small>have a card number, a name</small>', x: 22, y: 9, tone: 'muted', hidden: true },
+              { id: 'p2', label: '“books”<small>have a title, get lent</small>', x: 22, y: 30, tone: 'muted', hidden: true },
+              { id: 'p3', label: '“on the shelf, on loan, or lost”', x: 22, y: 51, tone: 'muted', hidden: true },
+              { id: 'p4', label: '“on loan to a member until a day”', x: 22, y: 72, tone: 'muted', hidden: true },
+              { id: 'p5', label: '“can’t be lent again”', x: 22, y: 92, tone: 'muted', hidden: true },
+              { id: 't1', label: 'data class Member', x: 76, y: 9, hidden: true },
+              { id: 't2', label: 'class Book<small>private state</small>', x: 76, y: 30, hidden: true },
+              { id: 't3', label: 'sealed interface BookState', x: 76, y: 51, tone: 'ok', hidden: true },
+              { id: 't4', label: 'class OnLoan<small>member, dueDay</small>', x: 76, y: 72, tone: 'ok', hidden: true },
+              { id: 't5', label: 'fun lendTo()<small>in Book</small>', x: 76, y: 92, hidden: true },
+            ],
+            predict: {
+              q: 'A book is “on the shelf”, “on loan until day 30”, or “lost”. Which tool fits best?',
+              options: ['A sealed interface, with a class for the loan', 'An enum class with three choices', 'Three Boolean properties'],
+              a: 0,
+              why: 'A book is in exactly one state, and only the loan carries extra data. Three Booleans could all be true at once.',
+            },
+            frames: [
+              { show: ['p1', 't1'], add: [['p1', 't1', '', 'accent']], say: '“Members” with a card number and a name: a plain value described by its data, so a <code>data class</code>. The card number is an <code>id</code>: two different people both called Ada get different ids, so they are not equal.' },
+              { show: ['p2', 't2'], add: [['p2', 't2', '', 'accent']], say: '“Books” have a life: they are lent and given back. A class with private state and functions.' },
+              { show: ['p3', 't3'], add: [['p3', 't3', '', 'accent']], say: 'Three cases, exactly one at a time: a <code>sealed interface BookState</code>. OnShelf and Lost carry no data, so they are objects.' },
+              { show: ['p4', 't4'], add: [['p4', 't4', '', 'accent'], ['t4', 't3', 'is a', 'ok']], say: 'Only the loan carries data: who has the book, and until when. So OnLoan is a class with properties, which an enum choice couldn’t hold.' },
+              { show: ['p5', 't5'], add: [['p5', 't5', '', 'accent']], say: 'The rule goes into the class that owns the state: <code>lendTo()</code> checks the book’s state before changing it.' },
+              { hl: ['t3'], say: 'A new case later, like Repairing? Add one member to BookState, and Kotlin points at every <code>when</code> that must handle it.' },
+            ],
+          });
         },
-        predict: {
-          q: 'Readers can “bookmark” an article. What should a <code>Bookmark</code> hold?',
-          options: ['The whole <code>Article</code> object', 'The <code>ArticleId</code> and when it was saved', 'Nothing: a Boolean on Article is enough'],
-          a: 1,
-          why: 'A bookmark points at an article by its id. It stays valid when the headline changes, and it can be stored offline on its own.',
-        },
-        play: `@JvmInline value class ArticleId(val raw: String) {
-    init { require(raw.isNotBlank()) { "ArticleId is blank" } }
-}
-@JvmInline value class UserId(val raw: String)
+        code: `data class Member(val id: Int, val name: String)
 
-data class Article(val id: ArticleId, val title: String) {      // entity: identified by id
-    init { require(title.isNotBlank()) { "Article \${id.raw} has a blank title" } }
+sealed interface BookState
+object OnShelf : BookState
+class OnLoan(val member: Member, val dueDay: Int) : BookState
+object Lost : BookState
+
+class Book(val title: String) {
+    var state: BookState = OnShelf   // the type is BookState, so any case fits later
+        private set
+
+    fun lendTo(member: Member, today: Int): Boolean {
+        if (state != OnShelf) {
+            return false
+        }
+        state = OnLoan(member, today + 14)
+        return true
+    }
+
+    fun giveBack() {
+        if (state is OnLoan) {
+            state = OnShelf
+        }
+    }
+
+    fun markLost() {
+        state = Lost
+    }
 }
 
-fun bookmark(user: UserId, article: ArticleId) = println("\${user.raw} saved \${article.raw}")
+fun describe(book: Book): String {
+    val s = book.state   // a val copy, so the smart cast to OnLoan works
+    return when (s) {
+        OnShelf -> "\${book.title}: on the shelf"
+        is OnLoan -> "\${book.title}: with \${s.member.name} until day \${s.dueDay}"
+        Lost -> "\${book.title}: lost"
+    }
+}
 
 fun main() {
-    val a = Article(ArticleId("a-42"), "Bridge reopens")
-    val edited = a.copy(title = "Bridge reopens after repairs")
-    println("same entity: \${a.id == edited.id}, same value: \${a == edited}")
-    bookmark(UserId("u-1"), a.id)
-    // bookmark(a.id, UserId("u-1"))   // remove the //: the compiler rejects the swapped ids
-    val ids = setOf(ArticleId("a-42"), ArticleId("a-42"), ArticleId("a-7"))
-    println("distinct ids: \${ids.size}")          // value objects compare by value
+    val ada = Member(1, "Ada")
+    val book = Book("Blue Harbor")
+    println(describe(book))                     // Blue Harbor: on the shelf
+    book.lendTo(ada, 3)
+    println(describe(book))                     // Blue Harbor: with Ada until day 17
+    println(book.lendTo(Member(2, "Sam"), 4))   // false: already on loan
 }`,
+        play: `enum class Size { SMALL, LARGE }
+
+data class Drink(val name: String, val size: Size)
+
+sealed interface OrderState
+object Waiting : OrderState
+class Ready(val counter: Int) : OrderState
+object Collected : OrderState
+
+class Order(val drink: Drink) {
+    var state: OrderState = Waiting   // the type is OrderState, so any case fits later
+        private set
+
+    fun price(): Int = if (drink.size == Size.SMALL) 3 else 4
+
+    fun finish(counter: Int) {
+        if (state == Waiting) {
+            state = Ready(counter)
+        }
+    }
+
+    fun collect() {
+        if (state is Ready) {
+            state = Collected
+        }
+    }
+}
+
+fun show(order: Order): String {
+    val s = order.state   // a val copy, so the smart cast to Ready works
+    return when (s) {
+        Waiting -> "\${order.drink.name}: waiting"
+        is Ready -> "\${order.drink.name}: ready at counter \${s.counter}"
+        Collected -> "\${order.drink.name}: collected"
+    }
+}
+
+fun main() {
+    val order = Order(Drink("Cocoa", Size.LARGE))
+    println("Price: \${order.price()}")
+    println(show(order))
+    order.finish(2)
+    println(show(order))
+    order.collect()
+    println(show(order))
+    // New rule: an order can be Cancelled, with a reason. Add it to OrderState
+    // and see which line Kotlin points you to.
+}`,
+        remember: 'Turn the words of the problem into types: data class for values, classes for things with rules, enum for simple choices, sealed for cases with their own data. Put each rule where its data lives.',
+        mistakes: [
+          { title: 'Modelling cases with loose Booleans', bad: `class Book(val title: String) {
+    var onLoan = false
+    var lost = false
+    var member: String? = null
+}
+// onLoan and lost can both be true,
+// and a loan can be missing its member`, good: `sealed interface BookState
+object OnShelf : BookState
+class OnLoan(val member: Member, val dueDay: Int) : BookState
+object Lost : BookState`, why: 'With Booleans, nonsense states are possible, and every function has to check for them. With a sealed state, a book is in exactly one case, and a loan always has its member.' },
+        ],
+        terms: [
+          { term: 'domain', def: 'The part of the world a program is about, like members, books and loans for a library.' },
+          { term: 'domain model', def: 'The types that describe a domain in code, with each rule placed in the class that owns its data.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A seat is free, or taken by someone. Put Free in the family, and handle the taken case.', code: `sealed interface Seat
+object Free : [[Seat]]
+class Taken(val person: String) : Seat
+
+fun label(s: Seat): String = when (s) {
+    Free -> "free"
+    is [[Taken]] -> "taken by \${s.person}"
+}`, why: 'Free carries no data, so it is an object. Taken carries a name, so it is a class, and after <code>is Taken</code> you can read <code>s.person</code>.' },
+          { type: 'bug', prompt: 'Kotlin says <code>Assignment type mismatch: actual type is \'Lost\', but \'BookState\' was expected.</code> Tap the line.', code: `sealed interface BookState
+object OnShelf : BookState
+object Lost
+
+class Book(val title: String) {
+    var state: BookState = OnShelf
+        private set
+
+    fun markLost() {
+        state = Lost
+    }
+}`, bug: 2, fix: 'object Lost : BookState', why: 'Lost is a case of BookState, so it has to join the family with <code>: BookState</code>. Without it, it is an unrelated object.' },
+        ],
+        quiz: [
+          { q: 'A café has cup sizes small, medium and large, with nothing else to store. Which tool fits?', options: ['An enum class', 'A sealed interface', 'A data class'], a: 0, why: 'A fixed list of simple choices, none carrying its own data.' },
+          { q: 'Where does the rule “a book on loan can’t be lent again” belong?', options: ['In <code>Book.lendTo()</code>', 'In every screen with a Lend button', 'In the Member class'], a: 0, why: 'In the class that owns the book’s state, written once.' },
+          { q: 'You add <code>object Repairing : BookState</code>. What does Kotlin do?', options: ['Every <code>when</code> over BookState with no <code>else</code> stops compiling until it handles Repairing', 'Nothing, until the program runs', 'The program crashes at the start'], a: 0, why: 'A sealed family is known in full, so Kotlin can check every <code>when</code> before the program runs.' },
+        ],
+        docs: [['Sealed classes and interfaces', 'https://kotlinlang.org/docs/sealed-classes.html'], ['Data classes', 'https://kotlinlang.org/docs/data-classes.html']],
       },
     ],
   });

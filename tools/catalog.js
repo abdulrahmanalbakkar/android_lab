@@ -24,7 +24,7 @@ const files = fs.readdirSync(path.join(root, 'tracks')).filter(f => f.endsWith('
 const ordered = order.filter(f => files.includes(f)).concat(files.filter(f => !order.includes(f)).sort());
 
 const TRACK_KEYS = ['id', 'title', 'description', 'requires', 'hue', 'kind', 'builds', 'stage', 'optional'];
-const LESSON_KEYS = ['id', 'title', 'tagline', 'level', 'remember', 'terms', 'quiz', 'refs'];
+const LESSON_KEYS = ['id', 'title', 'tagline', 'level', 'goals', 'remember', 'terms', 'quiz', 'refs'];
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
 const list = [];
