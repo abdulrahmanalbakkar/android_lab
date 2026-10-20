@@ -239,1339 +239,896 @@
     id: 'git',
     title: 'Git and the command line',
     description: 'Save, share and undo your work: the terminal, commits, branches, merging, rebasing, GitHub and pull requests, from zero.',
-    group: 'Foundations', requires: [],
+    group: 'Foundations', requires: [], lang: 'shell',
     css,
     lessons: [
-      // 1 ─────────────────────────────────────────────
       {
         id: 'terminal',
         title: 'The terminal',
-        tagline: 'A text window where you type commands. Every Git command runs here.',
-        level: 'beginner',
+        tagline: 'A window where you type commands instead of clicking.',
+        goals: ['Open a terminal and run a command', 'Find out where you are with <code>pwd</code> and <code>ls</code>', 'Move between folders with <code>cd</code> and make one with <code>mkdir</code>'],
+        level: 'beginner', introduces: ['pwd', 'ls', 'cd', 'mkdir', 'dir'],
         body: `
-<p>The terminal is a program that runs commands you type. On macOS it is called Terminal, on Windows you can use PowerShell or Git Bash, and Android Studio has one built in at the bottom of the window. You type a command, press <kbd>Enter</kbd>, and it prints the result.</p>
-<p>The terminal is always "standing" in one folder, the <em>working directory</em>. <code>pwd</code> prints where you are, <code>ls</code> lists what is there, <code>cd</code> moves you, and <code>mkdir</code> makes a new folder. Git commands act on the folder you are standing in, so knowing where you are is step one.</p>
-<p>Why not just click? Commands are exact, you can repeat them, copy them from docs, and put them in scripts and CI. Every Git feature exists on the command line, while most apps only show some of them. Try the commands below and watch the highlight move in the folder tree.</p>`,
-        predict: {
-          q: 'You stand in <code>~/projects</code> and run <code>cd NewsApp</code>, then <code>ls</code>. What does <code>ls</code> list?',
-          options: ['What is in <code>~/projects</code>', 'What is in NewsApp: <code>app/</code> and the two Gradle files', 'Every file on the disk'],
-          a: 1,
-          why: '<code>cd</code> changes the working directory, and <code>ls</code> with no argument lists the folder you are standing in.',
-        },
+<p>Every Git lesson after this one happens in a window where you type instead of click. Developers like it because a typed command is exact: you can copy it from a guide, run it again tomorrow, and see precisely what happened.</p>
+<p>That window is the <em>terminal</em>. On macOS and Linux, open the app called Terminal. Android Studio, the program you will use later in the course to build Android apps, has one too, in the Terminal tab at the bottom of its window. You type a <em>command</em> after the <em>prompt</em> (here a <code>$</code> sign; yours may also show your name and folder), press <kbd>Enter</kbd>, and the terminal prints the result.</p>
+<p>The terminal always stands in one folder, the <em>working directory</em>. <code>pwd</code> prints which one (print working directory). <code>ls</code> lists what is inside it. <code>cd projects</code> moves into the folder <code>projects</code>, and <code>cd ..</code> moves up one level, to the folder that holds this one. <code>mkdir notes</code> makes a new folder named <code>notes</code> right here. A <em>path</em> such as <code>/home/ada/projects</code> names a folder by listing the folders that lead to it, separated by <code>/</code>.</p>
+<p>On Windows, open PowerShell (it comes with Windows) or Git Bash (it comes with Git). <code>pwd</code>, <code>ls</code>, <code>cd</code> and <code>mkdir</code> work there too. In the older Command Prompt, type <code>dir</code> instead of <code>ls</code>, and <code>cd</code> on its own instead of <code>pwd</code>. Windows paths use <code>\\</code>, like <code>C:\\Users\\ada\\projects</code>.</p>`,
         visual(el) {
-          const FS = { projects: { NewsApp: { app: { src: {} }, 'build.gradle.kts': null, 'settings.gradle.kts': null }, 'notes.txt': null } };
-          let cwd = ['projects'];
-          const dirAt = p => p.reduce((d, k) => d[k], FS);
-          const tilde = p => '~' + p.map(x => '/' + x).join('');
-          const term = h('div', { class: 'gt-term', 'aria-live': 'polite' });
-          const tree = h('div', { class: 'gt-tree', 'aria-label': 'Folders on disk' });
-          const o = out('');
-          const log = [];
-          const NOTES = {
-            pwd: 'pwd = print working directory. It is the folder every relative path starts from.',
-            ls: 'ls lists the folder you are standing in. Folders end with a slash here.',
-            'cd ..': 'cd .. moves up one level, to the parent folder.',
-            'cd ~': 'cd ~ jumps to your home folder from anywhere.',
-            'mkdir docs': 'mkdir makes a folder inside the current one. It does not move you into it.',
+          const tree = (here, notes) => {
+            const rows = [['ada', 0, true], ['Desktop', 1, true], ['Documents', 1, true], ['projects', 1, true]];
+            if (notes) rows.push(['notes', 2, true]);
+            return '<div class="gt-tree">' + rows.map(([n, d, dir]) => `<div class="gt-ti${dir ? '' : ' gt-fi'}${n === here ? ' gt-here' : ''}" style="padding-left:${8 + d * 14}px">${n}${dir ? '/' : ''}</div>`).join('') + '</div>';
           };
-          function drawTree() {
-            const items = [h('div', { class: 'gt-ti' + (cwd.length === 0 ? ' gt-here' : '') }, '~ (home)')];
-            (function walk(d, path, depth) {
-              for (const [k, v] of Object.entries(d)) {
-                const p = [...path, k], dir = v && typeof v === 'object';
-                const here = dir && p.join('/') === cwd.join('/');
-                items.push(h('div', { class: `gt-ti${dir ? '' : ' gt-fi'}${here ? ' gt-here' : ''}`, style: `padding-left:${8 + depth * 14}px` }, dir ? k + '/' : k));
-                if (dir) walk(v, p, depth + 1);
-              }
-            })(FS, [], 1);
-            tree.replaceChildren(...items);
-          }
-          function drawTerm() {
-            term.replaceChildren(...log.slice(-6).flatMap(e => [
-              h('div', {}, h('span', { class: 'gt-ps' }, e.ps + ' '), e.cmd),
-              ...e.res.map(r => h('div', { class: e.err ? 'gt-terr' : 'gt-tout' }, r)),
-            ]));
-          }
-          function run(c) {
-            const ps = `sam@laptop:${tilde(cwd)}$`;
-            const [name, arg] = c.split(' ');
-            let res = [], err = false, note = NOTES[c] || '';
-            const d = dirAt(cwd);
-            if (name === 'pwd') res = ['/home/sam' + cwd.map(x => '/' + x).join('')];
-            else if (name === 'ls') { const ks = Object.keys(d); if (ks.length) res = [ks.map(k => (d[k] ? k + '/' : k)).join('  ')]; else note = 'ls printed nothing: this folder is empty.'; }
-            else if (name === 'cd') {
-              if (arg === '..') { if (cwd.length) cwd = cwd.slice(0, -1); else note = 'In the real terminal this goes to /home. The demo stops at your home folder.'; }
-              else if (arg === '~') cwd = [];
-              else if (d[arg] && typeof d[arg] === 'object') { cwd = [...cwd, arg]; note = `You are now inside ${arg}. The prompt shows the new path.`; }
-              else { res = [`bash: cd: ${arg}: No such file or directory`]; err = true; note = `There is no ${arg} folder here. cd looks inside the current folder, so check where you are with pwd and ls.`; }
-            } else if (name === 'mkdir') {
-              if (arg in d) { res = [`mkdir: cannot create directory '${arg}': File exists`]; err = true; note = 'That folder already exists here.'; }
-              else d[arg] = {};
-            }
-            log.push({ ps, cmd: c, res, err });
-            drawTerm(); drawTree();
-            say(o, esc(note));
-          }
-          drawTree();
-          log.push({ ps: 'sam@laptop:~/projects$', cmd: '', res: [], err: false });
-          drawTerm();
-          say(o, 'The prompt shows who you are, the computer, and the folder you are in. Run a command.');
-          el.append(
-            row(...['pwd', 'ls', 'cd NewsApp', 'cd app', 'cd ..', 'mkdir docs', 'cd ~'].map(c => act(c, () => run(c)))),
-            h('div', { class: 'gt-split' }, h('div', { class: 'gt-col' }, lab('terminal'), term), h('div', { class: 'gt-col' }, lab('folders'), tree)),
-            o);
-        },
-        code: `# Where am I, and what is here?
-pwd                      # /home/sam/projects
-ls                       # NewsApp/  notes.txt
-
-# Move around
-cd NewsApp            # into a folder (relative path)
-cd app/src               # several levels at once
-cd ..                    # up one level
-cd ~/projects            # from home, wherever you are now
-
-# Make things
-mkdir docs               # new folder
-touch docs/notes.md      # new empty file (macOS / Linux / Git Bash)
-
-# Is Git installed?
-git --version`,
-        remember: 'Know where you are before you run anything: pwd, then ls, then the command.',
-        deeper: [
-          {
-            title: 'Reading a command: program, subcommand, flags, arguments',
-            body: `<p>Most commands follow one pattern. First the <em>program</em> (<code>git</code>), then often a <em>subcommand</em> (<code>commit</code>), then <em>flags</em> that start with dashes, then <em>arguments</em>, the things to act on. Short flags use one dash (<code>-m</code>), long flags two (<code>--message</code>). Quotes keep words with spaces together as one argument.</p>
-<p>Tap each part of the command below.</p>`,
-            visual(el) {
-              const parts = [
-                ['git', 'Program: the tool to run. The shell finds it on your PATH.'],
-                ['commit', 'Subcommand: which of git\'s many jobs to do.'],
-                ['-m', 'Flag (short form of --message): the next argument is the commit message.'],
-                ['"Add login screen"', 'Argument: the value for -m. The quotes make three words one argument.'],
-                ['--verbose', 'Long flag with no value: switches a behaviour on.'],
-              ];
-              const o = out('');
-              const btns = parts.map(([t, d]) => h('button', { class: 'gt-tok', onclick() { press(btns, this); say(o, esc(d)); } }, t));
-              say(o, 'Tap a part of the command.');
-              el.append(h('div', { class: 'gt-anat' }, btns), o);
-            },
-          },
-          {
-            title: 'Absolute and relative paths',
-            body: `<p>A path that starts with <code>/</code> (or <code>~</code>, your home folder) is <em>absolute</em>: it works from anywhere. Any other path is <em>relative</em> to where you stand. <code>.</code> means "this folder" and <code>..</code> means "the parent". If a folder name has spaces, put it in quotes.</p>`,
-            code: `cd /home/sam/projects/NewsApp   # absolute: works from anywhere
-cd ~/projects/NewsApp             # same place, shorter
-cd app                               # relative: only if app is right here
-cd ../..                             # up two levels
-cd "Android Projects"                # quotes for spaces`,
-          },
-          {
-            title: 'Set Git up once: your name and email',
-            body: `<p>Every commit records an author. Tell Git who you are once per computer with <code>git config --global</code>. Use the same email as your GitHub account so your commits link to your profile. Press <kbd>Tab</kbd> to complete file and folder names, and the up arrow to bring back the previous command.</p>`,
-            code: `git config --global user.name "Sam Lee"
-git config --global user.email "sam@example.com"
-git config --global init.defaultBranch main   # new repos start on "main"
-git config --list                             # check what is set`,
-          },
-        ],
-        underHood: {
-          body: `<p>The terminal window runs a <em>shell</em> (bash, zsh or PowerShell). When you type <code>git status</code>, the shell splits the line into words, looks for a program called <code>git</code> in the folders listed in the <code>PATH</code> variable, starts it, and passes it the other words. When the program ends it returns an <em>exit code</em>: 0 means success, anything else means failure. Scripts and CI use exit codes to decide whether to stop.</p>`,
-          code: `which git        # /usr/bin/git: where the shell found it
-echo $PATH       # the folders it searches, separated by :
-git status
-echo $?          # exit code of the last command: 0 = success`,
-        },
-        mistakes: [
-          { title: 'Running Git in the wrong folder', bad: `cd ~
-git init        # turns your whole home folder into a repository`, good: `cd ~/projects/NewsApp
-pwd             # check first
-git init`, why: 'Git acts on the current folder. Running <code>git init</code> in your home folder makes Git track everything under it. Check with <code>pwd</code> first.' },
-          { title: 'Spaces in paths without quotes', bad: `cd Android Projects
-# bash: cd: too many arguments`, good: `cd "Android Projects"`, why: 'The shell splits words on spaces, so <code>Android</code> and <code>Projects</code> become two arguments. Quotes keep them together.' },
-        ],
-        terms: [
-          { term: 'Terminal', def: 'A window where you type text commands and see their output.' },
-          { term: 'Working directory', def: 'The folder the terminal is currently in. Relative paths and most Git commands start from it.' },
-          { term: 'Flag', def: 'An option that starts with - or --, such as -m or --verbose, that changes what a command does.' },
-          { term: 'Exit code', def: 'The number a program returns when it ends. 0 means success.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Print where you are, then move into the <code>app</code> folder inside <code>NewsApp</code>.', code: '[[pwd]]\n[[cd]] NewsApp/app', why: '<code>pwd</code> prints the working directory. <code>cd</code> changes it, and one path can go down several levels.' },
-          { type: 'bug', prompt: 'You start in <code>~/projects</code> and want to end in <code>~/projects/NewsApp/app</code>. Tap the wrong line.', code: 'cd NewsApp\nls\ncd ../app\npwd', bug: 2, fix: 'cd app', why: '<code>..</code> goes up to <code>projects</code> first, where there is no <code>app</code> folder. <code>app</code> is right here inside <code>NewsApp</code>, so a plain relative path works.' },
-        ],
-        quiz: [
-          { q: 'What does <code>cd ..</code> do?', options: ['Goes to your home folder', 'Moves up one level to the parent folder', 'Lists hidden files'], a: 1, why: '<code>..</code> always means the parent of the current folder.' },
-          { q: 'In <code>git commit -m "Fix crash"</code>, what is <code>"Fix crash"</code>?', options: ['A subcommand', 'A flag', 'An argument, the value of -m'], a: 2, why: 'The quoted text is the argument that <code>-m</code> expects. Quotes keep the two words together.' },
-          { q: 'A command printed nothing at all. What most likely happened?', options: ['It failed', 'It succeeded and had nothing to report', 'The terminal froze'], a: 1, why: 'Many commands stay silent on success. Check the exit code with <code>echo $?</code> if you are unsure.' },
-          { q: 'You are in <code>/home/sam/projects/NewsApp/app/src</code> and run <code>cd ../..</code>. Where are you now?', options: ['<code>/home/sam/projects</code>', '<code>/home/sam/projects/NewsApp/app</code>', '<code>/home/sam/projects/NewsApp</code>'], a: 2, why: 'Each .. goes up one level: first to app, then to NewsApp.' },
-          { q: '<code>cd Android Projects</code> fails, but the folder exists. Why?', options: ['Folder names can’t contain spaces', 'The shell split the name into two arguments; quote it: <code>cd "Android Projects"</code>', 'cd only accepts absolute paths'], a: 1, why: 'The shell splits words on spaces before the program sees them. Quotes keep the folder name together as one argument.' },
-        ],
-      },
-
-      // 2 ─────────────────────────────────────────────
-      {
-        id: 'commits',
-        title: 'Repositories and commits',
-        tagline: 'Pick changes into the staging area, then save them as a snapshot in history.',
-        level: 'beginner',
-        body: `
-<p><code>git init</code> turns a folder into a <em>repository</em>: Git adds a hidden <code>.git</code> folder where it keeps all history. Your files stay where they are. From now on, Git compares them with the last saved version.</p>
-<p>Saving takes two steps. <code>git add</code> copies a change into the <em>staging area</em>, a draft of your next commit. <code>git commit</code> saves everything in the staging area as a <em>commit</em>: a snapshot of the project with a message, an author and a unique id. The two steps let you edit five files but commit only the two that belong together.</p>
-<p><code>git status</code> tells you which files are changed, which are staged, and which Git has never seen (<em>untracked</em>). Run it often. Below, edit files, stage them and commit, and watch them move between the three areas.</p>`,
-        predict: {
-          q: 'You edited <code>MainActivity.kt</code> and <code>README.md</code>, but run <code>git add</code> only on MainActivity.kt before <code>git commit</code>. Where does the README edit end up?',
-          options: ['In the commit too', 'Still in your files, changed but not committed', 'Gone: Git discards edits that were not added'],
-          a: 1,
-          why: 'A commit saves exactly what is in the staging area. The README edit stays in the working tree for a later commit.',
-        },
-        visual(el) {
-          const F = [
-            { n: 'MainActivity.kt', w: 1, i: 1, c: 1 },
-            { n: 'strings.xml', w: 1, i: 1, c: 1 },
-            { n: 'README.md', w: 1, i: 0, c: 0 },
-          ];
-          const IDS = ['5b2f7d4', 'a90c13e', '71d4be2', 'c08f5a9', '2e6b9d1', '9fd0a37', '4c1e8b2', 'd37a0f5'];
-          const hist = [{ id: 'e3a91c0', msg: 'Initial commit' }];
-          let fresh = new Set();
-          const wt = h('div', { class: 'gt-files' }), st = h('div', { class: 'gt-files' }), hi = h('div', { class: 'gt-files' });
-          const bW = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, '1 Working tree', h('small', {}, 'your files')), wt);
-          const bS = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, '2 Staging area', h('small', {}, 'next commit')), st);
-          const bH = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, '3 History', h('small', {}, 'commits')), hi);
-          const o = out('');
-          const kind = f => (f.c === 0 && f.i === 0 ? 'untracked' : f.w !== f.i ? 'modified' : f.i !== f.c ? 'staged' : 'unchanged');
-          function draw(on) {
-            wt.replaceChildren(...F.map(f => {
-              const k = kind(f);
-              const cls = k === 'untracked' ? 'gt-new' : k === 'modified' ? 'gt-mod' : 'gt-dim';
-              return h('span', { class: `gt-f ${cls}${fresh.has('w' + f.n) ? ' drop-in' : ''}` }, f.n, ' ', h('small', {}, k));
-            }));
-            const staged = F.filter(f => f.i !== f.c);
-            st.replaceChildren(...(staged.length ? staged.map(f => h('span', { class: `gt-f gt-stg${fresh.has('s' + f.n) ? ' drop-in' : ''}` }, f.n, ' ', h('small', {}, f.c === 0 ? 'new file' : 'modified'))) : [h('span', { class: 'gt-empty' }, 'empty')]));
-            hi.replaceChildren(...hist.slice(-4).reverse().map((c, j) => h('span', { class: `gt-f${j === 0 && fresh.has('h') ? ' pop' : ''}` }, h('small', {}, c.id + ' '), c.msg)));
-            [bW, bS, bH].forEach(b => b.classList.toggle('gt-on', b === on));
-            fresh = new Set();
-          }
-          function edit(f) { f.w++; fresh.add('w' + f.n); draw(bW); say(o, `You saved ${esc(f.n)} in the editor. Git notices it differs from the last commit: <span class="bad">modified</span>.`); }
-          function add(list) {
-            const ch = list.filter(f => f.w !== f.i);
-            if (!ch.length) { draw(bS); say(o, '<span class="muted">Nothing new to stage. git add only copies changes that are not staged yet.</span>'); return; }
-            ch.forEach(f => { f.i = f.w; fresh.add('s' + f.n); fresh.add('w' + f.n); });
-            draw(bS);
-            say(o, `Staged ${esc(ch.map(f => f.n).join(', '))}. A copy of the file as it is now sits in the staging area. Edit it again and you would need to add again.`);
-          }
-          function commit() {
-            const staged = F.filter(f => f.i !== f.c);
-            if (!staged.length) {
-              draw(bS);
-              const dirty = F.some(f => kind(f) === 'modified'), untr = F.some(f => kind(f) === 'untracked');
-              say(o, `<span class="bad">${dirty ? 'no changes added to commit (use "git add")' : untr ? 'nothing added to commit but untracked files present (use "git add" to track)' : 'nothing to commit, working tree clean'}</span>`);
-              return;
-            }
-            const msg = staged.length === 1 ? `${staged[0].c === 0 ? 'Add' : 'Update'} ${staged[0].n}` : `Update ${staged.length} files`;
-            const id = IDS[(hist.length - 1) % IDS.length];
-            staged.forEach(f => { f.c = f.i; });
-            hist.push({ id, msg }); fresh.add('h');
-            draw(bH);
-            say(o, `[main ${id}] ${esc(msg)}\n<span class="muted">${staged.length} file(s) saved as a new snapshot. Changes you did not stage stay in the working tree.</span>`);
-          }
-          function status() {
-            const L = ['On branch main'];
-            const staged = F.filter(f => f.i !== f.c), mod = F.filter(f => kind(f) === 'modified' && f.c !== 0), untr = F.filter(f => f.c === 0 && f.i === 0);
-            if (staged.length) L.push('Changes to be committed:', ...staged.map(f => `<span class="good">    ${f.c === 0 ? 'new file' : 'modified'}:   ${esc(f.n)}</span>`));
-            if (mod.length) L.push('Changes not staged for commit:', ...mod.map(f => `<span class="bad">    modified:   ${esc(f.n)}</span>`));
-            if (untr.length) L.push('Untracked files:', ...untr.map(f => `<span class="bad">    ${esc(f.n)}</span>`));
-            if (L.length === 1) L.push('nothing to commit, working tree clean');
-            draw(null);
-            say(o, L.join('\n'));
-          }
-          draw(null);
-          say(o, 'A repository with one commit. README.md is new, so Git does not track it yet.');
-          el.append(
-            row(act('edit MainActivity.kt', () => edit(F[0])), act('edit strings.xml', () => edit(F[1]))),
-            row(act('git add MainActivity.kt', () => add([F[0]])), act('git add .', () => add(F)), act('git commit -m "…"', commit), act('git status', status)),
-            h('div', { class: 'gt-boxes' }, bW, bS, bH), o);
-        },
-        code: `cd ~/projects/NewsApp
-git init                         # creates .git/, starts on the default branch
-git status                       # what changed, what is staged, what is new
-
-git add app/src/main/java/com/example/news/MainActivity.kt
-git add .                        # stage every change under this folder
-git commit -m "Add news list screen"
-
-git log --oneline                # one line per commit, newest first
-# 5b2f7d4 (HEAD -> main) Add news list screen
-# e3a91c0 Initial commit`,
-        remember: 'Edit, git add the changes that belong together, git commit. Run git status between every step.',
-        deeper: [
-          {
-            title: 'git diff: what exactly changed?',
-            body: `<p><code>git diff</code> compares two of the three areas. With no options it shows what you changed but have not staged. <code>git diff --staged</code> shows what the next commit will contain. <code>git diff HEAD</code> shows everything since the last commit. Lines with <code>-</code> were removed, lines with <code>+</code> were added.</p>`,
-            visual(el) {
-              const V = { w: 'News Pro', s: 'News App', c: 'News' };
-              const mk = (t, k) => h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, t), h('span', { class: 'gt-f' }, 'app_name = ', h('small', {}, V[k])));
-              const bW = mk('Working tree', 'w'), bS = mk('Staging area', 's'), bC = mk('Last commit', 'c');
-              const diff = h('div', { class: 'gt-diff' });
-              const MODES = {
-                'git diff': [bS, bW, 's', 'w', 'Unstaged changes: staging area → working tree.'],
-                'git diff --staged': [bC, bS, 'c', 's', 'What the next commit will add: last commit → staging area.'],
-                'git diff HEAD': [bC, bW, 'c', 'w', 'Everything since the last commit.'],
-              };
-              const o = out('');
-              const btns = Object.keys(MODES).map(m => act(m, function () {
-                const [a, b, va, vb, note] = MODES[m];
-                press(btns, this);
-                [bW, bS, bC].forEach(x => x.classList.toggle('gt-on', x === a || x === b));
-                diff.replaceChildren(
-                  h('div', { class: 'gt-dl gt-meta' }, '@@ res/values/strings.xml @@'),
-                  h('div', { class: 'gt-dl gt-minus' }, `-    <string name="app_name">${V[va]}</string>`),
-                  h('div', { class: 'gt-dl gt-plus' }, `+    <string name="app_name">${V[vb]}</string>`));
-                replay(diff, 'pop-soft');
-                say(o, note);
-              }));
-              say(o, 'Each area holds a different version of the app name. Pick a diff.');
-              el.append(row(btns), h('div', { class: 'gt-boxes' }, bW, bS, bC), diff, o);
-            },
-          },
-          {
-            title: 'Reading history with git log',
-            body: `<p><code>git log</code> lists commits newest first: id, author, date and message. <code>--oneline</code> keeps one line each. <code>-p</code> shows the diff of each commit. Add a file path to see only the commits that touched that file. Press <kbd>q</kbd> to leave the log viewer.</p>`,
-            code: `git log --oneline -5                     # last 5 commits
-git log -p -- app/src/main/res/values/strings.xml   # every change to one file
-git show 5b2f7d4                         # one commit in full
-git log --author="Sam" --since="1 week ago"`,
-          },
-          {
-            title: 'Commit ids are hashes',
-            body: `<p>The id of a commit, like <code>5b2f7d4…</code>, is a hash computed from its content: the snapshot, the parent commit, the author, the time and the message. Change any of these and you get a different id. That is why ids are unique, and why "changing" an old commit really makes a new one. Git usually shows only the first 7 characters, and that is enough to name a commit.</p>`,
-          },
-        ],
-        underHood: {
-          body: `<p>Everything lives in <code>.git/objects</code>. A <em>blob</em> holds one file's content, a <em>tree</em> lists the files and folders of a snapshot, and a <em>commit</em> points to one tree, its parent commit(s), and has the author and message. Each object is stored under its hash (SHA-1 by default). Files that did not change between commits are not copied again: the new tree just points to the same blob.</p>`,
-          code: `git cat-file -p HEAD
-# tree 9c3e5a1f...
-# parent e3a91c0b...
-# author Sam Lee <sam@example.com> 1760600000 +0000
-# committer Sam Lee <sam@example.com> 1760600000 +0000
-#
-# Add news list screen`,
-        },
-        mistakes: [
-          { title: 'Committing without staging', bad: `# edited MainActivity.kt
-git commit -m "Fix crash"
-# no changes added to commit`, good: `git add MainActivity.kt
-git commit -m "Fix crash"`, why: '<code>git commit</code> only saves what is in the staging area. Stage first, or use <code>git commit -am</code> to stage changes to files Git already tracks (not new files).' },
-          { title: 'git add . without looking', bad: `git add .
-git commit -m "Stuff"`, good: `git status
-git diff
-git add app/src/main/java/com/example/news/NewsAdapter.kt
-git commit -m "Show source name on news cards"`, why: '<code>git add .</code> stages everything, including debug logs, keys and unrelated edits. Look at <code>git status</code> and <code>git diff</code> first, and add what belongs together.' },
-        ],
-        terms: [
-          { term: 'Repository', def: 'A project folder plus the .git folder that holds its full history.' },
-          { term: 'Staging area', def: 'The draft of your next commit. git add puts changes in it. Also called the index.' },
-          { term: 'Commit', def: 'A saved snapshot of the project with a message, an author, a parent and a unique id.' },
-          { term: 'Untracked file', def: 'A file in the folder that Git has never been told to track.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Stage one file, then save it as a commit.', code: 'git [[add]] MainActivity.kt\ngit [[commit]] -m "Add login screen"', why: '<code>add</code> puts the change in the staging area, <code>commit</code> saves the staging area into history.' },
-          { type: 'bug', prompt: 'Git replies "nothing added to commit but untracked files present". Tap the line to change.', code: 'cd NewsApp\ngit init\ngit commit -m "Initial commit"\ngit log --oneline', bug: 2, fix: 'git add . && git commit -m "Initial commit"', why: 'A new repository tracks nothing yet. Stage the files first, then commit.' },
-        ],
-        quiz: [
-          { q: 'You changed 3 files but want only 2 in the next commit. How?', options: ['git commit -m with the 2 names in the message', 'git add the 2 files, then git commit', 'Delete the third file'], a: 1, why: 'The staging area exists for exactly this. Only staged changes go into the commit.' },
-          { q: 'After git add, you edit the same file again. What does git commit save?', options: ['The newest version', 'The version you staged', 'Both versions'], a: 1, why: 'git add copies the file as it was at that moment. The later edit is unstaged until you add again.' },
-          { q: 'Where does Git store the history of a repository?', options: ['On GitHub only', 'In the hidden .git folder', 'In each file'], a: 1, why: 'Everything Git knows is in <code>.git</code>. Delete it and the folder is no longer a repository.' },
-          { q: 'You staged a file, then edited it again. Which command shows only that second, unstaged edit?', options: ['<code>git diff --staged</code>', '<code>git diff</code>', '<code>git log -p</code>'], a: 1, why: 'Plain git diff compares your files with the staging area. --staged shows what the next commit will contain.' },
-          { q: 'You created a new file Search.kt and edited a tracked file. What does <code>git commit -am "Add search"</code> commit?', options: ['Both files', 'Nothing, because Search.kt is not staged', 'Only the edit to the tracked file'], a: 2, why: '-a stages changes to files Git already tracks. A new file stays untracked until you git add it.' },
-        ],
-      },
-
-      // 3 ─────────────────────────────────────────────
-      {
-        id: 'ignore',
-        title: 'Good commits and .gitignore',
-        tagline: 'Commit one idea at a time, and never commit files a machine can rebuild or a stranger should not see.',
-        level: 'beginner',
-        body: `
-<p>A good commit holds one logical change and builds on its own. Its message has a short summary line, 50 characters or less, that says what the change does, like <code>Fix crash when the feed is empty</code>. Small commits are easier to review, easier to revert, and make <code>git log</code> readable months later.</p>
-<p>Some files must never be committed. An Android project creates <code>build/</code> folders and a <code>.gradle/</code> cache on every build. <code>local.properties</code> holds the SDK path of your own machine. Keystores (<code>.jks</code>) sign your releases and are secret. Most of <code>.idea/</code> is your personal Android Studio state. A <code>.gitignore</code> file lists patterns, and Git stops showing matching untracked files.</p>
-<p>Be careful with broad patterns. <code>gradle/wrapper/gradle-wrapper.jar</code> must be committed, so that teammates and CI can run <code>./gradlew</code>. Turn the patterns on below and watch which files Git would still offer to commit.</p>`,
-        predict: {
-          q: 'You add the line <code>build/</code> to .gitignore. Which paths does it hide?',
-          options: ['Only a <code>build</code> folder at the project root', 'Every folder named <code>build</code> at any depth, like <code>app/build/</code>', 'Every file with build in its name, like <code>build.gradle.kts</code>'],
-          a: 1,
-          why: 'A pattern with no slash except at the end matches a folder with that name anywhere below the .gitignore. The trailing slash means folders only.',
-        },
-        visual(el) {
-          const FILES = [
-            ['app/src/main/java/com/example/news/MainActivity.kt', 'keep'],
-            ['app/build.gradle.kts', 'keep'],
-            ['gradle/wrapper/gradle-wrapper.jar', 'keep'],
-            ['app/build/outputs/apk/debug/app-debug.apk', 'junk'],
-            ['.gradle/ (Gradle cache)', 'junk'],
-            ['.idea/workspace.xml', 'junk'],
-            ['local.properties', 'private'],
-            ['release.jks', 'private'],
-          ];
-          const PATS = [
-            ['build/', p => /(^|\/)build\//.test(p)],
-            ['.gradle/', p => p.startsWith('.gradle/')],
-            ['local.properties', p => p === 'local.properties'],
-            ['*.jks', p => p.endsWith('.jks')],
-            ['.idea/workspace.xml', p => p === '.idea/workspace.xml'],
-            ['*.jar', p => p.endsWith('.jar')],
-          ];
-          const on = new Set();
-          const file = h('div', { class: 'gt-ignfile', 'aria-label': '.gitignore contents' });
-          const list = h('div', { class: 'gt-ig' });
-          const o = out('');
-          const btns = PATS.map(([p]) => act(p, function () { on.has(p) ? on.delete(p) : on.add(p); this.setAttribute('aria-pressed', String(on.has(p))); draw(p); }, { 'aria-pressed': 'false' }));
-          function draw(changed) {
-            file.textContent = on.size ? PATS.filter(([p]) => on.has(p)).map(([p]) => p).join('\n') : '# .gitignore is empty';
-            let leaks = 0, junk = 0, broken = 0, shown = 0;
-            list.replaceChildren(...FILES.map(([path, kind]) => {
-              const hit = PATS.find(([p, f]) => on.has(p) && f(path.split(' ')[0]));
-              let cls = '', tag;
-              if (hit) {
-                if (kind === 'keep') { cls = 'gt-err'; tag = `ignored by ${hit[0]}, but the team needs it`; broken++; }
-                else { cls = 'gt-ign'; tag = `ignored by ${hit[0]}`; }
-              } else {
-                shown++;
-                if (kind === 'junk') { cls = 'gt-warn'; tag = 'generated: would be committed'; junk++; }
-                else if (kind === 'private') { cls = 'gt-err'; tag = 'private: would be committed'; leaks++; }
-                else tag = 'tracked';
-              }
-              const r = h('div', { class: `gt-ig-r ${cls}` }, h('span', {}, path), h('span', { class: 'gt-tag' }, tag));
-              if (changed && hit && hit[0] === changed) replay(r, 'pop-soft');
-              return r;
-            }));
-            replay(file, 'pop-soft');
-            if (broken) say(o, `<span class="bad">*.jar also hides gradle-wrapper.jar.</span> A fresh clone could not run ./gradlew. Remove that pattern.`);
-            else if (!leaks && !junk) say(o, `<span class="good">Clean.</span> git status now offers only the ${shown} files that belong in the repository.`);
-            else say(o, `git status would offer ${shown} files: ${leaks ? `<span class="bad">${leaks} private</span>` : '0 private'}, ${junk ? `<span class="bad">${junk} generated</span>` : '0 generated'}.`);
-          }
-          draw();
-          el.append(row(lab('add a line'), ...btns), h('div', { class: 'gt-split' }, h('div', { class: 'gt-col' }, lab('.gitignore'), file), h('div', { class: 'gt-col' }, lab('files in the project'), list)), o);
-        },
-        code: `# .gitignore for an Android project (in the project root)
-build/                 # every build output folder, at any depth
-.gradle/               # Gradle's local cache
-local.properties       # sdk.dir=/Users/sam/Library/Android/sdk
-*.jks
-*.keystore             # signing keys never go in Git
-.idea/workspace.xml
-.idea/caches/
-captures/
-.DS_Store
-
-# then
-git add .gitignore
-git commit -m "Ignore build outputs and local files"`,
-        remember: 'One idea per commit, a short summary line, and a .gitignore before the first git add.',
-        deeper: [
-          {
-            title: 'Pick the better commit message',
-            body: `<p>The summary line is what people see in <code>git log --oneline</code>, on GitHub and in review tools. Say what the change does, in the imperative ("Fix", "Add", "Remove"), and keep it short. Put the why in the body, after a blank line.</p>`,
-            visual(el) {
-              const ROUNDS = [
-                ['fixed stuff', 'Fix crash when the news feed is empty', 1, 'It names the change. "fixed stuff" tells a reader nothing.'],
-                ['Add pull-to-refresh to the news list', 'Add pull-to-refresh, dark mode and new onboarding, fix 3 crashes', 0, 'One idea per commit. The second one should be four commits.'],
-                ['Update NewsViewModel.kt', 'Retry the feed request once on timeout', 1, 'The file name is already in the diff. Say what changed in behaviour.'],
-              ];
-              let i = 0, score = 0;
-              const box = h('div', { class: 'gt-col' });
-              const o = out('');
-              function show() {
-                if (i >= ROUNDS.length) { box.replaceChildren(); say(o, `${score} of ${ROUNDS.length}. Press Reset to try again.`); return; }
-                const [a, b, good, why] = ROUNDS[i];
-                const opts = [a, b].map((m, j) => h('button', { class: 'gt-msg', onclick() {
-                  if (box.dataset.done) return; box.dataset.done = '1';
-                  opts[good].classList.add('gt-right'); if (j !== good) this.classList.add('gt-wrong'); else score++;
-                  say(o, `${j === good ? '<span class="good">Yes.</span>' : '<span class="bad">Not this one.</span>'} ${esc(why)}`);
-                  setTimeout(() => { if (!el.isConnected) return; delete box.dataset.done; i++; show(); }, 2200);
-                } }, m));
-                box.replaceChildren(lab(`round ${i + 1} of ${ROUNDS.length}`), ...opts);
-              }
-              show(); say(o, 'Which message would you rather read in the log?');
-              el.append(box, o);
-            },
-          },
-          {
-            title: 'Already committed it? Untrack it',
-            body: `<p><code>.gitignore</code> only affects untracked files. If <code>local.properties</code> is already in a commit, adding it to <code>.gitignore</code> changes nothing. Remove it from the index with <code>git rm --cached</code>; the file stays on your disk.</p>`,
-            code: `echo "local.properties" >> .gitignore
-git rm --cached local.properties     # stop tracking, keep the file
-git commit -m "Stop tracking local.properties"
-git check-ignore -v local.properties # which rule ignores it?`,
-          },
-          {
-            title: 'Pushed a secret? Rotate it',
-            body: `<p>If a key, password or keystore reached a shared repository, treat it as public. Deleting it in a new commit does not remove it from history, and anyone may already have a copy. Revoke or rotate the key first, then clean up. For patterns that are only yours, like your editor's files, use <code>.git/info/exclude</code> or a global ignore file instead of the shared <code>.gitignore</code>.</p>`,
-            code: `# personal ignores, not shared with the team
-echo ".vscode/" >> .git/info/exclude
-git config --global core.excludesFile ~/.gitignore_global`,
-          },
-        ],
-        mistakes: [
-          { title: 'Ignoring all jars', bad: `*.jar`, good: `# no *.jar rule: gradle/wrapper/gradle-wrapper.jar must be committed
-build/
-.gradle/`, why: 'The Gradle wrapper jar lets anyone build the project with <code>./gradlew</code> without installing Gradle. A broad <code>*.jar</code> rule hides it.' },
-          { title: 'Adding .gitignore after the fact', bad: `git add .
-git commit -m "Initial commit"   # build/ and local.properties are in
-echo "build/" >> .gitignore`, good: `# write .gitignore first
-git add .gitignore
-git add .
-git commit -m "Initial commit"`, why: 'Ignore rules do not untrack files that are already committed. Write <code>.gitignore</code> before the first <code>git add .</code>, or untrack with <code>git rm --cached</code>.' },
-        ],
-        terms: [
-          { term: '.gitignore', def: 'A file of patterns. Untracked files that match are hidden from git status and git add.' },
-          { term: 'local.properties', def: 'A file Android Studio writes with your machine’s SDK path. It differs per computer, so it is not committed.' },
-          { term: 'Keystore', def: 'A file (.jks or .keystore) holding the keys that sign your app. Keep it out of Git.' },
-          { term: 'Gradle wrapper', def: 'gradlew scripts plus gradle-wrapper.jar that download and run the right Gradle version. Commit them.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Ignore every build output folder, and the file with your SDK path.', code: '[[build/|build|/build/|**/build/]]\n.gradle/\n[[local.properties|/local.properties]]\n*.jks', why: '<code>build/</code> with a trailing slash matches a folder named build at any depth. <code>local.properties</code> holds a path that only exists on your machine.' },
-          { type: 'bug', prompt: 'With this .gitignore, a fresh clone on CI cannot run <code>./gradlew</code>. Tap the line.', code: 'build/\n.gradle/\nlocal.properties\n*.jar\n.idea/workspace.xml', bug: 3, fix: '*.jks', why: '<code>*.jar</code> also ignores <code>gradle/wrapper/gradle-wrapper.jar</code>. You probably meant <code>*.jks</code>, the keystore.' },
-        ],
-        quiz: [
-          { q: 'Why is <code>local.properties</code> not committed?', options: ['It is too big', 'It holds a path that is only valid on your computer', 'Gradle forbids it'], a: 1, why: 'It points to your own SDK folder. A teammate’s machine needs its own value.' },
-          { q: 'You add <code>secrets.txt</code> to .gitignore, but it was committed last week. What happens?', options: ['Git deletes it from history', 'Nothing: Git keeps tracking it', 'Git untracks it automatically'], a: 1, why: '.gitignore only affects untracked files. Use <code>git rm --cached</code>, and rotate any secret that was pushed.' },
-          { q: 'Which is the best commit summary line?', options: ['changes', 'Fix login button doing nothing on Android 14', 'Updated LoginScreen.kt, LoginViewModel.kt and strings.xml with fixes'], a: 1, why: 'Short, imperative, and it says what the change does. The file list is already in the diff.' },
-          { q: 'local.properties is already committed. Which command stops tracking it but keeps the file on your disk?', options: ['<code>git rm local.properties</code>', '<code>git rm --cached local.properties</code>', '<code>git restore local.properties</code>'], a: 1, why: 'git rm --cached removes the file from the index only. Plain git rm also deletes it from your disk.' },
-          { q: 'A signing keystore password was pushed to the shared GitHub repository. What do you do first?', options: ['Delete it in a new commit', 'Revoke or rotate the key and password', 'Add it to .gitignore'], a: 1, why: 'Anything that reached a shared repository may already be copied, and a new commit doesn’t remove it from history. Make the leaked secret useless first, then clean up.' },
-        ],
-      },
-
-      // 4 ─────────────────────────────────────────────
-      {
-        id: 'branches',
-        title: 'Branches',
-        tagline: 'A branch is a movable label on a commit. HEAD says which label you are on.',
-        level: 'beginner',
-        body: `
-<p>Each commit points back to its parent, so history forms a chain. A <em>branch</em> is just a name that points to one commit, like <code>main</code>. When you commit, the branch you are on moves forward to the new commit. Nothing is copied, so creating a branch is instant.</p>
-<p><code>HEAD</code> is Git's "you are here". It normally points to a branch. <code>git branch feature</code> creates a new label on the current commit but does not move you. <code>git switch feature</code> moves HEAD to it and updates your files to match. <code>git switch -c feature</code> does both.</p>
-<p>Branches let you start a feature, park it, fix a crash on <code>main</code>, and come back, without the work getting mixed. Commit a few times below, create a branch, switch, and commit again. Watch which label moves.</p>`,
-        visual(el) {
-          const log = s => '<pre class="ui-out">' + s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
           Lab.ui.terminal(el, {
-            panelTitle: 'git log --oneline --graph --all',
+            panelTitle: 'Ada’s folders',
             predict: {
-              q: 'You are on <code>feature/search</code> and run <code>git commit</code>. Which label moves to the new commit?',
-              options: ['Both <code>main</code> and <code>feature/search</code>', 'Only <code>feature/search</code>', 'Only <code>main</code>', 'Neither, only HEAD moves'],
+              q: 'Ada is in <code>/home/ada/projects</code>, where she just made a folder <code>notes</code>, and runs <code>cd notes</code>. What does <code>pwd</code> print next?',
+              options: ['<code>/home/ada/projects</code>', '<code>/home/ada/projects/notes</code>', '<code>/notes</code>'],
               a: 1,
-              why: 'A commit moves the branch HEAD points to, and only that one.',
+              why: '<code>cd</code> moves the terminal into <code>notes</code>, and <code>pwd</code> prints the folder it stands in now.',
             },
             frames: [
-              { panel: log('* b2f41c9 (HEAD -> main) Add home screen\n* a19e0d3 Initial commit'), say: 'Two commits on <code>main</code>. HEAD points to <code>main</code>: that is where you are.' },
-              { cmd: 'git branch feature/search', panel: log('* b2f41c9 (HEAD -> main, feature/search) Add home screen\n* a19e0d3 Initial commit'), say: 'A new label on the same commit. Nothing is copied, and HEAD did not move.' },
-              { cmd: 'git switch feature/search', out: "Switched to branch 'feature/search'", panel: log('* b2f41c9 (HEAD -> feature/search, main) Add home screen\n* a19e0d3 Initial commit'), say: 'Now HEAD points to <code>feature/search</code>. Both labels are still on the same commit.' },
-              { cmd: 'git commit -am "Add search box"', out: '[feature/search 7c10a2e] Add search box\n 1 file changed, 12 insertions(+)', panel: log('* 7c10a2e (HEAD -> feature/search) Add search box\n* b2f41c9 (main) Add home screen\n* a19e0d3 Initial commit'), say: 'Only the branch HEAD points to moves forward. <code>main</code> stays where it was.' },
-              { cmd: 'git switch main', out: "Switched to branch 'main'", panel: log('* 7c10a2e (feature/search) Add search box\n* b2f41c9 (HEAD -> main) Add home screen\n* a19e0d3 Initial commit'), say: 'Your files go back to how they are on <code>main</code>. The search box is safe on its branch.' },
-              { cmd: 'git commit -am "Fix crash on launch"', out: '[main e45d8b1] Fix crash on launch\n 1 file changed, 2 insertions(+), 1 deletion(-)', panel: log('* e45d8b1 (HEAD -> main) Fix crash on launch\n| * 7c10a2e (feature/search) Add search box\n|/\n* b2f41c9 Add home screen\n* a19e0d3 Initial commit'), say: 'History forks. Each branch has its own new commit, and both share <code>b2f41c9</code>. Merging joins them again.' },
+              { panel: tree('ada'), say: 'Ada opens a terminal. The panel shows her folders, and the highlight marks where the terminal stands.' },
+              { cmd: 'pwd', out: '/home/ada', say: '<code>pwd</code> prints the working directory. A new terminal starts in your home folder, here <code>/home/ada</code>. (On macOS it looks like <code>/Users/ada</code>.)' },
+              { cmd: 'ls', out: 'Desktop  Documents  projects', say: '<code>ls</code> lists what is inside the folder you stand in.' },
+              { cmd: 'cd projects', panel: tree('projects'), say: '<code>cd</code> moves into <code>projects</code>. It printed nothing: many commands stay quiet when they work.' },
+              { cmd: 'mkdir notes', panel: tree('projects', true), say: '<code>mkdir</code> makes a new folder here. It does not move you into it: the highlight stays on <code>projects</code>.' },
+              { cmd: 'cd notes', panel: tree('notes', true), say: 'Now she moves into <code>notes</code>, the folder she just made.' },
+              { cmd: 'pwd', out: '/home/ada/projects/notes', say: 'The path lists every folder on the way, from the top of the disk down to here.' },
+              { cmd: 'cd ..', panel: tree('projects', true), say: '<code>cd ..</code> goes up one level, back to <code>projects</code>.' },
             ],
           });
         },
-        code: `git branch                       # list branches, * marks the current one
-git switch -c feature/search     # create and switch in one step
-# ...edit, add, commit...
-git switch main                  # back to main: files change to main's version
-git switch feature/search        # and back again
-git log --oneline --graph --all  # draw every branch in the terminal
-git branch -d feature/search     # delete a merged branch`,
-        remember: 'A branch is a pointer, HEAD points to the branch you are on, and a commit moves only that branch.',
-        deeper: [
-          {
-            title: 'Detached HEAD: on a commit, not a branch',
-            body: `<p>You can switch to a commit instead of a branch to look at old code: <code>git switch --detach C2</code>. Now HEAD points straight at a commit. You can even commit, but no branch moves to remember it. Switch away and those commits are left behind. To keep them, create a branch while you are there with <code>git switch -c</code>.</p>`,
-            visual(el) {
-              const g = graph({ lanes: 2, title: 'Detached HEAD' });
-              const o = out('');
-              let cs, br, head, n;
-              const reach = (withHead) => { const r = new Set(); [...Object.values(br), ...(withHead && !br[head] ? [head] : [])].forEach(t => { for (let c = t; c; c = (cs.find(x => x.id === c) || { p: [] }).p[0]) r.add(c); }); return r; };
-              const draw = () => { const r = reach(true); g.set({ commits: cs.map(c => ({ ...c, ghost: !r.has(c.id) })), refs: Object.entries(br).map(([name, at]) => ({ name, at })), head }); };
-              cs = [{ id: 'C1', p: [] }, { id: 'C2', p: ['C1'] }, { id: 'C3', p: ['C2'] }]; br = { main: 'C3' }; head = 'main'; n = 0;
-              const isBranch = () => !!br[head];
-              draw(); say(o, 'HEAD points at main. Detach to look at an older commit.');
-              el.append(row(
-                act('git switch --detach C2', () => { head = 'C2'; draw(); say(o, "HEAD is now at C2. You are in 'detached HEAD' state: HEAD points at a commit, not a branch."); }),
-                act('git commit', () => {
-                  if (isBranch()) { say(o, 'You are on a branch, so this would be a normal commit. Detach first to see the difference.'); return; }
-                  if (n >= 2) { say(o, 'Two detached commits is enough. Switch away or save them.'); return; }
-                  const id = 'X' + (++n); cs.push({ id, p: [head], lane: 1 }); head = id; draw();
-                  say(o, `New commit ${id}. Only HEAD points at it. No branch remembers it.`);
-                }),
-                act('git switch main', () => {
-                  const lost = !isBranch() && !reach().has(head) ? head : null;
-                  head = 'main'; draw();
-                  say(o, lost ? `<span class="bad">Warning: you are leaving ${n} commit(s) behind, not connected to any of your branches.</span>\n<span class="muted">They still exist for a while (see reflog in the last lesson), but nothing points at them.</span>` : 'Back on main.');
-                }),
-                act('git switch -c rescue', () => {
-                  if (br.rescue) { say(o, "fatal: a branch named 'rescue' already exists"); return; }
-                  br.rescue = isBranch() ? br[head] : head; head = 'rescue'; draw();
-                  say(o, 'rescue now points where HEAD was, and HEAD points at rescue. Those commits are safe.');
-                })), g.el, o);
-            },
-          },
-          {
-            title: 'A branch is a tiny file',
-            body: `<p>Inside <code>.git</code>, a branch is a file under <code>refs/heads/</code> that contains one commit id. <code>.git/HEAD</code> usually contains the name of a branch. That is why branches cost nothing to create and delete: Git writes or removes a few bytes.</p>`,
-            code: `cat .git/HEAD
-# ref: refs/heads/main
-cat .git/refs/heads/main
-# 5b2f7d4c9e0a1f3b8d6e2c4a7f9b1d3e5c7a9b2f
-git branch -v                    # each branch with its commit and message`,
-          },
-          {
-            title: 'Naming and cleaning up',
-            body: `<p>Teams usually prefix branch names by kind: <code>feature/search</code>, <code>fix/empty-feed-crash</code>. Use lowercase and dashes. Delete a branch after it is merged with <code>-d</code>; Git refuses if the branch has commits that are not merged anywhere. <code>-D</code> forces it, so use it only when you mean to throw that work away.</p>`,
-            code: `git switch -c fix/empty-feed-crash
-git branch --merged main          # branches already merged into main
-git branch -d fix/empty-feed-crash
-git branch -D experiment/old-idea # force: deletes unmerged work`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>git switch</code> does three things: it points HEAD at the branch, updates the staging area to that commit's snapshot, and rewrites the files in your working tree that differ. If you have uncommitted changes that would be overwritten, Git refuses to switch rather than lose them. Commit or stash them first.</p>`,
-          code: `git switch main
-# error: Your local changes to the following files would be overwritten ...
-#         app/src/main/res/values/strings.xml
-# Please commit your changes or stash them before you switch branches.`,
-        },
+        code: `pwd              # /home/ada
+ls               # Desktop  Documents  projects
+cd projects      # move into projects (prints nothing)
+mkdir notes      # make a folder named notes here
+ls               # notes
+cd notes         # move into notes
+pwd              # /home/ada/projects/notes
+cd ..            # up one level, back to /home/ada/projects`,
+        remember: 'pwd says where you are, ls shows what is here, cd moves you, cd .. goes up one level.',
         mistakes: [
-          { title: 'Creating a branch but not switching to it', bad: `git branch feature/search
-git commit -am "Add search bar"   # lands on main`, good: `git switch -c feature/search
-git commit -am "Add search bar"`, why: '<code>git branch</code> only creates the label. HEAD stays on main, so the commit moves main. <code>git switch -c</code> creates and switches.' },
-          { title: 'Working directly on main', bad: `git switch main
-# a week of commits for a big feature`, good: `git switch -c feature/offline-mode
-# commit freely here, merge when it is ready`, why: 'Main should stay releasable. A feature branch lets you push half-done work, get review, and fix a crash on main in the meantime.' },
+          { title: 'Moving to a folder that is not here', bad: `pwd              # /home/ada
+cd notes
+# bash: cd: notes: No such file or directory`, good: `cd projects
+cd notes`, why: '<code>cd</code> only looks inside the folder you stand in. <code>notes</code> is inside <code>projects</code>, so go there first. (<code>bash</code> is the program running inside the terminal.) Run <code>ls</code> to see what is here. (macOS words the message a little differently.)' },
         ],
         terms: [
-          { term: 'Branch', def: 'A movable name that points to one commit. It moves forward when you commit on it.' },
-          { term: 'HEAD', def: 'Git’s pointer to where you are, normally to the current branch.' },
-          { term: 'Detached HEAD', def: 'HEAD pointing straight at a commit instead of a branch. New commits there are not on any branch.' },
+          { term: 'terminal, command', def: 'The terminal is a window where you type commands, such as <code>pwd</code>, run them with Enter, and read what they print.' },
+          { term: 'prompt', def: 'The sign, here <code>$</code>, where the terminal waits for your next command.' },
+          { term: 'working directory', def: 'The folder the terminal is standing in. Commands act on it.' },
+          { term: 'path', def: 'The folders that lead to a place, separated by <code>/</code>, such as <code>/home/ada/projects</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Create a branch and switch to it in one command, then list all branches.', code: 'git switch [[-c|--create]] feature/login\ngit [[branch]]', why: '<code>-c</code> creates the branch at the current commit and switches to it. <code>git branch</code> with no arguments lists branches.' },
-          { type: 'bug', prompt: 'The search work was meant to go on its own branch, but the commit landed on main. Tap the line to fix.', code: 'git switch main\ngit branch feature/search\n# edit SearchBar.kt\ngit add SearchBar.kt\ngit commit -m "Add search bar"', bug: 1, fix: 'git switch -c feature/search', why: '<code>git branch</code> creates the label but leaves HEAD on main. <code>git switch -c</code> creates it and moves HEAD there.' },
+          { type: 'blank', prompt: 'You are in your home folder. Move into <code>projects</code>, then print where you are.', code: '[[cd]] projects\n[[pwd]]', why: '<code>cd</code> moves you into a folder, and <code>pwd</code> prints the folder you stand in.' },
+          { type: 'bug', prompt: 'Ada is in <code>/home/ada/projects/notes</code>. She wants a new folder <code>drafts</code> inside <code>projects</code>, next to <code>notes</code>. Tap the wrong line.', code: 'pwd\ncd drafts\nmkdir drafts\nls', bug: 1, fix: 'cd ..', why: 'There is no <code>drafts</code> folder yet, so <code>cd drafts</code> fails. <code>cd ..</code> goes up to <code>projects</code>, where <code>mkdir drafts</code> belongs.' },
         ],
         quiz: [
-          { q: 'What happens to <code>main</code> when you commit while on <code>feature</code>?', options: ['main moves too', 'main stays where it was', 'main is deleted'], a: 1, why: 'Only the branch HEAD points to moves forward.' },
-          { q: 'How much does creating a branch copy?', options: ['The whole project', 'Only changed files', 'Nothing, it writes one commit id'], a: 2, why: 'A branch is a small file holding a commit id. That is why branching is instant.' },
-          { q: 'What does HEAD usually point to?', options: ['The newest commit in the repository', 'The branch you are on', 'The remote server'], a: 1, why: 'HEAD points to the current branch, which points to a commit. In detached HEAD it points to a commit directly.' },
-          { q: 'You are on main and run <code>git branch feature</code>, then <code>git commit -m "Add search"</code>. Which branch has the new commit?', options: ['feature', 'Both', 'main'], a: 2, why: 'git branch only creates the label. HEAD stays on main, so main moves. git switch -c feature creates and switches.' },
-          { q: 'In detached HEAD you make a commit, then run <code>git switch main</code>. What happens to that commit?', options: ['No branch points to it, so it is left behind unless you create a branch for it', 'It is added to main', 'Git deletes it immediately'], a: 0, why: 'A commit in detached HEAD moves no branch. Create a branch with git switch -c while you are there, or find it later in the reflog.' },
+          { q: 'What does <code>cd ..</code> do?', options: ['Moves up one level, to the folder that holds this one', 'Runs the previous command again', 'Deletes the current folder'], a: 0, why: '<code>..</code> always means the folder one level up.' },
+          { q: '<code>cd projects</code> printed nothing. What happened?', options: ['It failed', 'It worked: many commands print nothing when they succeed', 'The terminal froze'], a: 1, why: 'When something goes wrong, you get a message. Silence usually means it worked.' },
+          { q: 'In the Windows Command Prompt, which command lists what is in a folder?', options: ['<code>pwd</code>', '<code>dir</code>', '<code>mkdir</code>'], a: 1, why: 'The Command Prompt uses <code>dir</code> where macOS, Linux and PowerShell use <code>ls</code>.' },
         ],
+        docs: [['Pro Git: The Command Line', 'https://git-scm.com/book/en/v2/Getting-Started-The-Command-Line']],
       },
 
-      // 5 ─────────────────────────────────────────────
       {
-        id: 'merging',
-        title: 'Merging and conflicts',
-        tagline: 'Bring a branch back: Git slides the label forward or makes a merge commit, and asks you when both sides changed the same lines.',
-        level: 'beginner',
+        id: 'what-git',
+        title: 'What version control is',
+        tagline: 'Keep every version of your project without a pile of copies.',
+        goals: ['Explain what version control keeps for you', 'Say why copies named like <code>Main_final_v2.kt</code> stop working', 'Check that Git is installed'],
+        level: 'beginner', introduces: ['git', '--version'],
         body: `
-<p>To bring work from <code>feature</code> into <code>main</code>, switch to main and run <code>git merge feature</code>. If main has not moved since feature started, Git just slides the <code>main</code> label forward. This is a <em>fast-forward</em>: no new commit is needed.</p>
-<p>If both branches have new commits, Git makes a <em>merge commit</em> with two parents. It combines the changes from both sides since the commit where they split (the <em>merge base</em>). Most of the time this is automatic.</p>
-<p>When both sides changed the same lines of the same file, Git cannot pick for you. It stops with a <em>conflict</em> and writes both versions into the file between markers. You edit the file to the right result, delete the markers, <code>git add</code> it, and <code>git commit</code> to finish. Step through both kinds of merge below.</p>`,
+<p>You change a program, it stops working, and you can’t remember what it looked like an hour ago. Many people start making copies: <code>Main_old.kt</code>, <code>Main_final.kt</code>, <code>Main_final_v2.kt</code>. Soon nobody knows which copy is the newest, or what changed between two of them.</p>
+<p><em>Version control</em> is a tool that keeps that history for you. You keep one copy of each file. Whenever you reach a good point, you save a <em>version</em>: a snapshot of the whole project, with a short note saying what changed, plus who saved it and when. Later you can look back at any version, compare two, or bring one back.</p>
+<p><em>Git</em> is the version control tool almost every developer uses, and Android Studio and GitHub (a website for sharing Git projects) are built around it. Git is a program you run in the terminal. To check that it is installed, run <code>git --version</code>. A word that starts with <code>--</code> is an <em>option</em>: it changes what a command does, here “tell me your version”.</p>
+<p>If the terminal prints a version number, you are ready. If it says the command was not found, install Git from git-scm.com. On macOS, running <code>git --version</code> the first time offers to install it for you.</p>`,
         visual(el) {
-          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const pane = (t, s) => `<p class="gtk-h">${t}</p><pre class="ui-out">${esc(s)}</pre>`;
-          const log = s => pane('git log --oneline --graph --all', s);
-          const file = s => pane('app/src/main/res/values/strings.xml', s);
-          const path = 'app/src/main/res/values/strings.xml';
-          Lab.ui.terminal(el, {
+          const left = h('div', { class: 'gt-ig', 'aria-label': 'Folder without Git' });
+          const files = h('div', { class: 'gt-ig', 'aria-label': 'Folder with Git' });
+          const hist = h('pre', { class: 'ui-out', 'aria-label': 'Git history' });
+          const stage = h('div', { class: 'ui-stage' }, h('div', { class: 'gt-split' },
+            h('div', { class: 'gt-col' }, lab('without Git'), left),
+            h('div', { class: 'gt-col' }, lab('with Git'), files, lab('saved versions'), hist)));
+          const item = (n, bad) => `<div class="gt-ig-r${bad ? ' gt-warn' : ''}"><span>${n}</span>${bad ? '<span class="gt-tag">which one?</span>' : ''}</div>`;
+          const frames = [
+            { copies: ['Main.kt'], hist: [], say: 'The same Kotlin project, kept two ways. On the left, with copies. On the right, with Git.' },
+            { copies: ['Main.kt', 'Main_old.kt'], hist: ['1  Add greeting       Ada  Mon 10:02'], say: 'Before a change, the left side copies the file. Git saves a version instead: a snapshot plus a short note.' },
+            { copies: ['Main.kt', 'Main_old.kt', 'Main_v2.kt'], hist: ['1  Add greeting       Ada  Mon 10:02', '2  Greet Oslo too     Ada  Mon 11:40'], say: 'Another change, another copy. On the right, still one <code>Main.kt</code> and one more line in the list.' },
+            { copies: ['Main.kt', 'Main_old.kt', 'Main_v2.kt', 'Main_final.kt', 'Main_final_v2.kt'], hist: ['1  Add greeting       Ada  Mon 10:02', '2  Greet Oslo too     Ada  Mon 11:40', '3  Greet Rome         Ada  Tue 09:15', '4  Fix Rome typo      Sam  Tue 14:30'], say: 'Two more changes, one of them by Ada’s friend Sam. The folder on the left keeps growing.' },
+            { copies: ['Main.kt', 'Main_old.kt', 'Main_v2.kt', 'Main_final.kt', 'Main_final_v2.kt'], bad: true, hist: ['1  Add greeting       Ada  Mon 10:02', '2  Greet Oslo too     Ada  Mon 11:40', '3  Greet Rome         Ada  Tue 09:15', '4  Fix Rome typo      Sam  Tue 14:30'], say: 'Which copy is newest? Who changed what? The names can’t tell you. Each version on the right says what changed, who did it and when.' },
+            { copies: ['Main.kt', 'Main_old.kt', 'Main_v2.kt', 'Main_final.kt', 'Main_final_v2.kt'], bad: true, pick: 1, hist: ['1  Add greeting       Ada  Mon 10:02', '2  Greet Oslo too     Ada  Mon 11:40', '3  Greet Rome         Ada  Tue 09:15', '4  Fix Rome typo      Sam  Tue 14:30'], say: 'If a change breaks the program, Git can bring back any saved version, such as version 2, and you still keep the rest of the list.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
             predict: {
-              q: 'Both <code>main</code> and <code>feature/title</code> changed the same line of <code>strings.xml</code>. What does <code>git merge feature/title</code> do?',
-              options: ['Keeps the newer change', 'Stops with a conflict and writes both versions into the file', 'Keeps main’s version, since you are on main'],
+              q: 'Ada has <code>Main_final.kt</code> and <code>Main_final_v2.kt</code>. Which one has her latest work?',
+              options: ['<code>Main_final_v2.kt</code>, it says v2', '<code>Main_final.kt</code>, it says final', 'She can’t tell without opening both'],
+              a: 2,
+              why: 'File names are only guesses people make up. Nothing in them records when or what changed.',
+            },
+            draw(f) {
+              left.innerHTML = f.copies.map(n => item(n, f.bad)).join('');
+              files.innerHTML = item('Main.kt');
+              hist.innerHTML = f.hist.length ? f.hist.map((l, k) => (k === f.pick ? `<b>${esc(l)}</b>` : esc(l))).join('\n') : '(nothing saved yet)';
+            },
+          });
+        },
+        code: `# Is Git installed? Ask for its version.
+git --version
+# git version 2.43.0   (your number may be different)`,
+        remember: 'Version control keeps one copy of your files plus a list of saved versions, each with a note, an author and a time.',
+        terms: [
+          { term: 'version control', def: 'A tool that saves versions of a project and keeps the full history.' },
+          { term: 'version', def: 'A saved snapshot of the whole project, with a note about what changed.' },
+          { term: 'Git', def: 'The most used version control tool. You run it in the terminal with <code>git</code>.' },
+          { term: 'option', def: 'A word starting with <code>-</code> or <code>--</code> that changes what a command does, like <code>--version</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Ask Git which version is installed.', code: '[[git]] [[--version]]', why: '<code>git</code> runs Git, and the option <code>--version</code> asks it to print its version.' },
+          { type: 'bug', prompt: 'Git prints <code>unknown option: -version</code>. Tap the wrong line.', code: 'pwd\ngit -version', bug: 1, fix: 'git --version', why: 'Word options like <code>--version</code> start with two dashes.' },
+        ],
+        quiz: [
+          { q: 'What does a saved version in Git hold?', options: ['Only the one file you changed', 'A snapshot of the project, plus what changed, who and when', 'A copy with <code>_v2</code> in its name'], a: 1, why: 'A version saves the whole project as it was, together with a note and its author and time.' },
+          { q: 'You run <code>git --version</code> and see <code>git version 2.43.0</code>. What does it mean?', options: ['Git is installed and ready', 'Your project has 2.43 versions', 'Git must be updated first'], a: 0, why: 'The command only asks Git for its own version number. Getting one back means Git is there.' },
+        ],
+        docs: [['Pro Git: About Version Control', 'https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control'], ['Pro Git: Installing Git', 'https://git-scm.com/book/en/v2/Getting-Started-Installing-Git']],
+      },
+
+      {
+        id: 'init',
+        title: 'Starting a repository',
+        tagline: 'Tell Git which folder to keep a history for.',
+        goals: ['Tell Git your name and email, once per computer', 'Turn a folder into a repository with <code>git init</code>', 'Ask Git what it sees with <code>git status</code>'],
+        level: 'beginner', introduces: ['config', 'init', 'status', '-a'], ignore: ['branch', 'pull', 'rebase'],
+        body: `
+<p>Git doesn’t watch your whole computer. You pick one project folder and tell Git: keep a history for this one. Ada wants one for her Kotlin program, in <code>/home/ada/projects/weather</code>.</p>
+<p>First, once per computer, tell Git who you are, because every saved version records its author. The <code>git config --global</code> lines below set things for every project on this computer: your name, your email, and the name of your first line of work, <code>main</code>, the name most projects use today (more in Branches). The last one, <code>pull.rebase false</code>, is there so <code>git pull</code> merges; you will use <code>git pull</code> once your project is on GitHub.</p>
+<p>Then <code>cd</code> into the project folder and run <code>git init</code>. Git creates a folder named <code>.git</code> inside it, where it will keep the whole history. Your own files are not touched. A folder with <code>.git</code> inside is a <em>repository</em>, or <em>repo</em>. Names that start with a dot are hidden, so <code>ls</code> doesn’t show <code>.git</code>; <code>ls -a</code> (a for all) does.</p>
+<p><code>git status</code> is the question you will ask Git most: what do you see? It answers in sentences. <code>On branch main</code> names the line of work you are on, and <code>No commits yet</code> means nothing has been saved so far. In a folder without <code>.git</code>, it answers <code>fatal: not a git repository</code>: “fatal” only means the command stopped.</p>`,
+        visual(el) {
+          const view = (here, items) => '<div class="gt-tree">' +
+            `<div class="gt-ti${here === 'projects' ? ' gt-here' : ''}">projects/</div>` +
+            items.map(([n, d, dim]) => `<div class="gt-ti${dim ? ' gt-fi' : ''}${n === here ? ' gt-here' : ''}" style="padding-left:${8 + d * 14}px">${n}/${dim ? ' (hidden)' : ''}</div>`).join('') + '</div>';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Folders',
+            predict: {
+              q: 'Ada runs <code>git status</code> in a folder where she has not run <code>git init</code>. What happens?',
+              options: ['Git lists the files in the folder', 'An error: the folder is not a repository', 'Git starts a repository on its own'],
               a: 1,
-              why: 'Git combines changes line by line from the merge base. When both sides changed the same lines, it cannot choose, so it marks the spot and waits for you.',
+              why: 'Git only works in folders you have turned into repositories with <code>git init</code>.',
             },
             frames: [
-              { panel: log('* 9d2c4a1 (feature/search) Add search results\n* 5f1b7e3 Add search box\n* b2f41c9 (HEAD -> main) Add home screen\n* a19e0d3 Initial commit'), say: 'You are on <code>main</code>. It has not moved since <code>feature/search</code> started.' },
-              { cmd: 'git merge feature/search', out: 'Updating b2f41c9..9d2c4a1\nFast-forward\n .../example/news/SearchBar.kt | 40 ++++++++++++++++++++\n 1 file changed, 40 insertions(+)', panel: log('* 9d2c4a1 (HEAD -> main, feature/search) Add search results\n* 5f1b7e3 Add search box\n* b2f41c9 Add home screen\n* a19e0d3 Initial commit'), say: 'Fast-forward: Git slides the <code>main</code> label up to the feature’s tip. No new commit.' },
-              { clear: true, panel: log('* e45d8b1 (HEAD -> main) Rename app\n| * 7c10a2e (feature/title) Change title text\n|/\n* b2f41c9 Add home screen'), say: 'A new case. Both branches have a commit since they split at <code>b2f41c9</code>, and both edited the app name.' },
-              { cmd: 'git merge feature/title', out: `Auto-merging ${path}\nCONFLICT (content): Merge conflict in ${path}\nAutomatic merge failed; fix conflicts and then commit the result.`, panel: file('<<<<<<< HEAD\n<string name="app_name">Daily News</string>\n=======\n<string name="app_name">News Today</string>\n>>>>>>> feature/title'), say: 'Git merged what it could and stopped. Your side is above <code>=======</code>, theirs below.' },
-              { cmd: 'git status', out: `On branch main\nYou have unmerged paths.\n\nUnmerged paths:\n\tboth modified:   ${path}`, say: '<code>git status</code> lists every file that still needs you.' },
-              { panel: file('<string name="app_name">News Today</string>'), say: 'Edit the file to the result you want and delete all three marker lines.' },
-              { cmd: `git add ${path}`, out: '', say: '<code>git add</code> marks the conflict as resolved.' },
-              { cmd: 'git commit --no-edit', out: "[main 3a7f0c2] Merge branch 'feature/title'", panel: log("*   3a7f0c2 (HEAD -> main) Merge branch 'feature/title'\n|\\\n| * 7c10a2e (feature/title) Change title text\n* | e45d8b1 Rename app\n|/\n* b2f41c9 Add home screen"), say: 'The merge commit has two parents and joins both lines of history.' },
+              { panel: view('projects', [['notes', 1]]), say: 'Ada stands in her <code>projects</code> folder. She makes a folder for the weather program.' },
+              { cmd: 'mkdir weather', panel: view('projects', [['notes', 1], ['weather', 1]]), say: 'A new, empty folder.' },
+              { cmd: 'cd weather', panel: view('weather', [['notes', 1], ['weather', 1]]), say: 'She moves into it. Git commands act on the folder you stand in.' },
+              { cmd: 'git status', out: 'fatal: not a git repository (or any of the parent directories): .git', say: 'Git looked for a <code>.git</code> folder here and in the folders above, and found none.' },
+              { cmd: 'git init', out: 'Initialized empty Git repository in /home/ada/projects/weather/.git/', panel: view('weather', [['notes', 1], ['weather', 1], ['.git', 2, true]]), say: 'Now <code>weather</code> is a repository. Git made <code>.git</code>, where it will keep the history.' },
+              { cmd: 'ls -a', out: '.  ..  .git', say: '<code>-a</code> shows hidden names too. <code>.</code> is this folder and <code>..</code> the one above, as in <code>cd ..</code>.' },
+              { cmd: 'git status', out: 'On branch main\n\nNo commits yet\n\nnothing to commit (create/copy files and use "git add" to track)', say: 'Git sees the repository, on <code>main</code>, with nothing saved yet. The text in brackets is Git suggesting a next step.' },
+            ],
+          });
+        },
+        code: `# Once per computer: who you are, and the name of your first line of work
+git config --global user.name "Ada Lin"
+git config --global user.email "ada@example.com"
+git config --global init.defaultBranch main
+git config --global pull.rebase false   # so git pull merges
+
+# Once per project
+cd projects
+mkdir weather
+cd weather
+git init      # Initialized empty Git repository in /home/ada/projects/weather/.git/
+git status    # On branch main
+              # No commits yet`,
+        remember: 'git init once per project folder, then git status any time you want to know what Git sees.',
+        mistakes: [
+          { title: 'Running git init in the wrong folder', bad: `pwd          # /home/ada
+git init     # now Git keeps a history of your whole home folder`, good: `cd projects
+cd weather
+pwd          # /home/ada/projects/weather
+git init`, why: '<code>git init</code> works on the folder you stand in. Check with <code>pwd</code> first, so the repository is your project and nothing more. Already did it? Delete the hidden <code>.git</code> folder from your home folder, for example in your file manager with hidden files shown. Your own files are not touched.' },
+        ],
+        terms: [
+          { term: 'repository', def: 'A project folder that Git keeps a history for. Short: repo.' },
+          { term: '.git', def: 'The hidden folder <code>git init</code> creates, where Git stores the history.' },
+          { term: 'git status', def: 'Asks Git what it sees in the repository right now.' },
+          { term: 'git config', def: 'Sets Git options, such as your name. <code>--global</code> means for every project on this computer.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Turn the <code>weather</code> folder into a repository, then ask Git what it sees.', code: 'cd weather\ngit [[init]]\ngit [[status]]', why: '<code>git init</code> starts the repository; <code>git status</code> reports on it.' },
+          { type: 'bug', prompt: 'Git answers <code>git: \'int\' is not a git command. See \'git --help\'.</code> Tap the wrong line.', code: 'cd weather\ngit int\ngit status', bug: 1, fix: 'git init', why: 'Git only knows exact command names. It even suggests the closest one: <code>init</code>.' },
+        ],
+        quiz: [
+          { q: 'Where does Git keep a repository’s history?', options: ['In a hidden <code>.git</code> folder inside the project', 'In your home folder', 'In a file named history.txt'], a: 0, why: '<code>git init</code> creates <code>.git</code> inside the project folder, and everything Git saves goes there.' },
+          { q: 'After <code>git init</code>, <code>ls</code> shows nothing. Did it work?', options: ['No, run it again', 'Yes: <code>.git</code> is hidden, and <code>ls -a</code> shows it'], a: 1, why: 'Names that start with a dot are hidden from a plain <code>ls</code>.' },
+          { q: 'You set your name with <code>git config --global</code>. When do you need to do it again?', options: ['For every new project', 'Only on a new computer', 'Every day'], a: 1, why: '<code>--global</code> saves it for every project on this computer.' },
+        ],
+        docs: [['Pro Git: First-Time Git Setup', 'https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup'], ['git init', 'https://git-scm.com/docs/git-init']],
+      },
+
+      {
+        id: 'commits',
+        title: 'Saving a snapshot',
+        tagline: 'Pick changes with git add, save them with git commit.',
+        goals: ['Tell the working folder, the staging area and commits apart', 'Put a file in the staging area with <code>git add</code>', 'Save a commit with a clear message'],
+        level: 'beginner', introduces: ['add', 'commit', '-m'],
+        body: `
+<p>Ada’s program now greets Lisbon, and it works. Before she changes anything else, she wants to save this point so she can always get back to it. In Git, a saved version is called a <em>commit</em>. To write <code>Main.kt</code> you need a code editor, a program for writing code. Any code editor works, for example Android Studio, which you’ll install later in the course; save the file inside the <code>weather</code> folder.</p>
+<p>Your files live in three places. The <em>working folder</em> is your project as you see and edit it. The <em>staging area</em> is a waiting list for the next commit. And the <em>commits</em> are the saved snapshots. <code>git add Main.kt</code> puts <code>Main.kt</code> on the waiting list. <code>git commit -m "Add greeting"</code> saves everything on the list as one commit; <code>-m</code> stands for message, the text in quotes.</p>
+<p>Why two steps? You might change three files but want to save only the two that belong together. A brand new file starts out <em>untracked</em>: Git sees it but won’t save it until you add it. After a commit, if you change the file again, <code>git status</code> calls it <code>modified</code>. Add it and commit again.</p>
+<p>Write the message as a short line that says what the commit does, like “Add greeting” or “Greet Oslo too”. You will read these messages later when you look back.</p>`,
+        visual(el) {
+          const f = (n, cls, tag) => `<span class="gt-f ${cls}">${n} <small>${tag}</small></span>`;
+          const box = (title, inner) => `<p class="gtk-h">${title}</p><div class="gt-files">${inner || '<span class="gt-empty">empty</span>'}</div>`;
+          const panel = (work, stg, commits) => box('Working folder', work) + box('Staging area', stg) +
+            `<p class="gtk-h">Commits</p><pre class="ui-out">${commits.length ? commits.join('\n') : '(none yet)'}</pre>`;
+          const todo = f('todo.txt', 'gt-new', 'untracked');
+          Lab.ui.terminal(el, {
+            panelTitle: 'Where the files are',
+            predict: {
+              q: 'Ada has two new files, <code>Main.kt</code> and <code>todo.txt</code>. She runs <code>git add Main.kt</code>, then <code>git commit</code>. What does the commit hold?',
+              options: ['Both files', 'Only <code>Main.kt</code>', 'Nothing, because todo.txt was left out'],
+              a: 1,
+              why: 'A commit saves only what is in the staging area, and only <code>Main.kt</code> was added.',
+            },
+            frames: [
+              { panel: panel(f('Main.kt', 'gt-new', 'untracked') + todo, '', []), say: 'In her editor, Ada wrote <code>Main.kt</code> and a <code>todo.txt</code> with notes for herself, inside her repository.' },
+              { cmd: 'git status', out: 'On branch main\n\nNo commits yet\n\nUntracked files:\n\tMain.kt\n\ttodo.txt\n\nnothing added to commit but untracked files present (use "git add" to track)', say: 'Untracked: Git sees both files but is not saving them. (We cut a hint line from Git’s answer here and below.)' },
+              { cmd: 'git add Main.kt', panel: panel(todo, f('Main.kt', 'gt-stg', 'new file'), []), say: '<code>Main.kt</code> moves onto the waiting list. <code>todo.txt</code> stays behind.' },
+              { cmd: 'git status', out: 'On branch main\n\nNo commits yet\n\nChanges to be committed:\n\tnew file:   Main.kt\n\nUntracked files:\n\ttodo.txt', say: '“Changes to be committed” is the staging area.' },
+              { cmd: 'git commit -m "Add greeting"', out: '[main (root-commit) 14d1672] Add greeting\n 1 file changed, 3 insertions(+)\n create mode 100644 Main.kt', panel: panel(todo, '', ['14d1672 Add greeting']), say: 'Saved. <code>14d1672</code> is this commit’s id; every commit gets its own. “root-commit” means the first one, and “3 insertions” means three new lines. Ignore the <code>create mode</code> line.' },
+              { cmd: 'git status', out: 'On branch main\nChanges not staged for commit:\n\tmodified:   Main.kt\n\nUntracked files:\n\ttodo.txt', panel: panel(f('Main.kt', 'gt-mod', 'modified') + todo, '', ['14d1672 Add greeting']), say: 'Ada adds a line that greets Oslo and saves the file. Git notices: <code>Main.kt</code> is now modified.' },
+              { cmd: 'git add Main.kt', panel: panel(todo, f('Main.kt', 'gt-stg', 'modified'), ['14d1672 Add greeting']), say: 'Same two steps as before: add the change…' },
+              { cmd: 'git commit -m "Greet Oslo too"', out: '[main 7e085e9] Greet Oslo too\n 1 file changed, 1 insertion(+)', panel: panel(todo, '', ['7e085e9 Greet Oslo too', '14d1672 Add greeting']), say: '…and commit it. Two snapshots now, newest on top. <code>todo.txt</code> was never added, so it is in neither.' },
+            ],
+          });
+        },
+        code: `git status                      # Main.kt and todo.txt are untracked
+git add Main.kt                 # put Main.kt in the staging area
+git commit -m "Add greeting"    # [main (root-commit) 14d1672] Add greeting
+
+# edit Main.kt in your editor, then:
+git status                      # modified:   Main.kt
+git add Main.kt
+git commit -m "Greet Oslo too"  # [main 7e085e9] Greet Oslo too`,
+        remember: 'Edit, git add what belongs together, git commit -m "what it does".',
+        mistakes: [
+          { title: 'Committing without -m', bad: `git commit
+# Git opens a text editor and waits for a message`, good: `git commit -m "Greet Oslo too"`, why: 'Without <code>-m</code>, Git opens a text editor inside the terminal for you to type the message, which is easy to get stuck in. Give the message right away with <code>-m</code>. Stuck? Press <kbd>Esc</kbd>, type <code>:q!</code> and press <kbd>Enter</kbd> (that’s the editor Vim); in the editor nano, press <kbd>Ctrl</kbd>+<kbd>X</kbd>.' },
+        ],
+        terms: [
+          { term: 'commit', def: 'A saved snapshot of the project, with a message, an author and an id like <code>14d1672</code>.' },
+          { term: 'staging area', def: 'The waiting list for the next commit. <code>git add</code> puts changes on it.' },
+          { term: 'working tree', def: 'Git’s name for the working folder: your project as you see and edit it. Git prints it in messages like <code>working tree clean</code>.' },
+          { term: 'untracked', def: 'A file Git sees but does not save, because it was never added.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Save <code>Main.kt</code> as a commit with the message “Add greeting”.', code: 'git [[add]] Main.kt\ngit [[commit]] -m "Add greeting"', why: '<code>add</code> puts the file in the staging area, and <code>commit</code> saves the staging area as a snapshot.' },
+          { type: 'bug', prompt: 'Ada changed <code>Main.kt</code>, but Git answers <code>no changes added to commit</code>. Tap the wrong line.', code: 'git status\ngit status Main.kt\ngit commit -m "Greet Rome"', bug: 1, fix: 'git add Main.kt', why: 'A commit only saves what is in the staging area. <code>git add Main.kt</code> puts the change there first.' },
+        ],
+        quiz: [
+          { q: 'What does <code>git add Main.kt</code> do?', options: ['Saves a commit', 'Puts Main.kt in the staging area for the next commit', 'Creates a file named Main.kt'], a: 1, why: '<code>add</code> only fills the waiting list. Nothing is saved until <code>git commit</code>.' },
+          { q: 'Which commit message will help you most a month from now?', options: ['<code>"stuff"</code>', '<code>"Greet Oslo too"</code>', '<code>"changes"</code>'], a: 1, why: 'A good message says what the commit does.' },
+          { q: '<code>git status</code> lists <code>todo.txt</code> under “Untracked files”. What does that mean?', options: ['Git sees it but won’t save it until you add it', 'The file is broken', 'It is already in a commit'], a: 0, why: 'Untracked files have never been added, so no commit holds them.' },
+        ],
+        docs: [['Pro Git: Recording Changes to the Repository', 'https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository']],
+      },
+
+      {
+        id: 'history',
+        title: 'Looking at history',
+        tagline: 'See what changed, when, and why.',
+        goals: ['List your commits with <code>git log</code>', 'See changes you have not added yet with <code>git diff</code>', 'Open one commit with <code>git show</code>'],
+        level: 'beginner', introduces: ['log', '--oneline', 'diff', 'show', 'HEAD'],
+        body: `
+<p>Monday morning, Ada’s program prints something odd. What did she change this morning? She doesn’t have to remember: every commit is in the history, and Git can show it.</p>
+<p><code>git log</code> lists the commits, newest first. Each one shows its full id (a long code called a <em>hash</em>), the author, the date and the message. <code>git log --oneline</code> shows one line per commit: the first 7 characters of the hash, which are enough to name it, and the message. The newest line also says <code>(HEAD -&gt; main)</code>, which marks the commit you are on right now. If the list is longer than the window, Git shows one page at a time: press <kbd>Space</kbd> for more and <kbd>q</kbd> to quit.</p>
+<p><code>git diff</code> shows the changes in your folder that you have not added yet. Lines starting with <code>+</code> were added, lines starting with <code>-</code> were removed. Run it before <code>git add</code> to check your work. Once you add a change, <code>git diff</code> stops showing it.</p>
+<p><code>git show 7e085e9</code> opens one commit: its message and exactly which lines it changed. Use a hash you see in <code>git log --oneline</code>.</p>`,
+        visual(el) {
+          Lab.ui.terminal(el, {
+            predict: {
+              q: 'Ada adds one line to <code>Main.kt</code> and runs <code>git diff</code> before <code>git add</code>. How is the new line shown?',
+              options: ['With a <code>+</code> in front', 'With a <code>-</code> in front', 'It isn’t shown until she adds it'],
+              a: 0,
+              why: '<code>git diff</code> shows changes not added yet, and added lines start with <code>+</code>.',
+            },
+            frames: [
+              { say: 'Ada’s repository has two commits. She asks Git about them.' },
+              { cmd: 'git log', out: esc('commit 7e085e9ff863c986d29e61126ef9fe074f65790a (HEAD -> main)\nAuthor: Ada Lin <ada@example.com>\nDate:   Mon Oct 19 16:44:24 2026 +0300\n\n    Greet Oslo too\n\ncommit 14d167284edff8feed61173a3aa703e7f611493d\nAuthor: Ada Lin <ada@example.com>\nDate:   Mon Oct 19 16:44:24 2026 +0300\n\n    Add greeting'), say: 'Newest first: hash, author, date, message. <code>(HEAD -&gt; main)</code> marks the commit you are on.' },
+              { clear: true, cmd: 'git log --oneline', out: esc('7e085e9 (HEAD -> main) Greet Oslo too\n14d1672 Add greeting'), say: 'The same history, one line each. <code>7e085e9</code> is the start of the long hash.' },
+              { clear: true, cmd: 'git diff', out: esc('diff --git a/Main.kt b/Main.kt\nindex aee091b..8831498 100644\n--- a/Main.kt\n+++ b/Main.kt\n@@ -1,4 +1,5 @@\n fun main() {\n     println("Hello, Lisbon!")\n     println("Hello, Oslo!")\n+    println("Hello, Rome!")\n }'), say: 'Ada added a line that greets Rome, but has not run <code>git add</code>. The lines above the code are Git’s labels; read the <code>+</code> and <code>-</code> lines. The <code>+</code> marks the new line; the lines around it show where it is.' },
+              { cmd: 'git add Main.kt', say: 'Now the change is in the staging area…' },
+              { cmd: 'git diff', say: '…so <code>git diff</code> prints nothing. It only shows changes you have not added yet.' },
+              { clear: true, cmd: 'git show 7e085e9', out: esc('commit 7e085e9ff863c986d29e61126ef9fe074f65790a\nAuthor: Ada Lin <ada@example.com>\nDate:   Mon Oct 19 16:44:24 2026 +0300\n\n    Greet Oslo too\n\ndiff --git a/Main.kt b/Main.kt\nindex aa1ded7..aee091b 100644\n--- a/Main.kt\n+++ b/Main.kt\n@@ -1,3 +1,4 @@\n fun main() {\n     println("Hello, Lisbon!")\n+    println("Hello, Oslo!")\n }'), say: 'One commit up close: its message, then the line it added. This is how you find out what changed, and when.' },
+              { clear: true, cmd: 'git commit -m "Greet Rome"', out: '[main 27a0a6b] Greet Rome\n 1 file changed, 1 insertion(+)', say: 'Back to her own change: the Rome line is still in the staging area, so Ada commits it. Three commits now.' },
+            ],
+          });
+        },
+        code: `git log              # every commit, newest first: hash, author, date, message
+git log --oneline    # 7e085e9 (HEAD -> main) Greet Oslo too
+                     # 14d1672 Add greeting
+git diff             # changes not added yet: + added lines, - removed lines
+git show 7e085e9     # one commit: its message and the lines it changed`,
+        remember: 'git log lists commits, git diff shows what you have not added yet, git show opens one commit.',
+        mistakes: [
+          { title: 'Stuck inside a long git log', bad: `git log
+# the list fills the window, and the prompt is gone`, good: `q    # press q to leave the list and get the prompt back`, why: 'A long list opens one page at a time. <kbd>Space</kbd> shows more, <kbd>q</kbd> takes you back to the prompt.' },
+        ],
+        terms: [
+          { term: 'hash', def: 'A commit’s unique id, a long code like <code>7e085e9...</code>. The first 7 characters are usually enough.' },
+          { term: 'diff', def: 'A list of changed lines: <code>+</code> for added, <code>-</code> for removed.' },
+          { term: 'git log', def: 'Lists the commits, newest first.' },
+          { term: 'HEAD', def: 'Marks the commit you are on now. In <code>git log</code> it shows as <code>(HEAD -&gt; main)</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'List the history one line per commit, then open the commit <code>7e085e9</code>.', code: 'git log --[[oneline]]\ngit [[show]] 7e085e9', why: '<code>--oneline</code> makes the list short, and <code>show</code> opens one commit by its hash.' },
+          { type: 'bug', prompt: 'Git answers <code>fatal: unrecognized argument: --online</code>. Tap the wrong line.', code: 'git status\ngit log --online\ngit show 14d1672', bug: 1, fix: 'git log --oneline', why: 'The option is <code>--oneline</code>, one line per commit. Git only knows exact option names.' },
+        ],
+        quiz: [
+          { q: 'In <code>git log</code>, which commit is listed first?', options: ['The oldest', 'The newest'], a: 1, why: 'Newest first, so the latest work is at the top.' },
+          { q: 'A line in <code>git diff</code> starts with <code>-</code>. What does it mean?', options: ['The line was removed', 'The line was added', 'The line has an error'], a: 0, why: '<code>-</code> marks removed lines and <code>+</code> marks added ones.' },
+          { q: 'You changed <code>Main.kt</code> and ran <code>git add</code>. Now <code>git diff</code> prints nothing. Why?', options: ['The change was lost', '<code>git diff</code> only shows changes you have not added yet', 'Git is broken'], a: 1, why: 'The change is safe in the staging area. <code>git diff</code> shows only what is not added yet.' },
+        ],
+        docs: [['Pro Git: Viewing the Commit History', 'https://git-scm.com/book/en/v2/Git-Basics-Viewing-the-Commit-History']],
+      },
+
+      {
+        id: 'ignore',
+        title: 'Ignoring files',
+        tagline: 'Keep secrets and generated files out of your history.',
+        goals: ['Tell which files should never be committed', 'Write a <code>.gitignore</code> file', 'Check with <code>git status</code> that Git skips them'],
+        level: 'beginner', introduces: ['.gitignore', '*'],
+        body: `
+<p>Ada’s folder now holds files she never wants saved. <code>build/</code> is where her tools put the compiled program. <code>debug.log</code> is notes her program writes while it runs. And <code>secrets.txt</code> holds a private key, like a password, for a weather service. A commit keeps its files for good, and when a project is shared, everything in it is shared too.</p>
+<p>Two kinds of files don’t belong in commits. <em>Secrets</em>: passwords and keys. And <em>generated files</em>: anything a tool can make again, like compiled output and logs. They are often big, change every time you build, and can always be rebuilt.</p>
+<p>A file named <code>.gitignore</code> in the project folder tells Git what to skip, one <em>pattern</em> per line. <code>secrets.txt</code> matches that one file. <code>build/</code>, ending in <code>/</code>, matches the folder and everything in it. <code>*.log</code> matches every name that ends in <code>.log</code>: <code>*</code> means “any text”. Ignored files disappear from <code>git status</code>, and <code>git add</code> refuses them.</p>
+<p>Commit the <code>.gitignore</code> itself, so everyone on the project skips the same files. And write it early: once a secret is in a commit, it stays in the history even if you delete the file later.</p>`,
+        visual(el) {
+          const rows = (ign) => [['Main.kt', 'in a commit'], ['build/', 'new'], ['debug.log', 'new'], ['secrets.txt', 'new']].map(([n, t]) =>
+            `<div class="gt-ig-r${ign && n !== 'Main.kt' ? ' gt-ign' : (n !== 'Main.kt' ? ' gt-warn' : '')}"><span>${n}</span><span class="gt-tag">${ign && n !== 'Main.kt' ? 'ignored' : t}</span></div>`).join('');
+          const panel = (ign, gi) => `<p class="gtk-h">.gitignore</p><div class="gt-ignfile">${gi ? 'build/\nsecrets.txt\n*.log' : '(no file yet)'}</div>` +
+            `<p class="gtk-h">Folder</p><div class="gt-ig">${rows(ign)}${gi ? `<div class="gt-ig-r${gi === 2 ? '' : ' gt-warn'}"><span>.gitignore</span><span class="gt-tag">${gi === 2 ? 'in a commit' : 'new'}</span></div>` : ''}</div>`;
+          Lab.ui.terminal(el, {
+            panelTitle: 'Ada’s project',
+            predict: {
+              q: 'Ada writes a <code>.gitignore</code> that lists <code>build/</code>, <code>secrets.txt</code> and <code>*.log</code>. What does <code>git status</code> list as untracked then?',
+              options: ['build/, debug.log and secrets.txt', 'Only .gitignore', 'Nothing at all'],
+              a: 1,
+              why: 'The three listed files are now skipped. The new <code>.gitignore</code> file itself is untracked until she adds it.',
+            },
+            frames: [
+              { panel: panel(false, 0), say: 'Ada built and ran her program. Three new things appeared in her folder.' },
+              { cmd: 'git status', out: 'On branch main\nUntracked files:\n\tbuild/\n\tdebug.log\n\tsecrets.txt\n\nnothing added to commit but untracked files present (use "git add" to track)', say: 'Git offers all three. One careless <code>git add</code> and the secret key is in the history. (A hint line is cut from Git’s answer.)' },
+              { panel: panel(true, 1), say: 'In her editor, she creates a file named <code>.gitignore</code> in the project folder, with three lines.' },
+              { cmd: 'git status', out: 'On branch main\nUntracked files:\n\t.gitignore\n\nnothing added to commit but untracked files present (use "git add" to track)', say: 'The three files are gone from the list. Only the new <code>.gitignore</code> is left.' },
+              { cmd: 'git add secrets.txt', out: 'The following paths are ignored by one of your .gitignore files:\nsecrets.txt\nhint: Use -f if you really want to add them.', say: 'Even asking directly, Git refuses and tells you why. (Two more hint lines are cut.)' },
+              { cmd: 'git add .gitignore', say: 'The <code>.gitignore</code> itself should be saved, so the rules travel with the project.' },
+              { cmd: 'git commit -m "Ignore build output and secrets"', out: '[main 19c0a81] Ignore build output and secrets\n 1 file changed, 3 insertions(+)\n create mode 100644 .gitignore', panel: panel(true, 2), say: 'Committed, like any other file.' },
+              { cmd: 'git status', out: 'On branch main\nnothing to commit, working tree clean', say: 'Clean, even though <code>build/</code>, <code>debug.log</code> and <code>secrets.txt</code> are still in the folder. Git skips them.' },
+            ],
+          });
+        },
+        code: `# .gitignore: one pattern per line. Lines starting with # are notes.
+
+# the build folder and everything in it
+build/
+# this one file
+secrets.txt
+# every file whose name ends in .log
+*.log`,
+        remember: 'Secrets and generated files go in .gitignore, and .gitignore goes in a commit.',
+        mistakes: [
+          { title: 'Writing .gitignore after the secret is saved', bad: `git add secrets.txt
+git commit -m "Add key"
+# later: secrets.txt goes into .gitignore`, good: `# first: secrets.txt goes into .gitignore
+git add .gitignore
+git commit -m "Ignore secrets"`, why: '<code>.gitignore</code> only skips files Git isn’t tracking yet. A file that is already in a commit stays in the history, so write the rule before the first <code>git add</code>. If it already happened, treat the key as leaked: get a new one from the service.' },
+        ],
+        terms: [
+          { term: '.gitignore', def: 'A file listing what Git should skip, one pattern per line.' },
+          { term: 'pattern', def: 'A line in <code>.gitignore</code> that matches names. <code>*</code> means any text, a trailing <code>/</code> means a folder.' },
+          { term: 'generated file', def: 'A file a tool makes, such as compiled output or a log. It can always be made again.' },
+          { term: 'secret', def: 'A password or private key. It must never be in a commit.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make this <code>.gitignore</code> skip the <code>build</code> folder and every file ending in <code>.log</code>.', code: 'build[[/]]\n[[*]].log', why: 'A trailing <code>/</code> means a folder and everything in it, and <code>*</code> stands for any text.' },
+          { type: 'bug', prompt: 'This <code>.gitignore</code> should skip <code>secrets.txt</code>, but <code>git status</code> still lists it. Tap the wrong line.', code: 'build/\nsecret.txt\n*.log', bug: 1, fix: 'secrets.txt', why: 'A plain name must match exactly. The file is <code>secrets.txt</code>, with an s.' },
+        ],
+        quiz: [
+          { q: 'Which of these belongs in <code>.gitignore</code>?', options: ['<code>Main.kt</code>', '<code>secrets.txt</code> with a private key', '<code>.gitignore</code>'], a: 1, why: 'Secrets must never be saved. Your code and the <code>.gitignore</code> itself should be.' },
+          { q: 'What does the pattern <code>*.log</code> match?', options: ['Only a file literally named *.log', 'Every file whose name ends in .log', 'Every folder'], a: 1, why: '<code>*</code> stands for any text, so <code>debug.log</code> and <code>run.log</code> both match.' },
+          { q: 'Should you commit the <code>.gitignore</code> file?', options: ['Yes, so everyone on the project skips the same files', 'No, it is private to you'], a: 0, why: 'Once it is committed, the rules come with the project.' },
+        ],
+        docs: [['gitignore', 'https://git-scm.com/docs/gitignore']],
+      },
+
+      {
+        id: 'branches',
+        title: 'Branches',
+        tagline: 'Try an idea on its own line while the working version stays safe.',
+        goals: ['Explain a branch as a label on a commit', 'Make a branch and move to it with <code>git switch -c</code>', 'Read <code>HEAD</code> to see which branch you are on'],
+        level: 'beginner', introduces: ['branch', 'switch', '-c'],
+        body: `
+<p>Ada wants her program to show a forecast. She isn’t sure her idea will work, and the version on <code>main</code> works today. A <em>branch</em> lets her try the idea on the side. If it goes wrong, <code>main</code> is untouched.</p>
+<p>A branch is a label that points to a commit. <code>main</code> is a branch too: the label on Ada’s newest commit. When you commit, the label of the branch you are on moves forward to the new commit. Nothing is copied, so making a branch is instant.</p>
+<p><code>HEAD</code> tells you which branch you are on: <code>HEAD -&gt; main</code> means “you are on main”. <code>git branch</code> lists the branches and puts a <code>*</code> next to yours. <code>git switch -c forecast</code> makes a new branch called <code>forecast</code> on the commit you are on and moves you to it (<code>-c</code> stands for create). <code>git switch main</code> takes you back.</p>
+<p>When you switch, Git changes the files in your folder to match that branch. A file that exists only on <code>forecast</code> disappears from the folder when you switch to <code>main</code>, and comes back when you switch to <code>forecast</code> again. Commit your work before you switch, so nothing gets mixed up.</p>`,
+        visual(el) {
+          const G = graph({ lanes: 1, top: 92, minCols: 5, title: 'Commits and branch labels' });
+          const base = [
+            { id: 'A', p: [], msg: '14d1672 Add greeting' }, { id: 'B', p: ['A'], msg: '7e085e9 Greet Oslo too' },
+            { id: 'C', p: ['B'], msg: '27a0a6b Greet Rome' }, { id: 'D', p: ['C'], msg: '19c0a81 Ignore build output and secrets' },
+          ];
+          const withE = [...base, { id: 'E', p: ['D'], msg: 'f752750 Add forecast', hl: true }];
+          const legend = '<div class="gt-legend" style="margin-top:8px"><span><b>circle</b> commit</span><span><b>box</b> branch label</span><span><b>HEAD</b> where you are</span></div>';
+          const show = st => n => { n.append(G.el); n.insertAdjacentHTML('beforeend', legend); G.set(st); };
+          Lab.ui.terminal(el, {
+            panelTitle: 'Commits (oldest on the left)',
+            predict: {
+              q: 'Ada is on <code>forecast</code> and makes a commit. Where is the <code>main</code> label afterwards?',
+              options: ['It moved to the new commit too', 'It stayed on its old commit', 'It was deleted'],
+              a: 1,
+              why: 'Only the label of the branch you are on moves forward. <code>main</code> stays where it was.',
+            },
+            frames: [
+              { panel: show({ commits: base, refs: [{ name: 'main', at: 'D' }], head: 'main' }), say: 'Ada’s four commits, oldest on the left (letters stand in for the hashes). <code>main</code> is a label on the newest one, and <code>HEAD</code> sits on <code>main</code>.' },
+              { cmd: 'git branch', out: '* main', say: 'One branch so far. The <code>*</code> marks the one you are on.' },
+              { cmd: 'git switch -c forecast', out: 'Switched to a new branch \'forecast\'', panel: show({ commits: base, refs: [{ name: 'main', at: 'D' }, { name: 'forecast', at: 'D' }], head: 'forecast' }), say: 'A new label on the same commit, and <code>HEAD</code> moves to it. No files were copied or changed.' },
+              { cmd: 'git branch', out: '* forecast\n  main', say: 'Two branches now, and Ada is on <code>forecast</code>.' },
+              { cmd: 'git add Forecast.kt', say: 'In her editor, Ada writes <code>Forecast.kt</code>, then adds it.' },
+              { cmd: 'git commit -m "Add forecast"', out: '[forecast f752750] Add forecast\n 1 file changed, 1 insertion(+)\n create mode 100644 Forecast.kt', panel: show({ commits: withE, refs: [{ name: 'main', at: 'D' }, { name: 'forecast', at: 'E' }], head: 'forecast' }), say: 'The new commit goes on the branch she is on. <code>forecast</code> moves forward with it; <code>main</code> stays put.' },
+              { cmd: 'git switch main', out: 'Switched to branch \'main\'', panel: show({ commits: withE, refs: [{ name: 'main', at: 'D' }, { name: 'forecast', at: 'E' }], head: 'main' }), say: '<code>HEAD</code> is back on <code>main</code>, and Git changed the folder to match: <code>Forecast.kt</code> is gone from it. It is safe on <code>forecast</code>.' },
+              { cmd: 'git log --oneline', out: esc('19c0a81 (HEAD -> main) Ignore build output and secrets\n27a0a6b Greet Rome\n7e085e9 Greet Oslo too\n14d1672 Add greeting'), say: 'The history of <code>main</code> has no forecast commit. Ada can switch back to <code>forecast</code> whenever she wants to keep working on it.' },
+            ],
+          });
+        },
+        code: `git branch                    # * main
+git switch -c forecast        # Switched to a new branch 'forecast'
+git add Forecast.kt
+git commit -m "Add forecast"  # [forecast f752750] Add forecast
+git switch main               # Switched to branch 'main'
+git log --oneline             # 19c0a81 (HEAD -> main) Ignore build output and secrets
+git switch forecast           # back to the forecast work`,
+        remember: 'A branch is a label on a commit. git switch -c makes one and moves you to it; HEAD shows where you are.',
+        mistakes: [
+          { title: 'Switching to a branch that doesn’t exist yet', bad: `git switch map
+# fatal: invalid reference: map`, good: `git switch -c map`, why: 'Without <code>-c</code>, <code>git switch</code> only moves to branches that already exist. Add <code>-c</code> to create it.' },
+        ],
+        terms: [
+          { term: 'branch', def: 'A label that points to a commit and moves forward when you commit on it.' },
+          { term: 'HEAD', def: 'Marks where you are: <code>HEAD -&gt; main</code> means you are on the branch main.' },
+          { term: 'main', def: 'The usual name of a project’s first branch, where the working version lives.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make a new branch called <code>map</code> and move to it.', code: 'git [[switch]] [[-c]] map', why: '<code>git switch</code> moves you to a branch, and <code>-c</code> creates it first.' },
+          { type: 'bug', prompt: 'Ada wants to go back to <code>main</code>. Git answers <code>fatal: a branch named \'main\' already exists</code>. Tap the wrong line.', code: 'git status\ngit switch -c main\ngit log --oneline', bug: 1, fix: 'git switch main', why: '<code>-c</code> tries to create a new branch. <code>main</code> already exists, so drop <code>-c</code> to move to it.' },
+        ],
+        quiz: [
+          { q: 'What is a branch in Git?', options: ['A full copy of the project folder', 'A label that points to a commit', 'A backup on another computer'], a: 1, why: 'A branch is only a label, which is why making one is instant.' },
+          { q: '<code>git branch</code> prints <code>* forecast</code> and <code>main</code>. What does the <code>*</code> mean?', options: ['forecast is the branch you are on', 'forecast has unsaved files', 'forecast is the oldest branch'], a: 0, why: 'The <code>*</code> marks your current branch, the same one <code>HEAD</code> points to.' },
+          { q: 'You switch from <code>forecast</code> to <code>main</code>. What happens to <code>Forecast.kt</code>, which exists only on forecast?', options: ['It is deleted for good', 'It leaves the folder, and comes back when you switch to forecast', 'It stays in the folder'], a: 1, why: 'Git makes the folder match the branch you are on. The file is safe in the forecast commit.' },
+        ],
+        docs: [['Pro Git: Branches in a Nutshell', 'https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell'], ['git switch', 'https://git-scm.com/docs/git-switch']],
+      },
+
+      {
+        id: 'merging',
+        title: 'Merging',
+        tagline: 'Bring the work from one branch into another.',
+        goals: ['Bring a finished branch into <code>main</code> with <code>git merge</code>', 'Tell a fast-forward from a merge commit', 'Read what Git prints after a merge'],
+        level: 'beginner', introduces: ['merge', '--no-edit'],
+        body: `
+<p>Ada’s forecast works on its own branch, <code>forecast</code>. Now <code>main</code> should get it too, because <code>main</code> is where the working version lives. Copying files over by hand would lose the history. Git has a command for this: <code>git merge</code>.</p>
+<p>First be on the branch that should <em>receive</em> the work, then name the branch to bring in: <code>git switch main</code>, then <code>git merge forecast</code>. If <code>main</code> has no new commits since <code>forecast</code> started, Git slides the <code>main</code> label forward to the last commit of <code>forecast</code>. That is a <em>fast-forward</em>: no new commit is made.</p>
+<p>If both branches got new commits, the label can’t slide, because each side has something the other lacks. Git then makes a <em>merge commit</em>: a new commit that combines both sides and has two parents, one on each branch. For its message, Git would open a text editor with one already written, like <code>Merge branch 'units'</code> for a branch named <code>units</code>. Adding <code>--no-edit</code> keeps that message and skips the editor.</p>
+<p>A merge changes only the branch you are on. The branch you brought in stays where it was.</p>`,
+        visual(el) {
+          const g = graph({ lanes: 2, top: 92, title: 'Commits and branch labels' });
+          const P = st => node => { node.append(g.el); g.set(st); };
+          const line = [
+            { id: 'A', p: [], msg: '14d1672 Add greeting' }, { id: 'B', p: ['A'], msg: '7e085e9 Greet Oslo too' }, { id: 'C', p: ['B'], msg: '27a0a6b Greet Rome' },
+            { id: 'D', p: ['C'], msg: '19c0a81 Ignore build output and secrets' }, { id: 'E', p: ['D'], msg: 'f752750 Add forecast' },
+          ];
+          const fork = [
+            { id: 'D', p: [], lane: 0, col: 0, msg: '19c0a81 Ignore build output and secrets' }, { id: 'E', p: ['D'], lane: 0, col: 1, msg: 'f752750 Add forecast' },
+            { id: 'F', p: ['E'], lane: 1, col: 2, msg: '0602e79 Add units' }, { id: 'G', p: ['E'], lane: 0, col: 2, msg: 'e1f26e7 Add README' },
+          ];
+          const merged = fork.concat({ id: 'H', p: ['G', 'F'], lane: 0, col: 3, hl: true, msg: "487bc47 Merge branch 'units'" });
+          Lab.ui.terminal(el, {
+            panelTitle: 'Commits (oldest on the left)',
+            predict: {
+              q: 'Ada is on <code>main</code>, and <code>main</code> has no new commits since <code>forecast</code> started. What does <code>git merge forecast</code> do?',
+              options: ['Makes a new commit that joins both branches', 'Moves the <code>main</code> label forward to the last commit of <code>forecast</code>', 'Moves <code>forecast</code> back to where <code>main</code> is'],
+              a: 1,
+              why: 'The commit on <code>forecast</code> already sits on top of <code>main</code>, so Git only has to move the label. That is a fast-forward.',
+            },
+            frames: [
+              { panel: P({ commits: line, refs: [{ name: 'main', at: 'D' }, { name: 'forecast', at: 'E' }], head: 'main' }), say: 'Where the last lesson ended: Ada is on <code>main</code>, and <code>forecast</code> is one commit ahead. Letters stand in for the ids.' },
+              { cmd: 'git merge forecast', out: 'Updating 19c0a81..f752750\nFast-forward\n Forecast.kt | 1 +\n 1 file changed, 1 insertion(+)\n create mode 100644 Forecast.kt', panel: P({ commits: line, refs: [{ name: 'main', at: 'E' }, { name: 'forecast', at: 'E' }], head: 'main' }), say: '<code>main</code> had nothing new, so Git slid the label forward. <b>Fast-forward</b>: no new commit. Below that, Git lists the files that changed: <code>Forecast.kt</code> is now on <code>main</code>.' },
+              { clear: true, panel: P({ commits: fork, refs: [{ name: 'main', at: 'G' }, { name: 'units', at: 'F' }], head: 'main' }), say: 'Next, Ada made a branch <code>units</code> and committed “Add units” on it (F). Back on <code>main</code>, she committed “Add README” (G), which adds <code>README.md</code>, a short text that describes the project. Now both branches have new work.' },
+              { cmd: 'git merge --no-edit units', out: "Merge made by the 'ort' strategy.\n Units.kt | 1 +\n 1 file changed, 1 insertion(+)\n create mode 100644 Units.kt", panel: P({ commits: merged, refs: [{ name: 'main', at: 'H' }, { name: 'units', at: 'F' }], head: 'main' }), say: 'The label can’t slide, so Git made a <b>merge commit</b> (H) with two parents, G and F. (<code>ort</code> is the name of the method Git uses to combine files.)' },
+              { cmd: 'git log --oneline', out: "487bc47 (HEAD -> main) Merge branch 'units'\ne1f26e7 Add README\n0602e79 (units) Add units\nf752750 (forecast) Add forecast\n19c0a81 Ignore build output and secrets", say: 'The merge commit is on top, with the work of both branches below it (older lines cut). <code>units</code> did not move: a merge changes only the branch you are on.' },
+            ],
+          });
+        },
+        code: `git switch main              # be on the branch that receives the work
+git merge forecast           # bring in the commits from forecast
+# Updating 19c0a81..f752750
+# Fast-forward
+#  Forecast.kt | 1 +
+
+git merge --no-edit units    # both branches have new commits
+# Merge made by the 'ort' strategy.
+#  Units.kt | 1 +`,
+        remember: 'Be on the branch that receives the work, then git merge the other one: a fast-forward if only one side moved, a merge commit if both did.',
+        mistakes: [
+          { title: 'Merging in the wrong direction', bad: 'git switch forecast\ngit merge main        # brings main into forecast', good: 'git switch main\ngit merge forecast    # brings forecast into main', why: 'A merge changes the branch you are on. To give <code>main</code> the forecast, be on <code>main</code>.' },
+        ],
+        terms: [
+          { term: 'merge', def: '<code>git merge name</code> brings the commits of branch <code>name</code> into the branch you are on.' },
+          { term: 'fast-forward', def: 'A merge where Git only moves the branch label forward, because the branch you are on has no new commits of its own.' },
+          { term: 'merge commit', def: 'A commit with two parents that joins two branches. Git makes one when both branches have new commits.' },
+          { term: 'parent', def: 'The commit right before a commit. A merge commit has two.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Bring the finished <code>map</code> branch into <code>main</code>.', code: 'git [[switch]] main\ngit [[merge]] map', why: 'Be on the branch that receives the work, then merge the other branch into it.' },
+          { type: 'bug', prompt: 'Ada wants <code>main</code> to get the work from <code>units</code>, but Git prints <code>Already up to date.</code> and <code>main</code> doesn’t change. Tap the wrong line.', code: 'git switch units\ngit merge units', bug: 0, fix: 'git switch main', why: 'She was on <code>units</code>, merging it into itself. Be on <code>main</code>, the branch that should receive the work.' },
+        ],
+        quiz: [
+          { q: 'When does <code>git merge</code> do a fast-forward?', options: ['When the branch you are on has no new commits of its own', 'When none of the files changed', 'Every time'], a: 0, why: 'Then the other branch already contains everything, so Git only has to move the label forward.' },
+          { q: 'How many parents does a merge commit have?', options: ['One', 'Two', 'None'], a: 1, why: 'It joins two branches, so it points back to the last commit of each.' },
+          { q: 'You are on <code>main</code> and run <code>git merge units</code>. Which branch moves?', options: ['<code>main</code>', '<code>units</code>', 'Both'], a: 0, why: 'A merge changes only the branch you are on. <code>units</code> stays where it was.' },
+        ],
+        docs: [['Pro Git: Basic Branching and Merging', 'https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging'], ['git merge', 'https://git-scm.com/docs/git-merge']],
+      },
+
+      {
+        id: 'conflicts',
+        title: 'Merge conflicts',
+        tagline: 'When both branches changed the same line, Git asks you to decide.',
+        goals: ['Spot a conflict in what <code>git merge</code> and <code>git status</code> print', 'Read the conflict markers and write the right result', 'Finish the merge with <code>git add</code> and <code>git commit</code>, or cancel it'],
+        level: 'beginner', introduces: ['--abort'],
+        body: `
+<p>On the <code>greeting</code> branch, Ada changed the Lisbon line of <code>Main.kt</code> to <code>"Welcome to Lisbon!"</code>. Later, on <code>main</code>, she changed the very same line to <code>"Good morning, Lisbon!"</code>. When she merges, which line should win? Git can’t know, so it stops and asks. That pause is a <em>merge conflict</em>. It is normal, and nothing is lost.</p>
+<p>Git merges everything it can, then writes both versions of the disputed lines into the file between <em>conflict markers</em>. <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> starts your side (the branch you are on), <code>=======</code> separates the two sides, and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; greeting</code> ends the side being merged in. <code>git status</code> lists each such file as <code>both modified</code>.</p>
+<p>To resolve the conflict, open the file in your editor and change those lines into the result you want: one side, the other, or a mix. Delete the three marker lines. Then <code>git add Main.kt</code> tells Git the file is fixed, and <code>git commit -m "Merge greeting"</code> makes the merge commit. Changed your mind? <code>git merge --abort</code> puts everything back the way it was before the merge.</p>`,
+        visual(el) {
+          const file = (title, rows) => `<p class="gtk-h">${title}</p><div class="gt-cf">` + rows.map(([t, k]) => `<div class="gt-cl${k ? ' gt-' + k : ''}">${esc(t)}</div>`).join('') + '</div>';
+          const rest = [['    println("Hello, Oslo!")'], ['    println("Hello, Rome!")'], ['}']];
+          const two = file('Main.kt on main', [['fun main() {'], ['    println("Good morning, Lisbon!")', 'ours'], ...rest]) + file('Main.kt on greeting', [['fun main() {'], ['    println("Welcome to Lisbon!")', 'theirs'], ...rest]);
+          const marked = file('Main.kt', [['fun main() {'], ['<<<<<<< HEAD', 'mark'], ['    println("Good morning, Lisbon!")', 'ours'], ['=======', 'mark'], ['    println("Welcome to Lisbon!")', 'theirs'], ['>>>>>>> greeting', 'mark'], ...rest]);
+          const fixed = file('Main.kt', [['fun main() {'], ['    println("Good morning, welcome to Lisbon!")'], ...rest]);
+          Lab.ui.terminal(el, {
+            panelTitle: 'The file',
+            predict: {
+              q: 'Both branches changed the Lisbon line of <code>Main.kt</code>, in different ways. What does <code>git merge greeting</code> do?',
+              options: ['Keeps the newest change', 'Keeps the line from <code>main</code>, because you are on it', 'Stops and asks you to choose'],
+              a: 2,
+              why: 'Git never guesses which line is right. It marks the spot in the file and waits for you.',
+            },
+            frames: [
+              { panel: two, say: 'Ada is on <code>main</code>. The Lisbon line of <code>Main.kt</code> is different on each branch; the other lines are the same.' },
+              { cmd: 'git merge greeting', out: 'Auto-merging Main.kt\nCONFLICT (content): Merge conflict in Main.kt\nAutomatic merge failed; fix conflicts and then commit the result.', say: 'Git stops. The <code>CONFLICT</code> line names the file it couldn’t merge.' },
+              { cmd: 'git status', out: esc('On branch main\nYou have unmerged paths.\n  (fix conflicts and run "git commit")\n  (use "git merge --abort" to abort the merge)\n\nUnmerged paths:\n  (use "git add <file>..." to mark resolution)\n\tboth modified:   Main.kt'), say: '<code>git status</code> says you are in the middle of a merge, lists <code>Main.kt</code> as <code>both modified</code>, and shows the way forward and the way out.' },
+              { panel: marked, say: 'Ada opens <code>Main.kt</code>. Above <code>=======</code> is her side, <code>HEAD</code>. Below it is the side from <code>greeting</code>.' },
+              { panel: fixed, say: 'She writes the line she wants, a mix of both, deletes all three marker lines, and saves the file.' },
+              { cmd: 'git add Main.kt', say: '<code>git add</code> tells Git this file is resolved. It prints nothing.' },
+              { cmd: 'git status', out: 'On branch main\nAll conflicts fixed but you are still merging.\n  (use "git commit" to conclude merge)\n\nChanges to be committed:\n\tmodified:   Main.kt', say: 'No conflicts left. One step remains: the commit.' },
+              { cmd: 'git commit -m "Merge greeting"', out: '[main 5f1cfaa] Merge greeting', say: 'The merge commit is made, with two parents like any merge. Conflict resolved.' },
+            ],
+          });
+        },
+        code: `git merge greeting
+# CONFLICT (content): Merge conflict in Main.kt
+# Automatic merge failed; fix conflicts and then commit the result.
+
+git status                       # Main.kt is listed as "both modified"
+# open Main.kt, write the line you want, delete the marker lines
+git add Main.kt                  # mark the file as fixed
+git commit -m "Merge greeting"   # finish the merge
+
+git merge --abort                # or: cancel, back to before the merge`,
+        remember: 'Conflict: edit the file to the result you want, delete the markers, git add it, git commit. git merge --abort cancels.',
+        mistakes: [
+          { title: 'Leaving the markers in', bad: 'fun main() {\n<<<<<<< HEAD\n    println("Good morning, Lisbon!")\n=======\n    println("Welcome to Lisbon!")\n>>>>>>> greeting\n    println("Hello, Oslo!")\n    println("Hello, Rome!")\n}', good: 'fun main() {\n    println("Good morning, welcome to Lisbon!")\n    println("Hello, Oslo!")\n    println("Hello, Rome!")\n}', why: '<code>git add</code> doesn’t look inside the file. If the marker lines stay, the code no longer compiles. Delete all three before you add.' },
+        ],
+        terms: [
+          { term: 'merge conflict', def: 'Both branches changed the same lines in different ways. Git stops the merge and asks you to choose.' },
+          { term: 'conflict markers', def: 'The lines <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> that Git writes around the two versions.' },
+          { term: 'resolve', def: 'Edit the file into its final form, remove the markers, and <code>git add</code> it.' },
+          { term: '--abort', def: '<code>git merge --abort</code> cancels a merge that stopped, and puts your files back as they were.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'You fixed <code>Main.kt</code> and deleted the markers. Finish the merge.', code: 'git [[add]] Main.kt\ngit [[commit]] -m "Merge greeting"', why: '<code>git add</code> marks the file as resolved; <code>git commit</code> makes the merge commit.' },
+          { type: 'bug', prompt: 'Ada fixed <code>Main.kt</code>, but the last line fails with <code>error: Committing is not possible because you have unmerged files.</code> Tap the wrong line.', code: 'git merge greeting\n# fix Main.kt and delete the markers\ngit status\ngit commit -m "Merge greeting"', bug: 2, fix: 'git add Main.kt', why: 'Git waits until you <code>git add</code> the file to know the conflict is resolved. Looking at the status doesn’t tell it that.' },
+        ],
+        quiz: [
+          { q: 'What sits between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code>=======</code>?', options: ['The version from the branch you are on', 'The version from the branch being merged in', 'The version from before both changes'], a: 0, why: '<code>HEAD</code> is where you are. The side being merged in comes after <code>=======</code>.' },
+          { q: 'You edited the conflicted file into its final form. Which step tells Git it is fixed?', options: ['<code>git add Main.kt</code>', '<code>git status</code>', 'Saving the file'], a: 0, why: 'Saving changes the file, but Git keeps it marked as conflicted until you <code>git add</code> it.' },
+          { q: 'The conflict is too big to fix right now. What gets you back to before the merge?', options: ['<code>git merge --abort</code>', 'Deleting <code>Main.kt</code>', '<code>git commit</code>'], a: 0, why: '<code>--abort</code> cancels the merge and puts your files back as they were.' },
+        ],
+        docs: [['Pro Git: Basic Merge Conflicts', 'https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging#_basic_merge_conflicts'], ['Resolving a merge conflict using the command line', 'https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-using-the-command-line']],
+      },
+
+      {
+        id: 'remotes',
+        title: 'Working with GitHub',
+        tagline: 'Keep a copy of your repository online, and stay in sync with it.',
+        goals: ['Put a repository on GitHub with <code>git remote add</code> and <code>git push</code>', 'Copy a repository from GitHub with <code>git clone</code>', 'Bring in other people’s commits with <code>git fetch</code> and <code>git pull</code>'],
+        level: 'beginner', introduces: ['remote', 'origin', 'push', '-u', 'clone', 'fetch', 'pull'], ignore: ['rebase'],
+        body: `
+<p>So far Ada’s repository lives in one folder on one laptop. If the laptop breaks, the history is gone, and Sam can’t work on the project with her. <em>GitHub</em> is a website that keeps copies of Git repositories online. A copy of your repository somewhere else is called a <em>remote</em>.</p>
+<p>To start, sign in on github.com, open the <b>+</b> menu at the top right, choose <b>New repository</b>, type a name, leave all boxes unchecked so the repository starts empty, and click <b>Create repository</b>. GitHub then shows the repository’s address, like <code>https://github.com/ada/weather.git</code>. In your project folder, <code>git remote add origin</code> followed by that address saves it under the short name <code>origin</code>, the usual name for your main remote.</p>
+<p><code>git push -u origin main</code> uploads the commits of <code>main</code>. The <code>-u</code> makes Git remember where <code>main</code> goes, so next time <code>git push</code> is enough. The first time, Git asks you to sign in to GitHub. Your GitHub password won’t work here; use the browser sign-in Git offers, or a personal access token (see GitHub’s guide below).</p>
+<p>Three commands go the other way. <code>git clone</code> followed by an address copies a whole repository from GitHub into a new folder, with <code>origin</code> already set: that is how Sam gets the project. (So that Sam can push too, Ada added Sam under <b>Settings → Collaborators</b> on the repository’s page.) <code>git fetch</code> downloads new commits but leaves your files and your <code>main</code> alone; Git shows where GitHub’s <code>main</code> is with the label <code>origin/main</code>. <code>git pull</code> fetches, then merges those commits into your branch, so your files catch up. It merges because of the <code>pull.rebase false</code> setting from Starting a repository.</p>`,
+        visual(el) {
+          const g = graph({ lanes: 1, top: 92, title: 'Commits on Ada’s laptop' });
+          const P = st => node => { node.append(g.el); g.set(st); };
+          const two = [{ id: 'J', p: [], col: 0, msg: 'c60af31 Say good morning' }, { id: 'K', p: ['J'], col: 1, msg: '5f1cfaa Merge greeting' }];
+          const ghost = two.concat({ id: 'L', p: ['K'], col: 3, ghost: true, msg: 'de94841 Greet Paris (only on GitHub)' });
+          const three = two.concat({ id: 'L', p: ['K'], col: 3, hl: true, msg: 'de94841 Greet Paris' });
+          const url = 'https://github.com/ada/weather.git';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Commits (newest on the right)',
+            predict: {
+              q: 'Sam pushed a new commit to GitHub. Ada runs <code>git fetch</code>. What changes on her laptop?',
+              options: ['Her files change to include Sam’s work', 'Git downloads the commit, but her <code>main</code> and her files stay the same', 'Nothing: fetch only checks whether there is news'],
+              a: 1,
+              why: '<code>fetch</code> only downloads. It moves <code>origin/main</code>, Git’s note of where GitHub’s <code>main</code> is. <code>pull</code> is what updates your branch.',
+            },
+            frames: [
+              { panel: P({ commits: two, refs: [{ name: 'main', at: 'K' }], head: 'main' }), say: 'Ada’s newest commits (older ones are off to the left). They exist only on her laptop. On github.com she has created an empty repository called <code>weather</code>.' },
+              { cmd: `git remote add origin ${url}`, say: 'Nothing printed and nothing uploaded yet. Git saved the address under the name <code>origin</code>.' },
+              { cmd: 'git push -u origin main', out: `To ${url}\n * [new branch]      main -> main\nbranch 'main' set up to track 'origin/main'.`, panel: P({ commits: two, refs: [{ name: 'main', at: 'K' }, { name: 'origin/main', at: 'K', remote: true }], head: 'main' }), say: 'Uploaded, all commits of <code>main</code>. The new label <code>origin/main</code> shows where <code>main</code> is on GitHub. (Git first prints a few progress lines; they are cut here.)' },
+              { panel: P({ commits: ghost, refs: [{ name: 'main', at: 'K' }, { name: 'origin/main', at: 'K', remote: true }], head: 'main' }), say: 'Meanwhile Sam cloned the repository, committed “Greet Paris” and pushed it. GitHub now has that commit (dashed); Ada’s laptop doesn’t know yet.' },
+              { cmd: 'git fetch', out: 'From https://github.com/ada/weather\n   5f1cfaa..de94841  main       -> origin/main', panel: P({ commits: three, refs: [{ name: 'main', at: 'K' }, { name: 'origin/main', at: 'L', remote: true }], head: 'main' }), say: '<code>fetch</code> downloads Sam’s commit and moves <code>origin/main</code> to it. Ada’s <code>main</code> and her files stay the same.' },
+              { cmd: 'git status', out: 'On branch main\nYour branch is behind \'origin/main\' by 1 commit, and can be fast-forwarded.\n  (use "git pull" to update your local branch)\n\nnothing to commit, working tree clean', say: '<code>git status</code> compares <code>main</code> with <code>origin/main</code>: one commit behind.' },
+              { cmd: 'git pull', out: 'Updating 5f1cfaa..de94841\nFast-forward\n Main.kt | 1 +\n 1 file changed, 1 insertion(+)', panel: P({ commits: three, refs: [{ name: 'main', at: 'L' }, { name: 'origin/main', at: 'L', remote: true }], head: 'main' }), say: '<code>pull</code> is fetch plus merge. Here the merge is a fast-forward, and <code>Main.kt</code> now greets Paris too.' },
+            ],
+          });
+        },
+        code: `# put a project on GitHub (after creating an empty repository there)
+git remote add origin https://github.com/ada/weather.git
+git push -u origin main     # first time; afterwards: git push
+
+# copy a repository from GitHub into a new folder
+git clone https://github.com/ada/weather.git
+# Cloning into 'weather'...
+
+# stay up to date
+git fetch                   # download only: moves origin/main
+git pull                    # download and merge into your branch`,
+        remember: 'push uploads your commits; clone copies a whole repository; fetch downloads; pull downloads and merges.',
+        mistakes: [
+          { title: 'Pushing when GitHub has newer commits', bad: 'git push\n#  ! [rejected]        main -> main (fetch first)\n# error: failed to push some refs to \'https://github.com/ada/weather.git\'', good: 'git fetch\ngit merge --no-edit origin/main\ngit push', why: 'Sam pushed while you were working, so GitHub has a commit you don’t have, and Git won’t overwrite it. Download it, merge it into your branch (a merge commit, since both sides moved), then push.' },
+        ],
+        terms: [
+          { term: 'remote, origin', def: 'A copy of your repository somewhere else, such as GitHub. <code>origin</code> is the usual name for your main one.' },
+          { term: 'push', def: '<code>git push</code> uploads your new commits to the remote.' },
+          { term: 'clone', def: '<code>git clone</code> copies a whole repository from a remote into a new folder.' },
+          { term: 'fetch, pull', def: '<code>git fetch</code> downloads new commits without touching your files. <code>git pull</code> fetches, then merges them into your branch.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Upload <code>main</code> to GitHub for the first time, so plain <code>git push</code> works afterwards.', code: 'git remote add origin https://github.com/ada/weather.git\ngit [[push]] [[-u]] origin main', why: '<code>-u</code> makes Git remember that <code>main</code> goes to <code>origin</code>.' },
+          { type: 'bug', prompt: 'Ada created an empty repository on GitHub and wants to upload her commits. The middle line prints an error, and the push fails with <code>fatal: \'origin\' does not appear to be a git repository</code>. Tap the wrong line.', code: 'git commit -m "Add greeting"\ngit remote origin https://github.com/ada/weather.git\ngit push -u origin main', bug: 1, fix: 'git remote add origin https://github.com/ada/weather.git', why: 'The word <code>add</code> is missing, so no remote was saved and Git doesn’t know what <code>origin</code> is. <code>git remote add origin</code> saves the address first; then the push knows where to go.' },
+        ],
+        quiz: [
+          { q: 'What does <code>git push</code> do?', options: ['Uploads your new commits to the remote', 'Downloads commits from the remote', 'Saves a snapshot on your laptop'], a: 0, why: 'Push sends your commits up. Fetch and pull bring commits down; commit saves a snapshot.' },
+          { q: 'What is <code>origin</code>?', options: ['A short name for the remote’s address', 'The first commit', 'A branch on your laptop'], a: 0, why: '<code>git remote add origin</code> saved the GitHub address under that name.' },
+          { q: 'Which command updates your files with commits from GitHub?', options: ['<code>git pull</code>', '<code>git fetch</code>', '<code>git push</code>'], a: 0, why: '<code>pull</code> downloads and merges. <code>fetch</code> only downloads.' },
+        ],
+        docs: [['About remote repositories', 'https://docs.github.com/en/get-started/git-basics/about-remote-repositories'], ['Pro Git: Working with Remotes', 'https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes']],
+      },
+
+      {
+        id: 'pull-requests',
+        title: 'Pull requests and review',
+        tagline: 'Ask your team to look at a branch before it joins main.',
+        goals: ['Open a pull request on GitHub from a branch you pushed', 'Review one: comment, approve or request changes', 'Merge it on GitHub and bring the result to your laptop'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Merging straight into <code>main</code> works when you are alone. In a team, a second pair of eyes catches the typo or the bug before everyone gets it. A <em>pull request</em> (often called a PR) is a page on GitHub that says: “Here is my branch. Please look at it, then merge it into <code>main</code>.”</p>
+<p>Push your branch with <code>git push -u origin wind</code>. On the repository’s page, GitHub then shows a yellow banner with a <b>Compare &amp; pull request</b> button. Click it, check that <b>base</b> is <code>main</code> and <b>compare</b> is your branch, write a title and a short description of what changed and why, and click <b>Create pull request</b>.</p>
+<p>A teammate opens the <b>Files changed</b> tab to see every changed line, and can comment on any line. A <em>review</em> ends with <b>Review changes</b> (or <b>Submit review</b>) and one of three choices: <b>Comment</b>, <b>Approve</b> or <b>Request changes</b>. To fix something, commit on the same branch and <code>git push</code> again; the new commit shows up in the same pull request.</p>
+<p>Once it is approved, click <b>Merge pull request</b>, then <b>Confirm merge</b>. GitHub makes a merge commit on <code>main</code>, and offers a <b>Delete branch</b> button for the finished branch. Back on your laptop, <code>git switch main</code> and <code>git pull</code> bring the result down.</p>`,
+        visual(el) {
+          const STEPS = ['Push', 'Open', 'Review', 'Merge'];
+          const pr = ({ at, badge = '', tone = '', note = '', commits = 1, merged = false, dot = '' }) =>
+            '<div class="gt-pipe">' + STEPS.map((s, k) => `<span class="gt-stp${k < at || merged ? ' gt-done' : k === at ? ' gt-now' : ''}">${s}</span>`).join('') + '</div>' +
+            (!badge ? '' : `<div class="gt-pr${merged ? ' gt-merged' : ''}" style="margin-top:8px"><div class="gt-pr-t">Add wind #1</div>` +
+              `<div class="gt-pr-m">ada ${merged ? 'merged' : 'wants to merge'} ${commits} commit${commits > 1 ? 's' : ''} into main from wind</div>` +
+              `<span class="gt-badge${tone ? ' gt-b-' + tone : ''}">${badge}</span>` +
+              (note ? `<div class="gt-chk"><span class="gt-dot${dot ? ' gt-' + dot : ''}"></span><span>${note}</span></div>` : '') + '</div>');
+          const url = 'https://github.com/ada/weather.git';
+          Lab.ui.terminal(el, {
+            panelTitle: 'On github.com',
+            predict: {
+              q: 'Sam asked for a change in Ada’s pull request. Ada fixes it and runs <code>git push</code> on the same branch. What happens on GitHub?',
+              options: ['The new commit appears in the same pull request', 'GitHub opens a second pull request', 'The push is refused until the pull request is closed'],
+              a: 0,
+              why: 'A pull request follows its branch. Every commit you push to that branch shows up in it.',
+            },
+            frames: [
+              { cmd: 'git push -u origin wind', out: `remote: \nremote: Create a pull request for 'wind' on GitHub by visiting:\nremote:      https://github.com/ada/weather/pull/new/wind\nremote: \nTo ${url}\n * [new branch]      wind -> wind\nbranch 'wind' set up to track 'origin/wind'.`, panel: pr({ at: 1 }), say: 'Ada made a branch <code>wind</code> with one commit, “Add wind”, and pushes it. Lines starting with <code>remote:</code> come from GitHub: it even prints a link for opening a pull request.' },
+              { panel: pr({ at: 2, badge: 'Open', tone: 'ok' }), say: 'On github.com she clicks <b>Compare &amp; pull request</b>, writes a title and a description, and clicks <b>Create pull request</b>.' },
+              { panel: pr({ at: 2, badge: 'Changes requested', tone: 'err', note: 'Sam on Wind.kt line 1: “wnid” should be “wind”.', dot: 'fail' }), say: 'Sam opens <b>Files changed</b>, comments on the line, and submits the review with <b>Request changes</b>.' },
+              { cmd: 'git commit -m "Fix typo"', out: '[wind 6385369] Fix typo\n 1 file changed, 1 insertion(+), 1 deletion(-)', say: 'Ada fixes the word in <code>Wind.kt</code>, runs <code>git add Wind.kt</code>, and commits on the same branch.' },
+              { cmd: 'git push', out: `To ${url}\n   0c62d7c..6385369  wind -> wind`, panel: pr({ at: 2, badge: 'Open', tone: 'ok', commits: 2, note: 'New commit: Fix typo', dot: 'run' }), say: 'No new pull request needed. The commit shows up in the same one, and Sam looks again.' },
+              { panel: pr({ at: 4, badge: 'Merged', tone: 'ok', commits: 2, merged: true, note: 'Sam approved these changes', dot: 'pass' }), say: 'Sam submits <b>Approve</b>. Ada clicks <b>Merge pull request</b>, then <b>Confirm merge</b>. GitHub makes a merge commit on its copy of <code>main</code>.' },
+              { cmd: 'git switch main', out: "Switched to branch 'main'\nYour branch is up to date with 'origin/main'.", say: '“Up to date” means: up to date with what Git last downloaded. GitHub’s <code>main</code> has moved since.' },
+              { cmd: 'git pull', out: 'From https://github.com/ada/weather\n   de94841..8d4aaf5  main       -> origin/main\nUpdating de94841..8d4aaf5\nFast-forward\n Wind.kt | 1 +\n 1 file changed, 1 insertion(+)\n create mode 100644 Wind.kt', say: 'Pulling brings the merged work, with GitHub’s merge commit <code>Merge pull request #1 from ada/wind</code>, onto Ada’s laptop.' },
+            ],
+          });
+        },
+        code: `git switch -c wind
+# ...edit, git add, git commit...
+git push -u origin wind
+# on github.com: Compare & pull request, then Create pull request
+
+# a reviewer asked for a change: fix it on the same branch
+git add Wind.kt
+git commit -m "Fix typo"
+git push                       # appears in the same pull request
+
+# after Merge pull request and Confirm merge on github.com
+git switch main
+git pull`,
+        remember: 'Push a branch, open a pull request, fix review comments with more commits on that branch, merge on GitHub, then pull main.',
+        terms: [
+          { term: 'pull request', def: 'A page on GitHub that asks for a branch to be reviewed and merged into another branch, usually <code>main</code>.' },
+          { term: 'review', def: 'A teammate reads the changes, comments, and then chooses Comment, Approve or Request changes.' },
+          { term: 'base, compare', def: 'In a pull request, <b>base</b> is the branch that receives the work (<code>main</code>); <b>compare</b> is your branch.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A reviewer asked for a change, and you fixed <code>Wind.kt</code>. Update the pull request.', code: 'git add Wind.kt\ngit commit -m "Say breeze"\ngit [[push]]', why: 'Pushing to the same branch adds the commit to the pull request that is already open.' },
+          { type: 'bug', prompt: 'The pull request was merged on GitHub, but Ada’s <code>main</code> still has no <code>Wind.kt</code>. Tap the wrong line.', code: 'git switch main\ngit fetch\ngit log --oneline', bug: 1, fix: 'git pull', why: 'The merge happened on GitHub. <code>git pull</code> downloads it and updates your <code>main</code> and your files; <code>fetch</code> only downloads.' },
+        ],
+        quiz: [
+          { q: 'What is a pull request?', options: ['A request on GitHub to review a branch and merge it', 'A command that downloads commits', 'A copy of a repository'], a: 0, why: 'It is a page on GitHub around your branch. <code>git pull</code> is a different thing, despite the name.' },
+          { q: 'A reviewer chose <b>Request changes</b>. What do you do?', options: ['Commit the fix on the same branch and push', 'Open a new pull request', 'Merge anyway'], a: 0, why: 'The pull request follows its branch, so new commits appear in it.' },
+          { q: 'The pull request was merged on github.com. How does your laptop get it?', options: ['<code>git switch main</code>, then <code>git pull</code>', 'It arrives on its own', '<code>git push</code>'], a: 0, why: 'Your laptop changes only when you download. Pull brings GitHub’s new <code>main</code> into yours.' },
+        ],
+        docs: [['Creating a pull request', 'https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request'], ['Reviewing proposed changes in a pull request', 'https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/reviewing-proposed-changes-in-a-pull-request']],
+      },
+
+      {
+        id: 'rebase',
+        title: 'Rebase',
+        tagline: 'Move your branch to the end of main, for a straight history.',
+        goals: ['Replay your branch on top of <code>main</code> with <code>git rebase</code>', 'Compare a rebased history with a merged one', 'Know when not to rebase: commits others already have'],
+        level: 'intermediate', introduces: ['rebase', '--continue'],
+        body: `
+<p>While Ada worked on her branch <code>rain</code>, Sam added “Greet Berlin” to <code>main</code>. A merge would work, but it adds a merge commit, and with every branch the history gets another side loop. Many teams prefer one straight line. <code>git rebase</code> gives you that.</p>
+<p>On your branch, <code>git rebase main</code> takes the commits that are only on your branch, sets them aside, moves your branch to the end of <code>main</code>, then makes each commit again, one by one, on top. It is as if you had started your work today. First get the newest <code>main</code>: <code>git switch main</code> and <code>git pull</code>, then <code>git switch rain</code> and <code>git rebase main</code>. Afterwards, <code>main</code> can take your work with a fast-forward. If a replayed commit conflicts, fix the file as in Merge conflicts, <code>git add</code> it, then run <code>git rebase --continue</code> (or <code>git rebase --abort</code> to cancel).</p>
+<p>The catch: replayed commits are <em>new</em> commits, with new ids. The old ones are left behind. That is fine while the commits are only on your laptop. But if you already pushed them, GitHub and your teammates still have the old ones, and your next <code>git push</code> is refused. The rule: rebase only commits nobody else has. For branches you share, merge.</p>`,
+        visual(el) {
+          const g = graph({ lanes: 2, top: 92, title: 'Commits and branch labels' });
+          const P = st => node => { node.append(g.el); g.set(st); };
+          const base = [{ id: 'O', p: [], lane: 0, col: 0, msg: '8d4aaf5 Merge pull request #1 from ada/wind' }, { id: 'Q', p: ['O'], lane: 0, col: 1, msg: '106e565 Greet Berlin' }];
+          const before = base.concat({ id: 'P', p: ['O'], lane: 1, col: 1, msg: 'a5967b8 Add rain' });
+          const after = base.concat({ id: 'P', p: ['O'], lane: 1, col: 1, ghost: true, msg: 'a5967b8 Add rain (old)' }, { id: 'P2', label: 'P′', p: ['Q'], lane: 0, col: 2, hl: true, msg: '6c5533b Add rain (replayed)' });
+          const pushed = base.concat({ id: 'P', p: ['O'], lane: 1, col: 1, msg: 'a5967b8 Add rain (old, on GitHub)' }, { id: 'P2', label: 'P′', p: ['Q'], lane: 0, col: 2, hl: true, msg: '6c5533b Add rain (replayed)' });
+          Lab.ui.terminal(el, {
+            panelTitle: 'Commits (oldest on the left)',
+            predict: {
+              q: 'Ada is on <code>rain</code> and runs <code>git rebase main</code>. What happens to her commit “Add rain”?',
+              options: ['It moves on top of <code>main</code> and keeps its id', 'It is made again on top of <code>main</code>, with a new id', 'It is merged into <code>main</code>'],
+              a: 1,
+              why: 'Rebase replays each commit as a new one. Same change, new parent, so a new id. <code>main</code> itself doesn’t move.',
+            },
+            frames: [
+              { panel: P({ commits: before, refs: [{ name: 'main', at: 'Q' }, { name: 'rain', at: 'P' }], head: 'rain' }), say: 'Ada is on <code>rain</code> with one commit, “Add rain” (P). Since it started, <code>main</code> got Sam’s “Greet Berlin” (Q), which Ada has pulled.' },
+              { cmd: 'git log --oneline', out: 'a5967b8 (HEAD -> rain) Add rain\n8d4aaf5 Merge pull request #1 from ada/wind', say: 'Note the id of her commit: <code>a5967b8</code>. (Older lines cut.)' },
+              { cmd: 'git rebase main', out: 'Successfully rebased and updated refs/heads/rain.', panel: P({ commits: after, refs: [{ name: 'main', at: 'Q' }, { name: 'rain', at: 'P2' }], head: 'rain' }), say: 'Git replayed “Add rain” on top of <code>main</code>: the same change in a new commit, P′. The old P (dashed) is left behind. <code>refs/heads/rain</code> is Git’s full name for the branch <code>rain</code>.' },
+              { cmd: 'git log --oneline', out: '6c5533b (HEAD -> rain) Add rain\n106e565 (origin/main, main) Greet Berlin\n8d4aaf5 Merge pull request #1 from ada/wind', say: 'One straight line. Her commit has a new id: <code>6c5533b</code>, not <code>a5967b8</code>.' },
+              { cmd: 'git switch main', out: "Switched to branch 'main'\nYour branch is up to date with 'origin/main'.", panel: P({ commits: after, refs: [{ name: 'main', at: 'Q' }, { name: 'rain', at: 'P2' }], head: 'main' }), say: 'Now bring the work into <code>main</code> as usual.' },
+              { cmd: 'git merge rain', out: 'Updating 106e565..6c5533b\nFast-forward\n Rain.kt | 1 +\n 1 file changed, 1 insertion(+)\n create mode 100644 Rain.kt', panel: P({ commits: after, refs: [{ name: 'main', at: 'P2' }, { name: 'rain', at: 'P2' }], head: 'main' }), say: 'A fast-forward: no merge commit, and the history stays straight.' },
+              { clear: true, panel: P({ commits: pushed, refs: [{ name: 'main', at: 'Q' }, { name: 'rain', at: 'P2' }, { name: 'origin/rain', at: 'P', remote: true }], head: 'rain' }), say: 'Now picture another day: Ada had pushed <code>rain</code> before rebasing. GitHub still has the old commit P, shown by <code>origin/rain</code>.' },
+              { cmd: 'git push', out: "To https://github.com/ada/weather.git\n ! [rejected]        rain -> rain (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/ada/weather.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.", say: 'Refused. P′ doesn’t follow from P, and anyone who pulled P has the same mismatch. Don’t follow Git’s <code>git pull</code> hint here: it would merge the old P back in next to P′. That is why you rebase only commits nobody else has.' },
             ],
           });
         },
         code: `git switch main
-git pull                         # get the latest main first (lesson 7)
-git merge feature/search
+git pull                 # get the newest main first
+git switch rain
+git rebase main          # replay my commits on top of main
+# Successfully rebased and updated refs/heads/rain.
 
-# when there is a conflict:
-# CONFLICT (content): Merge conflict in app/src/main/res/values/strings.xml
-# Automatic merge failed; fix conflicts and then commit the result.
-git status                       # lists "both modified" files
-# edit the file, delete <<<<<<< ======= >>>>>>> markers
-git add app/src/main/res/values/strings.xml
-git commit                       # finishes the merge
-
-git merge --abort                # or: give up and go back to before the merge`,
-        remember: 'Merge into the branch you are on. On conflict: edit, delete markers, git add, git commit.',
-        deeper: [
-          {
-            title: 'Resolve a conflict by hand',
-            body: `<p>Both branches renamed the app in <code>strings.xml</code>. Between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code>=======</code> is your side (the branch you are on). Between <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> is the incoming side. Decide the result, then mark it resolved.</p>`,
-            visual(el) {
-              const ours = '    <string name="app_name">News App</string>', theirs = '    <string name="app_name">Daily News</string>';
-              const box = h('div', { class: 'gt-cf', 'aria-label': 'strings.xml' });
-              const o = out('');
-              let body = null, added = false;
-              const L = (t, c = '') => h('div', { class: `gt-cl ${c}` }, t);
-              function draw() {
-                const mid = body || [L('<<<<<<< HEAD', 'gt-mark'), L(ours, 'gt-ours'), L('=======', 'gt-mark'), L(theirs, 'gt-theirs'), L('>>>>>>> feature/rename', 'gt-mark')];
-                box.replaceChildren(L('<resources>'), ...mid, L('</resources>'));
-                replay(box, 'pop-soft');
-              }
-              const pick = (lines, note) => () => { body = lines.map(([t, c]) => L(t, c)); added = false; draw(); say(o, note); };
-              draw(); say(o, 'CONFLICT (content): Merge conflict in strings.xml. Pick a result.');
-              el.append(
-                row(act('keep HEAD', pick([[ours, 'gt-ours']], 'Kept your side. Markers are gone.')),
-                  act('keep feature', pick([[theirs, 'gt-theirs']], 'Kept the incoming side. Markers are gone.')),
-                  act('keep both', pick([[ours, 'gt-ours'], [theirs, 'gt-theirs']], '<span class="bad">Two strings named app_name: the Android build fails with a duplicate resource error.</span> Keeping both is right for lists, not here.'))),
-                row(act('git add strings.xml', () => {
-                  added = true;
-                  say(o, body ? 'strings.xml marked as resolved.' : '<span class="bad">Git accepted it, markers and all.</span> git add does not check the content. Always remove the markers first.');
-                }), act('git commit', () => {
-                  if (!added) { say(o, '<span class="bad">error: Committing is not possible because you have unmerged files.</span>\n<span class="muted">git add the file to mark it resolved.</span>'); return; }
-                  say(o, body ? '<span class="good">Merge commit created.</span> The conflict is resolved.' : '<span class="bad">Committed with conflict markers in strings.xml.</span> The next build will fail.');
-                })), box, o);
-            },
-          },
-          {
-            title: 'Keep a merge commit with --no-ff',
-            body: `<p>Some teams want every feature to show up as a merge commit, even when a fast-forward was possible, so the branch stays visible in history. <code>git merge --no-ff</code> always creates one. <code>--ff-only</code> does the opposite: merge only if it can fast-forward, otherwise stop.</p>`,
-            code: `git merge --no-ff feature/search     # always a merge commit
-git merge --ff-only origin/main      # only slide forward, never create a merge
-git log --oneline --graph`,
-          },
-          {
-            title: 'Fewer conflicts',
-            body: `<p>Conflicts grow with time apart. Keep branches short, merge or rebase the latest main into your branch often, and avoid reformatting whole files in the same branch as a feature. A conflict is not an error, it is Git asking a question only you can answer.</p>`,
-          },
-        ],
-        underHood: {
-          body: `<p>A three-way merge compares three snapshots: the merge base, your side and their side. For each piece of a file: if only one side changed it, take that change; if both made the same change, take it once; if both changed it differently, it is a conflict. Since Git 2.34 the default strategy is called <code>ort</code>, which is why you see "Merge made by the 'ort' strategy."</p>`,
-          code: `git merge-base main feature/search   # the commit where they split
-git diff $(git merge-base main feature/search) feature/search   # what feature changed`,
-        },
+git switch main
+git merge rain           # a fast-forward: history stays straight`,
+        remember: 'git rebase main replays your branch on top of main as new commits. Rebase only commits nobody else has.',
         mistakes: [
-          { title: 'Merging in the wrong direction', bad: `git switch feature/search
-git merge main          # brings main into feature`, good: `git switch main
-git merge feature/search`, why: 'Merge changes the branch you are on. To land a feature on main, be on main. (Merging main into your feature to stay up to date is fine, but it is a different thing.)' },
-          { title: 'Committing conflict markers', bad: `git add .
-git commit -m "Merge"    # file still has <<<<<<< HEAD`, good: `git diff --check        # warns about leftover markers
-git add strings.xml
-git commit`, why: '<code>git add</code> marks a file resolved without looking inside. Search for <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> or run <code>git diff --check</code> before you commit.' },
+          { title: 'Rebasing the shared branch', bad: 'git switch main\ngit rebase rain       # gives main’s shared commits new ids', good: 'git switch rain\ngit rebase main       # only your own commits get new ids', why: 'Rebase rewrites the branch you are on. Rebase your own branch onto <code>main</code>, never <code>main</code> itself.' },
         ],
         terms: [
-          { term: 'Fast-forward', def: 'A merge where the branch label just moves ahead, because the other branch already contains it.' },
-          { term: 'Merge commit', def: 'A commit with two parents that joins two lines of history.' },
-          { term: 'Merge conflict', def: 'Both sides changed the same lines differently. Git stops and asks you to choose.' },
-          { term: 'Merge base', def: 'The most recent commit two branches have in common.' },
+          { term: 'rebase', def: '<code>git rebase main</code> replays the commits of your branch, one by one, on top of <code>main</code>.' },
+          { term: 'replayed commit', def: 'A copy of a commit made by rebase: the same change on a new parent, so it gets a new id.' },
+          { term: 'shared branch', def: 'A branch that is on GitHub and that others may have pulled, like <code>main</code>. Don’t rebase its commits.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Land <code>feature/login</code> on main.', code: 'git switch [[main]]\ngit [[merge]] feature/login', why: 'Merge pulls the named branch into the branch you are on, so switch to main first.' },
-          { type: 'bug', prompt: 'You fixed the conflict in strings.xml, but this sequence goes wrong. Tap the line.', code: 'git merge feature/rename\n# CONFLICT in strings.xml: edit it and delete the markers\ngit rm strings.xml\ngit commit', bug: 2, fix: 'git add strings.xml', why: '<code>git add</code> marks the resolved file. <code>git rm</code> would delete the file from the project.' },
+          { type: 'blank', prompt: 'Put your branch <code>map</code> on top of the newest <code>main</code>, keeping the history straight.', code: 'git switch map\ngit [[rebase]] [[main]]', why: 'Be on your own branch, then rebase it onto <code>main</code>.' },
+          { type: 'bug', prompt: 'Ada is on <code>rain</code> and wants it on top of the newest <code>main</code>, but Git prints <code>Current branch rain is up to date.</code> and nothing moves. Tap the wrong line.', code: 'git switch rain\ngit rebase rain', bug: 1, fix: 'git rebase main', why: 'Name the branch to move onto, <code>main</code>. Rebasing <code>rain</code> onto itself does nothing.' },
         ],
         quiz: [
-          { q: 'When does <code>git merge</code> fast-forward?', options: ['When there are no conflicts', 'When the current branch has no commits the other branch lacks', 'Always'], a: 1, why: 'If your branch is fully contained in the other one, Git can just move the label ahead.' },
-          { q: 'How many parents does a merge commit have?', options: ['One', 'Two (or more)', 'None'], a: 1, why: 'It joins two lines of history, so it points back to both.' },
-          { q: 'In a conflict, what sits between <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> and <code>=======</code>?', options: ['The incoming branch', 'Your current branch', 'The merge base'], a: 1, why: 'HEAD is the branch you are on. The incoming side is after <code>=======</code>.' },
-          { q: 'main and feature both have new commits. What does <code>git merge --ff-only feature</code> do?', options: ['Creates a merge commit', 'Rebases feature onto main', 'Stops without merging'], a: 2, why: '--ff-only only slides the branch forward. When the histories have split, a fast-forward is impossible, so Git refuses.' },
-          { q: 'A merge stopped with a conflict in strings.xml. Which order finishes it?', options: ['git commit → git add → edit the file', 'git add → edit the file → git commit', 'Edit the file and remove the markers → git add → git commit'], a: 2, why: 'git add marks the file as resolved without looking inside, so fix it first. git commit then creates the merge commit.' },
+          { q: 'What is different about your commits after a rebase?', options: ['They have new ids', 'They lose their messages', 'They are uploaded to GitHub'], a: 0, why: 'Rebase makes each commit again on a new parent, so each gets a new id.' },
+          { q: 'Which branch is safe to rebase?', options: ['Your own branch that nobody else has pulled', '<code>main</code>, which the whole team uses', 'Any branch, at any time'], a: 0, why: 'Rebase replaces commits. Only do that with commits nobody else has.' },
+          { q: 'You rebased <code>rain</code> onto <code>main</code>. On <code>main</code>, what does <code>git merge rain</code> make?', options: ['A fast-forward', 'A merge commit', 'A conflict'], a: 0, why: '<code>rain</code> now starts at the end of <code>main</code>, so Git only moves the label.' },
         ],
+        docs: [['Pro Git: Rebasing', 'https://git-scm.com/book/en/v2/Git-Branching-Rebasing'], ['git rebase', 'https://git-scm.com/docs/git-rebase']],
       },
 
-      // 6 ─────────────────────────────────────────────
-      {
-        id: 'rebase',
-        title: 'Rebase vs merge',
-        tagline: 'Rebase replays your commits on top of another branch: a straight line, but brand new commits.',
-        level: 'intermediate',
-        body: `
-<p>Your feature branch started at B, and main has moved on to C. You can bring main's work in two ways. <code>git merge main</code> adds a merge commit that joins both lines. <code>git rebase main</code> takes your commits D and E, and replays them one by one on top of C, as if you had started there.</p>
-<p>The result of a rebase is a straight history, but the replayed commits are <em>new commits</em> (D′, E′) with new ids. The old D and E are left behind. That is fine for commits only you have. It is a problem for commits others already pulled: their copies still point at the old ones.</p>
-<p>The golden rule: <strong>do not rebase commits that exist outside your repository and that people may have based work on.</strong> Rebase your own feature branch to tidy it up; never rebase main. The demo below does both, on the same branch.</p>`,
-        visual(el) {
-          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const log = s => `<p class="gtk-h">git log --oneline --graph --all</p><pre class="ui-out">${esc(s)}</pre>`;
-          const start = log('* c81f2d0 (main) Fix crash on launch\n| * 4e9a1b7 (HEAD -> feature/search) Add search results\n| * 2d6c3f8 Add search box\n|/\n* b2f41c9 Add home screen');
-          Lab.ui.terminal(el, {
-            predict: {
-              q: 'You run <code>git merge main</code> on <code>feature/search</code>. How many new commits does that make?',
-              options: ['None: it only moves a label', 'One merge commit, with two parents', 'Two: one per feature commit'],
-              a: 1,
-              why: 'Both lines have commits the other lacks, so a fast-forward is impossible. Git records the join as one merge commit.',
-            },
-            frames: [
-              { panel: start, say: 'Your branch started at <code>b2f41c9</code>. Since then <code>main</code> got a crash fix. Bring it in, first with a merge.' },
-              { cmd: 'git merge main --no-edit', out: "Merge made by the 'ort' strategy.\n .../example/news/MainActivity.kt | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)", panel: log("*   f3e8d21 (HEAD -> feature/search) Merge branch 'main' into feature/search\n|\\\n| * c81f2d0 (main) Fix crash on launch\n* | 4e9a1b7 Add search results\n* | 2d6c3f8 Add search box\n|/\n* b2f41c9 Add home screen"), say: 'A merge commit joins both lines. Nothing is rewritten, so it is always safe.' },
-              { cmd: 'git reset --hard ORIG_HEAD', out: 'HEAD is now at 4e9a1b7 Add search results', panel: start, say: 'Undo that merge (it was never pushed) and try the other way.' },
-              { cmd: 'git rebase main', out: 'Successfully rebased and updated refs/heads/feature/search.', panel: log('* 9b0e5a4 (HEAD -> feature/search) Add search results\n* 6a3d7c1 Add search box\n* c81f2d0 (main) Fix crash on launch\n* b2f41c9 Add home screen'), say: 'Rebase replays your two commits on top of <code>c81f2d0</code>. A straight line, but look at the ids: these are new commits.' },
-              { cmd: 'git push', out: "To github.com:sam/news-app.git\n ! [rejected]        feature/search -> feature/search (non-fast-forward)\nerror: failed to push some refs to 'github.com:sam/news-app.git'", say: 'You had pushed the old <code>4e9a1b7</code> before. GitHub’s branch is not an ancestor of the new one, so a plain push is refused.' },
-              { cmd: 'git push --force-with-lease', out: 'To github.com:sam/news-app.git\n + 4e9a1b7...9b0e5a4 feature/search -> feature/search (forced update)', say: 'Fine for your own feature branch. On a branch others build on, like <code>main</code>, this would pull the ground from under them.' },
-            ],
-          });
-        },
-        code: `# bring the latest main into your own feature branch
-git switch feature/search
-git fetch origin
-git rebase origin/main            # replay your commits on top
-# on conflict: fix the file, then
-git add SearchBar.kt
-git rebase --continue             # or: git rebase --abort
-
-# you had already pushed this branch, so its history changed:
-git push --force-with-lease`,
-        remember: 'Rebase only commits nobody else has. Never rebase main or any branch others build on.',
-        deeper: [
-          {
-            title: 'Interactive rebase: clean up before review',
-            body: `<p><code>git rebase -i HEAD~4</code> opens a list of your last 4 commits, oldest first. Change the word in front of each line: <code>pick</code> keeps it, <code>reword</code> changes the message, <code>squash</code> melds it into the one above and combines messages, <code>fixup</code> melds it and drops its message, <code>drop</code> removes it. Tap the words below, then run it.</p>`,
-            visual(el) {
-              const VERBS = ['pick', 'reword', 'squash', 'fixup', 'drop'];
-              const C = [['1a2f3c4', 'Add news list screen'], ['3b4e5d6', 'wip'], ['5c6a7b8', 'fix typo'], ['7d8c9e0', 'Add pull to refresh']];
-              const v = C.map(() => 'pick');
-              const todo = h('div', { class: 'gt-todo', 'aria-label': 'Rebase todo list' });
-              const o = out('');
-              function draw() {
-                todo.replaceChildren(...C.map(([id, m], i) => h('div', { class: 'gt-todo-r' },
-                  h('button', { class: `gt-verb gt-v-${v[i]}`, 'aria-label': `Change action for ${m}`, onclick() { v[i] = VERBS[(VERBS.indexOf(v[i]) + 1) % VERBS.length]; draw(); } }, v[i]),
-                  h('span', {}, `${id} ${m}`))));
-              }
-              function runIt() {
-                const res = [];
-                for (let i = 0; i < C.length; i++) {
-                  const [, m] = C[i], verb = v[i];
-                  if (verb === 'drop') continue;
-                  if (verb === 'squash' || verb === 'fixup') {
-                    if (!res.length) { say(o, `<span class="bad">error: cannot '${verb}' without a previous commit</span>`); return; }
-                    if (verb === 'squash') res[res.length - 1].msg += ` + ${m}`;
-                    res[res.length - 1].n++;
-                    continue;
-                  }
-                  res.push({ msg: verb === 'reword' ? `${m} (new message)` : m, n: 1 });
-                }
-                if (!res.length) { say(o, 'Every commit dropped: the branch would be back at its base.'); return; }
-                const ids = ['e1f2a3b', '9c8d7e6', '4b5a6c7', '0f1e2d3'];
-                say(o, 'Successfully rebased.\n<span class="muted">git log --oneline</span>\n' + res.slice().reverse().map((r, i) => `${ids[i]} ${esc(r.msg)}${r.n > 1 ? ` <span class="muted">(${r.n} commits)</span>` : ''}`).join('\n') +
-                  `\n<span class="muted">${C.length} commits became ${res.length}. All of them have new ids.</span>`);
-              }
-              draw(); say(o, 'Tip: fixup "wip" and "fix typo" into the commit above them.');
-              el.append(todo, row(act('run rebase', runIt), act('reset list', () => { v.fill('pick'); draw(); say(o, 'All back to pick.'); })), o);
-            },
-          },
-          {
-            title: '--force-with-lease, not --force',
-            body: `<p>After rebasing a branch you already pushed, a normal push is rejected, because the remote has the old commits. <code>--force</code> overwrites the remote branch no matter what. <code>--force-with-lease</code> overwrites it only if it still points where you last saw it, so you do not wipe out a commit a teammate pushed in the meantime.</p>`,
-            code: `git push --force-with-lease origin feature/search`,
-          },
-          {
-            title: 'git pull --rebase',
-            body: `<p>If you made local commits on a branch and a teammate pushed to it too, a plain <code>git pull</code> makes a merge commit. <code>git pull --rebase</code> replays your unpushed commits on top instead, which keeps the history straight. Your unpushed commits are only yours, so this follows the golden rule.</p>`,
-            code: `git pull --rebase
-git config --global pull.rebase true   # make it the default`,
-          },
-        ],
-        underHood: {
-          body: `<p>A rebase saves your commits as patches, resets the branch to the new base, and applies each patch, creating a new commit every time. A commit's id depends on its parent, so a new parent means a new id, even if the change is identical. The old commits are not deleted right away: the reflog still remembers them.</p>`,
-          code: `git reflog
-# e7f8a9b HEAD@{0}: rebase (finish): returning to refs/heads/feature/search
-# 1a2b3c4 HEAD@{3}: commit: Add search bar   <- the old commit, before the rebase`,
-        },
-        mistakes: [
-          { title: 'Rebasing a shared branch', bad: `git switch main
-git rebase feature/search
-git push --force`, good: `git switch main
-git merge feature/search
-git push`, why: 'Everyone else’s main still has the old commits. After your force push, their next pull mixes old and new copies of the same changes.' },
-          { title: 'Plain --force after a rebase', bad: `git push --force`, good: `git push --force-with-lease`, why: 'If a teammate pushed to the branch since your last fetch, <code>--force</code> silently deletes their commit from the remote. <code>--force-with-lease</code> refuses instead.' },
-        ],
-        terms: [
-          { term: 'Rebase', def: 'Replaying your commits on top of another commit, creating new commits with new ids.' },
-          { term: 'Interactive rebase', def: 'git rebase -i: edit a list of commits to reorder, reword, squash or drop them.' },
-          { term: 'Squash', def: 'Combine a commit into the one before it.' },
-          { term: 'Force-with-lease', def: 'A force push that only succeeds if the remote branch has not changed since you last fetched.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Replay your branch on the latest main, then clean up your last 3 commits.', code: 'git [[rebase]] origin/main\ngit rebase [[-i|--interactive]] HEAD~3', why: '<code>rebase</code> moves your commits onto a new base. <code>-i</code> opens the todo list to edit them.' },
-          { type: 'bug', prompt: 'You rebased your already-pushed feature branch. Tap the line that could delete a teammate’s work.', code: 'git switch feature/search\ngit rebase -i HEAD~3\ngit push --force', bug: 2, fix: 'git push --force-with-lease', why: '<code>--force</code> overwrites whatever is on the remote. <code>--force-with-lease</code> checks that nobody pushed in the meantime.' },
-        ],
-        quiz: [
-          { q: 'After <code>git rebase main</code>, what happens to your commits’ ids?', options: ['They stay the same', 'They change: the commits are recreated', 'Only the last one changes'], a: 1, why: 'Each commit gets a new parent, so it is a new commit with a new id.' },
-          { q: 'Which is safe?', options: ['Rebasing main after others pulled it', 'Rebasing your own unpushed feature commits', 'Rebasing a teammate’s branch you both push to'], a: 1, why: 'Nobody else has those commits, so rewriting them hurts no one.' },
-          { q: 'In <code>git rebase -i</code>, what does <code>fixup</code> do?', options: ['Fixes merge conflicts', 'Melds the commit into the one above and drops its message', 'Deletes the commit'], a: 1, why: 'fixup is like squash without keeping the message. drop deletes.' },
-          { q: 'In the list that <code>git rebase -i HEAD~4</code> opens, in what order are the commits shown?', options: ['Newest first, like git log', 'Oldest first', 'In alphabetical order of their messages'], a: 1, why: 'The list is the order in which the commits will be replayed, so it starts with the oldest. That is the reverse of git log.' },
-          { q: 'You rebased your feature branch, which you had already pushed. The push is rejected. What do you run?', options: ['<code>git push --force-with-lease</code>', '<code>git push --force</code>', '<code>git pull</code>, then push'], a: 0, why: '--force-with-lease overwrites only if the remote still points where you last saw it. git pull would merge the old copies of your commits back in.' },
-          { q: 'You have two unpushed commits, and a teammate pushed to the same branch. What does <code>git pull --rebase</code> do?', options: ['Makes a merge commit joining both', 'Replays your two commits on top of the teammate’s', 'Throws away your two commits'], a: 1, why: 'Your unpushed commits are only yours, so rewriting them is safe and keeps the history straight.' },
-        ],
-      },
-
-      // 7 ─────────────────────────────────────────────
-      {
-        id: 'remotes',
-        title: 'Remotes and GitHub',
-        tagline: 'Your laptop and GitHub each hold a full copy. fetch, pull and push move commits between them.',
-        level: 'beginner',
-        body: `
-<p>A <em>remote</em> is another copy of the repository, usually on GitHub. <code>git clone</code> downloads a full copy, history included, and names the source <code>origin</code>. Git also keeps <em>remote-tracking branches</em> like <code>origin/main</code>: your last known position of main on GitHub. They only update when you talk to the server.</p>
-<p><code>git fetch</code> downloads new commits and moves <code>origin/main</code>, but leaves your own <code>main</code> and your files alone. <code>git pull</code> is fetch plus merge into your current branch. <code>git push</code> uploads your commits and moves the branch on GitHub.</p>
-<p>A push is rejected if GitHub has commits you do not have yet, so Git never overwrites a teammate's work silently. Pull first, then push. Below, a teammate pushes first, then you try to push your own commit.</p>`,
-        visual(el) {
-          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const two = (gh, me) => `<p class="gtk-h">GitHub (origin)</p><pre class="ui-out">${esc(gh)}</pre><p class="gtk-h">Your laptop</p><pre class="ui-out">${esc(me)}</pre>`;
-          const GH1 = '* b2f41c9 (main) Add home screen', GH2 = '* 7d3e9f0 (main) Add dark theme\n* b2f41c9 Add home screen';
-          const R = 'github.com:sam/news-app';
-          Lab.ui.terminal(el, {
-            panelTitle: 'Two copies of the repository',
-            predict: {
-              q: 'A teammate pushes a new commit to GitHub. Before you run any command, where does <code>origin/main</code> on your laptop point?',
-              options: ['Still at the old commit', 'At the teammate’s new commit', 'Nowhere: it is removed until you fetch'],
-              a: 0,
-              why: '<code>origin/main</code> is your last known position of GitHub’s main. Git only updates it when it talks to the server, with fetch, pull or push.',
-            },
-            frames: [
-              { panel: two(GH1, '* b2f41c9 (HEAD -> main, origin/main) Add home screen'), say: 'You cloned the repository. Both copies have the same commits, and <code>origin/main</code> marks where GitHub’s main was.' },
-              { panel: two(GH2, '* b2f41c9 (HEAD -> main, origin/main) Add home screen'), say: 'A teammate pushes <code>7d3e9f0</code>. Only GitHub has it.' },
-              { cmd: 'git status', out: "On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean", say: '“Up to date” compares with your last known <code>origin/main</code>, not with GitHub right now.' },
-              { cmd: 'git commit -am "Fix typo in title"', out: '[main 1c4b8a2] Fix typo in title\n 1 file changed, 1 insertion(+), 1 deletion(-)', panel: two(GH2, '* 1c4b8a2 (HEAD -> main) Fix typo in title\n* b2f41c9 (origin/main) Add home screen'), say: 'You commit locally. Now both copies have a commit the other lacks.' },
-              { cmd: 'git push', out: `To ${R}.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to '${R}.git'`, say: 'Rejected. GitHub has work you do not have, and Git never overwrites it silently.' },
-              { cmd: 'git fetch', out: `From ${R}\n   b2f41c9..7d3e9f0  main       -> origin/main`, panel: two(GH2, '* 1c4b8a2 (HEAD -> main) Fix typo in title\n| * 7d3e9f0 (origin/main) Add dark theme\n|/\n* b2f41c9 Add home screen'), say: '<code>fetch</code> downloads the commit and moves <code>origin/main</code>. Your <code>main</code> and your files are untouched.' },
-              { cmd: 'git pull --no-rebase', out: "Merge made by the 'ort' strategy.\n app/src/main/res/values/themes.xml | 12 ++++++++++++\n 1 file changed, 12 insertions(+)", panel: two(GH2, "*   5e2a9c3 (HEAD -> main) Merge branch 'main' of " + R + "\n|\\\n| * 7d3e9f0 (origin/main) Add dark theme\n* | 1c4b8a2 Fix typo in title\n|/\n* b2f41c9 Add home screen"), say: '<code>pull</code> is fetch plus merge. <code>--no-rebase</code> picks merge. Set <code>pull.rebase</code> once in your config and plain <code>git pull</code> works.' },
-              { cmd: 'git push', out: `To ${R}.git\n   7d3e9f0..5e2a9c3  main -> main`, panel: two("*   5e2a9c3 (main) Merge branch 'main' of " + R + "\n|\\\n| * 7d3e9f0 Add dark theme\n* | 1c4b8a2 Fix typo in title\n|/\n* b2f41c9 Add home screen", "*   5e2a9c3 (HEAD -> main, origin/main) Merge branch 'main' of " + R + "\n|\\\n| * 7d3e9f0 Add dark theme\n* | 1c4b8a2 Fix typo in title\n|/\n* b2f41c9 Add home screen"), say: 'Now GitHub already has everything below your commit, so the push is accepted and both copies match.' },
-            ],
-          });
-        },
-        code: `git clone git@github.com:sam/news-app.git   # SSH
-git clone https://github.com/sam/news-app.git   # or HTTPS
-cd news-app
-git remote -v                     # origin  git@github.com:sam/news-app.git
-
-git fetch                         # download, update origin/*, touch nothing else
-git status                        # Your branch is behind 'origin/main' by 2 commits
-git pull                          # fetch + merge into the current branch
-git push                          # upload main to origin
-
-git switch -c feature/search
-git push -u origin feature/search # first push of a new branch, sets upstream`,
-        remember: 'fetch looks, pull brings in, push sends out. Pull before you push.',
-        deeper: [
-          {
-            title: 'Tracking branches and ahead/behind',
-            body: `<p>A local branch can <em>track</em> a remote branch, its <em>upstream</em>. Then plain <code>git pull</code> and <code>git push</code> know where to go, and <code>git status</code> tells you how far apart you are. Cloning sets this up for main. For a new branch, <code>git push -u</code> sets it on the first push. The counts are only as fresh as your last fetch.</p>`,
-            code: `git status
-# On branch main
-# Your branch and 'origin/main' have diverged,
-# and have 1 and 2 different commits each, respectively.
-
-git branch -vv                    # every branch with its upstream and ahead/behind
-git fetch --all && git branch -vv # refresh first`,
-          },
-          {
-            title: 'SSH keys or HTTPS tokens',
-            body: `<p>GitHub needs to know it is you. Over <strong>HTTPS</strong>, Git asks for a username and password, but password sign-in for Git was removed: you enter a <em>personal access token</em> instead, and a credential helper remembers it. Over <strong>SSH</strong>, you create a key pair once, add the public key to your GitHub account, and Git uses it silently. GitHub's docs suggest an Ed25519 key.</p>`,
-            code: `ssh-keygen -t ed25519 -C "sam@example.com"
-# add ~/.ssh/id_ed25519.pub in GitHub: Settings > SSH and GPG keys
-ssh -T git@github.com             # test the connection
-git remote set-url origin git@github.com:sam/news-app.git   # switch an HTTPS clone to SSH`,
-          },
-          {
-            title: 'Push a new project to GitHub',
-            body: `<p>Create an empty repository on GitHub (no README, so histories do not clash), then connect your local repository to it and push. <code>origin</code> is only a convention; you can name remotes anything.</p>`,
-            code: `git remote add origin git@github.com:sam/news-app.git
-git branch -M main                # make sure the branch is called main
-git push -u origin main`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>origin/main</code> is a ref stored in <code>.git/refs/remotes/origin/main</code> (or in <code>packed-refs</code>). You cannot commit on it; only fetch and push move it. <code>git pull</code> runs <code>git fetch</code> and then merges (or rebases, if configured) the upstream into your branch. When you push, the server accepts the update only if its current commit is an ancestor of yours, a fast-forward.</p>`,
-          code: `git fetch origin
-git log --oneline main..origin/main   # commits on GitHub you do not have
-git log --oneline origin/main..main   # your commits GitHub does not have
-git merge origin/main                 # what pull would do next`,
-        },
-        mistakes: [
-          { title: 'Force-pushing over a rejection', bad: `git push
-# ! [rejected] main -> main (fetch first)
-git push --force`, good: `git pull
-git push`, why: 'The rejection means a teammate pushed. <code>--force</code> deletes their commits from GitHub. Pull to combine the work, then push.' },
-          { title: 'Thinking fetch updates your files', bad: `git fetch
-# why are my files the same?`, good: `git fetch
-git status          # see how far behind you are
-git merge origin/main   # or: git pull`, why: 'fetch only downloads and moves <code>origin/*</code>. Your branch and files change when you merge or pull.' },
-        ],
-        terms: [
-          { term: 'Remote', def: 'Another copy of the repository, usually on a server like GitHub. The default name is origin.' },
-          { term: 'Remote-tracking branch', def: 'A read-only ref like origin/main: where a branch was on the remote at your last fetch.' },
-          { term: 'Upstream', def: 'The remote branch a local branch tracks, used by plain git pull and git push.' },
-          { term: 'Personal access token', def: 'A generated secret you use instead of a password when Git talks to GitHub over HTTPS.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Download a repository, and later push a new branch for the first time.', code: 'git [[clone]] git@github.com:sam/news-app.git\ngit push [[-u|--set-upstream]] origin feature/search', why: '<code>clone</code> copies the repository and sets up origin. <code>-u</code> remembers origin/feature/search as the upstream.' },
-          { type: 'bug', prompt: 'Your push was rejected. Tap the line that loses your teammate’s work.', code: 'git switch main\ngit commit -am "Fix crash on empty feed"\ngit push origin main\n# ! [rejected] main -> main (fetch first)\ngit push --force origin main', bug: 4, fix: 'git pull --rebase origin main', why: 'The remote has a commit you do not. Pull it in (merge or rebase), then push again. Force pushing deletes it.' },
-        ],
-        quiz: [
-          { q: 'What does <code>git fetch</code> change?', options: ['Your files and your main', 'Only remote-tracking branches like origin/main', 'Nothing at all'], a: 1, why: 'It downloads commits and moves origin/*. Your branches and files stay as they are.' },
-          { q: 'Your push is rejected with "fetch first". Why?', options: ['Your SSH key expired', 'The remote has commits you do not have', 'The branch is protected'], a: 1, why: 'Git refuses to overwrite remote commits. Pull, then push.' },
-          { q: '<code>git pull</code> is the same as…', options: ['git fetch followed by a merge (or rebase)', 'git push in reverse', 'git clone again'], a: 0, why: 'pull = fetch + integrate the upstream into your current branch.' },
-          { q: '<code>git status</code> says your branch is up to date with origin/main, but a teammate pushed five minutes ago. Why?', options: ['The teammate’s push failed', 'status only compares local branches', 'status compares with origin/main as of your last fetch'], a: 2, why: 'origin/main only moves when you talk to the server. Run git fetch, and status will show you are behind.' },
-          { q: 'Pushing over HTTPS, Git asks for a password. What do you enter?', options: ['Your GitHub account password', 'A personal access token', 'Your SSH key passphrase'], a: 1, why: 'GitHub removed password sign-in for Git operations. A token takes its place, and a credential helper can remember it.' },
-        ],
-      },
-
-      // 8 ─────────────────────────────────────────────
-      {
-        id: 'pull-requests',
-        title: 'Pull requests and code review',
-        tagline: 'Push a branch, open a pull request, let CI and a teammate check it, then merge.',
-        level: 'intermediate',
-        body: `
-<p>On a team, nobody pushes straight to <code>main</code>. You work on a branch, push it, and open a <em>pull request</em> (PR) on GitHub: a page that asks to merge your branch into main. It shows the diff, a description, and a place for discussion.</p>
-<p>Two checks guard the merge. <em>CI</em> (for example GitHub Actions) builds the app and runs tests on every push, and reports status checks on the PR. A <em>reviewer</em> reads the diff and leaves a comment, approves, or requests changes. Repositories can require both before the merge button works. To address feedback, push more commits to the same branch; the PR updates itself.</p>
-<p>Keep PRs small: one fix or one feature slice. A 200-line PR gets a careful review; a 2,000-line PR gets a skim. Walk a PR through the flow below. The first CI run has a failing test.</p>`,
-        predict: {
-          q: 'The CI check on your PR fails. You fix the code and push a new commit to the same branch. What happens to the PR?',
-          options: ['You have to open a new PR', 'It picks up the commit and the checks run again', 'Nothing until a reviewer reruns it'],
-          a: 1,
-          why: 'A PR shows a branch, not a fixed set of commits. Every push to that branch updates it and triggers the checks.',
-        },
-        visual(el) {
-          const STEPS = ['branch', 'push', 'PR open', 'checks', 'review', 'merged'];
-          const pipe = h('div', { class: 'gt-pipe' });
-          const card = h('div', { class: 'gt-pr' });
-          const o = out('');
-          let s;
-          function reset() { s = { pushed: false, open: false, broken: true, checks: null, review: null, merged: false, running: false, commits: 2, deleted: false }; draw(); say(o, 'You have 2 commits on feature/date-format. Push the branch.'); }
-          const checksOk = () => s.checks && s.checks.every(c => c[1] === 'pass');
-          function draw() {
-            const at = s.merged ? 5 : !s.pushed ? 1 : !s.open ? 2 : !checksOk() ? 3 : s.review !== 'approve' ? 4 : 5;
-            const stop = s.checks && s.checks.some(c => c[1] === 'fail') ? 3 : s.review === 'changes' ? 4 : -1;
-            pipe.replaceChildren(...STEPS.map((t, i) => h('span', { class: `gt-stp ${i < at || (s.merged && i === 5) ? 'gt-done' : i === stop ? 'gt-stop' : i === at ? 'gt-now' : ''}` }, t)));
-            if (!s.open) { card.replaceChildren(h('div', { class: 'gt-pr-m' }, s.pushed ? 'Branch is on GitHub. No pull request yet.' : 'Nothing on GitHub yet.')); card.classList.remove('gt-merged'); return; }
-            card.classList.toggle('gt-merged', s.merged);
-            const canMerge = checksOk() && s.review === 'approve' && !s.merged;
-            card.replaceChildren(
-              h('div', { class: 'gt-pr-t' }, 'Show relative news dates #42'),
-              h('div', { class: 'gt-pr-m' }, `sam wants to merge ${s.commits} commits into main from feature/date-format`),
-              ...(s.checks || []).map(([n, st]) => h('div', { class: 'gt-chk' }, h('span', { class: `gt-dot gt-${st}` }), `${n} `, h('span', { class: 'gt-tag' }, st === 'run' ? 'in progress' : st === 'pass' ? 'passed' : st === 'fail' ? 'failed' : 'queued'))),
-              h('span', { class: `gt-badge ${s.review === 'approve' ? 'gt-b-ok' : s.review === 'changes' ? 'gt-b-err' : 'gt-b-warn'}` }, s.review === 'approve' ? 'Approved by Maya' : s.review === 'changes' ? 'Maya requested changes' : 'Review required'),
-              h('span', { class: `gt-badge ${s.merged ? 'gt-b-ok' : canMerge ? 'gt-b-ok' : ''}` }, s.merged ? (s.deleted ? 'Merged. Branch deleted.' : 'Merged') : canMerge ? 'Ready to merge' : 'Merging is blocked'));
-          }
-          async function ci() {
-            s.running = true;
-            const run = s.checks = [['build', 'idle'], ['unit tests', 'idle'], ['lint', 'idle']]; draw();
-            for (let i = 0; i < 3; i++) {
-              s.checks[i][1] = 'run'; draw();
-              await sleep(550); if (!el.isConnected || s.checks !== run) return; // reset or a new run took over
-              s.checks[i][1] = i === 1 && s.broken ? 'fail' : 'pass'; draw();
-            }
-            s.running = false;
-            say(o, s.broken ? '<span class="bad">unit tests failed:</span> DateFormatterTest > formatsTodayRelative expected "Today 14:05" but was "Oct 18, 14:05".\n<span class="muted">Fix it on the branch and push again.</span>' : '<span class="good">All checks passed.</span>');
-          }
-          function push() {
-            if (s.merged) { say(o, 'The PR is merged. Start a new branch for new work.'); return; }
-            if (!s.pushed) { s.pushed = true; draw(); say(o, "To github.com:sam/news-app.git\n * [new branch]      feature/date-format -> feature/date-format\n<span class=\"muted\">Branch is on GitHub. Now open a pull request.</span>"); return; }
-            if (s.running) { say(o, 'Wait for the current checks to finish.'); return; }
-            s.commits++; const wasBroken = s.broken; s.broken = false;
-            say(o, wasBroken ? 'Pushed a fix commit. The PR updates and CI runs again…' : 'Pushed another commit. CI runs again…');
-            if (s.review === 'changes') s.review = null;
-            if (s.open) ci(); else draw();
-          }
-          function open() {
-            if (!s.pushed) { say(o, 'Push the branch first. A PR compares two branches on GitHub.'); return; }
-            if (s.open) { say(o, 'The PR is already open.'); return; }
-            s.open = true; say(o, 'PR #42 opened. CI starts on its own…'); ci();
-          }
-          function review(kind) {
-            if (!s.open || s.merged) { say(o, 'Nothing to review yet.'); return; }
-            s.review = kind; draw();
-            say(o, kind === 'approve' ? 'Maya approved: "Looks good. Nice test."' : 'Maya requested changes: "Please use the device locale instead of hard-coding en-US." Push a commit to address it.');
-          }
-          function merge() {
-            if (!s.open) { say(o, 'There is no pull request to merge.'); return; }
-            if (s.merged) { if (!s.deleted) { s.deleted = true; draw(); say(o, 'Branch feature/date-format deleted. The PR and its commits stay in history.'); } return; }
-            if (s.running || !checksOk()) { say(o, '<span class="bad">Merging is blocked:</span> required status checks have not passed.'); return; }
-            if (s.review !== 'approve') { say(o, '<span class="bad">Merging is blocked:</span> at least 1 approving review is required.'); return; }
-            s.merged = true; draw(); say(o, '<span class="good">Pull request #42 merged into main.</span> Press merge again to delete the branch.');
-          }
-          reset();
-          el.append(
-            row(act('git push', push), act('open pull request', open), act('merge', merge)),
-            row(lab('reviewer'), act('request changes', () => review('changes')), act('approve', () => review('approve')), act('reset', reset)),
-            pipe, card, o);
-        },
-        code: `git switch main && git pull
-git switch -c feature/date-format
-# ...small, focused commits...
-git push -u origin feature/date-format
-# GitHub shows "Compare & pull request": write what and why, link the issue
-
-# review feedback? keep pushing to the same branch:
-git commit -am "Use device locale for dates"
-git push
-
-# with the GitHub CLI, if you have it installed:
-gh pr create --fill
-gh pr checks`,
-        remember: 'Small branch, clear description, green CI, one approval, then merge and delete the branch.',
-        deeper: [
-          {
-            title: 'Three ways to merge a PR',
-            body: `<p>GitHub's merge button has three modes. <strong>Create a merge commit</strong> keeps every commit and adds a merge commit. <strong>Squash and merge</strong> turns the whole PR into one commit on main. <strong>Rebase and merge</strong> replays each commit onto main with no merge commit. Teams usually pick one and stick to it.</p>`,
-            visual(el) {
-              const g = graph({ lanes: 3, title: 'Merge methods' });
-              const o = out('');
-              const base = () => [{ id: 'A', p: [] }, { id: 'B', p: ['A'] }, { id: 'C', p: ['B'] }, { id: 'D', p: ['B'], lane: 1 }, { id: 'E', p: ['D'], lane: 1 }];
-              const MODES = {
-                'merge commit': () => [[...base(), { id: 'M', p: ['C', 'E'] }], 'M', 'Every PR commit stays, plus merge commit M. Full detail, busier history.'],
-                'squash and merge': () => [[...base().map(c => (c.lane ? { ...c, lane: 2, ghost: true } : c)), { id: 'S', p: ['C'], col: 5 }], 'S', 'One new commit S holds all of the PR. main reads as one line per PR. The branch commits (dashed) are not on main.'],
-                'rebase and merge': () => [[...base().map(c => (c.lane ? { ...c, lane: 2, ghost: true } : c)), { id: "D'", p: ['C'], col: 5 }, { id: "E'", p: ["D'"], col: 6 }], "E'", 'Each commit is replayed on main with a new id. Straight history, no merge commit.'],
-              };
-              const btns = Object.keys(MODES).map(k => act(k, function () {
-                press(btns, this);
-                const [cs, tip, note] = MODES[k]();
-                g.set({ commits: [], refs: [], head: null });
-                g.set({ commits: cs, refs: [{ name: 'main', at: tip }], head: null });
-                say(o, note);
-              }));
-              g.set({ commits: base(), refs: [{ name: 'main', at: 'C' }, { name: 'feature', at: 'E' }], head: null });
-              say(o, 'A PR with commits D and E, while main moved to C. Pick a merge method.');
-              el.append(row(btns), g.el, o);
-            },
-          },
-          {
-            title: 'Write a PR people want to review',
-            body: `<p>The description answers three questions: what changed, why, and how to check it. Add screenshots for UI changes. Open a <em>draft</em> PR to share early work: drafts cannot be merged, and code owners are not asked to review until you mark them ready. Review your own diff first; you will catch half the comments yourself.</p>`,
-            code: `## What
-Show news dates as "Today 14:05" / "Yesterday".
-
-## Why
-Users read relative dates faster. Fixes #118.
-
-## How to test
-1. Set the device language to English
-2. Open the news list: today's items show "Today"`,
-          },
-          {
-            title: 'Reviewing someone else’s PR',
-            body: `<p>A review ends in one of three states: <strong>Comment</strong> (feedback, no decision), <strong>Approve</strong>, or <strong>Request changes</strong>. Comment on the code, not the person. Say what and why: "This runs on the main thread; it can freeze the list. Move it to a coroutine?" Mark small style notes as optional so the author knows what blocks the merge.</p>`,
-          },
-        ],
-        mistakes: [
-          { title: 'Pushing straight to main', bad: `git switch main
-git commit -am "Quick fix"
-git push`, good: `git switch -c fix/quick-fix
-git commit -am "Fix crash when feed is empty"
-git push -u origin fix/quick-fix
-# open a PR`, why: 'Even a one-line fix benefits from CI and a second pair of eyes. Many repositories protect main so that direct pushes are refused.' },
-          { title: 'One giant PR', bad: `# feature/redesign: 64 files, +3,200 −1,900`, good: `# feature/redesign-colors     +120
-# feature/redesign-news-card  +240
-# feature/redesign-detail     +310`, why: 'Reviewers cannot hold thousands of lines in their head, so big PRs get rubber-stamped. Split by slice; each PR should build and pass tests on its own.' },
-        ],
-        terms: [
-          { term: 'Pull request', def: 'A GitHub page asking to merge one branch into another, with the diff, checks and review.' },
-          { term: 'Status check', def: 'A pass or fail result reported on a commit, usually by CI. Required checks must pass before merging.' },
-          { term: 'Code review', def: 'A teammate reading your diff and commenting, approving or requesting changes.' },
-          { term: 'Draft pull request', def: 'A PR marked as work in progress. It cannot be merged until marked ready for review.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Start a fix branch and publish it so you can open a PR.', code: 'git switch [[-c|--create]] fix/empty-feed-crash\ngit commit -am "Fix crash when the feed is empty"\ngit [[push]] -u origin fix/empty-feed-crash', why: 'A PR needs the branch on GitHub. <code>-u</code> sets the upstream so later pushes are just <code>git push</code>.' },
-          { type: 'bug', prompt: 'You want to open a PR, but the fix never reaches GitHub. Tap the line.', code: 'git switch main\ngit pull\ngit switch -c fix/feed-crash\ngit commit -am "Fix crash when the feed is empty"\ngit push origin main', bug: 4, fix: 'git push -u origin fix/feed-crash', why: 'The commit is on <code>fix/feed-crash</code>. Pushing main sends nothing new. Push the branch, then open the PR from it.' },
-        ],
-        quiz: [
-          { q: 'A reviewer asks for changes. What do you do?', options: ['Close the PR and open a new one', 'Push more commits to the same branch', 'Merge anyway'], a: 1, why: 'The PR follows the branch. New commits show up in it and CI runs again.' },
-          { q: 'What do status checks on a PR usually come from?', options: ['The reviewer', 'CI, such as a build and test workflow', 'Git itself'], a: 1, why: 'CI systems report results on each commit. A repository can require them to pass before merging.' },
-          { q: 'What does "Squash and merge" put on main?', options: ['Every commit of the PR', 'One commit containing all the PR changes', 'A merge commit plus every commit'], a: 1, why: 'Squash combines the PR into a single commit on the base branch.' },
-          { q: 'You want feedback on half-done work, but it must not be merged yet. What do you open?', options: ['A draft pull request', 'A normal pull request with “WIP” in the title', 'Nothing: push to main and ask for review'], a: 0, why: 'Drafts can’t be merged, and code owners aren’t asked to review until you mark the PR ready.' },
-          { q: 'Which merge mode puts every PR commit on main without adding a merge commit?', options: ['Squash and merge', 'Create a merge commit', 'Rebase and merge'], a: 2, why: 'Rebase and merge replays each commit onto main. Squash makes one commit, and a merge commit keeps the commits plus a merge commit.' },
-        ],
-      },
-
-      // 9 ─────────────────────────────────────────────
       {
         id: 'undo',
         title: 'Undoing things',
-        tagline: 'restore for files, reset to move your branch back, revert for shared history, and reflog when all else fails.',
-        level: 'intermediate',
+        tagline: 'Throw away an edit, take back a commit, or cancel one that is already shared.',
+        goals: ['Throw away changes you haven’t committed with <code>git restore</code>', 'Take back your last commit with <code>git reset HEAD~1</code>', 'Undo a pushed commit safely with <code>git revert</code>'],
+        level: 'beginner', introduces: ['restore', '--staged', 'reset', 'HEAD~1', 'revert'],
         body: `
-<p>Pick the tool by what you want to undo. To throw away edits to a file, <code>git restore</code> copies it back from the staging area; <code>git restore --staged</code> unstages it. To undo commits that are only on your machine, <code>git reset</code> moves your branch back to an older commit.</p>
-<p><code>reset</code> has three strengths. <code>--soft</code> only moves the branch: the undone changes stay staged. <code>--mixed</code> (the default) also resets the staging area: the changes stay in your files, unstaged. <code>--hard</code> also overwrites your files. It is the only one that destroys uncommitted work.</p>
-<p>For commits already pushed, use <code>git revert</code>: it adds a new commit that does the opposite, so nobody's history is rewritten. And if you lose a commit, <code>git reflog</code> lists everywhere HEAD has been, so you can go back. Try each below. Your working file has an unsaved edit, v4.</p>`,
-        predict: {
-          q: 'You run <code>git revert</code> on the last commit. What happens to the history?',
-          options: ['That commit is deleted', 'A new commit is added that undoes its changes', 'The branch moves back one commit'],
-          a: 1,
-          why: 'Revert never rewrites history. It records the opposite change as a new commit, which is why it is safe on shared branches.',
-        },
+<p>Everyone makes changes they regret: an experiment that broke the program, a commit with a forgotten debug line, a pushed change that turned out wrong. Git can undo each of these. The right command depends on how far the change has gone.</p>
+<p><b>Not committed yet?</b> <code>git restore Main.kt</code> throws away your edits and puts the file back the way it was when you last added or committed it. Those edits are gone for good, so be sure. If you only staged a file by mistake, <code>git restore --staged Main.kt</code> takes it out of the staging area and keeps your edits. <code>git status</code> suggests these commands in brackets.</p>
+<p><b>Committed, but not pushed?</b> <code>git reset HEAD~1</code> moves your branch back one commit. <code>HEAD~1</code> means “one commit before <code>HEAD</code>”. The commit leaves the history, but its changes stay in your files, so you can fix them and commit again.</p>
+<p><b>Already pushed?</b> Don’t take away commits that others may have; that is the same problem as with rebase. <code>git revert</code> followed by a commit id makes a <em>new</em> commit that does the opposite of that one. History only grows, so a normal push works. Add <code>--no-edit</code> to keep Git’s ready-made message.</p>`,
         visual(el) {
-          const g = graph({ lanes: 1, top: 56, title: 'History with HEAD' });
-          const vH = h('span', { class: 'gt-ver' }), vI = h('span', { class: 'gt-ver' }), vW = h('span', { class: 'gt-ver' }), vX = h('span', { class: 'gt-ver gt-lost', hidden: true }, 'v4');
-          const bH = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, 'HEAD commit', h('small', {}, 'history')), vH);
-          const bI = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, 'Staging area', h('small', {}, 'index')), vI);
-          const bW = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, 'Working tree', h('small', {}, 'NewsAdapter.kt')), h('div', { class: 'gt-files' }, vW, vX));
-          const o = out('');
-          let cs, main, idx, wt, lost, log, rid;
-          const HASH = { A: '1f3a9c2', B: '7c4e0b8', C: 'e9b25d1', R: '4a8f6e3' };
-          const ver = id => cs.find(c => c.id === id).v;
-          function reset() {
-            cs = [{ id: 'A', p: [], v: 'v1' }, { id: 'B', p: ['A'], v: 'v2' }, { id: 'C', p: ['B'], v: 'v3' }];
-            main = 'C'; idx = 'v3'; wt = 'v4'; lost = false; rid = 0;
-            log = [['C', 'commit: Sort news by date'], ['B', 'commit: Add source label'], ['A', 'commit (initial): Add news list']];
-            draw(); say(o, 'main is at C (file v3). You have an unsaved edit: v4 in your working tree.');
-          }
-          function draw(changed = []) {
-            const reach = new Set(); for (let c = main; c; c = (cs.find(x => x.id === c).p[0])) reach.add(c);
-            g.set({ commits: cs.map(c => ({ ...c, label: c.id, ghost: !reach.has(c.id), msg: HASH[c.id] })), refs: [{ name: 'main', at: main }], head: 'main' });
-            vH.textContent = `${main}: ${ver(main)}`; vI.textContent = idx; vW.textContent = wt;
-            vX.hidden = !lost;
-            [[vH, 'h'], [vI, 'i'], [vW, 'w']].forEach(([e, k]) => { e.classList.remove('gt-chg'); if (changed.includes(k)) replay(e, 'gt-chg'); });
-          }
-          function rst(mode) {
-            const parent = cs.find(c => c.id === main).p[0];
-            if (!parent) { say(o, "fatal: ambiguous argument 'HEAD~1': unknown revision\n<span class=\"muted\">There is no commit before the first one.</span>"); return; }
-            const from = main; main = parent; log.unshift([parent, `reset: moving to HEAD~1`]);
-            const ch = ['h'];
-            if (mode !== 'soft') { idx = ver(parent); ch.push('i'); }
-            let note;
-            if (mode === 'hard') {
-              const unsaved = !cs.some(c => c.v === wt);
-              lost = unsaved; wt = ver(parent); ch.push('w');
-              note = `HEAD is now at ${HASH[parent]}\n<span class="bad">--hard overwrote your files.</span>${unsaved ? ' <span class="bad">The uncommitted v4 is gone for good: it was never in a commit.</span>' : ''}\n<span class="muted">Commit ${from} still exists. git reflog can find it.</span>`;
-            } else if (mode === 'mixed') note = `Unstaged changes after reset:\nM\tNewsAdapter.kt\n<span class="muted">main moved back to ${parent}. The staging area now matches ${parent}; your files still have ${wt}. Nothing lost.</span>`;
-            else note = `<span class="muted">Only main moved, to ${parent}. The staging area still holds ${idx}: ready to commit again, for example with a better message.</span>`;
-            draw(ch); say(o, note);
-          }
-          function revert() {
-            if (wt !== idx || idx !== ver(main)) { say(o, '<span class="bad">error: your local changes would be overwritten by revert.\nhint: commit your changes or stash them to proceed.</span>'); return; }
-            const head = cs.find(c => c.id === main);
-            if (!head.p[0]) { say(o, 'Nothing before the first commit to go back to.'); return; }
-            if (rid) { say(o, 'One revert is enough for this demo. Press "start over".'); return; }
-            const v = ver(head.p[0]); rid = 1;
-            cs.push({ id: 'R', p: [main], v }); log.unshift(['R', `revert: Revert "${head.id}"`]); main = 'R'; idx = v; wt = v;
-            draw(['h', 'i', 'w']);
-            say(o, `[main ${HASH.R}] Revert "${head.id}"\n<span class="muted">A new commit R undoes ${head.id}. History only grew, so it is safe to push on a shared branch.</span>`);
-          }
-          function restore() {
-            if (wt === idx) { say(o, '<span class="muted">Your file already matches the staging area. Nothing to restore.</span>'); return; }
-            wt = idx; lost = false; draw(['w']);
-            say(o, 'NewsAdapter.kt copied back from the staging area. The edit is discarded: restore cannot be undone either.');
-          }
-          function reflog() {
-            const canBack = log.length > 1 && log[1][0] !== main;
-            say(o, log.slice(0, 5).map((l, i) => `${HASH[l[0]]} HEAD@{${i}}: ${esc(l[1])}`).join('\n') + (canBack ? `\n<span class="muted">HEAD@{1} is where HEAD was before the last step. git reset --hard HEAD@{1} goes back there.</span>` : ''));
-            recover.hidden = !canBack;
-          }
-          const recover = act('git reset --hard HEAD@{1}', () => {
-            const target = log[1] && log[1][0];
-            if (!target || !cs.some(c => c.id === target)) return;
-            main = target; idx = ver(target); wt = ver(target); log.unshift([target, 'reset: moving to HEAD@{1}']);
-            recover.hidden = true; draw(['h', 'i', 'w']);
-            say(o, `HEAD is now at ${HASH[target]}\n<span class="good">Commit ${target} is back.</span>${lost ? ' <span class="muted">The uncommitted v4 is not: reflog only knows commits.</span>' : ''}`);
-          }, { hidden: true });
-          reset();
-          el.append(
-            row(act('git reset --soft HEAD~1', () => rst('soft')), act('git reset --mixed HEAD~1', () => rst('mixed')), act('git reset --hard HEAD~1', () => rst('hard'))),
-            row(act('git restore NewsAdapter.kt', restore), act('git revert HEAD', revert), act('git reflog', reflog), recover, act('start over', reset)),
-            g.el, h('div', { class: 'gt-boxes' }, bH, bI, bW), o);
-        },
-        code: `# files
-git restore NewsAdapter.kt              # discard unstaged edits (cannot be undone)
-git restore --staged NewsAdapter.kt     # unstage, keep the edits
-
-# last commit, not pushed yet
-git commit --amend                      # fix its message or add a forgotten file
-git reset --soft HEAD~1                 # undo commit, keep changes staged
-git reset HEAD~1                        # undo commit, keep changes unstaged (--mixed)
-git reset --hard HEAD~1                 # undo commit AND throw away the changes
-
-# already pushed
-git revert 9f1e2d0                      # new commit that undoes 9f1e2d0
-
-# lost something?
-git reflog
-git reset --hard HEAD@{2}`,
-        remember: 'Not pushed: reset. Pushed: revert. Before any --hard, commit or stash what you want to keep.',
-        deeper: [
-          {
-            title: 'git stash: put work aside for a moment',
-            body: `<p>A crash report arrives while you are halfway through a feature. <code>git stash</code> saves your uncommitted changes on a stack and cleans your working tree, so you can switch branches. Later, <code>git stash pop</code> brings them back and removes them from the stack; <code>apply</code> brings them back and keeps them. New untracked files are left behind unless you add <code>-u</code>.</p>`,
-            visual(el) {
-              const wt = h('div', { class: 'gt-files' }), sk = h('div', { class: 'gt-files' });
-              const bW = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, 'Working tree', h('small', {}, 'on feature/search')), wt);
-              const bS = h('div', { class: 'gt-box' }, h('div', { class: 'gt-box-h' }, 'Stash', h('small', {}, 'stack')), sk);
-              const o = out('');
-              let edits = ['SearchBar.kt', 'strings.xml'], stack = [], branch = 'feature/search';
-              function draw(anim) {
-                bW.querySelector('small').textContent = 'on ' + branch;
-                wt.replaceChildren(...(edits.length ? edits.map(f => h('span', { class: `gt-f gt-mod${anim === 'w' ? ' drop-in' : ''}` }, f, ' ', h('small', {}, 'modified'))) : [h('span', { class: 'gt-empty' }, 'clean')]));
-                sk.replaceChildren(...(stack.length ? stack.map((s, i) => h('span', { class: `gt-f gt-stg${anim === 's' && i === 0 ? ' drop-in' : ''}` }, `stash@{${i}}`, ' ', h('small', {}, s.files.join(', ')))) : [h('span', { class: 'gt-empty' }, 'empty')]));
-              }
-              draw(); say(o, 'Half-done search work. A crash needs fixing on main now.');
-              el.append(row(
-                act('git switch main', () => { if (branch === 'main') { say(o, "Already on 'main'"); return; } if (edits.length) { say(o, '<span class="bad">error: Your local changes to the following files would be overwritten…\n\tstrings.xml</span>\n<span class="muted">Stash or commit them first.</span>'); return; } branch = 'main'; draw(); say(o, "Switched to branch 'main'. Fix the crash here."); }),
-                act('git stash', () => { if (!edits.length) { say(o, 'No local changes to save'); return; } stack.unshift({ files: edits, on: branch }); edits = []; draw('s'); say(o, `Saved working directory and index state WIP on ${branch}\n<span class="muted">Your tree is clean, safe to switch.</span>`); }),
-                act('git switch feature/search', () => { if (branch === 'feature/search') { say(o, "Already on 'feature/search'"); return; } branch = 'feature/search'; draw(); say(o, "Switched to branch 'feature/search'."); }),
-                act('git stash pop', () => { if (!stack.length) { say(o, 'No stash entries found.'); return; } const s = stack.shift(); edits = s.files; draw('w'); say(o, `Your edits are back${branch !== s.on ? ` (they were stashed on ${s.on}, now applied on ${branch})` : ''}. Dropped stash@{0}.`); })),
-                h('div', { class: 'gt-boxes' }, bW, bS), o);
+          const g = graph({ lanes: 1, top: 92, title: 'Commits and branch labels' });
+          const P = st => node => { node.append(g.el); g.set(st); };
+          const two = [{ id: 'Q', p: [], col: 0, msg: '106e565 Greet Berlin' }, { id: 'P2', label: 'P′', p: ['Q'], col: 1, msg: '6c5533b Add rain' }];
+          const extra = two.concat({ id: 'S', p: ['P2'], col: 3, msg: '62b9961 Add debug line' });
+          const gone = two.concat({ id: 'S', p: ['P2'], col: 3, ghost: true, msg: '62b9961 Add debug line (taken back)' });
+          const later = two.concat({ id: 'T', p: ['P2'], col: 3, hl: true, msg: '4a7b8ed Use Fahrenheit' });
+          const reverted = later.concat({ id: 'U', p: ['T'], col: 5, msg: 'f756d57 Revert "Use Fahrenheit"' });
+          Lab.ui.terminal(el, {
+            panelTitle: 'Commits (newest on the right)',
+            predict: {
+              q: 'Ada runs <code>git reset HEAD~1</code> right after a commit she hasn’t pushed. What happens to the change in that commit?',
+              options: ['It is deleted', 'It stays in her files, no longer committed', 'It moves to a new branch'],
+              a: 1,
+              why: 'The branch moves back one commit, but the files keep the change, so she can fix it and commit again.',
             },
-          },
-          {
-            title: 'reset or revert?',
-            body: `<p>The question is whether anyone else has the commit. <code>reset</code> rewrites history: the commit disappears from the branch, so it is only safe for commits you have not pushed. <code>revert</code> adds history: a new commit that undoes an old one. Everyone can pull it normally, and the record of what happened stays honest.</p>`,
-            code: `git log --oneline origin/main..main   # commits not pushed yet: reset is fine
-git revert HEAD                       # undo the last pushed commit
-git revert -m 1 <merge-commit>        # undo a merge: keep parent 1 (main)`,
-          },
-          {
-            title: 'reflog, the safety net',
-            body: `<p>The reflog records every position HEAD has had on your machine: commits, resets, rebases, switches. If a reset or rebase "lost" a commit, it is still in the reflog for a long time (by default, unreachable entries expire after 30 days). Find it, then point a branch at it. The reflog is local: it is not pushed, and it cannot bring back changes that were never committed.</p>`,
-            code: `git reflog
-# 7c4e0b8 HEAD@{0}: reset: moving to HEAD~1
-# e9b25d1 HEAD@{1}: commit: Sort news by date
-git switch -c rescue e9b25d1          # or: git reset --hard HEAD@{1}`,
-          },
-        ],
-        underHood: {
-          body: `<p>Think of three trees: HEAD (the last commit), the index (staging area) and the working tree (your files). <code>reset</code> touches them in order and stops early: <code>--soft</code> moves only the branch HEAD points to, <code>--mixed</code> also copies that commit into the index, <code>--hard</code> also copies it into your files. <code>restore</code> works on files, not on branches: by default it copies from the index into the working tree, and with <code>--staged</code> from HEAD into the index.</p>`,
-          code: `#                 HEAD/branch   index     working tree
-# reset --soft       moves        -          -
-# reset --mixed      moves        reset      -
-# reset --hard       moves        reset      overwritten
-# restore <file>      -            -         from index
-# restore --staged    -           from HEAD   -`,
+            frames: [
+              { cmd: 'git status', out: esc('On branch main\nYour branch is up to date with \'origin/main\'.\n\nChanges not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n  (use "git restore <file>..." to discard changes in working directory)\n\tmodified:   Main.kt'), panel: P({ commits: two, refs: [{ name: 'main', at: 'P2' }, { name: 'origin/main', at: 'P2', remote: true }], head: 'main' }), say: 'Ada tried an idea in <code>Main.kt</code>, and now the program doesn’t compile. Nothing is committed. <code>git status</code> even suggests the fix.' },
+              { cmd: 'git restore Main.kt', say: 'Nothing printed. <code>Main.kt</code> is back the way it was when she last committed it, and the edits are gone.' },
+              { cmd: 'git log --oneline', out: '62b9961 (HEAD -> main) Add debug line\n6c5533b (origin/main, rain) Add rain\n106e565 Greet Berlin', panel: P({ commits: extra, refs: [{ name: 'main', at: 'S' }, { name: 'origin/main', at: 'P2', remote: true }], head: 'main' }), say: 'Next mistake: she committed a debug line, a <code>println</code> she only added to check something. It isn’t pushed: <code>origin/main</code> is one commit behind. (Older lines cut.)' },
+              { cmd: 'git reset HEAD~1', out: 'Unstaged changes after reset:\nM\tMain.kt', panel: P({ commits: gone, refs: [{ name: 'main', at: 'P2' }, { name: 'origin/main', at: 'P2', remote: true }], head: 'main' }), say: '<code>main</code> moves back one commit. The commit is out of the history, but its change is still in <code>Main.kt</code> (<code>M</code> means modified). She removes the line in her editor.' },
+              { clear: true, panel: P({ commits: later, refs: [{ name: 'main', at: 'T' }, { name: 'origin/main', at: 'T', remote: true }], head: 'main' }), say: 'Later: she committed “Use Fahrenheit” (T) and pushed it. Then the team decided to stay with Celsius. Taking T away would break everyone else’s copy.' },
+              { cmd: 'git revert --no-edit 4a7b8ed', out: '[main f756d57] Revert "Use Fahrenheit"\n 1 file changed, 1 insertion(+), 1 deletion(-)', panel: P({ commits: reverted, refs: [{ name: 'main', at: 'U' }, { name: 'origin/main', at: 'T', remote: true }], head: 'main' }), say: 'Revert adds a new commit (U) that does the opposite of T: <code>Units.kt</code> says Celsius again. Nothing is taken away. (One line with the date is cut.)' },
+              { cmd: 'git push', out: 'To https://github.com/ada/weather.git\n   4a7b8ed..f756d57  main -> main', panel: P({ commits: reverted, refs: [{ name: 'main', at: 'U' }, { name: 'origin/main', at: 'U', remote: true }], head: 'main' }), say: 'A normal push works, because history only grew. Sam gets the fix with <code>git pull</code>.' },
+            ],
+          });
         },
+        code: `# not committed: throw away your edits to a file
+git restore Main.kt
+# staged by mistake: unstage it, keep the edits
+git restore --staged Main.kt
+
+# committed, not pushed: take back the last commit, keep the changes
+git reset HEAD~1
+
+# already pushed: add a commit that undoes an old one
+git revert --no-edit 4a7b8ed
+git push`,
+        remember: 'Not committed: git restore. Committed but not pushed: git reset HEAD~1. Already pushed: git revert.',
         mistakes: [
-          { title: 'Resetting a pushed commit', bad: `git reset --hard HEAD~1
-git push --force`, good: `git revert HEAD
-git push`, why: 'Teammates who pulled still have the commit, and their next push brings it back. revert undoes it with a new commit everyone can pull.' },
-          { title: 'reset --hard with uncommitted work', bad: `git reset --hard origin/main   # "just start fresh"`, good: `git stash -u                   # or commit to a branch
-git reset --hard origin/main`, why: 'Uncommitted changes are not in any commit, so reflog cannot bring them back. Stash or commit first.' },
+          { title: 'Taking back a pushed commit', bad: 'git reset HEAD~1\ngit push       # rejected: GitHub has a commit you no longer have', good: 'git revert --no-edit HEAD   # instead of the reset\ngit push       # a new commit that undoes the last one', why: 'After a reset, your <code>main</code> no longer continues from GitHub’s, so the push is refused. Revert undoes the change by adding a commit instead. <code>HEAD</code> names your newest commit. Already reset? Run <code>git restore Main.kt</code> and <code>git pull</code> first to get the commit back, then revert.' },
         ],
         terms: [
-          { term: 'git reset', def: 'Moves the current branch to another commit, and optionally resets the staging area and files.' },
-          { term: 'git revert', def: 'Creates a new commit that undoes the changes of an earlier commit.' },
-          { term: 'Reflog', def: 'A local log of every commit HEAD has pointed to. Used to find lost commits.' },
-          { term: 'Stash', def: 'A stack where git stash saves uncommitted changes so you can come back to them later.' },
+          { term: 'restore', def: '<code>git restore file</code> throws away uncommitted edits. With <code>--staged</code> it only unstages the file.' },
+          { term: 'reset', def: '<code>git reset HEAD~1</code> moves your branch back one commit and keeps its changes in your files.' },
+          { term: 'revert', def: '<code>git revert id</code> makes a new commit that does the opposite of commit <code>id</code>. Safe for pushed commits.' },
+          { term: 'HEAD~1', def: 'The commit one before <code>HEAD</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Undo your last local commit but keep its changes staged, then undo a pushed commit safely.', code: 'git reset [[--soft]] HEAD~1\ngit [[revert]] 9f1e2d0', why: '<code>--soft</code> moves only the branch, so the changes stay staged. <code>revert</code> adds an undo commit instead of rewriting shared history.' },
-          { type: 'bug', prompt: 'The commit already went to GitHub and broke the app for everyone. Tap the line to change.', code: 'git log --oneline -1\n# 9f1e2d0 Change feed sorting (pushed)\ngit reset --hard HEAD~1\ngit push', bug: 2, fix: 'git revert HEAD', why: 'After a reset, the push is rejected (the remote is ahead), and forcing it rewrites shared history. revert makes a new commit that everyone can pull.' },
+          { type: 'blank', prompt: 'You pushed commit <code>4a7b8ed</code>, and it was a mistake. Undo it without rewriting history, and share the fix.', code: 'git [[revert]] --no-edit 4a7b8ed\ngit [[push]]', why: 'Revert adds an undoing commit, so a normal push works.' },
+          { type: 'bug', prompt: 'Ada wants to throw away her uncommitted edits to <code>Main.kt</code>, but this takes back her last commit instead. Tap the wrong line.', code: 'git status\ngit reset HEAD~1\ngit status', bug: 1, fix: 'git restore Main.kt', why: '<code>restore</code> is for edits that aren’t committed. <code>reset</code> works on commits.' },
         ],
         quiz: [
-          { q: 'Which reset keeps your changes in the files but unstaged?', options: ['--soft', '--mixed (the default)', '--hard'], a: 1, why: '--mixed moves the branch and resets the index, but leaves the working tree alone.' },
-          { q: 'You ran <code>git reset --hard HEAD~2</code> by mistake. The commits were real commits. Are they lost?', options: ['Yes, permanently', 'No: git reflog shows them and you can reset back', 'Only if you pushed'], a: 1, why: 'Commits stay in the object store and the reflog for weeks. Uncommitted edits are the ones --hard truly destroys.' },
-          { q: 'How do you undo a commit that teammates already pulled?', options: ['git reset --hard and force push', 'git revert', 'Delete the branch'], a: 1, why: 'revert adds a new commit, so nobody’s history is rewritten.' },
-          { q: 'After <code>git reset --soft HEAD~1</code>, where are the changes from the undone commit?', options: ['In your files, unstaged', 'Staged, ready to commit again', 'Gone'], a: 1, why: '--soft only moves the branch. The index and your files keep the changes, so they stay staged.' },
-          { q: 'You created a new file and edited a tracked one, then ran <code>git stash</code>. What happens to the new file?', options: ['It is stashed with the edit', 'Git deletes it', 'It stays in your working tree; add -u to stash it'], a: 2, why: 'git stash saves changes to tracked files by default. Untracked files are left behind unless you pass -u.' },
-          { q: 'You had uncommitted edits and ran <code>git reset --hard</code>. Can <code>git reflog</code> bring them back?', options: ['Yes, for 30 days', 'No: they were never in a commit', 'Yes, with git stash pop'], a: 1, why: 'The reflog records positions of HEAD, which are commits. Edits that were never committed are not in any of them.' },
+          { q: 'A wrong commit is already on GitHub. Which command undoes it without rewriting history?', options: ['<code>git revert</code>', '<code>git reset HEAD~1</code>', '<code>git restore</code>'], a: 0, why: 'Revert adds a new commit that undoes the old one, so history only grows.' },
+          { q: 'What does <code>git restore Main.kt</code> do to your uncommitted edits in that file?', options: ['Throws them away', 'Commits them', 'Stages them'], a: 0, why: 'The file goes back to the way it was when you last added or committed it. Those edits can’t be brought back.' },
+          { q: 'What does <code>HEAD~1</code> mean?', options: ['The commit one before <code>HEAD</code>', 'The very first commit', 'The next commit'], a: 0, why: '<code>~1</code> means one step back from <code>HEAD</code>.' },
         ],
+        docs: [['Pro Git: Undoing Things', 'https://git-scm.com/book/en/v2/Git-Basics-Undoing-Things'], ['git revert', 'https://git-scm.com/docs/git-revert']],
       },
     ],
   });

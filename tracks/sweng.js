@@ -1,6 +1,6 @@
 /* Software engineering practice track. Same shape as tracks/kotlin.js.
-   The university software engineering course, made practical for a mobile team: life cycle, agile, estimation,
-   design docs, code review, technical debt, incidents. Every class is prefixed swe-. */
+   How a small app team plans, builds and ships: life cycle, iterations, estimation, design docs, code review,
+   technical debt, teamwork. Every class is prefixed swe-. */
 (() => {
   const { h, sleep, hl, replay } = Lab;
   const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
@@ -99,7 +99,7 @@
 .swe-sev.swe-nit { background: var(--sunk); color: var(--muted); }
 .swe-sev.swe-should { background: var(--warm-soft); color: var(--warm); }
 
-/* incident timeline */
+/* lists, messages and quotes */
 .swe-pool { display: grid; gap: 6px; min-width: 0; }
 .swe-ev { text-align: left; font-family: inherit; font-size: 0.82rem; font-weight: 600; line-height: 1.35; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; overflow-wrap: anywhere; min-width: 0; }
 .swe-ev:hover { border-color: var(--accent); }
@@ -116,825 +116,570 @@
 .swe-quote.swe-fair { border-color: var(--ok); }
 `;
 
-  const lessons = [];
+  Lab.addTrack({
+    id: 'sweng', lang: 'text',
+    title: 'Software engineering practice',
+    description: 'How teams plan, build and ship software together: life cycle, agile, estimation, design docs, code review, technical debt and working in a team.',
+    requires: ['kotlin', 'git'],
+    css,
+    lessons: [
+      {
+        id: 'sdlc',
+        title: 'How software gets built',
+        tagline: 'Every change goes through the same five phases, from an idea to users’ phones.',
+        goals: ['Name the five phases: requirements, design, build, test, release', 'Say what each phase hands to the next', 'Explain why a mistake found late costs more'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Ada, Sam and Lin make a small weather app. A user writes in: “I check Lisbon and Oslo every day. Can I keep them at the top?” Between that message and a new version on people’s phones, the work passes through five phases. Every software team has them, even when nobody names them. Together they are called the <em>software development life cycle</em>, or SDLC.</p>
+<p><b>Requirements</b>: decide <em>what</em> it must do, in words anyone can check (“starred cities come first, and stay starred after the app restarts”). <b>Design</b>: plan <em>how</em>: sketch the screen, choose the classes and functions. <b>Build</b>: write the code, on a branch, through a pull request. <b>Test</b>: check that it does what the requirements say, on real phones. <b>Release</b>: publish a new version so users get it.</p>
+<p>Each phase hands something to the next: a written list of requirements, a sketch, merged code, a tested version. And the later a mistake is found, the more finished work it undoes. A misunderstood requirement costs a short conversation in the first week. Found in testing, it also costs the design, the code and the tests built on it.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'req', label: 'Requirements', sub: 'what it must do' },
+              { id: 'des', label: 'Design', sub: 'how it will work' },
+              { id: 'bld', label: 'Build', sub: 'write the code' },
+              { id: 'tst', label: 'Test', sub: 'does it work?' },
+              { id: 'rel', label: 'Release', sub: 'to users' },
+            ],
+            predict: {
+              q: 'In testing, Ada finds that the stars disappear when the app restarts. The requirements already said they must stay. Which phase does the work go back to?',
+              options: ['Requirements: write them again', 'Build: fix the code, then test again', 'Release: ship it now, fix it later'],
+              a: 1,
+              why: 'The requirement was right; the code didn’t follow it. Going back only as far as the mistake keeps the cost small.',
+            },
+            frames: [
+              { at: 'req', packet: '★', say: 'The idea: “keep my cities at the top”. Requirements turn it into three lines anyone can check: a star on each city; starred cities come first; stars stay after a restart.' },
+              { at: 'des', packet: '★', mark: { req: 'ok' }, say: 'Design: Lin sketches a star at the end of each city row, and plans the code: the <code>City</code> class gets a new property, <code>starred</code>.' },
+              { at: 'bld', packet: '★', mark: { des: 'ok' }, say: 'Build: Sam writes the code on a branch, opens a pull request, gets a review, and merges it into <code>main</code>.' },
+              { at: 'tst', packet: '✗', tone: 'err', mark: { bld: 'ok', tst: 'err' }, say: 'Test: Ada checks each requirement on a phone. After a restart, the stars are gone. Requirement 3 fails.' },
+              { at: 'bld', packet: 'fix', tone: 'warm', mark: { bld: 'warm' }, say: 'Back one phase, not to the start. The requirement was clear, so only the code changes: Sam saves the stars so they survive a restart.' },
+              { at: 'tst', packet: '★', tone: 'ok', mark: { bld: 'ok', tst: 'ok' }, say: 'Tested again: all three requirements pass, on a small phone and a large one.' },
+              { at: 'rel', packet: '1.4', tone: 'ok', mark: { rel: 'ok' }, say: 'Release: version 1.4 goes out. A user replies, “Can I put Oslo above Lisbon?” That becomes a new requirement, and the cycle starts again.' },
+            ],
+          });
+        },
+        code: `Feature: keep favourite cities at the top
 
-  // 1 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'sdlc',
-    title: 'The software development life cycle',
-    tagline: 'Every feature goes through the same phases. The question is how big a batch you push through them at once.',
-    level: 'beginner',
-    body: `
-<p>Every piece of software moves through the same phases: <b>requirements</b> (what should it do), <b>design</b> (how will it work), <b>build</b> (write the code), <b>test</b> (does it work), <b>release</b> (get it to users) and <b>maintain</b> (fix, update, keep it running). This is the software development life cycle, or SDLC.</p>
-<p>In <b>waterfall</b> you do each phase once, for the whole project, in order. It looks tidy on paper, but users see nothing until the end, and a requirement that changes late sends you back up the waterfall. In <b>iterative</b> development you run all the phases on a small slice, ship it, learn, and repeat. The phases don't go away; they just get short.</p>
-<p>Mobile teams lean iterative because shipping is cheap to repeat, but not free: releases go through store review and staged rollouts, and old app versions keep running on phones for a long time. Run the demo with and without a late requirement change.</p>`,
-    code: `# One small iteration on a mobile team, start to finish
-git switch -c feature/save-article          # build: a short-lived branch
-./gradlew testDebugUnitTest lintDebug       # test: unit tests and lint on every change
-git push -u origin feature/save-article     # review: open a pull request, CI runs again
+Requirements  A star on each city. Starred cities come first.
+              Stars stay after the app restarts.
+Design        Sketch: a star at the end of each city row.
+              Code plan: City gets a new property, starred.
+Build         Branch star, pull request #12, reviewed and merged.
+Test          Check all three requirements on a small and a large phone.
+Release       Version 1.4, note for users: "Star your favourite cities."`,
+        remember: 'Requirements, design, build, test, release: each phase hands something to the next, and a mistake costs less the earlier it is found.',
+        mistakes: [
+          { title: 'Testing only at the very end', bad: 'Months 1-3: build every feature\nLast week:  test everything\n            (40 bugs, no time left)', good: 'Build one feature, test it, release it.\nThen the next one.', why: 'Bugs found in the last week are found when there is no time to fix them well. Testing each piece as soon as it is built catches problems while the code is fresh in your head.' },
+        ],
+        terms: [
+          { term: 'software development life cycle (SDLC)', def: 'The phases every change goes through: requirements, design, build, test, release.' },
+          { term: 'requirement', def: 'A short statement of what the software must do, written so anyone can check it.' },
+          { term: 'release', def: 'Publishing a new version of the app so users can install it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Fill in the missing phase.', code: 'Requirements\nDesign\n[[Build|build]]\nTest\nRelease', why: 'After the plan comes the code. Build sits between design and test.' },
+          { type: 'bug', prompt: 'One line is in the wrong phase. Tap it.', code: 'Requirements: starred cities come first\nDesign: sketch a star at the end of each row\nBuild: write the code on a branch\nRelease: check the stars on a small phone\nRelease: publish version 1.4', bug: 3, fix: 'Test: check the stars on a small phone', why: 'Checking that it works is testing, and it happens before the release, not during it.' },
+        ],
+        quiz: [
+          { q: 'Which phase decides <em>what</em> a feature must do?', options: ['Requirements', 'Design', 'Test'], a: 0, why: 'Requirements say what; design says how.' },
+          { q: 'A requirement was misunderstood. When is it cheapest to find out?', options: ['While writing the requirements', 'During testing', 'After the release'], a: 0, why: 'Early, only a few sentences change. Later, the design, the code and the tests built on it change too.' },
+          { q: 'What does the build phase hand to testing?', options: ['A list of what users asked for', 'Code that is written, reviewed and merged', 'A version in the app store'], a: 1, why: 'Each phase hands its result to the next. Build produces working code to test.' },
+        ],
+        docs: [['Fundamentals of testing Android apps', 'https://developer.android.com/training/testing/fundamentals'], ['Publish your app', 'https://developer.android.com/studio/publish']],
+      },
 
-# after review and merge to main
-./gradlew bundleRelease                     # release: build the signed App Bundle
-git tag v5.12.0 && git push origin v5.12.0  # mark what shipped, so you can maintain it later`,
-    remember: 'The phases never disappear. Iterative work just runs all of them on a small slice, so you learn before the big money is spent.',
-    predict: {
-      q: "No requirement changes this time. Which plan gets a first working slice to users first?",
-      options: ["Waterfall, in month 11", "Iterative, in month 3", "Both in month 11"],
-      a: 1,
-      why: "Iterative work runs every phase on a small slice, so the first slice ships after one short cycle. Waterfall ships nothing until all phases are done.",
-    },
-    visual(el) {
-      const W = 'RRDDBBBBTTS'.split(''), WC = 'RRDDBBBDBBBTTS'.split('');
-      const I = 'DBSDBSDBSDBS'.split('');
-      let change = false, tok = 0;
-      const head = (name) => { const r = h('b', {}, ''); return [h('div', { class: 'swe-tl-head' }, h('span', {}, name), r), r]; };
-      const [wh, wr] = head('Waterfall'), [ih, ir] = head('Iterative');
-      const wrow = h('div', { class: 'swe-cells' }), irow = h('div', { class: 'swe-cells' });
-      const month = h('b', {}, '0');
-      const msg = out('Press Run to play a 14-month project, one month per step.');
-      function draw(m) {
-        const w = change ? WC : W;
-        const fill = (row, plan, chgAt) => row.replaceChildren(...Array.from({ length: 14 }, (_, k) => {
-          const p = plan[k];
-          return h('div', { class: `swe-cell ${p ? 'swe-ph-' + p : 'swe-none'} ${k < m ? 'swe-lit' : ''} ${change && k === chgAt ? 'swe-chg' : ''}`, title: p ? `Month ${k + 1}` : null }, p === 'S' ? '▲' : p || '');
-        }));
-        fill(wrow, w, 7); fill(irow, I, 6);
-        const ships = (plan) => plan.slice(0, m).filter(p => p === 'S').length;
-        wr.textContent = `${ships(w)} release${ships(w) === 1 ? '' : 's'}`;
-        ir.textContent = `${ships(I)} release${ships(I) === 1 ? '' : 's'}`;
-        month.textContent = String(m);
-      }
-      async function run() {
-        const t = ++tok;
-        for (let m = 1; m <= 14; m++) {
-          draw(m);
-          if (change && m === 7) say(msg, 'Month 7: product changes a requirement. Waterfall is in the middle of building the old design, so it goes back to design. Iterative folds it into the next slice.');
-          else if (m === 3) say(msg, 'Month 3: the iterative team ships its first slice and gets real feedback. The waterfall team is still designing.');
-          await sleep(480);
-          if (t !== tok || !el.isConnected) return;
-        }
-        say(msg, change
-          ? 'With the change: waterfall ships once, in month 14, three months late. Iterative still ships every 3 months; the change cost one slice of planning.'
-          : 'No change: waterfall ships once, in month 11. Iterative shipped 4 times, so users had the first slice 8 months earlier.');
-      }
-      const chg = act('Late requirement change: off', () => { change = !change; chg.textContent = `Late requirement change: ${change ? 'on' : 'off'}`; chg.setAttribute('aria-pressed', String(change)); tok++; draw(0); say(msg, change ? 'A requirement will change in month 7. Press Run.' : 'No changes this time. Press Run.'); }, { 'aria-pressed': 'false' });
-      el.append(h('div', { class: 'swe-stage' },
-        h('div', { class: 'swe-tl' }, wh, wrow), h('div', { class: 'swe-tl' }, ih, irow),
-        h('div', { class: 'swe-legend' }, [['Requirements', 'accent'], ['Design', 'warm'], ['Build', 'muted'], ['Test', 'ok']].map(([n, c]) => h('span', {}, h('i', { style: `border-color:var(--${c})` }), n)), h('span', {}, '▲ Release')),
-        h('span', { class: 'swe-stat' }, 'month ', month, ' of 14')),
-        h('div', { class: 'controls' }, act('Run', run), chg), msg);
-      draw(0);
-    },
-    deeper: [
       {
-        title: 'Each phase hands something to the next',
-        body: `<p>A phase is done when it produces something the next phase can use. Requirements produce user stories with acceptance criteria. Design produces a design doc or a screen spec. Build produces merged code. Test produces passing checks and a tested build. Release produces a version in users' hands. Maintain produces bug fixes and the next round of requirements, from crash reports and feedback.</p>
-<p>If you can't name what a phase handed over, that phase was skipped, even if time passed.</p>`,
-      },
-      {
-        title: 'Late changes touch more finished work',
-        body: `<p>A wrong requirement caught while writing the story costs a conversation. Caught in design, it costs a redraw. Caught after the code is built and tested, it costs the code, the tests and the review. Caught after release, it also costs a new store release and support for the users who have the old version.</p>
-<p>That is the real argument for iterating: each slice reaches the "real users" check early, so mistakes are found while the pile of work they touch is small.</p>`,
-      },
-      {
-        title: 'Maintenance never ends on mobile',
-        body: `<p>Once a version is out, it stays on some phones for a long time, because not everyone updates. Your backend has to keep serving old app versions, and a bug in an old version can't be fixed by a server deploy. Plan for it: version your APIs, use remote config or <a href="#launch.flags">feature flags</a> to switch behavior without a release, and consider <a href="#launch.updates">in-app updates</a> for versions you must retire.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Testing as the last phase', bad: 'Sprint 1-3: build the whole feature\nSprint 4:   QA tests everything\n            (finds 40 bugs, no time left)', good: 'Every story: code + unit tests + review\nDone means: tested on a real device\nCI runs the tests on every pull request', why: 'Test is a phase of every slice, not of the project. Bugs found late are found when there is no time left to fix them well. See <a href="#testing.pyramid">the testing pyramid</a> and <a href="#tools.ci">CI</a>.' },
-      { title: 'Calling it iterative when only build is split', bad: 'Month 1: requirements for everything\nMonth 2-5: build in 2-week "sprints"\nMonth 6: release', good: 'Every 2 weeks: plan a slice, build it,\ntest it, ship it (to beta or internal\ntrack), learn from it', why: 'If nothing reaches a user until the end, it is still waterfall with shorter meetings. Iterative means each slice goes through release, even if the release is to an internal test track first.' },
-    ],
-    terms: [
-      { term: 'SDLC', def: 'Software development life cycle: requirements, design, build, test, release and maintain.' },
-      { term: 'Waterfall', def: 'Doing each life cycle phase once, for the whole project, in strict order.' },
-      { term: 'Iterative development', def: 'Running all the phases repeatedly on small slices, and revising earlier work as you learn.' },
-      { term: 'Increment', def: 'A working, usable slice of the product added in one iteration.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Fill in the missing phases of the life cycle.', code: 'requirements -> [[design]] -> build -> [[test|testing]] -> release -> [[maintain|maintenance]]', why: 'Design comes before build, test before release, and maintain follows release, feeding the next round of requirements.' },
-      { type: 'bug', prompt: 'This team says it works iteratively. Tap the line that breaks the idea.', code: 'Sprint 1: login screen, built, tested, on the beta track\nSprint 2: news feed, built, tested, on the beta track\nSprint 3: push settings, built, tested, on the beta track\nSprint 4: test everything from sprints 1-3\nSprint 5: profile screen, built, tested, on the beta track', bug: 3, fix: 'Sprint 4: saved articles, built, tested, on the beta track', why: 'Testing belongs to each slice. A "test everything" sprint means sprints 1-3 were not really done, and the bugs pile up for the end.' },
-    ],
-    quiz: [
-      { q: 'A requirement changes in month 7 of a 12-month waterfall project, during build. What happens?', options: ['The team goes back to design, then reworks code that is already built', 'Nothing, build absorbs it for free', 'The change waits for version 2, at no cost'], a: 0, why: 'Waterfall designed everything up front, so a late change invalidates finished design and code. Iterative work only has one small slice in progress when the change arrives.' },
-      { q: 'Which order is right?', options: ['Requirements, design, build, test, release, maintain', 'Design, requirements, build, release, test, maintain', 'Build, test, requirements, design, release, maintain'], a: 0, why: 'You decide what to build, then how, then build it, check it, ship it and keep it running. Iteration repeats this order on small slices.' },
-      { q: 'Why does maintenance weigh more on mobile than on a website?', options: ['Old app versions keep running on phones, and you can\'t redeploy them', 'Mobile code never has bugs after release', 'Stores maintain the app for you'], a: 0, why: 'A website updates for everyone on deploy. An app update reaches people only when they install it, so the backend must keep supporting old versions.' },
-    ],
-  });
+        id: 'agile',
+        title: 'Working in iterations',
+        tagline: 'Build a small piece, show it, learn, repeat.',
+        goals: ['Explain why teams ship in short iterations', 'Use a backlog to choose what comes next', 'Give a short daily stand-up update'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Ada’s team could plan the next six months of work up front and show users the result at the end. If users wanted something different, the team would find out after six months. So most teams work in <em>iterations</em> instead: they run the five phases from the last lesson on a small piece of work, every one or two weeks. Each piece reaches users (or at least testers), and what they say shapes the next piece. This way of working is called <em>agile</em>.</p>
+<p>The <em>backlog</em> is the team’s to-do list for the app: every idea, request and bug, each written on a <em>ticket</em> (a short card for one piece of work), with the most important at the top. A <em>sprint</em> is one iteration with a fixed length, often two weeks. At sprint planning, the team pulls the top tickets it believes it can finish. At the end it shows what is done (the <em>sprint review</em>), then asks: what should we do differently next time? That last meeting is the <em>retrospective</em>.</p>
+<p>Every day there is a <em>stand-up</em>: a 15-minute meeting, often held standing so it stays short. Each person says what they did yesterday, what they will do today, and whether anything blocks them. Problems are not solved there; the people involved talk right after.</p>`,
+        visual(el) {
+          const COLS = ['Backlog', 'Sprint', 'Doing', 'Done'];
+          const T = { order: 'Reorder starred cities', lima: 'Wrong time in Lima', rain: 'Hourly rain chart', dark: 'Dark mode', mph: 'Wind in mph', widget: 'Home screen widget', see: 'Make the star easier to see' };
+          const day = h('p', { class: 'swe-note' });
+          const board = h('div', { class: 'swe-board' });
+          const quote = h('p', { class: 'swe-quote' });
+          const stage = h('div', { class: 'ui-stage swe-stage' }, day, board, quote);
+          const frames = [
+            { d: 'Monday, sprint planning', c: [['order', 'lima', 'rain', 'dark', 'mph'], [], [], []], q: 'Backlog, most important first.', say: 'The backlog, most important ticket on top. Monday morning: planning for a two-week sprint.' },
+            { d: 'Monday, sprint planning', c: [['dark', 'mph'], ['order', 'lima', 'rain'], [], []], q: 'Team: “We can finish these three in two weeks.”', say: 'The team pulls the top three tickets, the ones it believes it can finish in two weeks. The rest stay in the backlog.' },
+            { d: 'Day 1, stand-up', c: [['dark', 'mph'], ['rain'], ['order', 'lima'], []], who: { order: 'Sam', lima: 'Lin' }, q: 'Sam: “Today I start reordering cities.” Lin: “Today I fix the time in Lima.”', say: 'First stand-up. Each person picks a ticket and says what they will do today.' },
+            { d: 'Day 3, stand-up', c: [['dark', 'mph'], [], ['order', 'rain'], ['lima']], who: { order: 'Sam', rain: 'Lin', lima: 'Lin' }, q: 'Lin: “Yesterday I fixed Lima. Today the rain chart. Blocked: I need the rain data format from Ada.”', say: 'Lin is blocked and says so out loud. Ada and Lin talk right after the stand-up, not during it.' },
+            { d: 'Day 6', c: [['dark', 'mph', 'widget'], [], ['order', 'rain'], ['lima']], who: { order: 'Sam', rain: 'Lin', lima: 'Lin' }, q: 'Maya, who decides what the team builds: “Users want a home screen widget!”', say: 'A new idea arrives mid-sprint. It goes into the backlog, not into the sprint, so the plan stays steady. Planning will decide where it ranks.' },
+            { d: 'Day 10, end of sprint', c: [['dark', 'mph', 'widget'], [], [], ['lima', 'order', 'rain']], who: { order: 'Sam', rain: 'Lin', lima: 'Lin' }, q: 'Testers: “The star is hard to see on a small phone in sunlight.”', say: 'All three are done. The team shows them to testers, who notice something nobody had thought of.' },
+            { d: 'Day 10, retrospective, then next planning', c: [['see', 'widget', 'dark', 'mph'], [], [], ['lima', 'order', 'rain']], who: { order: 'Sam', rain: 'Lin', lima: 'Lin' }, q: 'Retrospective: “Next time, ask for data formats before the sprint starts.”', say: 'The feedback becomes a new ticket at the top of the backlog. One small change for next time is agreed. Then the next sprint begins.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'Mid-sprint, someone has a new idea: a widget for the home screen. Where does it go?',
+              options: ['Into the backlog, to be ranked for a later sprint', 'Straight into Doing, so it gets done now', 'Nowhere: new ideas wait until the app is finished'],
+              a: 0,
+              why: 'The sprint keeps its plan. New work joins the backlog, and the next planning decides where it ranks.',
+            },
+            draw(f, i) {
+              day.textContent = f.d;
+              board.replaceChildren(...COLS.map((name, k) => h('div', { class: 'swe-col' },
+                h('div', { class: 'swe-col-h' }, h('span', {}, name), h('b', {}, String(f.c[k].length))),
+                f.c[k].map(id => h('div', { class: 'swe-card' + (k === 3 ? ' swe-done' : '') }, T[id], f.who && f.who[id] && k > 1 ? h('small', {}, f.who[id]) : null)))));
+              quote.textContent = f.q;
+            },
+          });
+        },
+        code: `Stand-up, sprint 7, day 3 (15 minutes)
 
-  // 2 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'agile',
-    title: 'Agile in practice: Scrum and Kanban',
-    tagline: 'Short cycles, a visible board, and a limit on how much you start at once.',
-    level: 'beginner',
-    body: `
-<p>The <a href="https://agilemanifesto.org/" target="_blank" rel="noopener">Agile Manifesto</a> (2001) values working software over comprehensive documentation and responding to change over following a plan. Scrum and Kanban are two common ways to put that into practice.</p>
-<p><b>Scrum</b> works in fixed sprints of one month or less, often two weeks. Each sprint starts with Sprint Planning, has a 15-minute Daily Scrum (the stand-up), and ends with a Sprint Review (show what was built) and a Sprint Retrospective (improve how you work). The Scrum Guide names three accountabilities: Product Owner, Scrum Master and Developers. <b>Kanban</b> has no sprints. Work flows across a board, and the team controls how many items are in progress at once, so new work starts only when there is room.</p>
-<p>Both use <b>stories</b>: a small piece of user value, with <b>acceptance criteria</b> that say exactly when it works. Move the cards in the demo. With WIP limits on, a full column refuses new work, and you'll see why that makes things finish sooner.</p>`,
-    code: `// Story: As a reader, I want to save an article,
-// so that I can read it on the metro without signal.
-//
-// Acceptance criteria, written as Given / When / Then:
-// AC1 Given I am online, when I tap Save, then the article appears under "Saved".
-// AC2 Given a saved article, when I go offline and open it, then the full text shows.
-// AC3 Given a saved article, when I tap Save again, then it is removed.
+Lin  Yesterday: fixed the wrong time shown for Lima.
+     Today:     start the hourly rain chart.
+     Blocked:   I need the rain data format from Ada.
+Sam  Yesterday: moving a city up or down works, pull request #13 is open.
+     Today:     answer the review comments on #13.
+     Blocked:   nothing.
 
-class SaveArticleTest {
-    private val repo = FakeArticleRepository()
-    private val viewModel = ArticleViewModel(repo)
+After the stand-up: Ada and Lin, 10 minutes on the rain data.`,
+        remember: 'Work in short sprints: pull the top of the backlog, meet for 15 minutes a day, show the result, adjust.',
+        mistakes: [
+          { title: 'A stand-up that turns into a long meeting', bad: 'Lin: I’m blocked on the rain data.\nAda: Let’s work it out now...\n(40 minutes later, everyone is still there)', good: 'Lin: I’m blocked on the rain data.\nAda: Let’s talk right after.\n(stand-up ends after 15 minutes)', why: 'Most people don’t need the details. Name the problem in the stand-up; solve it afterwards with the people involved.' },
+        ],
+        terms: [
+          { term: 'backlog', def: 'The ordered list of tickets the team might work on, most important first. A <em>ticket</em> is a card for one piece of work.' },
+          { term: 'sprint', def: 'One <em>iteration</em> (a short round of requirements, design, build, test and release on a small piece of work) with a fixed length, often two weeks. It starts with planning and ends by showing the finished work, then a retrospective.' },
+          { term: 'retrospective', def: 'A short meeting at the end of a sprint about what to do differently next time.' },
+          { term: 'stand-up', def: 'A daily meeting of about 15 minutes: yesterday, today, and anything that blocks you.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Complete Sam’s stand-up update.', code: 'Yesterday: moving a city up or down works\nToday: answer the review comments\n[[Blocked|blocked]]: nothing', why: 'The third part of a stand-up update is what blocks you, even when the answer is “nothing”.' },
+          { type: 'bug', prompt: 'This sprint plan breaks the idea of a sprint. Tap the line.', code: 'Sprint 8: two weeks, starts Monday\nPull the top three tickets from the backlog\nAdd every other ticket to this sprint too\nShow the finished work on the last Friday', bug: 2, fix: 'Leave the other tickets in the backlog', why: 'A sprint holds only what the team believes it can finish. The rest waits in the backlog, in order.' },
+        ],
+        quiz: [
+          { q: 'What is the backlog?', options: ['The ordered list of work the team might do', 'The work finished last sprint', 'A list of bugs only'], a: 0, why: 'Ideas, requests and bugs all go in, most important first.' },
+          { q: 'Lin is stuck waiting for the rain data. When should she say so?', options: ['At the next stand-up, or sooner', 'At the end of the sprint', 'Only if it lasts a week'], a: 0, why: 'A blocker said early can often be solved in minutes. Said late, it has cost days.' },
+          { q: 'Why do teams work in short iterations?', options: ['Users see something early, and their feedback shapes the next piece', 'It skips the test phase', 'No planning is needed any more'], a: 0, why: 'Every phase still happens, on a small piece. The win is learning early.' },
+        ],
+        docs: [['Manifesto for Agile Software Development', 'https://agilemanifesto.org/'], ['The Scrum Guide', 'https://scrumguides.org/scrum-guide.html']],
+      },
 
-    @Test
-    fun \`AC1 saved article is listed under saved\`() = runTest {
-        viewModel.toggleSave(articleId = "a42")
-        assertEquals(listOf("a42"), repo.savedIds())
-    }
+      {
+        id: 'estimation', ignore: ['Text'],
+        title: 'Estimating work',
+        tagline: 'Break a job into small pieces, and answer with a range, not one number.',
+        goals: ['Break a feature into small tasks you can picture', 'Give an estimate as a range', 'Spot the work that is easy to forget'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Maya, who decides what the team builds next, asks Sam: “How long will the hourly rain chart take?” Sam has never built a chart in this app. Any single number he says now is a guess. If he says “two days”, the whole team plans around those two days.</p>
+<p>An <em>estimate</em> is a best guess of how long work will take, and every estimate carries <em>uncertainty</em>: the things you don’t know yet. Big, vague jobs hide the most. So first, <em>break the work down</em>: split it into small tasks, each one you can picture from start to finish, ideally a day or less. Small tasks are easier to guess, and splitting often turns up work nobody had counted: tests, review comments, the screen when there is no data, small phones.</p>
+<p>Then answer with a range, like “4 to 8 days”. The gap shows how unsure you are. Say what would make it narrower (“once I know the data format”) and update it as you learn. A range that turns out right helps the team more than an exact number that turns out wrong.</p>`,
+        visual(el) {
+          const TASKS = [
+            ['Get the hourly rain data', 0.5, 2, 'unknown'],
+            ['Draw one bar per hour', 0.5, 1],
+            ['Bar colours and spacing', 0.5, 1],
+            ['Hour labels under the bars', 0.5, 1],
+            ['Message when there is no data', 0.5, 1],
+            ['Tests', 0.5, 1, 'forgot'],
+            ['Review comments', 0.5, 1, 'forgot'],
+            ['Check on a small phone', 0.5, 1, 'forgot'],
+          ];
+          const n = x => String(x).replace('.5', '½').replace(/^0½/, '½');
+          const head = h('p', { class: 'swe-note' });
+          const list = h('ol', { class: 'swe-tlist' });
+          const total = h('div', { class: 'swe-stats' });
+          const stage = h('div', { class: 'ui-stage swe-stage' }, head, list, total);
+          const frames = [
+            { k: 0, guess: true, say: 'Sam’s first answer, off the top of his head: “About 2 days.” One number, and nothing written down behind it.' },
+            { k: 4, say: 'Now he breaks it down. The four tasks he was picturing already add up to 2 to 5 days. Getting the data is the widest range: he doesn’t know its format yet.' },
+            { k: 5, say: 'What does the screen show when there is no data? Nobody had thought of it. Another half day to a day.' },
+            { k: 8, say: 'Then the work that is easy to forget, because it isn’t “the feature”: tests, answering review comments, checking a small phone.' },
+            { k: 8, answer: true, say: 'His answer to Maya: “4 to 9 days. Most of the doubt is the data format; I’ll know more once Ada sends it.”' },
+            { k: 8, known: true, say: 'Ada sends the format: it is the same as the daily data. The first task shrinks to ½ to 1 day, and the estimate narrows to 4 to 8 days. Sam tells Maya the new range.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'Sam first guessed “2 days”. He then splits the work into small tasks and adds them up. The total is most likely…',
+              options: ['Bigger: splitting shows work he hadn’t counted', 'Smaller: small tasks are quicker', 'Exactly 2 days again'],
+              a: 0,
+              why: 'A quick guess pictures only the main part. Writing every task down shows the rest.',
+            },
+            draw(f) {
+              head.textContent = f.guess ? 'Hourly rain chart: how long?' : 'Hourly rain chart, broken down (days)';
+              const rows = TASKS.slice(0, f.k).map(([name, lo, hi, tag], j) => {
+                if (j === 0 && f.known) hi = 1;
+                const cls = tag === 'unknown' && !f.known ? 'swe-bad' : tag === 'forgot' ? 'swe-mit' : null;
+                return h('li', { class: cls }, h('b', {}, `${n(lo)}–${n(hi)}`), h('span', {}, name + (tag === 'unknown' && !f.known ? ' (format unknown)' : '')));
+              });
+              list.replaceChildren(...rows);
+              list.hidden = f.guess;
+              let lo = 0, hi = 0;
+              TASKS.slice(0, f.k).forEach(([, a, b], j) => { lo += a; hi += j === 0 && f.known ? 1 : b; });
+              total.replaceChildren(f.guess
+                ? h('span', { class: 'swe-stat' }, 'Sam: ', h('b', {}, '“about 2 days”'))
+                : h('span', { class: 'swe-stat' }, 'Total: ', h('b', {}, `${n(lo)} to ${n(hi)} days`)));
+            },
+          });
+        },
+        code: `Estimate: hourly rain chart (Sam, Tuesday)
 
-    @Test
-    fun \`AC3 saving twice removes it\`() = runTest {
-        viewModel.toggleSave("a42")
-        viewModel.toggleSave("a42")
-        assertTrue(repo.savedIds().isEmpty())
-    }
-}`,
-    remember: 'Stop starting, start finishing. A story is done when its acceptance criteria pass, not when the code is written.',
-    predict: {
-      q: "WIP limits off: you start all six cards on day 1 and work on them a little each day. Compared with WIP limits on, what happens to the average cycle time?",
-      options: ["It drops: more work started means more finished", "It rises: every started card keeps aging while it waits", "It stays the same"],
-      a: 1,
-      why: "Cycle time counts from start to finish. Starting everything at once makes every card wait longer for attention, so each one takes longer.",
-    },
-    visual(el) {
-      const COLS = ['To do', 'Doing', 'Review', 'Done'], LIMIT = [0, 2, 1, 0];
-      const NAMES = ['Login screen', 'Save article', 'Dark theme', 'Push opt-in', 'Search bar', 'Share button'];
-      let cards, day, wip = true, done;
-      const colEls = COLS.map(() => h('div', { class: 'swe-col' }));
-      const st = { day: h('b', {}, '1'), wip: h('b', {}, '0'), done: h('b', {}, '0'), cycle: h('b', {}, '-') };
-      const msg = out('');
-      function reset() { cards = NAMES.map(t => ({ t, col: 0, age: 0 })); day = 1; done = []; paint(); say(msg, 'Tap a card to move it one column right. Press "Next day" to let time pass.'); }
-      function paint() {
-        colEls.forEach((c, k) => {
-          const inCol = cards.filter(x => x.col === k);
-          const lim = wip && LIMIT[k];
-          c.classList.toggle('swe-full', !!lim && inCol.length >= lim);
-          c.replaceChildren(h('div', { class: 'swe-col-h' }, h('span', {}, COLS[k]), h('b', {}, lim ? `${inCol.length}/${lim}` : String(inCol.length))),
-            ...inCol.map(x => h('button', { class: `swe-card ${x.col === 3 ? 'swe-done' : x.age >= 4 ? 'swe-old' : ''}`, onclick: e => move(x, e.currentTarget) },
-              x.t, x.col === 1 || x.col === 2 ? h('small', {}, `age ${x.age}d`) : x.col === 3 ? h('small', {}, `took ${x.age}d`) : null)));
-        });
-        st.day.textContent = String(day);
-        st.wip.textContent = String(cards.filter(x => x.col === 1 || x.col === 2).length);
-        st.done.textContent = String(done.length);
-        st.cycle.textContent = done.length ? `${(done.reduce((s, x) => s + x.age, 0) / done.length).toFixed(1)}d` : '-';
-      }
-      function move(x, btn) {
-        if (x.col === 3) return;
-        const to = x.col + 1, lim = wip && LIMIT[to];
-        if (lim && cards.filter(c => c.col === to).length >= lim) {
-          replay(btn, 'shake');
-          say(msg, `<b>${COLS[to]}</b> is full (${lim}/${lim}). Finish or review something already started before pulling more in.`);
-          return;
-        }
-        if (to === 1) x.age = 1;
-        x.col = to;
-        if (to === 3) { done.push(x); say(msg, `"${x.t}" is done after ${x.age} day${x.age === 1 ? '' : 's'} in progress. That is its cycle time.`); }
-        else if (to === 1) say(msg, `Started "${x.t}". Its age counts from today.`);
-        else say(msg, `"${x.t}" waits for a reviewer. Review is part of the work, so it still counts as WIP.`);
-        paint();
-      }
-      function nextDay() {
-        day++;
-        cards.forEach(x => { if (x.col === 1 || x.col === 2) x.age++; });
-        const old = cards.filter(x => (x.col === 1 || x.col === 2) && x.age >= 4);
-        say(msg, old.length ? `Day ${day}. ${old.map(x => `"${x.t}"`).join(', ')} ${old.length === 1 ? 'has' : 'have'} been in progress 4+ days (red). Old items are the first thing to discuss at stand-up.` : `Day ${day}. Every started card got one day older.`);
-        paint();
-      }
-      const wipB = act('WIP limits: on', () => { wip = !wip; wipB.textContent = `WIP limits: ${wip ? 'on' : 'off'}`; wipB.setAttribute('aria-pressed', String(wip)); paint(); say(msg, wip ? 'Limits on: Doing holds 2, Review holds 1.' : 'Limits off. Try starting all six cards, then press Next day a few times and watch the ages and the cycle time.'); }, { 'aria-pressed': 'true' });
-      el.append(h('div', { class: 'swe-stage' }, h('div', { class: 'swe-board' }, colEls),
-        h('div', { class: 'swe-stats' }, h('span', { class: 'swe-stat' }, 'day ', st.day), h('span', { class: 'swe-stat' }, 'WIP ', st.wip), h('span', { class: 'swe-stat' }, 'throughput ', st.done), h('span', { class: 'swe-stat' }, 'avg cycle time ', st.cycle))),
-        h('div', { class: 'controls' }, act('Next day', nextDay), wipB), msg);
-      reset();
-    },
-    deeper: [
-      {
-        title: 'The Scrum events and their timeboxes',
-        body: `<p>The 2020 Scrum Guide sets maximum lengths, given for a one-month sprint (shorter sprints usually use less): Sprint Planning up to 8 hours, Daily Scrum 15 minutes, Sprint Review up to 4 hours, Sprint Retrospective up to 3 hours. A Scrum Team is typically 10 or fewer people.</p>
-<p>It also names three artifacts, each with a commitment: the Product Backlog (the Product Goal), the Sprint Backlog (the Sprint Goal) and the Increment (the Definition of Done).</p>`,
-      },
-      {
-        title: 'Acceptance criteria vs Definition of Done',
-        body: `<p>Acceptance criteria belong to one story: "saving twice removes the article". The Definition of Done applies to every story: "reviewed, unit tests pass, tested on a small and a large screen, strings translated, analytics events added". A story is done only when both hold.</p>
-<p>Writing criteria as Given / When / Then makes them easy to turn into tests, like the code above.</p>`,
-      },
-      {
-        title: 'Kanban measures flow',
-        body: `<p>The Kanban Guide asks teams to track four measures: <b>WIP</b> (started, not finished), <b>throughput</b> (how many finish per period), <b>work item age</b> (how long a started item has been going) and <b>cycle time</b> (start to finish). The demo shows all four.</p>
-<p>Work item age is the early warning: a card that keeps getting older is stuck, and you can act before its cycle time is ruined.</p>`,
-      },
-      {
-        title: 'Make the retrospective change something',
-        body: `<p>A retro that ends with ten complaints and no owner changes nothing. Pick one or two actions, give each an owner, and check them at the start of the next retro. "Ask backend for the API contract before sprint planning, owner: Maya" beats "communicate better".</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'A story that is a task', bad: 'Story: Add Room table for articles', good: 'Story: As a reader, I can save an article\nand read it offline.\nTasks: Room table, Save button, offline screen', why: 'A story describes user value, so the product owner can prioritize it and QA can check it. Technical steps are tasks inside the story.' },
-      { title: 'Acceptance criteria nobody can test', bad: 'AC: Saving should be fast and easy.', good: 'AC: Given I am online, when I tap Save,\nthen the icon fills within 300 ms\nand the article is under "Saved".', why: '"Fast and easy" can\'t fail. Given / When / Then with a concrete result can, which is what makes it useful.' },
-    ],
-    terms: [
-      { term: 'Sprint', def: 'A fixed-length Scrum iteration of one month or less in which the team builds a usable increment.' },
-      { term: 'WIP limit', def: 'A cap on how many items can be in a workflow step at once, so the team finishes work before starting more.' },
-      { term: 'Acceptance criteria', def: 'Concrete, testable conditions one story must meet to count as working.' },
-      { term: 'Cycle time', def: 'The time from when work on an item starts to when it is finished.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Complete the acceptance criterion in the Given / When / Then form.', code: '[[Given]] I am offline and have a saved article,\n[[when|When]] I open it from "Saved",\n[[then|Then]] the full text and images show.', why: 'Given sets the starting state, When is the user action, Then is the result you can check.' },
-      { type: 'bug', prompt: 'This is a team\'s Definition of Done. One line does not belong. Tap it.', code: 'Code reviewed and merged to main\nUnit tests pass in CI\nTested on a small phone and a tablet\nStrings added in English and Spanish\nWill be tested by QA next sprint', bug: 4, fix: 'Tested by QA on the release build', why: 'Done means done now. Pushing testing into a future sprint leaves the story unfinished and hides the bugs.' },
-    ],
-    quiz: [
-      { q: 'Doing holds 2 cards and is at its WIP limit. A developer is free. What should they do first?', options: ['Help finish or review an item already in progress', 'Start a new card anyway, the limit is a suggestion', 'Wait idle until the next sprint'], a: 0, why: 'The limit pushes free people toward finishing started work, which lowers cycle time. Starting more just adds age to everything.' },
-      { q: 'What is the maximum length of a Scrum sprint?', options: ['One month', 'Two weeks exactly', 'Three months'], a: 0, why: 'The Scrum Guide sets sprints at one month or less. Two weeks is common, but it is a team choice.' },
-      { q: 'Which one is a good story?', options: ['As a reader, I want to save an article so I can read it offline', 'Refactor ArticleRepository', 'Make the app better'], a: 0, why: 'It names a user, a need and the value. A refactor is a task, and "make it better" has nothing to test.' },
-      { q: 'The team finishes few items and every card stays "in progress" for weeks. Which change helps most?', options: ['Lower the WIP limit and swarm on the oldest card', 'Add more columns to the board', 'Make stand-ups longer'], a: 0, why: 'High WIP spreads attention thin, so everything ages. Fewer items in progress means each one finishes sooner.' },
-    ],
-  });
+Get the hourly rain data         0.5 - 1 day
+Draw one bar per hour            0.5 - 1 day
+Bar colours and spacing          0.5 - 1 day
+Hour labels under the bars       0.5 - 1 day
+Message when there is no data    0.5 - 1 day
+Tests                            0.5 - 1 day
+Review comments                  0.5 - 1 day
+Check on a small phone           0.5 - 1 day
+                                 -----------
+Total                            4 - 8 days
 
-  // 3 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'estimation',
-    title: 'Requirements and estimation',
-    tagline: 'Split work small, estimate in ranges, and expect early guesses to be far off.',
-    level: 'intermediate',
-    body: `
-<p>A user story names who wants what and why. Before you estimate it, <b>split</b> it until each piece fits in a sprint. Bill Wake's INVEST checklist says a good story is Independent, Negotiable, Valuable, Estimable, Small and Testable. "Offline reading" is too big; "save one article", "list saved articles" and "open a saved article offline" are each small and still useful.</p>
-<p>Teams estimate in <b>story points</b> (relative size: this is about twice that) or in time. Points avoid arguing about hours and, with <b>velocity</b> (points finished per sprint), give a forecast. Time estimates are easier to explain to people outside the team. Either way, estimates go wrong for the same reasons: unknowns nobody listed yet, optimism, and forgetting work that isn't code, like review, QA, translations, store review and waiting for an API.</p>
-<p>Steve McConnell's <b>cone of uncertainty</b> shows that an estimate made at the very first idea can be off by a factor of 4 either way, and that the range narrows only as the team makes decisions that remove unknowns. Drop estimates at each stage in the demo, then turn decisions off.</p>`,
-    code: `// Forecast with a range, from real velocity, not one hopeful number
-fun forecastSprints(remainingPoints: Int, recentVelocities: List<Int>): IntRange {
-    require(recentVelocities.isNotEmpty() && recentVelocities.all { it > 0 })
-    fun sprintsAt(velocity: Int) = (remainingPoints + velocity - 1) / velocity   // round up
-    val best = sprintsAt(recentVelocities.max())
-    val worst = sprintsAt(recentVelocities.min())
-    return best..worst
-}
+Next update: Thursday, once the first bars are drawn.`,
+        remember: 'Break the work into tasks of a day or less, count the work that isn’t code, and answer with a range you update as you learn.',
+        mistakes: [
+          { title: 'Estimating only the code', bad: 'Draw the chart: 2 days', good: 'Draw the bars:    0.5 - 1 day\nBar colours:      0.5 - 1 day\nTests:            0.5 - 1 day\nReview comments:  0.5 - 1 day', why: 'Tests, reviews and checks on real phones take real time. Leaving them out makes every estimate too small.' },
+        ],
+        terms: [
+          { term: 'estimate', def: 'A best guess of how long a piece of work will take, best given as a range.' },
+          { term: 'uncertainty', def: 'What you don’t know yet about a piece of work. The more there is, the wider the range.' },
+          { term: 'breaking work down', def: 'Splitting a feature into small tasks you can each picture from start to finish.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Add up Sam’s tasks to get the range.', code: 'Share button        0.5 - 1 day\nText to share       0.5 - 1 day\nTests               0.5 - 1 day\nReview comments     0.5 - 1 day\nTotal               [[2]] - [[4]] days', why: 'Four lows of 0.5 make 2; four highs of 1 make 4.' },
+          { type: 'bug', prompt: 'Sam doesn’t know yet how sharing works on older phones. Tap the line that hides that.', code: 'Maya: How long for the share button?\nSam: Exactly 2 days.\nMaya: What could change that?\nSam: How sharing works on older phones.', bug: 1, fix: 'Sam: 2 to 4 days. I’ll know more by Thursday.', why: 'He has a real unknown, so one exact number is a promise he can’t keep. A range, plus when it will get narrower, is honest.' },
+        ],
+        quiz: [
+          { q: 'Why break a feature into small tasks before estimating?', options: ['Small tasks are easier to picture, and splitting turns up forgotten work', 'It makes the work itself go faster', 'So that each person gets exactly one task'], a: 0, why: 'You can guess a one-day task far better than a vague two-week one.' },
+          { q: 'Which answer is the most useful estimate?', options: ['“3 to 6 days; I’ll know more once I see the data.”', '“Exactly 4 days.”', '“No idea.”'], a: 0, why: 'A range shows the uncertainty, and saying what would narrow it gives the team a plan.' },
+          { q: 'Which work is often left out of estimates?', options: ['Tests, review comments and checks on different phones', 'Writing the main code', 'Choosing a ticket'], a: 0, why: 'It doesn’t feel like “the feature”, but it takes real days.' },
+        ],
+        docs: [['Adding sub-issues', 'https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues'], ['About issues', 'https://docs.github.com/en/issues/tracking-your-work-with-issues/about-issues']],
+      },
 
-fun main() {
-    val range = forecastSprints(remainingPoints = 55, recentVelocities = listOf(18, 12, 21, 15))
-    println("Offline reading: ${'$'}{range.first} to ${'$'}{range.last} sprints")   // 3 to 5 sprints
-}`,
-    remember: 'Give a range, say what would narrow it, and re-estimate when you learn something. A single early number is a guess wearing a suit.',
-    predict: {
-      q: "Decisions are on. The team has split the stories and agreed on the design. What does a \"10 day\" estimate mean now?",
-      options: ["2.5 to 40 days", "About 6.7 to 15 days", "Exactly 10 days"],
-      a: 1,
-      why: "Each decision removes unknowns, so the cone narrows. At the design stage it is about 1.5× either way, not 4×.",
-    },
-    visual(el) {
-      const STAGES = ['Idea', 'Stories split', 'Design agreed', 'Half built', 'Nearly done'];
-      const HI = [4, 2, 1.5, 1.25, 1.1];
-      const W = 320, H = 210, X0 = 44, X1 = 300, Y = v => 105 - Math.log2(v) * 42;
-      const xs = STAGES.map((_, k) => X0 + (X1 - X0) * k / (STAGES.length - 1));
-      let decide = true, stage = 0;
-      const svg = svgEl('svg', { class: 'swe-svg', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Cone of uncertainty: actual effort divided by estimate, by project stage' });
-      const cone = svgEl('polygon', { class: 'swe-cone' });
-      const dots = svgEl('g', {});
-      svg.append(cone);
-      [4, 2, 1, 0.5, 0.25].forEach(v => {
-        svg.append(svgEl('line', { class: v === 1 ? 'swe-one' : 'swe-axis', x1: X0 - 6, x2: X1 + 6, y1: Y(v), y2: Y(v), 'stroke-opacity': v === 1 ? 1 : 0.35 }));
-        const t = svgEl('text', { x: 2, y: Y(v) + 3 }); t.textContent = `${v}x`; svg.append(t);
-      });
-      STAGES.forEach((s, k) => { const t = svgEl('text', { x: xs[k], y: H - 2, 'text-anchor': 'middle' }); t.textContent = String(k + 1); svg.append(t); });
-      svg.append(dots);
-      const bound = k => decide ? HI[k] : 4;
-      function drawCone() {
-        const top = xs.map((x, k) => `${x},${Y(bound(k))}`), bot = xs.map((x, k) => `${x},${Y(1 / bound(k))}`).reverse();
-        cone.setAttribute('points', [...top, ...bot].join(' '));
-      }
-      const msg = out('');
-      const range = h('b', {}, '');
-      function info() {
-        const b = bound(stage), lo = 10 / b, hi = 10 * b;
-        range.textContent = `${(1 / b).toFixed(2)}x to ${b}x`;
-        return `A "10 day" estimate here really means <b>${lo.toFixed(1)} to ${hi.toFixed(0)} days</b>.`;
-      }
-      function drop() {
-        const b = bound(stage);
-        for (let i = 0; i < 10; i++) {
-          // ponytail: skew toward overruns, like real projects; uniform in log space inside the cone
-          const r = Math.pow(2, (Math.random() * 2 - 0.75) * Math.log2(b));
-          dots.append(svgEl('circle', { class: 'swe-dot', cx: xs[stage] + (Math.random() * 16 - 8), cy: Y(Math.min(b, Math.max(1 / b, r))), r: 3.6, style: `animation-delay:${i * 40}ms` }));
-        }
-        const late = decide ? '' : ' Decisions are off, so the team is no surer than on day one.';
-        say(msg, `Stage ${stage + 1}, ${STAGES[stage]}: 10 estimates dropped. Each dot is actual ÷ estimate; 1x means spot on. ${info()}${late}`);
-      }
-      const stageP = picker('Stage', STAGES.map((s, k) => `${k + 1} ${s}`), k => { stage = k; say(msg, `Stage ${k + 1}: ${STAGES[k]}. ${info()} Press "Estimate 10 times".`); });
-      const decB = act('Decisions made: yes', () => {
-        decide = !decide; decB.textContent = `Decisions made: ${decide ? 'yes' : 'no'}`; decB.setAttribute('aria-pressed', String(decide));
-        dots.replaceChildren(); drawCone();
-        say(msg, decide ? 'Decisions on: each stage answers open questions, so the cone narrows.' : 'Decisions off: the team keeps building without settling scope or design. The cone stays as wide as on day one. It only narrows when you remove unknowns.');
-      }, { 'aria-pressed': 'true' });
-      el.append(h('div', { class: 'swe-stage' }, svg,
-        h('div', { class: 'swe-stats' }, h('span', { class: 'swe-stat' }, 'range at this stage: ', range)),
-        h('p', { class: 'swe-note' }, 'Ranges follow McConnell\'s cone (0.25x to 4x at the initial concept, down to 0.9x to 1.1x); the stage names are simplified and the dots are random.')),
-        stageP, h('div', { class: 'controls' }, act('Estimate 10 times', drop), decB), msg);
-      drawCone();
-      say(msg, `Stage 1: Idea. ${info()} Press "Estimate 10 times".`);
-    },
-    deeper: [
       {
-        title: 'Splitting a story',
-        body: `<p>Split along the user's path, not along layers. "Backend, then UI" gives two halves that are each useless alone. Useful splits for a mobile feature:</p>
-<ul><li><b>Happy path first:</b> save works online; errors and offline come next.</li><li><b>By operation:</b> save, list, remove.</li><li><b>By data:</b> text only first, images later.</li><li><b>By platform or screen size:</b> phone first, tablet layout as its own story.</li></ul>
-<p>Each slice should still pass its own acceptance criteria and be shippable behind a <a href="#launch.flags">feature flag</a>.</p>`,
-      },
-      {
-        title: 'Points, velocity and why points are relative',
-        body: `<p>The Agile Alliance glossary describes story points as relative measures of effort, not fixed durations. The team picks a reference story ("Share button = 2") and sizes others against it. Velocity is how many points the team actually finishes per sprint. Dividing the remaining points by a range of past velocities gives a forecast range, like the code above.</p>
-<p>Points stop working when they become targets. If velocity is a performance goal, estimates inflate and the forecast means nothing.</p>`,
-      },
-      {
-        title: 'List the work that is not code',
-        body: `<p>Most mobile estimates miss the same items. Before you give a number, walk this list:</p>
-<ul><li>Code review rounds and CI fixes</li><li>Testing on small, large and old devices, light and dark</li><li>Strings in every language you ship (English and Spanish, say)</li><li>Analytics events and their dashboards</li><li>Waiting for a backend endpoint or a design</li><li>Store review and a staged rollout</li></ul>`,
-      },
-    ],
-    mistakes: [
-      { title: 'One number, given on day one', bad: 'PM: How long for offline reading?\nDev: Two weeks.', good: 'Dev: Between 2 and 6 weeks today.\nI can narrow it once we agree on\nimages and sync. I\'ll update Friday.', why: 'At the idea stage the cone is widest. A range is honest, and naming what would narrow it turns the estimate into a plan.' },
-      { title: 'Splitting by layer', bad: 'Story 1: Saved articles API\nStory 2: Saved articles Room table\nStory 3: Saved articles screen', good: 'Story 1: Save one article and see it listed\nStory 2: Open a saved article offline\nStory 3: Remove a saved article', why: 'Layer slices deliver nothing to a user until all three are done. User-path slices each work end to end, so you can ship and learn after the first.' },
-    ],
-    terms: [
-      { term: 'Story point', def: 'A relative unit of effort for a story, compared against reference stories, not a fixed number of hours.' },
-      { term: 'Velocity', def: 'How many story points a team actually finishes in a sprint, used to forecast.' },
-      { term: 'Cone of uncertainty', def: 'The range of estimate error over a project: widest at the start, narrowing only as decisions remove unknowns.' },
-      { term: 'INVEST', def: 'Checklist for a good story: Independent, Negotiable, Valuable, Estimable, Small, Testable.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Round up, so 55 points at 18 per sprint is 4 sprints, not 3.', code: 'fun sprintsAt(points: Int, velocity: Int) =\n    (points + velocity - [[1]]) / [[velocity]]', why: 'Adding velocity - 1 before integer division rounds up. A partial sprint is still a sprint.' },
-      { type: 'bug', prompt: 'This forecast should be a range from the best to the worst sprint. Tap the wrong line.', code: 'fun forecast(points: Int, velocities: List<Int>): IntRange {\n    val best = sprintsAt(points, velocities.max())\n    val worst = sprintsAt(points, velocities.max())\n    return best..worst\n}', bug: 2, fix: '    val worst = sprintsAt(points, velocities.min())', why: 'The worst case uses the lowest velocity. With max on both lines the range collapses to one hopeful number.' },
-    ],
-    quiz: [
-      { q: 'At the idea stage you estimate 10 days. Using the cone, what range should you expect?', options: ['About 2.5 to 40 days', 'About 9 to 11 days', 'Exactly 10 days if the team is good'], a: 0, why: 'McConnell\'s cone starts at 0.25x to 4x. Skill doesn\'t remove unknowns that nobody has decided yet.' },
-      { q: 'The team is halfway through but has not settled scope or design. What does the cone say?', options: ['The range is still wide, because it narrows only with decisions', 'It is narrow, because half the time has passed', 'It no longer applies after the start'], a: 0, why: 'Time passing doesn\'t remove uncertainty. Answering open questions does.' },
-      { q: 'Which split of "offline reading" is best?', options: ['Save and list, then open offline, then remove', 'API, then database, then UI', 'Android first, tests later'], a: 0, why: 'Each slice works end to end for the user, so it can be tested and shipped alone.' },
-      { q: 'Velocities were 18, 12, 21 and 15. 55 points remain. Which forecast is the most honest?', options: ['3 to 5 sprints', '3 sprints', '55 / 16.5 = 3.33 sprints'], a: 0, why: '55/21 rounds up to 3 and 55/12 rounds up to 5. A range shows the real spread; a precise decimal hides it.' },
-    ],
-  });
-
-  // 4 ─────────────────────────────────────────────
-  const DOC = [
-    { k: 'Problem', t: 'Readers lose articles they meant to read later, and the app shows nothing on the metro without signal.', ask: 'What problem are we solving, and for whom? Is there data, like support tickets?' },
-    { k: 'Goals', t: 'Save up to 200 articles; open any saved article offline with text and images.', ask: 'How will we know it worked? I need something measurable.' },
-    { k: 'Non-goals', t: 'No sync across devices in v1. No saving videos.', ask: 'What are we explicitly not doing? Otherwise sync and video will creep in.' },
-    { k: 'Options', t: 'A) Room + WorkManager prefetch. B) HTTP cache only. C) Do nothing, add a "read later" link to email.', ask: 'What else did you consider? Is "do nothing" on the list?' },
-    { k: 'Decision', t: 'A: Room + WorkManager. HTTP cache can be evicted any time, so saved articles could vanish.', ask: 'Which option, and why that one over the others?' },
-    { k: 'Risks', t: 'Storage use on small phones: cap images at 1 MB each, show storage used in settings. Backend must add an article-by-id endpoint.', ask: 'What could go wrong, and what do we need from other teams?' },
-  ];
-  lessons.push({
-    id: 'design-doc',
-    title: 'Writing a design doc or RFC',
-    tagline: 'Write down the problem, the options and the decision before the code makes the decision for you.',
-    level: 'intermediate',
-    body: `
-<p>A design doc (some teams call it an RFC, a "request for comments") is a short document you write before building something big or hard to undo. It makes the team agree on the problem and the approach while changing your mind costs a comment, not a rewrite.</p>
-<p>A useful doc has six parts. <b>Problem</b>: what hurts, for whom. <b>Goals</b>: what success looks like, measurably. <b>Non-goals</b>: what you are deliberately not doing. <b>Options</b>: two or three real alternatives, including "do nothing". <b>Decision</b>: which one, and why it beat the others. <b>Risks</b>: what could go wrong and what you need from other teams.</p>
-<p>Keep it to a few pages and share it early, while it is still a draft. The demo follows one feature built doc-first and code-first. Kotlin itself uses a public process like this: changes to the language are proposed and discussed as documents in the <a href="https://github.com/Kotlin/KEEP" target="_blank" rel="noopener">KEEP</a> repository.</p>`,
-    code: `# Design: Offline saved articles            Status: In review
-Author: Maya   Reviewers: Android, Backend, Product   Updated: 2026-10-18
+        id: 'design-doc', ignore: ['take','plus'],
+        title: 'Design documents',
+        tagline: 'Write the plan down, compare the options, and decide before you build.',
+        goals: ['Name the parts of a short design doc', 'Compare options by their trade-offs', 'Explain why the doc comes before the code'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Users ask for their starred cities to come back when they get a new phone. Sam could keep the stars on the phone and use Android’s own backup, or store them in a user account online. Both work, and they mean very different amounts of work. If Sam picks alone and starts coding, the team may tell him in review, three weeks later, that they wanted the other one.</p>
+<p>A <em>design document</em> (design doc) is a short proposal, one or two pages, written before the code. It says: the <b>problem</b>, the <b>goals</b>, the <b>non-goals</b> (what you deliberately won’t do, so the work doesn’t keep growing), the <b>options</b> you considered, and the <b>decision</b> with its reason. Teammates read it and comment, like a review of a pull request, but for a plan. Design docs are often written in <em>Markdown</em>, plain text where a line starting with <code>#</code> is a heading and <code>##</code> a smaller heading.</p>
+<p>The heart of it is <em>trade-offs</em>: each option gains something and pays for it with something else. An online account follows the user everywhere, but needs sign-in, a server (a computer online that keeps everyone’s stars) and weeks of work. Writing the options side by side lets the team choose on purpose. Changing a paragraph takes minutes; changing finished code takes weeks.</p>`,
+        visual(el) {
+          const SECS = [
+            ['Problem', 'Users who get a new phone lose their starred cities. 12 messages this month asked for them back.'],
+            ['Goals', 'Stars still stay after a restart (true since 1.4). A user who moves to a new phone gets them back.'],
+            ['Non-goals', 'No sharing stars with other people. No backing up other settings, like °C or °F.'],
+            ['Options', 'A) Keep it as it is: 0 days, but stars are lost with the phone. B) Online account: follows the user anywhere, but 3 weeks, needs sign-in and a server. C) Phone plus Android’s backup: 3 days; needs backup turned on.'],
+          ];
+          const doc = h('div', { class: 'swe-doc' });
+          const quote = h('p', { class: 'swe-quote' });
+          const stage = h('div', { class: 'ui-stage swe-stage' }, doc, quote);
+          const frames = [
+            { k: 0, say: 'Sam starts with a title and a status: <b>Draft</b>. One page is enough.' },
+            { k: 1, say: '<b>Problem</b>: what is wrong, for whom, and how we know. The 12 messages show it is real.' },
+            { k: 2, say: '<b>Goals</b>: what must be true when the work is done, written so anyone can check it.' },
+            { k: 3, say: '<b>Non-goals</b>: things that sound related but are not part of this work. They stop the work from growing during review.' },
+            { k: 4, say: '<b>Options</b>, each with what it gains and what it costs. B gives users the most, and costs the most.' },
+            { k: 4, bare: true, q: 'Lin: “Why C and not B? In a year someone will ask.”', say: 'The decision says <b>C</b>, but not why. Lin comments on it in the review.' },
+            { k: 4, done: true, q: 'Lin: “Approved. Clear reason, and we know when to look again.”', say: 'Sam adds the reason. The team agrees, the status becomes <b>Accepted</b>, and only now does the coding start.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'Option B, an online account, gives users the most. Why might the team still choose C?',
+              options: ['It meets both goals for much less work: a trade-off', 'B is impossible to build', 'Teams always pick the last option'],
+              a: 0,
+              why: 'C meets both goals for most users in 3 days. B would take 3 weeks for a little more.',
+            },
+            draw(f) {
+              const parts = [h('h4', {}, 'Design: starred cities on a new phone'), h('p', { class: 'swe-note' }, 'Author: Sam · Reviewers: Ada, Lin · Status: ' + (f.done ? 'Accepted' : 'Draft'))];
+              SECS.slice(0, f.k).forEach(([k, t]) => parts.push(h('div', { class: 'swe-sec' }, h('b', {}, k), h('span', {}, t))));
+              if (f.bare) parts.push(h('div', { class: 'swe-sec swe-miss' }, h('b', {}, 'Decision'), h('span', {}, 'Option C.')));
+              if (f.done) parts.push(h('div', { class: 'swe-sec' }, h('b', {}, 'Decision'), h('span', {}, 'Option C: it meets both goals in 3 days. B would take 3 weeks for little more. We look at B again if the app ever gets accounts.')));
+              if (!f.k) parts.push(h('p', { class: 'swe-empty' }, '(empty page)'));
+              doc.replaceChildren(...parts);
+              doc.classList.toggle('swe-ok', !!f.done);
+              quote.hidden = !f.q;
+              quote.className = 'swe-quote' + (f.done ? ' swe-fair' : f.bare ? ' swe-blame' : '');
+              quote.textContent = f.q || '';
+            },
+          });
+        },
+        code: `# Design: starred cities on a new phone
+Author: Sam   Reviewers: Ada, Lin   Status: Accepted
 
 ## Problem
-Readers lose articles they meant to read later. On the metro the app shows nothing.
+Users who get a new phone lose their starred cities.
+12 messages this month asked for them back.
 
 ## Goals
-- Save up to 200 articles; open any saved one offline with text and images.
-- 10% of weekly readers save at least one article within 2 months.
+- Stars still stay after a restart (true since 1.4).
+- A user who moves to a new phone gets them back.
 
 ## Non-goals
-- Sync across devices (v2). Saving videos.
+- No sharing stars with other people.
+- No backing up other settings, like °C or °F.
 
 ## Options
-A) Room tables + WorkManager prefetch of images
-B) Rely on the HTTP cache
-C) Do nothing; add "read later" by email
+A) Keep it as it is. 0 days. Stars are lost with the phone.
+B) Online account. 3 weeks. Needs sign-in and a server.
+C) Phone plus Android's backup. 3 days. Needs backup turned on.
 
 ## Decision
-A. The HTTP cache can evict entries at any time, so B could lose saved articles.
-C does not work offline.
-
-## Risks and dependencies
-- Storage on small phones: cap images at 1 MB, show usage in Settings.
-- Backend: needs GET /articles/{id} with full body. Owner: backend team, due sprint 41.
-
-## Open questions
-- Do saved articles count as "read" in analytics?`,
-    remember: 'Problem, goals, non-goals, options, decision, risks. If you can\'t write the non-goals and the rejected options, you haven\'t designed it yet.',
-    visual(el) {
-      Lab.ui.timeline(el, {
-        lanes: ['Doc first', 'Code first'],
-        span: 26, unit: 'days',
-        predict: {
-          q: 'Both teams will hit the same surprise: the backend has no article-by-id endpoint yet. Which team pays more to deal with it?',
-          options: ['The doc-first team: they have to rewrite the doc', 'The code-first team: they find out after the code is built', 'Both pay the same'],
-          a: 1,
-          why: 'In a draft, changing the plan costs a comment. After three weeks of code, it costs the code, the tests and the review.',
-        },
-        frames: [
-          { now: 0, say: 'One feature, offline saved articles, built by two teams. The numbers are illustrative.' },
-          { bars: [{ lane: 0, from: 0, to: 1, label: 'draft', tone: 'warm' }, { lane: 1, from: 0, to: 1, label: 'build' }], say: 'The first team writes a two-page draft: problem, goals, non-goals, options, decision, risks. The second starts coding.' },
-          { bars: [{ lane: 0, from: 1, to: 3, label: 'review', tone: 'warm' }, { lane: 1, from: 1, to: 3, label: 'build' }], marks: [{ at: 2, label: 'found', tone: 'warm' }], say: 'In review, backend reads the Risks section and says the endpoint does not exist. The plan changes. It costs a few comments.' },
-          { bars: [{ lane: 0, from: 3, to: 18, label: 'build agreed option', tone: 'ok' }, { lane: 1, from: 3, to: 15, label: 'build' }], say: 'The first team builds what everyone agreed on. The second team is still building on a guess.' },
-          { bars: [{ lane: 1, from: 15, to: 17, label: 'PR review', tone: 'warm' }], marks: [{ at: 16, label: 'found', tone: 'err' }], say: 'The pull request reaches backend. Same surprise, found 14 days later, with the code already written.' },
-          { bars: [{ lane: 1, from: 17, to: 25, label: 'rework', tone: 'err' }], now: 25, say: 'The second team reworks code, tests and review. The doc-first team shipped at day 18.' },
+C: it meets both goals in 3 days. Look at B again if we add accounts.`,
+        remember: 'Before big work, write one page: problem, goals, non-goals, options with their trade-offs, and a decision with its reason.',
+        mistakes: [
+          { title: 'A decision with no reason', bad: '## Decision\nOption C.', good: '## Decision\nOption C: it meets both goals in 3 days.\nB would take 3 weeks for little more.', why: 'In a year, someone will ask “why not B?”. The reason is the part of the decision that stays useful.' },
         ],
-      });
-    },
-    deeper: [
-      {
-        title: 'Non-goals do the most work',
-        body: `<p>Goals are easy to agree on. Non-goals are where scope fights get settled before they start. "No cross-device sync in v1" saves a week of review comments and stops the backend team from building an endpoint nobody will call yet.</p>
-<p>A non-goal is not "never". It is "not in this doc". Point to where it will be handled, if anywhere.</p>`,
-      },
-      {
-        title: 'Options need real trade-offs',
-        body: `<p>Write each option so that a reasonable person could pick it. One strong option and two straw men is not a comparison. For each option, say what it costs (time, complexity, app size, battery, storage) and what it risks. Always include "do nothing" or "the smallest thing": sometimes it wins, and when it doesn't, saying why makes the case for the real work.</p>`,
-      },
-      {
-        title: 'When a doc is worth writing',
-        body: `<p>Not every change needs one. Write a doc when at least one of these is true:</p>
-<ul><li>More than one team has to change something (app and backend, Android and iOS).</li><li>The decision is hard to undo: a database schema, a public API, a new library across all <a href="#arch.modularization-arch">modules</a>.</li><li>The work is more than a couple of weeks.</li><li>People already disagree about the approach.</li></ul>
-<p>For a small, reversible change, a good pull request description is enough.</p>`,
-      },
-      {
-        title: 'After the decision',
-        body: `<p>Mark the doc's status (Draft, In review, Accepted, Superseded) and link it from the code or the module README. When the design changes later, update the doc or write a short new one that supersedes it. A design doc that silently disagrees with the code is worse than none, because people trust it.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Writing the doc after the code', bad: '1. Build the feature (3 weeks)\n2. Write a design doc describing it\n3. Review finds a backend conflict', good: '1. Write a 2-page draft (1 day)\n2. Review with backend and product\n3. Build the agreed option', why: 'A doc written afterwards documents a decision nobody could influence. Its value is the cheap disagreement before the expensive work.' },
-      { title: 'A decision with no reason', bad: '## Decision\nWe will use Room.', good: '## Decision\nRoom, because the HTTP cache can evict\nentries at any time and saved articles\nmust not disappear.', why: 'In a year someone will ask "why not the cache?". The reason is the part of the decision that stays useful.' },
-    ],
-    terms: [
-      { term: 'Design doc', def: 'A short document that states a problem, options and the chosen approach before building.' },
-      { term: 'RFC', def: 'Request for comments: a proposal shared so others can review it before it is decided.' },
-      { term: 'Non-goal', def: 'Something deliberately left out of the scope of a design, written down so nobody assumes it is included.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Fill in the two missing section headings of the design doc template.', code: '## Problem\n## Goals\n## [[Non-goals|Non goals|Nongoals]]\n## Options\n## [[Decision]]\n## Risks', why: 'Non-goals fence the scope. Decision names the chosen option and why it beat the others.' },
-      { type: 'bug', prompt: 'One "Goals" line is not a goal you can check. Tap it.', code: '## Goals\n- Save up to 200 articles per user\n- Open a saved article offline in under 1 s\n- Make reading delightful\n- 10% of weekly readers save one article in 2 months', bug: 3, fix: '- Saved articles survive app updates and restarts', why: 'A goal must be checkable. "Delightful" can\'t pass or fail, so it settles nothing in review.' },
-    ],
-    quiz: [
-      { q: 'A reviewer asks "why not just use the HTTP cache?". Which section should already answer that?', options: ['Options and Decision', 'Problem', 'Goals'], a: 0, why: 'Options lists the alternatives and Decision says why the chosen one beat them, including the cache.' },
-      { q: 'Which change most needs a design doc?', options: ['Changing the database schema used by app and backend', 'Renaming a private function', 'Fixing a typo in a string'], a: 0, why: 'It crosses teams and is hard to undo. The other two are small and reversible, so a PR description is enough.' },
-      { q: 'Product keeps asking for cross-device sync during review. What should the doc have had?', options: ['A non-goal: no sync in v1, planned for v2', 'A longer Problem section', 'More code samples'], a: 0, why: 'Writing it as a non-goal settles the scope once, in writing, instead of in every meeting.' },
-    ],
-  });
-
-  // 5 ─────────────────────────────────────────────
-  const DIFF = [
-    { s: 'class ArticleViewModel(' },
-    { s: '    private val repo: ArticleRepository,' },
-    { s: '    private val session: Session,' },
-    { s: ') : ViewModel() {' },
-    { s: '    private val _message = MutableStateFlow<String?>(null)' },
-    { s: '    fun save(a: Article) {', sev: 'nit', note: 'Nit: name the parameter <code>article</code>; one letter tells the reader nothing.' },
-    { s: '        GlobalScope.launch {', sev: 'must', note: '<code>GlobalScope</code> outlives the ViewModel, so the job keeps running after the screen closes. Use <code>viewModelScope</code>.' },
-    { s: '            try {' },
-    { s: '                repo.save(a.id, session.token!!)', sev: 'must', note: '<code>token!!</code> crashes for a logged-out reader. Handle the null case (show login, or disable Save).' },
-    { s: '                Log.d("Save", "token=" + session.token)', sev: 'must', note: 'Logs the auth token. Anyone with logcat access, or a log upload, gets the session. Remove it.' },
-    { s: '                _message.value = "Saved"', sev: 'should', note: 'Hard-coded UI text can\'t be translated. Expose a state or a string resource id and let the UI pick the text.' },
-    { s: '            } catch (e: Exception) { }', sev: 'must', note: 'Swallows every error, so the reader sees nothing when saving fails. It also catches <code>CancellationException</code>. Show an error state and rethrow cancellation.' },
-    { s: '        }' },
-    { s: '    }' },
-    { s: '}' },
-  ];
-  lessons.push({
-    id: 'code-review',
-    title: 'Code review',
-    tagline: 'Look for what matters most first, keep pull requests small, and write comments a person is happy to receive.',
-    level: 'intermediate',
-    body: `
-<p>Code review catches bugs, but it also spreads knowledge and keeps the codebase consistent. Google's public <a href="https://google.github.io/eng-practices/review/" target="_blank" rel="noopener">code review guide</a> sets the bar: approve a change once it definitely improves the overall health of the code, even if it isn't perfect. There is no perfect code, only better code.</p>
-<p>Read in order of what matters. First the <b>design</b>: does this belong here, does it fit the <a href="#arch.layers">architecture</a>? Then <b>functionality</b> (does it do what the author meant, for every user), <b>complexity</b>, <b>tests</b>, and only then naming, comments and style. Lint and formatters should catch style, so humans don't have to.</p>
-<p>Label each comment so the author knows what is required: <b>Nit:</b> for small polish, <b>Optional:</b> for ideas, plain comments for must-fix. Review the diff in the demo: tap every line you would comment on, then submit.</p>`,
-    code: `// The same change after review
-class ArticleViewModel(
-    private val repo: ArticleRepository,
-    private val session: Session,
-) : ViewModel() {
-    private val _state = MutableStateFlow<SaveState>(SaveState.Idle)
-    val state: StateFlow<SaveState> = _state
-
-    fun save(article: Article) {
-        val token = session.token ?: run { _state.value = SaveState.NeedsLogin; return }
-        viewModelScope.launch {
-            _state.value = try {
-                repo.save(article.id, token)
-                SaveState.Saved                    // UI shows R.string.saved
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: IOException) {
-                SaveState.Failed                   // UI shows R.string.save_failed
-            }
-        }
-    }
-}`,
-    remember: 'Design first, style last. Label nits as nits. Approve when the change makes the code healthier, not when it is perfect.',
-    predict: {
-      q: "Which line in this diff needs the most urgent comment?",
-      options: ["<code>fun save(a: Article)</code>: the parameter name", "<code>Log.d(\"Save\", \"token=\" + session.token)</code>: it logs the auth token", "<code>_message.value = \"Saved\"</code>: hard-coded text"],
-      a: 1,
-      why: "A leaked session token is a security bug and must be fixed before merge. The name is a Nit and the text is a should-fix.",
-    },
-    visual(el) {
-      const flagged = new Set();
-      let submitted = false;
-      const lines = DIFF.map((d, i) => h('button', { class: 'swe-dl', 'aria-pressed': 'false', onclick() {
-        if (submitted) return;
-        flagged.has(i) ? flagged.delete(i) : flagged.add(i);
-        this.classList.toggle('swe-flag', flagged.has(i)); this.setAttribute('aria-pressed', String(flagged.has(i)));
-        count.textContent = String(flagged.size);
-      } }, h('span', { class: 'swe-ln' }, String(i + 1)), h('code', { html: hl(d.s) })));
-      const count = h('b', {}, '0');
-      const notes = h('ol', { class: 'swe-notes' });
-      const msg = out('Tap each line you would leave a comment on. Tap again to unflag.');
-      const SEV = { must: ['Must fix', ''], should: ['Should fix', 'swe-should'], nit: ['Nit', 'swe-nit'] };
-      function submit(reveal) {
-        submitted = true;
-        let hit = 0, miss = 0, fals = 0;
-        notes.replaceChildren();
-        DIFF.forEach((d, i) => {
-          const f = flagged.has(i) || reveal;
-          lines[i].classList.remove('swe-flag');
-          if (d.sev && f) { hit++; lines[i].classList.add('swe-hit'); }
-          else if (d.sev) { miss++; lines[i].classList.add('swe-miss'); }
-          else if (flagged.has(i)) { fals++; lines[i].classList.add('swe-false'); }
-          if (d.sev) notes.append(h('li', { class: 'drop-in' }, h('span', { class: `swe-sev ${SEV[d.sev][1]}` }, SEV[d.sev][0]), `Line ${i + 1}: `, h('span', { html: d.note })));
-        });
-        const total = DIFF.filter(d => d.sev).length;
-        say(msg, reveal ? `All ${total} comments shown. Green lines have a comment; the list below says why and how serious.`
-          : `You found <b>${hit} of ${total}</b>${miss ? `; ${miss} missed (red)` : ''}${fals ? `; ${fals} flag${fals === 1 ? '' : 's'} on fine lines (dashed)` : ''}. ${hit === total && !fals ? 'A clean review.' : 'Read the notes, then Reset to try again.'} With four must-fix items, the verdict is "request changes".`);
-      }
-      el.append(h('div', { class: 'swe-stage' }, h('span', { class: 'swe-label' }, 'Pull request #318: save articles'), h('div', { class: 'swe-diff' }, lines),
-        h('span', { class: 'swe-stat' }, 'flagged lines: ', count), notes),
-        h('div', { class: 'controls' }, act('Submit review', () => submit(false)), act('Show all comments', () => submit(true))), msg);
-    },
-    deeper: [
-      {
-        title: 'Small pull requests get better reviews',
-        body: `<p>Google's guide says about 100 lines is usually a reasonable size for a change, and 1,000 lines is usually too large, with the number of files mattering too. A big PR gets a skim and an approval; a small one gets real attention. It is also easier to revert.</p>
-<p>Split by concern: one PR adds the Room table and its tests, the next adds the Save button behind a <a href="#launch.flags">flag</a>, the next wires the screen. Refactors go in their own PR, before the feature. See <a href="#git.pull-requests">pull requests</a> for the Git side.</p>`,
-      },
-      {
-        title: 'Writing comments people can act on',
-        body: `<p>Comment on the code, not the person: "this call can throw when the token is null" rather than "you forgot null". Say why, so the author learns the rule and not just the fix. Label severity, so a nit isn't mistaken for a blocker. Point out good things too.</p>
-<p>If you have to explain a piece of code in the review thread, ask for the code to be clearer instead, or for a code comment, because the next reader won't see the thread.</p>`,
-        code: `Must fix: GlobalScope keeps running after the screen closes,
-so a slow save can update a dead ViewModel. viewModelScope
-cancels with it.
-
-Nit: \`a\` -> \`article\`.
-
-Optional: this mapping looks like the one in FeedViewModel.
-Worth a shared function in a follow-up?`,
-      },
-      {
-        title: 'Receiving review',
-        body: `<p>The comments are about the code. If you don't understand one, ask. If you disagree, explain your reasoning and the trade-off, and share context the reviewer may not have. When a reviewer misunderstood the code, that is a sign to make the code clearer, not only to reply.</p>
-<p>Respond quickly in both directions. Google's guide sets one business day as the maximum time to respond to a review request; slow reviews push people toward bigger PRs, which makes reviews slower still.</p>`,
-      },
-      {
-        title: 'A checklist for Android PRs',
-        body: `<p>Keep a short team checklist for the things humans must judge and tools can't:</p>
-<ul><li>Coroutines run in a lifecycle scope and handle cancellation.</li><li>No secrets or personal data in logs.</li><li>User-visible text is in string resources, in every language you ship.</li><li>New screens work in dark theme, large font and small screens.</li><li>Tests cover the new behavior; <a href="#tools.ci">CI</a> is green.</li></ul>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Fifty style comments, no design comment', bad: 'Nit: trailing space (x23)\nNit: import order (x14)\nLGTM', good: 'Lint/formatter in CI handles style.\nComment: Should saved articles live in\nthe feed module? It pulls Room into it.', why: 'Humans are best at design and behavior. Automate style with <a href="#tools.lint">lint</a> and a formatter, so review time goes where only a person can help.' },
-      { title: 'A 2,000-line PR', bad: 'PR #300: Offline reading (64 files, +2,113)', good: 'PR #301: Saved articles table + DAO tests\nPR #302: Save button behind a flag\nPR #303: Saved list screen', why: 'Large PRs get skimmed. Small, single-purpose PRs get real review and are easy to revert.' },
-    ],
-    terms: [
-      { term: 'Pull request', def: 'A request to merge a branch, where teammates review the diff and CI runs checks.' },
-      { term: 'Nit', def: 'A label for a small, optional polish comment that should not block approval.' },
-      { term: 'LGTM', def: '"Looks good to me": the reviewer approves the change.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Fix the reviewed lines: use the lifecycle scope and keep cancellation working.', code: '[[viewModelScope]].launch {\n    try { repo.save(article.id, token) }\n    catch (e: [[CancellationException]]) { throw e }\n    catch (e: IOException) { _state.value = SaveState.Failed }\n}', why: '<code>viewModelScope</code> is cancelled with the ViewModel. Rethrowing <code>CancellationException</code> lets cancellation finish instead of being treated as a failed save.' },
-      { type: 'bug', prompt: 'You are reviewing this diff. Which line must be fixed before merge?', code: 'fun refresh() {\n    viewModelScope.launch {\n        val user = repo.currentUser()\n        Log.i("Auth", "refreshing for " + user.email + " / " + user.token)\n        _state.value = repo.loadFeed(user.id)\n    }\n}', bug: 3, fix: '        Log.i("Auth", "refreshing feed")', why: 'It writes an email address and an auth token to logcat. Personal data and secrets never go in logs.' },
-    ],
-    quiz: [
-      { q: 'You have limited time for a large PR. What do you look at first?', options: ['Design: does the change belong here and fit the architecture?', 'Import order', 'Whether variable names match your taste'], a: 0, why: 'A design problem makes the rest of the review moot. Style is last, and ideally automated.' },
-      { q: 'Which comment is best written?', options: ['Must fix: token!! crashes for logged-out readers; show login when it is null.', 'This is wrong.', 'Why would you do this?'], a: 0, why: 'It says the severity, the problem, why it matters and a way forward, and it is about the code.' },
-      { q: 'A change clearly improves the code but you would have named one class differently. What do you do?', options: ['Approve, with an optional "Nit:" about the name', 'Block until it is renamed', 'Rewrite it yourself in a new PR'], a: 0, why: 'The standard is "improves code health", not "matches my taste". A labeled nit lets the author choose.' },
-      { q: 'Which PR is easiest to review well?', options: ['+90 lines: the saved articles table with its DAO tests', '+1,800 lines across 40 files: the whole feature', '+300 lines mixing a refactor with a new screen'], a: 0, why: 'It does one thing and is small. Google\'s guide calls about 100 lines usually reasonable and 1,000 usually too large.' },
-      { q: 'A reviewer misunderstood your code and left a wrong comment. What helps most?', options: ['Make the code clearer, or add a comment, so the next reader won\'t trip either', 'Explain it only in the PR thread', 'Resolve the comment without replying'], a: 0, why: 'Future readers see the code, not the thread. Confusion in review predicts confusion later.' },
-    ],
-  });
-
-  // 6 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'tech-debt',
-    title: 'Technical debt and refactoring',
-    tagline: 'Messy code charges interest every time you change it. Pay it down where you change code most.',
-    level: 'intermediate',
-    body: `
-<p>Technical debt is Martin Fowler's metaphor for internal quality problems, which he calls cruft. The <b>interest</b> is the extra time every change costs because of the cruft. The <b>principal</b> is what it costs to clean it up. In his example, a feature takes 6 days instead of 4 because of messy code, and cleaning up first would take 5 days.</p>
-<p>Fowler sorts debt on two axes: <b>deliberate</b> or <b>inadvertent</b>, and <b>prudent</b> or <b>reckless</b>. "Ship now, clean up after the launch" with a plan is prudent and deliberate. "We have no time for design" is reckless. "Now we know how it should have been built" is prudent and inadvertent, and every good team makes some.</p>
-<p>The key point: interest is only charged when you work in that code. Cruft in a module nobody touches costs almost nothing. The demo ships the same four features with and without paying down first.</p>`,
-    code: `// Strangler fig: grow the new code next to the old, move callers one at a time.
-interface ArticleSource {
-    suspend fun article(id: String): Article
-}
-
-class LegacyArticleSource(private val api: OldNewsApi) : ArticleSource {
-    override suspend fun article(id: String) = api.fetchJson(id).toArticleTheOldWay()
-}
-
-class ArticleRepository(                          // new, tested, offline-first
-    private val dao: ArticleDao,
-    private val api: ArticleApi,
-) : ArticleSource {
-    override suspend fun article(id: String): Article =
-        dao.find(id) ?: api.article(id).also { dao.insert(it) }
-}
-
-// One switch decides who serves the call. Remove the legacy class when the flag is at 100%.
-fun articleSource(flags: Flags, legacy: LegacyArticleSource, repo: ArticleRepository): ArticleSource =
-    if (flags.isOn("new_article_repository")) repo else legacy`,
-    remember: 'Pay down debt in code you change often, a little with every change. Replace big messes piece by piece, never in one rewrite.',
-    visual(el) {
-      Lab.ui.timeline(el, {
-        lanes: ['Keep cruft', 'Clean first'],
-        span: 24, unit: 'days',
-        predict: {
-          q: 'One team works around the messy code, the other spends 5 days cleaning first. Which team ships <b>feature 1</b> first?',
-          options: ['Keep cruft: 6 days', 'Clean first: 9 days', 'Both on the same day'],
-          a: 0,
-          why: 'Paying down the principal costs time up front. It only pays back through cheaper features later, and only if those features touch this code.',
-        },
-        frames: [
-          { now: 0, say: 'Fowler’s numbers: a feature takes 4 days in clean code, 6 with the cruft, and the clean-up takes 5. Every feature here touches the messy module.' },
-          { bars: [{ lane: 0, from: 0, to: 6, label: 'F1', tone: 'warm' }, { lane: 1, from: 0, to: 5, label: 'clean up', tone: 'muted' }], say: 'The first team starts feature 1 at once. The second team cleans first.' },
-          { bars: [{ lane: 1, from: 5, to: 9, label: 'F1', tone: 'ok' }], now: 9, say: 'Feature 1 ships at day 6 for the first team and day 9 for the second. Cleaning looks like a loss so far.' },
-          { bars: [{ lane: 0, from: 6, to: 12, label: 'F2', tone: 'warm' }, { lane: 1, from: 9, to: 13, label: 'F2', tone: 'ok' }], now: 13, say: 'Each feature costs the first team 2 days of interest. The gap is shrinking.' },
-          { bars: [{ lane: 0, from: 12, to: 18, label: 'F3', tone: 'warm' }, { lane: 1, from: 13, to: 17, label: 'F3', tone: 'ok' }], now: 17, say: 'After three features the clean team is ahead: day 17 against day 18.' },
-          { bars: [{ lane: 0, from: 18, to: 24, label: 'F4', tone: 'warm' }, { lane: 1, from: 17, to: 21, label: 'F4', tone: 'ok' }], now: 21, say: 'From here every feature saves 2 more days. If the module were touched once a year, the 5 days would never come back.' },
+        terms: [
+          { term: 'design doc', def: 'A short written proposal, made before the code: problem, goals, non-goals, options, decision.' },
+          { term: 'non-goal', def: 'Something the team deliberately won’t do in this piece of work, written down so the work doesn’t keep growing.' },
+          { term: 'trade-off', def: 'What an option gains, and what it pays for it, such as more features for more time.' },
         ],
-      });
-    },
-    deeper: [
-      {
-        title: 'The camp-site rule',
-        body: `<p>Most debt is paid in small amounts: leave the code a bit better than you found it every time you touch it. Fowler calls this opportunistic refactoring and quotes the camp-site rule; you'll also hear it called the boy-scout rule. Rename a confusing variable, extract the function you just had to read three times, add the missing test.</p>
-<p>Because you only touch code you are changing anyway, this pays down debt exactly where the interest is highest. Keep these cleanups in their own commit or PR so review stays easy.</p>`,
-      },
-      {
-        title: 'The strangler fig, for big messes',
-        body: `<p>When a whole area is bad, the temptation is a rewrite. Big-bang rewrites tend to take longer than planned, users wait for features, and the team copies old behavior nobody needed. Fowler's <b>strangler fig</b> pattern grows the new code next to the old and moves behavior over piece by piece until the old code can be deleted.</p>
-<p>On Android, the seam is usually an interface, as in the code above, plus a <a href="#launch.flags">remote flag</a> so you can move traffic gradually and switch back without a release. The same idea moves a <a href="#views.compose-in-views">View screen to Compose</a> one screen at a time.</p>`,
-      },
-      {
-        title: 'Make debt visible',
-        body: `<p>Debt nobody wrote down never gets prioritized. Keep it in the same backlog as features, phrased by its interest: "Every new feed card type takes 2 extra days because FeedAdapter mixes 6 view types" can be weighed against features. "Refactor FeedAdapter" cannot.</p>
-<p>Measure where it hurts: files that change most often and also break most often are the best place to start.</p>`,
-      },
-      {
-        title: 'Refactoring needs tests',
-        body: `<p>Refactoring means changing structure without changing behavior. The only way to know behavior didn't change is to have tests around it first. If the messy code has no tests, write characterization tests that pin what it does today, even the odd parts, then refactor. See <a href="#testing.fakes">fakes</a> for testing code with dependencies.</p>`,
-        code: `// Pin today's behavior before touching the legacy parser
-@Test fun \`legacy parser keeps empty images as null\`() {
-    val article = LegacyParser.parse(fixture("article_no_image.json"))
-    assertNull(article.imageUrl)          // odd, but the UI relies on it
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'The big rewrite', bad: 'Q1-Q3: rewrite the app from scratch\n(no features ship, old app still needs fixes)', good: 'Each sprint: move one screen or one data\nsource to the new code behind a flag,\ndelete the old path when it hits 100%', why: 'A rewrite delivers nothing until it is complete and must catch up with a moving target. The strangler approach ships value and reduces risk every sprint.' },
-      { title: 'Refactoring and a feature in one PR', bad: 'PR: Add push opt-in + restructure\nSettingsViewModel (+900 / -700)', good: 'PR 1: Restructure SettingsViewModel\n      (no behavior change, tests pass)\nPR 2: Add push opt-in (+120)', why: 'Mixed PRs hide behavior changes inside moved code. A pure refactor PR can be reviewed for "nothing changed"; the feature PR stays small.' },
-    ],
-    terms: [
-      { term: 'Technical debt', def: 'Internal quality problems that make every future change cost more, like interest on a loan.' },
-      { term: 'Refactoring', def: 'Changing the structure of code without changing what it does.' },
-      { term: 'Strangler fig', def: 'Replacing a legacy system gradually by growing new code beside it and moving behavior over piece by piece.' },
-      { term: 'Characterization test', def: 'A test that records what existing code does today, so a refactor can prove it changed nothing.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Route callers through the seam, so the flag decides which implementation runs.', code: 'fun articleSource(flags: Flags): [[ArticleSource]] =\n    if (flags.isOn("new_article_repository")) [[repo]] else legacy', why: 'Callers depend on the interface, and the flag chooses the new repository or the legacy one. Turning the flag off is the rollback.' },
-      { type: 'bug', prompt: 'This PR claims to be a pure refactor (no behavior change). Tap the line that breaks that promise.', code: 'fun formatDate(epochMs: Long): String {\n    val zone = ZoneId.of("Europe/Berlin")\n    val date = Instant.ofEpochMilli(epochMs).atZone(zone)\n    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))\n}', bug: 3, fix: '    return date.format(DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("de")))', why: 'The old code formatted months in German ("5 Okt."). Switching the locale changes what users see, so it is a behavior change hiding inside a refactor.' },
-    ],
-    quiz: [
-      { q: 'A messy module is touched by about one feature a year. What does the interest metaphor suggest?', options: ['Leave it for now; interest is only charged when you change it', 'Rewrite it this sprint', 'Delete it'], a: 0, why: 'Fowler notes that cruft in rarely touched code costs little. Spend cleanup effort where changes happen.' },
-      { q: '"We know this is quick and dirty; we ship for the launch and clean up next sprint, ticket is filed." Which quadrant?', options: ['Prudent and deliberate', 'Reckless and inadvertent', 'Prudent and inadvertent'], a: 0, why: 'The team chose the debt knowingly and has a plan to repay it.' },
-      { q: 'Put the strangler steps in order.', options: ['Add a seam, build the new path, move traffic with a flag, delete the old path', 'Delete the old path, build the new path, add a seam', 'Build the new path, switch everyone at once, write tests'], a: 0, why: 'The seam lets both paths coexist, the flag moves users gradually and allows rollback, and deletion comes last.' },
-      { q: 'With Fowler\'s numbers (4 days clean, 6 with cruft, 5 to clean), when does cleaning first pay off if every feature touches the code?', options: ['From the 3rd feature', 'Never', 'From the 1st feature'], a: 0, why: 'After 2 features: 12 vs 13 days. After 3: 18 vs 17. The 2 days saved per feature repay the 5 days by feature 3.' },
-    ],
-  });
-
-  // 7 ─────────────────────────────────────────────
-  const EVENTS = [
-    { t: '10:02', s: 'Version 5.12.0 reaches 20% of users in a staged rollout.', c: '' },
-    { t: '10:40', s: 'Crash alert: crash-free users drop sharply on 5.12.0.', c: 'swe-bad' },
-    { t: '10:45', s: 'On-call acknowledges, declares an incident and takes the incident commander role.', c: '' },
-    { t: '10:52', s: 'Rollout halted in Play Console. No new users get 5.12.0.', c: 'swe-mit' },
-    { t: '11:30', s: 'Cause found: the feed parser crashes when imageUrl is null.', c: '' },
-    { t: '13:10', s: 'Fix 5.12.1, with a test for the null image, starts its staged rollout.', c: 'swe-mit' },
-    { t: '15:00', s: 'Crash rate back to normal. Incident closed.', c: 'swe-mit' },
-    { t: '+1 day', s: 'Blameless postmortem written and reviewed, with owned action items.', c: '' },
-  ];
-  lessons.push({
-    id: 'teamwork',
-    title: 'Working in a team: incidents, postmortems and communication',
-    tagline: 'When production breaks, follow a plan, fix the system and not the person, and write it down.',
-    level: 'intermediate',
-    body: `
-<p>Sooner or later a release breaks something for real users. Teams that handle it well decide the rules in advance: who is <b>on call</b>, what counts as an incident, and who does what. Google's SRE book suggests declaring an incident early and splitting roles: an <b>incident commander</b> who coordinates, people who work on the fix, and someone who keeps stakeholders updated. On mobile, your fastest lever is often to <a href="#build.tracks">halt a staged rollout</a> or turn off a <a href="#launch.flags">flag</a>: halting stops new users getting the version, but people who already have it keep it.</p>
-<p>Afterwards, write a <b>postmortem</b>: what happened, the impact, what you did, the root causes and follow-up actions. Make it <b>blameless</b>. The SRE book describes this as assuming everyone acted with good intentions and the information they had, and fixing the systems that let the mistake through. People who fear blame hide problems; people who don't, report them early.</p>
-<p>The same habits apply every day: agree on API contracts with backend before building, ask design about edge cases (empty, error, long German words), and keep docs short and current. The demo follows one incident from the first alert to resolution.</p>`,
-    code: `// Postmortem action item #1: "The parser must accept a missing image."
-// The fix ships with the test that would have caught it.
-@Serializable
-data class ArticleDto(
-    val id: String,
-    val title: String,
-    val imageUrl: String? = null,        // was String: crashed on null from the CMS
-)
-
-class ArticleDtoTest {
-    private val json = Json { ignoreUnknownKeys = true }
-
-    @Test
-    fun \`article without image parses\`() {
-        val dto = json.decodeFromString<ArticleDto>("""{"id":"a1","title":"Deprem","imageUrl":null}""")
-        assertNull(dto.imageUrl)
-    }
-}`,
-    remember: 'Mitigate first, debug second. Then write a blameless postmortem whose action items have owners.',
-    visual(el) {
-      Lab.ui.timeline(el, {
-        lanes: ['Alerts', 'Commander', 'Fix', 'Updates'],
-        span: 120, unit: 'min',
-        predict: {
-          q: 'An incident is declared. Who should write the code fix?',
-          options: ['The incident commander, because they know the most', 'Someone else, so the commander can keep coordinating', 'Nobody until the postmortem'],
-          a: 1,
-          why: 'The SRE book splits the roles. The commander coordinates and decides, others work on the fix, and one person keeps stakeholders updated.',
-        },
-        frames: [
-          { now: 0, say: 'Version 5.12 is at 10% of a staged rollout. It is a normal morning.' },
-          { bars: [{ lane: 0, from: 4, to: 14, label: 'crash rate up', tone: 'err' }], marks: [{ at: 4, label: 'page', tone: 'err' }], say: 'The crash-free rate drops on 5.12 and the on-call developer is paged.' },
-          { bars: [{ lane: 1, from: 8, to: 12, label: 'declare', tone: 'warm' }], say: 'They declare an incident early and assign roles: a commander, people on the fix, one person on updates.' },
-          { bars: [{ lane: 2, from: 12, to: 20, label: 'halt', tone: 'ok' }], say: 'Mitigate first: halt the rollout. New users stop getting 5.12. People who have it keep it.' },
-          { bars: [{ lane: 3, from: 16, to: 22, label: 'update' }, { lane: 3, from: 46, to: 52, label: 'update' }, { lane: 3, from: 76, to: 82, label: 'update' }], say: 'Support and product get short updates on a fixed rhythm, so nobody interrupts the people fixing it.' },
-          { bars: [{ lane: 2, from: 16, to: 90, label: 'find + fix', tone: 'accent' }, { lane: 2, from: 90, to: 110, label: '5.12.1', tone: 'ok' }], say: 'The fix ships as 5.12.1, with a higher <code>versionCode</code>, on a new staged rollout.' },
-          { bars: [{ lane: 1, from: 110, to: 120, label: 'resolved', tone: 'ok' }], now: 120, say: 'The commander closes the incident. Next comes a blameless postmortem: impact, timeline, root causes, follow-up actions.' },
+        challenges: [
+          { type: 'blank', prompt: 'Fill in the section that stops the work from growing.', code: '## Goals\nStars come back on a new phone.\n## [[Non-goals|Non-Goals|Non goals|Nongoals]]\nNo sharing stars with other people.', why: 'Non-goals say out loud what is not part of this work.' },
+          { type: 'bug', prompt: 'One option hides its cost, so nobody can weigh it. Tap it.', code: 'A) Keep it as it is: 0 days. Lost with the phone.\nB) Online account: the best option.\nC) Phone plus backup: 3 days. Needs backup on.', bug: 1, fix: 'B) Online account: 3 weeks. Needs sign-in and a server.', why: 'Every option needs its gains and its costs, so the team can compare them fairly.' },
         ],
-      });
-    },
-    deeper: [
-      {
-        title: 'When to call it an incident',
-        body: `<p>Decide the triggers before you need them, so nobody debates it at 2 a.m. The SRE book suggests treating something as an incident if a second team must get involved, if customers can see it, or if it is still unsolved after an hour of focused work. For an app team, add your own: crash-free users below a threshold, login or payments failing, a push sent to the wrong audience.</p>`,
+        quiz: [
+          { q: 'When is a design doc most useful?', options: ['Before the code, while changing the plan is cheap', 'After the release, to describe what was built', 'Only when something breaks'], a: 0, why: 'Its value is the cheap disagreement before the expensive work.' },
+          { q: 'What is a non-goal?', options: ['Something the team deliberately won’t do in this work', 'A goal that failed', 'A bug nobody fixed'], a: 0, why: 'Writing it down settles “are we also doing this?” questions before they come up in review.' },
+          { q: 'What is a trade-off?', options: ['What an option gains, and what it pays for it', 'Swapping two tickets in the backlog', 'Always choosing the cheapest option'], a: 0, why: 'Good designs compare trade-offs; the cheapest option is not always right.' },
+        ],
+        docs: [['Kotlin KEEP: design proposals for the Kotlin language', 'https://github.com/Kotlin/KEEP'], ['Back up user data with Auto Backup', 'https://developer.android.com/identity/data/autobackup']],
       },
-      {
-        title: 'What goes in a postmortem',
-        body: `<p>Keep the shape fixed so they are quick to write and easy to compare:</p>
-<ul><li><b>Summary and impact:</b> who was affected, how many, for how long.</li><li><b>Timeline:</b> like the demo, with detection and mitigation times.</li><li><b>Root causes:</b> usually several, and about systems: missing test, unclear contract, slow alert.</li><li><b>What went well:</b> the staged rollout limited it to 20%.</li><li><b>Action items:</b> each with an owner and a due date.</li></ul>
-<p>Share it widely. Other teams learn from your incident for free.</p>`,
-      },
-      {
-        title: 'Working with backend, product and design',
-        body: `<p>Most cross-team pain comes from assumptions. Agree on the API contract in writing before either side builds: field names, which fields can be null, error codes, pagination. Ask design for the states they didn't draw: loading, empty, error, offline, a 40-character German headline at 200% font size. Tell product early when an estimate moves, with the reason and the new range.</p>
-<p>Prefer written, searchable channels for decisions (the design doc, the ticket) and calls for untangling disagreement. After the call, write down what was decided.</p>`,
-      },
-      {
-        title: 'Documentation that stays true',
-        body: `<p>Google's documentation guide argues for minimum viable documentation: a small set of fresh, accurate docs beats a large pile of stale ones. Update the docs in the same change as the code, so review catches drift, and delete docs that are dead. A module README that says what the module owns and how to run its tests is worth more than a wiki nobody updates.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Debugging before mitigating', bad: '10:40 alert\n10:45-12:30 investigate the crash\n12:30 halt rollout (rollout kept growing)', good: '10:40 alert\n10:52 halt rollout\n10:52-11:30 investigate, calmly', why: 'Every minute of debugging with the rollout still running adds affected users. Stop the bleeding, then find the cause.' },
-      { title: 'A root cause with a name in it', bad: 'Root cause: Omar forgot the null check.', good: 'Root causes: contract didn\'t say imageUrl\ncan be null; no parser test for optional\nfields; alert fired 38 min late.', why: 'Naming a person ends the analysis and teaches people to hide mistakes. Naming system gaps produces fixes that stop the next person too.' },
-    ],
-    terms: [
-      { term: 'On-call', def: 'The person responsible, for a set period, for responding to alerts and incidents.' },
-      { term: 'Incident commander', def: 'The person who coordinates an incident response, assigns roles and holds the overall picture.' },
-      { term: 'Postmortem', def: 'A written record of an incident: impact, timeline, root causes and follow-up actions.' },
-      { term: 'Blameless', def: 'Looking for the system causes of a failure without blaming individuals, assuming good intentions.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Make the DTO accept a missing image, which was the root cause of the crash.', code: 'data class ArticleDto(\n    val id: String,\n    val imageUrl: String[[?]] = [[null]],\n)', why: 'A nullable type with a default of <code>null</code> accepts both an explicit null and a missing field.' },
-      { type: 'bug', prompt: 'One action item in this postmortem will not prevent anything. Tap it.', code: 'Action items\n1. Document nullable fields in the API contract (owner: backend, Nov 1)\n2. Add parser tests for every optional field (owner: Android, Nov 1)\n3. Everyone should be more careful (owner: team)\n4. Alert on crash rate at the 1% rollout stage (owner: on-call, Nov 8)', bug: 3, fix: '3. Run the release checklist in CI before promoting a rollout (owner: Android, Nov 8)', why: '"Be more careful" has no concrete change, no single owner and no date. Good action items change a system and can be checked off.' },
-    ],
-    quiz: [
-      { q: 'The crash alert fires 10% into a staged rollout. What comes first?', options: ['Halt the rollout, then investigate', 'Find the root cause, then decide', 'Write the postmortem'], a: 0, why: 'Mitigation limits how many users are hurt. Investigation can then happen without the clock running.' },
-      { q: 'You halt a staged rollout. What happens to users who already installed the version?', options: ['They keep it; halting only stops new users getting it', 'Play rolls them back automatically', 'The app is removed from their phones'], a: 0, why: 'Play Console\'s help says halting stops additional users; people who received it stay on that version. You still need a fix release.' },
-      { q: 'Which postmortem root cause is blameless?', options: ['No test covered a null image, and the contract didn\'t mark it optional', 'The developer was careless', 'QA should have caught it'], a: 0, why: 'It names system gaps that can be fixed. The others blame people, which stops learning.' },
-      { q: 'Backend and Android both start building "saved articles" next sprint. What prevents the classic mismatch?', options: ['Agree a written API contract, including nullable fields, before either builds', 'Each side builds and they align at the end', 'Android mocks whatever it guesses'], a: 0, why: 'A shared contract turns assumptions into decisions. This incident started with exactly such an unstated assumption.' },
-    ],
-  });
 
-  Lab.addTrack({
-    id: 'sweng',
-    title: 'Software engineering practice',
-    description: 'The university software engineering course made practical for a mobile team: life cycle, agile, estimation, design docs, code review, technical debt and incidents.',
-    requires: [],
-    css,
-    lessons,
+      {
+        id: 'code-review', ignore: ['out'],
+        title: 'Code review',
+        tagline: 'Comment on the code, not the person, and take comments as help.',
+        goals: ['Write review comments that are kind, specific and say why', 'Mark how much a comment matters', 'Answer the comments on your own pull request'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>In Pull requests and review you saw the steps: a teammate opens <b>Files changed</b>, comments on lines, and approves or requests changes. Sam’s new pull request has a bug that would crash the favourites screen for every user, with or without starred cities. Whether it gets caught depends on the review. Whether Sam fixes it gladly depends on how the comment is written.</p>
+<p><b>Giving</b> a review: comment on the code, not the person: “this loop reads one past the end of the list”, not “you got the loop wrong”. Say why, and suggest a fix. Mark how much it matters: <b>Must:</b> for things that would break, <b>Suggestion:</b> for a better way, <b>Nit:</b> for a tiny point, like a name, that shouldn’t block the merge. And say what is good, so the author knows what to keep.</p>
+<p><b>Receiving</b> a review: the comments are about the code, not about you. Thank the reviewer, fix, and reply to each comment so they know it is handled. If you disagree, explain your reason. If a reviewer misread the code, that is often a sign it could be clearer.</p>`,
+        visual(el) {
+          const OLD = ['fun printFavourites(c: List<String>) {', '    if (c.size == 0) println("No favourites yet")', '    for (i in 0..c.size) {', '        println(c[i])', '    }', '}'];
+          const NEW = ['fun printFavourites(cities: List<String>) {', '    if (cities.size == 0) println("No favourites yet")', '    for (city in cities) {', '        println(city)', '    }', '}'];
+          const NOTES = [
+            ['must', 'Must', 3, 'Line 3: <code>0..c.size</code> includes <code>c.size</code>, so with 3 cities the loop reads <code>c[3]</code> and crashes: <code>Index 3 out of bounds for length 3</code>. Even an empty list crashes, at <code>c[0]</code>, right after the friendly message. A <code>for (city in c)</code> loop can’t go past the end.'],
+            ['nit', 'Nit', 1, 'Line 1: name the parameter <code>cities</code>. <code>c</code> doesn’t say what it holds.'],
+            ['good', 'Nice', 2, 'Line 2: a friendly message for the empty list. Good thinking.'],
+          ];
+          const diff = h('div', { class: 'swe-diff' });
+          const notes = h('ul', { class: 'swe-notes' });
+          const quote = h('p', { class: 'swe-quote' });
+          const stage = h('div', { class: 'ui-stage swe-stage' }, h('span', { class: 'swe-label' }, 'Files changed: Favourites.kt'), diff, notes, quote);
+          const frames = [
+            { n: 0, say: 'Sam’s pull request adds one function that prints the starred cities, one per line. Ada reviews it in <b>Files changed</b>.' },
+            { n: 0, hl: 3, q: 'Ada (draft): “This is wrong. Did you even run it?”', bad: true, say: 'Ada spots the problem on line 3. Her first draft is about Sam, not the code, and it doesn’t say what is wrong or how to fix it. She rewrites it before posting.' },
+            { n: 1, hl: 3, say: 'The comment she posts: labelled <b>Must</b>, says exactly what happens and why, and suggests a fix.' },
+            { n: 2, hl: 1, say: 'A <b>Nit</b>: worth saying, but it won’t block the merge.' },
+            { n: 3, hl: 2, say: 'And one thing done well. Ada submits the review with <b>Request changes</b>.' },
+            { n: 3, fixed: true, q: 'Sam: “Thanks, good catch! Fixed both in the latest commit.”', good: true, say: 'Sam doesn’t argue with the bug. He fixes it on the same branch, renames the parameter (and its uses), pushes, and replies to each comment.' },
+            { n: 3, fixed: true, q: 'Ada: Approve. “Looks good, thanks for the quick fix.”', good: true, say: 'Ada looks again and approves. The crash never reached a single user.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'Ada finds the bug in Sam’s loop. Which comment helps Sam most?',
+              options: ['“This is wrong.”', '“Must: <code>0..c.size</code> goes one past the end and crashes. Use <code>for (city in c)</code>.”', 'None: approve, and let testing find it'],
+              a: 1,
+              why: 'It says what breaks, why, and how to fix it, and it is about the code.',
+            },
+            draw(f) {
+              const src = f.fixed ? NEW : OLD;
+              diff.replaceChildren(...src.map((s, k) => h('div', { class: 'swe-dl' + (f.fixed && k < 4 ? ' swe-hit' : f.hl === k + 1 ? (f.n ? ' swe-flag' : ' swe-miss') : '') },
+                h('span', { class: 'swe-ln' }, String(k + 1)), h('code', { html: hl(s) }))));
+              notes.replaceChildren(...NOTES.slice(0, f.n).map(([sev, lab, , t]) => h('li', {}, h('span', { class: 'swe-sev' + (sev === 'nit' ? ' swe-nit' : sev === 'good' ? ' swe-should' : '') }, lab), h('span', { html: t }))));
+              notes.hidden = !f.n;
+              quote.hidden = !f.q;
+              quote.className = 'swe-quote' + (f.bad ? ' swe-blame' : f.good ? ' swe-fair' : '');
+              quote.textContent = f.q || '';
+            },
+          });
+        },
+        code: `Review of pull request #14, Favourites.kt (by Ada)
+The change: fun printFavourites(c: List<String>) prints each city.
+
+line 1  Nit: name the parameter cities. "c" doesn't say what it holds.
+line 2  Nice: a friendly message for the empty list.
+line 3  Must: 0..c.size includes c.size, so with 3 cities the loop
+        reads c[3] and the app crashes:
+        Index 3 out of bounds for length 3
+        Even an empty list crashes, at c[0], right after the
+        friendly message. A for (city in c) loop can't go past the end.
+
+Review: Request changes
+
+Sam: Thanks, good catch! Fixed both in the latest commit.
+Ada: Approve`,
+        remember: 'Review the code, not the person: say what, why and a fix, and label it Must, Suggestion or Nit. When you receive one, thank, fix and reply.',
+        terms: [
+          { term: 'review comment', def: 'A note a reviewer leaves on a line of a pull request, ideally saying what, why and how to fix it.' },
+          { term: 'nit', def: 'A tiny, optional point in a review, like a name or a space. Starting a comment with “Nit:” says it shouldn’t block the merge.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Label this comment so Sam knows it won’t block the merge.', code: '[[Nit|nit]]: add a space after the comma in listOf("Oslo","Lima").', why: 'A missing space doesn’t change what the code does, so it is a nit.' },
+          { type: 'bug', prompt: 'One review comment is about the person, not the code. Tap it.', code: 'Must: this reads one past the end of any list and crashes.\nSuggestion: a loop over the list itself reads more clearly.\nDid you even run this?\nNit: name it cities, not c.', bug: 2, fix: 'Suggestion: check what the loop reads on its last round.', why: '“Did you even run this?” makes Sam defensive and helps him fix nothing. A comment about the code points him at the problem.' },
+        ],
+        quiz: [
+          { q: 'Which comment follows the advice in this lesson?', options: ['“Must: this reads one past the end of the list and crashes. Use <code>for (city in cities)</code>.”', '“Wrong loop.”', '“Why would you write it like this?”'], a: 0, why: 'It is about the code, says why, and suggests a fix.' },
+          { q: 'What does a comment that starts with “Nit:” mean?', options: ['A tiny point that shouldn’t block the merge', 'A bug that must be fixed', 'The reviewer is not sure'], a: 0, why: 'Labels tell the author which comments are required and which are optional.' },
+          { q: 'A reviewer asks for a change you disagree with. What do you do?', options: ['Reply with your reason and talk it through', 'Ignore it and merge', 'Close the pull request'], a: 0, why: 'The reviewer may know something you don’t, or you may know something they don’t. Talking finds out which.' },
+        ],
+        docs: [['How to write code review comments', 'https://google.github.io/eng-practices/review/reviewer/comments.html'], ['How to handle reviewer comments', 'https://google.github.io/eng-practices/review/developer/handling-comments.html']],
+      },
+
+      {
+        id: 'tech-debt',
+        title: 'Technical debt',
+        tagline: 'A shortcut saves time today and charges a little on every later change.',
+        goals: ['Recognise a shortcut that becomes technical debt', 'Explain the “interest” it charges on later work', 'Pay it back in small steps, and write down what is left'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>The day before a release, Lin needs the temperature on three screens. The quickest way is to copy the same line onto all three. It works, and the release goes out on time. Two months later users ask for Fahrenheit, and Lin has to find and change every copy. She misses one.</p>
+<p>That shortcut is <em>technical debt</em>: a quicker, messier way that saves time now and makes later changes slower. Like borrowed money, it charges <em>interest</em>: every later change that touches that code costs a bit extra. A little debt, taken on purpose and written down, can be a fair deal before a deadline. Debt that nobody remembers keeps growing.</p>
+<p>Paying it back means cleaning up the code so the next change is easy again, here by moving the copied line into one function. Changing how code is built without changing what it does is called <em>refactoring</em>. Do it in small steps, next to the work that touches that code, and put the rest in the backlog as tickets, so it gets planned like any other work.</p>`,
+        visual(el) {
+          const b = (lane, from, to, label, tone) => ({ lane, from, to, label, tone });
+          Lab.ui.timeline(el, {
+            lanes: ['Copies', 'Cleaned up'],
+            span: 10, unit: 'days',
+            predict: {
+              q: 'Team B spends one day cleaning up after the first change. After four changes, which team is done first?',
+              options: ['Team A: it never lost a day', 'Team B: every later change is quicker', 'They finish at the same time'],
+              a: 1,
+              why: 'The cleanup costs one day once. The copies cost extra on every change that touches them.',
+            },
+            frames: [
+              { now: 0, say: 'Two versions of the same team. Both need the temperature on three screens, then three more changes to it. Top lane: Team A keeps the copies. Bottom lane: Team B cleans up.' },
+              { bars: [b(0, 0, 1, '1', 'warm'), b(1, 0, 1, '1', 'warm')], say: 'Change 1, day 1: both teams take the shortcut and copy the line onto three screens. The release goes out on time.' },
+              { bars: [b(1, 1, 2, 'R', 'muted')], now: 2, say: 'Team B spends day 2 refactoring (bar R): moving the line into one function, <code>formatTemp</code>, and the three screens call it. Nothing new for users. Team A is ahead, for now.' },
+              { bars: [b(0, 1, 4, '2 °F', 'err'), b(1, 2, 3, '2', 'ok')], say: 'Change 2, Fahrenheit. Team A changes three copies, misses one, and fixes the bug a user reports: 3 days. Team B changes one function: 1 day.' },
+              { bars: [b(0, 4, 6.5, '3 feels like', 'err'), b(1, 3, 4, '3', 'ok')], say: 'Change 3, “feels like” temperatures. Team A again edits every copy. That extra time on every change is the interest.' },
+              { bars: [b(0, 6.5, 9, '4 rounding', 'err'), b(1, 4, 5, '4', 'ok')], marks: [{ at: 5, label: 'B done', tone: 'ok' }, { at: 9, label: 'A done', tone: 'err' }], say: 'Change 4, rounding. After four changes, Team B is done on day 5, Team A on day 9. The day spent cleaning up paid for itself on the first change.' },
+            ],
+          });
+        },
+        code: `// Before: the same rule copied onto three screens
+println("Now: " + temp + " °C")          // home screen
+println("Today: " + max + " °C")         // daily screen
+println("At 15:00: " + hourTemp + "°C")  // hourly screen: already different!
+
+// After: one function, one place to change
+fun formatTemp(celsius: Int): String = "$celsius °C"
+
+println("Now: " + formatTemp(temp))      // Now: 21 °C
+println("Today: " + formatTemp(max))     // Today: 24 °C
+println("At 15:00: " + formatTemp(hourTemp))
+
+// Not done yet? Write it down as a ticket instead of forgetting it:
+// #41 Widget still builds its own temperature text. Use formatTemp.`,
+        remember: 'Technical debt is a shortcut that makes later changes slower. Take it on purpose, write it down, and pay it back in small steps.',
+        mistakes: [
+          { title: 'Paying it all back with one big rewrite', bad: 'Stop all new features for two months\nand rewrite the whole app.', good: 'Clean up one piece at a time,\nnext to the feature that touches it.', why: 'A big rewrite delivers nothing to users for a long time and brings its own new bugs. Small clean-ups pay back the debt where the interest is highest: in the code you change most.' },
+        ],
+        terms: [
+          { term: 'technical debt', def: 'A quicker, messier way of building something that saves time now and makes later changes slower.' },
+          { term: 'interest (technical debt)', def: 'The extra time every later change costs because of the shortcut.' },
+          { term: 'refactoring', def: 'Changing how code is built, without changing what it does, so it is easier to change next time.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Pay back the debt: make both screens use the one function.', code: 'fun formatTemp(celsius: Int): String = "$celsius °C"\n\nprintln("Now: " + [[formatTemp]](temp))\nprintln("Today: " + [[formatTemp]](max))', why: 'Both screens call the same function, so a change to the format happens in one place.' },
+          { type: 'bug', prompt: 'Lin paid back most of the debt, but one screen still has its own copy. Tap it.', code: 'fun formatTemp(celsius: Int): String = "$celsius °C"\nprintln("Now: " + formatTemp(temp))\nprintln("Today: " + max + " °C")\nprintln("At 15:00: " + formatTemp(hourTemp))', bug: 2, fix: 'println("Today: " + formatTemp(max))', why: 'This line still builds the text itself. When the format changes, it would be the one that gets missed.' },
+        ],
+        quiz: [
+          { q: 'What is technical debt?', options: ['A shortcut that saves time now and makes later changes slower', 'Money the team owes for its tools', 'A bug that users reported'], a: 0, why: 'The “loan” is the time saved; the cost comes later.' },
+          { q: 'What is the “interest” on technical debt?', options: ['The extra time every later change in that code costs', 'A fee paid every month', 'The time it took to write the shortcut'], a: 0, why: 'You pay it each time you touch the messy code, not on a calendar.' },
+          { q: 'There is no time to clean up before tomorrow’s release. What is a good move?', options: ['Take the shortcut, and add a ticket to the backlog to pay it back', 'Take the shortcut and forget about it', 'Delay the release for a big rewrite'], a: 0, why: 'Debt taken on purpose and written down is a fair deal. Forgotten debt keeps growing.' },
+        ],
+        docs: [['Technical Debt (Martin Fowler)', 'https://martinfowler.com/bliki/TechnicalDebt.html'], ['Code refactoring in IntelliJ IDEA', 'https://www.jetbrains.com/help/idea/refactoring-source-code.html']],
+      },
+
+      {
+        id: 'teamwork', ignore: ['out'],
+        title: 'Working in a team',
+        tagline: 'Give every job one owner, ask early, and say what you tried.',
+        goals: ['Give every task one owner, and close the loop when it is done', 'Ask for help before you lose a day', 'Write a message someone can act on: what, what happened, what you tried'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Ada’s team gets a report: “The app shows the wrong temperature in Oslo.” Three people read it. Each thinks someone else is on it. A week later, nobody has looked. Or the opposite: two people fix it at the same time, on two branches that conflict.</p>
+<p><em>Ownership</em> fixes that. Every task has exactly one <em>owner</em>: the person who sees it through, or hands it on clearly. Saying “I’ll take this” and assigning the ticket to yourself (on GitHub, tickets are called <em>issues</em>, and the owner goes in the <b>Assignees</b> box) makes it visible to everyone. The owner doesn’t have to do it all alone. They make sure it isn’t dropped, and they <em>close the loop</em>: tell the person who asked when it is done.</p>
+<p>Communication is mostly about the reader. When you are stuck, ask early: after trying for a while (half an hour is a good guide), not after two days. Write a message someone can act on without asking back: what you are trying to do, what happens instead, and what you already tried. Post it in the <em>team channel</em> (the team’s shared group chat), not in a private message, so whoever knows can answer, and the next person with the same problem can find it.</p>`,
+        visual(el) {
+          const ticket = h('div', { class: 'swe-doc' });
+          const thread = h('div', { class: 'swe-pool' });
+          const stage = h('div', { class: 'ui-stage swe-stage' }, ticket, h('span', { class: 'swe-label' }, 'Team channel'), thread);
+          const MSG = {
+            vague: ['Lin', 'Oslo is broken, help?', 'swe-blame'],
+            clear: ['Lin', '#57: Oslo shows 9 °C, but the data says -9 °C. Lisbon (21 °C) is fine. So the minus sign gets lost on the way to the screen. Where do we turn the number into text?', 'swe-fair'],
+            sam: ['Sam', 'That’s formatTemp in Temp.kt. I wrote it, so I’ll look with you for 10 minutes now.', ''],
+            done: ['Lin', '#57 fixed in pull request #61, out in version 1.4.1. Maya, thanks for reporting!', 'swe-fair'],
+          };
+          const frames = [
+            { owner: '', state: 'Open', m: [], say: 'A new ticket. Ada, Sam and Lin all read it, and each thinks someone else has it. With no owner, nothing happens.' },
+            { owner: 'Lin', state: 'Open', m: [], say: 'Lin says “I’ll take this” at the stand-up and sets herself as the only assignee. Now everyone can see who has it.' },
+            { owner: 'Lin', state: 'Open', m: ['vague'], say: 'After 30 minutes, Lin is stuck. Her first message gives the reader nothing to work with: what is broken? what did she see?' },
+            { owner: 'Lin', state: 'Open', m: ['clear'], say: 'She rewrites it: what she sees, what she expected, what she checked, and one clear question. Posted in the team channel, where anyone can answer.' },
+            { owner: 'Lin', state: 'Open', m: ['clear', 'sam'], say: 'Sam knows that code and answers in minutes. Lin is still the owner; Sam helps.' },
+            { owner: 'Lin', state: 'Closed', m: ['clear', 'sam', 'done'], say: 'Fixed and released. Lin closes the loop: she tells Maya, who reported it, and closes the ticket.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'Lin is stuck on the Oslo bug. Which message gets her help fastest?',
+              options: ['“Oslo is broken, help?”', '“#57: Oslo shows 9 °C, the data says -9 °C. Lisbon is fine. Where do we turn the number into text?”', 'No message: keep trying alone for two more days'],
+              a: 1,
+              why: 'It says what happens, what she checked and what she needs, so someone can answer without asking questions back.',
+            },
+            draw(f) {
+              ticket.replaceChildren(
+                h('h4', {}, '#57 Wrong temperature in Oslo'),
+                h('div', { class: 'swe-stats' },
+                  h('span', { class: 'swe-stat' }, 'Reported by: ', h('b', {}, 'Maya')),
+                  h('span', { class: 'swe-stat' }, 'Assignees: ', h('b', {}, f.owner || 'No one')),
+                  h('span', { class: 'swe-stat' }, 'Status: ', h('b', {}, f.state))));
+              ticket.classList.toggle('swe-ok', f.state === 'Closed');
+              thread.replaceChildren(...(f.m.length ? f.m.map(k => h('p', { class: 'swe-quote ' + MSG[k][2] }, h('b', {}, MSG[k][0] + ': '), MSG[k][1])) : [h('p', { class: 'swe-empty' }, '(no messages yet)')]));
+            },
+          });
+        },
+        code: `In the team channel, after 30 minutes stuck:
+
+  #57 Wrong temperature in Oslo (owner: Lin)
+  Trying to: show -9 °C for Oslo.
+  Happens:   the screen shows 9 °C.
+  Tried:     the data really says -9. Lisbon (21 °C) shows fine.
+  Question:  where do we turn the number into text?
+
+Later, on the ticket:
+
+  Fixed in pull request #61, out in version 1.4.1.
+  Maya, thanks for reporting! Closing.`,
+        remember: 'Every task has one owner. Ask early, in the open, saying what you tried. Close the loop when it is done.',
+        mistakes: [
+          { title: 'A message that needs a second message', bad: 'Private message to Sam: "are you there?"', good: 'Team channel: "#57: Oslo shows 9 °C, the data\nsays -9 °C. Where do we turn the number into text?"', why: '“Are you there?” makes Sam stop and wait for the real question. Asking it straight away, in the open, lets anyone who knows answer.' },
+        ],
+        terms: [
+          { term: 'owner', def: 'The one person responsible for seeing a task through, shown as its assignee.' },
+          { term: 'close the loop', def: 'When a task is done, tell the person who asked for it, and close the ticket.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Complete Lin’s message so Sam can help without asking back.', code: 'Trying to: show -9 °C for Oslo\nHappens: the screen shows 9 °C\n[[Tried|tried]]: the data says -9; Lisbon shows fine', why: 'What you already tried saves the helper from suggesting it again.' },
+          { type: 'bug', prompt: 'This ticket has an ownership problem. Tap the line that causes it.', code: '#57 Wrong temperature in Oslo\nAssignees: Lin, Sam, Ada\nLabel: bug\nReported by: Maya', bug: 1, fix: 'Assignees: Lin', why: 'Three owners means each can think another one has it. One owner is clear; others can still help.' },
+        ],
+        quiz: [
+          { q: 'Three people read a bug report and each thinks someone else has it. What prevents this?', options: ['One named owner, visible on the ticket', 'More people reading it', 'Waiting for the next sprint'], a: 0, why: 'When the ticket shows one name, nobody has to guess.' },
+          { q: 'You have been stuck for 30 minutes. What is a good next step?', options: ['Ask the team, saying what you tried', 'Keep trying alone for two more days', 'Start another task without telling anyone'], a: 0, why: 'A teammate who knows the code may answer in minutes.' },
+          { q: 'The bug is fixed and released. What does “closing the loop” mean here?', options: ['Telling the person who reported it, and closing the ticket', 'Deleting the branch', 'Starting the next sprint'], a: 0, why: 'The person who asked shouldn’t have to wonder whether anything happened.' },
+        ],
+        docs: [['Assigning issues and pull requests to other GitHub users', 'https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/assigning-issues-and-pull-requests-to-other-github-users'], ['About issues', 'https://docs.github.com/en/issues/tracking-your-work-with-issues/about-issues']],
+      },
+    ],
   });
 })();

@@ -1,24 +1,11 @@
 /* Databases track. Same shape as tracks/kotlin.js.
-   A university-style databases course (relational model, SQL, joins, normalization, indexes, transactions,
-   NoSQL, schema evolution), tied back to SQLite/Room on Android and to the backend.
-   Demos run on a tiny in-memory dataset. There is no SQL parser: each query button carries its own
-   hand-written evaluator. Every class is prefixed dbx-. */
+   A beginner's first databases course on SQLite: tables, SQL, keys, joins, table design, indexes, transactions,
+   other kinds of databases and schema changes. One story runs through it: Ada's book-lending app.
+   Demos show real sqlite3 output; each demo draws its own small tables with tbl(). Every class is prefixed dbx-. */
 (() => {
-  const { h, sleep, replay } = Lab;
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = (text = '') => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
+  const { h } = Lab;
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const c = s => `<code>${esc(s)}</code>`;
   const label = text => h('span', { class: 'dbx-label' }, text);
-
-  function stats(names) {
-    const vals = {};
-    const root = h('div', { class: 'dbx-stats' }, names.map(n => { const b = h('b', {}, '-'); vals[n] = b; return h('span', { class: 'dbx-stat' }, `${n} `, b); }));
-    root.set = (n, v) => { if (vals[n].textContent !== String(v)) { vals[n].textContent = String(v); replay(vals[n], 'pop-soft'); } };
-    return root;
-  }
 
   // A small table. rows: arrays of values; o.cls(row, i) returns a row class; o.keys marks key columns.
   function tbl(name, cols, rows, o = {}) {
@@ -33,45 +20,8 @@
           : h('tr', {}, h('td', { colspan: String(cols.length), class: 'dbx-null' }, '(no rows)'))))));
   }
 
-  // Step player over prepared frames. o.paint(frame, i) draws one; frame.msg is shown below.
-  function player(el, o) {
-    let frames = o.frames || [{ msg: '' }], i = 0, tok = 0;
-    const msg = out('');
-    const count = h('span', { class: 'dbx-stat' });
-    const stepB = act('Step', () => { tok++; go(i + 1); });
-    const runB = act('Run', run);
-    const backB = act('Restart', () => { tok++; go(0); });
-    function go(n) {
-      if (n >= frames.length) return;
-      i = n;
-      o.paint(frames[i], i, frames);
-      if (frames[i].msg != null) say(msg, frames[i].msg);
-      count.textContent = `step ${i} of ${frames.length - 1}`;
-      stepB.disabled = runB.disabled = i >= frames.length - 1;
-    }
-    async function run() {
-      const t = ++tok;
-      while (i < frames.length - 1) {
-        go(i + 1);
-        await sleep(o.speed || 1100);
-        if (t !== tok || !el.isConnected) return;
-      }
-    }
-    el.append(h('div', { class: 'dbx-stage' }, ...(o.top || []), h('div', { class: 'controls' }, stepB, runB, backB, count), ...(o.view || []), msg));
-    go(0);
-    return { load(fr) { tok++; frames = fr; go(0); } };
-  }
-
-  // ---------- the shared dataset ----------
-  const USERS = [[1, 'Alice', 'Paris'], [2, 'Bob', 'Berlin'], [3, 'Maya', 'Paris'], [4, 'Sam', 'Lisbon']];
-  const POSTS = [[10, 1, 'Sandwich recipe', 42], [11, 1, 'Seaside walk', 17], [12, 2, 'Museum notes', 8], [13, 3, 'Kotlin tips', 95], [14, 3, 'Caching with Room', 61]];
-  const TAGS = [[1, 'food'], [2, 'travel'], [3, 'android']];
-  const POST_TAGS = [[10, 1], [10, 2], [11, 2], [12, 2], [13, 3], [14, 3]];
-  const userName = id => (USERS.find(u => u[0] === id) || [])[1];
-
   const css = `
 .dbx-stage { display: grid; gap: 12px; min-width: 0; }
-.dbx-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; min-width: 0; }
 .dbx-label { font: 600 0.72rem var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .dbx-tw { display: grid; gap: 4px; min-width: 0; max-width: 100%; }
 .dbx-tn { font: 600 0.78rem var(--mono); color: var(--muted); }
@@ -85,1186 +35,798 @@
 .dbx-t tr.dbx-hit td { background: var(--ok-soft); }
 .dbx-t tr.dbx-bad td { background: var(--err-soft); }
 .dbx-t tr.dbx-warm td { background: var(--warm-soft); }
-.dbx-t tr.dbx-g0 td { background: var(--accent-soft); }
-.dbx-t tr.dbx-g1 td { background: var(--warm-soft); }
-.dbx-t tr.dbx-g2 td { background: var(--ok-soft); }
-.dbx-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.dbx-chip { font: 600 0.74rem var(--mono); padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); transition: background 0.2s, color 0.2s; }
-.dbx-chip.dbx-on { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
-.dbx-chip.dbx-off { opacity: 0.35; }
-.dbx-chip.dbx-okc { background: var(--ok-soft); color: var(--ink); border-color: var(--ok); }
-.dbx-chip.dbx-badc { background: var(--err-soft); color: var(--ink); border-color: var(--err); }
 .dbx-stats { display: flex; flex-wrap: wrap; gap: 8px; }
 .dbx-stat { font: 500 0.8rem var(--mono); padding: 6px 10px; border-radius: 8px; background: var(--sunk); color: var(--ink); }
 .dbx-stat b { color: var(--accent); }
-.dbx-sql { font: 500 0.8rem/1.5 var(--mono); background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
 .dbx-doc { font: 500 0.76rem/1.5 var(--mono); background: var(--sunk); color: var(--ink); border-radius: 10px; padding: 8px 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; min-width: 0; }
-.dbx-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; max-width: 360px; width: 100%; }
-.dbx-cell { font: 500 0.68rem var(--mono); text-align: center; padding: 5px 0; border-radius: 5px; background: var(--sunk); color: var(--muted); transition: background 0.15s; }
-.dbx-cell.dbx-read { background: var(--warm-soft); color: var(--ink); }
-.dbx-cell.dbx-found { background: var(--ok); color: var(--bg); }
-.dbx-tree { display: grid; gap: 6px; justify-items: start; min-width: 0; }
-.dbx-lvl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
-.dbx-node { display: inline-flex; flex-wrap: wrap; gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 3px; background: var(--surface); }
-.dbx-k { font: 600 0.76rem var(--mono); padding: 3px 7px; border-radius: 5px; color: var(--ink); transition: background 0.15s; }
-.dbx-k.dbx-cmp { background: var(--warm-soft); }
-.dbx-k.dbx-found { background: var(--ok); color: var(--bg); }
-.dbx-node.dbx-idle { opacity: 0.35; }
-.dbx-log { display: grid; gap: 4px; font: 500 0.78rem/1.45 var(--mono); min-width: 0; }
-.dbx-ev { display: flex; gap: 8px; align-items: baseline; padding: 5px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
-.dbx-ev span:last-child { min-width: 0; }
-.dbx-ev.dbx-evbad { border-color: var(--err); background: var(--err-soft); }
-.dbx-ev.dbx-evok { border-color: var(--ok); }
-.dbx-lane { flex: none; font-weight: 700; padding: 1px 6px; border-radius: 5px; }
-.dbx-lane.dbx-t1 { background: var(--accent-soft); color: var(--ink); }
-.dbx-lane.dbx-t2 { background: var(--warm-soft); color: var(--ink); }
-.dbx-lane.dbx-sys { background: var(--sunk); color: var(--muted); }
-.dbx-replicas { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
-.dbx-rep { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--surface); display: grid; gap: 4px; min-width: 0; text-align: center; color: var(--ink); font: 500 0.8rem var(--mono); }
-.dbx-rep b { font-size: 1.3rem; color: var(--accent); }
-.dbx-link { font: 700 0.8rem var(--mono); color: var(--ok); }
-.dbx-link.dbx-cut { color: var(--err); }
 .dbx-pass { color: var(--ok); font-weight: 700; }
 .dbx-fail { color: var(--err); font-weight: 700; }
 `;
 
-  const lessons = [];
-
-  // 1 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'relational',
-    title: 'The relational model',
-    tagline: 'Data as tables of rows, tied together by keys the database checks for you.',
-    level: 'beginner',
-    body: `
-<p>A relational database stores data in <strong>tables</strong> (relations). Each row is one fact, each column has one type. A <strong>primary key</strong> names each row uniquely, like <code>users.id</code>. A <strong>foreign key</strong> is a column that points at another table’s primary key, like <code>posts.user_id</code>.</p>
-<p>Why not keep a JSON file? A file works until you need to change one fact that is copied in many places, find a few items without reading everything, or stop two writers from clobbering each other. A database stores each fact once, answers queries without loading the whole file, and refuses bad data: a duplicate id or a post by a user that does not exist.</p>
-<p>On Android the database is SQLite, and <a href="#data.room">Room</a> sits on top of it. On the backend it is usually PostgreSQL or MySQL. The model is the same everywhere. In the demo, SQLite pushes back when you break the rules. Note that SQLite only checks foreign keys when the connection turns them on.</p>`,
-    visual(el) {
-      const panel = '<pre class="ui-out">users(id PK, name, city)\n  1 Alice · 2 Bob · 3 Maya · 4 Sam\n\nposts(id PK, user_id → users.id, title)\n  10, 11 by 1 · 12 by 2 · 13, 14 by 3</pre>';
-      Lab.ui.terminal(el, {
-        prompt: 'sqlite>',
-        panelTitle: 'Schema',
-        predict: {
-          q: 'Foreign key checks are on. You insert a post with <code>id</code> 10, and post 10 already exists. What does SQLite answer?',
-          options: ['Nothing: it overwrites post 10', '<code>UNIQUE constraint failed: posts.id</code>', '<code>FOREIGN KEY constraint failed</code>'],
-          a: 1,
-          why: 'A primary key names one row. A second row with the same key is refused, whatever the other columns say.',
-        },
-        frames: [
-          { panel, say: 'A fresh <code>sqlite3</code> shell with two tables. <code>posts.user_id</code> points at <code>users.id</code>.' },
-          { cmd: 'PRAGMA foreign_keys;', out: '0', say: 'Foreign key checks are off. That is SQLite’s default, per connection.' },
-          { cmd: "INSERT INTO posts(id, user_id, title) VALUES (15, 9, 'Orphan post');", say: 'User 9 does not exist, but with checks off SQLite stores the row without a word.' },
-          { cmd: 'SELECT p.id, p.user_id, u.name FROM posts p LEFT JOIN users u ON u.id = p.user_id WHERE p.id = 15;', out: '15|9|', say: 'An orphan: the post points at nobody, so the author name is empty.' },
-          { cmd: 'PRAGMA foreign_keys = ON;', say: 'Turn the checks on for this connection.' },
-          { cmd: "INSERT INTO posts(id, user_id, title) VALUES (16, 9, 'Orphan post');", out: '<span style="color:var(--err)">Runtime error: FOREIGN KEY constraint failed (19)</span>', say: 'Now SQLite refuses the bad reference.' },
-          { cmd: "INSERT INTO posts(id, user_id, title) VALUES (10, 1, 'Again');", out: '<span style="color:var(--err)">Runtime error: UNIQUE constraint failed: posts.id (19)</span>', say: 'And a duplicate primary key. A JSON array would happily hold two objects with id 10.' },
-          { cmd: "UPDATE users SET name = 'Alice K.' WHERE id = 1;", say: 'Renaming Alice changes one row. Her posts only hold her id, so every query that joins them shows the new name.' },
-        ],
-      });
-    },
-    code: `@Entity(tableName = "users")
-data class User(
-    @PrimaryKey val id: Long,
-    val name: String,
-    val city: String,
-)
-
-@Entity(
-    tableName = "posts",
-    foreignKeys = [ForeignKey(
-        entity = User::class,
-        parentColumns = ["id"],
-        childColumns = ["user_id"],
-        onDelete = ForeignKey.CASCADE,     // deleting a user deletes their posts
-    )],
-    indices = [Index("user_id")],          // index the foreign key column
-)
-data class Post(
-    @PrimaryKey val id: Long,
-    @ColumnInfo(name = "user_id") val userId: Long,
-    val title: String,
-    val likes: Int = 0,
-)`,
-    remember: 'Store each fact once, give every row a primary key, and point between tables with foreign keys.',
-    deeper: [
-      {
-        title: 'Relations, tuples, attributes',
-        body: `<p>In the textbook, a table is a <strong>relation</strong>, a row is a <strong>tuple</strong> and a column is an <strong>attribute</strong>. A relation is a set: no duplicate rows and no built-in order. That is why SQL gives you rows in no promised order unless you write <code>ORDER BY</code>.</p>
-<p>A <strong>candidate key</strong> is any set of columns that is unique for every row, like <code>email</code>. You pick one as the primary key. A <strong>surrogate key</strong> is a made-up id (<code>1, 2, 3</code> or a UUID); a <strong>natural key</strong> is a real-world value like a national id number. Surrogate keys are safer because real-world values change.</p>`,
-      },
-      {
-        title: 'Constraints do the checking',
-        body: `<p>Constraints are rules the database enforces on every write, no matter which code path writes. <code>NOT NULL</code>, <code>UNIQUE</code>, <code>CHECK</code>, <code>PRIMARY KEY</code> and <code>FOREIGN KEY</code> catch bugs that your Kotlin validation misses, like a background sync writing a half-filled row.</p>`,
-        code: `CREATE TABLE users (
-    id    INTEGER PRIMARY KEY,
-    email TEXT    NOT NULL UNIQUE,
-    age   INTEGER CHECK (age >= 13)
-);
--- SQLite checks REFERENCES only after: PRAGMA foreign_keys = ON;`,
-      },
-      {
-        title: 'What happens when the parent goes away',
-        body: `<p>A foreign key also says what to do when the parent row is deleted or its key changes. <code>CASCADE</code> deletes the children too, <code>SET NULL</code> clears the pointer, <code>RESTRICT</code> refuses the delete. Pick on purpose: deleting a user should probably delete their drafts, but not the orders the shop must keep.</p>`,
-        code: `@Entity(foreignKeys = [ForeignKey(
-    entity = User::class, parentColumns = ["id"], childColumns = ["user_id"],
-    onDelete = ForeignKey.SET_NULL,     // keep the order, forget the user
-)])
-data class Order(@PrimaryKey val id: Long, @ColumnInfo(name = "user_id") val userId: Long?)`,
-      },
-    ],
-    underHood: {
-      body: `<p>An SQLite database is one file made of fixed-size pages. Each ordinary table is a <strong>table b-tree</strong> keyed by a 64-bit <code>rowid</code>, with the row data in the leaves. A column declared <code>INTEGER PRIMARY KEY</code> becomes that rowid, so looking a row up by id is a tree search. Every index is a separate <strong>index b-tree</strong>, including the hidden ones SQLite creates for <code>UNIQUE</code> constraints.</p>`,
-    },
-    mistakes: [
-      { title: 'Assuming SQLite checks REFERENCES', bad: '-- raw SQLite connection, default settings\nINSERT INTO posts(id, user_id, title) VALUES (15, 9, \'x\');\n-- succeeds, even though user 9 does not exist', good: 'PRAGMA foreign_keys = ON;   -- once per connection\nINSERT INTO posts(id, user_id, title) VALUES (15, 9, \'x\');\n-- FOREIGN KEY constraint failed', why: 'SQLite keeps foreign key enforcement off by default for backwards compatibility, and the setting is per connection. Turn it on, or rely on a layer that does.' },
-      { title: 'Using a changeable value as the primary key', bad: '@Entity data class User(@PrimaryKey val email: String, val name: String)', good: '@Entity(indices = [Index(value = ["email"], unique = true)])\ndata class User(@PrimaryKey(autoGenerate = true) val id: Long = 0, val email: String, val name: String)', why: 'People change emails. If the email is the key, every foreign key that points at it must change too. A surrogate id never changes; a unique index still blocks duplicates.' },
-    ],
-    terms: [
-      { term: 'Primary key', def: 'A column (or set of columns) whose value is unique for every row and identifies it.' },
-      { term: 'Foreign key', def: 'A column that holds another table’s primary key, so the database can check the link exists.' },
-      { term: 'Constraint', def: 'A rule like NOT NULL, UNIQUE or CHECK that the database enforces on every write.' },
-      { term: 'Orphan row', def: 'A child row whose foreign key points at a parent that does not exist.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Give <code>posts</code> a primary key and make <code>user_id</code> point at <code>users</code>.', code: 'CREATE TABLE posts (\n    id      INTEGER [[PRIMARY KEY|primary key]],\n    user_id INTEGER NOT NULL [[REFERENCES|references]] users(id),\n    title   TEXT NOT NULL\n);', why: '<code>PRIMARY KEY</code> makes <code>id</code> unique and, for <code>INTEGER</code>, the rowid. <code>REFERENCES users(id)</code> declares the foreign key.' },
-      { type: 'bug', prompt: 'This test expects the orphan insert to fail on a raw SQLite connection, but it passes the insert. Tap the line that is missing its setup.', code: 'val db = SQLiteDatabase.create(null)\ndb.execSQL("CREATE TABLE users(id INTEGER PRIMARY KEY)")\ndb.execSQL("CREATE TABLE posts(id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id))")\ndb.execSQL("INSERT INTO posts VALUES (1, 9)")   // expected: FOREIGN KEY constraint failed', bug: 0, fix: 'val db = SQLiteDatabase.create(null).apply { setForeignKeyConstraintsEnabled(true) }', why: 'Foreign key checks are off by default. <code>setForeignKeyConstraintsEnabled(true)</code> runs <code>PRAGMA foreign_keys = ON</code> for this connection, before the insert.' },
-    ],
-    quiz: [
-      { q: 'An app keeps posts in a JSON file with the author’s name copied into each post. The author changes her name. What is the core problem?', options: ['JSON cannot store non-ASCII characters', 'The same fact lives in many places, so every copy must be found and rewritten', 'JSON files cannot be larger than 1 MB'], a: 1, why: 'Duplicated facts drift apart when one copy is missed. A table stores the name once and posts point at it by id.' },
-      { q: 'On a fresh SQLite connection you run <code>INSERT INTO posts(user_id) VALUES (9)</code> and user 9 does not exist. What happens?', options: ['FOREIGN KEY constraint failed', 'The insert succeeds and leaves an orphan row', 'SQLite creates user 9 automatically'], a: 1, why: 'SQLite leaves foreign key enforcement off by default. It only checks after <code>PRAGMA foreign_keys = ON</code> on that connection.' },
-      { q: 'Which column makes the best primary key for a <code>users</code> table?', options: ['email', 'phone number', 'a generated numeric id'], a: 2, why: 'Emails and phone numbers change. A generated id never does, so nothing pointing at it has to change. Keep email unique with an index.' },
-    ],
-  });
-
-  // 2 ─────────────────────────────────────────────
-  const CLAUSES = ['FROM', 'WHERE', 'GROUP BY', 'HAVING', 'SELECT', 'ORDER BY', 'LIMIT'];
-  const sumBy = uid => POSTS.filter(p => p[1] === uid).reduce((a, p) => a + p[3], 0);
-  const groups = [1, 2, 3].map(u => [u, POSTS.filter(p => p[1] === u).length, sumBy(u)]);
-  const QUERIES = [
-    { label: 'SELECT *', sql: 'SELECT * FROM posts;', use: ['FROM', 'SELECT'], cols: ['id', 'user_id', 'title', 'likes'], rows: () => POSTS, msg: 'Every row, every column. Fine for 5 rows; on a real table, name the columns you need.' },
-    { label: 'WHERE', sql: 'SELECT title, likes FROM posts\nWHERE likes > 40;', use: ['FROM', 'WHERE', 'SELECT'], keep: p => p[3] > 40, cols: ['title', 'likes'], rows: () => POSTS.filter(p => p[3] > 40).map(p => [p[2], p[3]]), msg: 'WHERE drops rows before anything else looks at them. Dimmed rows failed the test.' },
-    { label: 'ORDER BY + LIMIT', sql: 'SELECT title, likes FROM posts\nORDER BY likes DESC\nLIMIT 3;', use: ['FROM', 'SELECT', 'ORDER BY', 'LIMIT'], cols: ['title', 'likes'], rows: () => POSTS.slice().sort((a, b) => b[3] - a[3]).slice(0, 3).map(p => [p[2], p[3]]), msg: 'Sort, then keep the first 3. Without ORDER BY the order is whatever the engine finds first.' },
-    { label: 'GROUP BY', sql: 'SELECT user_id, COUNT(*) AS n,\n       SUM(likes) AS total\nFROM posts\nGROUP BY user_id;', use: ['FROM', 'GROUP BY', 'SELECT'], group: true, cols: ['user_id', 'n', 'total'], rows: () => groups, msg: 'Rows with the same user_id collapse into one output row. COUNT and SUM run once per group.' },
-    { label: 'HAVING', sql: 'SELECT user_id, SUM(likes) AS total\nFROM posts\nGROUP BY user_id\nHAVING SUM(likes) > 50\nORDER BY total DESC;', use: ['FROM', 'GROUP BY', 'HAVING', 'SELECT', 'ORDER BY'], group: true, cols: ['user_id', 'total'], rows: () => groups.filter(g => g[2] > 50).sort((a, b) => b[2] - a[2]).map(g => [g[0], g[2]]), msg: 'HAVING filters groups, after the sums exist. WHERE could not do this: it runs before grouping.' },
-  ];
-  lessons.push({
-    id: 'sql-queries',
-    title: 'SQL queries',
-    tagline: 'Say what rows you want; the database works out how to get them.',
-    level: 'beginner',
-    body: `
-<p>SQL is declarative: you describe the result, not the loop. <code>SELECT</code> picks columns, <code>FROM</code> picks the table, <code>WHERE</code> filters rows, <code>ORDER BY</code> sorts, <code>LIMIT</code> keeps the first few.</p>
-<p><code>GROUP BY</code> folds rows that share a value into one row, and aggregate functions like <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code> and <code>MAX</code> compute one value per group. <code>HAVING</code> filters those groups.</p>
-<p>The clauses are written in one order but run in another: FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT. That explains most beginner errors, like using an aggregate in <code>WHERE</code>. Run each query and watch the clauses light up in the order they run. In <a href="#data.room">Room</a> these same queries go in <code>@Query</code>, and Room checks them against your schema at compile time.</p>`,
-    predict: {
-      q: "The <code>GROUP BY user_id</code> query runs on 5 posts written by users 1, 2 and 3. How many rows come out?",
-      options: ["5, one per post", "3, one per user_id", "1, the grand total"],
-      a: 1,
-      why: "GROUP BY folds the rows that share a value into one output row, and COUNT and SUM run once per group.",
-    },
-    visual(el) {
-      const sql = h('pre', { class: 'dbx-sql' });
-      const chips = CLAUSES.map(n => h('span', { class: 'dbx-chip dbx-off' }, n));
-      const src = h('div', {});
-      const res = h('div', {});
-      const msg = out('Pick a query. The source table is on the left, the result on the right.');
-      let tok = 0;
-      const paintSrc = (q, stage) => src.replaceChildren(tbl('posts', ['id', 'user_id', 'title', 'likes'], POSTS, {
-        cls: p => {
-          if (stage >= 1 && q.keep && !q.keep(p)) return 'dbx-dim';
-          if (stage >= 2 && q.group) return 'dbx-g' + (p[1] - 1);
-          return null;
-        },
-      }));
-      const btns = QUERIES.map(q => act(q.label, async () => {
-        const t = ++tok;
-        press(btns, btns[QUERIES.indexOf(q)]);
-        sql.textContent = q.sql;
-        chips.forEach(ch => { ch.className = 'dbx-chip dbx-off'; });
-        res.replaceChildren(); paintSrc(q, 0);
-        let stage = 0;
-        for (const n of CLAUSES) {
-          if (!q.use.includes(n)) continue;
-          chips[CLAUSES.indexOf(n)].className = 'dbx-chip dbx-on';
-          if (n === 'WHERE') stage = 1;
-          if (n === 'GROUP BY') stage = 2;
-          paintSrc(q, stage);
-          await sleep(380);
-          if (t !== tok || !el.isConnected) return;
-        }
-        res.replaceChildren(tbl('result', q.cols, q.rows()));
-        say(msg, q.msg);
-      }));
-      press(btns, null);
-      paintSrc({}, 0);
-      sql.textContent = '-- pick a query';
-      el.append(h('div', { class: 'dbx-stage' }, h('div', { class: 'controls' }, btns), sql, h('div', { class: 'dbx-chips' }, label('runs in order'), chips), h('div', { class: 'dbx-row' }, src, res), msg));
-    },
-    code: `@Dao
-interface PostDao {
-    @Query("SELECT * FROM posts WHERE likes > :min ORDER BY likes DESC LIMIT :n")
-    suspend fun top(min: Int, n: Int): List<Post>
-
-    // A query can return a small data class instead of the entity
-    @Query("""
-        SELECT user_id AS userId, COUNT(*) AS posts, SUM(likes) AS total
-        FROM posts
-        GROUP BY user_id
-        HAVING SUM(likes) > :atLeast
-        ORDER BY total DESC
-    """)
-    fun popularAuthors(atLeast: Int): Flow<List<AuthorStats>>
-}
-
-data class AuthorStats(val userId: Long, val posts: Int, val total: Int)`,
-    remember: 'FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT. WHERE filters rows, HAVING filters groups.',
-    deeper: [
-      {
-        title: 'NULL is not a value',
-        body: `<p><code>NULL</code> means “unknown”. Any comparison with it is unknown too, so <code>WHERE city = NULL</code> matches nothing. Use <code>IS NULL</code> and <code>IS NOT NULL</code>. Aggregates skip NULLs: <code>COUNT(*)</code> counts rows, <code>COUNT(city)</code> counts rows where city is not NULL. <code>COALESCE(x, 0)</code> swaps a NULL for a default.</p>`,
-        code: `SELECT COUNT(*), COUNT(city) FROM users;      -- 4, 3 if one city is NULL
-SELECT * FROM users WHERE city IS NULL;       -- not: city = NULL
-SELECT name, COALESCE(city, 'unknown') FROM users;`,
-      },
-      {
-        title: 'Bind parameters, never string concatenation',
-        body: `<p>Building SQL by gluing strings lets user input become SQL: a search box value like <code>' OR 1=1 --</code> changes the query. Bind parameters send the value separately, so it can only ever be data. Room’s <code>:name</code> parameters do this for you.</p>`,
-        code: `// Bad: injection, and no compile-time check
-db.rawQuery("SELECT * FROM users WHERE name = '$input'", null)
-
-// Good: the value is bound, never parsed as SQL
-@Query("SELECT * FROM users WHERE name = :name")
-suspend fun byName(name: String): List<User>`,
-      },
-      {
-        title: 'Case and non-ASCII text',
-        body: `<p>By default, SQLite’s <code>lower()</code>, <code>upper()</code>, the <code>NOCASE</code> collation and <code>LIKE</code> only know upper and lower case for ASCII letters; full Unicode folding needs the ICU extension. So <code>'SÃO PAULO' = 'são paulo' COLLATE NOCASE</code> is false. Do not count on the database for Unicode or locale-specific case rules: store a normalized column, lowercased in Kotlin with an explicit locale, and query that.</p>`,
-        code: `val key = "SÃO PAULO".lowercase(Locale.ROOT)   // "são paulo"
-// @Entity: val cityKey: String  (filled on insert)
-@Query("SELECT * FROM users WHERE city_key = :key")
-suspend fun inCity(key: String): List<User>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Aggregate in WHERE', bad: 'SELECT user_id, SUM(likes) FROM posts\nWHERE SUM(likes) > 50\nGROUP BY user_id;', good: 'SELECT user_id, SUM(likes) FROM posts\nGROUP BY user_id\nHAVING SUM(likes) > 50;', why: 'WHERE runs before grouping, when no sums exist yet. Filters on aggregates belong in HAVING.' },
-      { title: 'Expecting a stable order without ORDER BY', bad: '@Query("SELECT * FROM posts LIMIT 20")\nsuspend fun firstPage(): List<Post>', good: '@Query("SELECT * FROM posts ORDER BY created_at DESC, id DESC LIMIT 20")\nsuspend fun firstPage(): List<Post>', why: 'A table is a set. Without ORDER BY the engine may return rows in any order, and that order can change when an index is added. Add a tie-breaker like id so equal timestamps stay stable.' },
-    ],
-    terms: [
-      { term: 'Aggregate function', def: 'A function like COUNT, SUM or AVG that turns many rows into one value.' },
-      { term: 'GROUP BY', def: 'A clause that folds rows with equal values into one output row per group.' },
-      { term: 'HAVING', def: 'A filter that runs after grouping, so it can test aggregate values.' },
-      { term: 'Bind parameter', def: 'A placeholder like :name whose value is sent separately from the SQL text, which blocks injection.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Count posts per user and keep only users with at least 2 posts.', code: 'SELECT user_id, [[COUNT|count]](*) AS n\nFROM posts\n[[GROUP BY|group by]] user_id\n[[HAVING|having]] COUNT(*) >= 2;', why: '<code>COUNT(*)</code> counts rows per group, <code>GROUP BY</code> makes the groups, <code>HAVING</code> filters groups after counting.' },
-      { type: 'bug', prompt: 'This should list users with no city, but it always returns nothing. Tap the bug.', code: '@Query("""\n    SELECT * FROM users\n    WHERE city = NULL\n    ORDER BY name\n""")\nsuspend fun noCity(): List<User>', bug: 2, fix: '    WHERE city IS NULL', why: 'Comparing anything with NULL using <code>=</code> gives unknown, which WHERE treats as false. <code>IS NULL</code> is the test for missing values.' },
-    ],
-    quiz: [
-      { q: 'In which order does the database logically run these clauses?', options: ['SELECT, FROM, WHERE, ORDER BY', 'FROM, WHERE, SELECT, ORDER BY', 'FROM, SELECT, WHERE, ORDER BY', 'WHERE, FROM, SELECT, ORDER BY'], a: 1, why: 'First pick the table, then drop rows, then compute the output columns, then sort them. That is why standard SQL lets ORDER BY use a SELECT alias but not WHERE (SQLite is more lenient and accepts both).' },
-      { q: 'With the demo data, what does <code>SELECT COUNT(*) FROM posts WHERE likes > 40</code> return?', options: ['5', '3', '2'], a: 1, why: 'Posts with 42, 95 and 61 likes pass the filter. COUNT then counts the 3 remaining rows.' },
-      { q: 'You need users whose posts have more than 100 likes in total. Where does <code>SUM(likes) > 100</code> go?', options: ['In WHERE', 'In HAVING, after GROUP BY user_id', 'In ORDER BY'], a: 1, why: 'The sum only exists per group, after GROUP BY. HAVING is the filter for groups.' },
-      { q: 'A search screen builds <code>"... WHERE name = \'" + query + "\'"</code>. Which fix is right?', options: ['Escape quotes by hand', 'Use a bind parameter like :name', 'Trim the input'], a: 1, why: 'A bind parameter sends the value apart from the SQL, so input can never change the query. Hand escaping misses cases.' },
-    ],
-  });
-
-  // 3 ─────────────────────────────────────────────
-  const JOINS = [
-    {
-      label: 'INNER JOIN', sql: 'SELECT u.name, p.title\nFROM users u\nJOIN posts p ON p.user_id = u.id;',
-      cols: ['name', 'title'], rows: () => POSTS.map(p => [userName(p[1]), p[2]]), cls: () => null,
-      msg: 'One output row per matching pair. Sam has no posts, so Sam is missing from the result.',
-    },
-    {
-      label: 'LEFT JOIN', sql: 'SELECT u.name, p.title\nFROM users u\nLEFT JOIN posts p ON p.user_id = u.id;',
-      cols: ['name', 'title'], rows: () => [...POSTS.map(p => [userName(p[1]), p[2]]), ['Sam', null]], cls: r => r[1] == null ? 'dbx-warm' : null,
-      msg: 'Every user stays. Where no post matches, the post columns are NULL. Use it for “users and their posts, if any”.',
-    },
-    {
-      label: 'LEFT JOIN … IS NULL', sql: 'SELECT u.name\nFROM users u\nLEFT JOIN posts p ON p.user_id = u.id\nWHERE p.id IS NULL;',
-      cols: ['name'], rows: () => [['Sam']], cls: () => 'dbx-warm',
-      msg: 'The anti-join: keep only the users the LEFT JOIN could not match. “Users who never posted.”',
-    },
-    {
-      label: 'many-to-many', sql: 'SELECT p.title, t.name AS tag\nFROM posts p\nJOIN post_tags pt ON pt.post_id = p.id\nJOIN tags t ON t.id = pt.tag_id;',
-      cols: ['title', 'tag'], rows: () => POST_TAGS.map(([pid, tid]) => [POSTS.find(p => p[0] === pid)[2], TAGS.find(t => t[0] === tid)[1]]), cls: r => r[0] === 'Sandwich recipe' ? 'dbx-g0' : null,
-      msg: 'A post has many tags and a tag has many posts. The join table post_tags holds one row per pair. “Sandwich recipe” has two tags, so it appears twice.',
-    },
-  ];
-  lessons.push({
-    id: 'joins',
-    title: 'Joins',
-    tagline: 'Put related rows from two tables side by side, in one query.',
-    level: 'intermediate',
-    body: `
-<p>Data is split across tables, so you need a way to bring it back together. A <strong>join</strong> pairs rows from two tables that satisfy a condition, usually “this foreign key equals that primary key”.</p>
-<p><code>INNER JOIN</code> keeps only pairs that match. <code>LEFT JOIN</code> keeps every row of the left table and fills the right side with NULL when nothing matches. A <strong>many-to-many</strong> link (posts and tags) needs a third table, a <strong>join table</strong>, with one row per pair.</p>
-<p>The classic performance bug is the <strong>N+1 query problem</strong>: load 20 posts in one query, then run one more query per post to load its author. That is 21 round trips where 1 or 2 would do. Room’s <a href="#data.relations">@Relation</a> avoids it by loading children with one batched <code>IN (...)</code> query.</p>`,
-    visual(el) {
-      Lab.ui.codeStepper(el, {
-        code: `// users u LEFT JOIN posts p
-for (u in users) {
-  var hit = false
-  for (p in posts) {
-    if (p.userId == u.id) {
-      emit(u.name, p.title)
-      hit = true
-    }
-  }
-  if (!hit) emit(u.name, null)
-}`,
-        outTitle: 'Result rows',
-        predict: {
-          q: 'Alice wrote two posts. How many result rows mention Alice?',
-          options: ['1, with both titles in it', '2, one per matching pair', '5, one per post in the table'],
-          a: 1,
-          why: 'A join emits one row for each pair of rows that matches the condition. Two posts match Alice, so she appears twice.',
-        },
-        frames: [
-          { say: '<code>SELECT u.name, p.title FROM users u LEFT JOIN posts p ON p.user_id = u.id</code>, written as the loop it means. A real engine uses an index to find matches, but the result is the same.' },
-          { line: 2, vars: { u: '1 Alice', hit: 'false' }, say: 'Take the first user.' },
-          { line: [5, 6], vars: { p: '10 → user 1', hit: 'true' }, out: 'Alice | Sandwich recipe', say: 'Post 10 has <code>user_id</code> 1. The condition holds, so one row comes out.' },
-          { line: [5, 6], vars: { p: '11 → user 1' }, out: 'Alice | Seaside walk', say: 'Post 11 also matches. A second row for Alice. Posts 12 to 14 belong to others and are skipped.' },
-          { line: [5, 6], vars: { u: '2 Bob', p: '12 → user 2' }, out: 'Bob | Museum notes', say: 'Bob: every post is checked again, and only post 12 matches.' },
-          { line: [5, 6], vars: { u: '3 Maya', p: '14 → user 3' }, out: 'Maya | Kotlin tips\nMaya | Caching with Room', say: 'Maya has two posts, so two more rows.' },
-          { line: 2, vars: { u: '4 Sam', p: null, hit: 'false' }, say: 'Sam. No post has <code>user_id</code> 4.' },
-          { line: 10, out: 'Sam | NULL', say: 'LEFT JOIN keeps Sam with NULL for the post columns. An INNER JOIN has no such line, so Sam would be missing from its result.' },
-        ],
-      });
-    },
-    code: `// One-to-many with Room: parents first, then all children in one IN (...) query
-data class UserWithPosts(
-    @Embedded val user: User,
-    @Relation(parentColumn = "id", entityColumn = "user_id")
-    val posts: List<Post>,
-)
-
-// Many-to-many: the join table is an entity with a composite primary key
-@Entity(tableName = "post_tags", primaryKeys = ["post_id", "tag_id"], indices = [Index("tag_id")])
-data class PostTag(@ColumnInfo(name = "post_id") val postId: Long, @ColumnInfo(name = "tag_id") val tagId: Long)
-
-@Dao
-interface FeedDao {
-    @Transaction                      // several queries, one consistent snapshot
-    @Query("SELECT * FROM users")
-    fun usersWithPosts(): Flow<List<UserWithPosts>>
-
-    // Or one JOIN returning a multimap
-    @Query("SELECT * FROM users JOIN posts ON posts.user_id = users.id")
-    suspend fun postsByUser(): Map<User, List<Post>>
-}`,
-    remember: 'INNER keeps matches, LEFT keeps every left row. Many-to-many needs a join table. Never query once per row.',
-    deeper: [
-      {
-        title: 'The N+1 query problem',
-        body: `<p>Count round trips. The naive loop runs 1 query for the posts and 1 per post for its author. The JOIN does it in 1. The batched version runs 2: posts, then <code>WHERE id IN (…)</code> for all their authors at once, which is what Room’s <code>@Relation</code> does. Each query has fixed overhead; on a server, each one is also a network hop.</p>`,
-        visual(el) {
-          const log = h('div', { class: 'dbx-log' });
-          const st = stats(['queries', 'time (≈2 ms each)']);
-          const msg = out('Load a feed of 8 posts with their authors.');
-          let tok = 0;
-          async function run(lines, note) {
-            const t = ++tok;
-            log.replaceChildren();
-            st.set('queries', 0); st.set('time (≈2 ms each)', '0 ms');
-            for (let k = 0; k < lines.length; k++) {
-              log.append(h('div', { class: 'dbx-ev' }, h('span', { class: 'dbx-lane dbx-sys' }, String(k + 1)), h('span', {}, lines[k])));
-              st.set('queries', k + 1); st.set('time (≈2 ms each)', `${(k + 1) * 2} ms`);
-              await sleep(220);
-              if (t !== tok || !el.isConnected) return;
-            }
-            say(msg, note);
-          }
-          const authors = [1, 3, 1, 2, 3, 3, 1, 2];
-          el.append(h('div', { class: 'dbx-stage' },
-            h('div', { class: 'controls' },
-              act('Loop: N+1', () => run(['SELECT * FROM posts LIMIT 8', ...authors.map(a => `SELECT * FROM users WHERE id = ${a}`)], '9 queries for 8 posts, and the same users are fetched again and again. With 50 posts it is 51.')),
-              act('One JOIN', () => run(['SELECT … FROM posts JOIN users ON users.id = posts.user_id LIMIT 8'], '1 query. The author columns repeat in every row, which is fine for small rows.')),
-              act('Batched IN (…)', () => run(['SELECT * FROM posts LIMIT 8', 'SELECT * FROM users WHERE id IN (1, 2, 3)'], '2 queries no matter how many posts. This is what Room does for @Relation.'))),
-            st, log, msg));
-        },
-        code: `// N+1: hidden inside a map
-val feed = postDao.latest(50).map { post ->
-    FeedItem(post, userDao.byId(post.userId))     // one query per post
-}
-
-// 2 queries total
-val posts = postDao.latest(50)
-val users = userDao.byIds(posts.map { it.userId }.distinct()).associateBy { it.id }
-val feed2 = posts.map { FeedItem(it, users.getValue(it.userId)) }`,
-      },
-      {
-        title: 'How the engine runs a join',
-        body: `<p>A <strong>nested loop join</strong> takes each row of one table and looks for matches in the other. Without an index on the join column, that inner lookup is a full scan, so the join costs about rows × rows. With an index on <code>posts.user_id</code>, each lookup is a tree search. SQLite uses nested loops; PostgreSQL can also pick hash joins and merge joins. Either way: index your foreign keys.</p>`,
-        code: `EXPLAIN QUERY PLAN
-SELECT u.name, p.title FROM users u JOIN posts p ON p.user_id = u.id;
--- with an index on posts(user_id), the inner side reads:
---   SEARCH p USING INDEX index_posts_user_id (user_id=?)`,
-      },
-      {
-        title: 'Joins that multiply rows',
-        body: `<p>Joining a user to two one-to-many tables at once (posts and comments) makes posts × comments rows per user. A user with 10 posts and 20 comments becomes 200 rows, and <code>COUNT</code> or <code>SUM</code> over them is wrong. Aggregate each child table in its own subquery, or load them separately.</p>`,
-        code: `-- Wrong: counts are multiplied
-SELECT u.id, COUNT(p.id), COUNT(c.id)
-FROM users u LEFT JOIN posts p ON p.user_id = u.id LEFT JOIN comments c ON c.user_id = u.id
-GROUP BY u.id;
-
--- Right: count each side on its own
-SELECT u.id,
-  (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id)    AS posts,
-  (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.id) AS comments
-FROM users u;`,
-      },
-    ],
-    mistakes: [
-      { title: 'Filtering the right table of a LEFT JOIN in WHERE', bad: 'SELECT u.name, p.title FROM users u\nLEFT JOIN posts p ON p.user_id = u.id\nWHERE p.likes > 10;      -- users without posts vanish', good: 'SELECT u.name, p.title FROM users u\nLEFT JOIN posts p ON p.user_id = u.id AND p.likes > 10;', why: 'For users without posts, p.likes is NULL and the WHERE test drops them, turning the LEFT JOIN into an inner one. Put conditions on the right table in ON.' },
-      { title: 'A query per item in a list', bad: 'items.forEach { item ->\n    item.author = userDao.byId(item.userId)\n}', good: 'val users = userDao.byIds(items.map { it.userId }.distinct())\n    .associateBy { it.id }', why: 'One query per item is the N+1 problem. Load all needed rows in one IN query or a JOIN, then match them in memory.' },
-    ],
-    terms: [
-      { term: 'Join', def: 'Combining rows from two tables into one result where a condition between them holds.' },
-      { term: 'LEFT JOIN', def: 'A join that keeps every row of the left table, with NULLs where the right table has no match.' },
-      { term: 'Join table', def: 'A table with one row per pair of linked rows, used for many-to-many relationships.' },
-      { term: 'N+1 query problem', def: 'Running one query for a list and then one extra query per item, instead of one or two in total.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'List every user and the title of each post they wrote, including users with no posts.', code: 'SELECT u.name, p.title\nFROM users u\n[[LEFT|left|LEFT OUTER|left outer]] JOIN posts p ON p.[[user_id]] = u.id;', why: '<code>LEFT JOIN</code> keeps users without posts. The join condition matches the foreign key <code>p.user_id</code> to the primary key <code>u.id</code>.' },
-      { type: 'bug', prompt: 'The feed screen is slow with 100 posts. Tap the line that causes the N+1 problem.', code: 'suspend fun loadFeed(): List<FeedItem> {\n    val posts = postDao.latest(100)\n    return posts.map { post ->\n        FeedItem(post, userDao.byId(post.userId))\n    }\n}', bug: 3, fix: '        FeedItem(post, users.getValue(post.userId))   // users = userDao.byIds(ids).associateBy { it.id }', why: 'Each <code>byId</code> call is one more query, 101 in total. Load all authors once with <code>IN (...)</code> before the loop and look them up in a map.' },
-    ],
-    quiz: [
-      { q: 'With the demo data (Sam has no posts), how many rows does <code>users LEFT JOIN posts</code> return?', options: ['4', '5', '6'], a: 2, why: 'Five posts each match one user, giving 5 rows. Can matches nothing, so the LEFT JOIN adds one more row with NULL post columns: 6.' },
-      { q: 'Students take many courses and courses have many students. How do you model it?', options: ['A course_id column in students', 'A comma-separated list of ids in each row', 'A third table enrollments(student_id, course_id)'], a: 2, why: 'Each enrollment is its own fact. A join table with both foreign keys, and a composite primary key, models many-to-many.' },
-      { q: 'A screen loads 30 orders, then calls <code>customerDao.byId()</code> for each. How many queries run, and what is the fix?', options: ['30, use a cache', '31, load customers with one WHERE id IN (...) query', '1, nothing to fix'], a: 1, why: '1 for the orders plus 30 for customers is N+1. One batched IN query (or a JOIN) brings it to 2 (or 1).' },
-      { q: 'Why does Room ask for <code>@Transaction</code> on a query returning <code>UserWithPosts</code>?', options: ['It runs more than one query, and the transaction keeps them on one snapshot', 'Room cannot read without a transaction', 'It makes the query run faster in parallel'], a: 0, why: 'Users and posts come from separate queries. Without a transaction, a write could land between them and you would get posts that do not match the users.' },
-    ],
-  });
-
-  // 4 ─────────────────────────────────────────────
-  const NF = [
-    {
-      name: 'Unnormalized', anomaly: 2,
-      tables: [['orders', ['order_id', 'customer', 'city', 'items'], [[1001, 'Alice', 'Paris', 'tea×2, bagel×1'], [1002, 'Alice', 'Paris', 'bagel×3'], [1003, 'Bob', 'Berlin', 'tea×1']], { order_id: 'PK' }]],
-      msg: 'One wide table, and the items column holds a list. You cannot ask “how many bagels were sold?” without parsing text.',
-    },
-    {
-      name: '1NF', anomaly: 3,
-      tables: [['order_lines', ['order_id', 'product', 'qty', 'customer', 'city', 'price'], [[1001, 'tea', 2, 'Alice', 'Paris', 15], [1001, 'bagel', 1, 'Alice', 'Paris', 20], [1002, 'bagel', 3, 'Alice', 'Paris', 20], [1003, 'tea', 1, 'Bob', 'Berlin', 15]], { order_id: 'PK', product: 'PK' }]],
-      msg: '1NF: one value per cell, no lists. The key is now (order_id, product). But Alice’s city is copied into 3 rows, and the bagel price into 2.',
-    },
-    {
-      name: '2NF', anomaly: 2,
-      tables: [
-        ['orders', ['order_id', 'customer', 'city'], [[1001, 'Alice', 'Paris'], [1002, 'Alice', 'Paris'], [1003, 'Bob', 'Berlin']], { order_id: 'PK' }],
-        ['order_lines', ['order_id', 'product', 'qty'], [[1001, 'tea', 2], [1001, 'bagel', 1], [1002, 'bagel', 3], [1003, 'tea', 1]], { order_id: 'FK', product: 'FK' }],
-        ['products', ['product', 'price'], [['tea', 15], ['bagel', 20]], { product: 'PK' }]],
-      msg: '2NF: every column depends on the whole key. customer and city depend only on order_id, price only on product, so they moved out. City still repeats once per order.',
-    },
-    {
-      name: '3NF', anomaly: 1,
-      tables: [
-        ['customers', ['id', 'name', 'city'], [[1, 'Alice', 'Paris'], [2, 'Bob', 'Berlin']], { id: 'PK' }],
-        ['orders', ['order_id', 'customer_id'], [[1001, 1], [1002, 1], [1003, 2]], { order_id: 'PK', customer_id: 'FK' }],
-        ['order_lines', ['order_id', 'product', 'qty'], [[1001, 'tea', 2], [1001, 'bagel', 1], [1002, 'bagel', 3], [1003, 'tea', 1]], {}],
-        ['products', ['product', 'price'], [['tea', 15], ['bagel', 20]], { product: 'PK' }]],
-      msg: '3NF: no column depends on another non-key column. city depended on the customer, not the order, so customers got their own table. Each fact now lives in exactly one row.',
-    },
-  ];
-  lessons.push({
-    id: 'normalization',
-    title: 'Normalization and modeling',
-    tagline: 'Split tables until every fact lives in one place, then copy on purpose.',
-    level: 'intermediate',
-    body: `
-<p>Normalization is a recipe for removing duplicated facts. Duplicates cause <strong>anomalies</strong>: update one copy and forget another (update anomaly), cannot store a product until someone orders it (insert anomaly), delete the last order and lose the customer (delete anomaly).</p>
-<p><strong>1NF</strong>: one value per cell, no lists or repeating groups. <strong>2NF</strong>: every non-key column depends on the whole key, not part of it. <strong>3NF</strong>: no non-key column depends on another non-key column. The old mnemonic: every column depends on “the key, the whole key, and nothing but the key”.</p>
-<p>Normalize first, then <strong>denormalize on purpose</strong> where reads dominate. A feed that shows like counts can store <code>like_count</code> on the post instead of counting rows every time. A local <a href="#data.caching">cache</a> of API responses can be a flat copy. Each copy is a promise to keep it in sync. Press the steps to split the table and watch the cost of renaming Alice’s city fall.</p>`,
-    predict: {
-      q: "Alice moves to another city. How many rows must change in the 1NF table, and how many in 3NF?",
-      options: ["1 and 1", "3 and 1", "3 and 3"],
-      a: 1,
-      why: "In 1NF her city is copied into every order line. In 3NF it lives once, in her customer row.",
-    },
-    visual(el) {
-      const area = h('div', { class: 'dbx-row' });
-      const st = stats(['rows to update when Alice moves', 'tables']);
-      const msg = out('');
-      const btns = NF.map((f, k) => act(f.name, () => show(k)));
-      function show(k) {
-        press(btns, btns[k]);
-        const f = NF[k];
-        area.replaceChildren(...f.tables.map(([n, cols, rows, keys]) => tbl(n, cols, rows, {
-          keys,
-          cls: r => (cols.includes('city') && r.includes('Alice')) ? 'dbx-warm' : null,
-        })));
-        replay(area, 'pop-soft');
-        st.set('rows to update when Alice moves', f.anomaly);
-        st.set('tables', f.tables.length);
-        say(msg, f.msg);
-      }
-      el.append(h('div', { class: 'dbx-stage' }, h('div', { class: 'controls' }, btns), st, area, msg));
-      show(0);
-    },
-    code: `// 3NF in Room
-@Entity data class Customer(@PrimaryKey val id: Long, val name: String, val city: String)
-@Entity data class Product(@PrimaryKey val sku: String, val name: String, val priceCents: Long)
-
-@Entity(foreignKeys = [ForeignKey(entity = Customer::class, parentColumns = ["id"], childColumns = ["customerId"])],
-        indices = [Index("customerId")])
-data class Order(@PrimaryKey val id: Long, val customerId: Long, val createdAt: Long)
-
-@Entity(primaryKeys = ["orderId", "sku"], indices = [Index("sku")])
-data class OrderLine(
-    val orderId: Long,
-    val sku: String,
-    val qty: Int,
-    val unitPriceCents: Long,   // copied on purpose: the price at the time of sale
-)`,
-    remember: 'Each fact in one place. Denormalize only for a measured read need, and own the code that keeps copies in sync.',
-    deeper: [
-      {
-        title: 'Functional dependencies',
-        body: `<p>The formal tool is the <strong>functional dependency</strong>: A → B means “knowing A tells you B”. <code>product → price</code>, <code>order_id → customer</code>, <code>customer → city</code>. A table is in 3NF when every dependency points from a key. When you find <code>customer → city</code> inside <code>orders</code>, that dependency wants its own table.</p>
-<p>Boyce–Codd normal form (BCNF) tightens 3NF: the left side of every dependency must be a candidate key. In practice, reaching 3NF is the goal for app schemas.</p>`,
-      },
-      {
-        title: 'Copying is sometimes correct',
-        body: `<p>Not every copy is a duplicate. An order line stores <code>unit_price</code> because the price at the time of sale is its own fact; when the product price changes next week, old receipts must not change. Ask: if the source changes, should this copy change? If no, it is history, not duplication.</p>`,
-      },
-      {
-        title: 'Denormalize a counter',
-        body: `<p>A feed of 50 posts with like counts costs 50 <code>COUNT(*)</code> subqueries, or a join plus grouping. Storing <code>like_count</code> on the post makes the read free, and every like now writes two rows. Do both writes in one transaction so the count and the rows cannot disagree.</p>`,
-        code: `@Dao
-abstract class LikeDao {
-    @Insert abstract suspend fun insertLike(like: Like)
-    @Query("UPDATE posts SET like_count = like_count + 1 WHERE id = :postId")
-    abstract suspend fun bump(postId: Long)
-
-    @Transaction
-    open suspend fun like(like: Like) {
-        insertLike(like)
-        bump(like.postId)       // both or neither
-    }
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'A list inside one column', bad: '@Entity data class Post(@PrimaryKey val id: Long, val tags: String)   // "kotlin,room,android"', good: '@Entity(primaryKeys = ["postId", "tagId"])\ndata class PostTag(val postId: Long, val tagId: Long)', why: 'A comma-separated column breaks 1NF. You cannot index it, count by tag, or rename a tag without string surgery. A join table makes each pair a row.' },
-      { title: 'Denormalizing without a sync plan', bad: '// post.authorName copied at insert time, never updated\n@Entity data class Post(@PrimaryKey val id: Long, val authorId: Long, val authorName: String)', good: '// either join on read...\n@Query("SELECT posts.*, users.name AS authorName FROM posts JOIN users ON users.id = posts.authorId")\n// ...or update every copy in the same transaction as the rename', why: 'A copy with no owner goes stale. If you copy, write the code that updates it; otherwise join.' },
-    ],
-    terms: [
-      { term: 'Normalization', def: 'Splitting tables so each fact is stored once, following 1NF, 2NF and 3NF.' },
-      { term: 'Update anomaly', def: 'Changing one copy of a duplicated fact and leaving other copies wrong.' },
-      { term: 'Functional dependency', def: 'A → B: knowing the value of A determines the value of B.' },
-      { term: 'Denormalization', def: 'Copying data on purpose to make reads cheaper, at the cost of extra writes and sync code.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Name the normal form each fix reaches.', code: '-- items "tea×2, bagel×1" split into one row per item   -> [[1NF|1nf]]\n-- price moved out of order_lines into products         -> [[2NF|2nf]]\n-- city moved out of orders into customers              -> [[3NF|3nf]]', why: 'Removing lists gives 1NF. price depended on part of the key (product), a partial dependency, so moving it gives 2NF. city depended on customer, a non-key column, so moving it gives 3NF.' },
-      { type: 'bug', prompt: 'This order table is meant to be in 3NF. Tap the column that breaks it.', code: 'CREATE TABLE orders (\n    id           INTEGER PRIMARY KEY,\n    customer_id  INTEGER NOT NULL REFERENCES customers(id),\n    customer_city TEXT NOT NULL,\n    created_at   INTEGER NOT NULL\n);', bug: 3, fix: '    -- (removed) city lives in customers; join when needed', why: '<code>customer_city</code> depends on <code>customer_id</code>, not on the order id. That transitive dependency breaks 3NF and means a move must update every order.' },
-    ],
-    quiz: [
-      { q: 'In <code>order_lines(order_id, product, qty, price)</code> with key (order_id, product), <code>price</code> depends only on <code>product</code>. Which form does this break?', options: ['1NF', '2NF', '3NF only'], a: 1, why: 'A non-key column depending on part of a composite key is a partial dependency, which 2NF forbids. Move price to products.' },
-      { q: 'A feed shows like counts for 50 posts and is read 1,000 times for each like. What fits?', options: ['Keep counting with COUNT(*) on every read', 'Store like_count on the post and update it in the same transaction as the like', 'Store likes as a comma-separated list on the post'], a: 1, why: 'Reads dominate, so paying one extra write per like is cheap. The transaction keeps the counter and the rows in sync.' },
-      { q: 'Why does an order line keep its own <code>unit_price</code> even in a normalized schema?', options: ['To break 3NF on purpose for speed', 'Because the price at sale time is a separate fact that must not change when the product price changes', 'SQLite cannot join on prices'], a: 1, why: 'The receipt must show what the customer paid. That historic value is not a duplicate of the current price.' },
-    ],
-  });
-
-  // 5 ─────────────────────────────────────────────
-  // Deterministic shuffle of 1..64 for the heap (table) order.
-  const HEAP = (() => { const a = Array.from({ length: 64 }, (_, i) => i + 1); let s = 7; for (let i = a.length - 1; i > 0; i--) { s = (s * 1103515245 + 12345) % 2147483648; const j = s % (i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; })();
-  lessons.push({
-    id: 'indexes',
-    title: 'Indexes',
-    tagline: 'A sorted tree beside the table: reads get fast, every write pays a little.',
-    level: 'intermediate',
-    body: `
-<p>Without an index, <code>WHERE email = ?</code> reads every row: a <strong>full scan</strong>, O(n). An <strong>index</strong> is a separate B-tree holding the column’s values in sorted order, each with a pointer (the rowid) back to the table row. A lookup walks from the root to a leaf: O(log n), a handful of pages even for millions of rows. See <a href="#cs.trees">trees</a> and <a href="#cs.binary-search">binary search</a> for the idea underneath.</p>
-<p>A B-tree is wide, not tall. Each node is a disk page holding many keys, so a tree with hundreds of keys per node reaches millions of rows in 3 or 4 levels. That matters because reading a page is the expensive part.</p>
-<p>Indexes are not free. Each one takes disk space and every <code>INSERT</code>, <code>UPDATE</code> of an indexed column, and <code>DELETE</code> must update it too. Add indexes for the queries you actually run, check them with <code>EXPLAIN QUERY PLAN</code>, and drop ones nothing uses. Try both lookups below.</p>`,
-    predict: {
-      q: "The B-tree has a root, one inner level and leaves. How many index pages does one lookup read?",
-      options: ["1", "3: one per level, root to leaf", "All of them, like a scan"],
-      a: 1,
-      why: "A lookup walks one path from the root down to a single leaf, so it reads one page per level.",
-    },
-    visual(el) {
-      let target = 47, tok = 0;
-      const cells = HEAP.map(v => h('div', { class: 'dbx-cell' }, String(v)));
-      const grid = h('div', { class: 'dbx-grid' }, cells);
-      const tree = h('div', { class: 'dbx-tree' });
-      const plan = h('pre', { class: 'dbx-sql' });
-      const st = stats(['rows read (scan)', 'pages read (index)']);
-      const msg = out('');
-      const tLabel = h('b', {});
-      // Fan-out 4: root splits 1..64 in 4 ranges of 16, level 2 in ranges of 4, leaves hold 4 keys.
-      const nodeEl = keys => h('div', { class: 'dbx-node' }, keys.map(k => h('span', { class: 'dbx-k' }, String(k))));
-      function drawTree(show) {
-        const lo2 = Math.floor((target - 1) / 16) * 16, lo3 = Math.floor((target - 1) / 4) * 4;
-        const root = nodeEl([16, 32, 48]);
-        const lvl2 = [0, 16, 32, 48].map(lo => { const n = nodeEl([lo + 4, lo + 8, lo + 12]); if (lo !== lo2) n.classList.add('dbx-idle'); return n; });
-        const leaf = nodeEl([lo3 + 1, lo3 + 2, lo3 + 3, lo3 + 4]);
-        tree.replaceChildren(
-          h('div', { class: 'dbx-lvl' }, label('root'), root),
-          h('div', { class: 'dbx-lvl' }, label('inner'), lvl2),
-          h('div', { class: 'dbx-lvl' }, label('leaf'), show ? leaf : h('span', { class: 'dbx-stat' }, '16 leaves')));
-        return { root, mid: lvl2[lo2 / 16], leaf };
-      }
-      function reset() {
-        tok++;
-        cells.forEach(cl => { cl.className = 'dbx-cell'; });
-        drawTree(false);
-        st.set('rows read (scan)', '-'); st.set('pages read (index)', '-');
-        tLabel.textContent = String(target);
-      }
-      async function scan() {
-        reset(); const t = tok;
-        plan.textContent = `EXPLAIN QUERY PLAN SELECT * FROM users WHERE email = 'u${target}@…';\n\`--SCAN users`;
-        for (let i = 0; i < HEAP.length; i++) {
-          cells[i].classList.add(HEAP[i] === target ? 'dbx-found' : 'dbx-read');
-          st.set('rows read (scan)', i + 1);
-          if (HEAP[i] === target) { say(msg, `Found after reading <b>${i + 1}</b> of 64 rows. The table is in insertion order, so the scan has no idea where to look. Ask for a missing value and it reads all 64.`); return; }
-          await sleep(45);
-          if (t !== tok || !el.isConnected) return;
-        }
-      }
-      async function seek() {
-        reset(); const t = tok;
-        plan.textContent = `CREATE INDEX idx_users_email ON users(email);\nEXPLAIN QUERY PLAN SELECT * FROM users WHERE email = 'u${target}@…';\n\`--SEARCH users USING INDEX idx_users_email (email=?)`;
-        const { root, mid, leaf } = drawTree(true);
-        const path = [root, mid, leaf];
-        for (let lv = 0; lv < 3; lv++) {
-          const keys = [...path[lv].children];
-          for (const k of keys) {
-            const v = Number(k.textContent);
-            k.classList.add(v === target ? 'dbx-found' : 'dbx-cmp');
-            await sleep(260);
-            if (t !== tok || !el.isConnected) return;
-            if (v >= target) break;
-          }
-          st.set('pages read (index)', lv + 1);
-        }
-        const i = HEAP.indexOf(target);
-        cells[i].classList.add('dbx-found');
-        say(msg, `3 index pages, then 1 jump by rowid to the row. At each level the keys say which child to visit. With real pages of ~100 keys, 3 levels cover a million rows.`);
-      }
-      el.append(h('div', { class: 'dbx-stage' },
-        h('div', { class: 'controls' },
-          act('Full scan', scan), act('Index lookup', seek),
-          act('Another key', () => { target = 1 + Math.floor(Math.random() * 64); reset(); say(msg, `Now looking for u${target}.`); }),
-          h('span', { class: 'dbx-stat' }, 'looking for u', tLabel)),
-        st, plan, h('div', { class: 'dbx-row' }, h('div', { class: 'dbx-tw' }, label('table rows (heap order)'), grid), h('div', { class: 'dbx-tw' }, label('index b-tree'), tree)), msg));
-      reset();
-      plan.textContent = '-- run a lookup';
-      say(msg, 'Same question, two strategies. Compare how much each one reads.');
-    },
-    code: `@Entity(
-    tableName = "messages",
-    indices = [
-        Index(value = ["chat_id", "sent_at"]),         // serves: WHERE chat_id = ? ORDER BY sent_at
-        Index(value = ["server_id"], unique = true),   // lookups during sync, and no duplicates
-    ],
-)
-data class Message(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    @ColumnInfo(name = "server_id") val serverId: String,
-    @ColumnInfo(name = "chat_id") val chatId: Long,
-    @ColumnInfo(name = "sent_at") val sentAt: Long,
-    val body: String,
-)
-
-@Query("SELECT * FROM messages WHERE chat_id = :chat ORDER BY sent_at DESC LIMIT 50")
-fun latest(chat: Long): Flow<List<Message>>`,
-    remember: 'Index the columns you filter, join and sort on. Leftmost columns of a composite index first. Check with EXPLAIN QUERY PLAN.',
-    deeper: [
-      {
-        title: 'Composite index order',
-        body: `<p>An index on <code>(city, name)</code> is sorted by city, then by name inside each city, like a phone book. It serves <code>WHERE city = ?</code> and <code>WHERE city = ? AND name = ?</code>, because the matches sit next to each other. It cannot jump to <code>WHERE name = ?</code> alone: Lena in Paris and Lena in Berlin are far apart. Rule: the index is used from its leftmost column onward.</p>`,
-        visual(el) {
-          const IDX = [['Berlin', 'Bob'], ['Berlin', 'Lena'], ['Berlin', 'Omar'], ['Lisbon', 'Ken'], ['Lisbon', 'Sam'], ['Paris', 'Alice'], ['Paris', 'Lena'], ['Paris', 'Maya']];
-          const area = h('div', {});
-          const plan = h('pre', { class: 'dbx-sql' });
-          const msg = out('Index idx_city_name on users(city, name). Pick a WHERE clause.');
-          const Q = [
-            { l: "city = 'Paris'", hit: r => r[0] === 'Paris', plan: 'SEARCH users USING INDEX idx_city_name (city=?)', m: 'One seek to the first Paris entry, then read the 3 entries next to it.' },
-            { l: "city = 'Paris' AND name = 'Lena'", hit: r => r[0] === 'Paris' && r[1] === 'Lena', plan: 'SEARCH users USING INDEX idx_city_name (city=? AND name=?)', m: 'Both columns narrow the seek: straight to one entry.' },
-            { l: "name = 'Lena'", hit: r => r[1] === 'Lena', scan: true, plan: 'SCAN users', m: 'The Lena entries are not adjacent, so a seek is impossible. Without other help, SQLite scans the table. Add an index that starts with name if this query matters.' },
-          ];
-          const btns = Q.map((q, k) => act(q.l, () => {
-            press(btns, btns[k]);
-            area.replaceChildren(tbl('idx_city_name (sorted)', ['city', 'name'], IDX, { cls: r => q.hit(r) ? 'dbx-hit' : q.scan ? 'dbx-warm' : 'dbx-dim' }));
-            plan.textContent = `EXPLAIN QUERY PLAN SELECT * FROM users WHERE ${q.l};\n\`--${q.plan}`;
-            say(msg, q.m);
-          }));
-          press(btns, null);
-          area.append(tbl('idx_city_name (sorted)', ['city', 'name'], IDX));
-          plan.textContent = '-- pick a query';
-          el.append(h('div', { class: 'dbx-stage' }, h('div', { class: 'controls' }, btns), plan, area, msg));
-        },
-      },
-      {
-        title: 'Read the plan',
-        body: `<p><code>EXPLAIN QUERY PLAN</code> tells you what SQLite will do. <code>SCAN</code> visits every row; <code>SEARCH … USING INDEX</code> visits a subset; <code>USING COVERING INDEX</code> means the index holds every column the query needs, so the table is never read. <code>USE TEMP B-TREE FOR ORDER BY</code> means it has to sort. The output format is for humans and can change between versions, so read it, do not parse it.</p>`,
-        code: `// In a debug build, or in Android Studio's Database Inspector
-db.query("EXPLAIN QUERY PLAN SELECT * FROM messages WHERE chat_id = 7 ORDER BY sent_at").use { c ->
-    while (c.moveToNext()) Log.d("plan", c.getString(3))
-}
-// SEARCH messages USING INDEX index_messages_chat_id_sent_at (chat_id=?)`,
-      },
-      {
-        title: 'What an index costs',
-        body: `<p>Each index is another B-tree to update on every insert and delete, and on updates of its columns. Five indexes on a table means six trees to write per insert. Indexes also take disk space and a bulk import slows down. An index on a low-selectivity column (a boolean that is true for half the rows) rarely helps, because the engine still touches half the table.</p>
-<p>Avoid redundant indexes: if you have <code>(chat_id, sent_at)</code>, a separate index on <code>(chat_id)</code> is a prefix of it and adds cost without a new benefit.</p>`,
-      },
-    ],
-    underHood: {
-      body: `<p>In SQLite a normal table is itself a B-tree keyed by rowid, with the row data in the leaves. An index is a second B-tree whose entries are the indexed values plus the rowid, and no other data. So an index lookup is two searches: find the rowid in the index, then find the row in the table. A covering index skips the second search. The SQLite docs put the cost of finding K matching rows through an index at about (K + 1) × log N.</p>`,
-    },
-    mistakes: [
-      { title: 'Wrong column order in a composite index', bad: '@Entity(indices = [Index(value = ["sent_at", "chat_id"])])\n// query: WHERE chat_id = ? ORDER BY sent_at', good: '@Entity(indices = [Index(value = ["chat_id", "sent_at"])])', why: 'The query filters by chat_id with equality. Put equality columns first, then the sort or range column. Starting with sent_at cannot seek by chat.' },
-      { title: 'A function on the indexed column', bad: "SELECT * FROM users WHERE lower(email) = 'alice@x.com';", good: "-- store emails lowercased, then\nSELECT * FROM users WHERE email = 'alice@x.com';", why: 'The index holds email values, not lower(email). Wrapping the column hides it from the index and forces a scan. Normalize on write, or create an index on the expression.' },
-    ],
-    terms: [
-      { term: 'Index', def: 'A separate sorted structure (a B-tree) mapping column values to rows, for fast lookups.' },
-      { term: 'Full table scan', def: 'Reading every row of a table to answer a query, O(n).' },
-      { term: 'Composite index', def: 'An index on several columns, sorted by the first, then the second within it, and so on.' },
-      { term: 'Covering index', def: 'An index that contains every column a query needs, so the table itself is not read.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Add the index that serves <code>WHERE chat_id = ? ORDER BY sent_at</code>.', code: '@Entity(indices = [Index(value = ["[[chat_id]]", "[[sent_at]]"])])\ndata class Message(/* ... */)', why: 'Equality column first, so the seek lands on one chat; then sent_at, so the rows inside that chat are already in order and no sort step is needed.' },
-      { type: 'bug', prompt: 'There is an index on <code>email</code>, yet <code>EXPLAIN QUERY PLAN</code> says <code>SCAN users</code>. Tap the line that hides the index.', code: '@Query("""\n    SELECT id, name FROM users\n    WHERE lower(email) = :email\n    LIMIT 1\n""")\nsuspend fun byEmail(email: String): UserRow?', bug: 2, fix: '    WHERE email = :email', why: 'The index stores raw email values. <code>lower(email)</code> is a different expression, so SQLite cannot use the index. Store emails lowercased and compare the column directly.' },
-    ],
-    quiz: [
-      { q: 'With an index on <code>(city, name)</code>, which query cannot seek with it?', options: ["WHERE city = 'Paris'", "WHERE city = 'Paris' AND name = 'Lena'", "WHERE name = 'Lena'"], a: 2, why: 'The index is ordered by city first. Rows with name Ece are spread across cities, so there is no single place to seek to.' },
-      { q: 'A table has 1,000,000 rows and a B-tree index with about 100 keys per page. Roughly how many index pages does one lookup read?', options: ['About 3', 'About 1,000', 'About 500,000'], a: 0, why: '100 × 100 × 100 = 1,000,000, so three levels are enough. That is why indexes stay fast as tables grow.' },
-      { q: 'You add 6 indexes to a <code>messages</code> table that syncs thousands of rows. What gets worse?', options: ['Nothing, indexes only help', 'Inserts, because each one updates 7 B-trees', 'Reads by primary key'], a: 1, why: 'Every index is another tree to update on insert and delete. Keep only the ones a real query needs.' },
-      { q: 'EXPLAIN QUERY PLAN prints <code>SEARCH t USING COVERING INDEX i (a=?)</code>. What does it mean?', options: ['The query reads every row', 'The index holds all the columns needed, so the table is not read', 'The index is corrupt'], a: 1, why: 'SEARCH means a subset of rows; COVERING means the answer comes from the index alone.' },
-    ],
-  });
-
-  // 6 ─────────────────────────────────────────────
-  const T = (lane, text, bad) => ({ lane, text, bad });
-  const SCEN = [
-    {
-      key: 'ru', label: 'Read uncommitted', expect: 130,
-      intro: 'T1 adds 50 but will fail and roll back. T2 adds 30. The right final balance is 100 + 30 = 130.',
-      steps: [
-        [T('T1', 'BEGIN; UPDATE wallet SET balance = 150   (not committed)'), 100, 150, 'T1 changed the row but has not committed.'],
-        [T('T2', 'BEGIN; SELECT balance → 150', true), 100, 150, '<span class="bad">Dirty read.</span> T2 saw a value that was never committed.'],
-        [T('T1', 'ROLLBACK'), 100, null, 'T1 failed and undid its change. The 150 never existed.'],
-        [T('T2', 'UPDATE wallet SET balance = 150 + 30 = 180; COMMIT', true), 180, null, null],
-      ],
-    },
-    {
-      key: 'rc', label: 'Read committed', expect: 180,
-      intro: 'Both transactions read the balance in the app, add to it, and write it back. T1 adds 50, T2 adds 30. Right answer: 180.',
-      steps: [
-        [T('T1', 'BEGIN; SELECT balance → 100'), 100, null, 'Only committed data is visible. No dirty reads at this level.'],
-        [T('T2', 'BEGIN; SELECT balance → 100'), 100, null, 'T2 also reads 100. Both now compute from the same old value.'],
-        [T('T1', 'UPDATE wallet SET balance = 150; COMMIT'), 150, null, 'T1 committed 150.'],
-        [T('T2', 'UPDATE wallet SET balance = 130; COMMIT', true), 130, null, '<span class="bad">Lost update.</span> T2 wrote 100 + 30 over T1’s 150.'],
-      ],
-    },
-    {
-      key: 'rr', label: 'Repeatable read (PostgreSQL)', expect: 180,
-      intro: 'Same read-then-write code, on PostgreSQL at REPEATABLE READ. Right answer: 180.',
-      steps: [
-        [T('T1', 'BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT → 100'), 100, null, 'Each transaction reads from a snapshot taken when it starts.'],
-        [T('T2', 'BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT → 100'), 100, null, 'T2’s snapshot also says 100.'],
-        [T('T1', 'UPDATE … = 150; COMMIT'), 150, null, 'T1 commits.'],
-        [T('T2', 'UPDATE … → ERROR: could not serialize access due to concurrent update'), 150, null, 'The row changed after T2’s snapshot, so PostgreSQL refuses the write instead of losing T1’s update.'],
-        [T('T2', 'ROLLBACK; retry: BEGIN; SELECT → 150; UPDATE … = 180; COMMIT'), 180, null, 'The app retries the whole transaction and reads the new value.'],
-      ],
-    },
-    {
-      key: 'sqlite', label: 'SQLite (serializable)', expect: 180,
-      intro: 'SQLite allows one writer at a time. Both transactions start with BEGIN IMMEDIATE, which takes the write lock up front. Right answer: 180.',
-      steps: [
-        [T('T1', 'BEGIN IMMEDIATE; SELECT balance → 100'), 100, null, 'T1 holds the write lock.'],
-        [T('T2', 'BEGIN IMMEDIATE → SQLITE_BUSY, waits for the lock'), 100, null, 'T2 cannot start a write while T1 holds the lock. With a busy timeout it waits.'],
-        [T('T1', 'UPDATE wallet SET balance = 150; COMMIT'), 150, null, 'T1 commits and releases the lock.'],
-        [T('T2', 'gets the lock; SELECT balance → 150'), 150, null, 'T2 starts after T1, so it reads 150.'],
-        [T('T2', 'UPDATE wallet SET balance = 180; COMMIT'), 180, null, null],
-      ],
-    },
-    {
-      key: 'atomic', label: 'One atomic UPDATE', expect: 180,
-      intro: 'Skip the read in the app. Let the database do the arithmetic in one statement. Right answer: 180.',
-      steps: [
-        [T('T1', 'UPDATE wallet SET balance = balance + 50'), 150, null, 'One statement is its own transaction. The read and the write happen together.'],
-        [T('T2', 'UPDATE wallet SET balance = balance + 30'), 180, null, 'T2 adds to whatever is committed when it gets the write lock.'],
-      ],
-    },
-  ];
-  function scenFrames(s) {
-    const fr = [{ log: [], committed: 100, pending: null, msg: s.intro }];
-    s.steps.forEach(([ev, committed, pending, m], k) => {
-      const last = k === s.steps.length - 1;
-      const ok = committed === s.expect;
-      fr.push({
-        log: [...fr[fr.length - 1].log, ev], committed, pending,
-        msg: last ? `Final balance <b>${committed}</b>, expected ${s.expect}: ${ok ? '<span class="dbx-pass">correct</span>.' : '<span class="dbx-fail">wrong</span>.'} ${m || ''}` : m,
-        end: last, ok,
-      });
-    });
-    return fr;
-  }
-  lessons.push({
-    id: 'transactions',
-    title: 'Transactions and ACID',
-    tagline: 'A group of writes that all happen or none do, without stepping on other writers.',
-    level: 'advanced',
-    body: `
-<p>A <strong>transaction</strong> groups statements into one unit. <strong>ACID</strong> names its promises. <strong>Atomicity</strong>: all of it commits, or none of it. <strong>Consistency</strong>: constraints hold before and after. <strong>Isolation</strong>: concurrent transactions do not see each other’s half-done work. <strong>Durability</strong>: once committed, it survives a crash.</p>
-<p>Isolation comes in levels, trading safety for concurrency. The SQL standard defines read uncommitted, read committed, repeatable read and serializable by which anomalies they allow: <strong>dirty reads</strong> (seeing uncommitted data), non-repeatable reads, phantoms. The <strong>lost update</strong> (two read-modify-write cycles where one overwrites the other) bites at read committed, which is PostgreSQL’s default.</p>
-<p>SQLite is simpler: transactions are serializable and only one writer runs at a time. In WAL mode readers keep reading a snapshot while the writer works. On Android, wrap related writes in a Room <code>@Transaction</code> or <code>withTransaction { }</code>; see <a href="#data.room">Room</a> and, for in-memory races, <a href="#coroutines.shared-state">shared state</a>. Step through each level below.</p>`,
-    predict: {
-      q: "At read uncommitted, T1 sets the balance to 150 and then rolls back. T2 read the 150 and adds 30. The balance started at 100. What is the final balance?",
-      options: ["130", "180", "150"],
-      a: 1,
-      why: "T2 read a value that was never committed and built on it. The right answer is 130; the dirty read gives 180.",
-    },
-    visual(el) {
-      const log = h('div', { class: 'dbx-log' });
-      const st = stats(['committed balance', 'uncommitted']);
-      let p;
-      const btns = SCEN.map((s, k) => act(s.label, () => { press(btns, btns[k]); p.load(scenFrames(s)); }));
-      press(btns, btns[0]);
-      p = player(el, {
-        top: [h('div', { class: 'controls' }, btns)],
-        view: [st, log],
-        speed: 1300,
-        frames: scenFrames(SCEN[0]),
-        paint(f) {
-          st.set('committed balance', f.committed);
-          st.set('uncommitted', f.pending == null ? '-' : f.pending);
-          log.replaceChildren(...f.log.map((e, k) => h('div', { class: `dbx-ev ${e.bad ? 'dbx-evbad' : ''} ${f.end && k === f.log.length - 1 && f.ok ? 'dbx-evok' : ''}` },
-            h('span', { class: `dbx-lane ${e.lane === 'T1' ? 'dbx-t1' : 'dbx-t2'}` }, e.lane), h('span', {}, e.text))));
-        },
-      });
-    },
-    code: `// Room: both writes commit together, or neither does
-suspend fun transfer(db: AppDatabase, from: Long, to: Long, cents: Long) {
-    db.withTransaction {
-        val dao = db.walletDao()
-        check(dao.balance(from) >= cents) { "insufficient funds" }
-        dao.add(from, -cents)
-        dao.add(to, cents)
-    }
-}
-
-@Dao
-interface WalletDao {
-    @Query("SELECT balance FROM wallet WHERE id = :id")
-    suspend fun balance(id: Long): Long
-
-    // The arithmetic happens inside the database: no lost update
-    @Query("UPDATE wallet SET balance = balance + :delta WHERE id = :id")
-    suspend fun add(id: Long, delta: Long)
-}`,
-    remember: 'Group related writes in one transaction. Do read-modify-write in SQL (balance = balance + x), or at an isolation level that stops lost updates.',
-    deeper: [
-      {
-        title: 'The anomalies, by level',
-        body: `<p>The standard table, with PostgreSQL’s actual behavior in brackets:</p>
-<ul><li><strong>Read uncommitted</strong>: dirty reads allowed [PostgreSQL treats it as read committed].</li>
-<li><strong>Read committed</strong>: no dirty reads; non-repeatable reads and phantoms allowed. PostgreSQL’s default.</li>
-<li><strong>Repeatable read</strong>: a transaction keeps seeing its first snapshot [PostgreSQL also blocks phantoms here and aborts the second writer of a row].</li>
-<li><strong>Serializable</strong>: the result matches some one-at-a-time order. The database may abort a transaction, so the app must retry.</li></ul>
-<p>Higher levels mean more aborts and waits. Many backends stay at read committed and fix hot spots with atomic updates or <code>SELECT … FOR UPDATE</code> row locks.</p>`,
-      },
-      {
-        title: 'SQLite on Android: one writer, WAL readers',
-        body: `<p>SQLite lets only one connection write at a time; other writers wait or get <code>SQLITE_BUSY</code>. In the default rollback-journal mode a writer committing blocks readers. In <strong>WAL mode</strong> (write-ahead logging) changes go to a separate <code>-wal</code> file: readers keep reading the last committed snapshot while the writer appends, so the UI can read while sync writes. A checkpoint later copies the log back into the main file.</p>
-<p>Plain <code>BEGIN</code> is deferred: a transaction that reads first and writes later may fail to upgrade if another connection committed in between. <code>BEGIN IMMEDIATE</code> takes the write lock at the start. Keep write transactions short, and never do network calls inside one.</p>`,
-        code: `Room.databaseBuilder(context, AppDatabase::class.java, "app.db")
-    .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)   // explicit WAL
-    .build()
-
-// Wrong: holds the write lock for the whole network call
-db.withTransaction { val page = api.fetch(); dao.insertAll(page) }
-// Right: fetch first, then a short transaction
-val page = api.fetch()
-db.withTransaction { dao.clear(); dao.insertAll(page) }`,
-      },
-      {
-        title: 'Atomicity and durability: the journal',
-        body: `<p>How does a crash mid-write not leave half a transaction? The database writes intent to a journal before touching the main data. In rollback mode SQLite saves the original pages first and restores them after a crash. In WAL mode it appends new pages to the log, and a transaction counts only once its commit record is in the log. PostgreSQL uses its own write-ahead log the same way. Durability means that log reaches the disk before COMMIT returns.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Read in Kotlin, write back the sum', bad: 'val b = dao.balance(id)\ndao.setBalance(id, b + 50)     // two statements, no transaction', good: 'dao.add(id, 50)   // UPDATE wallet SET balance = balance + :delta', why: 'Between the read and the write another writer can commit, and your write erases theirs. Doing the arithmetic in one SQL statement makes it atomic.' },
-      { title: 'Several writes, no transaction', bad: 'dao.deleteAll()\ndao.insertAll(fresh)     // the UI briefly sees an empty list', good: 'db.withTransaction {\n    dao.deleteAll()\n    dao.insertAll(fresh)\n}', why: 'Without a transaction, observers see the in-between state, and a crash after the delete leaves the table empty. A transaction commits both or neither.' },
-    ],
-    terms: [
-      { term: 'ACID', def: 'Atomicity, Consistency, Isolation, Durability: the guarantees of a database transaction.' },
-      { term: 'Dirty read', def: 'Reading data another transaction wrote but has not committed, and may roll back.' },
-      { term: 'Lost update', def: 'Two transactions read the same value and write back; the second write erases the first.' },
-      { term: 'WAL mode', def: 'SQLite write-ahead logging: writes go to a log file so readers can keep reading a snapshot during a write.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Make the like counter safe against lost updates, with no app-side read.', code: '@Query("UPDATE posts SET like_count = [[like_count + 1|like_count+1]] WHERE id = :id")\nsuspend fun like(id: Long)', why: 'The database reads and writes the value in one statement, under its own lock, so two likes at once both count.' },
-      { type: 'bug', prompt: 'Users sometimes see an empty list during sync, and a crash mid-sync leaves it empty for good. Tap the line to change.', code: 'suspend fun sync(fresh: List<Article>) {\n    dao.deleteAll()\n    dao.insertAll(fresh)\n}', bug: 0, fix: 'suspend fun sync(fresh: List<Article>) = db.withTransaction {', why: 'Wrapping the body in <code>withTransaction</code> makes delete and insert one atomic unit: observers see old rows, then new rows, and a crash rolls back to the old rows. Close the block after the insert.' },
-    ],
-    quiz: [
-      { q: 'T1 sets the balance to 150 without committing. T2 reads 150. T1 rolls back. What did T2 do?', options: ['A lost update', 'A dirty read', 'A phantom read'], a: 1, why: 'T2 read data that was never committed. Only read uncommitted allows it, and PostgreSQL does not allow it even there.' },
-      { q: 'Two requests run <code>SELECT likes</code>, add 1 in Kotlin, then <code>UPDATE … SET likes = ?</code>, at read committed. Both started at 10. What is the final value?', options: ['12', '11', 'The second request fails'], a: 1, why: 'Both computed 11 from the same read. The second write overwrites the first: a lost update. Use likes = likes + 1.' },
-      { q: 'In SQLite WAL mode, a sync job is writing. What happens to a query the UI runs at the same time?', options: ['It waits until the write commits', 'It reads the last committed snapshot and returns', 'It sees the half-written rows'], a: 1, why: 'In WAL mode writers do not block readers. The reader sees the database as of its start; the new rows show up on the next read.' },
-      { q: 'At PostgreSQL REPEATABLE READ, your UPDATE fails with “could not serialize access due to concurrent update”. What should the app do?', options: ['Ignore it, the row was saved', 'Retry the whole transaction from the start', 'Switch to read uncommitted'], a: 1, why: 'Another transaction changed the row after your snapshot. Retrying reads the new value and redoes the logic on it.' },
-      { q: 'Put a safe Room sync in order.', options: ['begin transaction → fetch from network → write → commit', 'fetch from network → begin transaction → write → commit', 'write → fetch from network → commit'], a: 1, why: 'Network calls are slow and can hang. Holding the single SQLite write lock during one blocks every other writer. Fetch first, then write in a short transaction.' },
-    ],
-  });
-
-  // 7 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'nosql',
-    title: 'NoSQL',
-    tagline: 'Model the data for the queries you will run, not for the facts you have.',
-    level: 'intermediate',
-    body: `
-<p>“NoSQL” covers several shapes. <strong>Key-value</strong> stores (Redis, <a href="#data.datastore">DataStore</a> on the device) get and set a value by key and little else. <strong>Document</strong> stores (Firestore, MongoDB) keep JSON-like documents with nested fields. <strong>Wide-column</strong> stores (Cassandra, Bigtable) group rows by a partition key and spread them across many machines. <strong>Graph</strong> databases (Neo4j) store nodes and edges for “friends of friends” queries.</p>
-<p>The big mental shift: in a relational database you normalize and join at read time. Document stores have limited or no joins, so you shape documents around your screens and copy data where reads need it. Firestore bills and limits by documents read and written, so a feed that needs 1 read per post plus 1 per author costs twice what a copied author name would.</p>
-<p>The trade is writes. Copied data has to be updated everywhere when it changes. The demo compares both shapes: reads to show the feed, writes for a rename.</p>`,
-    visual(el) {
-      Lab.ui.timeline(el, {
-        lanes: ['By id', 'Copied'],
-        span: 320, unit: 'ms',
-        predict: {
-          q: 'Alice wrote 4 of the 10 posts and changes her name. When each post carries a copy of the author name, how many documents must be written?',
-          options: ['1: her user document', '5: her user document and her 4 posts', '10: every post in the feed'],
-          a: 1,
-          why: 'Each copy is a promise to keep it in sync. The rename has to reach every document that holds the old name.',
-        },
-        frames: [
-          { now: 0, say: 'The feed shows 10 posts by 6 authors. Firestore has no server-side join, so the document shape decides the cost. Times are illustrative.' },
-          { bars: [{ lane: 0, from: 0, to: 80, label: '10 reads' }, { lane: 1, from: 0, to: 80, label: '10 reads', tone: 'ok' }], marks: [{ at: 80, label: 'copied', tone: 'ok' }], say: 'Both start with one query for the posts. With the name copied in, the feed can draw now: 10 reads.' },
-          { bars: [{ lane: 0, from: 80, to: 160, label: '+6 reads', tone: 'warm' }], marks: [{ at: 160, label: 'by id', tone: 'warm' }], say: 'Posts that only hold <code>authorId</code> need the 6 user documents too. The client does the join: a second round trip and 16 reads.' },
-          { bars: [{ lane: 0, from: 220, to: 250, label: '1 write', tone: 'ok' }], say: 'Alice renames herself. With ids only, one write to her user document, and every feed shows the new name.' },
-          { bars: [{ lane: 1, from: 220, to: 310, label: '5 writes', tone: 'err' }], say: 'With copies: her user document plus her 4 posts, ideally in one batched write. Miss one and the feed shows the old name.' },
-        ],
-      });
-    },
-    code: `// Firestore (Android, Kotlin): shape documents around the screen
-data class FeedPost(
-    val authorId: String = "",
-    val authorName: String = "",      // copied so the feed needs one query
-    val title: String = "",
-    val likes: Long = 0,
-    val createdAt: Timestamp? = null,
-)
-
-val feed = Firebase.firestore.collection("posts")
-    .orderBy("createdAt", Query.Direction.DESCENDING)
-    .limit(20)
-    .snapshots()                       // Flow<QuerySnapshot>
-    .map { it.toObjects<FeedPost>() }
-
-// Rename: update the user and every copy in one atomic batch
-suspend fun rename(uid: String, name: String, postIds: List<String>) {
-    val db = Firebase.firestore
-    db.runBatch { b ->
-        b.update(db.collection("users").document(uid), "name", name)
-        postIds.forEach { b.update(db.collection("posts").document(it), "authorName", name) }
-    }.await()
-}`,
-    remember: 'Relational: model the facts, join on read. Document: model the screens, copy on write. Pick by your read and write patterns.',
-    deeper: [
-      {
-        title: 'Four shapes, four sweet spots',
-        body: `<ul><li><strong>Key-value</strong>: sessions, caches, feature flags, settings. Fast by key; no queries on the value.</li>
-<li><strong>Document</strong>: profiles, posts, chat messages. Nested data read together; queries on fields with indexes; few or no joins.</li>
-<li><strong>Wide-column</strong>: huge append-heavy data like events or metrics, read by a known partition key (for example, per device per day).</li>
-<li><strong>Graph</strong>: relationships are the data: social graphs, recommendations, fraud rings.</li></ul>
-<p>Relational databases are still the default for business data with many relationships and a need for transactions across them. Many systems use both.</p>`,
-      },
-      {
-        title: 'Firestore: nest, subcollection or root collection',
-        body: `<p>Firestore stores documents in collections; a document can hold nested maps and its own <strong>subcollections</strong>. A document is limited to 1 MiB, so a growing list (all comments on a post) should not be an array inside it. Put it in a subcollection (<code>posts/p10/comments</code>) or a root collection with a <code>postId</code> field. Root collections suit many-to-many links; subcollections keep the parent small. Firestore needs an index for every query, and composite queries need composite indexes you declare.</p>`,
-        code: `// Small, fixed list: nest it
-users/alice { name: "Alice", links: { github: "...", site: "..." } }
-
-// Grows without limit: subcollection
-posts/p10/comments/c1 { authorId: "sam", text: "Looks delicious" }
-
-// Many-to-many: a root collection of pairs
-follows/alice_sam { from: "alice", to: "sam", at: <timestamp> }`,
-      },
-      {
-        title: 'CAP in plain words',
-        body: `<p>When a distributed database is split by a network failure (a <strong>partition</strong>), each side must choose: refuse requests until it can reach the other side (<strong>consistent</strong>, “CP”), or keep answering with what it has and reconcile later (<strong>available</strong>, “AP”). You cannot have both during the split. When the network is fine, the trade becomes latency versus consistency. Cut the link and try each choice.</p>`,
-        visual(el) {
-          let cut = false, mode = 'CP', a = 1, b = 1;
-          const ra = h('b', {}), rb = h('b', {});
-          const link = h('span', { class: 'dbx-link' });
-          const msg = out('Two replicas of the same value x. Pick a mode, cut the link, then write.');
-          const mB = [act('CP: refuse', () => setMode('CP')), act('AP: accept', () => setMode('AP'))];
-          function paint() { ra.textContent = String(a); rb.textContent = String(b); link.textContent = cut ? '✕ cut' : '⇄ ok'; link.className = `dbx-link ${cut ? 'dbx-cut' : ''}`; replay(ra, 'pop-soft'); replay(rb, 'pop-soft'); }
-          function setMode(m) { mode = m; press(mB, mB[m === 'CP' ? 0 : 1]); say(msg, m === 'CP' ? 'CP: during a partition, writes that cannot reach the other replica are refused.' : 'AP: every replica keeps accepting writes and syncs later.'); }
-          el.append(h('div', { class: 'dbx-stage' },
-            h('div', { class: 'controls' }, mB),
-            h('div', { class: 'controls' },
-              act('Cut the link', () => { cut = true; paint(); say(msg, 'Partition. Replica A and replica B cannot talk.'); }),
-              act('Write x = x + 1 on A', () => {
-                if (!cut) { a += 1; b = a; paint(); say(msg, 'Link is up: A writes and B copies it. Both agree.'); return; }
-                if (mode === 'CP') { say(msg, '<span class="bad">Error: cannot reach a majority, try later.</span> Consistent, but not available.'); return; }
-                a += 1; paint(); say(msg, `Accepted on A. B still says ${b}. Available, but a reader on B gets a <b>stale</b> value.`);
-              }),
-              act('Read on B', () => say(msg, cut && mode === 'CP' ? '<span class="bad">Error: B may be stale, refusing.</span>' : `B answers x = ${b}${a !== b ? ', which is stale' : ''}.`)),
-              act('Heal', () => { cut = false; b = a = Math.max(a, b); paint(); say(msg, `Link back. The replicas sync to x = ${a}. In AP systems conflicting writes need a merge rule, such as last write wins.`); })),
-            h('div', { class: 'dbx-replicas' }, h('div', { class: 'dbx-rep' }, 'replica A', ra), link, h('div', { class: 'dbx-rep' }, 'replica B', rb)),
-            msg));
-          setMode('CP'); paint();
-        },
-      },
-    ],
-    mistakes: [
-      { title: 'An unbounded array inside one document', bad: 'posts/p10 { title: "...", comments: [ {...}, {...}, ... ] }   // grows forever', good: 'posts/p10/comments/{commentId} { authorId, text, createdAt }', why: 'A Firestore document has a 1 MiB limit, and every read downloads the whole array. A subcollection keeps the post small and lets you page comments.' },
-      { title: 'Designing a NoSQL schema like SQL tables', bad: '// feed: query posts, then fetch each author, each like count, each tag\nposts.forEach { db.collection("users").document(it.authorId).get() }', good: '// store what the feed shows inside the post document\nposts/p10 { authorName, authorAvatar, likeCount, tags: ["food"] }', why: 'Without joins, normalized documents turn every screen into N+1 reads. Copy the fields the screen needs and update them on write.' },
-    ],
-    terms: [
-      { term: 'Document store', def: 'A database of JSON-like documents with nested fields, queried by field, usually without joins.' },
-      { term: 'Key-value store', def: 'A database that maps keys to opaque values; fast lookup by key only.' },
-      { term: 'Partition (network)', def: 'A failure where parts of a distributed system cannot reach each other.' },
-      { term: 'CAP trade-off', def: 'During a partition, a system must choose between refusing requests (consistency) and answering with possibly stale data (availability).' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Comments on a post can grow without limit. Put them where Firestore can page them.', code: 'Firebase.firestore\n    .collection("posts").document(postId)\n    .[[collection]]("comments")\n    .orderBy("createdAt")\n    .[[limit]](20)', why: 'A subcollection under the post holds one document per comment, and <code>limit</code> pages through them, instead of one huge array in the post.' },
-      { type: 'bug', prompt: 'Renaming a user leaves the old name on some posts. Tap the line that should be part of the same batch.', code: 'suspend fun rename(uid: String, name: String, postIds: List<String>) {\n    val db = Firebase.firestore\n    db.collection("users").document(uid).update("name", name).await()\n    postIds.forEach { db.collection("posts").document(it).update("authorName", name) }\n}', bug: 3, fix: '    db.runBatch { b -> b.update(db.collection("users").document(uid), "name", name); postIds.forEach { b.update(db.collection("posts").document(it), "authorName", name) } }.await()', why: 'The post updates are fired and forgotten, outside any batch. If one fails, copies disagree. One batched write commits the user and every copy together.' },
-    ],
-    quiz: [
-      { q: 'A chat app shows the sender’s name on every message and names change rarely. In Firestore, what fits?', options: ['Store only senderId and fetch each user on display', 'Copy senderName into each message and update copies on the rare rename', 'Keep all messages in one document'], a: 1, why: 'Reads are constant and renames are rare, so paying on the rename is cheaper. Fetching users per message is the N+1 pattern.' },
-      { q: 'Which store fits “store the last 30 days of sensor readings per device, billions of rows, read by device and day”?', options: ['A graph database', 'A wide-column store partitioned by device and day', 'A single SQLite file'], a: 1, why: 'Wide-column stores spread rows by partition key across machines and read one partition fast. That matches append-heavy, key-shaped access.' },
-      { q: 'During a network partition, an AP system accepts a write on replica A. What can a reader on replica B see?', options: ['An error', 'The old value until the partition heals', 'The new value immediately'], a: 1, why: 'AP keeps answering, so B serves what it has, which is stale. A CP system would refuse instead.' },
-    ],
-  });
-
-  // 8 ─────────────────────────────────────────────
-  const C = (name, st) => ({ name, st });
-  const MIG_START = { cols: ['id', 'name'], rows: [[1, 'Alice'], [2, 'Sam']] };
-  const BIGBANG = [
-    { ...MIG_START, clients: [C('app v1 reads name', 'ok')], msg: 'Backend table users(id, name). Every installed app is v1 and reads name.' },
-    { cols: ['id', 'display_name'], rows: [[1, 'Alice'], [2, 'Sam']], sql: "ALTER TABLE users RENAME COLUMN name TO display_name;", clients: [C('app v1 reads name', 'bad'), C('app v2 reads display_name', 'not out yet')], msg: '<span class="bad">Every v1 request now fails: no such column: name.</span> App stores take days to roll out v2, and some users never update.' },
-  ];
-  const EXPAND = [
-    { ...MIG_START, clients: [C('app v1 reads name', 'ok')], msg: 'Same start. This time each step keeps every running version working.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', null], [2, 'Sam', null]], sql: 'ALTER TABLE users ADD COLUMN display_name TEXT;', clients: [C('app v1 reads name', 'ok')], msg: '<b>Expand.</b> Add the new column, nullable, so the change is instant and nothing that exists breaks.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', null], [2, 'Sam', null], [3, 'Lena', 'Lena']], sql: '-- backend code: on every write, set both name and display_name', clients: [C('app v1 reads name', 'ok')], msg: '<b>Dual write.</b> New and changed rows get both columns. Old rows still have NULL.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', 'Alice'], [2, 'Sam', 'Sam'], [3, 'Lena', 'Lena']], sql: 'UPDATE users SET display_name = name\nWHERE display_name IS NULL AND id BETWEEN ? AND ?;   -- in batches', clients: [C('app v1 reads name', 'ok')], msg: '<b>Backfill.</b> Copy old values in small batches so no single transaction locks the table for long.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', 'Alice'], [2, 'Sam', 'Sam'], [3, 'Lena', 'Lena']], sql: '-- release app v2 and API v2, reading display_name', clients: [C('app v1 reads name', 'ok'), C('app v2 reads display_name', 'ok')], msg: '<b>Switch reads.</b> Ship v2. Both versions work, because both columns exist and are in sync.' },
-    { cols: ['id', 'name', 'display_name'], rows: [[1, 'Alice', 'Alice'], [2, 'Sam', 'Sam'], [3, 'Lena', 'Lena']], sql: '-- wait: watch v1 traffic fall; raise the minimum supported version', clients: [C('app v1 reads name', 'retired'), C('app v2 reads display_name', 'ok')], msg: '<b>Wait.</b> Only contract when analytics show v1 is gone or you force an update.' },
-    { cols: ['id', 'display_name'], rows: [[1, 'Alice'], [2, 'Sam'], [3, 'Lena']], sql: '-- stop writing name, then:\nALTER TABLE users DROP COLUMN name;', clients: [C('app v2 reads display_name', 'ok')], msg: '<b>Contract.</b> Remove the old column. The rename is done and no client ever broke.' },
-  ];
-  lessons.push({
-    id: 'schema-evolution',
-    title: 'Migrations and schema evolution',
-    tagline: 'Change a live schema in small steps that every running version survives.',
-    level: 'advanced',
-    body: `
-<p>A schema changes for the whole life of a product. A <strong>migration</strong> is a versioned script that moves the database from one shape to the next, kept in source control and run in order. On the device, Room runs it when the app opens a database with an older version; see <a href="#data.migrations">Room migrations</a>.</p>
-<p>The device is the easy case: one app version talks to its own database file. A backend is harder. Old app versions stay installed for months, and during a deploy old and new server code run side by side. A change is <strong>backwards-compatible</strong> when the old code keeps working: adding a nullable column or a new table is safe; renaming, dropping or changing a column’s type is not.</p>
-<p>The safe pattern is <strong>expand and contract</strong> (also called parallel change): add the new shape, write to both, backfill, move readers over, and only then remove the old shape. Compare it with the one-step rename below.</p>`,
-    predict: {
-      q: "You run <code>ALTER TABLE users RENAME COLUMN name TO display_name</code> on the live backend in one step. What happens to installed app v1?",
-      options: ["It keeps working: the database remembers the old name", "Its requests start failing: there is no column called name", "It updates itself to v2"],
-      a: 1,
-      why: "The rename is instant for everyone. Code that still asks for <code>name</code> breaks until every client has moved, which on phones takes months.",
-    },
-    visual(el) {
-      const sql = h('pre', { class: 'dbx-sql' });
-      const area = h('div', {});
-      const clients = h('div', { class: 'dbx-chips' });
-      let p;
-      const btns = [act('One-step rename', () => { press(btns, btns[0]); p.load(BIGBANG); }), act('Expand / contract', () => { press(btns, btns[1]); p.load(EXPAND); })];
-      press(btns, btns[0]);
-      p = player(el, {
-        top: [h('div', { class: 'controls' }, btns)],
-        view: [sql, area, clients],
-        speed: 1500,
-        frames: BIGBANG,
-        paint(f) {
-          sql.textContent = f.sql || '-- current schema';
-          area.replaceChildren(tbl('users (backend)', f.cols, f.rows));
-          clients.replaceChildren(label('clients'), ...f.clients.map(cl => h('span', { class: `dbx-chip ${cl.st === 'ok' ? 'dbx-okc' : cl.st === 'bad' ? 'dbx-badc' : 'dbx-off'}` }, `${cl.name}: ${cl.st === 'bad' ? 'broken' : cl.st}`)));
-        },
-      });
-    },
-    code: `@Database(
-    entities = [User::class],
-    version = 3,
-    autoMigrations = [
-        AutoMigration(from = 1, to = 2),                           // added a nullable column
-        AutoMigration(from = 2, to = 3, spec = Rename2to3::class), // rename needs a hint
-    ],
-    exportSchema = true,          // schemas/ JSON files: commit them
-)
-abstract class AppDatabase : RoomDatabase()
-
-@RenameColumn(tableName = "users", fromColumnName = "name", toColumnName = "display_name")
-class Rename2to3 : AutoMigrationSpec
-
-// Changes Room cannot infer, like splitting a table, get a manual Migration
-val MIGRATION_3_4 = object : Migration(3, 4) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE addresses (user_id INTEGER NOT NULL PRIMARY KEY, city TEXT NOT NULL)")
-        db.execSQL("INSERT INTO addresses (user_id, city) SELECT id, city FROM users")
-    }
-}`,
-    remember: 'Expand, migrate data, switch readers, contract. Never remove what a running version still reads.',
-    deeper: [
-      {
-        title: 'Safe and unsafe changes',
-        body: `<ul><li><strong>Safe</strong>: add a table; add a nullable column, or one with a default; add an index (on a big PostgreSQL table, <code>CREATE INDEX CONCURRENTLY</code> avoids blocking writes).</li>
-<li><strong>Unsafe in one step</strong>: rename or drop a column or table; change a type; add <code>NOT NULL</code> to existing data; tighten a constraint.</li></ul>
-<p>Every unsafe change can be rewritten as a series of safe ones. The same rule applies to the API: add fields freely, never remove or repurpose one that old clients read.</p>`,
-      },
-      {
-        title: 'SQLite cannot alter everything',
-        body: `<p>SQLite’s <code>ALTER TABLE</code> supports renaming a table, renaming a column, adding a column and dropping a column, with limits. Adding a <code>NOT NULL</code> column needs a non-NULL default. Other changes (a new type, a new foreign key, a changed primary key) use the documented procedure: create the new table, copy the rows, drop the old one, rename the new one, all in one transaction. Room’s auto-migrations generate that recreate-and-copy SQL for you when needed.</p>`,
-        code: `// Manual version of a table rebuild
-db.execSQL("CREATE TABLE users_new (id INTEGER PRIMARY KEY NOT NULL, display_name TEXT NOT NULL, city TEXT)")
-db.execSQL("INSERT INTO users_new (id, display_name, city) SELECT id, COALESCE(name, ''), city FROM users")
-db.execSQL("DROP TABLE users")
-db.execSQL("ALTER TABLE users_new RENAME TO users")
-db.execSQL("CREATE INDEX index_users_city ON users(city)")   // indexes do not come along`,
-      },
-      {
-        title: 'Test every path',
-        body: `<p>A user can jump from version 1 straight to version 6. Test each migration and the full chain with Room’s <code>MigrationTestHelper</code>, which builds the old schema from the exported JSON, runs your migrations and checks the result against the new schema. A missing path throws <code>IllegalStateException</code> on open, which is a crash on launch. <code>fallbackToDestructiveMigration</code> deletes all data instead: acceptable for a pure cache, never for user data.</p>`,
-        code: `@get:Rule
-val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
-
-@Test fun migrate3to4() {
-    helper.createDatabase("t.db", 3).use { it.execSQL("INSERT INTO users (id, display_name, city) VALUES (1, 'Alice', 'Paris')") }
-    helper.runMigrationsAndValidate("t.db", 4, true, MIGRATION_3_4).use { db ->
-        db.query("SELECT city FROM addresses WHERE user_id = 1").use { c -> c.moveToFirst(); assertEquals("Paris", c.getString(0)) }
-    }
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'Renaming a column the old app still reads', bad: '-- deploy day\nALTER TABLE users RENAME COLUMN name TO display_name;', good: '-- release 1: add display_name, dual write, backfill\n-- release 2: apps read display_name\n-- later: DROP COLUMN name', why: 'Installed apps and old server instances keep sending the old column name. Expand and contract keeps both shapes alive until nobody uses the old one.' },
-      { title: 'Editing a migration that already shipped', bad: '// changed MIGRATION_2_3 after release to also add an index', good: '// leave MIGRATION_2_3 alone; add MIGRATION_3_4 with the index and bump version', why: 'Devices that already ran 2 → 3 will never run it again, so they miss the change and schemas drift. Shipped migrations are history; fix forward.' },
-    ],
-    terms: [
-      { term: 'Migration', def: 'A versioned script that moves a database schema, and its data, from one version to the next.' },
-      { term: 'Backwards-compatible change', def: 'A schema change that the currently running code keeps working with, like adding a nullable column.' },
-      { term: 'Expand and contract', def: 'Change a schema by adding the new shape, moving data and readers over, then removing the old shape.' },
-      { term: 'Backfill', def: 'Filling a new column or table with values derived from existing data, usually in batches.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Add a column that existing rows can satisfy, in one safe step on SQLite.', code: "ALTER TABLE users ADD COLUMN status TEXT NOT NULL [[DEFAULT|default]] 'active';", why: 'SQLite requires a non-NULL default when adding a NOT NULL column, so existing rows have a value. Without it the statement fails.' },
-      { type: 'bug', prompt: 'Version 4 shipped, and users on version 2 now crash on launch. Tap the line that causes it.', code: 'Room.databaseBuilder(context, AppDatabase::class.java, "app.db")\n    .addMigrations(MIGRATION_1_2, MIGRATION_3_4)\n    .build()\n// @Database(version = 4)', bug: 1, fix: '    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)', why: 'There is no path from 2 to 3, so Room throws <code>IllegalStateException</code> when a version-2 database opens. Every step in the chain must exist.' },
-    ],
-    quiz: [
-      { q: 'Put the expand/contract steps for renaming <code>name</code> to <code>display_name</code> in order.', options: ['drop name → add display_name → backfill → ship readers', 'add display_name → dual write → backfill → ship readers → drop name', 'ship readers → add display_name → drop name → backfill'], a: 1, why: 'Each step keeps every running version working: the old column stays until nobody reads it.' },
-      { q: 'Which backend change is safe to deploy while old app versions are still in use?', options: ['Adding a nullable column', 'Dropping a column v1 reads', 'Changing a column from TEXT to INTEGER'], a: 0, why: 'Old code ignores a column it does not know. The other two break queries or parsing for old clients.' },
-      { q: 'On the device, why does a Room migration not need expand/contract?', options: ['Room does it automatically', 'Only one app version uses that database file, and it migrates before first use', 'SQLite has no columns to rename'], a: 1, why: 'The app upgrades and migrates its own file in one go. The many-versions problem lives on the server and in the API.' },
-    ],
-  });
-
   Lab.addTrack({
-    id: 'db',
+    id: 'db', lang: 'sql',
     title: 'Databases',
-    description: 'How databases work, from tables and SQL to indexes, transactions, NoSQL and migrations, tied back to SQLite, Room and the backend.',
+    description: 'Keep an app’s data in a database with SQLite: make tables, ask them questions in SQL, link them with keys, and keep the data fast, safe and up to date as the app grows.',
     requires: ['kotlin'],
     css,
-    lessons,
+    lessons: [
+      {
+        id: 'what-db',
+        title: 'What a database is',
+        tagline: 'A place where an app keeps its data in tidy tables.',
+        goals: ['Say what a table, a row and a column are', 'Explain why apps keep data in a database instead of a text file', 'Make a table with <code>CREATE TABLE</code> in <code>sqlite3</code>'],
+        level: 'beginner', introduces: ['sqlite3', 'CREATE', 'TABLE', 'INTEGER', 'TEXT'],
+        body: `
+<p>Ada is building a small app where friends lend each other books. At first she keeps the books in a text file, one per line: <code>Rain at Dawn, Mia Hart, 2019</code>. To find every book by Mia Hart, her program has to read the whole file and cut each line apart at the commas. A title with a comma in it breaks that, and if the app stops halfway through saving, the file can end up half written.</p>
+<p>A <em>database</em> is a program built to keep data safe and find it fast. Most databases keep data in <em>tables</em>. A table looks like a spreadsheet: each <em>column</em> has a name and holds one kind of value (title, author, year), and each <em>row</em> is one thing, here one book. In Kotlin terms: a table is like a list of objects of one class, a row is one object, and a column is one property.</p>
+<p>Every Android phone comes with <em>SQLite</em>, a small database that apps use to keep data on the phone, and this track uses it too. On your computer, run <code>sqlite3 library.db</code> in the terminal. It opens the database file <code>library.db</code> (making it if it does not exist yet) and waits for your commands after <code>sqlite&gt;</code>. On macOS and most Linux systems it is already installed; on Windows, download it from sqlite.org. Type <code>.quit</code> to leave.</p>
+<p>You talk to the database in <em>SQL</em>, a language for asking databases questions. <code>CREATE TABLE books (...)</code> makes a table named <code>books</code>. Inside the parentheses, each column gets a name and a type: <code>INTEGER</code> for whole numbers, like Kotlin’s <code>Int</code>, and <code>TEXT</code> for text, like <code>String</code>. A SQL command can run over several lines and ends with <code>;</code>. SQL words are usually written in capitals so they stand out, but SQLite accepts small letters too.</p>`,
+        visual(el) {
+          const COLS = ['id', 'title', 'author', 'year', 'copies'];
+          const B = [[1, 'Rain at Dawn', 'Mia Hart', 2019, 2], [2, 'The Quiet Sea', 'Leo Brandt', 2015, 1], [3, 'Night Train', 'Mia Hart', 2021, 3], [4, 'Paper Birds', 'Ines Costa', 2018, 1], [5, 'Small Rooms', 'Leo Brandt', 2022, 2]];
+          const show = (rows, hit) => n => n.append(tbl('books', COLS, rows, { cls: r => hit == null ? null : (r[0] === hit ? 'dbx-hit' : 'dbx-dim') }));
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'library.db',
+            predict: {
+              q: 'Ada runs <code>CREATE TABLE books (...)</code> with five columns. How many rows does the new table have?',
+              options: ['0', '5', '1'],
+              a: 0,
+              why: '<code>CREATE TABLE</code> only describes the columns. Rows arrive when you add books.',
+            },
+            frames: [
+              { out: 'SQLite version 3.45.1 2024-01-30 16:01:20\nEnter ".help" for usage hints.', panel: '<p class="dbx-label">no tables yet</p>', say: 'Ada ran <code>sqlite3 library.db</code> in the terminal. SQLite printed its version and now waits after <code>sqlite&gt;</code>.' },
+              { cmd: 'CREATE TABLE books (id INTEGER, title TEXT, author TEXT, year INTEGER, copies INTEGER);', panel: show([]), say: 'It printed nothing: in <code>sqlite3</code>, silence means it worked. The panel draws the new table: five columns, no rows yet.' },
+              { cmd: '.tables', out: 'books', say: 'Commands that start with a dot are for the <code>sqlite3</code> program itself, not SQL. <code>.tables</code> lists the tables in this file.' },
+              { panel: show(B), say: 'Ada pasted five set-up lines that add her books. They are at the end of the code below: paste them too, so your table matches hers. Each row is one book, and each column holds one kind of value.' },
+              { panel: show(B, 3), say: 'One row: Night Train by Mia Hart, from 2021, 3 copies. The <code>id</code> is a number Ada gives every book, so she can point at exactly one.' },
+              { cmd: '.quit', say: '<code>.quit</code> closes <code>sqlite3</code>. The table and its rows stay in <code>library.db</code>, ready for next time.' },
+            ],
+          });
+        },
+        code: `-- In the terminal: sqlite3 library.db
+CREATE TABLE books (
+    id INTEGER,
+    title TEXT,
+    author TEXT,
+    year INTEGER,
+    copies INTEGER
+);
+-- prints nothing: the table now exists, with 0 rows
+
+.tables
+-- books
+
+-- Set-up: paste these five lines as they are, to give the table Ada's books.
+-- The lesson after next explains how they work.
+INSERT INTO books VALUES (1, 'Rain at Dawn', 'Mia Hart', 2019, 2);
+INSERT INTO books VALUES (2, 'The Quiet Sea', 'Leo Brandt', 2015, 1);
+INSERT INTO books VALUES (3, 'Night Train', 'Mia Hart', 2021, 3);
+INSERT INTO books VALUES (4, 'Paper Birds', 'Ines Costa', 2018, 1);
+INSERT INTO books VALUES (5, 'Small Rooms', 'Leo Brandt', 2022, 2);`,
+        ignore: ['INSERT', 'INTO', 'VALUES'],
+        remember: 'A table holds rows of one kind of thing; every column has a name and a type. CREATE TABLE makes one.',
+        mistakes: [
+          { title: 'Forgetting the semicolon', bad: `sqlite> CREATE TABLE books (id INTEGER, title TEXT)
+   ...>`, good: `sqlite> CREATE TABLE books (id INTEGER, title TEXT)
+   ...> ;`, why: 'Without <code>;</code>, <code>sqlite3</code> thinks the command goes on and shows <code>...&gt;</code> to ask for the rest. Type <code>;</code> and press Enter to finish it.' },
+        ],
+        terms: [
+          { term: 'database', def: 'A program that keeps data safe and finds it fast. SQLite is one.' },
+          { term: 'table, row, column', def: 'A table is a grid of data. Each row is one thing (one book); each column is one kind of value (the title).' },
+          { term: 'SQL', def: 'The language you use to talk to a database, with commands like <code>CREATE TABLE</code>.' },
+          { term: 'sqlite3', def: 'A terminal program for SQLite: <code>sqlite3 library.db</code> opens that database file.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make a table <code>members</code> with a whole-number <code>id</code> and a text <code>name</code>.', code: 'CREATE [[TABLE|table]] members (id [[INTEGER|integer]], name [[TEXT|text]]);', why: '<code>CREATE TABLE</code> names the table; <code>INTEGER</code> holds whole numbers and <code>TEXT</code> holds text.' },
+          { type: 'bug', prompt: 'A table of cities, where <code>population</code> is a whole number. Tap the wrong line.', code: 'CREATE TABLE cities (\n    name TEXT,\n    population TEXT\n);', bug: 2, fix: '    population INTEGER', why: 'A population is a whole number, so its column type is <code>INTEGER</code>, like <code>Int</code> in Kotlin.' },
+        ],
+        quiz: [
+          { q: 'In Ada’s <code>books</code> table, what is one row?', options: ['One book', 'Every title, top to bottom', 'The whole file'], a: 0, why: 'A row is one thing. Every title, top to bottom, is a column.' },
+          { q: 'Which column type fits a year like 2019?', options: ['<code>TEXT</code>', '<code>INTEGER</code>'], a: 1, why: 'A year is a whole number, so <code>INTEGER</code>.' },
+          { q: 'Why does a text file get hard to use as an app’s data grows?', options: ['Text files cannot hold numbers', 'The program must read and cut apart every line itself to find anything', 'A computer can open only one text file'], a: 1, why: 'A database does the finding for you, and keeps the data safe while it saves.' },
+        ],
+        docs: [['Command Line Shell For SQLite', 'https://www.sqlite.org/cli.html']],
+      },
+
+      {
+        id: 'sql-select',
+        title: 'Reading data with SQL',
+        tagline: 'Ask a table a question and get back only the rows you need.',
+        goals: ['Read columns from a table with <code>SELECT</code> and <code>FROM</code>', 'Keep only the rows that match with <code>WHERE</code>', 'Sort with <code>ORDER BY</code> and keep the first few with <code>LIMIT</code>'],
+        level: 'beginner', introduces: ['SELECT', 'FROM', 'WHERE', 'ORDER', 'BY', 'DESC', 'LIMIT'],
+        body: `
+<p>Ada’s app has a screen “Books by Mia Hart”, and another with the newest books first. The app does not read the whole table to make them. It asks the database a question, a <em>query</em>, and gets back only the rows it needs.</p>
+<p><code>SELECT title, year FROM books;</code> reads the columns <code>title</code> and <code>year</code> from every row of <code>books</code>. <code>SELECT *</code> means all columns. The answer is itself a small table: <code>sqlite3</code> prints one row per line, with <code>|</code> between the values.</p>
+<p><code>WHERE</code> keeps only the rows that pass a test: <code>WHERE year &gt; 2018</code>, or <code>WHERE author = 'Mia Hart'</code>. Two things differ from Kotlin: SQL checks “equal” with a single <code>=</code>, and text goes in single quotes. The check is exact, so <code>'mia hart'</code> finds nothing.</p>
+<p><code>ORDER BY year</code> sorts the answer, smallest first; add <code>DESC</code> (descending) for biggest first. <code>LIMIT 2</code> keeps only the first two rows. The parts always come in this order: <code>SELECT</code>, <code>FROM</code>, <code>WHERE</code>, <code>ORDER BY</code>, <code>LIMIT</code>. Without <code>ORDER BY</code>, the database promises no order at all.</p>`,
+        visual(el) {
+          const COLS = ['id', 'title', 'author', 'year', 'copies'];
+          const B = [[1, 'Rain at Dawn', 'Mia Hart', 2019, 2], [2, 'The Quiet Sea', 'Leo Brandt', 2015, 1], [3, 'Night Train', 'Mia Hart', 2021, 3], [4, 'Paper Birds', 'Ines Costa', 2018, 1], [5, 'Small Rooms', 'Leo Brandt', 2022, 2]];
+          const show = keep => n => n.append(tbl('books', COLS, B, { cls: r => keep ? (keep(r) ? 'dbx-hit' : 'dbx-dim') : null }));
+          const err = s => `<span class="dbx-fail">${esc(s)}</span>`;
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'books',
+            predict: {
+              q: 'Ada runs <code>SELECT title, year FROM books ORDER BY year DESC LIMIT 2;</code> What is the first line of the answer?',
+              options: ['<code>Small Rooms|2022</code>', '<code>The Quiet Sea|2015</code>', '<code>Rain at Dawn|2019</code>'],
+              a: 0,
+              why: '<code>DESC</code> puts the biggest year first, and Small Rooms is from 2022.',
+            },
+            frames: [
+              { panel: show(), say: 'Ada’s <code>books</code> table with her five books. She opened it with <code>sqlite3 library.db</code>.' },
+              { cmd: 'SELECT * FROM books;', out: '1|Rain at Dawn|Mia Hart|2019|2\n2|The Quiet Sea|Leo Brandt|2015|1\n3|Night Train|Mia Hart|2021|3\n4|Paper Birds|Ines Costa|2018|1\n5|Small Rooms|Leo Brandt|2022|2', say: '<code>*</code> means every column. One line per row, with <code>|</code> between the values.' },
+              { cmd: 'SELECT title, year FROM books;', out: 'Rain at Dawn|2019\nThe Quiet Sea|2015\nNight Train|2021\nPaper Birds|2018\nSmall Rooms|2022', say: 'Name the columns you want, separated by commas. The others stay out of the answer.' },
+              { cmd: "SELECT title FROM books WHERE author = 'Mia Hart';", out: 'Rain at Dawn\nNight Train', panel: show(r => r[2] === 'Mia Hart'), say: '<code>WHERE</code> tests each row. Only Mia Hart’s two books pass. Text goes in single quotes.' },
+              { cmd: 'SELECT title, year FROM books WHERE year > 2018;', out: 'Rain at Dawn|2019\nNight Train|2021\nSmall Rooms|2022', panel: show(r => r[3] > 2018), say: 'Comparisons work as in Kotlin. Only “equal” is different: one <code>=</code>.' },
+              { cmd: 'SELECT title, year FROM books ORDER BY year DESC;', out: 'Small Rooms|2022\nNight Train|2021\nRain at Dawn|2019\nPaper Birds|2018\nThe Quiet Sea|2015', panel: show(), say: '<code>ORDER BY</code> sorts the answer. <code>DESC</code> means biggest first.' },
+              { cmd: 'SELECT title, year FROM books ORDER BY year DESC LIMIT 2;', out: 'Small Rooms|2022\nNight Train|2021', panel: show(r => r[3] > 2020), say: '<code>LIMIT 2</code> keeps the first two rows of the sorted answer: the two newest books.' },
+              { cmd: 'SELECT title FROM books WHERE author = Mia;', out: err('Parse error: no such column: Mia\n  SELECT title FROM books WHERE author = Mia;\n                           error here ---^'), say: 'Without quotes, SQL reads <code>Mia</code> as the name of a column. There is no such column, so it stops with an error.' },
+            ],
+          });
+        },
+        code: `SELECT title, year FROM books WHERE year > 2018 ORDER BY year DESC;
+-- Small Rooms|2022
+-- Night Train|2021
+-- Rain at Dawn|2019
+
+SELECT title FROM books WHERE author = 'Mia Hart' ORDER BY title LIMIT 1;
+-- Night Train`,
+        remember: 'SELECT columns FROM table WHERE test ORDER BY column LIMIT n, in that order. Text goes in single quotes.',
+        mistakes: [
+          { title: 'Text without quotes', bad: `SELECT title FROM books WHERE author = Mia Hart;
+-- Parse error: near "Hart": syntax error`, good: `SELECT title FROM books WHERE author = 'Mia Hart';
+-- Rain at Dawn
+-- Night Train`, why: 'Without quotes, SQL reads words as column names. Put text values in single quotes.' },
+        ],
+        terms: [
+          { term: 'query', def: 'A question you ask the database, like <code>SELECT title FROM books;</code>. The answer is a small table.' },
+          { term: 'SELECT … FROM', def: '<code>SELECT</code> names the columns you want, <code>FROM</code> names the table. <code>*</code> means all columns.' },
+          { term: 'WHERE', def: 'Keeps only the rows that pass a test, like <code>WHERE year &gt; 2018</code>.' },
+          { term: 'ORDER BY, DESC, LIMIT', def: '<code>ORDER BY</code> sorts the answer (<code>DESC</code> for biggest first); <code>LIMIT</code> keeps the first few rows.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'List the titles of the books with exactly 1 copy, sorted by title.', code: 'SELECT title [[FROM|from]] books [[WHERE|where]] copies = 1 [[ORDER BY|order by]] title;', why: 'It prints <code>Paper Birds</code> and <code>The Quiet Sea</code>, in that order.' },
+          { type: 'bug', prompt: 'This should list the three newest books, newest first. Tap the wrong line.', code: 'SELECT title, year\nFROM books\nORDER BY year\nLIMIT 3;', bug: 2, fix: 'ORDER BY year DESC', why: 'Without <code>DESC</code>, the oldest come first, so <code>LIMIT 3</code> keeps the three oldest books.' },
+        ],
+        quiz: [
+          { q: "What does <code>SELECT title FROM books WHERE author = 'mia hart';</code> print?", options: ['Rain at Dawn and Night Train', 'Nothing: no row matches', 'An error'], a: 1, why: 'Text must match exactly, small and capital letters included.' },
+          { q: 'Which part keeps only some of the rows?', options: ['<code>SELECT</code>', '<code>WHERE</code>', '<code>ORDER BY</code>'], a: 1, why: '<code>SELECT</code> picks columns; <code>WHERE</code> picks rows.' },
+          { q: 'How do you get only the oldest book?', options: ['<code>ORDER BY year LIMIT 1</code>', '<code>ORDER BY year DESC LIMIT 1</code>', '<code>LIMIT 1</code>'], a: 0, why: 'Without <code>DESC</code> the smallest year comes first. <code>LIMIT 1</code> alone gives no promised order.' },
+        ],
+        docs: [['SQLite: SELECT', 'https://www.sqlite.org/lang_select.html']],
+      },
+
+      {
+        id: 'sql-write',
+        title: 'Changing data with SQL',
+        tagline: 'Add rows, change them and remove them.',
+        goals: ['Add rows with <code>INSERT INTO</code> and <code>VALUES</code>', 'Change rows with <code>UPDATE</code> and <code>SET</code>', 'Remove rows with <code>DELETE FROM</code>, aimed by <code>WHERE</code>'],
+        level: 'beginner', introduces: ['INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'NULL'],
+        body: `
+<p>Someone adds a new book to Ada’s app, a copy is returned, a book is taken off the shelf. Each of those changes the table. SQL has one command for each: add, change, remove.</p>
+<p><code>INSERT INTO books VALUES (6, 'Blue Hills', 'Ines Costa', 2023, 1);</code> adds one row. The values go in the same order as the columns: id, title, author, year, copies. To fill only some columns, name them first: <code>INSERT INTO books (id, title, author) VALUES (7, 'Long Winter', 'Mia Hart');</code>. The columns you leave out stay empty: SQL calls this <code>NULL</code>, “no value”, like <code>null</code> in Kotlin.</p>
+<p><code>UPDATE books SET copies = 2 WHERE id = 6;</code> changes the rows that pass the <code>WHERE</code> test. <code>SET</code> can also work from the old value: <code>SET copies = copies + 1</code>. <code>DELETE FROM books WHERE id = 6;</code> removes the rows that pass the test.</p>
+<p><code>WHERE</code> is what aims <code>UPDATE</code> and <code>DELETE</code>. Leave it out and the command hits every row in the table, without asking and without undo. Before changing rows, you can run a <code>SELECT</code> with the same <code>WHERE</code> to see exactly which rows you are about to hit.</p>`,
+        visual(el) {
+          const COLS = ['id', 'title', 'author', 'year', 'copies'];
+          const B = [[1, 'Rain at Dawn', 'Mia Hart', 2019, 2], [2, 'The Quiet Sea', 'Leo Brandt', 2015, 1], [3, 'Night Train', 'Mia Hart', 2021, 3], [4, 'Paper Birds', 'Ines Costa', 2018, 1], [5, 'Small Rooms', 'Leo Brandt', 2022, 2]];
+          const show = (rows, cls) => n => n.append(tbl('books', COLS, rows, { cls }));
+          const six = c => [...B.map(r => r[0] === 1 && c > 1 ? [1, 'Rain at Dawn', 'Mia Hart', 2019, 3] : r), [6, 'Blue Hills', 'Ines Costa', 2023, c]];
+          const B3 = B.map(r => r[0] === 1 ? [1, 'Rain at Dawn', 'Mia Hart', 2019, 3] : r);
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'books',
+            predict: {
+              q: 'Ada runs <code>UPDATE books SET copies = 0;</code> with no <code>WHERE</code>. Which rows change?',
+              options: ['None: SQLite asks for a <code>WHERE</code> first', 'Only the first row', 'Every row in the table'],
+              a: 2,
+              why: 'With no test to pass, every row counts as a match.',
+            },
+            frames: [
+              { panel: show(B), say: 'The same five books. Each command below changes the table, and the panel shows the result.' },
+              { cmd: "INSERT INTO books VALUES (6, 'Blue Hills', 'Ines Costa', 2023, 1);", panel: show([...B, [6, 'Blue Hills', 'Ines Costa', 2023, 1]], r => r[0] === 6 ? 'dbx-hit' : null), say: 'A new row. The values follow the order of the columns.' },
+              { cmd: 'SELECT * FROM books WHERE id = 6;', out: '6|Blue Hills|Ines Costa|2023|1', say: 'Read it back to check.' },
+              { cmd: 'UPDATE books SET copies = 2 WHERE id = 6;', panel: show([...B, [6, 'Blue Hills', 'Ines Costa', 2023, 2]], r => r[0] === 6 ? 'dbx-hit' : null), say: '<code>WHERE</code> picks the row, <code>SET</code> gives the new value. Only Blue Hills changes.' },
+              { cmd: 'UPDATE books SET copies = copies + 1 WHERE id = 1;', panel: show(six(2), r => r[0] === 1 ? 'dbx-hit' : null), say: '<code>SET</code> can use the old value: <code>copies + 1</code> turns Rain at Dawn’s 2 into 3.' },
+              { cmd: 'DELETE FROM books WHERE id = 6;', panel: show(B3), say: '<code>DELETE</code> removes the rows that match. Blue Hills is gone.' },
+              { cmd: 'UPDATE books SET copies = 0;', panel: show(B.map(r => [...r.slice(0, 4), 0]), () => 'dbx-bad'), say: 'No <code>WHERE</code>: every row changes, and <code>sqlite3</code> does not ask first.' },
+              { cmd: 'SELECT title, copies FROM books;', out: 'Rain at Dawn|0\nThe Quiet Sea|0\nNight Train|0\nPaper Birds|0\nSmall Rooms|0', say: 'Every book now has 0 copies. That is why you write the <code>WHERE</code> before anything else.' },
+            ],
+          });
+        },
+        code: `INSERT INTO books VALUES (6, 'Blue Hills', 'Ines Costa', 2023, 1);
+UPDATE books SET copies = 2 WHERE id = 6;
+SELECT title, copies FROM books WHERE id = 6;
+-- Blue Hills|2
+
+DELETE FROM books WHERE id = 6;
+SELECT * FROM books WHERE id = 6;
+-- (prints nothing: the row is gone)`,
+        remember: 'INSERT adds rows, UPDATE changes them, DELETE removes them. UPDATE and DELETE hit every row unless WHERE aims them.',
+        mistakes: [
+          { title: 'Too few values', bad: `INSERT INTO books VALUES (8, 'Short Story', 'Leo Brandt', 2020);
+-- Parse error: table books has 5 columns but 4 values were supplied`, good: `INSERT INTO books (id, title, author, year) VALUES (8, 'Short Story', 'Leo Brandt', 2020);
+-- copies stays empty: NULL`, why: 'Without a list of columns, SQLite wants one value for every column. To fill only some, name them first.' },
+        ],
+        terms: [
+          { term: 'INSERT INTO … VALUES', def: 'Adds a row: <code>INSERT INTO books VALUES (6, \'Blue Hills\', \'Ines Costa\', 2023, 1);</code>' },
+          { term: 'UPDATE … SET', def: 'Changes columns in the rows that pass the <code>WHERE</code> test.' },
+          { term: 'DELETE FROM', def: 'Removes the rows that pass the <code>WHERE</code> test. Without <code>WHERE</code>, all of them.' },
+          { term: 'NULL', def: 'SQL’s “no value”, like <code>null</code> in Kotlin. A column you leave out of an <code>INSERT</code> holds <code>NULL</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A copy of Night Train (id 3) comes back. Add 1 to its copies.', code: '[[UPDATE|update]] books [[SET|set]] copies = copies + 1 [[WHERE|where]] id = 3;', why: '<code>UPDATE</code> names the table, <code>SET</code> the new value, <code>WHERE</code> the row.' },
+          { type: 'bug', prompt: 'Ada wants to remove only Small Rooms (id 5). Tap the wrong line.', code: 'SELECT title FROM books WHERE id = 5;\nDELETE FROM books;\nSELECT * FROM books;', bug: 1, fix: 'DELETE FROM books WHERE id = 5;', why: 'Without <code>WHERE</code>, <code>DELETE</code> removes all five books.' },
+        ],
+        quiz: [
+          { q: 'What does <code>DELETE FROM books;</code> remove?', options: ['Nothing: it needs a <code>WHERE</code>', 'Every row; the empty table stays', 'The whole table, columns and all'], a: 1, why: 'It removes all the rows. The table itself is still there, empty.' },
+          { q: "After <code>INSERT INTO books (id, title) VALUES (9, 'Mist');</code>, what is in that row’s <code>year</code>?", options: ['<code>0</code>', 'Nothing: it stays empty (<code>NULL</code>)', 'An error stops the INSERT'], a: 1, why: 'Columns you leave out hold <code>NULL</code>. <code>sqlite3</code> prints the row as <code>9|Mist|||</code>.' },
+          { q: 'Which command changes Night Train’s year to 2020?', options: ['<code>UPDATE books SET year = 2020 WHERE id = 3;</code>', '<code>INSERT INTO books VALUES (3, 2020);</code>', '<code>UPDATE books WHERE id = 3 SET year = 2020;</code>'], a: 0, why: '<code>SET</code> comes before <code>WHERE</code>. <code>INSERT</code> adds a new row instead of changing one.' },
+        ],
+        docs: [['SQLite: INSERT', 'https://www.sqlite.org/lang_insert.html'], ['SQLite: UPDATE', 'https://www.sqlite.org/lang_update.html']],
+      },
+
+      {
+        id: 'keys',
+        title: 'Keys and relations',
+        tagline: 'Give every row its own name, and let one table point at another.',
+        goals: ['Make a column that names each row with <code>PRIMARY KEY</code>', 'Point from one table to another with <code>REFERENCES</code>', 'Turn on SQLite’s link checks with <code>PRAGMA foreign_keys = ON</code>'],
+        level: 'beginner', introduces: ['PRIMARY', 'KEY', 'DROP', 'REFERENCES', 'PRAGMA', 'foreign_keys', 'ON'],
+        body: `
+<p>Ada adds a second book with id 3 by accident. Now “book 3” could mean Night Train or Blue Hills, and when Sam borrows book 3, nobody knows which one he has. Her table needs a column whose value no two rows ever share.</p>
+<p>That column is the <em>primary key</em>. Write <code>id INTEGER PRIMARY KEY</code> in <code>CREATE TABLE</code>, and SQLite refuses a second row with the same id. If an <code>INSERT</code> leaves the id out, SQLite uses one more than the biggest id in the table. SQLite can’t add a primary key to a table that already exists, so Ada deletes the old table with <code>DROP TABLE books;</code> (that removes the table and all its rows) and makes it again, with the key.</p>
+<p>Now the loans. A loan says which book went to whom. Instead of copying the book’s title into the loan, the loan keeps the book’s id: <code>book_id INTEGER REFERENCES books(id)</code>. Such a column is a <em>foreign key</em>: it points at the primary key of another table. The link between the two tables is called a <em>relation</em>.</p>
+<p>With a foreign key, the database checks the link: a loan for book 9, which does not exist, is refused, and so is deleting a book that a loan still points at. SQLite does these checks only after <code>PRAGMA foreign_keys = ON;</code>. <code>PRAGMA</code> changes one of SQLite’s settings, and this one is off again every time you open the database, so run it each time.</p>`,
+        visual(el) {
+          const COLS = ['id', 'title', 'author', 'year', 'copies'];
+          const B = [[1, 'Rain at Dawn', 'Mia Hart', 2019, 2], [2, 'The Quiet Sea', 'Leo Brandt', 2015, 1], [3, 'Night Train', 'Mia Hart', 2021, 3], [4, 'Paper Birds', 'Ines Costa', 2018, 1], [5, 'Small Rooms', 'Leo Brandt', 2022, 2]];
+          const L = [[1, 3, 'Sam'], [2, 1, 'Noor'], [3, 4, 'Sam']];
+          const err = s => `<span class="dbx-fail">${esc(s)}</span>`;
+          const books = (rows, o = {}) => tbl('books', COLS, rows, o);
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'library.db',
+            predict: {
+              q: 'The checks are on. Ada adds a loan for book 9, and there is no book 9. What does SQLite do?',
+              options: ['Stores the loan anyway', 'Refuses it: <code>FOREIGN KEY constraint failed</code>', 'Makes an empty book 9'],
+              a: 1,
+              why: 'A foreign key must point at a row that exists. Otherwise the change is refused.',
+            },
+            frames: [
+              { panel: n => n.append(books(B)), say: 'The <code>books</code> table from before. Nothing stops two rows from having the same id.' },
+              { cmd: "INSERT INTO books VALUES (3, 'Blue Hills', 'Ines Costa', 2023, 1);", panel: n => n.append(books([...B, [3, 'Blue Hills', 'Ines Costa', 2023, 1]], { cls: r => r[0] === 3 ? 'dbx-bad' : null })), say: 'SQLite takes it without a word. Two books now answer to id 3, so “book 3” means nothing for sure.' },
+              { cmd: 'DROP TABLE books;', panel: '<p class="dbx-label">no tables</p>', say: '<code>DROP TABLE</code> deletes the table and every row in it. Ada starts over.' },
+              { cmd: 'CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, author TEXT, year INTEGER, copies INTEGER);', panel: n => n.append(books(B, { keys: { id: 'PK' } })), say: 'This time <code>id</code> is the primary key. Ada pastes the five set-up lines from the first lesson again to add her books. (All the lines of this demo are in the code below.)' },
+              { cmd: "INSERT INTO books VALUES (3, 'Blue Hills', 'Ines Costa', 2023, 1);", out: err('Runtime error: UNIQUE constraint failed: books.id (19)'), say: 'Refused: no two rows can share a primary key. (19 is SQLite’s number for this kind of error.)' },
+              { cmd: 'PRAGMA foreign_keys = ON;', say: 'Turn on the link checks. They stay on until <code>sqlite3</code> closes.' },
+              { cmd: 'CREATE TABLE loans (id INTEGER PRIMARY KEY, book_id INTEGER REFERENCES books(id), member TEXT);', panel: n => n.append(books(B, { keys: { id: 'PK' }, cls: r => [1, 3, 4].includes(r[0]) ? 'dbx-hit' : null }), tbl('loans', ['id', 'book_id', 'member'], L, { keys: { id: 'PK', book_id: 'FK' } })), say: 'Each loan’s <code>book_id</code> points at a book’s <code>id</code>. With three <code>INSERT</code> lines (in the code below), Ada adds three loans: Sam has books 3 and 4, Noor has book 1.' },
+              { cmd: "INSERT INTO loans VALUES (4, 9, 'Lin');", out: err('Runtime error: FOREIGN KEY constraint failed (19)'), say: 'There is no book 9, so the loan is refused. A broken link never gets in.' },
+            ],
+          });
+        },
+        code: `-- the demo, line by line
+INSERT INTO books VALUES (3, 'Blue Hills', 'Ines Costa', 2023, 1);
+DROP TABLE books;
+CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, author TEXT, year INTEGER, copies INTEGER);
+INSERT INTO books VALUES (1, 'Rain at Dawn', 'Mia Hart', 2019, 2);
+INSERT INTO books VALUES (2, 'The Quiet Sea', 'Leo Brandt', 2015, 1);
+INSERT INTO books VALUES (3, 'Night Train', 'Mia Hart', 2021, 3);
+INSERT INTO books VALUES (4, 'Paper Birds', 'Ines Costa', 2018, 1);
+INSERT INTO books VALUES (5, 'Small Rooms', 'Leo Brandt', 2022, 2);
+INSERT INTO books VALUES (3, 'Blue Hills', 'Ines Costa', 2023, 1);
+-- Runtime error: UNIQUE constraint failed: books.id (19)
+PRAGMA foreign_keys = ON;
+CREATE TABLE loans (id INTEGER PRIMARY KEY, book_id INTEGER REFERENCES books(id), member TEXT);
+INSERT INTO loans VALUES (1, 3, 'Sam');
+INSERT INTO loans VALUES (2, 1, 'Noor');
+INSERT INTO loans VALUES (3, 4, 'Sam');
+INSERT INTO loans VALUES (4, 9, 'Lin');
+-- Runtime error: FOREIGN KEY constraint failed (19)
+
+-- an INSERT without an id
+INSERT INTO books (title, author, year, copies) VALUES ('Blue Hills', 'Ines Costa', 2023, 1);
+SELECT id, title FROM books WHERE title = 'Blue Hills';
+-- 6|Blue Hills          (one more than the biggest id, 5)
+
+DELETE FROM books WHERE id = 3;
+-- Runtime error: FOREIGN KEY constraint failed (19)   (a loan still points at book 3)
+DELETE FROM books WHERE id = 6;
+-- prints nothing: Blue Hills is gone, and books has its five rows again`,
+        remember: 'A primary key names each row; a foreign key points at another table’s primary key. In SQLite, run PRAGMA foreign_keys = ON first.',
+        mistakes: [
+          { title: 'Forgetting to turn the checks on', bad: `-- a new sqlite3 session, PRAGMA not run
+INSERT INTO loans VALUES (4, 9, 'Lin');
+-- no error: a loan for a book that does not exist`, good: `PRAGMA foreign_keys = ON;
+INSERT INTO loans VALUES (4, 9, 'Lin');
+-- Runtime error: FOREIGN KEY constraint failed (19)`, why: 'SQLite keeps the checks off unless you turn them on, and only for as long as that session lasts.' },
+        ],
+        terms: [
+          { term: 'primary key', def: 'A column whose value is different in every row, so it names exactly one row: <code>id INTEGER PRIMARY KEY</code>.' },
+          { term: 'foreign key', def: 'A column that holds another table’s primary key, like <code>book_id INTEGER REFERENCES books(id)</code>.' },
+          { term: 'relation', def: 'The link between two tables made by a foreign key.' },
+          { term: 'PRAGMA', def: 'Reads or changes a setting of SQLite, like <code>PRAGMA foreign_keys = ON;</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make a table of members whose <code>id</code> names each row.', code: 'CREATE TABLE members (id INTEGER [[PRIMARY KEY|primary key]], name TEXT, city TEXT);', why: '<code>PRIMARY KEY</code> makes SQLite refuse two members with the same id.' },
+          { type: 'bug', prompt: 'Ada wants SQLite to refuse loans for books that don’t exist. Tap the wrong line.', code: 'PRAGMA foreign_keys = ON;\nCREATE TABLE loans (\n    id INTEGER PRIMARY KEY,\n    book_id INTEGER,\n    member TEXT\n);', bug: 3, fix: '    book_id INTEGER REFERENCES books(id),', why: 'Without <code>REFERENCES books(id)</code>, <code>book_id</code> is a plain number that SQLite never checks.' },
+        ],
+        quiz: [
+          { q: '<code>id</code> is the primary key of <code>books</code>, and a book with id 2 exists. What does another <code>INSERT</code> with id 2 do?', options: ['Replaces the old row', 'Fails: <code>UNIQUE constraint failed: books.id</code>', 'Keeps both rows'], a: 1, why: 'A primary key value can belong to one row only.' },
+          { q: 'A loan has <code>book_id</code> 4. What is <code>book_id</code>?', options: ['The loan’s primary key', 'A foreign key: it points at book 4 in <code>books</code>', 'A copy of the book’s title'], a: 1, why: 'It holds another table’s primary key, so it is a foreign key.' },
+          { q: 'You open <code>sqlite3</code> again tomorrow. Are the foreign key checks on?', options: ['Yes, the file remembers', 'No: run <code>PRAGMA foreign_keys = ON;</code> again'], a: 1, why: 'The setting lasts only until the session ends.' },
+        ],
+        docs: [['SQLite Foreign Key Support', 'https://www.sqlite.org/foreignkeys.html']],
+      },
+
+      {
+        id: 'joins',
+        title: 'Joining tables',
+        tagline: 'Put rows from two tables side by side in one answer.',
+        goals: ['Combine two tables in one query with <code>JOIN</code> and <code>ON</code>', 'Name a column by its table, like <code>books.title</code>', 'Explain why rows without a partner drop out'],
+        level: 'beginner', introduces: ['JOIN'],
+        body: `
+<p>Ada’s “Loans” screen should say “Sam has Night Train”. But a loan row only says <code>1|3|Sam</code>: loan 1, book 3, Sam. The title lives in <code>books</code>. She needs one answer built from both tables.</p>
+<p><code>FROM loans JOIN books ON loans.book_id = books.id</code> builds it. For each loan, SQLite finds the book whose <code>id</code> equals the loan’s <code>book_id</code>, and puts the two rows side by side as one wider row. <code>ON</code> gives the rule for which rows belong together, and it is almost always “foreign key = primary key”.</p>
+<p>With two tables in one query, write a column as <code>table.column</code>: <code>books.title</code>, <code>loans.member</code>. Both tables have a column called <code>id</code>, so a bare <code>id</code> is <em>ambiguous</em>: SQLite can’t tell which one you mean, and stops with an error. After the join, <code>WHERE</code> and <code>ORDER BY</code> work as before.</p>
+<p>A join keeps only rows that found a partner. Nobody has borrowed The Quiet Sea or Small Rooms, so no loan points at them, and they are not in the answer.</p>`,
+        visual(el) {
+          const B = [[1, 'Rain at Dawn', 'Mia Hart'], [2, 'The Quiet Sea', 'Leo Brandt'], [3, 'Night Train', 'Mia Hart'], [4, 'Paper Birds', 'Ines Costa'], [5, 'Small Rooms', 'Leo Brandt']];
+          const L = [[1, 3, 'Sam'], [2, 1, 'Noor'], [3, 4, 'Sam']];
+          const err = s => `<span class="dbx-fail">${esc(s)}</span>`;
+          const show = (lc, bc) => n => n.append(
+            tbl('loans', ['id', 'book_id', 'member'], L, { keys: { book_id: 'FK' }, cls: lc }),
+            tbl('books (id, title, author)', ['id', 'title', 'author'], B, { keys: { id: 'PK' }, cls: bc }));
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'library.db',
+            predict: {
+              q: 'Three loans, five books. How many rows does <code>FROM loans JOIN books ON loans.book_id = books.id</code> give?',
+              options: ['3', '5', '15'],
+              a: 0,
+              why: 'Each loan finds the one book its <code>book_id</code> points at: one row per loan.',
+            },
+            frames: [
+              { panel: show(), say: 'Two tables. Each loan’s <code>book_id</code> points at a book’s <code>id</code>. (The panel leaves out <code>year</code> and <code>copies</code>.)' },
+              { cmd: 'SELECT * FROM loans;', out: '1|3|Sam\n2|1|Noor\n3|4|Sam', say: 'On its own, a loan holds numbers and a name. Which book is 3?' },
+              { cmd: 'SELECT loans.member, books.title FROM loans JOIN books ON loans.book_id = books.id;', out: 'Sam|Night Train\nNoor|Rain at Dawn\nSam|Paper Birds', panel: show(() => 'dbx-hit', r => [1, 3, 4].includes(r[0]) ? 'dbx-hit' : 'dbx-dim'), say: 'Each loan found its book. Three loans, three rows. The two dimmed books have no loan, so they are not in the answer.' },
+              { cmd: "SELECT loans.member, books.title, books.author FROM loans JOIN books ON loans.book_id = books.id WHERE loans.member = 'Sam';", out: 'Sam|Night Train|Mia Hart\nSam|Paper Birds|Ines Costa', panel: show(r => r[2] === 'Sam' ? 'dbx-hit' : 'dbx-dim', r => [3, 4].includes(r[0]) ? 'dbx-hit' : 'dbx-dim'), say: '<code>WHERE</code> works on the joined rows: only Sam’s loans, with the author too.' },
+              { cmd: 'SELECT id, title FROM loans JOIN books ON loans.book_id = books.id;', out: err('Parse error: ambiguous column name: id\n  SELECT id, title FROM loans JOIN books ON loans.book_id = books.id;\n         ^--- error here'), panel: show(), say: 'Both tables have an <code>id</code> column. SQLite won’t guess which one you mean. <code>books.id</code> would work.' },
+              { cmd: 'SELECT loans.member, books.title FROM loans JOIN books;', out: 'Sam|Rain at Dawn\nSam|The Quiet Sea\nSam|Night Train\nSam|Paper Birds\nSam|Small Rooms\nNoor|Rain at Dawn\nNoor|The Quiet Sea\nNoor|Night Train\nNoor|Paper Birds\nNoor|Small Rooms\nSam|Rain at Dawn\nSam|The Quiet Sea\nSam|Night Train\nSam|Paper Birds\nSam|Small Rooms', say: 'Without <code>ON</code> there is no rule, so every loan pairs with every book: 3 × 5 = 15 rows, most of them wrong.' },
+            ],
+          });
+        },
+        code: `SELECT loans.member, books.title
+FROM loans JOIN books ON loans.book_id = books.id
+ORDER BY books.title;
+-- Sam|Night Train
+-- Sam|Paper Birds
+-- Noor|Rain at Dawn`,
+        remember: 'FROM a JOIN b ON a.foreign_key = b.id puts matching rows side by side. Rows without a partner drop out.',
+        mistakes: [
+          { title: 'A column name both tables have', bad: `SELECT id, title FROM loans JOIN books ON loans.book_id = books.id;
+-- Parse error: ambiguous column name: id`, good: `SELECT books.id, books.title FROM loans JOIN books ON loans.book_id = books.id;
+-- 3|Night Train
+-- 1|Rain at Dawn
+-- 4|Paper Birds`, why: 'When two tables share a column name, say which table you mean.' },
+        ],
+        terms: [
+          { term: 'join', def: 'Combining rows of two tables into one answer: <code>FROM loans JOIN books ON ...</code>.' },
+          { term: 'ON', def: 'In a join, the rule for which rows belong together, like <code>loans.book_id = books.id</code>.' },
+          { term: 'ambiguous column', def: 'A column name that more than one table in the query has. Write <code>table.column</code> instead.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'List each member next to the author of the book they have.', code: 'SELECT loans.member, books.author\nFROM loans [[JOIN]] books [[ON|on]] loans.book_id = books.[[id]];', why: 'It prints <code>Sam|Mia Hart</code>, <code>Noor|Mia Hart</code> and <code>Sam|Ines Costa</code>.' },
+          { type: 'bug', prompt: 'This should list each loan with its title, but it prints 15 rows. Tap the wrong line.', code: 'SELECT loans.member, books.title\nFROM loans JOIN books\nORDER BY loans.member;', bug: 1, fix: 'FROM loans JOIN books ON loans.book_id = books.id', why: 'Without <code>ON</code>, every loan pairs with every book.' },
+        ],
+        quiz: [
+          { q: 'Why is Small Rooms missing from the joined loans?', options: ['No loan points at it', 'Its id is the biggest', 'A join always skips the last row'], a: 0, why: 'A join keeps only rows that found a partner.' },
+          { q: 'What does <code>ON loans.book_id = books.id</code> say?', options: ['Copy <code>book_id</code> into <code>books</code>', 'Which loan row goes with which book row', 'Sort the answer by id'], a: 1, why: '<code>ON</code> is the rule for pairing rows.' },
+          { q: 'SQLite says <code>ambiguous column name: id</code>. What fixes it?', options: ['Write <code>books.id</code> or <code>loans.id</code>', 'Add <code>DESC</code>', 'Remove the <code>ON</code> part'], a: 0, why: 'Naming the table makes clear which <code>id</code> you mean.' },
+        ],
+        docs: [['SQLite: SELECT', 'https://www.sqlite.org/lang_select.html']],
+      },
+
+      {
+        id: 'normalization',
+        title: 'Designing tables',
+        tagline: 'Keep each fact in one place, so it can’t disagree with itself.',
+        goals: ['Spot a fact that is copied into many rows', 'Split a wide table into tables that each describe one kind of thing', 'Use the normal forms as a plain-words checklist'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Suppose Ada had kept her loans in one wide table, like a spreadsheet: member, city, title and author on every loan. Sam has two books, so “Sam, Rivertown” sat in two rows. When Sam moved to Hillside, the app changed one of them. Now the table says Sam lives in two cities, and no query can tell which is true.</p>
+<p>Copies cause three kinds of trouble, called <em>anomalies</em>. To change a fact you must find every copy, and missing one makes the data disagree. Deleting a row can erase a fact you still need: when Noor returned her only book, her row went, and with it everything the app knew about her. And you can’t store a new member who hasn’t borrowed anything yet without leaving the book columns empty.</p>
+<p>The cure is one table per kind of thing, linked by keys: <code>members</code> (who), <code>books</code> (what), and <code>loans</code>, which holds only <code>book_id</code> and <code>member_id</code>. Sam’s city is now written once. To see the wide view again, join the tables, one <code>JOIN ... ON</code> for each extra table. Designing tables this way is called <em>normalization</em>.</p>
+<p>Textbooks describe it in steps called <em>normal forms</em>. In plain words: first normal form, one value per cell, so no “Night Train, Paper Birds” in one cell. Second and third: every column describes the thing its table’s key names, and nothing else. A city describes a member, so it belongs in <code>members</code>, not in <code>loans</code>.</p>`,
+        visual(el) {
+          const S = [['Sam', 'Rivertown', 'Night Train', 'Mia Hart'], ['Noor', 'Rivertown', 'Rain at Dawn', 'Mia Hart'], ['Sam', 'Rivertown', 'Paper Birds', 'Ines Costa']];
+          const SC = ['member', 'city', 'title', 'author'];
+          const S2 = [['Sam', 'Hillside', 'Night Train', 'Mia Hart'], S[1], S[2]];
+          const sheet = (rows, cls) => n => n.append(tbl('loan_sheet', SC, rows, { cls }));
+          const split = (city, cls) => n => n.append(
+            tbl('members', ['id', 'name', 'city'], [[1, 'Sam', city], [2, 'Lin', 'Lakeside'], [3, 'Noor', 'Rivertown']], { keys: { id: 'PK' }, cls }),
+            tbl('books (id, title, author)', ['id', 'title', 'author'], [[1, 'Rain at Dawn', 'Mia Hart'], [2, 'The Quiet Sea', 'Leo Brandt'], [3, 'Night Train', 'Mia Hart'], [4, 'Paper Birds', 'Ines Costa'], [5, 'Small Rooms', 'Leo Brandt']], { keys: { id: 'PK' } }),
+            tbl('loans', ['id', 'book_id', 'member_id'], [[1, 3, 1], [2, 1, 3], [3, 4, 1]], { keys: { book_id: 'FK', member_id: 'FK' } }));
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'library.db',
+            predict: {
+              q: 'Sam has two loans, so the wide table holds his city twice. The app changes only the Night Train row to Hillside. What does a query for Sam’s city give?',
+              options: ['Hillside', 'Hillside and Rivertown', 'Rivertown'],
+              a: 1,
+              why: 'One copy changed, the other did not. The table now says two different things.',
+            },
+            frames: [
+              { cmd: 'CREATE TABLE loan_sheet (member TEXT, city TEXT, title TEXT, author TEXT);', panel: sheet(S), say: 'Suppose Ada had used one wide table, <code>loan_sheet</code>. She adds three loans with three <code>INSERT</code> lines (all the set-up lines are in the code below). Sam and his city appear twice.' },
+              { cmd: 'SELECT * FROM loan_sheet;', out: 'Sam|Rivertown|Night Train|Mia Hart\nNoor|Rivertown|Rain at Dawn|Mia Hart\nSam|Rivertown|Paper Birds|Ines Costa', say: 'Every row carries the member’s city and the book’s author along with the loan.' },
+              { cmd: "UPDATE loan_sheet SET city = 'Hillside' WHERE title = 'Night Train';", panel: sheet(S2, (r, i) => i === 0 ? 'dbx-warm' : null), say: 'Sam moved. The app changed the row it was showing: the Night Train loan.' },
+              { cmd: "SELECT member, city FROM loan_sheet WHERE member = 'Sam';", out: 'Sam|Hillside\nSam|Rivertown', panel: sheet(S2, (r, i) => i !== 1 ? 'dbx-bad' : null), say: 'Two answers for one fact. The copy nobody changed now disagrees.' },
+              { cmd: "DELETE FROM loan_sheet WHERE title = 'Rain at Dawn';", panel: sheet([S2[0], S2[2]]), say: 'Noor returns her book, so her loan row goes…' },
+              { cmd: "SELECT * FROM loan_sheet WHERE member = 'Noor';", say: '…and with it, everything the table knew about Noor. She is still a member, but the data has forgotten her.' },
+              { panel: split('Rivertown'), say: 'The fix: one table per kind of thing, linked by keys. Each fact is written once. Sam is member 1, Lin 2 and Noor 3. Lin has no loans, and she is still on record. The code below builds these tables.' },
+              { cmd: "UPDATE members SET city = 'Hillside' WHERE id = 1;", panel: split('Hillside', r => r[0] === 1 ? 'dbx-hit' : null), say: 'Now Sam’s move changes exactly one row, and every join shows Hillside.' },
+            ],
+          });
+        },
+        code: `-- the wide table for the demo
+CREATE TABLE loan_sheet (member TEXT, city TEXT, title TEXT, author TEXT);
+INSERT INTO loan_sheet VALUES ('Sam', 'Rivertown', 'Night Train', 'Mia Hart');
+INSERT INTO loan_sheet VALUES ('Noor', 'Rivertown', 'Rain at Dawn', 'Mia Hart');
+INSERT INTO loan_sheet VALUES ('Sam', 'Rivertown', 'Paper Birds', 'Ines Costa');
+
+-- the better design: it replaces the loans table from the keys lesson
+DROP TABLE loans;
+CREATE TABLE members (id INTEGER PRIMARY KEY, name TEXT, city TEXT);
+INSERT INTO members VALUES (1, 'Sam', 'Rivertown');
+INSERT INTO members VALUES (2, 'Lin', 'Lakeside');
+INSERT INTO members VALUES (3, 'Noor', 'Rivertown');
+CREATE TABLE loans (
+    id INTEGER PRIMARY KEY,
+    book_id INTEGER REFERENCES books(id),
+    member_id INTEGER REFERENCES members(id)
+);
+INSERT INTO loans VALUES (1, 3, 1);
+INSERT INTO loans VALUES (2, 1, 3);
+INSERT INTO loans VALUES (3, 4, 1);
+
+-- Sam moves: one row changes
+UPDATE members SET city = 'Hillside' WHERE id = 1;
+
+-- the wide view, built again with joins
+SELECT members.name, members.city, books.title
+FROM loans
+JOIN members ON loans.member_id = members.id
+JOIN books ON loans.book_id = books.id;
+-- Sam|Hillside|Night Train
+-- Noor|Rivertown|Rain at Dawn
+-- Sam|Hillside|Paper Birds`,
+        remember: 'Write each fact once: one table per kind of thing, linked by keys, and joins to put them back together.',
+        mistakes: [
+          { title: 'A list in one cell', bad: `CREATE TABLE members (id INTEGER PRIMARY KEY, name TEXT, books TEXT);
+INSERT INTO members VALUES (1, 'Sam', 'Night Train, Paper Birds');
+SELECT name FROM members WHERE books = 'Paper Birds';
+-- prints nothing`, good: `-- one row per loan, pointing at members and books
+SELECT * FROM loans WHERE member_id = 1;
+-- 1|3|1
+-- 3|4|1`, why: 'A cell holding two titles matches neither title exactly. One row per loan keeps one value per cell, so <code>WHERE</code> and joins work.' },
+        ],
+        terms: [
+          { term: 'normalization', def: 'Designing tables so each fact is stored once, with keys linking the tables.' },
+          { term: 'normal forms', def: 'Checklist steps for normalization. In plain words: one value per cell, and every column describes what its table’s key names.' },
+          { term: 'anomaly', def: 'A problem caused by copies: an update that misses a copy, a delete that erases a fact you still need, or a fact you can’t store yet.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish the loans table so it points at a member by id instead of copying the name.', code: 'CREATE TABLE loans (\n    id INTEGER PRIMARY KEY,\n    book_id INTEGER REFERENCES books(id),\n    member_id INTEGER [[REFERENCES|references]] [[members]](id)\n);', why: '<code>member_id</code> is a foreign key that points at <code>members(id)</code>.' },
+          { type: 'bug', prompt: 'In the new design, Sam (member 1) moved to Hillside. Tap the wrong line.', code: "SELECT name, city FROM members WHERE id = 1;\nUPDATE loans SET city = 'Hillside' WHERE member_id = 1;\nSELECT name, city FROM members WHERE id = 1;", bug: 1, fix: "UPDATE members SET city = 'Hillside' WHERE id = 1;", why: 'The city now lives only in <code>members</code>. <code>loans</code> has no <code>city</code> column, so SQLite says <code>Parse error: no such column: city</code>.' },
+        ],
+        quiz: [
+          { q: 'A table copies each member’s city into every loan. What can go wrong?', options: ['Changing the city in one row leaves other rows saying something else', 'The table runs out of columns', 'SQLite refuses text it has seen before'], a: 0, why: 'Every copy must change together, and it is easy to miss one.' },
+          { q: 'In Ada’s design, where does a member’s city belong?', options: ['In <code>members</code>', 'In <code>loans</code>', 'In <code>books</code>'], a: 0, why: 'A city describes a member, so it sits next to the member’s key.' },
+          { q: 'What is first normal form, in plain words?', options: ['One value per cell', 'Every table has one row', 'Use only one table'], a: 0, why: 'No lists like “Night Train, Paper Birds” packed into a single cell.' },
+        ],
+        docs: [['Database normalization description', 'https://learn.microsoft.com/en-us/office/troubleshoot/access/database-normalization-description']],
+      },
+
+      {
+        id: 'indexes',
+        title: 'Indexes',
+        tagline: 'A sorted lookup list that lets the database jump straight to a row.',
+        goals: ['Explain why a search in a big table is slow without an index', 'Make an index with <code>CREATE INDEX</code> and check it with <code>EXPLAIN QUERY PLAN</code>', 'Name the cost: every change also updates the index'],
+        level: 'intermediate', introduces: ['INDEX', 'EXPLAIN', 'QUERY', 'PLAN', 'timer'],
+        body: `
+<p>Ada’s app grows to a million books, and the search box gets slow. To answer <code>WHERE title = 'Night Train'</code>, SQLite reads all million rows and checks each title, because the rows are not stored in title order. That is a <em>full scan</em>.</p>
+<p>An <em>index</em> is an extra, sorted list kept next to the table: every title in alphabetical order, each with the place of its row. Like the index at the back of a book, it lets SQLite jump to the right spot instead of reading every page. <code>CREATE INDEX books_by_title ON books(title);</code> makes one; <code>books_by_title</code> is a name you choose. From then on, SQLite uses it by itself whenever it helps. The primary key already works this way, which is why <code>WHERE id = 734512</code> is fast without any extra index.</p>
+<p>To see what SQLite will do, put <code>EXPLAIN QUERY PLAN</code> in front of a query. <code>SCAN books</code> means it reads every row; <code>SEARCH books USING INDEX</code> means it jumps. In <code>sqlite3</code>, <code>.timer on</code> prints how long each command took.</p>
+<p>An index is not free. It takes space in the file, and every <code>INSERT</code>, <code>UPDATE</code> and <code>DELETE</code> must update every index on the table too. So add indexes for the searches your app runs often, not for every column.</p>`,
+        visual(el) {
+          const stat = (idx, read) => `<div class="dbx-stats"><span class="dbx-stat">rows <b>1,000,000</b></span><span class="dbx-stat">index on title <b>${idx}</b></span><span class="dbx-stat">rows read <b>${read}</b></span></div>`;
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'books (test copy)',
+            predict: {
+              q: 'There is no index yet. To find Night Train among a million books, how many rows does SQLite read?',
+              options: ['About one', 'All one million', 'About half'],
+              a: 1,
+              why: 'The rows are not in title order, so any of them could be Night Train. It checks every one.',
+            },
+            frames: [
+              { panel: stat('none', '?'), say: 'Ada made a test file with a million made-up books, using the set-up lines at the top of the code below. One of them is Night Train.' },
+              { cmd: '.timer on', say: '<code>.timer on</code> makes <code>sqlite3</code> print how long each command takes.' },
+              { cmd: "SELECT * FROM books WHERE title = 'Night Train';", out: '734512|Night Train|Mia Hart|2021|3\nRun Time: real 0.176 user 0.046504 sys 0.010557', panel: stat('none', '1,000,000'), say: 'Found, after 0.176 seconds (the <code>real</code> time). That is slow for a search box that asks on every key press. Times differ from computer to computer.' },
+              { cmd: "EXPLAIN QUERY PLAN SELECT * FROM books WHERE title = 'Night Train';", out: 'QUERY PLAN\n`--SCAN books\nRun Time: real 0.000 user 0.000049 sys 0.000010', say: '<code>SCAN books</code>: read every row. <code>EXPLAIN QUERY PLAN</code> only describes the plan, so it is instant.' },
+              { cmd: 'CREATE INDEX books_by_title ON books(title);', out: 'Run Time: real 0.988 user 0.334242 sys 0.076213', panel: stat('books_by_title', '?'), say: 'Building the index sorts a million titles once. That took about a second.' },
+              { cmd: "SELECT * FROM books WHERE title = 'Night Train';", out: '734512|Night Train|Mia Hart|2021|3\nRun Time: real 0.000 user 0.000109 sys 0.000025', panel: stat('books_by_title', 'a handful'), say: 'Same query, same answer, now too fast to measure: 0.000 seconds.' },
+              { cmd: "EXPLAIN QUERY PLAN SELECT * FROM books WHERE title = 'Night Train';", out: 'QUERY PLAN\n`--SEARCH books USING INDEX books_by_title (title=?)\nRun Time: real 0.000 user 0.000025 sys 0.000006', say: '<code>SEARCH ... USING INDEX</code>: SQLite jumps through the sorted titles straight to Night Train.' },
+              { cmd: "EXPLAIN QUERY PLAN SELECT * FROM books WHERE author = 'Mia Hart';", out: 'QUERY PLAN\n`--SCAN books\nRun Time: real 0.000 user 0.000051 sys 0.000011', say: 'An index helps only searches on its own column. A search by author still scans.' },
+            ],
+          });
+        },
+        code: `-- Set-up: run sqlite3 test.db (a separate file, so library.db stays small),
+-- then paste these three lines as they are. They make a million made-up books.
+CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, author TEXT, year INTEGER, copies INTEGER);
+INSERT INTO books SELECT value, 'Book ' || value, 'Writer ' || (value % 1000), 2000 + value % 25, 1 FROM generate_series(1, 1000000);
+UPDATE books SET title = 'Night Train', author = 'Mia Hart', year = 2021, copies = 3 WHERE id = 734512;
+
+-- now the demo's commands, starting with .timer on
+CREATE INDEX books_by_title ON books(title);
+
+EXPLAIN QUERY PLAN SELECT * FROM books WHERE title = 'Night Train';
+-- QUERY PLAN
+-- \`--SEARCH books USING INDEX books_by_title (title=?)
+
+EXPLAIN QUERY PLAN SELECT * FROM books WHERE author = 'Mia Hart';
+-- QUERY PLAN
+-- \`--SCAN books`,
+        ignore: ['value'],
+        remember: 'An index is a sorted list that turns a SCAN of every row into a quick SEARCH. It costs space and slows every write a little.',
+        mistakes: [
+          { title: 'An index on every column', bad: `CREATE INDEX i1 ON books(title);
+CREATE INDEX i2 ON books(author);
+CREATE INDEX i3 ON books(year);
+CREATE INDEX i4 ON books(copies);`, good: `-- only for the search the app really runs
+CREATE INDEX books_by_title ON books(title);`, why: 'Every index must be updated on every write, and takes space. In one test with 300,000 books, the file was 12.6 MB with no extra index, 20.8 MB with one and 31.1 MB with three.' },
+        ],
+        terms: [
+          { term: 'full scan', def: 'Reading every row to answer a query. <code>EXPLAIN QUERY PLAN</code> shows it as <code>SCAN</code>.' },
+          { term: 'index', def: 'A sorted list of one column’s values, each pointing at its row, made with <code>CREATE INDEX</code>.' },
+          { term: 'query plan', def: 'How SQLite will run a query. <code>EXPLAIN QUERY PLAN</code> prints it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make an index so searches by author jump instead of scanning.', code: '[[CREATE INDEX|create index]] books_by_author [[ON|on]] books([[author]]);', why: 'After this, <code>WHERE author = \'Mia Hart\'</code> shows <code>SEARCH books USING INDEX books_by_author</code>.' },
+          { type: 'bug', prompt: 'Ada wants to check that her title search uses the index. Tap the wrong line.', code: "CREATE INDEX books_by_title ON books(title);\nQUERY PLAN SELECT * FROM books WHERE title = 'Night Train';", bug: 1, fix: "EXPLAIN QUERY PLAN SELECT * FROM books WHERE title = 'Night Train';", why: 'The command is <code>EXPLAIN QUERY PLAN</code>. Without <code>EXPLAIN</code>, SQLite says <code>Parse error: near "QUERY": syntax error</code>.' },
+        ],
+        quiz: [
+          { q: 'The plan says <code>SCAN books</code>. What does SQLite do?', options: ['Reads every row', 'Jumps to the row through an index', 'Sorts the table'], a: 0, why: 'A scan reads the whole table.' },
+          { q: 'What does an index cost?', options: ['Nothing', 'Space, plus extra work on every <code>INSERT</code>, <code>UPDATE</code> and <code>DELETE</code>', 'It makes every <code>SELECT</code> slower'], a: 1, why: 'The sorted list has to be kept up to date on every write.' },
+          { q: 'There is an index on <code>title</code> only. Which search can use it?', options: ["<code>WHERE title = 'Night Train'</code>", "<code>WHERE author = 'Mia Hart'</code>", '<code>WHERE year = 2021</code>'], a: 0, why: 'An index helps searches on the column it sorts.' },
+        ],
+        docs: [['SQLite: CREATE INDEX', 'https://www.sqlite.org/lang_createindex.html'], ['SQLite: EXPLAIN QUERY PLAN', 'https://www.sqlite.org/eqp.html']],
+      },
+
+      {
+        id: 'transactions',
+        title: 'Transactions',
+        tagline: 'Several changes that happen all together, or not at all.',
+        goals: ['Group changes with <code>BEGIN</code> and <code>COMMIT</code>', 'Throw away a half-done group with <code>ROLLBACK</code>', 'Explain ACID in plain words'],
+        level: 'intermediate', introduces: ['BEGIN', 'COMMIT', 'ROLLBACK'],
+        body: `
+<p>Borrowing a book takes two changes: one copy fewer in <code>books</code>, and a new row in <code>loans</code>. If the first works and the second fails, a copy has vanished: the count went down, but no loan says who has it. The data is now wrong, and nothing points at the mistake.</p>
+<p>A <em>transaction</em> groups changes so they count as one. <code>BEGIN;</code> starts it. The changes after it are not final until <code>COMMIT;</code> makes all of them permanent at once. If something goes wrong on the way, <code>ROLLBACK;</code> throws all of them away, and the data is exactly as it was before <code>BEGIN</code>.</p>
+<p>In SQLite, a command that fails inside a transaction cancels only itself. The transaction stays open, with the earlier changes still in it, and you decide: <code>ROLLBACK</code> to undo the lot. Without <code>BEGIN</code>, every command is its own small transaction, final as soon as it finishes.</p>
+<p>Databases make four promises about transactions, known as <em>ACID</em>. Atomic: all of it or none of it. Consistent: the rules, like foreign keys, still hold afterwards. Isolated: someone reading at the same time sees the data before your transaction or after it, never halfway. Durable: once <code>COMMIT</code> is done, the change survives even if the app or phone crashes right after.</p>`,
+        visual(el) {
+          const err = s => `<span class="dbx-fail">${esc(s)}</span>`;
+          const show = (copies, cls) => n => n.append(
+            tbl('books (id 5)', ['id', 'title', 'copies'], [[5, 'Small Rooms', copies]], { cls: () => cls || null }),
+            tbl('loans', ['id', 'book_id', 'member_id'], [[1, 3, 1], [2, 1, 3], [3, 4, 1]]));
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'library.db',
+            predict: {
+              q: 'Inside a transaction, the copies of Small Rooms went from 2 to 1, then the loan was refused. Ada runs <code>ROLLBACK;</code>. How many copies now?',
+              options: ['1', '2', '0'],
+              a: 1,
+              why: '<code>ROLLBACK</code> undoes every change since <code>BEGIN</code>, including the one that worked.',
+            },
+            frames: [
+              { panel: show(2), say: 'Lin (member 2) wants Small Rooms, book 5. That takes two changes: copies 2 → 1, and a new loan. The tables are the ones from the last lessons.' },
+              { cmd: 'PRAGMA foreign_keys = ON;', say: 'Link checks on, as always.' },
+              { cmd: 'BEGIN;', say: 'From here on, changes are not final.' },
+              { cmd: 'UPDATE books SET copies = copies - 1 WHERE id = 5;', panel: show(1, 'dbx-warm'), say: 'One copy fewer, but not final yet.' },
+              { cmd: 'INSERT INTO loans VALUES (4, 5, 9);', out: err('Runtime error: FOREIGN KEY constraint failed (19)'), say: 'A bug in the app sent member 9 instead of 2. There is no member 9, so the loan is refused.' },
+              { cmd: 'SELECT copies FROM books WHERE id = 5;', out: '1', panel: show(1, 'dbx-bad'), say: 'The <code>UPDATE</code> is still in the open transaction: 1 copy, and no loan. Half done.' },
+              { cmd: 'ROLLBACK;', panel: show(2, 'dbx-hit'), say: '<code>ROLLBACK</code> throws away everything since <code>BEGIN</code>.' },
+              { cmd: 'SELECT copies FROM books WHERE id = 5;', out: '2', say: 'Back to 2, as if nothing happened. The app can show an error and try again with Lin’s real id.' },
+            ],
+          });
+        },
+        code: `BEGIN;
+UPDATE books SET copies = copies - 1 WHERE id = 5;
+INSERT INTO loans VALUES (4, 5, 2);
+COMMIT;
+
+SELECT copies FROM books WHERE id = 5;
+-- 1
+SELECT * FROM loans WHERE id = 4;
+-- 4|5|2`,
+        remember: 'BEGIN, the changes, then COMMIT to keep them all or ROLLBACK to drop them all.',
+        mistakes: [
+          { title: 'Two changes without a transaction', bad: `UPDATE books SET copies = copies - 1 WHERE id = 5;
+INSERT INTO loans VALUES (4, 5, 9);
+-- Runtime error: FOREIGN KEY constraint failed (19)
+-- copies is now 1, and no loan exists`, good: `BEGIN;
+UPDATE books SET copies = copies - 1 WHERE id = 5;
+INSERT INTO loans VALUES (4, 5, 9);
+-- Runtime error: FOREIGN KEY constraint failed (19)
+ROLLBACK;
+-- copies is back to 2`, why: 'Without <code>BEGIN</code>, the <code>UPDATE</code> is final the moment it runs, even when the next step fails.' },
+        ],
+        terms: [
+          { term: 'transaction', def: 'A group of changes that count as one: all of them happen, or none do.' },
+          { term: 'COMMIT, ROLLBACK', def: '<code>COMMIT</code> makes every change since <code>BEGIN</code> permanent; <code>ROLLBACK</code> throws them all away.' },
+          { term: 'ACID', def: 'Atomic (all or nothing), Consistent (rules still hold), Isolated (nobody sees it halfway), Durable (a commit survives a crash).' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Noor (member 3) borrows Night Train (book 3). Make the two changes count as one.', code: '[[BEGIN|begin]];\nUPDATE books SET copies = copies - 1 WHERE id = 3;\nINSERT INTO loans VALUES (5, 3, 3);\n[[COMMIT|commit]];', why: '<code>BEGIN</code> opens the transaction and <code>COMMIT</code> makes both changes permanent together.' },
+          { type: 'bug', prompt: 'The loan was refused, so Ada wants to undo the whole borrow. Tap the wrong line.', code: 'BEGIN;\nUPDATE books SET copies = copies - 1 WHERE id = 5;\nINSERT INTO loans VALUES (4, 5, 9);\nCOMMIT;', bug: 3, fix: 'ROLLBACK;', why: '<code>COMMIT</code> keeps the <code>UPDATE</code> that worked: 1 copy and no loan. <code>ROLLBACK</code> undoes it.' },
+        ],
+        quiz: [
+          { q: 'What does <code>ROLLBACK;</code> undo?', options: ['Only the last command', 'Every change since <code>BEGIN</code>', 'Every change ever made'], a: 1, why: 'It drops the whole open transaction.' },
+          { q: 'Which letter of ACID means “all of it or none of it”?', options: ['A, atomic', 'D, durable', 'I, isolated'], a: 0, why: 'Atomic: the group can’t be split.' },
+          { q: 'Ada runs <code>COMMIT;</code> with no <code>BEGIN</code> before it. What does <code>sqlite3</code> say?', options: ['Nothing', '<code>Runtime error: cannot commit - no transaction is active</code>', 'It commits the last command again'], a: 1, why: 'Without <code>BEGIN</code>, each command was already final, so there is nothing to commit.' },
+        ],
+        docs: [['SQLite: Transaction', 'https://www.sqlite.org/lang_transaction.html']],
+      },
+
+      {
+        id: 'nosql',
+        title: 'Other kinds of databases',
+        tagline: 'Not every database is made of tables.',
+        goals: ['Describe a key-value store and a document store', 'Say what each is good at, and when tables are better', 'Pick a fitting kind of store for a piece of app data'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>Ada’s app also remembers small settings, like whether the screen is dark or light. A whole table for one value feels heavy. And a member’s profile page shows everything about that person at once. Databases that don’t use tables are often called <em>NoSQL</em> databases. Two kinds are common.</p>
+<p>A <em>key-value store</em> works like a Kotlin <code>Map</code> that is saved to disk: you store a value under a key, like <code>"theme" to "dark"</code>, and get it back by that key. It is simple and fast, but it can only find things by their key. Android has one built in for settings like these, called DataStore.</p>
+<p>A <em>document store</em> keeps each item as one <em>document</em>: a nested piece of data, usually written in <em>JSON</em>, a text format of names and values inside curly braces, and lists in square brackets. A member’s document can hold the name, the city and a list of loans with the book titles inside. One read brings back the whole profile, no join needed.</p>
+<p>The price is the problem from the normalization lesson. If the same title sits inside many members’ documents, a corrected title must be fixed in every one of them. Tables with keys suit data that is shared, linked and must agree; key-value stores suit lookups by one key; documents suit data that is mostly read as one piece.</p>`,
+        visual(el) {
+          const doc = (name, city, loans, cls) => h('pre', { class: 'dbx-doc' + (cls ? ' ' + cls : ''), html: `{\n  "name": "${name}",\n  "city": "${city}",\n  "loans": [\n${loans.map(t => `    { "title": ${t} }`).join(',\n')}\n  ]\n}` });
+          const mark = t => `<b class="dbx-fail">"${t}"</b>`;
+          const ok = t => `<b class="dbx-pass">"${t}"</b>`;
+          const views = [
+            () => [label('tables'), tbl('members', ['id', 'name', 'city'], [[1, 'Sam', 'Hillside']], { keys: { id: 'PK' } }), tbl('loans', ['id', 'book_id', 'member_id'], [[1, 3, 1], [3, 4, 1]]), tbl('books', ['id', 'title'], [[3, 'Night Train'], [4, 'Paper Birds']], { keys: { id: 'PK' } })],
+            () => [label('document store: key 1'), doc('Sam', 'Hillside', ['"Night Train"', '"Paper Birds"'])],
+            () => [label('key-value store'), tbl(null, ['key', 'value'], [['theme', 'dark'], ['font_size', '18'], ['last_screen', 'loans']])],
+            () => [label('key-value store'), tbl(null, ['key', 'value'], [['theme', 'dark'], ['font_size', '18'], ['last_screen', 'loans']], { cls: r => r[0] === 'theme' ? 'dbx-hit' : 'dbx-dim' })],
+            () => [label('document store'), doc('Sam', 'Hillside', [mark('Night Train'), '"Paper Birds"']), doc('Noor', 'Rivertown', ['"Rain at Dawn"', mark('Night Train')])],
+            () => [label('document store'), doc('Sam', 'Hillside', [ok('The Night Train'), '"Paper Birds"']), doc('Noor', 'Rivertown', ['"Rain at Dawn"', mark('Night Train')])],
+            () => [label('tables'), tbl('books', ['id', 'title'], [[3, 'The Night Train'], [4, 'Paper Birds']], { keys: { id: 'PK' }, cls: r => r[0] === 3 ? 'dbx-hit' : null })],
+          ];
+          const frames = [
+            { v: 0, say: 'In tables, Sam’s profile is spread over three tables. Showing it takes a join.' },
+            { v: 1, say: 'In a document store, the whole profile is one document, stored under its key. One read, no join. The titles are copied inside.' },
+            { v: 2, say: 'A key-value store: names and values, like a Kotlin <code>Map</code>. Good for settings.' },
+            { v: 3, say: 'Asking for <code>theme</code> gives <code>dark</code> at once. A question like “which keys hold dark?” means reading every pair.' },
+            { v: 4, say: 'Noor borrows Night Train too. Now that title is copied into two documents.' },
+            { v: 5, say: 'The title is corrected to “The Night Train”. Every document holding a copy must be found and changed. Miss one, and they disagree, just like the wide table.' },
+            { v: 6, say: 'In tables, the title lives in one row of <code>books</code>. One <code>UPDATE</code>, and every join shows the new title.' },
+          ];
+          const view = h('div', { class: 'dbx-stage' });
+          Lab.ui.player(el, {
+            frames,
+            stage: h('div', { class: 'ui-stage' }, view),
+            draw(f) { view.replaceChildren(...views[f.v]()); },
+            predict: {
+              q: 'Sam’s and Noor’s documents both hold the title Night Train. The title gets corrected. How many places must change?',
+              options: ['1', '2', 'None: the store fixes it'],
+              a: 1,
+              why: 'Each document keeps its own copy, so each copy must change.',
+            },
+          });
+        },
+        code: `{
+  "id": 1,
+  "name": "Sam",
+  "city": "Hillside",
+  "loans": [
+    { "title": "Night Train", "author": "Mia Hart" },
+    { "title": "Paper Birds", "author": "Ines Costa" }
+  ]
+}`,
+        remember: 'Tables for linked data that must agree, key-value for lookups by key, documents for data read as one piece.',
+        terms: [
+          { term: 'NoSQL', def: 'A name for databases that don’t keep data in tables, such as key-value and document stores.' },
+          { term: 'key-value store', def: 'Stores values under keys, like a Kotlin <code>Map</code> saved to disk. Finds things only by key.' },
+          { term: 'document store', def: 'Stores each item as one nested document, so it can be read in one go.' },
+          { term: 'JSON', def: 'A text format for data: names and values in curly braces, lists in square brackets.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'A key-value store works like this Kotlin map. Get the theme back by its key.', code: 'val settings = mutableMapOf("theme" to "dark", "font_size" to "18")\nprintln(settings.[[get]]("theme"))   // dark', why: 'You ask by key, and get that one value back.' },
+          { type: 'bug', prompt: 'This settings store should print <code>dark</code>, but prints <code>null</code>. Tap the wrong line.', code: 'val settings = mutableMapOf("theme" to "light")\nsettings["theme"] = "dark"\nprintln(settings["Theme"])', bug: 2, fix: 'println(settings["theme"])', why: 'Keys must match exactly, capital letters included. There is no key <code>"Theme"</code>.' },
+        ],
+        quiz: [
+          { q: 'Which fits the app’s dark-mode setting best?', options: ['A key-value store', 'Three tables and a join', 'One document per book'], a: 0, why: 'One value, found by one key.' },
+          { q: 'Documents copy a book’s title into each member who borrowed it. What is the risk?', options: ['A correction must reach every copy, or they disagree', 'Documents can’t hold text', 'Each read needs a join'], a: 0, why: 'The same problem as copies in a wide table.' },
+          { q: 'What can a key-value store find quickly?', options: ['The value for one key', 'Every key whose value is <code>dark</code>', 'Rows joined with another table'], a: 0, why: 'It is built to look things up by key, and only by key.' },
+        ],
+        docs: [['DataStore', 'https://developer.android.com/topic/libraries/architecture/datastore']],
+      },
+
+      {
+        id: 'schema-evolution',
+        title: 'Changing a schema',
+        tagline: 'Change the shape of a database that already holds people’s data.',
+        goals: ['Add a column to an existing table with <code>ALTER TABLE</code> … <code>ADD COLUMN</code>', 'Number schema versions and write one migration per step', 'Keep old code working by adding instead of renaming'],
+        level: 'intermediate', introduces: ['ALTER', 'ADD', 'COLUMN', 'user_version', 'RENAME', 'TO'],
+        body: `
+<p>Version 1 of Ada’s app is on thousands of phones, each with its own <code>library.db</code> full of that person’s loans. Version 2 needs an email for each member. She can’t delete the database and start over: that would wipe everyone’s data.</p>
+<p>The <em>schema</em> is the shape of a database: its tables and their columns. A <em>migration</em> is a short script that changes the schema from one version to the next and keeps the rows. <code>ALTER TABLE members ADD COLUMN email TEXT;</code> adds a column to the existing table. Old rows get <code>NULL</code> there, “no value”, as with a column left out of an <code>INSERT</code>. <code>sqlite3</code> prints it as nothing at all.</p>
+<p>The database has to remember which version it is at. SQLite keeps a number for that: <code>PRAGMA user_version;</code> reads it, and <code>PRAGMA user_version = 2;</code> sets it. When the new app starts, it reads the number and runs each migration it is missing, in order, inside a transaction. Someone who skipped version 2 and installs version 3 gets 1→2, then 2→3. Room, the library Android apps use on top of SQLite, uses this same number.</p>
+<p>Renaming or removing breaks code that still uses the old name. After <code>RENAME COLUMN name TO full_name</code>, every query that says <code>name</code> fails. When many app versions share one database on a <em>server</em> (a computer on the internet that many phones talk to), old versions keep running for months. So prefer changes that only add, and remove the old parts later, once nothing uses them.</p>`,
+        visual(el) {
+          const err = s => `<span class="dbx-fail">${esc(s)}</span>`;
+          const M = [[1, 'Sam', 'Hillside'], [2, 'Lin', 'Lakeside'], [3, 'Noor', 'Rivertown']];
+          const ver = v => `<p class="dbx-label">user_version ${v}</p>`;
+          const show = (v, cols, rows, cls) => n => { n.innerHTML = ver(v); n.append(tbl('members', cols, rows, { keys: { id: 'PK' }, cls })); };
+          const withEmail = M.map(r => [...r, null]);
+          Lab.ui.terminal(el, {
+            prompt: 'sqlite>',
+            panelTitle: 'library.db on a phone',
+            predict: {
+              q: '<code>members</code> has 3 rows. After <code>ALTER TABLE members ADD COLUMN email TEXT;</code>, how many rows does it have?',
+              options: ['0: the table is rebuilt empty', '3, each with no email yet', '6'],
+              a: 1,
+              why: 'Adding a column keeps every row. The new column starts with no value.',
+            },
+            frames: [
+              { cmd: 'PRAGMA user_version = 1;', panel: show(1, ['id', 'name', 'city'], M), say: 'The database on a phone with app version 1. A new database starts at <code>user_version</code> 0; app version 1 set it to 1 when it made the database. Run this line to do the same in your <code>library.db</code>.' },
+              { cmd: 'PRAGMA user_version;', out: '1', say: 'The schema version this database is at.' },
+              { cmd: 'ALTER TABLE members ADD COLUMN email TEXT;', panel: show(1, ['id', 'name', 'city', 'email'], withEmail), say: 'The new column joins the table. Every row stays.' },
+              { cmd: 'SELECT * FROM members;', out: '1|Sam|Hillside|\n2|Lin|Lakeside|\n3|Noor|Rivertown|', say: 'Nothing after the last <code>|</code>: the old rows hold <code>NULL</code>, no value yet.' },
+              { cmd: 'PRAGMA user_version = 2;', panel: show(2, ['id', 'name', 'city', 'email'], withEmail), say: 'Record that the migration is done, so it never runs twice.' },
+              { cmd: 'ALTER TABLE members ADD COLUMN email TEXT;', out: err('Parse error: duplicate column name: email'), say: 'This is why the number matters: the same migration a second time fails.' },
+              { cmd: 'ALTER TABLE members RENAME COLUMN name TO full_name;', panel: show(2, ['id', 'full_name', 'city', 'email'], withEmail, () => 'dbx-warm'), say: 'Now a rename. It works on the database…' },
+              { cmd: 'SELECT name FROM members;', out: err('Parse error: no such column: name\n  SELECT name FROM members;\n         ^--- error here'), say: '…but every query that still says <code>name</code> now fails. Old code breaks.' },
+            ],
+          });
+        },
+        code: `-- migration 1 → 2, run once when app version 2 first opens the database
+-- (the demo already added email to your library.db, so there this ALTER TABLE
+-- would print: Parse error: duplicate column name: email)
+BEGIN;
+ALTER TABLE members ADD COLUMN email TEXT;
+PRAGMA user_version = 2;
+COMMIT;
+
+SELECT * FROM members;
+-- 1|Sam|Hillside|
+-- 2|Lin|Lakeside|
+-- 3|Noor|Rivertown|`,
+        remember: 'A migration changes the schema one version at a time and keeps the rows. Add new things; remove old ones only when nothing uses them.',
+        mistakes: [
+          { title: 'Renaming a column old code still reads', bad: `ALTER TABLE members RENAME COLUMN name TO full_name;
+SELECT name FROM members;
+-- Parse error: no such column: name`, good: `ALTER TABLE members ADD COLUMN full_name TEXT;
+UPDATE members SET full_name = name;
+-- both columns exist, so old code keeps reading name`, why: 'On one phone, the app code and its migration update together, so a rename there is fine. The add-and-copy way matters when old code may still read the database, like old app versions talking to a server. Drop the old column later, once no running code uses it.' },
+        ],
+        terms: [
+          { term: 'schema', def: 'The shape of a database: its tables and their columns.' },
+          { term: 'migration', def: 'A script that moves the schema from one version to the next and keeps the data.' },
+          { term: 'user_version', def: 'A number SQLite keeps in the file for you, used as the schema version: <code>PRAGMA user_version;</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Add a whole-number column <code>age</code> to <code>members</code>.', code: '[[ALTER|alter]] TABLE members [[ADD COLUMN|add column]] age [[INTEGER|integer]];', why: '<code>ALTER TABLE ... ADD COLUMN</code> adds it; old rows get <code>NULL</code>.' },
+          { type: 'bug', prompt: 'This migration takes the database from version 2 to 3. Tap the wrong line.', code: 'BEGIN;\nALTER TABLE members ADD COLUMN phone TEXT;\nPRAGMA user_version = 2;\nCOMMIT;', bug: 2, fix: 'PRAGMA user_version = 3;', why: 'If the number stays 2, the next start runs this migration again and fails with <code>duplicate column name: phone</code>.' },
+        ],
+        quiz: [
+          { q: 'What do old rows hold in a column added with <code>ADD COLUMN</code>?', options: ['<code>0</code>', '<code>NULL</code>: no value', 'A copy of the column before it'], a: 1, why: 'Nothing was ever stored there, so it is <code>NULL</code>.' },
+          { q: 'A phone is at <code>user_version</code> 1, and the new app expects 3. What should run?', options: ['Only migration 2→3', 'Migration 1→2, then 2→3', 'Delete the database and start again'], a: 1, why: 'Each step builds on the one before, so they run in order.' },
+          { q: 'Why prefer adding a column over renaming one?', options: ['Old code that uses the old name keeps working', 'SQL has no way to rename', 'Adding is faster to type'], a: 0, why: 'Renaming is possible, but it breaks every query that uses the old name.' },
+        ],
+        docs: [['SQLite: ALTER TABLE', 'https://www.sqlite.org/lang_altertable.html'], ['Migrate your Room database', 'https://developer.android.com/training/data-storage/room/migrating-db-versions']],
+      },
+    ],
   });
 })();

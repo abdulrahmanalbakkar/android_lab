@@ -1,6 +1,6 @@
 /* Operating systems track. Same shape as tracks/kotlin.js.
-   University OS course topics (kernel, processes, threads, memory, IPC, files, power), each followed by where
-   the idea shows up on Android, which runs on a Linux kernel. Every class is prefixed osy-. */
+   Beginner lessons on what the OS does (kernel, processes, threads, memory, IPC, files, power), each followed by
+   where the idea shows up on Android, which runs on a Linux kernel. Every class is prefixed osy-. */
 (() => {
   const { h, sleep, replay } = Lab;
   const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
@@ -140,1071 +140,595 @@
   const lessons = [];
 
   // 1 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'kernel',
-    title: 'What an operating system does',
-    tagline: 'The kernel owns the hardware; your app asks it for things through system calls.',
-    level: 'beginner',
-    body: `
-<p>An operating system shares one machine between many programs and keeps them from hurting each other. The core part is the <em>kernel</em>. It runs with full control of the CPU, memory and devices. Everything else, including your app, runs in <em>user space</em> with fewer rights: it cannot touch hardware or another program's memory directly.</p>
-<p>When user code needs something only the kernel can do, like reading a file, opening a socket or starting a thread, it makes a <em>system call</em>. The CPU switches into kernel mode, the kernel checks that the request is allowed, does the work and switches back. Most of your code never does this: sorting a list or building a <code>String</code> stays in user space.</p>
-<p>Android is a stack on top of a Linux kernel. From the bottom: the Linux kernel, the hardware abstraction layer (HAL), the Android Runtime (ART) with native C/C++ libraries, the Java API framework, and apps. Each app runs in its own process with its own instance of the runtime (ART since Android 5.0, Dalvik before that). Step through the demo and follow one file read down the stack.</p>`,
-    code: `// Pure user space: no system call at all
-val titles = headlines.map { it.title.uppercase() }
-
-// These end in system calls that libc makes for you
-val text = File(context.filesDir, "cache.json").readText()   // openat, read, close
-Thread.sleep(100)                                            // the kernel parks this thread for 100 ms
-
-// Ids handed out by the kernel
-Log.d("OS", "pid=\${Process.myPid()} tid=\${Process.myTid()} uid=\${Process.myUid()}")`,
-    remember: 'The kernel owns the hardware. Your app gets anything real (files, network, threads, memory) only by asking through a system call.',
-    visual(el) {
-      Lab.ui.flow(el, {
-        nodes: [
-          { id: 'app', label: 'Your app', sub: 'user mode' },
-          { id: 'fw', label: 'Framework', sub: 'java.io' },
-          { id: 'rt', label: 'libc', sub: 'ART + native' },
-          { id: 'kernel', label: 'Linux kernel', sub: 'kernel mode' },
-          { id: 'hw', label: 'Storage', sub: 'flash + driver' },
-        ],
-        predict: {
-          q: '<code>File(path).readText()</code> needs bytes from flash storage. Which layer is allowed to talk to the storage hardware?',
-          options: ['Your app, through java.io', 'ART, because it runs your code', 'Only the kernel, after a system call'],
-          a: 2,
-          why: 'Code in user mode cannot touch hardware. A system call traps into kernel mode, and the kernel’s driver does the I/O for you.',
-        },
-        frames: [
-          { say: 'Your code calls <code>File(path).readText()</code>. Follow it down the stack.' },
-          { at: 'app', packet: 'readText()', say: 'It starts in your process, in user mode. This code may not touch the disk directly.' },
-          { at: 'fw', packet: 'FileInputStream', say: 'java.io opens a <code>FileInputStream</code> and asks for bytes. Still user mode.' },
-          { at: 'rt', packet: 'openat() · read()', say: 'libc turns that into system calls. A system call is the only door into the kernel.' },
-          { at: 'kernel', packet: 'trap', tone: 'warm', mark: { kernel: 'warm' }, say: 'The CPU switches to kernel mode. The kernel checks that your UID may read the file and finds its blocks.' },
-          { at: 'hw', packet: 'blocks', tone: 'warm', mark: { hw: 'warm' }, say: 'The driver reads the blocks from flash. If the file was read recently, the page cache in RAM skips this step.' },
-          { at: 'kernel', packet: 'bytes', tone: 'ok', say: 'The kernel copies the bytes into your buffer and switches back to user mode.' },
-          { at: 'app', packet: 'String', tone: 'ok', mark: { app: 'ok' }, say: '<code>readText()</code> returns. Sorting a list, by contrast, never leaves user mode: no system call at all.' },
-        ],
-      });
-    },
-    deeper: [
-      {
-        title: 'Two CPU modes',
-        body: `<p>The CPU itself enforces the split. In kernel mode every instruction is allowed. In user mode, instructions that touch devices or change memory mappings fault. That is why a bug in your app crashes only your process: it cannot scribble over the kernel or another app.</p>
-<p>A system call is the one controlled door between the modes. On arm64 Linux, libc puts a call number in a register and runs the <code>svc</code> instruction. The CPU jumps to a fixed kernel entry point, so user code cannot choose where in the kernel it lands.</p>`,
-      },
-      {
-        title: 'System calls cost time',
-        body: `<p>Each system call switches modes and back, which costs far more than a normal function call. Code that reads a file one byte at a time makes one call per byte. A buffer makes one call per few kilobytes and does the rest in user space.</p>`,
-        code: `// One read() system call per byte
-FileInputStream(file).use { input ->
-    while (input.read() != -1) count++
-}
-
-// One read() per 8 KB chunk; the rest is plain memory access
-file.inputStream().buffered().use { input ->
-    while (input.read() != -1) count++
-}`,
-      },
-      {
-        title: 'Android narrows the door',
-        body: `<p>Android adds its own limits on top of Linux. Since Android 8.0 apps run with a seccomp filter that blocks system calls apps have no reason to make. SELinux policy adds rules the kernel checks on every access, and since Android 9 each app that targets API 28 or higher gets its own SELinux sandbox. The <a href="#android.permissions">runtime permissions</a> you request sit higher up, in the framework, but they end up as checks like these.</p>`,
-      },
-    ],
-    underHood: {
-      body: `<p>Follow <code>File.readText()</code> down: Kotlin calls <code>FileInputStream.read(buffer)</code>, which calls into native code in the runtime, which calls the C library function <code>read()</code>. That function is a thin wrapper that loads the system call number and arguments into registers and traps into the kernel. The kernel's <code>read</code> handler finds the open file from the file descriptor, copies data into your buffer and returns a byte count, or a negative error that libc turns into <code>errno</code> and Java turns into an <code>IOException</code>.</p>`,
-    },
-    mistakes: [
-      { title: 'Unbuffered I/O in a loop', bad: 'val input = FileInputStream(file)\nwhile (input.read() != -1) count++   // a system call per byte', good: 'file.inputStream().buffered().use { input ->\n    while (input.read() != -1) count++\n}', why: 'Every unbuffered <code>read()</code> crosses into the kernel. A buffered stream fetches 8 KB per call, so a 1 MB file takes about 128 system calls instead of a million.' },
-    ],
-    terms: [
-      { term: 'Kernel', def: 'The part of the OS that runs with full hardware access and manages CPU time, memory, devices and security.' },
-      { term: 'User space', def: 'Where ordinary programs run, with restricted rights. Apps, ART and the framework all live here.' },
-      { term: 'System call', def: 'A request from user code to the kernel, such as <code>read</code>, <code>mmap</code> or <code>clone</code>. The CPU switches to kernel mode to handle it.' },
-      { term: 'HAL', def: 'Hardware abstraction layer: standard interfaces that let Android talk to each vendor’s camera, audio or sensor code the same way.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Fill in the Android stack from top to bottom.', code: 'Apps\nJava API [[framework]]\nART and native libraries\n[[HAL|Hardware abstraction layer]]\nLinux [[kernel]]', why: 'Apps call the framework, which runs on ART and native libraries. The HAL wraps vendor hardware code, and the Linux kernel sits under everything.' },
-      { type: 'bug', prompt: 'Counting lines in a 20 MB log file takes seconds. Tap the line that makes millions of system calls.', code: 'fun countLines(file: File): Int {\n    var lines = 0\n    val input = FileInputStream(file)\n    var b = input.read()\n    while (b != -1) { if (b == 10) lines++; b = input.read() }\n    input.close()\n    return lines\n}', bug: 2, fix: '    val input = file.inputStream().buffered()', why: 'A raw <code>FileInputStream</code> makes one <code>read()</code> system call per byte. Wrapping it in a buffer reads 8 KB per call and serves the rest from memory.' },
-    ],
-    quiz: [
-      { q: 'Which of these runs entirely in user space, with no system call?', options: ['<code>File(path).readText()</code>', '<code>Thread.sleep(100)</code>', '<code>list.sortedBy { it.date }</code>', '<code>Socket(host, 443)</code>'], a: 2, why: 'Sorting works on memory the process already has. Reading files, sleeping and opening sockets all need the kernel.' },
-      { q: 'Why can’t a buggy app overwrite the kernel’s memory?', options: ['Kotlin has no pointers', 'The CPU runs app code in user mode, where those memory accesses fault', 'ART checks every write', 'The kernel is stored in flash, not RAM'], a: 1, why: 'Protection comes from the hardware: kernel pages are not accessible in user mode. This holds for native code too, which can use pointers.' },
-      { q: 'Your app takes a photo with CameraX. In what order does the request travel?', options: ['App → framework → Binder to camera service → camera HAL → kernel driver → sensor', 'App → kernel driver → HAL → sensor', 'App → HAL → framework → sensor', 'App → ART → sensor'], a: 0, why: 'Apps never talk to hardware or the HAL directly. The framework asks a system service in another process over Binder, and that service uses the HAL, which uses the kernel driver.' },
-      { q: 'Since which Android version does each app process run on ART instead of Dalvik?', options: ['Android 2.3', 'Android 5.0 (API 21)', 'Android 10', 'Android 14'], a: 1, why: 'ART replaced Dalvik as the runtime in Android 5.0 (API 21). Each app process has its own runtime instance, as it did with Dalvik before.' },
-    ],
-  });
+  
 
   // 2 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'processes',
-    title: 'Processes, zygote and the app sandbox',
-    tagline: 'A process is a running program with its own memory, ids and rights.',
-    level: 'intermediate',
-    body: `
-<p>A <em>process</em> is a program while it runs. The kernel gives each one a process id (PID), its own virtual address space, a table of open files, one or more threads, and the user id (UID) whose rights it has. Two processes cannot see each other's memory.</p>
-<p>On Unix, new processes come from <code>fork()</code>: the kernel copies the parent, and the child usually calls <code>exec()</code> to load a different program. Android does it differently for apps. At boot, <code>init</code> starts the <em>zygote</em>, which loads the framework code and resources once. When an app needs a process, system_server asks the zygote over a socket, the zygote forks, and the child becomes your app. Most framework pages stay shared between all apps.</p>
-<p>Then the child drops its rights to a UID that belongs only to your app. That is the <em>app sandbox</em>: each app has its own Linux user, and the kernel's normal file permissions plus SELinux keep apps out of each other's data. Step through the demo: two apps launch, then one tries to cross the line.</p>`,
-    code: `// Every process has kernel-assigned ids
-val pid = Process.myPid()
-val uid = Process.myUid()            // 10145 is shown as u0_a145: app UIDs start at 10000
-Log.d("Proc", "pid=$pid uid=$uid")
-
-// Your private files belong to your UID only
-val db = File(context.filesDir, "news.db")   // /data/user/0/com.example.news/files/news.db
-
-// A component can run in a second process (rarely needed). Application.onCreate runs again there.
-// <service android:name=".PlayerService" android:process=":player" />`,
-    remember: 'Each app is its own Linux process with its own UID, forked from the zygote. Separate processes means separate memory: nothing is shared unless the OS carries it.',
-    visual(el) {
-      Lab.ui.graph(el, {
-        height: 300,
-        nodes: [
-          { id: 'init', label: 'init<small>pid 1</small>', x: 50, y: 10, tone: 'muted' },
-          { id: 'sys', label: 'system_server', x: 17, y: 10 },
-          { id: 'zy', label: 'zygote<small>root</small>', x: 50, y: 42, tone: 'warm' },
-          { id: 'fw', label: 'Framework<small>shared pages</small>', x: 83, y: 42, tone: 'ok' },
-          { id: 'news', label: 'News<small>pid 4821</small>', x: 25, y: 84, hidden: true },
-          { id: 'maps', label: 'Maps<small>pid 5307</small>', x: 75, y: 84, hidden: true },
-        ],
-        predict: {
-          q: 'Right after <code>fork()</code>, which user does the new News process run as?',
-          options: ['root, the same as the zygote', 'u0_a145, its own app UID', 'system, like system_server'],
-          a: 0,
-          why: '<code>fork()</code> copies the parent, user included. The child then drops root and switches to the app’s own UID before it loads any app code.',
-        },
-        frames: [
-          { add: [['init', 'zy', 'starts'], ['zy', 'fw']], say: 'At boot, init starts the zygote. It loads ART, the framework classes and resources once. (system_server was forked from it too.)' },
-          { show: ['news'], add: [['sys', 'zy', 'request']], hl: ['sys'], say: 'You tap News. system_server asks the zygote, over a socket, for a new app process.' },
-          { add: [['zy', 'news', 'fork()', 'warm']], hl: ['zy', 'news'], say: 'The zygote calls <code>fork()</code>. The child starts as a copy: still root, with everything already loaded. No new program is exec’d.' },
-          { add: [['news', 'fw', 'shares', 'weak']], say: 'The child does not copy the framework pages. It shares them with the zygote, so starting is fast and cheap.' },
-          { add: [['zy', 'news', 'fork()']], hl: ['news'], say: 'The child drops root, becomes uid <code>u0_a145</code> and enters the app’s SELinux domain. Then <code>Application.onCreate()</code> runs.' },
-          { show: ['maps'], add: [['zy', 'maps', 'fork()'], ['maps', 'fw', 'shares', 'weak']], hl: ['maps'], say: 'Maps gets its own fork and its own UID, <code>u0_a146</code>. Two processes, one copy of the framework.' },
-          { add: [['news', 'maps', 'open files?', 'err']], hl: ['news', 'maps'], say: 'News tries to open a file in Maps’ data directory: <b>EACCES</b>. Different UIDs, private directories and SELinux keep apps apart.' },
-        ],
-      });
-    },
-    deeper: [
-      {
-        title: 'fork, exec and copy-on-write',
-        body: `<p><code>fork()</code> returns twice: 0 in the child, the child's PID in the parent. The kernel does not copy all memory at fork time. Parent and child share every page read-only, and a page is copied only when one of them writes to it. This is <em>copy-on-write</em>, and it is why forking the zygote is cheap and why the framework pages stay shared.</p>`,
-        code: `pid_t pid = fork();                   // one process becomes two
-if (pid == 0) {
-    execv("/system/bin/ls", argv);    // child: replace the program
-} else {
-    waitpid(pid, &status, 0);         // parent: wait for the child to exit
-}`,
-      },
-      {
-        title: 'Why the zygote exists',
-        body: `<p>Starting a runtime and loading thousands of framework classes for every app would make every launch slow and every app pay for its own copy in RAM. The zygote does that work once at boot. A fork gives each new app a warm runtime, and copy-on-write keeps the untouched pages shared. Some devices go one step further and keep a small pool of pre-forked, not yet specialized processes ready. This is part of why a <a href="#perf.startup">cold start</a> still costs more than a warm one: your own code and data still have to load.</p>`,
-      },
-      {
-        title: 'You can see it with ps',
-        body: `<p>Every app's parent process id is the zygote. The user column shows the per-app UID.</p>`,
-        code: `$ adb shell ps -A -o PID,PPID,USER,NAME | grep -E "zygote|example"
-  612     1 root      zygote64
- 4821   612 u0_a145   com.example.news
- 5307   612 u0_a146   com.example.maps`,
-      },
-      {
-        title: 'Process state is not Activity state',
-        body: `<p>In OS terms a process is created, then its threads move between ready, running and blocked until it exits. Android adds an importance ranking on top (foreground, visible, service, cached) that decides who dies first when memory runs short. The <a href="#android.lifecycle">Activity lifecycle</a> is a separate, higher layer: a process can be alive with no visible Activity, and an Activity can be recreated in a brand new process. More on that in <a href="#os.low-memory">Running out of memory</a>.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Treating a singleton as permanent', bad: 'object Session {\n    var user: User? = null   // set once at login\n}', good: 'object Session {\n    var user: User? = null   // a cache only\n}\n// Source of truth: DataStore, reloaded when a new process starts', why: 'A singleton lives exactly as long as the process. When Android kills the process and the user comes back, a new process forks from the zygote and <code>user</code> is null again. See <a href="#android.savedstate">saved state</a>.' },
-      { title: 'Expecting one Application per app', bad: '<service android:name=".PlayerService"\n    android:process=":player" />\n// Application.onCreate() starts analytics, opens the DB', good: '<service android:name=".PlayerService" />\n// Only use android:process when you need the isolation,\n// and check the process name before heavy init', why: 'Each process gets its own <code>Application</code> instance and its own copy of every singleton. Two processes opening the same database without coordination is a common source of bugs.' },
-    ],
-    terms: [
-      { term: 'Process', def: 'A running program: an address space, threads, open files and the credentials (UID) it runs with.' },
-      { term: 'PID', def: 'Process id, a number the kernel assigns to each process.' },
-      { term: 'Zygote', def: 'The Android process that preloads the runtime and framework and forks every app process.' },
-      { term: 'App sandbox', def: 'Android’s isolation model: each app runs as its own Linux UID in its own process, with file permissions and SELinux keeping apps apart.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Log the ids the kernel gave this process.', code: 'val pid = Process.[[myPid]]()\nval uid = Process.[[myUid]]()\nLog.d("Proc", "pid=$pid uid=$uid")', why: '<code>android.os.Process</code> exposes the calling process’s PID and UID. App UIDs are 10000 and up.' },
-      { type: 'bug', prompt: 'This compiles but always fails on a real device. Tap the line that breaks the sandbox rules.', code: 'fun loadMapsHome(context: Context): String? {\n    val f = File("/data/data/com.example.maps/files/home.json")\n    return if (f.exists()) f.readText() else null\n}', bug: 1, fix: '    val uri = Uri.parse("content://com.example.maps.provider/home")   // read via the app’s ContentProvider', why: 'Another app’s private directory belongs to its UID. The kernel refuses the access. Data crosses apps only through something the other app exposes, such as a ContentProvider.' },
-    ],
-    quiz: [
-      { q: 'Two apps are open. App A has a global <code>val cache = HashMap()</code>. Can App B read it?', options: ['Yes, if both are written in Kotlin', 'Yes, through reflection', 'No, each app is a separate process with its own address space', 'Only when both are in the foreground'], a: 2, why: 'Separate processes have separate virtual memory. B could only get the data if A sends it, for example over Binder.' },
-      { q: 'What is the parent process of a normal Android app?', options: ['init', 'system_server', 'zygote', 'The launcher'], a: 2, why: 'system_server asks for it, but the zygote calls <code>fork()</code>, so the zygote is the parent. <code>ps</code> shows the zygote’s PID as the PPID.' },
-      { q: 'Put the start of an app process in order.', options: ['zygote forks → child sets its UID and SELinux domain → app code loads → Application.onCreate()', 'exec() the APK → zygote forks → Application.onCreate()', 'Application.onCreate() → zygote forks → UID is set', 'Launcher forks itself → loads the APK → sets UID'], a: 0, why: 'The forked child first drops to the app’s identity, then loads the app’s code, and only then runs your Application.' },
-      { q: 'Why does forking the zygote save memory across apps?', options: ['Apps share one heap', 'Copy-on-write keeps preloaded framework pages shared until someone writes to them', 'The zygote compresses each app', 'Apps run inside the zygote process'], a: 1, why: 'After fork, parent and child point at the same physical pages. Framework code is rarely written to, so it stays shared by every app.' },
-      { q: 'A second app tries to open the login token file in the first app’s <code>filesDir</code>. What stops it?', options: ['Only Google Play Protect', 'The kernel’s file permissions for the owning UID, plus SELinux', 'Nothing, files are public', 'ART’s bytecode verifier'], a: 1, why: 'The file is owned by the first app’s UID in a mode-700 directory. The kernel checks the caller’s UID on <code>open()</code>, and SELinux adds a second check.' },
-    ],
-  });
+  
 
   // 3 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'threads',
-    title: 'Threads and scheduling',
-    tagline: 'The scheduler hands out CPU time in slices; a blocked main thread draws nothing.',
-    level: 'intermediate',
-    body: `
-<p>A <em>thread</em> is one line of execution inside a process. Threads of the same process share its memory, but each has its own stack and registers. The kernel schedules threads, not processes: it keeps a list of runnable threads and gives each a <em>time slice</em> on a CPU core. When the slice ends, or the thread blocks, the kernel saves its registers and loads another thread. That swap is a <em>context switch</em>.</p>
-<p>A thread is always in one of three states: running on a core, runnable and waiting for a core, or blocked waiting for something like disk, network or a lock. A blocked thread uses no CPU at all. It just doesn't move.</p>
-<p>Every Android app has one <em>main thread</em>. It handles input, runs your UI code and produces each frame. At 60 Hz it has about 16 ms per frame. If you block it with disk or network I/O, or keep it busy with heavy work, frames are missed (<a href="#perf.frame">jank</a>), and if input waits 5 seconds you get an <a href="#perf.anr">ANR</a>. The fixes are in <a href="#perf.main-thread">keeping the main thread free</a>. Run the scenarios and compare the main thread row.</p>`,
-    code: `class ArticleViewModel(private val repo: ArticleRepository) : ViewModel() {
-    val state = MutableStateFlow<ArticleState>(ArticleState.Loading)
-
-    fun load(id: Long) {
-        viewModelScope.launch {                           // starts on the main thread
-            val article = withContext(Dispatchers.IO) {   // a pool thread can block on disk/network
-                repo.fetch(id)
-            }
-            state.value = ArticleState.Ready(article)     // back on main
-        }
-    }
-}`,
-    remember: 'The main thread must never wait. Blocking I/O and heavy work go to another thread; only short UI work stays on main.',
-    visual(el) {
-      const N = 40, W = 4;
-      // c: who is on the CPU, m: main thread state, w: worker state. Letters: M main, W worker, O other app, '-' idle.
-      // main/worker: R running, Q runnable, B blocked, S sleeping until the next frame, '' none.
-      function scenario(name) {
-        const c = [], m = [], w = [], f = [];
-        for (let i = 0; i < N; i++) {
-          const k = i % W;
-          let cc = k < 2 ? 'M' : k === 2 ? 'O' : '-', mm = k < 2 ? 'R' : 'S', ww = '';
-          if (name === 'block' && i >= 4 && i < 28) { mm = 'B'; cc = k === 2 ? 'O' : '-'; }
-          if (name === 'busy' && i >= 4 && i < 28) { cc = k === 2 ? 'O' : 'M'; mm = k === 2 ? 'Q' : 'R'; }
-          if (name === 'worker') {
-            if (i === 7) ww = 'R';
-            else if (i > 7 && i < 24) ww = 'B';
-            else if (i >= 24 && i < 36) ww = k === 3 ? 'R' : 'Q';
-            if (ww === 'R') cc = 'W';
-          }
-          c.push(cc); m.push(mm); w.push(ww);
-        }
-        for (let j = 0; j < N / W; j++) f.push(j >= 1 && j < 7 && (name === 'block' || name === 'busy') ? 'miss' : 'ok');
-        return { c, m, w, f };
-      }
-      const row = n => { const cells = Array.from({ length: n }, () => h('div', { class: 'osy-cell' })); return { cells, el: h('div', { class: 'osy-tl', style: `--n:${n}` }, cells) }; };
-      const cpu = row(N), main = row(N), work = row(N), frames = row(N / W);
-      const st = stats(['frames drawn', 'missed', 'context switches']);
-      const msg = out('Pick a scenario. Each cell is 4 ms; a frame is due every 16 ms.');
-      const R = runner(el);
-      const CC = { M: 'osy-c-main', W: 'osy-c-work', O: 'osy-c-other', '-': '' };
-      const TC = { R: 'osy-c-main', Q: 'osy-c-wait', B: 'osy-c-block', S: '', '': '' };
-      const END = {
-        smooth: 'Main runs 8 ms per frame, then sleeps until the next frame is due. Another app gets the CPU in between. Every frame on time.',
-        block: 'Main called a blocking disk read. It sat in the <span class="bad">blocked</span> state for 96 ms while the CPU was mostly <em>idle</em>: the phone was not busy, your thread was waiting. Six frames missed. Keep it up for 5 s of pending input and Android shows an ANR.',
-        busy: 'Main parsed a big JSON for 96 ms. It ran almost nonstop; the scheduler still preempted it so the other app got its slices (yellow: runnable, waiting for the core). Busy or blocked, the result is the same: missed frames.',
-        worker: 'Main only posts the work. A worker thread blocks on the disk read, then parses when it gets CPU time. Main keeps its 8 ms per frame and every frame is on time. This is what <code>withContext(Dispatchers.IO)</code> does.',
-      };
-      async function play(name) {
-        const t = R.start();
-        const s = scenario(name);
-        [cpu, main, work, frames].forEach(r => r.cells.forEach(x => { x.className = 'osy-cell'; x.textContent = ''; }));
-        let ok = 0, miss = 0, sw = 0;
-        st.set('frames drawn', 0); st.set('missed', 0); st.set('context switches', 0);
-        say(msg, 'Running…');
-        for (let i = 0; i < N; i++) {
-          cpu.cells[i].className = `osy-cell ${CC[s.c[i]]}`;
-          main.cells[i].className = `osy-cell ${TC[s.m[i]]}`;
-          work.cells[i].className = `osy-cell ${s.w[i] === 'R' ? 'osy-c-work' : TC[s.w[i]]}`;
-          if (i > 0 && s.c[i] !== s.c[i - 1] && s.c[i] !== '-' ) st.set('context switches', ++sw);
-          if (i % W === W - 1) {
-            const j = (i + 1) / W - 1, good = s.f[j] === 'ok';
-            frames.cells[j].className = `osy-cell ${good ? 'osy-c-ok' : 'osy-c-miss'}`;
-            frames.cells[j].textContent = good ? '✓' : '×';
-            good ? st.set('frames drawn', ++ok) : st.set('missed', ++miss);
-          }
-          await sleep(55);
-          if (!R.live(t)) return;
-        }
-        say(msg, END[name]);
-      }
-      const key = (cls, text) => h('span', { class: 'osy-key' }, h('i', { class: `osy-cell ${cls}`, style: 'height:12px' }), text);
-      el.append(h('div', { class: 'osy-stage' },
-        h('div', { class: 'osy-tlrow' }, label('CPU core: who runs'), cpu.el),
-        h('div', { class: 'osy-tlrow' }, label('main thread'), main.el),
-        h('div', { class: 'osy-tlrow' }, label('worker thread'), work.el),
-        h('div', { class: 'osy-tlrow' }, label('frames (every 16 ms)'), frames.el),
-        h('div', { class: 'osy-legend' }, key('osy-c-main', 'main running'), key('osy-c-work', 'worker running'), key('osy-c-other', 'other app'), key('osy-c-wait', 'runnable, waiting'), key('osy-c-block', 'blocked on I/O')),
-        st),
-        h('div', { class: 'controls' }, act('Smooth', () => play('smooth')), act('Disk read on main', () => play('block')), act('Heavy work on main', () => play('busy')), act('Move it to a worker', () => play('worker'))), msg);
-    },
-    deeper: [
-      {
-        title: 'Threads versus processes',
-        body: `<p>Creating a thread is cheaper than creating a process, and threads share memory, so they can pass objects with no copying. The price is that shared memory needs care: two threads writing the same object without a lock or an atomic is a data race. Processes are the opposite trade: strong isolation, but any data passed between them has to be copied through the kernel.</p>
-<p>On Linux both are created with the same <code>clone()</code> system call. A thread is a task that shares its parent's address space; a process is a task that gets its own.</p>`,
-      },
-      {
-        title: 'Context switches are not free',
-        body: `<p>A switch saves one thread's registers, loads another's, and often leaves the CPU caches full of the wrong data. A few hundred threads all fighting for 8 cores spend real time switching. That is why coroutines map many tasks onto a small pool of threads: <code>Dispatchers.Default</code> has about one thread per core, and suspending a coroutine does not block its thread. See <a href="#coroutines.dispatchers">dispatchers</a>.</p>`,
-      },
-      {
-        title: 'Priorities',
-        body: `<p>The scheduler gives more CPU to higher-priority threads. On Linux, a normal thread's priority is its <em>nice</em> value: lower is more important. Android sets the main thread of the foreground app high and lets you lower your own background threads so they don't steal time from drawing.</p>`,
-        code: `thread(name = "thumbnail-cache") {
-    Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)  // nice +10: yield to UI work
-    warmThumbnailCache()
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>The main thread runs a loop: a <code>Looper</code> takes the next message from its <code>MessageQueue</code> and runs it. Input events, lifecycle callbacks, <code>Handler.post</code> and frame callbacks are all messages. When the queue is empty, the thread blocks in the kernel (an <code>epoll</code> wait) and uses no CPU until a message or an input event wakes it. While one message runs, every other message waits, which is exactly how a slow <code>onClick</code> delays drawing.</p>`,
-      code: `// Roughly what Looper.loop() does
-while (true) {
-    val msg = queue.next()   // blocks in the kernel when there is nothing to do
-    msg.target.dispatchMessage(msg)   // your code runs here; everything else waits
-}`,
-    },
-    mistakes: [
-      { title: 'runBlocking on the main thread', bad: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    val user = runBlocking { repo.loadUser() }   // main thread blocks\n}', good: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    lifecycleScope.launch { show(repo.loadUser()) }   // main is free while it suspends\n}', why: '<code>runBlocking</code> blocks the calling thread until the coroutine ends. On main that freezes input and drawing for the whole load.' },
-      { title: 'Sleeping to wait for something', bad: 'button.setOnClickListener {\n    Thread.sleep(300)   // "let the animation finish"\n    openDetail()\n}', good: 'button.setOnClickListener {\n    lifecycleScope.launch { delay(300); openDetail() }\n}', why: '<code>Thread.sleep</code> blocks the thread in the kernel: no frames for 300 ms. <code>delay</code> suspends the coroutine and leaves the thread free to draw.' },
-    ],
-    terms: [
-      { term: 'Thread', def: 'A unit of execution the kernel schedules. Threads in one process share memory and each has its own stack.' },
-      { term: 'Time slice', def: 'The stretch of CPU time a thread gets before the scheduler may switch to another runnable thread.' },
-      { term: 'Context switch', def: 'Saving one thread’s CPU state and loading another’s so the other can run.' },
-      { term: 'Main thread', def: 'The app thread that handles input, lifecycle callbacks and drawing. Also called the UI thread.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Move the blocking database read off the main thread.', code: 'viewModelScope.launch {\n    val rows = withContext(Dispatchers.[[IO]]) { dao.loadAll() }\n    _state.value = UiState.Ready(rows)\n}', why: '<code>Dispatchers.IO</code> runs blocking calls on a shared pool so the main thread stays free. The assignment after <code>withContext</code> runs back on main.' },
-      { type: 'bug', prompt: 'This crashes with <code>NetworkOnMainThreadException</code> on startup. Tap the line that runs on the wrong thread.', code: 'override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    val json = URL("https://api.example.com/manset").readText()\n    adapter.submit(parse(json))\n}', bug: 2, fix: '    lifecycleScope.launch { val json = withContext(Dispatchers.IO) { URL("https://api.example.com/manset").readText() }; adapter.submit(parse(json)) }', why: '<code>onCreate</code> runs on the main thread. A network read there would block drawing and input, so Android throws <code>NetworkOnMainThreadException</code>. Do the read on an I/O thread and come back to main.' },
-    ],
-    predict: {
-      q: "The main thread blocks on a slow disk read for 96 ms. A frame is due every 16 ms. How many frames are missed?",
-      options: ["None: the CPU is idle anyway","About six","Only one"],
-      a: 1,
-      why: "A blocked main thread cannot produce frames, even with the CPU idle. 96 ms is six 16 ms frame slots.",
-    },
-    quiz: [
-      { q: 'The main thread is blocked on a slow disk read. What is the CPU doing?', options: ['Spinning at 100% on the main thread', 'Running other threads, or idle; the blocked thread uses no CPU', 'Waiting for the main thread to finish its slice', 'Reading the disk byte by byte'], a: 1, why: 'A blocked thread is off the CPU until the I/O completes. The UI freezes because the thread that draws is waiting, not because the CPU is busy.' },
-      { q: 'At 60 Hz, roughly how long does the main thread have to produce each frame?', options: ['1 ms', '16 ms', '100 ms', '5 s'], a: 1, why: '1000 ms / 60 ≈ 16.7 ms. At 120 Hz it is about 8 ms. 5 seconds is the input timeout for an ANR, a far worse failure.' },
-      { q: 'Which change fixes jank caused by parsing a 2 MB JSON file in a click handler?', options: ['Raise the main thread’s priority', 'Parse it on <code>Dispatchers.Default</code> and post the result to main', 'Call <code>Thread.yield()</code> during parsing', 'Use <code>runBlocking</code> around the parse'], a: 1, why: 'Parsing is CPU work, so <code>Default</code> (sized to the cores) fits. The main thread only applies the result.' },
-      { q: 'What do two threads of the same process share?', options: ['Nothing', 'Their stacks', 'The heap and all of the process’s memory, but not stacks or registers', 'Only open files'], a: 2, why: 'Threads share the address space, so heap objects are visible to both. Each thread has its own stack and its own register state.' },
-      { q: 'Your app starts 500 threads for 500 image downloads. What goes wrong first?', options: ['Nothing, threads are free', 'Each thread reserves stack memory and the scheduler spends time switching; a bounded pool or coroutines is better', 'The kernel refuses to create more than 8 threads', 'Downloads run in sequence anyway'], a: 1, why: 'Threads cost memory and switching time. Downloads mostly wait on the network, so a few threads with suspending I/O handle them better.' },
-    ],
-  });
+  
 
   // 4 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'memory',
-    title: 'Virtual memory, stack and heap',
-    tagline: 'Every process sees its own address space; the kernel maps it onto real RAM page by page.',
-    level: 'intermediate',
-    body: `
-<p>A process never sees physical RAM addresses. It sees a private <em>virtual address space</em>, split into fixed-size <em>pages</em> (4 KB on most Android devices today; some newer devices use 16 KB). A per-process <em>page table</em> maps each virtual page to a physical <em>frame</em> in RAM, and the CPU's MMU does the lookup on every memory access, with a small cache (the TLB) to make it fast.</p>
-<p>A page does not need a frame until it is used. The first touch causes a <em>page fault</em>: the kernel finds a free frame, fills it (with zeros, or with data from a file) and updates the table. The same frame can appear in many page tables, which is how all apps share the zygote's framework pages. Files can be mapped straight into memory with <code>mmap</code>; Android maps app code this way.</p>
-<p>Inside the address space, each thread has a <em>stack</em> for function calls and local variables, and objects live on the <em>heap</em>, which ART manages with its garbage collector. Android caps each app's heap, because many processes share one device's RAM and pages you write to stay in RAM. Tap pages in the demo to see hits, faults and sharing.</p>`,
-    code: `// How much heap this device gives a normal app, in MB
-val am = context.getSystemService(ActivityManager::class.java)
-val heapLimitMb = am.memoryClass
-
-// What the ART heap holds right now
-val rt = Runtime.getRuntime()
-val usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
-Log.d("Mem", "heap used $usedMb MB of $heapLimitMb MB")
-
-fun render(item: Article) {          // \`item\` reference and locals live on this thread’s stack
-    val card = ArticleCard(item)     // the ArticleCard object lives on the heap
-}`,
-    remember: 'Addresses are virtual. Pages get real RAM only when touched, shared pages count once, and every page you write stays in RAM until you drop the objects on it.',
-    visual(el) {
-      const PAGES = [
-        { n: 0, name: 'code: libart.so', kind: 'shared' },
-        { n: 1, name: 'framework (zygote)', kind: 'shared' },
-        { n: 2, name: 'heap', kind: 'anon' },
-        { n: 3, name: 'heap', kind: 'anon' },
-        { n: 4, name: 'mmap: articles.db', kind: 'file' },
-        { n: 5, name: 'stack', kind: 'anon' },
-      ];
-      const OWN = { A: 'News', B: 'Maps' };
-      let frames, pt, cur = 'A', zram;
-      function reset() {
-        frames = Array.from({ length: 8 }, () => null);
-        frames[0] = { label: 'libart.so code', cls: 'osy-f-shared', key: 'shared0' };
-        frames[1] = { label: 'framework', cls: 'osy-f-shared', key: 'shared1' };
-        frames[2] = { label: 'News stack', cls: 'osy-f-a', key: 'A5' };
-        frames[3] = { label: 'Maps stack', cls: 'osy-f-b', key: 'B5' };
-        pt = { A: { 0: 0, 1: 1, 5: 2 }, B: { 0: 0, 1: 1, 5: 3 } };
-        zram = 0;
-      }
-      const left = h('div', { class: 'osy-col' });
-      const right = h('div', { class: 'osy-frames' });
-      const st = stats(['free frames', 'page faults', 'in ZRAM']);
-      const msg = out('Tap a virtual page. Its address is page number × 4 KB + offset 0xA10.');
-      let faults = 0, flashF = -1, mark = {};
-      const hex = n => '0x' + n.toString(16).toUpperCase();
-      const procBtns = ['A', 'B'].map(p => act(`Process ${OWN[p]}`, () => { cur = p; mark = {}; paint(); say(msg, `Now looking at ${OWN[p]}’s page table. Pages 0 and 1 point at the same frames as in the other process.`); }));
-      function entry(p, n) { const e = pt[p][n]; return e === undefined ? 'not present' : e === 'z' ? 'in ZRAM' : `→ frame ${e}`; }
-      function paint() {
-        procBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(['A', 'B'][i] === cur)));
-        left.replaceChildren(label(`${OWN[cur]}: virtual pages`), ...PAGES.map(pg => h('button', { class: `osy-vpage ${mark[pg.n] || ''}`, onclick: () => touch(pg) },
-          h('span', {}, String(pg.n)), h('span', {}, pg.name), h('em', {}, entry(cur, pg.n)))));
-        right.replaceChildren(...frames.map((f, i) => h('div', { class: `osy-frame ${f ? f.cls : ''} ${i === flashF ? 'osy-flash' : ''}` }, `frame ${i}`, h('b', {}, f ? f.label : 'free'))));
-        st.set('free frames', frames.filter(f => !f).length);
-        st.set('page faults', faults);
-        st.set('in ZRAM', zram);
-        flashF = -1;
-      }
-      function freeFrame() {
-        let i = frames.findIndex(f => !f);
-        if (i >= 0) return { i, note: '' };
-        // Prefer dropping a clean file page: it can be read back from the file.
-        i = frames.findIndex(f => f.cls === 'osy-f-file');
-        if (i >= 0) {
-          for (const p of ['A', 'B']) if (pt[p][4] === i) delete pt[p][4];
-          frames[i] = null;
-          return { i, note: ' RAM was full, so the kernel first <b>dropped a clean file page</b> (it can be re-read from articles.db).' };
-        }
-        i = frames.findIndex((f, k) => f && f.key && /^[AB][23]$/.test(f.key) && f.key[0] !== cur);
-        if (i < 0) i = frames.findIndex(f => f && f.key && /^[AB][23]$/.test(f.key));
-        if (i >= 0) {
-          const k = frames[i].key; pt[k[0]][k[1]] = 'z'; zram++;
-          frames[i] = null;
-          return { i, note: ` RAM was full and no clean page was left, so the kernel <b>compressed ${OWN[k[0]]}’s heap page ${k[1]} into ZRAM</b>.` };
-        }
-        return { i: -1, note: '' };
-      }
-      function touch(pg) {
-        const e = pt[cur][pg.n];
-        const va = hex(pg.n * 0x1000 + 0xA10);
-        mark = { [pg.n]: '' };
-        if (typeof e === 'number') {
-          mark[pg.n] = 'osy-hit'; paint();
-          say(msg, `Hit. Virtual ${va} = page ${pg.n}, offset 0xA10 → frame ${e} → physical ${hex(e * 0x1000 + 0xA10)}. No kernel involvement.${pg.kind === 'shared' ? ' This frame is shared by both processes.' : ''}`);
-          return;
-        }
-        faults++;
-        if (pg.kind === 'file') {
-          const other = cur === 'A' ? 'B' : 'A', f = pt[other][4];
-          if (typeof f === 'number') {
-            pt[cur][4] = f; mark[pg.n] = 'osy-fault'; flashF = f; paint();
-            say(msg, `Page fault, but articles.db page 4 is already in RAM (the page cache) for ${OWN[other]}. The kernel just maps frame ${f} into ${OWN[cur]} too. One copy, two processes.`);
-            return;
-          }
-        }
-        const { i, note } = freeFrame();
-        if (i < 0) { paint(); say(msg, 'No frame can be freed. On Android, this is where lmkd starts killing processes.'); return; }
-        const wasZ = e === 'z';
-        if (wasZ) zram--;
-        frames[i] = pg.kind === 'file' ? { label: 'articles.db p4', cls: 'osy-f-file', key: 'F4' } : { label: `${OWN[cur]} ${pg.name}`, cls: cur === 'A' ? 'osy-f-a' : 'osy-f-b', key: cur + pg.n };
-        pt[cur][pg.n] = i; mark[pg.n] = 'osy-fault'; flashF = i;
-        paint();
-        const how = wasZ ? 'decompresses it from ZRAM' : pg.kind === 'file' ? 'reads that part of articles.db from storage' : 'fills it with zeros';
-        say(msg, `<span class="bad">Page fault</span> at ${va}: page ${pg.n} had no frame. The kernel picks frame ${i}, ${how}, and updates the page table.${note}`);
-      }
-      reset(); paint();
-      el.append(h('div', { class: 'osy-stage' }, h('div', { class: 'controls' }, procBtns), st,
-        h('div', { class: 'osy-vm' }, left, h('div', { class: 'osy-col' }, label('physical RAM frames'), right))), msg);
-    },
-    deeper: [
-      {
-        title: 'Stack versus heap',
-        body: `<p>The stack is a block of memory per thread. Each function call pushes a frame with its parameters and local variables, and returning pops it. It is fast and needs no garbage collection, but it is small; recursion that never stops ends in <code>StackOverflowError</code>.</p>
-<p>The heap holds every object you create with a constructor call. Objects live as long as something references them, and ART's garbage collector frees the rest. In Kotlin a local <code>val</code> of an object type is a reference on the stack pointing at an object on the heap.</p>`,
-        code: `fun depth(c: Comment): Int {                 // each call adds a stack frame
-    var max = 0                              // local Int: in the frame
-    for (reply in c.replies) max = maxOf(max, depth(reply))
-    return max + 1                           // frame popped on return
-}
-val thread = Comment(text = "Great news")  // the object is on the heap`,
-      },
-      {
-        title: 'Memory-mapped files',
-        body: `<p><code>mmap</code> maps a file into the address space. Reading the memory reads the file, through page faults, and pages the app never modifies are <em>clean</em>: under pressure the kernel can drop them and read them again later. Android maps app code (DEX, compiled OAT files and native libraries) like this, which is why code is cheaper on RAM than heap objects. Pages you modify are <em>dirty</em> and stay in RAM, or go to ZRAM, a compressed area in RAM.</p>`,
-        code: `RandomAccessFile(file, "r").use { raf ->
-    val map = raf.channel.map(FileChannel.MapMode.READ_ONLY, 0, raf.length())
-    val first = map.get(0)   // a page fault loads the first page; no read() call
-}`,
-      },
-      {
-        title: 'Why apps have a heap limit',
-        body: `<p>Android sets a hard limit on each app's heap, which depends on the device's RAM. <code>ActivityManager.getMemoryClass()</code> tells you the number in MB. Go past it and the allocation throws <code>OutOfMemoryError</code>, even if the phone has free RAM, because the limit protects every other process. A leaked Activity, a cache with no bound, or a full-size bitmap are the usual causes. See <a href="#perf.leaks">memory leaks</a>.</p>`,
-      },
-      {
-        title: 'Shared pages and PSS',
-        body: `<p>If 20 apps map the same framework frame, whose memory is it? Android reports <em>PSS</em>, proportional set size: each shared page is split evenly between the processes that map it. So your app's PSS includes 1/20 of that frame. Your private dirty pages, mostly your heap, are the part you control.</p>`,
-        code: `$ adb shell dumpsys meminfo com.example.news
-#   Pss Total, Private Dirty and the Java Heap / Native Heap rows are the ones to watch`,
-      },
-    ],
-    underHood: {
-      body: `<p>Translation is plain arithmetic. With 4 KB pages (2<sup>12</sup> bytes), the low 12 bits of a virtual address are the offset inside the page and the rest is the page number. The MMU looks up the page number (on arm64 through a tree of page tables, three or four levels deep depending on how the kernel is configured), finds the frame, and puts the same offset on the end. A TLB hit skips the table walk entirely.</p>`,
-      code: `virtual 0x3A10  →  page 0x3, offset 0xA10
-page table[0x3] =  frame 0x7
-physical         =  0x7 * 0x1000 + 0xA10 = 0x7A10`,
-    },
-    mistakes: [
-      { title: 'Decoding a full-size photo for a thumbnail', bad: 'val bmp = BitmapFactory.decodeFile(path)   // 4000 × 3000 × 4 bytes ≈ 48 MB', good: 'val opts = BitmapFactory.Options().apply { inSampleSize = 8 }\nval bmp = BitmapFactory.decodeFile(path, opts)   // 500 × 375 ≈ 0.75 MB', why: 'A decoded bitmap costs width × height × 4 bytes of RAM, whatever the file size. A few of those hit the heap limit. Image libraries like Coil sample down to the view size for you.' },
-      { title: 'A cache with no limit', bad: 'object Thumbs { val cache = HashMap<String, Bitmap>() }', good: 'object Thumbs {\n    val cache = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {\n        override fun sizeOf(key: String, value: Bitmap) = value.byteCount\n    }\n}', why: 'A static map keeps every entry reachable forever, so the GC can never free them. An <code>LruCache</code> with a byte budget drops the oldest entries.' },
-    ],
-    terms: [
-      { term: 'Virtual memory', def: 'Each process’s private view of memory; the kernel and MMU map it onto physical RAM.' },
-      { term: 'Page', def: 'A fixed-size block of virtual memory, usually 4 KB, that is mapped as one unit.' },
-      { term: 'Page fault', def: 'The trap a CPU raises when a page has no frame mapped. The kernel fixes the mapping or kills the access.' },
-      { term: 'Heap', def: 'Memory for objects. On Android, ART manages the app heap and frees unreachable objects with garbage collection.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Pages are 4 KB (0x1000 bytes). Split the virtual address 0x3A10.', code: '// virtual 0x3A10\nval page = [[3|0x3]]\nval offset = [[0xA10|A10|0xa10]]', why: 'The low 12 bits (three hex digits) are the offset, 0xA10. What remains, 0x3, is the page number.' },
-      { type: 'bug', prompt: 'Opening a long comment thread crashes with <code>StackOverflowError</code>. Tap the line that recurses forever.', code: 'fun depth(c: Comment): Int {\n    var max = 0\n    for (reply in c.replies) max = maxOf(max, depth(reply))\n    return depth(c) + 1\n}', bug: 3, fix: '    return max + 1', why: '<code>depth(c)</code> calls itself with the same argument, so each call pushes another stack frame until the thread’s stack runs out. Return the computed <code>max + 1</code> instead.' },
-    ],
-    predict: {
-      q: "News already read page 4 of <code>articles.db</code>. Now Maps touches the same page of the same file. What does the kernel do?",
-      options: ["Reads it from storage again","Maps the frame that is already in RAM into Maps too","Copies News’ frame into a new one"],
-      a: 1,
-      why: "File pages live in the page cache. The kernel just points Maps’ page table at the frame that is already there: one copy, two processes.",
-    },
-    quiz: [
-      { q: 'News and Maps both use the framework classes the zygote preloaded. How many copies of those pages are in RAM?', options: ['One per app', 'One, mapped into both page tables', 'None, they are read from flash every time', 'Two, one per CPU core'], a: 1, why: 'The pages came from the zygote and nobody wrote to them, so both page tables point at the same physical frames.' },
-      { q: 'An app allocates a 50 MB array but never touches most of it. What happens to physical RAM?', options: ['50 MB is used at once', 'Pages get frames only as they are first written; untouched pages may cost nothing yet', 'The array goes to flash', 'The kernel refuses the allocation'], a: 1, why: 'The kernel assigns frames lazily, on the first touch, through page faults. Do not count on this for Java objects: the app’s heap limit counts the full 50 MB the moment you allocate it.' },
-      { q: 'RAM is tight. Which page can the kernel drop without losing data?', options: ['A heap page your app wrote to', 'A clean page of a memory-mapped file, like app code', 'A thread’s stack page', 'Any page, then it asks the app to rebuild it'], a: 1, why: 'A clean file page is identical to the file on disk, so it can be read back. Dirty pages have no other copy; on Android they can only be compressed into ZRAM.' },
-      { q: 'The device has 2 GB free, yet your app throws <code>OutOfMemoryError</code>. Why?', options: ['A bug in ART', 'The app hit its per-app heap limit, which is far lower than total RAM', 'ZRAM is full', 'The stack is too small'], a: 1, why: 'Android limits each app’s heap to protect other processes. <code>getMemoryClass()</code> gives the limit. Look for leaks or oversized bitmaps.' },
-    ],
-  });
+  
 
   // 5 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'low-memory',
-    title: 'Running out of memory',
-    tagline: 'When RAM runs out, Android kills the least important process and expects you to restore state.',
-    level: 'advanced',
-    body: `
-<p>A desktop OS can swap pages to disk. A phone mostly can't afford to, so Linux on Android first reclaims what it can: it drops clean file pages and compresses dirty anonymous pages into ZRAM. If memory pressure keeps rising, something has to die. The Linux kernel has an OOM killer for the very last moment, but Android acts earlier, in user space, with the <em>low memory killer daemon</em>, <code>lmkd</code>.</p>
-<p>Every process has an <code>oom_score_adj</code> value from -1000 to 1000. Android's activity manager keeps it updated from the process's importance: the foreground app is 0, a visible app 100, a foreground service around 200, the previous app 700, cached apps 900 and above. When lmkd sees pressure, it kills the process with the highest score first. Since Android 10 it measures pressure with the kernel's pressure stall information (PSI).</p>
-<p>So a background app can be killed at any time with no callback. When the user returns, Android starts a fresh process and recreates the Activity with its <a href="#android.savedstate">saved state</a>. ViewModels and singletons are gone. Open apps in the demo until lmkd steps in, then go back to News.</p>`,
-    code: `class SearchViewModel(private val handle: SavedStateHandle) : ViewModel() {
-    // Survives process death: SavedStateHandle is written to the saved-state Bundle
-    val query: StateFlow<String> = handle.getStateFlow("query", "")
-
-    // Does not survive process death: rebuild it from the query
-    val results = query.flatMapLatest { repo.search(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    fun onQuery(q: String) { handle["query"] = q }
-}`,
-    remember: 'A background process can die at any moment without notice. Keep small UI state in saved state, real data on disk, and treat everything in memory as a cache.',
-    visual(el) {
-      const TOTAL = 30, RESERVE = 2;
-      const IMP = { 0: 'foreground', 100: 'visible', 200: 'perceptible', 600: 'home', 700: 'previous', '-900': 'system', '-1000': 'native' };
-      const name = adj => IMP[adj] || (adj >= 900 ? 'cached' : '');
-      let procs, queue, killedNews;
-      function reset() {
-        procs = [
-          { id: 'native', name: 'kernel + native daemons', mem: 6, adj: -1000, sys: true },
-          { id: 'system', name: 'system_server', mem: 4, adj: -900, sys: true },
-          { id: 'launcher', name: 'launcher', mem: 2, adj: 600 },
-          { id: 'news', name: 'com.example.news', mem: 3, adj: 0 },
-        ];
-        queue = [['maps', 'com.example.maps', 5], ['camera', 'com.example.camera', 6], ['game', 'com.example.game', 9], ['browser', 'com.example.browser', 5], ['video', 'com.example.video', 7]];
-        killedNews = false;
-      }
-      const bar = h('div', { class: 'osy-ram', role: 'img', 'aria-label': 'RAM use' });
-      const list = h('div', { class: 'osy-plist' });
-      const st = stats(['used', 'free', 'killed']);
-      const msg = out('News is in the foreground. Open more apps and watch free RAM shrink. (A made-up 3 GB phone; sizes are illustrative.)');
-      const R = runner(el);
-      let killed = 0, fresh = null, dead = [];
-      const used = () => procs.reduce((s, p) => s + p.mem, 0);
-      function paint() {
-        const u = used();
-        bar.replaceChildren(...procs.map(p => h('div', { class: `osy-seg ${p.sys ? 'osy-s-sys' : p.adj === 0 ? 'osy-s-fg' : p.adj >= 900 ? 'osy-s-cache' : 'osy-s-mid'}`, style: `width:${(p.mem / TOTAL) * 100}%`, title: p.name }, p.mem >= 3 ? (p.sys ? p.id : p.name.replace('com.example.', '')) : '')));
-        list.replaceChildren(...[...procs].sort((a, b) => b.adj - a.adj).map(p => h('div', { class: `osy-prow ${p.id === fresh ? 'osy-fresh' : ''}` },
-          h('span', {}, p.name), pill(name(p.adj), p.adj === 0 ? 'osy-acc' : p.adj >= 900 ? 'osy-warm' : p.adj < 0 ? 'osy-ghost' : 'osy-ok'), h('span', { class: 'osy-adj' }, `adj ${p.adj}`))),
-        ...dead.map(d => h('div', { class: 'osy-prow osy-killed' }, h('span', {}, d.name), pill('killed', 'osy-err'), h('span', { class: 'osy-adj' }, `adj ${d.adj}`))));
-        st.set('used', `${(u / 10).toFixed(1)} of ${TOTAL / 10} GB`);
-        st.set('free', `${(Math.max(0, TOTAL - u) / 10).toFixed(1)} GB`);
-        st.set('killed', killed);
-      }
-      // Re-rank: newest foreground 0, the one before is "previous" 700, older apps cached 900, 910, ...
-      function rank(fg) {
-        const apps = procs.filter(p => !p.sys && p.id !== 'launcher' && p.adj !== 200);
-        apps.sort((a, b) => (b.t || 0) - (a.t || 0));
-        let c = 900;
-        apps.forEach(p => { p.adj = p.id === fg ? 0 : p === apps.find(x => x.id !== fg) ? 700 : (c += 10) - 10; });
-      }
-      let clock = 1;
-      async function lmkd(t) {
-        while (used() > TOTAL - RESERVE) {
-          const victims = procs.filter(p => p.adj > 0).sort((a, b) => b.adj - a.adj || b.mem - a.mem);
-          if (!victims.length) { say(msg, 'Only the foreground and system are left. The next allocation fails.'); return; }
-          const v = victims[0];
-          say(msg, `Memory pressure is high (PSI). <b>lmkd</b> picks the highest oom_score_adj: <span class="bad">kill ${v.name}</span> (adj ${v.adj}, ${v.mem * 100} MB). No callback runs in that app.`);
-          await sleep(1500); if (!R.live(t)) return;
-          procs = procs.filter(p => p !== v); dead.push({ name: v.name, adj: v.adj }); killed++;
-          if (v.id === 'news') killedNews = true;
-          paint();
-          await sleep(500); if (!R.live(t)) return;
-        }
-      }
-      async function open() {
-        const t = R.start();
-        if (!queue.length) { say(msg, 'No more apps in this demo. Press Reset.'); return; }
-        const [id, nm, mem] = queue.shift();
-        procs.push({ id, name: nm, mem, adj: 0, t: ++clock });
-        rank(id); fresh = id; dead = dead.slice(-3);
-        paint();
-        say(msg, `${nm} opens (${mem * 100} MB) and becomes the foreground app, adj 0. The app before it is now "previous" (700); older ones are cached (900+).`);
-        await sleep(1500); if (!R.live(t)) return;
-        if (used() > TOTAL - RESERVE) await lmkd(t);
-        else if (R.live(t)) say(msg, `Still ${((TOTAL - used()) / 10).toFixed(1)} GB free. Nobody needs to die yet.`);
-      }
-      async function back() {
-        const t = R.start();
-        const p = procs.find(x => x.id === 'news');
-        if (p) {
-          p.t = ++clock; rank('news'); fresh = 'news'; paint();
-          say(msg, 'The News process was still alive: a warm start. Everything in memory, including the ViewModel, is still there.');
-          return;
-        }
-        say(msg, 'News has no process. Android asks the zygote for a new one: a <b>cold start</b>.');
-        procs.push({ id: 'news', name: 'com.example.news', mem: 3, adj: 0, t: ++clock });
-        dead = dead.filter(d => d.name !== 'com.example.news');
-        rank('news'); fresh = 'news'; paint();
-        await sleep(1600); if (!R.live(t)) return;
-        say(msg, 'The Activity is recreated with its saved <code>Bundle</code>: <span class="good">the search query and scroll position come back</span>. The ViewModel is new and empty, so it reloads the article list from disk using that query.');
-        await sleep(1800); if (!R.live(t)) return;
-        if (used() > TOTAL - RESERVE) await lmkd(t);
-      }
-      async function music() {
-        R.stop();
-        if (procs.some(p => p.id === 'music')) { say(msg, 'Music is already playing.'); return; }
-        procs.push({ id: 'music', name: 'com.example.music', mem: 2, adj: 200, t: ++clock });
-        fresh = 'music'; paint();
-        say(msg, 'A music app runs a foreground service with a notification. It is "perceptible", adj 200: the user would notice if it died, so lmkd leaves it for much later.');
-        const t = R.start();
-        await sleep(1200);
-        if (R.live(t) && used() > TOTAL - RESERVE) await lmkd(t);
-      }
-      reset(); paint();
-      el.append(h('div', { class: 'osy-stage' }, h('div', { class: 'osy-tlrow' }, label('RAM'), bar), st, list),
-        h('div', { class: 'controls' }, act('Open next app', open), act('Start music (foreground service)', music), act('Back to News', back)), msg);
-    },
-    deeper: [
-      {
-        title: 'Reclaim comes before killing',
-        body: `<p>When free memory drops, the kernel thread <code>kswapd</code> wakes up and reclaims pages in the background: clean file pages are dropped from the page cache, and anonymous pages are compressed into ZRAM. If an allocation can't wait, the allocating thread does the reclaim itself (direct reclaim), which shows up as jank. lmkd watches how long tasks stall on memory, and kills when the stalls cross its thresholds.</p>`,
-      },
-      {
-        title: 'Importance becomes a number',
-        body: `<p>The ranking you met in <a href="#os.processes">processes</a> turns into <code>oom_score_adj</code>. In AOSP the levels include foreground 0, visible 100, perceptible 200, service 500, home 600, previous 700, and cached 900 to 999. System processes are negative and are not killed this way. A started service that runs for a long time can be demoted toward cached. <code>dumpsys meminfo</code> groups processes by these levels.</p>`,
-        code: `$ adb shell dumpsys meminfo
-# Look for "Total PSS by OOM adjustment": Native, System, Persistent,
-# Foreground, Visible, Perceptible, ... , Cached`,
-      },
-      {
-        title: 'Test process death on purpose',
-        body: `<p>Put your app in the background and kill it from adb. Then return to it from Recents. If the screen comes back empty or crashes, some state lived only in memory. Keep IDs and user input in saved state, and the data itself in Room or DataStore. See <a href="#android.viewmodel">ViewModel</a> and <a href="#android.savedstate">saved state</a>.</p>`,
-        code: `# 1. open the app, type a search, press Home
-$ adb shell am kill com.example.news
-# 2. reopen from Recents: query and scroll position should be restored`,
-      },
-      {
-        title: 'Give memory back before you are killed',
-        body: `<p>Android tells you when it is a good time to shrink. <code>onTrimMemory</code> with <code>TRIM_MEMORY_UI_HIDDEN</code> means your UI is no longer visible: drop UI-only caches. <code>TRIM_MEMORY_BACKGROUND</code> means your process is a kill candidate: release what you can rebuild. A smaller cached process is a cheaper victim to keep around. From Android 14 the other legacy levels are no longer delivered.</p>`,
-        code: `override fun onTrimMemory(level: Int) {
-    super.onTrimMemory(level)
-    if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) imageCache.evictAll()
-    if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) articleCache.clear()
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'Holding user input only in the ViewModel', bad: 'class ComposeViewModel : ViewModel() {\n    var draft by mutableStateOf("")   // lost on process death\n}', good: 'class ComposeViewModel(handle: SavedStateHandle) : ViewModel() {\n    var draft by handle.saveable { mutableStateOf("") }\n}', why: 'A ViewModel survives rotation but not process death. <code>SavedStateHandle</code> writes into the saved-state Bundle that system_server keeps for the task.' },
-      { title: 'Putting big data in saved state', bad: 'outState.putParcelableArrayList("articles", ArrayList(articles))   // 400 articles', good: 'outState.putLong("selectedId", selectedId)   // reload the list from Room', why: 'Saved state travels over Binder and is held by the system. Keep it small (the docs suggest under 50 KB). Store an ID and reload the data.' },
-    ],
-    terms: [
-      { term: 'lmkd', def: 'Android’s low memory killer daemon. It watches memory pressure and kills the least important processes.' },
-      { term: 'oom_score_adj', def: 'A per-process Linux value from -1000 to 1000. Higher means more likely to be killed when memory runs out.' },
-      { term: 'PSI', def: 'Pressure stall information: kernel counters for how long tasks stall waiting on memory, CPU or I/O.' },
-      { term: 'Process death', def: 'The system kills a background app’s process. The app gets no callback and must restore state on the next start.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Read the saved query as a flow that survives process death.', code: 'class SearchViewModel(private val handle: SavedStateHandle) : ViewModel() {\n    val query = handle.[[getStateFlow]]("query", "")\n    fun onQuery(q: String) { handle.[[set]]("query", q) }\n}', why: '<code>getStateFlow</code> reads the restored value, or the default, and emits on every write. <code>set</code> (or <code>handle["query"] = q</code>) stores it in saved state.' },
-      { type: 'bug', prompt: 'After the system kills the app in the background, the search box comes back empty. Tap the line that ignores the restored value.', code: 'class SearchViewModel(private val handle: SavedStateHandle) : ViewModel() {\n    val query = MutableStateFlow("")\n    fun onQuery(q: String) {\n        query.value = q\n        handle["query"] = q\n    }\n}', bug: 1, fix: '    val query = MutableStateFlow(handle.get<String>("query") ?: "")', why: 'The query is saved, but the new ViewModel starts from an empty string and never reads it back. Start from the saved value, or use <code>getStateFlow</code>.' },
-    ],
-    predict: {
-      q: "A music app plays through a foreground service while you open more and more apps. Compared with a cached app, when does lmkd kill it?",
-      options: ["First, because it uses the most memory","Much later: it is perceptible, with a low oom_score_adj","At the same time as cached apps"],
-      a: 1,
-      why: "lmkd kills the highest oom_score_adj first. Cached apps sit at 900 and above; a perceptible foreground service is around 200.",
-    },
-    quiz: [
-      { q: 'Memory is short. Which process does lmkd kill first?', options: ['The foreground app (adj 0)', 'A music app with a foreground service (adj 200)', 'The previous app (adj 700)', 'A cached app the user hasn’t opened for an hour (adj 950)'], a: 3, why: 'lmkd picks the highest oom_score_adj first. The cached app is cheapest to lose, and the user may never come back to it.' },
-      { q: 'Put what happens in order when the user returns to an app that was killed in the background.', options: ['zygote forks a new process → Application.onCreate → Activity recreated with saved Bundle → new ViewModel reloads data', 'Old process resumes → ViewModel restored → onResume', 'Activity recreated → zygote forks → Application.onCreate', 'onRestart → onStart → onResume in the old process'], a: 0, why: 'The old process is gone, so a new one starts from the zygote. The framework passes the saved Bundle to the recreated Activity; the ViewModel is brand new.' },
-      { q: 'What does an app receive just before lmkd kills it?', options: ['onDestroy()', 'onTrimMemory(TRIM_MEMORY_COMPLETE)', 'Nothing; the process is killed with no callback', 'A broadcast'], a: 2, why: 'lmkd sends a kill signal. No code in the app runs. That is why state must already be saved by <code>onStop</code>.' },
-      { q: 'Which of these survives process death?', options: ['A ViewModel field', 'A Kotlin <code>object</code>’s property', 'A value in <code>SavedStateHandle</code>', 'A coroutine launched in <code>viewModelScope</code>'], a: 2, why: 'Saved state is handed to the system and given back to the new process. Everything else lives in the old process’s memory and dies with it.' },
-      { q: 'Your app has a 300 MB in-memory image cache while in the background. What is the trade-off?', options: ['None, cached apps are never killed', 'It makes your process a big, attractive victim; trimming it on TRIM_MEMORY_BACKGROUND helps you stay cached longer', 'It speeds up other apps', 'It moves the app to the foreground'], a: 1, why: 'Holding lots of memory in the background raises pressure and makes a cold start more likely. Release what you can rebuild.' },
-    ],
-  });
+  
 
   // 6 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'ipc',
-    title: 'Interprocess communication and Binder',
-    tagline: 'Processes can’t share memory by accident, so the kernel carries their messages.',
-    level: 'advanced',
-    body: `
-<p>Processes are isolated, so any cooperation needs <em>interprocess communication</em> (IPC). Unix offers several kinds. A <em>pipe</em> is a one-way byte stream, as in <code>ls | grep</code>. A <em>socket</em> is a two-way channel, between machines or, as a Unix domain socket, on the same machine. <em>Shared memory</em> maps the same frames into both processes: the fastest option, but the two sides must synchronize themselves.</p>
-<p>Android's main IPC is <em>Binder</em>, a kernel driver plus libraries for calling methods on objects in another process. The caller holds a proxy. A call packs the arguments into a <code>Parcel</code>, the driver copies it into the target process and tells it who the caller is (UID and PID), a thread from the target's Binder thread pool runs the method, and the reply comes back the same way.</p>
-<p>Almost everything you do with the framework is a Binder call. <code>startActivity</code>, <a href="#android.intents">Intents</a>, <code>getSystemService</code> calls, and content providers all cross into system_server or another app this way. Watch an Intent travel in the demo, then send one that is too big.</p>`,
-    code: `// IHeadlineService.aidl
-interface IHeadlineService {
-    List<String> latest(int count);
-    oneway void markRead(long id);
-}
-
-// Client: once bound, call it like a local object
-private val connection = object : ServiceConnection {
-    override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-        val service = IHeadlineService.Stub.asInterface(binder)
-        lifecycleScope.launch(Dispatchers.IO) {
-            val titles = service.latest(10)   // blocks this thread until the reply arrives
-            service.markRead(42)              // oneway: returns at once
-        }
-    }
-    override fun onServiceDisconnected(name: ComponentName) {}
-}`,
-    remember: 'A Binder call looks local but crosses processes: arguments are copied, the caller waits for the reply, and everything in flight shares a 1 MB buffer.',
-    visual(el) {
-      Lab.ui.flow(el, {
-        nodes: [
-          { id: 'app', label: 'Your app', sub: 'proxy, main thread' },
-          { id: 'drv', label: 'Binder driver', sub: 'in the kernel' },
-          { id: 'srv', label: 'system_server', sub: 'Binder thread pool' },
-        ],
-        predict: {
-          q: 'You put a 2 MB bitmap into an Intent extra and call <code>startActivity</code>. What happens?',
-          options: ['It works, just a little slower', 'It fails with <code>TransactionTooLargeException</code>', 'Android compresses the bitmap so it fits'],
-          a: 1,
-          why: 'The Intent travels as a Binder transaction. Its buffer is about 1 MB per process, shared by every call in flight, so the call fails in your process.',
-        },
-        frames: [
-          { say: 'Your code calls <code>startActivity(intent)</code>. The activity manager lives in another process: system_server.' },
-          { at: 'app', packet: 'Parcel · 3 KB', say: 'The proxy marshals the call: a method code plus a flat copy of the arguments in a <code>Parcel</code>.' },
-          { at: 'drv', packet: 'Parcel + uid 10145', tone: 'warm', mark: { app: 'warm' }, say: 'The driver copies the Parcel once, into system_server, and stamps the caller’s UID and PID. Your thread now blocks.' },
-          { at: 'srv', packet: 'startActivity()', say: 'A thread from system_server’s Binder pool runs the method. It checks <code>Binder.getCallingUid()</code> and resolves the Intent.' },
-          { at: 'drv', packet: 'reply', tone: 'ok', say: 'The reply Parcel goes back through the driver.' },
-          { at: 'app', packet: 'returns', tone: 'ok', mark: { app: 'ok' }, say: 'Your thread wakes up and <code>startActivity()</code> returns. One round trip between processes.' },
-          { at: 'app', packet: 'Intent + 2 MB bitmap', tone: 'err', mark: { app: null }, say: 'Now the same call with a 2 MB bitmap in the extras.' },
-          { at: 'drv', packet: 'too big', tone: 'err', mark: { drv: 'err' }, say: 'The transaction buffer is about 1 MB per process. The driver cannot fit this one.' },
-          { at: 'app', packet: 'TransactionTooLargeException', tone: 'err', mark: { app: 'err' }, say: 'The call fails in your process. Send a URI or an ID across, never the bitmap itself.' },
-        ],
-      });
-    },
-    deeper: [
-      {
-        title: 'Pipes and sockets',
-        body: `<p>A pipe is a kernel buffer with a write end and a read end, both file descriptors. A reader blocks when it is empty and a writer blocks when it is full, which keeps two processes in step. Sockets work the same way but go both ways and can carry many connections. Android uses a Unix domain socket for system_server to ask the zygote for new processes.</p>`,
-        code: `$ adb logcat | grep News      # the shell creates a pipe between two processes
-
-// In app code, a socket to a local service
-LocalSocket().use { s ->
-    s.connect(LocalSocketAddress("news-debug"))
-    s.outputStream.write("ping\\n".toByteArray())
-}`,
-      },
-      {
-        title: 'Shared memory',
-        body: `<p>For large data, copying is the cost. Shared memory maps the same physical pages into both processes, so a write by one is instantly visible to the other, with no copy. The catch is that nothing orders the reads and writes for you. Android's <code>SharedMemory</code> class creates a region whose file descriptor can be sent over Binder; graphics buffers move between apps and the compositor in a similar way.</p>`,
-      },
-      {
-        title: 'The server side is multithreaded',
-        body: `<p>Incoming calls from other processes run on a pool of Binder threads in the receiving process, not on its main thread. Two clients can call the same method at the same moment, so the implementation must be thread-safe. Inside the call, <code>Binder.getCallingUid()</code> tells you who is calling, which the kernel guarantees.</p>`,
-        code: `private val binder = object : IHeadlineService.Stub() {
-    override fun latest(count: Int): List<String> {
-        val caller = Binder.getCallingUid()        // set by the kernel, can’t be faked
-        check(caller == allowedUid) { "not allowed" }
-        return synchronized(lock) { headlines.take(count) }   // pool threads can race
-    }
-    override fun markRead(id: Long) { readIds.add(id) }       // a thread-safe set
-}`,
-      },
-      {
-        title: 'When the other process dies',
-        body: `<p>The other side of a Binder can be killed at any time (see <a href="#os.low-memory">lmkd</a>). Calls to a dead process throw <code>DeadObjectException</code>, a <code>RemoteException</code>. <code>linkToDeath</code> lets you register a callback that runs when it happens, so you can rebind.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Big objects in Intent extras', bad: 'intent.putParcelableArrayListExtra("photos", ArrayList(bitmaps))', good: 'intent.putParcelableArrayListExtra("photoUris", ArrayList(uris))', why: 'Extras are copied through the Binder buffer, about 1 MB shared by the whole process. Send IDs or content URIs and let the other side load the data. See <a href="#data.share-files">sharing files</a>.' },
-      { title: 'A slow remote call on the main thread', bad: 'button.setOnClickListener {\n    val titles = service.latest(50)   // remote: blocks until reply\n    show(titles)\n}', good: 'button.setOnClickListener {\n    lifecycleScope.launch {\n        val titles = withContext(Dispatchers.IO) { service.latest(50) }\n        show(titles)\n    }\n}', why: 'Binder calls are synchronous by default. If the other process is slow or busy, your main thread waits with it.' },
-    ],
-    terms: [
-      { term: 'IPC', def: 'Interprocess communication: any way for separate processes to exchange data, such as pipes, sockets, shared memory or Binder.' },
-      { term: 'Binder', def: 'Android’s IPC system: a kernel driver and libraries for calling methods on objects in another process.' },
-      { term: 'Parcel', def: 'The flat container a Binder call packs its arguments into before the driver copies it across.' },
-      { term: 'AIDL', def: 'Android Interface Definition Language. It generates the Stub (server) and proxy (client) code for a Binder interface.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Make <code>markRead</code> fire-and-forget, and turn the raw binder into the interface.', code: 'interface IHeadlineService {\n    List<String> latest(int count);\n    [[oneway]] void markRead(long id);\n}\n\nval service = IHeadlineService.Stub.[[asInterface]](binder)', why: '<code>oneway</code> makes the call return as soon as the transaction is queued. <code>Stub.asInterface</code> wraps the <code>IBinder</code> in a proxy, or returns the local object if the service is in your own process.' },
-      { type: 'bug', prompt: 'Sharing a gallery to the editor screen crashes with <code>TransactionTooLargeException</code>. Tap the line.', code: 'fun openEditor(context: Context, photos: List<Bitmap>) {\n    val intent = Intent(context, EditorActivity::class.java)\n    intent.putParcelableArrayListExtra("photos", ArrayList(photos))\n    context.startActivity(intent)\n}', bug: 2, fix: '    intent.putParcelableArrayListExtra("photoUris", ArrayList(photoUris))   // load bitmaps in EditorActivity', why: '<code>startActivity</code> sends the Intent through system_server over Binder. Full bitmaps blow past the 1 MB buffer. Pass URIs and decode on the other side.' },
-    ],
-    quiz: [
-      { q: 'You call a normal (not oneway) AIDL method on a service in another app. What does your thread do while the service works?', options: ['Keeps running; the result arrives in a callback', 'Blocks until the reply comes back', 'Gets suspended like a coroutine', 'Is killed'], a: 1, why: 'Binder calls are synchronous by default. The caller blocks in the driver until the reply transaction arrives.' },
-      { q: 'Which thread runs an incoming Binder call in your service process?', options: ['The main thread', 'A thread from the process’s Binder thread pool', 'A new thread per call that the client creates', 'The caller’s thread, moved across'], a: 1, why: 'Calls from other processes are dispatched on Binder pool threads in the receiving process, so the code must be thread-safe.' },
-      { q: 'Two processes exchange 50 MB of video frames per second. Which IPC fits best?', options: ['Intent extras', 'A pipe, one byte at a time', 'Shared memory, with only a small Binder message to say a frame is ready', 'Writing each frame to a file'], a: 2, why: 'Copying that much data is the bottleneck. Shared memory avoids copies; Binder or a socket carries the small "frame ready" signal.' },
-      { q: 'How does a service know which app is calling it?', options: ['The client passes its package name as an argument', '<code>Binder.getCallingUid()</code>, which the kernel driver fills in', 'It reads the Intent’s extras', 'It can’t know'], a: 1, why: 'The driver records the sender’s UID and PID with each transaction. An argument could be faked; the driver’s value can’t.' },
-    ],
-  });
+  
 
   // 7 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'files',
-    title: 'Files, descriptors and storage',
-    tagline: 'A file system turns names into blocks; a file descriptor is your handle to an open file.',
-    level: 'intermediate',
-    body: `
-<p>A <em>file system</em> organizes storage into files and directories. Each file has an <em>inode</em> holding its owner, permissions, size and where its blocks are; a directory maps names to inodes. In Linux the <em>virtual file system</em> (VFS) layer gives one interface over many real file systems, so <code>open</code>, <code>read</code> and <code>write</code> work the same everywhere.</p>
-<p><code>open()</code> returns a <em>file descriptor</em>: a small integer that indexes the process's table of open files. Every later call uses it, and <code>close()</code> frees the slot. Sockets, pipes and the Binder device are file descriptors too. A process has a limit on how many it can hold, so forgetting to close leaks them until calls start failing.</p>
-<p>The kernel checks permissions on every open: owner, group and others, each with read, write and execute bits, plus SELinux. On Android your app-specific directory belongs to your UID and nobody else can enter it. Shared storage works differently: apps that target Android 10 or higher get <em>scoped storage</em> by default (Android 11 enforces it for apps that target 11+), with direct access only to their own directory and the media they created. Other files go through <code>MediaStore</code> or the system file picker. Try each kind of open in the demo.</p>`,
-    code: `// App-specific storage: private to your UID, no permission needed
-val file = File(context.filesDir, "articles.json")
-file.writeText(json)
-
-// use {} closes the file descriptor, even if an exception is thrown
-val first = file.bufferedReader().use { it.readLine() }
-
-// Shared media: go through MediaStore, not raw /sdcard paths
-val values = ContentValues().apply {
-    put(MediaStore.Images.Media.DISPLAY_NAME, "manset.jpg")
-    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-}
-val resolver = context.contentResolver
-val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-uri?.let { resolver.openOutputStream(it)?.use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out) } }`,
-    remember: 'Open, use, close: always with use {}. Your files live in your app’s private directory; anything shared goes through MediaStore or the picker.',
-    visual(el) {
-      const LIMIT = 8;
-      let fds;
-      const table = h('div', { class: 'osy-fdt' });
-      const meta = h('div', { class: 'osy-row' });
-      const msg = out('This is com.example.news’s file descriptor table, running as uid u0_a145. The demo limit is 8 slots; real limits are much higher.');
-      function reset() { fds = [{ fd: 0, path: 'standard input', std: true }, { fd: 1, path: 'standard output', std: true }, { fd: 2, path: 'standard error', std: true }]; }
-      function paint(newFd) {
-        table.replaceChildren(label('open files'), ...fds.map(f => h('div', { class: `osy-fd ${f.std ? 'osy-fd-std' : ''} ${f.leak ? 'osy-fd-leak' : ''} ${f.fd === newFd ? 'osy-fd-new' : ''}` }, h('b', {}, String(f.fd)), h('span', {}, f.path))));
-      }
-      const lowest = () => { for (let i = 0; ; i++) if (!fds.some(f => f.fd === i)) return i; };
-      function showMeta(path, owner, mode, verdict, cls) {
-        meta.replaceChildren(pill(path, 'osy-ghost'), pill(`owner ${owner}`), pill(mode), pill(verdict, cls));
-      }
-      function openOwn() {
-        if (fds.length >= LIMIT) { say(msg, '<span class="bad">EMFILE: too many open files</span>. Every open fails now, even sockets. Close what you opened.'); return; }
-        const fd = lowest();
-        fds.push({ fd, path: '/data/user/0/com.example.news/files/cache.json' }); paint(fd);
-        showMeta('files/cache.json', 'u0_a145', 'rw-------', 'allowed', 'osy-ok');
-        say(msg, `<code>open()</code> returned <span class="good">fd ${fd}</span>, the lowest free slot. The kernel checked: owner u0_a145 is the caller, read and write allowed.`);
-      }
-      function read() {
-        const f = [...fds].reverse().find(x => !x.std);
-        if (!f) { say(msg, 'Nothing open to read. Open cache.json first.'); return; }
-        paint(f.fd);
-        say(msg, `<code>read(${f.fd}, buffer, 8192)</code>: the kernel looks up slot ${f.fd}, finds the open file and its current offset, and copies up to 8 KB. The offset moves forward, so the next read continues from there.`);
-      }
-      function close() {
-        const i = fds.map(x => !x.std).lastIndexOf(true);
-        if (i < 0) { say(msg, 'Nothing to close.'); return; }
-        const [f] = fds.splice(i, 1); paint();
-        say(msg, `<code>close(${f.fd})</code> frees the slot. The next <code>open()</code> can reuse number ${f.fd}.`);
-      }
-      function other() {
-        paint();
-        showMeta('/data/data/com.example.maps/files/home.db', 'u0_a146', 'rwx------ dir', 'EACCES', 'osy-err');
-        say(msg, '<span class="bad">EACCES</span>: the directory belongs to u0_a146 with no rights for others. No file descriptor is created. This is the app sandbox doing its job.');
-      }
-      function dcim() {
-        paint();
-        showMeta('/sdcard/DCIM/Camera/IMG_0042.jpg', 'another app’s media', 'shared storage', 'not visible', 'osy-err');
-        say(msg, 'Scoped storage (target Android 10+): a raw path into another app’s photos fails. Ask <code>MediaStore</code> (with the media permission) or let the user pick the file with the system picker, which hands you a <code>content://</code> URI.');
-      }
-      function leak() {
-        let n = 0;
-        while (fds.length < LIMIT) { fds.push({ fd: lowest(), path: 'files/cache.json (never closed)', leak: true }); n++; }
-        paint();
-        showMeta('files/cache.json', 'u0_a145', 'rw-------', 'table full', 'osy-err');
-        say(msg, `A loop called <code>FileInputStream(file)</code> without closing it. ${n ? `${n} more slots` : 'The slots'} filled up. The next open, socket or even Binder call that needs a descriptor fails with <span class="bad">too many open files</span>. Press Close to release them one by one, or Reset.`);
-      }
-      reset(); paint(); showMeta('no file selected', '-', '-', 'idle', 'osy-ghost');
-      el.append(h('div', { class: 'osy-stage' }, meta, table),
-        h('div', { class: 'controls' }, act('open cache.json', openOwn), act('read', read), act('close', close), act('open Maps’ file', other), act('open /sdcard/DCIM photo', dcim), act('Leak in a loop', leak)), msg);
-    },
-    deeper: [
-      {
-        title: 'Writes go to RAM first',
-        body: `<p><code>write()</code> usually returns once the data is in the kernel's page cache, not on flash. The kernel writes it out later. If the phone loses power in between, the file can be half old and half new. To be safe, write to a temporary file, flush it to storage with <code>fsync</code>, then rename it over the original. A rename within one file system is atomic: readers see either the old file or the new one. <code>AtomicFile</code> does all of that.</p>`,
-        code: `val atomic = AtomicFile(File(context.filesDir, "settings.json"))
-val out = atomic.startWrite()
-try {
-    out.write(json.toByteArray())
-    atomic.finishWrite(out)   // syncs, then renames over the old file
-} catch (e: IOException) {
-    atomic.failWrite(out)     // the old file is untouched
-}`,
-      },
-      {
-        title: 'Everything is a file descriptor',
-        body: `<p>Sockets, pipes, the Binder device and memory regions all live in the same descriptor table. That is why a leak of one kind (say, unclosed HTTP responses) can make an unrelated part fail. Binder can even send a descriptor to another process: <code>ParcelFileDescriptor</code> is how a <code>ContentProvider</code> hands you an open file you have no path to.</p>`,
-        code: `resolver.openFileDescriptor(uri, "r")?.use { pfd ->
-    FileInputStream(pfd.fileDescriptor).use { input -> decode(input) }
-}`,
-      },
-      {
-        title: 'Which storage to pick',
-        body: `<p>App-specific files (<code>filesDir</code>, <code>cacheDir</code>) need no permission and are removed with the app. Shared media goes through <code>MediaStore</code>. Documents the user picks go through the Storage Access Framework. Structured data belongs in Room or DataStore. See <a href="#data.files">files</a>, <a href="#data.share-files">sharing files</a> and <a href="#security.at-rest">data at rest</a>.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'Forgetting to close', bad: 'val text = FileInputStream(file).bufferedReader().readText()   // descriptor stays open', good: 'val text = file.bufferedReader().use { it.readText() }', why: 'The descriptor is freed only when the stream is closed or, much later, when the GC finalizes it. In a loop that leaks until opens start failing.' },
-      { title: 'Hardcoded /sdcard paths', bad: 'File("/sdcard/Download/report.pdf").writeBytes(bytes)', good: 'val values = ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, "report.pdf") }\nval uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)\nuri?.let { resolver.openOutputStream(it)?.use { out -> out.write(bytes) } }', why: 'Under scoped storage, raw paths into shared folders don’t work for files you don’t own, and the path differs between devices and users. MediaStore gives you a URI that works.' },
-    ],
-    terms: [
-      { term: 'File descriptor', def: 'A small integer that refers to an open file, socket or pipe in a process’s table.' },
-      { term: 'Inode', def: 'The file system record for one file: owner, permissions, size and where the data blocks are.' },
-      { term: 'Page cache', def: 'File data the kernel keeps in RAM so repeated reads skip storage and writes can be flushed later.' },
-      { term: 'Scoped storage', def: 'The Android model, default for apps targeting Android 10+, that limits direct shared-storage access to the app’s own files.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Read the file and make sure the descriptor is closed even on an exception.', code: 'val text = File(context.[[filesDir]], "articles.json")\n    .bufferedReader()\n    .[[use]] { it.readText() }', why: '<code>filesDir</code> is your private app directory. <code>use</code> calls <code>close()</code> in a finally block.' },
-      { type: 'bug', prompt: 'This saves a report to a hardcoded shared-storage path, which scoped storage does not support. Tap the line to replace.', code: 'fun saveReport(context: Context, bytes: ByteArray) {\n    val out = File("/sdcard/Download/news-report.pdf")\n    out.writeBytes(bytes)\n}', bug: 1, fix: '    val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, ContentValues().apply { put(MediaStore.Downloads.DISPLAY_NAME, "news-report.pdf") })', why: 'Under scoped storage, the <code>File</code> API is only guaranteed for your app-specific directory and media your app created, and <code>/sdcard</code> is not the same path on every device or user. Insert into <code>MediaStore.Downloads</code> and write through the returned URI.' },
-    ],
-    predict: {
-      q: "News calls <code>open()</code> on a file inside Maps’ data directory. What does it get back?",
-      options: ["A read-only file descriptor","EACCES, and no file descriptor at all","An empty file"],
-      a: 1,
-      why: "The kernel checks permissions on every open. The directory belongs to Maps’ UID with no rights for others, so the open fails before any descriptor is created.",
-    },
-    quiz: [
-      { q: 'A new process has descriptors 0, 1 and 2 open. You open a file, then a socket, then close the file and open another file. What number does the last file get?', options: ['3', '4', '5', '6'], a: 0, why: 'The file got 3, the socket 4. Closing frees 3, and <code>open</code> returns the lowest free number, so the new file gets 3 again.' },
-      { q: 'A crash log shows "Too many open files" in an HTTP call. What is the likely cause?', options: ['The disk is full', 'Something leaks descriptors, such as unclosed streams or responses; sockets share the same table', 'The network is down', 'The heap limit was hit'], a: 1, why: 'Sockets are descriptors too. A leak anywhere in the process fills the table and makes every new open fail.' },
-      { q: 'Your app writes settings.json and the phone dies mid-write. How do you make sure the old file stays readable?', options: ['Write twice', 'Write to a temporary file, sync it, then rename it over the original (AtomicFile)', 'Use a bigger buffer', 'Write from the main thread'], a: 1, why: 'Rename within one file system is atomic, so readers see the old or the new version, never a half-written one.' },
-      { q: 'Which access needs no permission at all?', options: ['Reading another app’s photos', 'Writing to your own <code>filesDir</code>', 'Reading /sdcard/DCIM by path', 'Listing another app’s private directory'], a: 1, why: 'Your app-specific directory belongs to your UID. The others are blocked by the sandbox or by scoped storage.' },
-    ],
-  });
+  
 
   // 8 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'power',
-    title: 'Power, interrupts and wakelocks',
-    tagline: 'A phone saves battery by sleeping; every wakeup you cause costs energy.',
-    level: 'advanced',
-    body: `
-<p>The CPU talks to devices (network chip, touch screen, storage) through I/O. It could <em>poll</em>, asking a device again and again whether it has data, but that keeps the CPU busy. Instead a device raises an <em>interrupt</em>: a signal that makes the CPU stop what it is doing, run the kernel's handler, and go back. Devices can also copy data into RAM themselves (DMA) and interrupt only when done.</p>
-<p>When there is nothing to run, the kernel puts a CPU core into an <em>idle state</em>. Deeper states save more power but take longer to wake from. With the screen off and nothing to do, Android goes further and <em>suspends</em> the whole system. An interrupt, such as a network packet or an alarm, wakes it.</p>
-<p>A <em>wakelock</em> is a request to stay awake: with a partial wakelock the CPU keeps running with the screen off. That is why background limits exist. One app holding a wakelock or waking the phone every minute keeps it from sleeping, and the battery pays. Since Android 6.0, <a href="#background.doze">Doze</a> ignores app wakelocks and batches work into maintenance windows. Compare the battery meter across the buttons.</p>`,
-    code: `// Prefer: let the system pick a good moment and batch with other apps
-val constraints = Constraints.Builder()
-    .setRequiredNetworkType(NetworkType.CONNECTED)
-    .setRequiresBatteryNotLow(true)
-    .build()
-val sync = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
-    .setConstraints(constraints)
-    .build()
-WorkManager.getInstance(context)
-    .enqueueUniquePeriodicWork("sync", ExistingPeriodicWorkPolicy.KEEP, sync)
-
-// Only if you truly must keep the CPU on: short, tagged, with a timeout
-val pm = context.getSystemService(PowerManager::class.java)
-val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "news:export")
-lock.acquire(60_000L)
-try { exportArticles() } finally { if (lock.isHeld) lock.release() }`,
-    remember: 'A sleeping phone is a happy battery. Let the system wake you (WorkManager, FCM, alarms) instead of keeping it awake yourself.',
-    visual(el) {
-      const N = 36;
-      const cells = Array.from({ length: N }, () => h('div', { class: 'osy-cell' }));
-      const tl = h('div', { class: 'osy-tl', style: `--n:${N}` }, cells);
-      const fill = h('i', { class: 'osy-low' });
-      const meter = h('div', { class: 'osy-meter', role: 'img', 'aria-label': 'Energy used' }, fill);
-      const st = stats(['state', 'energy used', 'wakeups']);
-      const msg = out('Each cell is a stretch of time with the screen off. Pick what happens. (Energy costs are illustrative units.)');
-      const R = runner(el);
-      const COST = { A: 6, I: 2, S: 0.2, L: 4 };
-      const CLS = { A: 'osy-c-active', I: 'osy-c-idle', S: 'osy-c-sleep', L: 'osy-c-lock' };
-      const NAME = { A: 'running', I: 'idle', S: 'suspended', L: 'awake (wakelock)' };
-      let pos = 0, energy = 0, wakes = 0, doze = false;
-      function reset() { pos = 0; energy = 0; wakes = 0; cells.forEach(c => { c.className = 'osy-cell'; }); fill.style.width = '0%'; st.set('state', 'suspended'); st.set('energy used', 0); st.set('wakeups', 0); }
-      async function play(seq, text, end, t) {
-        say(msg, text);
-        if (pos + seq.length > N) { cells.forEach(c => { c.className = 'osy-cell'; }); pos = 0; }
-        for (const s of seq) {
-          cells[pos].className = `osy-cell ${CLS[s]}`;
-          pos++;
-          energy += COST[s];
-          st.set('state', NAME[s]);
-          st.set('energy used', Math.round(energy));
-          fill.style.width = `${Math.min(100, energy / 2)}%`;
-          fill.className = energy > 140 ? 'osy-over' : energy > 60 ? '' : 'osy-low';
-          await sleep(110);
-          if (!R.live(t)) return false;
-        }
-        say(msg, end);
-        return true;
-      }
-      const go = (seq, text, end, wake) => { const t = R.start(); if (wake) st.set('wakeups', ++wakes); play(seq, text, end, t); };
-      el.append(h('div', { class: 'osy-stage' },
-        h('div', { class: 'osy-tlrow' }, label('CPU over time'), tl),
-        h('div', { class: 'osy-legend' }, ...Object.keys(CLS).map(k => h('span', { class: 'osy-key' }, h('i', { class: `osy-cell ${CLS[k]}`, style: 'height:12px' }), NAME[k]))),
-        h('div', { class: 'osy-tlrow' }, label('battery energy used'), meter), st),
-        h('div', { class: 'controls' },
-          act('Nothing to do', () => go(['A', 'I', 'I', 'S', 'S', 'S', 'S', 'S'], 'The last work finishes, cores go idle, and with no wakelock held the system suspends.', 'Suspended: almost no power. This is where a phone should spend most of the night.')),
-          act('Packet arrives', () => go(['A', 'A', 'I', 'S', 'S', 'S'], 'The network chip raises an <b>interrupt</b>. The CPU wakes, the kernel handler runs, the packet is handed to the app (an FCM message, say).', 'Handled in a moment, then straight back to sleep. Short wakeups are cheap; frequent ones add up.', true)),
-          act('App holds a wakelock', () => go(doze ? ['A', 'S', 'S', 'S', 'S', 'S', 'S', 'S'] : ['L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L'], doze ? 'The app acquires a <code>PARTIAL_WAKE_LOCK</code>, but the device is in Doze.' : 'An app acquires a <code>PARTIAL_WAKE_LOCK</code> and polls a server in a loop. The system cannot suspend.', doze ? 'Doze <b>ignores app wakelocks</b>, so the system suspends anyway. The work waits for a maintenance window.' : '<span class="bad">The CPU never sleeps</span>. In this demo’s units, ten cells of this cost as much as two hundred cells of suspend. This is the battery drain background limits are there to stop.')),
-          act(doze ? 'Leave Doze' : 'Enter Doze', function () {
-            doze = !doze; this.textContent = doze ? 'Leave Doze' : 'Enter Doze';
-            go(['I', 'S', 'S', 'S'], doze ? 'The screen has been off and the phone still for a while: <b>Doze</b> starts. Network off for apps, wakelocks ignored, jobs and alarms deferred.' : 'The user picks up the phone: Doze ends.', doze ? 'In Doze. Try the wakelock button again.' : 'Out of Doze. Apps run normally.');
-          }),
-          act('Maintenance window', () => go(['A', 'A', 'A', 'A', 'I', 'S', 'S', 'S'], 'Doze opens a short <b>maintenance window</b>: pending jobs, syncs and alarms from all apps run together, with network.', 'Batched: one wakeup did the work of many. The windows get further apart the longer the phone sits still.', true))),
-        msg);
-      reset();
-    },
-    deeper: [
-      {
-        title: 'Polling versus interrupts',
-        body: `<p>Polling is simple and has low latency when data arrives constantly, but it burns CPU time when nothing happens. Interrupts cost a little per event and nothing while waiting. App code makes the same choice one level up: checking a server every minute is polling, while a push message from <a href="#push.fcm">FCM</a> is the interrupt version, one shared connection waking the phone only when there is news.</p>`,
-      },
-      {
-        title: 'Idle states have a price',
-        body: `<p>The kernel's idle governor picks a state for an idle core. Each state has an exit latency, how long it takes to resume, and a target residency, how long the core must stay there to save energy overall. A core woken every few milliseconds never reaches the deep states. That is why many small, scattered wakeups cost more than one batched burst.</p>`,
-      },
-      {
-        title: 'Wakelocks in practice',
-        body: `<p>Holding a wakelock needs the <code>WAKE_LOCK</code> permission. Always pass a timeout to <code>acquire</code>, release it in <code>finally</code>, and tag it with your package and class so it is easy to find in battery stats. Most of the time you don't need one: WorkManager holds one for you while a worker runs, and a <a href="#background.fgs">foreground service</a> is the tool for long user-visible work.</p>`,
-        code: `<uses-permission android:name="android.permission.WAKE_LOCK" />
-
-$ adb shell dumpsys power | grep -i wake_lock   # who is holding wakelocks now`,
-      },
-      {
-        title: 'Why the limits keep growing',
-        body: `<p>Each Android release has added limits on background work: Doze and App Standby in 6.0, background execution limits later, then standby buckets and restrictions on starting foreground services. The OS reason is always the same. The system can only sleep when no one is holding it awake, and one careless app can drain a whole battery. Work with the system: <a href="#background.workmanager">WorkManager</a> for deferrable work, <a href="#background.alarms">exact alarms</a> only when the time really matters.</p>`,
-      },
-    ],
-    mistakes: [
-      { title: 'A wakelock without timeout or finally', bad: 'lock.acquire()\nsyncAll()\nlock.release()', good: 'lock.acquire(60_000L)\ntry { syncAll() } finally { if (lock.isHeld) lock.release() }', why: 'If <code>syncAll</code> throws, the lock is never released and the phone stays awake. The timeout is a safety net; <code>finally</code> is the real fix.' },
-      { title: 'Polling on a timer', bad: 'handler.postDelayed(object : Runnable {\n    override fun run() { checkForNews(); handler.postDelayed(this, 60_000) }\n}, 60_000)', good: '// Server sends an FCM message when there is news;\n// WorkManager runs a periodic catch-up sync with constraints', why: 'A check every minute wakes the radio and CPU 1,440 times a day, mostly for nothing. A push message wakes the phone only when there is something to show.' },
-    ],
-    terms: [
-      { term: 'Interrupt', def: 'A signal from a device that makes the CPU pause and run a kernel handler.' },
-      { term: 'Idle state', def: 'A low-power CPU state. Deeper states save more power but take longer to exit.' },
-      { term: 'Wakelock', def: 'A request that keeps the CPU (or screen) awake. A partial wakelock keeps only the CPU on.' },
-      { term: 'Doze', def: 'An Android mode, since 6.0, that defers background work into maintenance windows while the phone is unused.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Keep only the CPU awake, for at most one minute.', code: 'val lock = pm.newWakeLock(PowerManager.[[PARTIAL_WAKE_LOCK]], "news:export")\nlock.[[acquire]](60_000L)\ntry { export() } finally { if (lock.isHeld) lock.release() }', why: 'A partial wakelock keeps the CPU on while the screen can turn off. <code>acquire(timeout)</code> releases it automatically if your code never does.' },
-      { type: 'bug', prompt: 'Battery stats show this app keeping the phone awake for hours after a failed export. Tap the line that causes it.', code: 'fun export() {\n    lock.acquire()\n    writeAllArticles()   // can throw IOException\n    lock.release()\n}', bug: 1, fix: '    lock.acquire(60_000L)   // and release it in a finally block', why: 'With no timeout, an exception in <code>writeAllArticles</code> skips <code>release()</code> and the lock is held forever. Add a timeout and release in <code>finally</code>.' },
-    ],
-    predict: {
-      q: "The screen is off, nothing is running, and no app holds a wakelock. What does the system do?",
-      options: ["Keeps the CPU awake but idle","Suspends the whole system until an interrupt wakes it","Powers the phone off"],
-      a: 1,
-      why: "With no work and no wakelock, Android suspends. An interrupt, such as a network packet or an alarm, wakes it again.",
-    },
-    quiz: [
-      { q: 'The phone is in Doze and your app holds a partial wakelock. What happens?', options: ['The wakelock keeps the CPU on as usual', 'Doze ignores the wakelock; the work waits for a maintenance window', 'The app is killed', 'The screen turns on'], a: 1, why: 'Doze ignores app wakelocks, cuts network access and defers jobs and alarms until the next maintenance window.' },
-      { q: 'Why is waking the phone every minute worse than one sync every hour, even if each wakeup is short?', options: ['It isn’t; total CPU time is the same', 'Each wakeup costs fixed energy to exit idle states and power up the radio, and the CPU never reaches deep sleep', 'Short wakeups are blocked by Android', 'It uses more RAM'], a: 1, why: 'Waking has a fixed cost, and deep idle states need long quiet stretches to pay off. Batching saves both.' },
-      { q: 'A news app must show breaking news within seconds, even at night. Which design fits the OS best?', options: ['A foreground service polling every 10 seconds', 'A partial wakelock held all night', 'A high-priority FCM message sent by the server when news breaks', 'An exact alarm every minute'], a: 2, why: 'The interrupt-style design: the system keeps one shared connection and wakes your app only when there is news. The others keep the phone awake for nothing.' },
-      { q: 'What does an interrupt let the CPU avoid?', options: ['Running the kernel', 'Polling devices in a loop while waiting for data', 'Context switches', 'Using RAM'], a: 1, why: 'With interrupts the CPU can idle, or run other work, and the device signals when it needs attention.' },
-    ],
-  });
+  
 
   Lab.addTrack({
-    id: 'os',
+    id: 'os', lang: 'shell',
     title: 'Operating systems',
-    description: 'Kernel, processes, threads, memory, IPC, files and power the way a university OS course teaches them, and where each one shows up on Android.',
+    description: 'What happens inside your phone when apps run: how it shares out time, memory, files and battery between them, and why apps freeze or close. Tried with simple terminal commands, then linked to Android.',
     requires: ['kotlin'],
     css,
-    lessons,
+    lessons: [
+      {
+        id: 'what-os',
+        title: 'What an operating system does',
+        tagline: 'The program that runs all the other programs.',
+        goals: ['Say what an operating system does for the apps on your phone', 'Explain what the kernel is', 'Find out which kernel a computer runs with <code>uname</code>'],
+        level: 'beginner', introduces: ['uname', '-r'],
+        body: `
+<p>Your phone runs a camera app, a music app and a chat app, and none of them was written for your exact phone model. Yet each one can take a photo, play a sound and save a file. The program that makes this possible is the <em>operating system</em> (OS): Android or iOS on phones, Windows, macOS or Linux on computers.</p>
+<p>The OS sits between the apps and the <em>hardware</em>, the physical parts: the processor (CPU) that runs instructions, the memory, the storage chip, the screen, the camera. An app never talks to the hardware itself. It asks the OS, “save this photo”, and the OS does it. This is <em>hardware abstraction</em>: the app only needs the simple request, not the details of this phone’s storage chip. For each part, the OS has a <em>driver</em>, a small piece of code that knows how to talk to that exact part.</p>
+<p>The heart of the OS is the <em>kernel</em>: the part that controls the hardware and decides which program may do what. Android is built on the Linux kernel, the same kernel that runs on many computers and servers. The rest of the OS, like the home screen, the settings and the notifications, is made of programs that run on top of the kernel.</p>
+<p>This track shows commands in the terminal of a Linux computer, because Android runs on Linux. Most also work on a Mac; on Windows, Git Bash has some of them, or you can read along. <code>uname</code> prints the name of the kernel, and <code>uname -r</code> prints its version (<code>-r</code> for release).</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'cam', label: 'Camera app', sub: 'a program' },
+              { id: 'kern', label: 'Kernel', sub: 'heart of the OS' },
+              { id: 'drv', label: 'Driver', sub: 'knows this chip' },
+              { id: 'hw', label: 'Storage chip', sub: 'hardware' },
+            ],
+            predict: {
+              q: 'The camera app has a photo to save on the phone’s storage chip. Who actually writes it onto the chip?',
+              options: ['The camera app writes it directly', 'The operating system, after the app asks', 'The photo saves itself'],
+              a: 1,
+              why: 'Apps never touch the hardware. They ask the OS, and the kernel and its driver do the work.',
+            },
+            frames: [
+              { say: 'You tap the shutter button, and the camera app has a photo to save. Follow the request.' },
+              { at: 'cam', packet: 'photo', say: 'The photo starts inside the camera app. The app can’t reach the storage chip: it has to ask.' },
+              { at: 'kern', packet: 'save photo', tone: 'warm', mark: { kern: 'warm' }, say: 'The app asks the kernel: “save this photo as a file”. The kernel checks that the camera app is allowed to save there.' },
+              { at: 'drv', packet: 'write', tone: 'warm', say: 'The kernel hands the job to the driver for this phone’s storage chip. Another phone has a different chip and a different driver, but the app’s request is the same.' },
+              { at: 'hw', packet: 'photo', tone: 'warm', mark: { hw: 'warm' }, say: 'The driver writes the photo onto the chip.' },
+              { at: 'kern', packet: 'done', tone: 'ok', say: 'The answer travels back up: the kernel tells the app the file is saved.' },
+              { at: 'cam', packet: 'saved', tone: 'ok', mark: { cam: 'ok' }, say: 'The app shows the photo in your gallery. It never touched the hardware. That is hardware abstraction.' },
+            ],
+          });
+        },
+        code: `uname          # the name of the kernel
+# Linux
+uname -r       # its version (r for release)
+# 6.8.0-45-generic
+
+# On a Mac, uname prints Darwin, the kernel of macOS.`,
+        remember: 'Apps never touch the hardware. They ask the operating system, and its kernel does the work.',
+        terms: [
+          { term: 'operating system (OS)', def: 'The program that runs all the other programs and shares the hardware between them, such as Android, Windows or Linux.' },
+          { term: 'kernel', def: 'The heart of the OS: it controls the hardware and decides which program may do what. Android uses the Linux kernel.' },
+          { term: 'hardware', def: 'The physical parts of a device: CPU, memory, storage, screen, camera.' },
+          { term: 'hardware abstraction, driver', def: 'Apps make simple requests like “save this file”, and the OS turns them into work on the real parts. A driver is the code that knows one exact part.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print the name of the kernel this computer runs.', code: '[[uname]]\n# Linux', why: '<code>uname</code> on its own prints the kernel’s name.' },
+          { type: 'bug', prompt: 'Ada wants to see where she is, then the version of the kernel. The second command prints only <code>Linux</code>. Tap the line to fix.', code: 'pwd\nuname', bug: 1, fix: 'uname -r', why: '<code>uname</code> prints the name. Add <code>-r</code> (release) to get the version.' },
+        ],
+        quiz: [
+          { q: 'A music app wants to play a sound. How does it reach the speaker?', options: ['It asks the OS, which uses the speaker’s driver', 'It sends electricity to the speaker itself', 'It needs a different version for every phone model'], a: 0, why: 'Hardware abstraction: the app asks, and the OS and its driver handle the real part.' },
+          { q: 'Which part of the OS controls the hardware?', options: ['The home screen', 'The kernel', 'The settings app'], a: 1, why: 'The home screen and settings are programs on top of the kernel.' },
+          { q: 'Android is built on which kernel?', options: ['Windows', 'Linux', 'Darwin'], a: 1, why: 'Android uses the Linux kernel. Darwin is the kernel of macOS.' },
+        ],
+        docs: [['Android platform architecture', 'https://developer.android.com/guide/platform'], ['uname(1) manual', 'https://man7.org/linux/man-pages/man1/uname.1.html']],
+      },
+
+      {
+        id: 'processes',
+        title: 'Processes',
+        tagline: 'A running program, in its own walled-off space.',
+        goals: ['Tell a program from a process', 'Explain why one app crashing doesn’t crash the others', 'List running processes with <code>ps</code>'],
+        level: 'beginner', introduces: ['ps', '-e'],
+        body: `
+<p>When a chat app on your phone crashes, your music keeps playing. That is no accident: the operating system keeps every running app in its own separate space.</p>
+<p>A <em>program</em> is the app as it is stored: a file of instructions. When you open it, the OS starts a <em>process</em>: that program running, with its own piece of memory to keep its values in, and a number called the <em>PID</em> (process ID). Open two apps and you have two processes. The OS builds a wall between them, called <em>memory isolation</em>: one process can’t read or change another one’s memory. If one crashes, only its own process ends.</p>
+<p>Every process has a life, the <em>process lifecycle</em>. It is created when a program starts. It runs, and often waits (for a tap, a file, the network). Finally it ends: it finished, it crashed, or it was closed. Open the same app again and you get a brand-new process.</p>
+<p>On a computer, <code>ps</code> (process status) lists the processes started from this terminal, and <code>ps -e</code> lists every process on the computer. Even <code>ps</code> shows up: while it runs, it is a process too. The PID column is the number, CMD is the program’s name, TTY is the terminal that started it (<code>?</code> means none), and TIME is how much CPU time it has used.</p>`,
+        visual(el) {
+          const list = h('div', { class: 'osy-tree' });
+          const stage = h('div', { class: 'osy-stage' }, label('Processes on the phone'), list);
+          const P = (name, pid, mem, state, cls = '') => ({ name, pid, mem, state, cls });
+          const home = P('Home screen', 812, 'app icons', 'waiting');
+          const notes = (state, cls = '') => P('Notes', 4821, '“Buy milk”', state, cls);
+          const tone = { running: 'osy-acc', waiting: 'osy-ghost', blocked: 'osy-err', 'ended: crashed': 'osy-err' };
+          const frames = [
+            { procs: [home], say: 'The phone is on, showing the home screen. The home screen is a program too, so it has its own process. (The system’s own processes are left out.)' },
+            { procs: [home, notes('running', 'osy-new')], say: 'You open Notes. The OS creates a process for it, with a PID and its own memory. Notes keeps your text there.' },
+            { procs: [home, notes('waiting'), P('Music', 4907, 'song “Rain”, at 1:12', 'running', 'osy-new')], say: 'You open Music. One more program running, one more process, with its own memory. Notes has nothing to do, so it waits.' },
+            { procs: [home, notes('running', 'osy-hot'), P('Music', 4907, 'song “Rain”, at 1:15', 'blocked', 'osy-deny')], say: 'A bug in Notes tries to reach Music’s memory, but Notes has no way in: the OS gives each process only its own memory. This is memory isolation.' },
+            { procs: [home, notes('waiting'), P('Music', 4907, 'cleaned up', 'ended: crashed', 'osy-dead')], say: 'Then Music hits a bug of its own and crashes. Only its process ends, and the OS cleans up its memory.' },
+            { procs: [home, notes('running', 'osy-hot')], say: 'Notes is untouched: your text is still in its memory. A crash stays inside one process.' },
+            { procs: [home, notes('waiting'), P('Music', 5012, 'no song yet', 'running', 'osy-new')], say: 'Open Music again, and the OS starts a brand-new process, with a new PID and empty memory.' },
+          ];
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'Notes and Music are both open. Music crashes. What happens to Notes?',
+              options: ['Notes crashes too', 'Notes keeps running, with its text still there', 'Notes starts again from the beginning'],
+              a: 1,
+              why: 'Each app is its own process with its own memory. A crash ends only the process it happens in.',
+            },
+            draw(f) {
+              list.replaceChildren(...f.procs.map(p => h('div', { class: `osy-proc ${p.cls}` },
+                h('div', { class: 'osy-ptop' }, h('span', { class: 'osy-pname' }, p.name), pill(p.state, tone[p.state])),
+                h('span', { class: 'osy-pmeta' }, `PID ${p.pid} · memory: ${p.mem}`))));
+            },
+          });
+        },
+        code: `ps        # the processes started from this terminal
+#   PID TTY          TIME CMD
+#  5645 pts/0    00:00:00 bash
+#  5647 pts/0    00:00:00 ps
+
+ps -e     # every process on the computer (lines cut)
+#   PID TTY          TIME CMD
+#     1 ?        00:00:02 systemd   # the first process Linux starts
+#  5645 pts/0    00:00:00 bash
+#  5651 pts/0    00:00:00 ps`,
+        remember: 'A process is a running program with its own memory and PID. A crash ends only that process.',
+        terms: [
+          { term: 'process', def: 'A program that is running, with its own memory. Opening an app starts one.' },
+          { term: 'PID (process ID)', def: 'The number the OS gives each process, such as <code>4821</code>.' },
+          { term: 'memory isolation', def: 'The wall the OS builds between processes: one can’t read or change another one’s memory.' },
+          { term: 'process lifecycle', def: 'The life of a process: created, running, often waiting, and finally ended.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'List every process on the computer, not only the ones from this terminal.', code: 'ps [[-e]]', why: '<code>ps</code> alone shows this terminal’s processes. <code>-e</code> means every process.' },
+          { type: 'bug', prompt: 'Ada wants to list every process, but the terminal says <code>ls: invalid option -- \'e\'</code>. Tap the line to fix.', code: 'pwd\nls -e', bug: 1, fix: 'ps -e', why: '<code>ls</code> lists files in a folder. <code>ps</code> lists processes.' },
+        ],
+        quiz: [
+          { q: 'What is the difference between a program and a process?', options: ['A process is a program that is running', 'They are two words for the same thing', 'A program is a process that has crashed'], a: 0, why: 'The program is the stored file of instructions. Running it starts a process.' },
+          { q: 'A game crashes while a map app is open. What happens to the map app?', options: ['It crashes too', 'It keeps running: each process has its own memory', 'It loses everything in its memory'], a: 1, why: 'Memory isolation keeps a crash inside the process where it happened.' },
+          { q: 'You close Music and open it again. Does the new process have the same PID?', options: ['Yes, always', 'No: the OS starts a new process, with a new PID'], a: 1, why: 'Every start is a new process, with a new number and empty memory.' },
+        ],
+        docs: [['Processes and app lifecycle', 'https://developer.android.com/guide/components/activities/process-lifecycle'], ['ps(1) manual', 'https://man7.org/linux/man-pages/man1/ps.1.html']],
+      },
+
+      {
+        id: 'threads',
+        title: 'Threads',
+        tagline: 'Several jobs at once inside one process.',
+        goals: ['Explain what a thread is', 'Say why an app freezes when its main thread is busy', 'List the threads of a process with <code>ps -T</code>'],
+        level: 'beginner', introduces: ['-T', '-p'],
+        body: `
+<p>You tap Download in a music app. The song downloads, and meanwhile you can still scroll and tap. One process is doing two jobs at the same time, and each job runs on its own thread.</p>
+<p>A <em>thread</em> is one line of work inside a process: it runs instructions one after another, like the programs you have written so far. A process starts with one thread and can start more. All threads of a process share its memory, so the download thread can put the finished song where the other threads can see it. Processes are walled off from each other; threads of the same process are not.</p>
+<p>Every app starts with a <em>main thread</em>, which draws the screen and answers your taps. If the main thread itself spends three seconds downloading, it can’t do anything else for those three seconds: the app freezes, and your taps wait. That is why apps hand slow jobs to other threads and keep the main thread free.</p>
+<p>On Linux, <code>ps -T -p 5996</code> lists the threads (<code>-T</code>) of the process whose PID is 5996 (<code>-p</code>). Every row has the same PID, because they belong to one process. SPID is each thread’s own number.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['1: main', '2: main', '2: extra'],
+            span: 3500, unit: 'ms',
+            predict: {
+              q: 'The main thread draws the screen. If it spends 3 seconds downloading a song, what happens when you scroll?',
+              options: ['The list scrolls normally', 'Nothing moves until the download ends', 'The download stops'],
+              a: 1,
+              why: 'A thread does one thing at a time. While the main thread downloads, it can’t answer your scroll.',
+            },
+            frames: [
+              { now: 0, say: 'Two versions of the same music app: version 1 on the top lane, version 2 on the two lanes below. In each, you tap Download at 0 ms, then try to scroll at 800 ms.' },
+              { bars: [{ lane: 0, from: 0, to: 3000, label: 'downloading', tone: 'warm' }], now: 0, say: 'Version 1 has only the main thread, and it does the download itself. For 3 seconds it does nothing else.' },
+              { marks: [{ at: 800, label: 'scroll', tone: 'err' }], now: 800, say: 'You scroll at 800 ms. The main thread is busy downloading, so nothing moves. The app is frozen.' },
+              { bars: [{ lane: 0, from: 3000, to: 3200, tone: 'accent' }], say: 'Only when the download ends does the main thread get to your scroll, far too late.' },
+              { bars: [{ lane: 1, from: 0, to: 100, tone: 'accent' }, { lane: 2, from: 100, to: 3100, label: 'downloading', tone: 'warm' }], now: 100, say: 'Version 2: the main thread starts an extra thread for the download, and is free again right away.' },
+              { bars: [{ lane: 1, from: 800, to: 950, tone: 'accent' }], now: 950, say: 'You scroll at 800 ms, and the main thread answers at once while the download keeps going.' },
+              { bars: [{ lane: 1, from: 3100, to: 3300, tone: 'ok' }], say: 'The download thread puts the song in the memory both threads share, and the main thread shows “Downloaded”.' },
+            ],
+          });
+        },
+        code: `ps -T -p 5996    # the threads (-T) of process 5996 (-p), a music player
+#   PID  SPID TTY          TIME CMD
+#  5996  5996 pts/0    00:00:00 music
+#  5996  5998 pts/0    00:00:00 download
+#  5996  5999 pts/0    00:00:00 player
+
+# One process (PID 5996), three threads, each with its own SPID.`,
+        remember: 'A thread is one line of work inside a process. Threads of a process share its memory; a busy main thread freezes the app.',
+        terms: [
+          { term: 'thread', def: 'One line of work inside a process, running instructions one after another. A process can have many.' },
+          { term: 'main thread', def: 'The thread an app starts with. It draws the screen and answers taps, so slow work belongs elsewhere.' },
+          { term: 'SPID', def: 'The number of one thread, shown by <code>ps -T</code>. The PID says which process it belongs to.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show the threads of process 5996.', code: 'ps [[-T]] -p 5996', why: '<code>-T</code> shows threads, and <code>-p 5996</code> picks the process.' },
+          { type: 'bug', prompt: 'Ada wants the threads of the music process. Her last command prints only the header line. Tap the line to fix.', code: 'ps -e\n#  5996 pts/0    00:00:00 music\nps -T -p 5998', bug: 2, fix: 'ps -T -p 5996', why: '5998 is a thread’s SPID, not a process’s PID, so <code>-p</code> finds no process. <code>ps -e</code> shows that music is 5996.' },
+        ],
+        quiz: [
+          { q: 'What do threads of the same process share?', options: ['Its memory', 'Nothing: they are walled off like processes', 'Only the screen'], a: 0, why: 'Memory isolation is between processes. Threads inside one process share its memory.' },
+          { q: 'An app freezes for a few seconds every time you tap Save. What is the likely cause?', options: ['The main thread is doing slow work itself', 'The app has too many threads', 'The phone has no kernel'], a: 0, why: 'While the main thread works, it can’t draw or answer taps.' },
+          { q: 'In <code>ps -T</code> output, every row shows PID 5996. What does that tell you?', options: ['They are threads of one process', 'They are separate processes', 'The command failed'], a: 0, why: 'The PID names the process. The SPID column tells the threads apart.' },
+        ],
+        docs: [['Processes and threads overview', 'https://developer.android.com/guide/components/processes-and-threads']],
+      },
+
+      {
+        id: 'scheduling',
+        title: 'Sharing the CPU',
+        tagline: 'Hundreds of threads, a few cores: the OS takes turns.',
+        goals: ['Explain how a few CPU cores run hundreds of threads', 'Describe a time slice and a context switch', 'Count cores with <code>nproc</code> and watch processes with <code>top</code>'],
+        level: 'beginner', introduces: ['nproc', 'top'],
+        body: `
+<p>A phone has around 8 CPU cores, yet hundreds of threads want to run: your apps, the clock, the keyboard, the system itself. It all feels smooth because the OS takes turns, very quickly.</p>
+<p>A <em>CPU core</em> runs one thread at a time, so 8 cores run 8 threads at the very same moment, and the rest must wait. The part of the kernel that picks which thread runs next is the <em>scheduler</em>. It gives a thread a <em>time slice</em> of a few milliseconds (thousandths of a second), then pauses it and lets the next one run. Swapping one thread for another is a <em>context switch</em>: the kernel saves exactly where the paused thread was, so it can continue later as if nothing happened. This happens thousands of times a second, too fast to notice.</p>
+<p>Most threads don’t want a turn most of the time. They are waiting for a tap, a timer or the network, and the scheduler skips them until that arrives. It also favors what you are looking at: the app on the screen gets its turns before work in the background.</p>
+<p><code>nproc</code> prints how many cores a Linux computer has. <code>top</code> shows a live list of processes, busiest first, and keeps updating; press <kbd>q</kbd> to quit. Its second line counts them, and almost all are “sleeping”, which here means waiting.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['Music', 'Maps', 'Notes'],
+            span: 60, unit: 'ms',
+            predict: {
+              q: 'One CPU core, and three apps that want to run. What does the OS do?',
+              options: ['Runs one app until it closes, then the next', 'Gives each a short turn, switching very fast', 'Runs all three at exactly the same moment on that core'],
+              a: 1,
+              why: 'One core runs one thread at a time. The scheduler hands out short time slices, so everything seems to run at once.',
+            },
+            frames: [
+              { now: 0, say: 'One CPU core and three apps. Music and Maps have work to do. Notes is waiting for you to type.' },
+              { bars: [{ lane: 0, from: 0, to: 10, label: 'run', tone: 'accent' }], say: 'The scheduler gives Music a time slice of 10 ms.' },
+              { marks: [{ at: 10, label: 'switch', tone: 'warm' }], bars: [{ lane: 1, from: 10, to: 20, label: 'run', tone: 'accent' }], say: 'Time is up. Context switch: the kernel saves where Music was and lets Maps run.' },
+              { bars: [{ lane: 0, from: 20, to: 30, tone: 'accent' }, { lane: 1, from: 30, to: 40, tone: 'accent' }], say: 'Back and forth. Each app continues exactly where it stopped. Notes gets no turns: it is waiting, so it doesn’t need any.' },
+              { marks: [{ at: 42, label: 'key', tone: 'ok' }], bars: [{ lane: 2, from: 42, to: 46, tone: 'ok' }], say: 'You press a key. Notes stops waiting, and because it is the app on the screen, the scheduler lets it run first.' },
+              { bars: [{ lane: 0, from: 46, to: 53, tone: 'accent' }, { lane: 1, from: 53, to: 60, tone: 'accent' }], say: 'Notes needed only 4 ms and waits again. Music and Maps go on taking turns. Real phones do this thousands of times a second.' },
+            ],
+          });
+        },
+        code: `nproc    # how many CPU cores (Linux)
+# 8
+
+top      # a live list of processes, busiest first; press q to quit
+# Its second line:
+# Tasks: 312 total,   1 running, 311 sleeping,   0 stopped,   0 zombie`,
+        remember: 'A core runs one thread at a time. The scheduler gives out short time slices and switches so fast that everything seems to run at once.',
+        terms: [
+          { term: 'CPU core', def: 'One part of the processor that runs one thread at a time. Phones have several.' },
+          { term: 'scheduler', def: 'The part of the kernel that picks which thread runs next on each core.' },
+          { term: 'time slice', def: 'The few milliseconds a thread may run before the scheduler gives another one a turn.' },
+          { term: 'context switch', def: 'Pausing one thread and running another. The kernel saves where the first one was, so it can continue later.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print how many CPU cores this Linux computer has.', code: '[[nproc]]\n# 8', why: '<code>nproc</code> prints the number of cores.' },
+          { type: 'bug', prompt: 'Ada wants a live list of processes that shows how many are sleeping. Tap the line that won’t show it.', code: 'pwd\nnproc', bug: 1, fix: 'top', why: '<code>nproc</code> only prints the number of cores. <code>top</code> shows the live list and counts sleeping processes.' },
+        ],
+        quiz: [
+          { q: 'What does the scheduler decide?', options: ['Which thread runs next on each core', 'Which files an app may open', 'How bright the screen is'], a: 0, why: 'It hands out time slices on the CPU cores.' },
+          { q: '<code>top</code> says 311 of 312 processes are sleeping. What are they doing?', options: ['Waiting for something, without using the CPU', 'They are broken and need restarting', 'Running in secret'], a: 0, why: 'A sleeping process waits for a tap, a timer or data. It needs no turns until then.' },
+          { q: 'What happens in a context switch?', options: ['The kernel saves where one thread was and runs another', 'The app starts again from the beginning', 'The phone switches to another network'], a: 0, why: 'Saving the paused thread’s place lets it continue later as if nothing happened.' },
+        ],
+        docs: [['CFS Scheduler (Linux kernel documentation)', 'https://docs.kernel.org/scheduler/sched-design-CFS.html'], ['top(1) manual', 'https://man7.org/linux/man-pages/man1/top.1.html']],
+      },
+
+      {
+        id: 'memory',
+        title: 'Memory',
+        tagline: 'Where a running program keeps its values.',
+        goals: ['Explain what RAM is and how it differs from storage', 'Tell the stack from the heap', 'Check how much RAM is free with <code>free -h</code>'],
+        level: 'beginner', introduces: ['free', '-h'],
+        body: `
+<p>A phone might have 8 GB of RAM and 128 GB of storage. Your photos live in storage; the apps you have open live in RAM. <em>RAM</em> (random access memory) is fast working memory: every <code>val</code> and every list a running program makes is kept there. Switch the phone off and RAM is wiped, while storage keeps its files.</p>
+<p>A process uses its memory in two main areas. The <em>stack</em> holds the values of the functions running right now: calling a function puts a new frame, with its local values, on top, and returning removes it. The <em>heap</em> holds objects, like lists and objects made from classes, which may live longer than the function that made them. A variable for a list doesn’t hold the list itself; it holds where the list is on the heap, so we say it <em>points to</em> the list. When nothing points to an object any more, the system frees it for you, a little later.</p>
+<p>Each process also gets <em>virtual memory</em>: its own private set of addresses (numbers that name places in memory). The kernel maps them to real places in RAM behind the scenes. That is how memory isolation works: process A has no address that leads into process B’s memory.</p>
+<p><code>free -h</code> shows how much RAM a Linux computer has and uses. <code>-h</code> makes the sizes human-readable: <code>Gi</code> is about a gigabyte and <code>Mi</code> about a megabyte. The available column is what new programs can still get.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            varsTitle: 'Heap (objects)',
+            code: `fun total(prices: List<Int>): Int {
+    val sum = prices.sum()
+    return sum
+}
+
+fun main() {
+    val prices = listOf(3, 5, 2)
+    val t = total(prices)
+    println(t)
+}`,
+            predict: {
+              q: 'When <code>total</code> returns, what happens to its local value <code>sum</code>?',
+              options: ['It stays on the stack until the program ends', 'It is removed together with <code>total</code>’s frame', 'It moves to the heap'],
+              a: 1,
+              why: 'Local values live in their function’s stack frame. Returning removes the frame, and the value with it.',
+            },
+            frames: [
+              { line: 6, stack: ['main()'], say: 'The program starts in <code>main</code>. The stack gets a frame for <code>main</code>, with room for its values.' },
+              { line: 7, stack: ['main(): prices → the list'], vars: { 'the list': '[3, 5, 2]' }, say: '<code>listOf</code> makes a list object on the heap. <code>main</code>’s frame only holds <code>prices</code>, which points to it.' },
+              { line: 1, stack: ['main(): prices → the list', 'total(): prices → the list'], say: 'Calling <code>total</code> puts a new frame on top of the stack. Its <code>prices</code> points to the same list on the heap.' },
+              { line: 2, stack: ['main(): prices → the list', 'total(): prices → the list, sum = 10'], say: '<code>sum</code> is a local value, so it lives in <code>total</code>’s frame.' },
+              { line: 8, stack: ['main(): prices → the list, t = 10'], say: '<code>total</code> returns 10. Its frame is removed, and <code>sum</code> is gone with it. <code>main</code>’s <code>t</code> gets the 10.' },
+              { line: 9, out: '10', say: 'The list is still on the heap, because <code>main</code> still points to it.' },
+              { line: 10, stack: [], vars: { 'the list': null }, say: '<code>main</code> ends. Its frame goes, and nothing points to the list any more, so it can be freed. A helper called the garbage collector cleans it up soon after.' },
+            ],
+          });
+        },
+        code: `free -h    # RAM on this computer, in human-readable sizes (Linux; lines cut)
+#                total        used        free      shared  buff/cache   available
+# Mem:           7.8Gi       660Mi       6.4Gi        22Mi       738Mi       7.2Gi
+
+# 7.8 GB in total, 660 MB used, and 7.2 GB still available for new programs.`,
+        remember: 'RAM is fast working memory that is wiped when the power goes. Function values live on the stack, objects on the heap.',
+        terms: [
+          { term: 'RAM', def: 'Fast working memory where running programs keep their values. It is wiped when the device switches off.' },
+          { term: 'stack', def: 'Memory for the functions running right now: each call adds a frame with its local values, and returning removes it.' },
+          { term: 'heap', def: 'Memory for objects such as lists, which can outlive the function that made them.' },
+          { term: 'virtual memory', def: 'The private addresses each process sees. The kernel maps them to real places in RAM.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show how much RAM is free, with sizes like <code>7.8Gi</code> instead of long numbers.', code: 'free [[-h]]', why: '<code>-h</code> makes the sizes human-readable.' },
+          { type: 'bug', prompt: 'This should show how much memory the computer has, but it lists the files in the folder. Tap the line to fix.', code: 'cd projects\nls -h', bug: 1, fix: 'free -h', why: '<code>ls</code> lists files. <code>free</code> reports memory.' },
+        ],
+        quiz: [
+          { q: 'You switch the phone off and on again. What is gone?', options: ['What was in RAM', 'Your photos in storage', 'The installed apps'], a: 0, why: 'RAM needs power to keep its contents. Storage keeps files without power.' },
+          { q: 'A function makes a local <code>val</code>, then returns. Where did the value live, and what happens to it?', options: ['On the stack; it is removed when the function returns', 'On the heap; it stays forever', 'In storage; it is saved as a file'], a: 0, why: 'Local values live in the function’s stack frame, which goes away on return.' },
+          { q: 'Why can’t process A read process B’s memory?', options: ['A’s virtual addresses don’t lead into B’s memory', 'B hides its memory with a password', 'RAM is split into two halves'], a: 0, why: 'The kernel maps each process’s addresses only to that process’s own places in RAM.' },
+        ],
+        docs: [['Overview of memory management', 'https://developer.android.com/topic/performance/memory-overview'], ['free(1) manual', 'https://man7.org/linux/man-pages/man1/free.1.html']],
+      },
+
+      {
+        id: 'low-memory',
+        title: 'When memory runs out',
+        tagline: 'Phones close apps you aren’t using to make room.',
+        goals: ['Explain what happens when RAM is full', 'Predict which app a phone closes first', 'End a process yourself with <code>kill</code>'],
+        level: 'beginner', introduces: ['kill', 'sleep'],
+        body: `
+<p>You switch to a game, play for a while, then go back to the chat app, and it opens on its first screen. Nothing broke: the phone needed RAM for the game, so it closed the chat app’s process while you weren’t looking.</p>
+<p>RAM is limited. When an app needs memory and there is none left, the device is <em>out of memory</em>. A computer can borrow slow space on its storage, but a phone mostly frees memory by <em>killing</em> processes: ending them on purpose, without asking. Android keeps what you would notice: the app on the screen and music playing in the <em>background</em> (running while you look at something else) stay. Apps you left long ago go first.</p>
+<p>For the killed app this is like a crash. Next time you open it, a new process starts with empty memory. That is why well-made apps save what matters, like the message you were typing, to storage: storage survives, and the RAM of a killed process doesn’t.</p>
+<p>On a computer you can kill a process yourself. <code>sleep 600</code> starts a process that waits 600 seconds and does nothing else; the terminal gives you no prompt until it ends. In a second terminal window, find its PID with <code>ps -e</code> and end it with <code>kill</code> and that number. The first window prints <code>Terminated</code> (on a Mac: <code>zsh: terminated  sleep 600</code>).</p>`,
+        visual(el) {
+          const TOTAL = 6;
+          const bar = h('div', { class: 'osy-ram', role: 'img', 'aria-label': 'RAM use' });
+          const list = h('div', { class: 'osy-plist' });
+          const st = stats(['used', 'free', 'killed']);
+          const stage = h('div', { class: 'osy-stage' }, h('div', { class: 'osy-tlrow' }, label('RAM: 6 GB'), bar), st, list);
+          const A = (name, mem, state, kind, cls = '') => ({ name, mem, state, kind, cls });
+          const sys = A('System', 2, 'system', 'sys');
+          const music = A('Music', 1, 'playing music', 'mid');
+          const dead = name => A(name, 0, 'killed', 'dead', 'osy-killed');
+          const frames = [
+            { apps: [sys, A('Browser', 1, 'on screen', 'fg'), music, A('Maps', 1, 'left 10 min ago', 'cache'), A('Chat', 0.5, 'left 1 hour ago', 'cache')], killed: 0, say: 'A made-up phone with 6 GB of RAM. You are reading in Browser, Music is playing, and Maps and Chat are open from earlier.' },
+            { apps: [sys, A('Browser', 1, 'on screen', 'fg'), music, A('Maps', 1, 'left 10 min ago', 'cache'), A('Chat', 0.5, 'left 1 hour ago', 'cache'), A('Game', 2, 'needs 2 GB', 'wait', 'osy-fresh')], killed: 0, say: 'You open a game that needs 2 GB. Only 0.5 GB is free: the phone is out of memory.' },
+            { apps: [sys, A('Browser', 1, 'on screen', 'fg'), music, A('Maps', 1, 'left 10 min ago', 'cache'), A('Game', 2, 'needs 2 GB', 'wait', 'osy-fresh'), dead('Chat')], killed: 1, say: 'The phone kills the process you are least likely to miss: Chat, which you left an hour ago. Now 1 GB is free. Still not enough.' },
+            { apps: [sys, A('Browser', 1, 'on screen', 'fg'), music, A('Game', 2, 'needs 2 GB', 'wait', 'osy-fresh'), dead('Chat'), dead('Maps')], killed: 2, say: 'Next in line is Maps. Now there is room.' },
+            { apps: [sys, A('Game', 2, 'on screen', 'fg', 'osy-fresh'), music, A('Browser', 1, 'left just now', 'cache'), dead('Chat'), dead('Maps')], killed: 2, say: 'The game starts. Music kept playing the whole time: you would notice if it stopped.' },
+            { apps: [sys, A('Chat', 0.5, 'on screen', 'fg', 'osy-fresh'), music, A('Game', 2, 'left just now', 'cache'), dead('Maps'), dead('Browser')], killed: 3, say: 'You go back to Chat. Its process is gone, so a new one starts, and the phone makes room by killing Browser, now the app you left longest ago.' },
+            { apps: [sys, A('Chat', 0.5, 'on screen', 'fg'), music, A('Game', 2, 'left 1 min ago', 'cache'), dead('Maps'), dead('Browser')], killed: 3, say: 'The new Chat process has empty memory, so it opens on its first screen. Anything Chat saved to storage is still there.' },
+          ];
+          const seg = { sys: 'osy-s-sys', fg: 'osy-s-fg', mid: 'osy-s-mid', cache: 'osy-s-cache' };
+          const tone = { sys: 'osy-ghost', fg: 'osy-acc', mid: 'osy-ok', cache: 'osy-warm', wait: 'osy-ghost', dead: 'osy-err' };
+          Lab.ui.player(el, {
+            stage, frames,
+            predict: {
+              q: 'RAM is full and you open a game. Which app does the phone close first?',
+              options: ['The app on the screen', 'The music that is playing', 'The app you left longest ago'],
+              a: 2,
+              why: 'The phone keeps what you would notice, and kills the app you are least likely to miss.',
+            },
+            draw(f) {
+              const live = f.apps.filter(a => seg[a.kind]);
+              const used = live.reduce((s, a) => s + a.mem, 0);
+              bar.replaceChildren(...live.map(a => h('div', { class: `osy-seg ${seg[a.kind]}`, style: `width:${(a.mem / TOTAL) * 100}%`, title: a.name }, a.mem >= 1 ? a.name : '')));
+              st.set('used', `${used} GB`);
+              st.set('free', `${TOTAL - used} GB`);
+              st.set('killed', f.killed);
+              list.replaceChildren(...f.apps.map(a => h('div', { class: `osy-prow ${a.cls}` },
+                h('span', {}, a.name), pill(a.state, tone[a.kind]), h('span', { class: 'osy-adj' }, a.mem ? `${a.mem} GB` : ''))));
+            },
+          });
+        },
+        code: `# Terminal window 1
+sleep 600       # a process that waits 600 seconds; no prompt until it ends
+
+# Terminal window 2
+ps -e           # find its PID (lines cut)
+#   PID TTY          TIME CMD
+#  6120 pts/0    00:00:00 sleep
+kill 6120       # end process 6120
+
+# Back in window 1:
+# Terminated      (on a Mac: zsh: terminated  sleep 600)`,
+        remember: 'When RAM runs out, a phone kills the processes you are least likely to miss. A killed app starts over with empty memory.',
+        terms: [
+          { term: 'out of memory', def: 'When programs need more RAM than is free.' },
+          { term: 'kill (a process)', def: 'End a process on purpose. Phones do it to free RAM; in a terminal, <code>kill</code> and a PID does it.' },
+          { term: 'background', def: 'An app is in the background when it is open but not on the screen, like music playing while you read.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'End the process whose PID is 6120.', code: '[[kill]] 6120', why: '<code>kill</code> followed by a PID ends that process.' },
+          { type: 'bug', prompt: 'Ada wants to end the waiting <code>sleep</code> process, but gets <code>bash: kill: sleep: arguments must be process or job IDs</code>. Tap the line to fix.', code: 'ps -e\n#  6120 pts/0    00:00:00 sleep\nkill sleep', bug: 2, fix: 'kill 6120', why: '<code>kill</code> needs the PID, not the program’s name. <code>ps -e</code> shows it is 6120.' },
+        ],
+        quiz: [
+          { q: 'You come back to an app and it opens on its first screen. What probably happened?', options: ['The phone killed its process to free RAM', 'The app was deleted', 'The storage is full'], a: 0, why: 'A killed app starts again as a new process, with empty memory.' },
+          { q: 'Which app is the phone least likely to kill?', options: ['A music app playing in the background', 'A chat app you left yesterday', 'A map you left an hour ago'], a: 0, why: 'You would notice the music stopping, so it is kept.' },
+          { q: 'What does <code>kill 6120</code> do?', options: ['Ends the process with PID 6120', 'Deletes the file named 6120', 'Frees 6120 MB of RAM'], a: 0, why: '<code>kill</code> takes a PID.' },
+        ],
+        docs: [['Memory allocation among processes', 'https://developer.android.com/topic/performance/memory-management'], ['kill(1) manual', 'https://man7.org/linux/man-pages/man1/kill.1.html']],
+      },
+
+      {
+        id: 'ipc',
+        title: 'Processes talking',
+        tagline: 'Walled-off processes still pass messages.',
+        goals: ['Explain why processes need the kernel to talk', 'Describe how a phone app asks the system to show a notification', 'Connect two commands with a pipe <code>|</code>'],
+        level: 'beginner', introduces: ['|', 'wc', '-l', 'grep'],
+        body: `
+<p>A chat app gets a message, and a notification slides down at the top of your screen. But the chat app can’t draw there: the top bar belongs to the system, which is a different process, and memory isolation keeps them apart. So the chat app sends the system a message.</p>
+<p><em>Inter-process communication</em> (IPC) means processes passing data to each other through the kernel. The kernel is the one part that can reach both sides: it carries the message across the wall and tells the receiver who sent it, so the receiver can check that the sender is allowed. On Android, almost everything an app asks of the system travels this way: show a notification, use the camera, find your location. The app sends a request, and the system process does the work and sends an answer back.</p>
+<p>In the terminal you can use a simple kind of IPC, the <em>pipe</em> <code>|</code>. <code>ps -e | wc -l</code> runs two processes at once, and the kernel passes everything <code>ps</code> prints into <code>wc</code> instead of onto the screen. <code>wc</code> (word count) counts, and with <code>-l</code> it counts lines, so you get the number of processes, plus one for the header line. <code>grep sleep</code> keeps only the lines that contain <code>sleep</code>, so <code>ps -e | grep sleep</code> finds a process by name.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'chat', label: 'Chat app', sub: 'one process' },
+              { id: 'kern', label: 'Kernel', sub: 'carries messages' },
+              { id: 'sys', label: 'System', sub: 'another process' },
+              { id: 'bar', label: 'Top bar', sub: 'on the screen' },
+            ],
+            predict: {
+              q: 'The chat app wants a notification in the top bar, which the system process owns. How does it get there?',
+              options: ['The chat app draws it itself', 'It sends a message through the kernel to the system process', 'It copies itself into the system process'],
+              a: 1,
+              why: 'Processes can’t touch each other’s memory. The kernel carries a request to the process that owns the top bar.',
+            },
+            frames: [
+              { say: 'A message from Sam arrives in Ada’s chat app. The app wants to show a notification in the top bar.' },
+              { at: 'chat', packet: 'notify: Sam', say: 'The chat app writes a request. It can’t put it into the system’s memory itself.' },
+              { at: 'kern', packet: 'notify: Sam', tone: 'warm', mark: { kern: 'warm' }, say: 'It hands the request to the kernel, which notes who sent it.' },
+              { at: 'sys', packet: 'notify: Sam', tone: 'warm', say: 'The kernel delivers it to the system process, which checks that the chat app may post notifications.' },
+              { at: 'bar', packet: 'Sam: hi!', tone: 'ok', mark: { bar: 'ok' }, say: 'The system draws the notification. It owns the top bar, so it is the one that may draw there.' },
+              { at: 'kern', packet: 'shown', tone: 'ok', say: 'An answer goes back the same way, through the kernel.' },
+              { at: 'chat', packet: 'shown', tone: 'ok', mark: { chat: 'ok' }, say: 'The chat app learns the notification is up. Two processes worked together without touching each other’s memory.' },
+            ],
+          });
+        },
+        code: `ps -e | wc -l          # pipe the process list into wc, which counts its lines
+# 313
+ps -e | grep sleep     # keep only the lines that contain "sleep"
+#  6120 pts/0    00:00:00 sleep`,
+        remember: 'Processes talk by passing messages through the kernel. In the terminal, a pipe | passes one command’s output to the next.',
+        terms: [
+          { term: 'inter-process communication (IPC)', def: 'Processes passing data to each other through the kernel, such as an app asking the system to show a notification.' },
+          { term: 'pipe', def: 'The <code>|</code> between two commands: the kernel passes what the first prints into the second.' },
+          { term: 'wc', def: 'Counts what it is given. <code>wc -l</code> counts lines.' },
+          { term: 'grep', def: 'Keeps only the lines that contain a word, such as <code>grep sleep</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Count the lines that <code>ps -e</code> prints.', code: 'ps -e | [[wc]] -l', why: '<code>wc -l</code> counts lines, and the pipe feeds it the output of <code>ps -e</code>.' },
+          { type: 'bug', prompt: 'Ada wants to find the <code>sleep</code> process, but nothing prints. Tap the line to fix.', code: 'pwd\nps -e | grep slep', bug: 1, fix: 'ps -e | grep sleep', why: '<code>grep</code> looks for exactly the letters you give it. No line contains “slep”.' },
+        ],
+        quiz: [
+          { q: 'Why does a phone app ask the system to show a notification, instead of drawing it itself?', options: ['The top bar belongs to another process, the system', 'Apps can’t draw anything', 'Notifications are stored in a file'], a: 0, why: 'Memory isolation: only the system process may change what it owns, so the app sends it a request.' },
+          { q: 'In <code>ps -e | wc -l</code>, what does <code>|</code> do?', options: ['Passes what <code>ps -e</code> prints into <code>wc</code>', 'Runs <code>ps</code>, then deletes its output', 'Means “or”, like <code>||</code> in Kotlin'], a: 0, why: 'A pipe connects two processes: the output of the first becomes the input of the second.' },
+          { q: 'Who carries a message from one process to another?', options: ['The kernel', 'The screen', 'Nobody: processes read each other’s memory'], a: 0, why: 'Only the kernel can reach both sides of the wall.' },
+        ],
+        docs: [['Processes and threads overview', 'https://developer.android.com/guide/components/processes-and-threads'], ['Bash manual: Pipelines', 'https://www.gnu.org/software/bash/manual/bash.html#Pipelines']],
+      },
+
+      {
+        id: 'files',
+        title: 'Files and storage',
+        tagline: 'How the OS keeps files in folders, and who may open them.',
+        goals: ['Explain what a file system does', 'Tell an absolute path from a relative one', 'Read permissions like <code>-rw-r--r--</code> in <code>ls -l</code>'],
+        level: 'beginner', introduces: ['cat'],
+        body: `
+<p>Your photos are still there after you switch your phone off, and a game you installed can’t open the files of your chat app. Both are the work of the file system.</p>
+<p>A storage chip is one long row of bytes. The <em>file system</em> is the part of the OS that turns it into files with names, inside folders, inside other folders. A path names a file by the folders that lead to it. <code>/home/ada/notes.txt</code> starts at the very top, <code>/</code>, so it is an <em>absolute path</em> and works from any folder. <code>notes.txt</code> on its own is a <em>relative path</em>: it means “in the folder I am in now”. <code>cat notes.txt</code> prints the text of that file.</p>
+<p>Every file has an owner and <em>permissions</em>: who may read it (<code>r</code>), write it, meaning change it (<code>w</code>), and, for programs, run it (<code>x</code>). For a folder, <code>r</code> means list what is inside and <code>x</code> means go into it. <code>ls -l</code> (<code>-l</code> for long) shows them. <code>-rw-r--r--</code> starts with <code>-</code> for a file (<code>d</code> would mean a folder), then three groups of three: the owner may read and write (<code>rw-</code>), the owner’s group of users may read (<code>r--</code>), and everyone else may read (<code>r--</code>). A <code>-</code> means “not allowed”. When you aren’t allowed, the kernel refuses with <code>Permission denied</code>.</p>
+<p>Phones use the same idea. Android gives each app its own user and a private folder that only that app may open. That is why one app can’t read another app’s files, unless you share them on purpose.</p>`,
+        visual(el) {
+          Lab.ui.terminal(el, {
+            predict: {
+              q: 'Sam’s folder shows <code>drwx------</code>. Ada runs <code>ls /home/sam</code>. What happens?',
+              options: ['She sees Sam’s files', '<code>Permission denied</code>', 'Sam’s folder is deleted'],
+              a: 1,
+              why: '<code>rwx</code> is for Sam only, and <code>------</code> means nobody else may do anything, so the kernel refuses.',
+            },
+            frames: [
+              { say: 'Ada and Sam share a Linux computer. Each has a home folder inside <code>/home</code>. Ada opens a terminal.' },
+              { cmd: 'pwd', out: '/home/ada', say: 'She starts in her home folder.' },
+              { cmd: 'cat notes.txt', out: 'Buy milk', say: 'A relative path: <code>notes.txt</code> in the folder she is in. <code>cat</code> prints its text.' },
+              { cmd: 'ls -l notes.txt', out: '-rw-r--r-- 1 ada ada 9 Oct 19 09:30 notes.txt', say: 'A file (<code>-</code>). Ada may read and write it (<code>rw-</code>); everyone else may only read it. The owner is <code>ada</code> (the second <code>ada</code> is her group), and it is 9 bytes long. You can ignore the other numbers for now.' },
+              { cmd: 'ls -l /home', out: 'total 8\ndrwxr-x--- 2 ada ada 4096 Oct 19 09:30 ada\ndrwx------ 2 sam sam 4096 Oct 18 17:05 sam', say: 'An absolute path, from the top. Both are folders (<code>d</code>). Sam’s folder: <code>rwx</code> for Sam, then <code>---</code> and <code>---</code>.' },
+              { cmd: 'ls /home/sam', out: 'ls: cannot open directory \'/home/sam\': Permission denied', say: 'The kernel checks the permissions and says no. Phones keep each app’s files private the same way.' },
+              { cmd: 'cat /home/ada/notes.txt', out: 'Buy milk', say: 'The absolute path to her notes works from any folder.' },
+            ],
+          });
+        },
+        code: `pwd                  # /home/ada
+cat notes.txt        # relative path: notes.txt in this folder
+# Buy milk
+ls -l notes.txt      # -l: long form, with permissions and owner
+# -rw-r--r-- 1 ada ada 9 Oct 19 09:30 notes.txt
+ls /home/sam         # another user's private folder
+# ls: cannot open directory '/home/sam': Permission denied`,
+        remember: 'The file system keeps files in folders. Every file has an owner and permissions (r, w, x), and the kernel checks them.',
+        terms: [
+          { term: 'file system', def: 'The part of the OS that turns storage into named files inside folders.' },
+          { term: 'absolute path, relative path', def: 'An absolute path starts at <code>/</code> and works anywhere. A relative path, like <code>notes.txt</code>, starts from the folder you are in.' },
+          { term: 'permissions', def: 'Who may read (<code>r</code>), write (<code>w</code>) or run (<code>x</code>) a file. <code>ls -l</code> shows them.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print the text of the file <code>notes.txt</code> in this folder.', code: '[[cat]] notes.txt', why: '<code>cat</code> prints what is in a file.' },
+          { type: 'bug', prompt: 'Ada is in <code>/home</code> and wants to print her notes, which are in <code>/home/ada</code>. Tap the line to fix.', code: 'pwd\n# /home\ncat notes.txt\n# cat: notes.txt: No such file or directory', bug: 2, fix: 'cat /home/ada/notes.txt', why: 'A relative path looks in the folder you are in, and <code>/home</code> has no <code>notes.txt</code>. The absolute path works from anywhere.' },
+        ],
+        quiz: [
+          { q: 'Which is an absolute path?', options: ['<code>/home/ada/notes.txt</code>', '<code>notes.txt</code>', '<code>ada/notes.txt</code>'], a: 0, why: 'An absolute path starts at the top, <code>/</code>.' },
+          { q: 'A file shows <code>-rw-r--r--</code>. What may other users do with it?', options: ['Only read it', 'Read and change it', 'Nothing at all'], a: 0, why: 'The last group, <code>r--</code>, is for everyone else: read, but no write.' },
+          { q: 'Why can’t one phone app open another app’s files?', options: ['Each app has its own user and a private folder, and the kernel checks permissions', 'Files are hidden behind the screen', 'Apps can’t use storage'], a: 0, why: 'It is the same owner-and-permissions idea as on a shared computer.' },
+        ],
+        docs: [['Data and file storage overview', 'https://developer.android.com/training/data-storage'], ['ls(1) manual', 'https://man7.org/linux/man-pages/man1/ls.1.html']],
+      },
+
+      {
+        id: 'power',
+        title: 'Power and battery',
+        tagline: 'Why a phone sleeps, and why it limits apps that keep it awake.',
+        goals: ['Explain why waiting costs almost no battery', 'Describe what a wake lock does', 'Say why phones limit apps in the background'],
+        level: 'beginner', introduces: ['time'],
+        body: `
+<p>Your phone lasts a whole day, and it is never really off. Most of that time it is asleep: screen dark, CPU stopped, using a tiny trickle of power. One app that keeps it awake can empty the battery overnight.</p>
+<p>When no thread has anything to do, the kernel puts the CPU into a <em>sleep state</em>, a low-power mode it leaves as soon as something happens: a message arrives, an alarm rings, you press the button. Waiting costs almost nothing. <code>time sleep 2</code> shows it: <code>time</code> runs a command and measures it. The real time is 2 seconds, but the CPU worked for only about 2 thousandths of a second.</p>
+<p>An app that must finish a job with the screen off, like saving a long recording, can hold a <em>wake lock</em>: a request to the OS that says “don’t let the CPU sleep yet”. Held for a moment, that is fine. Forgotten, it keeps the CPU awake for hours. That is why Android limits apps in the background. After the phone has been still with its screen off for a while, it enters <em>Doze</em>: it ignores wake locks and lets apps do background work only in short, shared windows. Apps you rarely open get even fewer chances.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['Screen', 'CPU, night 1', 'CPU, night 2'],
+            span: 8, unit: 'h',
+            predict: {
+              q: 'The screen is off and no app has work to do. What does the CPU do?',
+              options: ['Keeps running at full speed', 'Goes into a low-power sleep state until something happens', 'Switches the phone off'],
+              a: 1,
+              why: 'With nothing to run, the kernel puts the CPU to sleep, and wakes it when an event arrives.',
+            },
+            frames: [
+              { now: 0, say: 'A phone from 23:00 (0 h) to 07:00 (8 h). Night 1 is a normal night; on night 2 an app forgets to let go.' },
+              { bars: [{ lane: 0, from: 0, to: 0.3, tone: 'accent' }], say: 'You use the phone for a few minutes, then switch the screen off and go to sleep.' },
+              { bars: [{ lane: 1, from: 0, to: 0.4, tone: 'warm' }, { lane: 1, from: 2, to: 2.1, tone: 'warm' }, { lane: 1, from: 4, to: 4.1, tone: 'warm' }, { lane: 1, from: 6, to: 6.1, tone: 'warm' }], say: 'Night 1: the CPU sleeps. Now and then it wakes for a moment, to receive a message or let apps do a little work, then sleeps again.' },
+              { bars: [{ lane: 2, from: 0, to: 0.4, tone: 'warm' }, { lane: 2, from: 0.4, to: 8, label: 'wake lock held', tone: 'err' }], say: 'Night 2: an app takes a wake lock to save a file, and never releases it. The CPU can’t sleep all night.' },
+              { marks: [{ at: 1, label: 'Doze', tone: 'ok' }], say: 'This is why Android has Doze. Once the phone has been still for a while, it ignores wake locks, so a forgotten one can’t keep the CPU awake all night.' },
+              { say: 'Doze is one of several limits on background apps. Each one exists because a single careless app can drain everyone’s battery.' },
+            ],
+          });
+        },
+        code: `time sleep 2     # run sleep 2 and measure how long it took
+
+# real\t0m2.003s
+# user\t0m0.002s
+# sys\t0m0.000s
+
+# real: 2 seconds passed. user and sys: the CPU worked for about 0.002 seconds,
+# running the program's own instructions (user) and the kernel's work for it (sys).`,
+        remember: 'A waiting CPU sleeps and saves power. A wake lock keeps it awake, so Android limits apps in the background.',
+        terms: [
+          { term: 'sleep state', def: 'A low-power mode the CPU enters when nothing needs to run. It wakes up when something happens.' },
+          { term: 'wake lock', def: 'An app’s request to the OS: “don’t let the CPU sleep yet”. Forgotten ones drain the battery.' },
+          { term: 'Doze', def: 'Android’s mode for a phone left still with its screen off: background work waits for short, shared windows.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Measure how long <code>sleep 2</code> takes.', code: '[[time]] sleep 2', why: '<code>time</code> runs the command after it and reports how long it took.' },
+          { type: 'bug', prompt: 'Ada wants to measure a 5-second wait. Tap the line to fix.', code: 'time sleep\n# sleep: missing operand', bug: 0, fix: 'time sleep 5', why: '<code>sleep</code> needs to know how many seconds to wait.' },
+        ],
+        quiz: [
+          { q: 'Why does a sleeping CPU save battery?', options: ['It uses very little power until something wakes it', 'It charges the battery', 'It closes all the apps'], a: 0, why: 'A sleep state is a low-power mode that ends when an event arrives.' },
+          { q: 'What does a wake lock ask the OS?', options: ['Don’t let the CPU sleep yet', 'Lock the screen', 'Wake me up at 07:00'], a: 0, why: 'It keeps the CPU awake so the app can finish a job.' },
+          { q: '<code>time sleep 2</code> shows <code>real 0m2.003s</code> and <code>user 0m0.002s</code>. What does that tell you?', options: ['Waiting took real time but almost no CPU work', 'The computer is broken', '<code>sleep</code> ran for only 2 milliseconds'], a: 0, why: 'A waiting process doesn’t use the CPU, which is why waiting is cheap.' },
+        ],
+        docs: [['Optimize for Doze and App Standby', 'https://developer.android.com/training/monitoring-device-state/doze-standby'], ['Use wake locks', 'https://developer.android.com/develop/background-work/background-tasks/awake/wakelock']],
+      },
+    ],
   });
 })();

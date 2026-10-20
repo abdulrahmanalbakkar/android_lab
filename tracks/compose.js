@@ -523,5183 +523,1714 @@ div.cmp-ov-sitem { cursor: default; }
     group: 'Building apps', requires: ['kotlin'],
     css,
     lessons: [
-      // 1 ─────────────────────────────────────────────
       {
-        id: 'recomposition',
-        title: 'Composables and recomposition',
-        tagline: 'UI = f(state). Change the state, the function runs again.',
+        id: 'what-compose',
+        title: 'What Compose is',
+        tagline: 'Describe the screen in Kotlin functions, and Compose draws it.',
+        goals: ['Explain what “declarative” means: describe the result, not the steps', 'Write a function marked <code>@Composable</code> that shows text', 'See a composable in the Preview without starting the emulator'],
+        level: 'beginner', introduces: ['Composable', 'Preview', 'showBackground'],
         body: `
-<p>A composable is a Kotlin function marked <code>@Composable</code>. It does not return a view. It describes what the screen should show for the data it gets.</p>
-<p>When a <code>State</code> value changes, Compose runs again only the composables that read it. This is called <em>recomposition</em>. A child whose inputs are equal to last time gets <em>skipped</em>, so its code does not run at all.</p>
-<p>Below, <code>ProfileScreen</code> reads both <code>name</code> and <code>likes</code> to pass them down. Each node counts how many times it has run. Change a value and see which counters move.</p>`,
-        code: `@Composable
-fun ProfileScreen() {
-    var name by remember { mutableStateOf("Ada") }
-    var likes by remember { mutableIntStateOf(0) }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Avatar()
-        NameText(name)
-        LikeCount(likes)
-        LikeButton(onClick = { likes++ })
-    }
-}
-
-@Composable
-fun LikeCount(likes: Int) {
-    Text("$likes likes")   // runs again only when likes changes
-}`,
-        remember: 'Change state, and only the composables that read it run again. Equal inputs get skipped.',
-        level: 'beginner',
-        terms: [
-          { term: '@Composable', def: 'An annotation that marks a function as a composable, which describes UI for its inputs and can only be called from other composables.' },
-          { term: 'Recomposition', def: 'Compose running a composable again because a State value it read has changed.' },
-          { term: 'Skipping', def: 'Compose leaving out a composable during recomposition because all its inputs are equal to last time.' },
-          { term: 'mutableStateListOf', def: 'Creates a list that Compose observes, so adding or removing items triggers recomposition.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Turn this function into a composable that shows the name.', code: '[[@Composable]]\nfun Greeting(name: String) {\n    [[Text]]("Hello, $name")\n}', why: 'Only a function marked <code>@Composable</code> can call other composables like <code>Text</code>.' },
-          { type: 'bug', prompt: 'Tapping Add never shows the new tag. Tap the line that causes it.', code: '@Composable\nfun TagList() {\n    val tags = remember { mutableListOf("kotlin") }\n    Column {\n        tags.forEach { Text(it) }\n        Button(onClick = { tags.add("compose") }) { Text("Add") }\n    }\n}', bug: 2, fix: '    val tags = remember { mutableStateListOf("kotlin") }', why: 'A plain <code>MutableList</code> is not State. Changing it does not tell Compose to recompose. <code>mutableStateListOf</code> does.' },
-        ],
-        quiz: [
-          { q: 'What makes a composable recompose?', options: ['A <code>State</code> value it read has changed', 'Every new frame', 'Calling <code>invalidate()</code> on it'], a: 0, why: 'Compose tracks which state each composable reads and reruns only those when the state changes.' },
-          { q: 'After <code>likes++</code>, <code>ProfileScreen</code> runs again. What happens to <code>Avatar()</code>, which takes no parameters?', options: ['It runs again too', 'It is skipped'], a: 1, why: 'Its inputs did not change, so Compose skips it.' },
-          { q: 'What recomposes after <code>likes = likes</code>?', options: ['Everything', 'Only <code>LikeCount</code>', 'Nothing'], a: 2, why: 'Writing an equal value does not count as a change, so no reader is notified.' },
-        ],
-        deeper: [
-          {
-            title: 'The smallest scope that read the state',
-            body: `<p>Compose never reruns "the screen". It reruns the nearest <em>restart scope</em> that read the state. Every non-inline composable function is a restart scope, and so is every composable lambda.</p>
-<p><code>Column</code>, <code>Row</code> and <code>Box</code> are <code>inline</code> functions, so their content lambdas are not scopes of their own. A read inside them belongs to the function around them. The content lambda of <code>Button</code> is a normal composable lambda, so a read there reruns only that lambda.</p>`,
-            code: `@Composable
-fun Screen() {
-    var count by remember { mutableIntStateOf(0) }
-    Column {                                    // inline: part of Screen's scope
-        Header()
-        Button(onClick = { count++ }) {
-            Text("Clicked $count times")        // read here: only this lambda reruns
-        }
-    }
-}`,
-            visual(el) {
-              const OPTS = [
-                { src: 'val label = "Clicked $count"   // in Screen()', at: 'screen', note: 'The read sits in the Screen body, so Screen is the scope.' },
-                { src: 'Column { val label = "Clicked $count" }', at: 'column', note: 'Column is inline. The read still belongs to Screen.' },
-                { src: 'Button(onClick) { Text("Clicked $count") }', at: 'button', note: 'The Button content lambda is its own scope.' },
-              ];
-              let opt = OPTS[0], count = 0, busy = false;
-              const mk = (label, kind) => {
-                const badge = h('span', { class: 'cmp-badge', title: 'Times this has run' }, '1');
-                const status = h('span', { class: 'cmp-status' }, kind);
-                const read = h('span', { class: 'cmp-rs-read', hidden: true }, 'reads count');
-                return { runs: 1, kind, badge, status, read, el: h('div', { class: 'cmp-node' }, h('span', { class: 'cmp-node-label' }, label), read, status, badge) };
-              };
-              const N = {
-                screen: mk('Screen()', 'scope'),
-                column: mk('Column { }', 'inline, no scope'),
-                header: mk('Header()', 'scope'),
-                button: mk('Button(onClick) { }', 'content lambda is a scope'),
-                text: mk('Text(label)', 'scope'),
-              };
-              const o = out();
-              const btns = OPTS.map(x => cmd(x.src, () => pick(x)));
-              function pick(x) {
-                if (busy) return;
-                opt = x;
-                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(OPTS[i] === x)));
-                Object.entries(N).forEach(([k, n]) => { n.read.hidden = k !== x.at; n.el.classList.remove('cmp-hit', 'cmp-skip'); n.status.textContent = n.kind; });
-                replay(N[x.at].read, 'pop');
-                say(o, `${esc(x.note)} <span class="muted">// press count++</span>`);
-              }
-              async function bump() {
-                if (busy) return; busy = true;
-                count++;
-                Object.values(N).forEach(n => { n.el.classList.remove('cmp-hit', 'cmp-skip'); n.status.textContent = n.kind; });
-                const ran = opt.at === 'button' ? ['button', 'text'] : ['screen', 'column', 'header', 'button', 'text'];
-                say(o, `${hl(`count = ${count}`)} <span class="muted">// invalidates the scope that read it</span>`);
-                for (const k of ['screen', 'column', 'header', 'button', 'text']) {
-                  await sleep(300);
-                  if (!el.isConnected) return;
-                  const n = N[k];
-                  if (!ran.includes(k)) { n.status.textContent = 'not visited'; n.el.classList.add('cmp-skip'); continue; }
-                  if (k === 'header') { n.status.textContent = 'skipped, no inputs changed'; n.el.classList.add('cmp-skip'); continue; }
-                  n.runs++; n.badge.textContent = n.runs; replay(n.badge, 'pop');
-                  n.status.textContent = k === 'column' ? 'ran as part of Screen' : 'ran';
-                  n.el.classList.add('cmp-hit'); replay(n.el, 'cmp-flash');
-                }
-                const hits = Object.values(N).filter(n => n.el.classList.contains('cmp-hit')).length;
-                say(o, opt.at === 'button'
-                  ? `<span class="good">${hits} of 5 ran.</span> Only the Button content lambda and its Text. Screen was never called.`
-                  : `<span class="bad">${hits} of 5 ran.</span> Screen reran, so its Column body did too. Header skipped.`);
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'cmp-tree' }, N.screen.el,
-                  h('div', { class: 'cmp-kids' }, N.column.el,
-                    h('div', { class: 'cmp-kids' }, N.header.el, N.button.el, h('div', { class: 'cmp-kids' }, N.text.el)))),
-                h('div', { class: 'controls' }, btns),
-                h('div', { class: 'controls' }, cmd('count++', bump)),
-                o);
-              pick(OPTS[0]);
-            },
-          },
-          {
-            title: 'Writes wait for the next frame',
-            body: `<p>Writing a State value does not run anything right away. Compose marks the scopes that read it as invalid. Just before the next frame, the Recomposer reruns each invalid scope once, with the latest values.</p>
-<p>So three writes in one click handler cost one recomposition, not three. Code in the same handler still sees the new value at once. Only the UI waits.</p>`,
-            code: `Button(onClick = {
-    likes++
-    likes++
-    likes++
-    println(likes)   // already 3 here
-}) { Text("Like x3") }
-// LikeCount(likes) runs once, on the next frame, with 3`,
-            visual(el) {
-              let likes = 0, recomps = 0, busy = false;
-              const writes = h('div', { class: 'cmp-rs-chips' });
-              const frame = h('div', { class: 'cmp-rs-chips' }, h('span', { class: 'cmp-status' }, 'waiting'));
-              const rc = h('span', { class: 'cmp-badge' }, '0');
-              const shown = h('p', { class: 'cmp-pv-name' }, '0 likes');
-              const o = out('Each click writes likes. Watch when LikeCount actually runs.');
-              async function click(n, src) {
-                if (busy) return; busy = true;
-                writes.replaceChildren();
-                frame.replaceChildren(h('span', { class: 'cmp-status' }, 'waiting'));
-                say(o, `${hl(src)} <span class="muted">// writes happen now</span>`);
-                for (let i = 0; i < n; i++) {
-                  likes++;
-                  writes.append(h('span', { class: 'cmp-obj cmp-new drop-in' }, `likes = ${likes}`));
-                  await sleep(280);
-                  if (!el.isConnected) return;
-                }
-                say(o, `${n} write${n > 1 ? 's' : ''} done. LikeCount is marked invalid. Nothing has run yet.`);
-                await sleep(700);
-                if (!el.isConnected) return;
-                frame.replaceChildren(h('span', { class: 'cmp-obj cmp-reuse drop-in' }, `LikeCount(likes = ${likes})`));
-                recomps++; rc.textContent = recomps; replay(rc, 'pop');
-                shown.textContent = `${likes} like${likes === 1 ? '' : 's'}`; replay(shown, 'cmp-flash');
-                say(o, `Next frame: ${n} write${n > 1 ? 's' : ''}, <span class="good">1 recomposition</span> with the latest value.`);
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'cmp-split' },
-                  h('div', { class: 'cmp-rs-lanes' },
-                    h('div', { class: 'cmp-rs-lane' }, h('span', { class: 'cmp-fx-name' }, 'in onClick'), writes),
-                    h('div', { class: 'cmp-rs-lane' }, h('span', { class: 'cmp-fx-name' }, 'next frame'), frame),
-                    h('div', { class: 'cmp-rs-lane' }, h('span', { class: 'cmp-fx-name' }, 'recompositions'), h('div', { class: 'cmp-rs-chips' }, rc))),
-                  h('div', { class: 'phone cmp-rs-phone', role: 'img', 'aria-label': 'Like count preview' }, shown)),
-                h('div', { class: 'controls' },
-                  cmd('onClick = { likes++ }', () => click(1, 'likes++')),
-                  cmd('onClick = { repeat(3) { likes++ } }', () => click(3, 'repeat(3) { likes++ }'))),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>The Compose compiler plugin rewrites every <code>@Composable</code> function. It adds hidden parameters: a <code>Composer</code> that records what the function emits, and a <code>$changed</code> bit mask where the caller says which arguments it already knows are the same or different.</p>
-<p>The body is wrapped in a <em>restart group</em>. If no argument changed and the composer allows skipping, the function jumps to the end of its group and its body never runs. At the end, it registers a lambda that calls the same function again with the same arguments. That lambda is the restart scope. When a State read inside it is invalidated, the Recomposer calls it on the next frame. The code below is simplified. The real output has more bookkeeping.</p>`,
-          code: `// You write
-@Composable
-fun LikeCount(likes: Int) {
-    Text("$likes likes")
-}
-
-// The compiler produces roughly this (simplified)
-fun LikeCount(likes: Int, $composer: Composer, $changed: Int) {
-    val composer = $composer.startRestartGroup(/* source key */ 0x5a1c)
-    val likesChanged = /* bits in $changed, else */ composer.changed(likes)
-    if (likesChanged || !composer.skipping) {
-        Text("$likes likes", composer, 0)
-    } else {
-        composer.skipToGroupEnd()           // skipped: the body never runs
-    }
-    composer.endRestartGroup()?.updateScope { nextComposer, _ ->
-        LikeCount(likes, nextComposer, $changed or 1)   // the restart scope
-    }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Heavy work in the body',
-            bad: `@Composable
-fun Contacts(contacts: List<Contact>) {
-    val sorted = contacts.sortedBy { it.name }   // every recomposition
-    LazyColumn {
-        items(sorted, key = { it.id }) { ContactRow(it) }
-    }
-}`,
-            good: `@Composable
-fun Contacts(contacts: List<Contact>) {
-    val sorted = remember(contacts) { contacts.sortedBy { it.name } }
-    LazyColumn {
-        items(sorted, key = { it.id }) { ContactRow(it) }
-    }
-}`,
-            why: 'A composable can run on every frame of an animation. Cache derived data with <code>remember</code> keyed on its input, or better, prepare it in the ViewModel.',
-          },
-          {
-            title: 'Writing state during composition',
-            bad: `@Composable
-fun Cart(items: List<Item>, vm: CartViewModel) {
-    vm.total = items.sumOf { it.price }   // State write in the body
-    Text("Total: \${vm.total}")
-}`,
-            good: `@Composable
-fun Cart(items: List<Item>) {
-    val total = items.sumOf { it.price }  // a plain local value
-    Text("Total: $total")
-}`,
-            why: 'Composition should only read state. Writing a State that the same composition reads invalidates it again, which can loop and recompose on every frame.',
-          },
-        ],
+<p>In the Android lessons, <code>setContent { Text("Hello") }</code> put one line of text on the screen. A real screen has many parts, such as titles, numbers, buttons and pictures, and they change while the app runs. <em>Jetpack Compose</em> (Compose for short) is Android’s toolkit for building screens in Kotlin. <code>Text</code> is already part of it.</p>
+<p>Compose is <em>declarative</em>: you describe what the screen should show, and Compose works out how to draw it. Take a water tracker that shows “3 of 8 glasses”. You don’t write steps like “find the label and change its 3 into a 4”. You write a function that says “show this many glasses”. Call it with 4, and Compose draws a screen that says 4.</p>
+<p>Such a function is a <em>composable</em>. You mark it with <code>@Composable</code> on the line above <code>fun</code>. A word that starts with <code>@</code> is an <em>annotation</em>: a label that gives a function extra meaning, here “this function describes UI”. A composable returns nothing, its name starts with a capital letter (like <code>Text</code>), and it can only be called from another composable or from inside <code>setContent { }</code>.</p>
+<p>You don’t have to start the emulator to see one. Write a second composable with no parameters that calls the first one with sample values, and put <code>@Preview</code> above it. Click <b>Split</b> at the top right of the editor, and Android Studio draws it next to your code (it may ask you to build the project first). <code>@Preview(showBackground = true)</code> gives the preview a white background, so the text is easy to read.</p>`,
         visual(el) {
-          let name = 'Ada', likes = 0, busy = false;
-          const nodes = {
-            screen: { label: () => 'ProfileScreen()' },
-            avatar: { label: () => 'Avatar()' },
-            name: { label: () => `NameText(name = "${name}")` },
-            count: { label: () => `LikeCount(likes = ${likes})` },
-            button: { label: () => 'LikeButton(onClick)' },
-          };
-          for (const n of Object.values(nodes)) {
-            n.runs = 1;
-            n.lab = h('span', { class: 'cmp-node-label' }, n.label());
-            n.status = h('span', { class: 'cmp-status' }, 'composed');
-            n.badge = h('span', { class: 'cmp-badge', title: 'Times this composable has run' }, '1');
-            n.el = h('div', { class: 'cmp-node' }, n.lab, n.status, n.badge);
-          }
-          const pv = {
-            avatar: h('div', { class: 'cmp-avatar', 'aria-hidden': 'true' }),
-            name: h('p', { class: 'cmp-pv-name' }, name),
-            count: h('p', { class: 'cmp-pv-count' }, '0 likes'),
-            button: h('button', { class: 'btn small primary', onclick: () => act('likes') }, 'Like'),
-          };
-          const phone = h('div', { class: 'phone', role: 'img', 'aria-label': 'Screen preview' }, pv.avatar, pv.name, pv.count, pv.button);
-          const o = out('Change a value and watch which counters go up.');
-          const nameBtn = cmd('name = "Grace"', () => act('name'));
-
-          async function rerun(k) {
-            const n = nodes[k];
-            n.runs++; n.badge.textContent = n.runs; replay(n.badge, 'pop');
-            n.lab.textContent = n.label();
-            n.status.textContent = 'recomposed';
-            n.el.classList.add('cmp-hit'); replay(n.el, 'cmp-flash');
-            if (k === 'name') { pv.name.textContent = name; replay(pv.name, 'cmp-flash'); }
-            if (k === 'count') { pv.count.textContent = `${likes} like${likes === 1 ? '' : 's'}`; replay(pv.count, 'cmp-flash'); }
-            await sleep(320);
-          }
-          async function act(kind) {
-            if (busy) return; busy = true;
-            Object.values(nodes).forEach(n => n.el.classList.remove('cmp-hit', 'cmp-skip'));
-            if (kind === 'same') {
-              Object.values(nodes).forEach(n => { n.status.textContent = 'not invalidated'; });
-              replay(phone, 'shake');
-              say(o, `${hl('likes = likes')} <span class="muted">// equal value, so nobody is told. 0 composables ran.</span>`);
-              busy = false; return;
-            }
-            let changed, src;
-            if (kind === 'likes') { likes++; changed = 'count'; src = 'likes++'; }
-            else { src = `name = "${name === 'Ada' ? 'Grace' : 'Ada'}"`; name = name === 'Ada' ? 'Grace' : 'Ada'; changed = 'name'; nameBtn.innerHTML = hl(`name = "${name === 'Ada' ? 'Grace' : 'Ada'}"`); }
-            say(o, `${hl(src)} <span class="muted">// ProfileScreen read this state, so it runs first</span>`);
-            await rerun('screen');
-            for (const k of ['avatar', 'name', 'count', 'button']) {
-              await sleep(220);
-              if (k === changed) await rerun(k);
-              else { nodes[k].el.classList.add('cmp-skip'); nodes[k].status.textContent = 'skipped'; }
-            }
-            say(o, `${hl(src)} <span class="muted">→</span> 2 of 5 composables ran. <span class="muted">The other 3 got equal inputs and were skipped.</span>`);
-            busy = false;
-          }
-          el.append(
-            h('div', { class: 'cmp-split' },
-              h('div', { class: 'cmp-tree' }, nodes.screen.el, h('div', { class: 'cmp-kids' }, nodes.avatar.el, nodes.name.el, nodes.count.el, nodes.button.el)),
-              phone),
-            h('div', { class: 'controls' }, cmd('likes++', () => act('likes')), nameBtn, cmd('likes = likes', () => act('same'))),
-            o);
-        },
-        predict: {
-          q: 'You change <code>name</code> from "Ada" to "Grace". Which composables run again?',
-          options: ['All five', '<code>ProfileScreen</code> and <code>NameText</code>', 'Only <code>NameText</code>'],
-          a: 1,
-          why: '<code>ProfileScreen</code> reads <code>name</code>, so it runs again, and <code>NameText</code> gets a new parameter. The other three get equal inputs and are skipped.',
-        },
-      },
-
-      // 2 ─────────────────────────────────────────────
-      {
-        id: 'modifiers',
-        title: 'Modifier order',
-        tagline: 'Each modifier wraps everything after it.',
-        body: `
-<p>A <code>Modifier</code> chain reads from the outside in. The first modifier is the outermost layer. Each one wraps all the modifiers that come after it, and the composable’s content sits in the middle.</p>
-<p>So order changes the result. <code>.padding(16.dp).background(Purple)</code> leaves a clear ring and then paints inside it. <code>.background(Purple).padding(16.dp)</code> paints first, so the padding is purple too. Put <code>.clickable</code> before the padding and the whole area responds to taps. Put it after and only the inner part does.</p>
-<p>Tap a modifier below to move it one step earlier, or pick a preset. Then tap inside the box to see the real touch area.</p>`,
-        code: `val Purple = Color(0xFF6C44EC)
-
-// A 96 dp purple square inside a clear 16 dp ring. Only the purple part is tappable.
-Box(
-    Modifier
-        .padding(16.dp)
-        .background(Purple)
-        .clickable { onClick() }
-        .size(96.dp)
-)
-
-// A 128 dp purple square. The whole square is tappable.
-Box(
-    Modifier
-        .clickable { onClick() }
-        .background(Purple)
-        .padding(16.dp)
-        .size(96.dp)
-)`,
-        remember: 'Modifiers apply outside in. The first one wraps everything after it.',
-        level: 'beginner',
-        terms: [
-          { term: 'Modifier', def: 'An ordered chain of decorations like size, padding, background and click handling applied to a composable.' },
-          { term: 'Modifier order', def: 'The rule that each modifier wraps all modifiers after it, so changing the order changes layout, drawing and touch area.' },
-          { term: 'Touch target', def: 'The area that responds to taps, set by where clickable sits in the chain; Material asks for at least 48 dp.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Make the whole padded area tappable, not just the text.', code: 'Text(\n    "Retry",\n    Modifier\n        .[[clickable]] { retry() }\n        .[[padding]](12.dp)\n)', why: '<code>clickable</code> comes first, so it wraps the padding and the whole area responds.' },
-          { type: 'bug', prompt: 'This should be a purple circle. It draws a purple square. Tap the line in the wrong place.', code: 'Box(\n    Modifier\n        .size(64.dp)\n        .background(Purple)\n        .clip(CircleShape)\n)', bug: 4, fix: '        // move .clip(CircleShape) above .background(Purple)', why: 'A clip only affects what comes after it. The background is already painted as a square when the clip arrives.' },
-        ],
-        quiz: [
-          { q: 'Which chain paints the padding area purple?', options: ['<code>.padding(16.dp).background(Purple)</code>', '<code>.background(Purple).padding(16.dp)</code>'], a: 1, why: 'The background is outside the padding, so it covers the padded area too.' },
-          { q: 'Which button has the bigger touch target?', options: ['<code>.clickable { }.padding(12.dp)</code>', '<code>.padding(12.dp).clickable { }</code>'], a: 0, why: 'When clickable comes first, it wraps the padding, so the padding area responds to taps.' },
-          { q: 'How big is <code>Modifier.size(96.dp).padding(16.dp)</code>?', options: ['96 × 96 dp', '128 × 128 dp', '64 × 64 dp'], a: 0, why: 'The size is outermost. The padding eats into it and leaves 64 dp for the content.' },
-        ],
-        deeper: [
-          {
-            title: 'The first size wins',
-            body: `<p>Layout modifiers pass <em>constraints</em> down the chain. Each one gets a min and max size from the modifier before it, and it has to answer with a size that fits. <code>size(100.dp)</code> sets the constraints to exactly 100 dp. A later <code>size(50.dp)</code> must fit inside those, so it is coerced up to 100.</p>
-<p><code>requiredSize</code> ignores the incoming constraints. The content takes the size it asked for, the parent still sees the size it allowed, and Compose centers the content in that space. If the content is bigger, it spills over its neighbors.</p>`,
-            code: `Box(Modifier.size(100.dp).size(50.dp))          // 100 dp: the first size wins
-Box(Modifier.size(100.dp).requiredSize(50.dp))  // 50 dp content, centered in 100 dp
-Box(Modifier.size(50.dp).requiredSize(100.dp))  // parent sees 50 dp, content draws 100 dp`,
-            visual(el) {
-              const CASES = [
-                { src: '.size(100.dp).size(50.dp)', slot: 100, box: 100, note: 'The first size fixes the constraints at 100 dp. The second size must fit them, so it becomes 100.' },
-                { src: '.size(50.dp).size(100.dp)', slot: 50, box: 50, note: 'Same rule the other way round. The first size wins, so the box is 50 dp.' },
-                { src: '.size(100.dp).requiredSize(50.dp)', slot: 100, box: 50, note: 'requiredSize ignores the constraints. 50 dp of content, centered in the 100 dp slot.' },
-                { src: '.size(50.dp).requiredSize(100.dp)', slot: 50, box: 100, note: 'The parent reserves 50 dp. The content insists on 100 and draws over A and C.' },
-              ];
-              const content = h('div', { class: 'cmp-d2m-box' }, 'B');
-              const slotEl = h('div', { class: 'cmp-d2m-slot' }, content);
-              const row = h('div', { class: 'cmp-d2m-row', role: 'img', 'aria-label': 'Row with A, B and C' },
-                h('div', { class: 'cmp-d2m-nb' }, 'A'), slotEl, h('div', { class: 'cmp-d2m-nb' }, 'C'));
-              const sizes = h('div', { class: 'cmp-d2m-sizes' });
-              const o = out();
-              const btns = CASES.map(c => cmd(`B(Modifier${c.src})`, () => pick(c)));
-              function pick(c) {
-                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(CASES[i] === c)));
-                slotEl.style.width = slotEl.style.height = `${c.slot}px`;
-                const off = (c.slot - c.box) / 2;
-                Object.assign(content.style, { width: `${c.box}px`, height: `${c.box}px`, left: `${off}px`, top: `${off}px` });
-                content.classList.toggle('cmp-d2m-spill', c.box > c.slot);
-                sizes.innerHTML = `<span><i class="cmp-d2m-k1"></i>parent sees ${c.slot} × ${c.slot} dp</span><span><i class="cmp-d2m-k2"></i>content draws ${c.box} × ${c.box} dp</span>`;
-                replay(content, 'pop-soft');
-                say(o, esc(c.note));
-              }
-              el.append(row, sizes, h('div', { class: 'controls' }, btns), o);
-              pick(CASES[0]);
-            },
-          },
-          {
-            title: 'Take a modifier, apply it first',
-            body: `<p>Every reusable composable should take <code>modifier: Modifier = Modifier</code> as its first optional parameter and apply it to its root, before its own modifiers. The caller then controls the outside: spacing, size, weight and clicks. Your component controls the inside.</p>
-<p>If you add the caller’s modifier at the end with <code>.then(modifier)</code>, its padding lands inside your background. If you ignore it, the caller can’t place your component at all.</p>`,
-            code: `@Composable
-fun Tag(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        modifier                                  // the caller's part goes outside
-            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    )
-}
-
-Tag("New", Modifier.padding(end = 8.dp))      // spacing between tags`,
-            visual(el) {
-              const IMPL = [
-                { src: 'Text(text, modifier.background(…).padding(…))', at: 'first', note: '<span class="good">Right.</span> The caller’s padding is outside the pill, so it spaces the tags apart.' },
-                { src: 'Text(text, Modifier.background(…).padding(…).then(modifier))', at: 'last', note: '<span class="bad">Wrong place.</span> The caller’s padding ends up inside the pill. The tags get fatter and still touch.' },
-                { src: 'Text(text, Modifier.background(…).padding(…))', at: 'none', note: '<span class="bad">Ignored.</span> The caller passed padding and nothing happened. There is no way to fix it from outside.' },
-              ];
-              const strip = h('div', { class: 'cmp-d2m-strip', role: 'img', 'aria-label': 'Three tags in a row' });
-              const call = h('div', { class: 'kt' });
-              const o = out();
-              const btns = IMPL.map(x => cmd(x.src, () => pick(x)));
-              function tag(label, at) {
-                const pill = h('span', { class: 'cmp-d2m-pill' }, label);
-                if (at === 'last') pill.classList.add('cmp-d2m-fat');
-                return h('span', { class: `cmp-d2m-outer${at === 'first' ? ' cmp-d2m-gap' : ''}` }, pill);
-              }
-              function pick(x) {
-                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(IMPL[i] === x)));
-                strip.replaceChildren(...['New', 'Sale', 'Hot'].map(t => tag(t, x.at)));
-                strip.querySelectorAll('.cmp-d2m-pill').forEach(p => replay(p, 'pop-soft'));
-                say(o, x.note);
-              }
-              call.innerHTML = hl('// the caller, the same in all three cases\nTag("New", Modifier.padding(end = 8.dp))');
-              el.append(call, strip, h('div', { class: 'controls' }, btns), o);
-              pick(IMPL[0]);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>A <code>Modifier</code> is an immutable chain. Each call like <code>.padding(16.dp)</code> returns <code>this then PaddingElement(...)</code>. <code>then</code> builds a <code>CombinedModifier(outer, inner)</code>, so the order you write is the order stored.</p>
-<p>The elements are cheap descriptions. When the layout node is created, each element creates a long-lived <code>Modifier.Node</code>. On recomposition Compose compares the new elements with the old ones and updates the existing nodes in place, instead of building new ones. During measure, each layout node calls the next one in the chain with its own constraints. That is why the first <code>size</code> decides what the later ones can do.</p>`,
-          code: `// Roughly what the library does (simplified)
-fun Modifier.padding(all: Dp): Modifier =
-    this then PaddingElement(start = all, top = all, end = all, bottom = all, rtlAware = true)
-
-infix fun Modifier.then(other: Modifier): Modifier =
-    if (other === Modifier) this else CombinedModifier(this, other)`,
-        },
-        mistakes: [
-          {
-            title: 'No modifier parameter',
-            bad: `@Composable
-fun Avatar(painter: Painter) {
-    Image(painter, null, Modifier.size(40.dp).clip(CircleShape))
-}`,
-            good: `@Composable
-fun Avatar(painter: Painter, modifier: Modifier = Modifier) {
-    Image(painter, null, modifier.size(40.dp).clip(CircleShape))
-}`,
-            why: 'Without a <code>modifier</code> parameter, callers can’t add padding, a click or a weight. Take one and put it first in the chain on the root element.',
-          },
-          {
-            title: 'Passing the same modifier to the children',
-            bad: `@Composable
-fun Note(title: String, body: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(title, modifier)
-        Text(body, modifier)
-    }
-}`,
-            good: `@Composable
-fun Note(title: String, body: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(title)
-        Text(body)
-    }
-}`,
-            why: 'The caller’s padding, size or click now applies three times. The <code>modifier</code> parameter belongs to the root only. Children get their own <code>Modifier</code> chains.',
-          },
-        ],
-        visual(el) {
-          const MODS = { padding: '.padding(16.dp)', background: '.background(Purple)', clickable: '.clickable { onClick() }', size: '.size(96.dp)' };
-          const PRESETS = [
-            ['padding().background()', ['padding', 'background', 'clickable', 'size']],
-            ['background().padding()', ['background', 'padding', 'clickable', 'size']],
-            ['clickable().padding()', ['clickable', 'padding', 'background', 'size']],
-            ['size().padding()', ['size', 'padding', 'background', 'clickable']],
-          ];
-          let order = PRESETS[0][1].slice();
-          const chain = h('div', { class: 'cmp-chain' });
-          const preview = h('div', { class: 'cmp-preview', onclick: () => { replay(preview, 'shake'); say(o, '<span class="bad">missed:</span> that tap landed outside the clickable area. Nothing ran.'); } });
-          const o = out();
-          const presetBtns = PRESETS.map(([src, ord]) => cmd(src, () => { order = ord.slice(); render(); }));
-          function sizes() {
-            let w = 26;
-            for (const k of [...order].reverse()) { if (k === 'size') w = 96; if (k === 'padding') w += 32; }
-            const total = w, at = {};
-            for (const k of order) { at[k] = w; if (k === 'padding') w -= 32; }
-            return { total, at };
-          }
-          function move(i) {
-            const k = order.splice(i, 1)[0];
-            if (i === 0) order.push(k); else order.splice(i - 1, 0, k);
-            render();
-          }
-          function ripple(ev, layer) {
-            ev.stopPropagation();
-            const r = layer.getBoundingClientRect();
-            layer.append(h('span', { class: 'cmp-ripple', style: `left:${ev.clientX - r.left}px;top:${ev.clientY - r.top}px` }));
-            setTimeout(() => layer.querySelector('.cmp-ripple') && layer.querySelector('.cmp-ripple').remove(), 650);
-            say(o, `<span class="good">onClick()</span> ran. <span class="muted">The touch area is ${sizes().at.clickable} × ${sizes().at.clickable} dp.</span>`);
-          }
-          function render() {
-            presetBtns.forEach((b, i) => b.setAttribute('aria-pressed', PRESETS[i][1].join() === order.join()));
-            chain.replaceChildren(
-              h('div', { class: 'cmp-chain-head', html: hl('Box(Modifier') }),
-              ...order.map((k, i) => h('button', { class: 'cmd', 'aria-label': `Move ${MODS[k]} ${i ? 'one step earlier' : 'to the end'}`, onclick: () => move(i), html: `<span class="muted">${i ? '↑' : '↓'}</span> ${hl(MODS[k])}` })),
-              h('div', { class: 'cmp-chain-head', html: hl(') { Text("Hi") }') }));
-            let node = h('div', { class: 'cmp-content' }, 'Hi');
-            for (const k of [...order].reverse()) {
-              const props = { class: `cmp-layer cmp-l-${k}` };
-              if (k === 'padding') props.style = 'padding:16px';
-              if (k === 'size') props.style = 'width:96px;height:96px';
-              node = h('div', props, node);
-              if (k === 'clickable') { const layer = node; layer.addEventListener('click', ev => ripple(ev, layer)); }
-            }
-            preview.replaceChildren(node); replay(node, 'pop');
-            const s = sizes();
-            say(o, `Box: ${s.total} × ${s.total} dp <span class="muted">·</span> purple: ${s.at.background} × ${s.at.background} <span class="muted">·</span> touch area: ${s.at.clickable} × ${s.at.clickable}`);
-          }
-          render();
-          el.append(
-            h('div', { class: 'controls' }, presetBtns),
-            h('div', { class: 'cmp-mod-wrap' }, chain, preview),
-            h('div', { class: 'cmp-legend' },
-              h('span', {}, h('i', { class: 'lg-bg' }), 'background'),
-              h('span', {}, h('i', { class: 'lg-click' }), 'touch area'),
-              h('span', {}, h('i', { class: 'lg-pad' }), 'padding edge')),
-            h('p', { class: 'tip' }, 'Tap a line in the chain to move it up one step. The first line jumps to the end.'),
-            o);
-        },
-        predict: {
-          q: 'The chain is <code>.padding(16.dp)</code> first, then <code>.size(96.dp)</code> later. How big is the whole Box?',
-          options: ['96 × 96 dp', '128 × 128 dp', '64 × 64 dp'],
-          a: 1,
-          why: 'The first modifier is the outermost layer. Padding wraps the 96 dp box and adds 16 dp on every side: 96 + 32 = 128.',
-        },
-      },
-
-      // 3 ─────────────────────────────────────────────
-      {
-        id: 'layouts',
-        title: 'Row, Column and Box',
-        tagline: 'Arrangement spreads along the main axis. Alignment places across it.',
-        body: `
-<p><code>Column</code> stacks children top to bottom. <code>Row</code> puts them side by side. <code>Box</code> stacks them on top of each other. Most screens are these three, nested.</p>
-<p>Row and Column each take two knobs. <em>Arrangement</em> works along the main axis and decides how leftover space is shared. <em>Alignment</em> works across it and decides where each child sits in the other direction. A Row has <code>horizontalArrangement</code> and <code>verticalAlignment</code>. A Column has the opposite pair. A Box has one <code>contentAlignment</code>.</p>
-<p><code>Modifier.weight(1f)</code> gives a child a share of the leftover space. Once a child has weight, nothing is left over, so arrangement has nothing to spread. A <code>Spacer</code> with weight pushes the children after it to the far end.</p>`,
-        code: `@Composable
-fun MessageRow(name: String, preview: String, time: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Avatar(Modifier.size(40.dp))
-        Column(Modifier.weight(1f)) {          // takes all the leftover width
-            Text(name, style = MaterialTheme.typography.titleMedium)
-            Text(preview, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text(time, style = MaterialTheme.typography.labelSmall)
-    }
-}
-
-@Composable
-fun BellWithCount(count: Int) {
-    Box(contentAlignment = Alignment.Center) {  // children stack, last on top
-        Icon(Icons.Default.Notifications, contentDescription = "Notifications")
-        Text("$count", Modifier.align(Alignment.TopEnd))
-    }
-}`,
-        remember: 'Arrangement spreads along the main axis. Alignment places across it. weight takes what is left.',
-        level: 'beginner',
-        terms: [
-          { term: 'Arrangement', def: 'How a Row or Column places its children along its main axis and shares the leftover space, such as Start, SpaceBetween or spacedBy.' },
-          { term: 'Alignment', def: 'Where a child sits on the cross axis of a Row or Column, or anywhere inside a Box.' },
-          { term: 'Modifier.weight', def: 'A Row or Column child modifier that gives the child a share of the space left after the unweighted children are measured.' },
-          { term: 'Spacer', def: 'An empty composable that only takes up space, often sized with a modifier like width, height or weight.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Center both children vertically and push the Delete button to the right end.', code: 'Row(\n    modifier = Modifier.fillMaxWidth(),\n    [[verticalAlignment]] = Alignment.CenterVertically,\n) {\n    Text("Draft")\n    Spacer(Modifier.[[weight]](1f))\n    TextButton(onClick = onDelete) { Text("Delete") }\n}', why: 'A Row aligns on the vertical axis with <code>verticalAlignment</code>. The weighted Spacer eats the free space, so Delete lands at the end.' },
-          { type: 'bug', prompt: 'This Row should spread its buttons to both ends, but it does not compile. Tap the broken line.', code: 'Row(\n    modifier = Modifier.fillMaxWidth(),\n    horizontalAlignment = Arrangement.SpaceBetween,\n) {\n    TextButton(onClick = onBack) { Text("Back") }\n    Button(onClick = onNext) { Text("Next") }\n}', bug: 2, fix: '    horizontalArrangement = Arrangement.SpaceBetween,', why: 'A Row spreads children along its main axis with <code>horizontalArrangement</code>. <code>horizontalAlignment</code> belongs to Column.' },
-        ],
-        quiz: [
-          { q: 'In a <code>Row</code>, which parameter moves the children up and down?', options: ['<code>horizontalArrangement</code>', '<code>verticalAlignment</code>', '<code>contentAlignment</code>'], a: 1, why: 'Up and down is the cross axis of a Row, and the cross axis is set by alignment.' },
-          { q: 'One child of a Row has <code>Modifier.weight(1f)</code>. What does <code>Arrangement.SpaceBetween</code> do now?', options: ['Spreads the children to both ends', 'Nothing visible, because the weight used up the leftover space', 'It throws at runtime'], a: 1, why: 'Arrangement only shares leftover space. A weighted child already took all of it.' },
-          { q: 'Which layout draws its children on top of each other?', options: ['<code>Row</code>', '<code>Column</code>', '<code>Box</code>'], a: 2, why: 'A Box stacks its children. The last one draws on top.' },
-        ],
-        deeper: [
-          {
-            title: 'How weight shares the space',
-            body: `<p>A Row measures in two rounds. First it measures every child without weight, one after another, each with whatever width is still free. Then it takes the leftover width and splits it between the weighted children by their weights: <code>weight(2f)</code> gets twice what <code>weight(1f)</code> gets.</p>
-<p>By default a weighted child must fill its share exactly. With <code>weight(1f, fill = false)</code> the share is only a maximum, so a small child stays small and the rest of its share stays empty.</p>`,
-            code: `Row(Modifier.width(300.dp)) {
-    A(Modifier.width(60.dp))           // round 1: 60 dp
-    B(Modifier.weight(1f))             // round 2: 240 × 1/3 = 80 dp
-    C(Modifier.weight(2f))             // round 2: 240 × 2/3 = 160 dp
-}`,
-            visual(el) {
-              const W = 300, A = 60, NAT = { B: 80, C: 50 };
-              const B_OPTS = [['B()', 0, true], ['B(Modifier.weight(1f))', 1, true], ['B(Modifier.weight(2f))', 2, true]];
-              const C_OPTS = [['C()', 0, true], ['C(Modifier.weight(1f))', 1, true], ['C(Modifier.weight(1f, fill = false))', 1, false]];
-              let b = B_OPTS[1], c = C_OPTS[1], busy = false;
-              const seg = n => h('div', { class: `cmp-d2l-seg cmp-d2l-${n.toLowerCase()}` }, h('b', {}, n), h('small', {}));
-              const S = { A: seg('A'), B: seg('B'), C: seg('C') };
-              const left = h('div', { class: 'cmp-d2l-left' });
-              const track = h('div', { class: 'cmp-d2l-track', role: 'img', 'aria-label': 'Row 300 dp wide' }, S.A, S.B, S.C, left);
-              const steps = h('ol', { class: 'cmp-d2l-steps' });
-              const o = out();
-              const bBtns = B_OPTS.map(x => cmd(x[0], () => set(() => { b = x; })));
-              const cBtns = C_OPTS.map(x => cmd(x[0], () => set(() => { c = x; })));
-              const pct = dp => `${(dp / W) * 100}%`;
-              function setW(n, dp, label) {
-                S[n].style.width = pct(dp);
-                S[n].querySelector('small').textContent = label === '' ? '' : `${Math.round(dp)} dp`;
-                S[n].classList.toggle('cmp-d2l-tiny', dp < 34);
-              }
-              async function run() {
-                busy = true;
-                const kids = [['A', 0, true, A], ['B', b[1], b[2], NAT.B], ['C', c[1], c[2], NAT.C]];
-                bBtns.forEach((x, i) => x.setAttribute('aria-pressed', String(B_OPTS[i] === b)));
-                cBtns.forEach((x, i) => x.setAttribute('aria-pressed', String(C_OPTS[i] === c)));
-                steps.replaceChildren();
-                left.style.width = '0'; left.style.left = '0';
-                for (const [n] of kids) { setW(n, 0, ''); S[n].classList.remove('cmp-d2l-on'); }
-                await sleep(350); if (!el.isConnected) return;
-                let used = 0;
-                const fixed = kids.filter(k => !k[1]);
-                for (const [n, , , nat] of fixed) {
-                  setW(n, nat); S[n].classList.add('cmp-d2l-on'); used += nat;
-                  await sleep(380); if (!el.isConnected) return;
-                }
-                steps.append(h('li', { class: 'drop-in' }, `Round 1: measure ${fixed.map(k => k[0]).join(', ')} without weight → ${used} dp used`));
-                const rest = W - used, weighted = kids.filter(k => k[1]), total = weighted.reduce((s, k) => s + k[1], 0);
-                left.style.left = pct(used); left.style.width = pct(rest);
-                await sleep(450); if (!el.isConnected) return;
-                if (!weighted.length) {
-                  steps.append(h('li', { class: 'drop-in' }, `No weights. ${rest} dp stays free for Arrangement to place.`));
-                  say(o, `Nothing has weight, so ${rest} dp is left over. Arrangement decides where it goes.`);
-                  busy = false; return;
-                }
-                steps.append(h('li', { class: 'drop-in' }, `Leftover: ${W} − ${used} = ${rest} dp, total weight ${total}`));
-                let unused = 0;
-                for (const [n, w, fill, nat] of weighted) {
-                  const share = rest * w / total, got = fill ? share : Math.min(nat, share);
-                  unused += share - got;
-                  setW(n, got); S[n].classList.add('cmp-d2l-on');
-                  steps.append(h('li', { class: 'drop-in' }, `Round 2: ${n} gets ${rest} × ${w}/${total} = ${Math.round(share)} dp${fill ? '' : `, fill = false so it keeps ${nat} dp`}`));
-                  await sleep(450); if (!el.isConnected) return;
-                }
-                left.style.left = pct(W - unused); left.style.width = pct(unused);
-                say(o, unused > 0.5
-                  ? `<span class="muted">fill = false:</span> C took only ${NAT.C} dp of its share. ${Math.round(unused)} dp stays empty.`
-                  : `<span class="good">All ${W} dp used.</span> Weighted children split the leftover by weight.`);
-                busy = false;
-              }
-              function set(fn) { if (busy) return; fn(); run(); }
-              el.append(track, steps,
-                h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'B'), h('div', { class: 'controls' }, bBtns)),
-                h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'C'), h('div', { class: 'controls' }, cBtns)),
-                o);
-              say(o, 'A is always 60 dp. Pick weights for B and C and watch the two rounds.');
-              setTimeout(() => { if (el.isConnected) run(); }, 60);
-            },
-          },
-          {
-            title: 'Match the tallest child with IntrinsicSize',
-            body: `<p>Compose measures each child only once per pass, so a child can’t simply ask “how tall is my sibling?”. Say you want a divider between two texts that is exactly as tall as the taller text. With <code>fillMaxHeight()</code> alone, the divider fills the Row’s maximum height, which can be the whole screen.</p>
-<p><code>Modifier.height(IntrinsicSize.Min)</code> on the Row fixes it. Before measuring, the Row asks each child for its <em>intrinsic</em> height: the smallest height that shows its content. It takes the largest answer as its own height, and then <code>fillMaxHeight()</code> means “as tall as the tallest text”. Intrinsic queries cost an extra pass over the children, so use them where you need them.</p>`,
-            code: `Row(Modifier.height(IntrinsicSize.Min)) {
-    Text(left, Modifier.weight(1f))
-    VerticalDivider(Modifier.fillMaxHeight())     // as tall as the taller Text
-    Text(right, Modifier.weight(1f))
-}`,
-            visual(el) {
-              let on = false;
-              const div = h('div', { class: 'cmp-d2l-div' });
-              const row = h('div', { class: 'cmp-d2l-irow' },
-                h('div', { class: 'cmp-d2l-txt' }, 'Departs 08:40', h('small', {}, 'Lisbon')),
-                div,
-                h('div', { class: 'cmp-d2l-txt' }, 'Arrives 11:55', h('small', {}, 'Berlin, Terminal 1, Gate B12')));
-              const screen = h('div', { class: 'cmp-d2l-screen', role: 'img', 'aria-label': 'Row with a divider inside a screen' }, row, h('div', { class: 'cmp-d2l-below' }, 'Next item'));
-              const code = h('div', { class: 'kt' });
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2l-intr' });
-              function paint() {
-                row.classList.toggle('cmp-d2l-fit', on);
-                code.innerHTML = hl(`Row(${on ? 'Modifier.height(IntrinsicSize.Min)' : ''}) {\n    Text(left, Modifier.weight(1f))\n    VerticalDivider(Modifier.fillMaxHeight())\n    Text(right, Modifier.weight(1f))\n}`);
-                replay(div, 'pop-soft');
-                say(o, on
-                  ? '<span class="good">IntrinsicSize.Min:</span> the Row asked both texts for their height first. The divider matches the taller one.'
-                  : '<span class="bad">No intrinsics:</span> fillMaxHeight takes the Row’s max height, so the divider and the Row grow to fill the screen.');
-              }
-              sw.addEventListener('change', () => { on = sw.checked; paint(); });
-              el.append(screen, h('label', { class: 'switch', for: 'cmp-d2l-intr' }, sw, 'Modifier.height(IntrinsicSize.Min)'), code, o);
-              paint();
-            },
-          },
-        ],
-        underHood: {
-          body: `<p><code>Row</code>, <code>Column</code> and <code>Box</code> are inline functions that call <code>Layout</code> with a <code>MeasurePolicy</code>. Layout in Compose is a single pass down and up the tree: a parent passes constraints down, each child returns its size, and the parent places the children. Measuring the same child twice in one pass throws an exception, which keeps deep trees fast.</p>
-<p>Row’s policy measures the children without weight first, then gives each weighted child its share of the rest, then places them all with the arrangement and alignment you passed. Box measures every child and takes the size of the largest. If you need a different rule, you write your own <code>Layout</code>, which the Compose, advanced track covers.</p>`,
-          code: `// Row's measure policy, heavily simplified
-var used = 0
-for (child in unweightedChildren) {
-    used += child.measure(Constraints(maxWidth = constraints.maxWidth - used)).width
-}
-val remaining = constraints.maxWidth - used
-for (child in weightedChildren) {
-    val share = (remaining * child.weight / totalWeight).roundToInt()
-    child.measure(
-        if (child.fill) Constraints.fixedWidth(share)   // weight(1f)
-        else Constraints(maxWidth = share)              // weight(1f, fill = false)
-    )
-}
-// then: place along the main axis with arrangement, across it with alignment`,
-        },
-        mistakes: [
-          {
-            title: 'fillMaxWidth on two children of a Row',
-            bad: `Row {
-    Text(from, Modifier.fillMaxWidth())
-    Text(to, Modifier.fillMaxWidth())   // gets 0 dp
-}`,
-            good: `Row {
-    Text(from, Modifier.weight(1f))
-    Text(to, Modifier.weight(1f))
-}`,
-            why: 'The Row measures children in order. The first one fills all the width and leaves nothing for the second. <code>weight</code> splits the space instead.',
-          },
-          {
-            title: 'A long text pushes the icon out',
-            bad: `Row(verticalAlignment = Alignment.CenterVertically) {
-    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null)
-}`,
-            good: `Row(verticalAlignment = Alignment.CenterVertically) {
-    Text(title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    Icon(painterResource(R.drawable.ic_chevron), contentDescription = null)
-}`,
-            why: 'Without weight, the Text is measured first and takes all the width it wants. The icon gets what is left, which can be 0. A weighted Text is measured last, with only the leftover space, so it ellipsizes and the icon stays.',
-          },
-        ],
-        visual(el) {
-          const ARR = ['Start', 'Center', 'End', 'SpaceBetween', 'SpaceAround', 'SpaceEvenly'];
-          const JUST = { Start: 'flex-start', Center: 'center', End: 'flex-end', SpaceBetween: 'space-between', SpaceAround: 'space-around', SpaceEvenly: 'space-evenly' };
-          const ALIGN = { Row: ['Top', 'CenterVertically', 'Bottom'], Column: ['Start', 'CenterHorizontally', 'End'] };
-          const CROSS = ['flex-start', 'center', 'flex-end'];
-          const BOX = ['TopStart', 'TopCenter', 'TopEnd', 'CenterStart', 'Center', 'CenterEnd', 'BottomStart', 'BottomCenter', 'BottomEnd'];
-          let kind = 'Row', arr = 'Start', align = 1, boxAlign = 4, weight = false, spacer = false, busy = false;
-          const [a, b, c] = ['A', 'B', 'C'].map(n => h('div', { class: `cmp-ly-item cmp-ly-${n.toLowerCase()}` }, n));
-          const bNote = h('small', {});
-          b.append(bNote);
-          const spacerEl = h('div', { class: 'cmp-ly-spacer' }, h('span', {}, 'Spacer'));
-          const tag = h('span', { class: 'cmp-ly-tag' });
-          const parent = h('div', { class: 'cmp-ly-parent', role: 'img', 'aria-label': 'Layout preview' });
-          const code = h('div', { class: 'kt' });
-          const o = out();
-          const kindBtns = ['Row', 'Column', 'Box'].map(k => cmd(`${k} { A(); B(); C() }`, () => change(() => { kind = k; }, `${k}: ${k === 'Box' ? 'children stack on top of each other. The last one draws on top.' : `the main axis is ${k === 'Row' ? 'horizontal' : 'vertical'}.`}`)));
-          const arrGroup = h('div', { class: 'controls' });
-          const alignGroup = h('div', { class: 'controls' });
-          const weightIn = h('input', { type: 'checkbox', id: 'cmp-ly-weight' });
-          const spacerIn = h('input', { type: 'checkbox', id: 'cmp-ly-spacer' });
-          const switches = h('div', { class: 'controls' },
-            h('label', { class: 'switch', for: 'cmp-ly-weight' }, weightIn, 'B: Modifier.weight(1f)'),
-            h('label', { class: 'switch', for: 'cmp-ly-spacer' }, spacerIn, 'Spacer(Modifier.weight(1f)) before C'));
-
-          // FLIP: measure, change the layout, then slide every child from its old spot.
-          function slide(mutate) {
-            const before = new Map([...parent.children].map(k => [k, k.getBoundingClientRect()]));
-            mutate();
-            for (const k of parent.children) {
-              const r = before.get(k); if (!r) continue;
-              const n = k.getBoundingClientRect(), dx = r.left - n.left, dy = r.top - n.top;
-              if (dx || dy) k.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 450, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
-            }
-          }
-          function apply() {
-            const box = kind === 'Box';
-            parent.className = `cmp-ly-parent cmp-ly-${box ? 'box' : kind === 'Row' ? 'row' : 'col'}`;
-            tag.textContent = kind;
-            b.classList.toggle('cmp-ly-w', weight && !box);
-            bNote.textContent = weight && !box ? 'weight(1f)' : '';
-            const kids = [a, b];
-            if (spacer && !box) kids.push(spacerEl);
-            kids.push(c);
-            if (!box) {
-              parent.style.justifyContent = JUST[arr]; parent.style.alignItems = CROSS[align];
-              kids.forEach(k => { k.style.alignSelf = ''; k.style.justifySelf = ''; });
-            } else {
-              parent.style.justifyContent = ''; parent.style.alignItems = '';
-              const r = Math.floor(boxAlign / 3), col = boxAlign % 3;
-              kids.forEach(k => { k.style.alignSelf = ['start', 'center', 'end'][r]; k.style.justifySelf = ['start', 'center', 'end'][col]; });
-            }
-            parent.replaceChildren(tag, ...kids);
-            paintCode(); paintControls();
-          }
-          function paintCode() {
-            const lines = [];
-            if (kind === 'Box') lines.push('Box(', `    contentAlignment = Alignment.${BOX[boxAlign]},`, ') {', '    A()', '    B()', '    C()', '}');
-            else {
-              lines.push(`${kind}(`, `    ${kind === 'Row' ? 'horizontal' : 'vertical'}Arrangement = Arrangement.${arr},`, `    ${kind === 'Row' ? 'vertical' : 'horizontal'}Alignment = Alignment.${ALIGN[kind][align]},`, ') {', '    A()');
-              lines.push(weight ? '    B(Modifier.weight(1f))' : '    B()');
-              if (spacer) lines.push('    Spacer(Modifier.weight(1f))');
-              lines.push('    C()', '}');
-            }
-            code.innerHTML = hl(lines.join('\n'));
-          }
-          let builtFor = '';
-          function paintControls() {
-            kindBtns.forEach((k, i) => k.setAttribute('aria-pressed', String(['Row', 'Column', 'Box'][i] === kind)));
-            if (builtFor === kind) {
-              arrGroup.querySelectorAll('.cmd').forEach((x, i) => x.setAttribute('aria-pressed', String(ARR[i] === arr)));
-              alignGroup.querySelectorAll('.cmd, .cmp-ly-cell').forEach((x, i) => x.setAttribute('aria-pressed', String(i === (kind === 'Box' ? boxAlign : align))));
-              return;
-            }
-            builtFor = kind;
-            if (kind === 'Box') {
-              arrGroup.replaceChildren(h('span', { class: 'cmp-label' }, 'A Box has no arrangement. Pick its contentAlignment below.'));
-              alignGroup.replaceChildren(h('div', { class: 'cmp-ly-grid', role: 'group', 'aria-label': 'contentAlignment' },
-                BOX.map((n, i) => h('button', { class: 'cmp-ly-cell', 'aria-label': `Alignment.${n}`, 'aria-pressed': String(i === boxAlign), onclick: () => change(() => { boxAlign = i; }, `${hl(`contentAlignment = Alignment.${n}`)} <span class="muted">// every child moves to the same spot</span>`) }))));
-            } else {
-              arrGroup.replaceChildren(...ARR.map(x => cmd(x, () => pickArr(x), { 'aria-pressed': String(x === arr), 'aria-label': `Arrangement.${x}` })));
-              alignGroup.replaceChildren(...ALIGN[kind].map((x, i) => cmd(x, () => change(() => { align = i; }, `${hl(`Alignment.${x}`)} <span class="muted">// moves each child across the main axis</span>`), { 'aria-pressed': String(i === align), 'aria-label': `Alignment.${x}` })));
-            }
-            weightIn.disabled = spacerIn.disabled = kind === 'Box';
-          }
-          function pickArr(x) {
-            const used = weight || spacer;
-            change(() => { arr = x; }, used
-              ? `${hl(`Arrangement.${x}`)} <span class="bad">has nothing to spread.</span> <span class="muted">A weighted child already took the leftover space.</span>`
-              : `${hl(`Arrangement.${x}`)} <span class="muted">// shares the leftover space along the main axis</span>`);
-          }
-          function change(mutate, msg) {
-            if (busy) return;
-            busy = true;
-            slide(() => { mutate(); apply(); });
-            say(o, msg);
-            setTimeout(() => { busy = false; }, 200);
-          }
-          weightIn.addEventListener('change', () => {
-            weight = weightIn.checked; apply(); replay(b, 'pop-soft');
-            say(o, weight ? `${hl('B(Modifier.weight(1f))')} <span class="muted">// B grows into all the free space</span>` : 'B is back to its own width. Arrangement works again.');
-          });
-          spacerIn.addEventListener('change', () => {
-            if (busy) { spacerIn.checked = spacer; return; }
-            spacer = spacerIn.checked;
-            if (spacer) {
-              spacerEl.classList.remove('cmp-ly-grow'); apply();
-              requestAnimationFrame(() => requestAnimationFrame(() => spacerEl.classList.add('cmp-ly-grow')));
-              say(o, `${hl('Spacer(Modifier.weight(1f))')} <span class="muted">// fills the gap and pushes C to the far end</span>`);
-            } else {
-              busy = true; spacer = true; spacerEl.classList.remove('cmp-ly-grow');
-              setTimeout(() => { spacer = false; apply(); busy = false; }, 460);
-              say(o, 'Spacer removed. C slides back.');
-            }
-          });
-          apply();
-          say(o, 'Pick an arrangement and an alignment. Each box is a real flex layout.');
-          el.append(
-            parent,
-            h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Main axis · Arrangement.'), arrGroup),
-            h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Cross axis · Alignment.'), alignGroup),
-            switches,
-            h('div', { class: 'cmp-ly-group' }, h('span', { class: 'cmp-label' }, 'Container'), h('div', { class: 'controls' }, kindBtns)),
-            code, o);
-        },
-        predict: {
-          q: 'A Row holds A, then a <code>Spacer(Modifier.weight(1f))</code>, then B and C. Where do B and C end up?',
-          options: ['Right next to A', 'Pushed to the far end of the Row', 'Spread evenly across the Row'],
-          a: 1,
-          why: 'The weighted Spacer takes all the leftover space, so everything after it is pushed to the end.',
-        },
-      },
-
-      // 4 ─────────────────────────────────────────────
-      {
-        id: 'scaffold',
-        title: 'Scaffold and Material 3 structure',
-        tagline: 'Slots for the bars, and innerPadding to keep content clear of them.',
-        body: `
-<p><code>Scaffold</code> lays out the standard parts of a Material 3 screen: <code>topBar</code>, <code>bottomBar</code>, <code>floatingActionButton</code>, <code>snackbarHost</code>, and your content in the middle. It knows where each part goes. The FAB sits above the bottom bar, and a snackbar appears above the FAB.</p>
-<p>The content lambda gets one parameter, <code>innerPadding</code>. It holds the space taken by the bars and by the system bars. Apps that target Android 15 draw edge to edge, so if you drop <code>innerPadding</code>, your first and last items slide under the bars. Apply it with <code>Modifier.padding(innerPadding)</code>, or pass it as <code>contentPadding</code> to a lazy list so items still scroll behind the bars.</p>
-<p>A snackbar needs a <code>SnackbarHostState</code>. Its <code>showSnackbar</code> is a suspend function, so you call it from a coroutine. It shows one message at a time, and the rest wait in line.</p>`,
-        code: `@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun InboxScreen(messages: List<Message>, onCompose: () -> Unit) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Inbox") }) },
-        bottomBar = { NavigationBar { /* NavigationBarItem(...) */ } },
-        floatingActionButton = {
-            FloatingActionButton(onClick = {
-                onCompose()
-                scope.launch { snackbarHostState.showSnackbar("Draft saved") }
-            }) {
-                Icon(Icons.Default.Add, contentDescription = "Compose")
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { innerPadding ->
-        LazyColumn(contentPadding = innerPadding) {
-            items(messages, key = { it.id }) { MessageRow(it) }
-        }
-    }
-}`,
-        remember: 'Scaffold places the bars. innerPadding tells your content where they are. Always use it.',
-        level: 'beginner',
-        terms: [
-          { term: 'Scaffold', def: 'A Material 3 layout with slots for a top bar, bottom bar, floating action button, snackbar host and the main content.' },
-          { term: 'innerPadding', def: 'The PaddingValues that Scaffold passes to its content, covering the space used by its bars and the system bars.' },
-          { term: 'SnackbarHostState', def: 'The state object that queues snackbar messages; its suspend showSnackbar shows one message and waits until it is dismissed.' },
-          { term: 'Edge-to-edge', def: 'Drawing the app behind the status bar and navigation bar, which is the default for apps that target Android 15.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Keep the first and last notes clear of the bars while the list still scrolls behind them.', code: 'Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { [[innerPadding]] ->\n    LazyColumn([[contentPadding]] = innerPadding) {\n        items(notes, key = { it.id }) { NoteRow(it) }\n    }\n}', why: 'The lambda parameter carries the bar sizes. As <code>contentPadding</code> it pads the list content, so items can still scroll under the bars.' },
-          { type: 'bug', prompt: 'Tapping Save never shows a snackbar. Tap the line that causes it.', code: '@Composable\nfun NoteScreen(onSave: () -> Unit) {\n    val snackbarHostState = remember { SnackbarHostState() }\n    val scope = rememberCoroutineScope()\n    Scaffold(\n        snackbarHost = { SnackbarHost(remember { SnackbarHostState() }) },\n        floatingActionButton = {\n            FloatingActionButton(onClick = {\n                onSave()\n                scope.launch { snackbarHostState.showSnackbar("Saved") }\n            }) { Icon(Icons.Default.Check, contentDescription = "Save") }\n        },\n    ) { innerPadding -> NoteEditor(Modifier.padding(innerPadding)) }\n}', bug: 5, fix: '        snackbarHost = { SnackbarHost(snackbarHostState) },', why: 'The host watches a second, empty state object. Messages go to <code>snackbarHostState</code>, which no host is showing.' },
-        ],
-        quiz: [
-          { q: 'What does <code>innerPadding</code> contain?', options: ['Padding you set on the Scaffold yourself', 'The space taken by the Scaffold bars and the system bars', 'Always 16.dp on every side'], a: 1, why: 'Scaffold measures its bars and the window insets, then tells your content how much room they take.' },
-          { q: 'You call <code>showSnackbar</code> twice in quick succession. What happens?', options: ['The second replaces the first at once', 'The second waits until the first is dismissed', 'Both show, stacked'], a: 1, why: 'SnackbarHostState shows one message at a time and queues the rest.' },
-          { q: 'Why can’t you call <code>showSnackbar</code> straight from <code>onClick</code>?', options: ['It is a suspend function, so it needs a coroutine', 'It only works inside a ViewModel', 'It has to run on a background thread'], a: 0, why: 'It suspends until the snackbar is dismissed. Launch it with <code>rememberCoroutineScope()</code>.' },
-          { q: 'You add <code>TopAppBarDefaults.enterAlwaysScrollBehavior()</code> and pass it to the <code>TopAppBar</code>. The list scrolls but the bar never moves. What is missing?', options: ['<code>Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)</code> on the Scaffold', '<code>contentPadding = innerPadding</code> on the LazyColumn', 'A <code>LargeTopAppBar</code> instead of a <code>TopAppBar</code>'], a: 0, why: 'The nested scroll connection is the link: the list reports scroll deltas to its parents, and the connection uses them to move the bar. Without it the bar never hears about the scroll.' },
-        ],
-        deeper: [
-          {
-            title: 'Top bars that react to scrolling',
-            body: `<p>A top app bar can collapse while the content scrolls. Create a scroll behavior from <code>TopAppBarDefaults</code>, pass it to the bar, and connect it to the scroll with <code>Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)</code> on the Scaffold.</p>
-<p>That modifier is the link. A lazy list reports every scroll delta to its nested scroll parents, and the connection takes part of each delta to move or shrink the bar. Forget it and the bar never hears about the scroll. <code>enterAlwaysScrollBehavior</code> hides the bar on the way down and brings it back as soon as you scroll up. <code>exitUntilCollapsedScrollBehavior</code>, used with <code>MediumTopAppBar</code> or <code>LargeTopAppBar</code>, shrinks the bar to its small size and grows it again only at the top of the list.</p>`,
-            code: `@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FeedScreen(posts: List<Post>) {
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { TopAppBar(title = { Text("Feed") }, scrollBehavior = scrollBehavior) },
-    ) { innerPadding ->
-        LazyColumn(contentPadding = innerPadding) {
-            items(posts, key = { it.id }) { PostRow(it) }
-        }
-    }
-}`,
-            visual(el) {
-              const MODES = {
-                pinned: { src: 'pinnedScrollBehavior()', bar: 'TopAppBar', max: 64, min: 64 },
-                always: { src: 'enterAlwaysScrollBehavior()', bar: 'TopAppBar', max: 64, min: 0 },
-                exit: { src: 'exitUntilCollapsedScrollBehavior()', bar: 'LargeTopAppBar', max: 112, min: 64 },
-              };
-              let mode = 'always', nested = true, offset = 0, lastTop = 0;
-              const PX = 0.75;
-              const title = h('span', { class: 'cmp-d2s-title' }, 'Feed');
-              const bar = h('div', { class: 'cmp-d2s-bar' }, title);
-              const inner = h('div', { class: 'cmp-d2s-inner' });
-              for (let i = 1; i <= 24; i++) inner.append(h('div', { class: 'cmp-d2s-row' }, `Post ${i}`));
-              const scroller = h('div', { class: 'cmp-d2s-scroll', tabindex: '0', 'aria-label': 'Scrollable feed' }, inner);
-              const phone = h('div', { class: 'cmp-d2s-phone' }, scroller, bar);
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              const modeBtns = Object.entries(MODES).map(([k, m]) => cmd(`TopAppBarDefaults.${m.src}`, () => setMode(k)));
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2s-nested', checked: true });
-              function paint() {
-                const m = MODES[mode];
-                let height = m.max, shift = 0;
-                if (nested && mode === 'always') shift = offset;
-                if (nested && mode === 'exit') height = Math.max(m.min, m.max - scroller.scrollTop / PX);
-                bar.style.height = `${height * PX}px`;
-                bar.style.transform = `translateY(${shift * PX}px)`;
-                bar.classList.toggle('cmp-d2s-large', mode === 'exit' && height > m.min + 20);
-                const hOff = mode === 'always' ? shift : height - m.max, limit = mode === 'always' ? -64 : m.min - m.max;
-                const frac = limit ? Math.min(1, hOff / limit) : 0;
-                read.innerHTML = hl(`${m.bar}(scrollBehavior = ${m.src.replace('()', '')})\nstate.heightOffset = ${Math.round(hOff)}f\nstate.collapsedFraction = ${frac.toFixed(2)}f`);
-              }
-              function setMode(k) {
-                mode = k; offset = 0;
-                modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(MODES)[i] === k)));
-                inner.style.paddingTop = `${MODES[k].max * PX + 6}px`;
-                title.textContent = k === 'exit' ? 'Large feed' : 'Feed';
-                scroller.scrollTop = 0; lastTop = 0;
-                paint();
-                say(o, k === 'pinned' ? 'Pinned: the bar never moves. Content scrolls under it.' : k === 'always' ? 'enterAlways: scroll down to hide the bar, scroll up a little to bring it back.' : 'exitUntilCollapsed: the large bar shrinks to 64 dp and grows back only at the top.');
-              }
-              scroller.addEventListener('scroll', () => {
-                const dy = (scroller.scrollTop - lastTop) / PX;
-                lastTop = scroller.scrollTop;
-                offset = Math.max(-64, Math.min(0, offset - dy));
-                paint();
-              }, { passive: true });
-              sw.addEventListener('change', () => {
-                nested = sw.checked; offset = 0; paint(); replay(bar, 'shake');
-                say(o, nested ? `${hl('Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)')} <span class="muted">// the bar hears the scroll again</span>` : '<span class="bad">No nestedScroll:</span> the list scrolls, but the bar never receives the deltas. It stays put.');
-              });
-              const by = d => scroller.scrollBy({ top: d, behavior: 'smooth' });
-              el.append(
-                h('div', { class: 'cmp-sc-wrap' }, phone, h('div', { class: 'cmp-sc-side' }, read,
-                  h('label', { class: 'switch', for: 'cmp-d2s-nested' }, sw, 'Modifier.nestedScroll(...)'),
-                  h('div', { class: 'controls' }, act('Scroll down', () => by(150)), act('Scroll up a little', () => by(-50))))),
-                h('div', { class: 'controls' }, modeBtns), o);
-              setMode('always');
-            },
-          },
-          {
-            title: 'Snackbar results and Undo',
-            body: `<p><code>showSnackbar</code> returns a <code>SnackbarResult</code>: <code>ActionPerformed</code> if the user tapped the action, or <code>Dismissed</code> if it timed out or was closed. That makes Undo simple. Hide the item right away, show the snackbar, and only delete for real when the result is <code>Dismissed</code>.</p>
-<p>Watch the duration. When you pass an <code>actionLabel</code>, the default duration is <code>SnackbarDuration.Indefinite</code>, so the snackbar stays until the user acts, and every other message waits behind it. Pass <code>SnackbarDuration.Short</code> or <code>Long</code> if it should go away on its own. When an accessibility service is on, the system can make these times longer.</p>`,
-            code: `fun onDelete(photo: Photo) {
-    vm.hide(photo.id)                         // gone from the list, still in storage
-    scope.launch {
-        val result = snackbarHostState.showSnackbar(
-            message = "Photo deleted",
-            actionLabel = "Undo",
-            duration = SnackbarDuration.Short,   // with an action the default is Indefinite
-        )
-        when (result) {
-            SnackbarResult.ActionPerformed -> vm.restore(photo.id)
-            SnackbarResult.Dismissed -> vm.deleteForever(photo.id)
-        }
-    }
-}`,
-            visual(el) {
-              const PHOTOS = ['Beach.jpg', 'Dog.jpg', 'Cake.jpg', 'Snow.jpg'];
-              let short = true, storage = PHOTOS.length, showing = null, timer = 0, logN = 0;
-              const queue = [], rows = new Map();
-              const list = h('div', { class: 'cmp-d2s-list' });
-              PHOTOS.forEach(n => {
-                const r = h('div', { class: 'cmp-d2s-item' }, h('span', {}, n), act('Delete', () => del(n)));
-                rows.set(n, r); list.append(r);
-              });
-              const snackText = h('span', { class: 'cmp-d2s-msg' });
-              const fill = h('i', { class: 'cmp-d2s-fill' });
-              const snack = h('div', { class: 'cmp-d2s-snack', 'aria-live': 'polite' }, snackText,
-                h('button', { class: 'cmp-d2s-undo', type: 'button', onclick: () => finish('ActionPerformed') }, 'Undo'),
-                h('button', { class: 'cmp-d2s-x', type: 'button', 'aria-label': 'Dismiss', onclick: () => finish('Dismissed') }, '×'), fill);
-              const box = h('div', { class: 'cmp-d2s-box' }, list, snack);
-              const store = h('div', { class: 'cmp-label' });
-              const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2s-short', checked: true });
-              function addLog(html) {
-                log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
-                while (log.children.length > 4) log.lastElementChild.remove();
-              }
-              const paintStore = () => { store.textContent = `In storage: ${storage} · waiting in SnackbarHostState: ${queue.length}`; };
-              function del(n) {
-                const r = rows.get(n);
-                if (!r || r.classList.contains('cmp-d2s-gone')) return;
-                r.classList.add('cmp-d2s-gone');
-                queue.push(n); paintStore();
-                addLog(`${hl(`vm.hide("${n}")`)} <span class="muted">// still in storage</span>`);
-                if (showing) say(o, `${hl('showSnackbar')} suspends. ${esc(n)} waits until the current snackbar is done.`);
-                pump();
-              }
-              function pump() {
-                if (showing || !queue.length || !el.isConnected) return;
-                const n = showing = queue.shift(); paintStore();
-                snackText.textContent = `${n} deleted`;
-                snack.classList.add('cmp-on');
-                fill.style.transition = 'none'; fill.style.width = '100%'; void fill.offsetWidth;
-                if (short) {
-                  fill.style.transition = 'width 4s linear'; fill.style.width = '0';
-                  timer = setTimeout(() => { if (el.isConnected && showing === n) finish('Dismissed'); }, 4000);
-                  say(o, `${hl('duration = SnackbarDuration.Short')} <span class="muted">// about 4 s. Tap Undo, or wait.</span>`);
-                } else {
-                  fill.style.width = '0';
-                  say(o, '<span class="bad">Indefinite:</span> no timer. The snackbar waits for Undo or ×, and every other message waits behind it.');
-                }
-              }
-              function finish(result) {
-                if (!showing) return;
-                clearTimeout(timer);
-                const n = showing; showing = null;
-                snack.classList.remove('cmp-on');
-                const r = rows.get(n);
-                if (result === 'ActionPerformed') {
-                  r.classList.remove('cmp-d2s-gone'); replay(r, 'pop-soft');
-                  addLog(`result = ${hl('ActionPerformed')} → ${hl(`vm.restore("${n}")`)}`);
-                  say(o, `<span class="good">Undo:</span> ${esc(n)} was never deleted, so it simply comes back.`);
-                } else {
-                  storage--; r.remove(); rows.delete(n);
-                  addLog(`result = ${hl('Dismissed')} → ${hl(`vm.deleteForever("${n}")`)}`);
-                  say(o, `Dismissed. Now ${esc(n)} is deleted for real.`);
-                }
-                paintStore();
-                setTimeout(pump, 350);
-              }
-              sw.addEventListener('change', () => {
-                short = sw.checked;
-                say(o, short ? `${hl('duration = SnackbarDuration.Short')} <span class="muted">// times out on its own</span>` : `${hl('showSnackbar("…", actionLabel = "Undo")')} <span class="muted">// no duration: Indefinite</span>`);
-              });
-              paintStore();
-              addLog('<span class="muted">// results show up here</span>');
-              say(o, 'Delete a photo. It disappears at once, but storage only changes when the snackbar is dismissed.');
-              el.append(box,
-                h('label', { class: 'switch', for: 'cmp-d2s-short' }, sw, 'duration = SnackbarDuration.Short'),
-                store, log, o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p><code>Scaffold</code> is built on <code>SubcomposeLayout</code>, a layout that can compose its children during measure. It first composes and measures the top bar, bottom bar, snackbar host and FAB. From their sizes and the <code>contentWindowInsets</code> (system bars by default) it computes a <code>PaddingValues</code>. Only then does it compose your content lambda and hand it that value as <code>innerPadding</code>.</p>
-<p>That order is why <code>innerPadding</code> is a lambda parameter and not something you read from a state object. It also means a bar that changes height, like a collapsing top bar, produces a new <code>innerPadding</code> on the next layout.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Deleting before the Undo answer',
-            bad: `onDelete = { photo ->
-    repository.delete(photo)
-    scope.launch {
-        snackbarHostState.showSnackbar("Deleted", actionLabel = "Undo")
-    }
-}`,
-            good: `onDelete = { photo ->
-    vm.hide(photo.id)
-    scope.launch {
-        val result = snackbarHostState.showSnackbar(
-            "Deleted", actionLabel = "Undo", duration = SnackbarDuration.Short,
-        )
-        if (result == SnackbarResult.ActionPerformed) vm.restore(photo.id)
-        else vm.deleteForever(photo.id)
-    }
-}`,
-            why: 'The data is gone before the user can say Undo, and the result is ignored. Without a duration, the snackbar with an action also stays until the user acts.',
-          },
-          {
-            title: 'Hard-coding the bar heights',
-            bad: `Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { _ ->
-    LazyColumn(Modifier.padding(top = 88.dp)) { /* ... */ }
-}`,
-            good: `Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { innerPadding ->
-    LazyColumn(contentPadding = innerPadding) { /* ... */ }
-}`,
-            why: 'Status bar and app bar heights change with the device, display cutouts, font size and collapsing bars. <code>innerPadding</code> is measured on every layout, so it is always right.',
-          },
-        ],
-        visual(el) {
-          const STATUS = 24, TOPBAR = 64, NAVBAR = 80, NAVINSET = 24, PX = 0.75;
-          let hasTop = true, hasBottom = true, hasFab = true, usePad = true, drafts = 0, showing = false;
-          const queue = [];
-          const rows = h('div', {});
-          const content = h('div', { class: 'cmp-sc-content' }, rows);
-          const top = h('div', { class: 'cmp-sc-top' }, 'Inbox');
-          const bottom = h('div', { class: 'cmp-sc-bottom' }, h('span'), h('span'), h('span'));
-          const fab = h('button', { class: 'cmp-sc-fab', 'aria-label': 'Floating action button', onclick: () => tapFab() }, '+');
-          const snackText = h('span', {});
-          const snack = h('div', { class: 'cmp-sc-snack', 'aria-live': 'polite' }, snackText, h('b', {}, 'Undo'));
-          const phone = h('div', { class: 'cmp-sc-phone' },
-            h('div', { class: 'cmp-sc-status', 'aria-hidden': 'true' }, h('span', {}, '9:41'), h('span', {}, '5G')),
-            content, top, bottom, snack, fab, h('div', { class: 'cmp-sc-pill', 'aria-hidden': 'true' }));
-          const pad = h('div', { class: 'cmp-sc-pad' });
-          const qLine = h('span', { class: 'cmp-sc-q' });
-          const o = out();
-          const sw = (id, label, on, fn) => {
-            const i = h('input', { type: 'checkbox', id, checked: on });
-            i.addEventListener('change', () => fn(i.checked));
-            return h('label', { class: 'switch', for: id }, i, label);
-          };
-          const MESSAGES = ['Welcome to Inbox', 'Your order shipped', 'Team lunch on Friday', 'Invoice #2041', 'New sign-in on Pixel', 'Weekend plans?', 'Build passed', 'Design review notes', 'Flight check-in open', 'Last message'];
-          function addRow(title, sub, first) {
-            const r = h('div', { class: 'cmp-sc-row' }, title, h('small', {}, sub));
-            if (first) { rows.prepend(r); r.classList.add('drop-in'); } else rows.append(r);
-          }
-          MESSAGES.forEach((m, i) => addRow(m, i === 0 ? 'First item' : i === MESSAGES.length - 1 ? 'Scroll down to reach it' : 'Tap to open'));
-          const insets = () => ({ top: hasTop ? STATUS + TOPBAR : STATUS, bottom: hasBottom ? NAVBAR + NAVINSET : NAVINSET });
-          function layout() {
-            const p = insets();
-            phone.classList.toggle('cmp-sc-notop', !hasTop);
-            phone.classList.toggle('cmp-sc-nobottom', !hasBottom);
-            phone.classList.toggle('cmp-sc-nopad', !usePad);
-            content.style.paddingTop = usePad ? `${p.top * PX}px` : '0px';
-            content.style.paddingBottom = usePad ? `${p.bottom * PX}px` : '0px';
-            const base = p.bottom * PX;
-            fab.style.bottom = `${base + 12}px`;
-            snack.style.bottom = `${base + (hasFab ? 12 + fab.offsetHeight + 8 : 8)}px`;
-            fab.classList.toggle('cmp-sc-hide', !hasFab);
-            pad.innerHTML = hl(`innerPadding = PaddingValues(\n    top = ${p.top}.dp,     // ${hasTop ? 'status bar + TopAppBar' : 'status bar only'}\n    bottom = ${p.bottom}.dp,  // ${hasBottom ? 'NavigationBar + gesture bar' : 'gesture bar only'}\n)\n${usePad ? 'LazyColumn(contentPadding = innerPadding)' : 'LazyColumn()   // innerPadding ignored'}`);
-            setTimeout(markUnder, 430);
-          }
-          function markUnder() {
-            if (!el.isConnected) return 0;
-            const cr = content.getBoundingClientRect(), p = insets();
-            const first = rows.firstElementChild, last = rows.lastElementChild;
-            const atTop = content.scrollTop < 2, atEnd = content.scrollTop + content.clientHeight >= content.scrollHeight - 2;
-            for (const r of rows.children) r.classList.remove('cmp-sc-under');
-            if (atTop && first.getBoundingClientRect().top < cr.top + p.top * PX - 2) first.classList.add('cmp-sc-under');
-            if (atEnd && last.getBoundingClientRect().bottom > cr.bottom - p.bottom * PX + 2) last.classList.add('cmp-sc-under');
-            return usePad ? 0 : 2;
-          }
-          content.addEventListener('scroll', () => requestAnimationFrame(markUnder), { passive: true });
-          function setPart(fn, msg) {
-            fn(); layout();
-            setTimeout(() => {
-              const n = markUnder();
-              say(o, `${msg} ${n ? '<span class="bad">The first and last items stay under the bars, even at the ends of the scroll.</span>' : '<span class="good">The first and last items clear the bars.</span>'}`);
-            }, 450);
-          }
-          async function pump() {
-            if (showing) return;
-            while (queue.length && el.isConnected) {
-              showing = true;
-              snackText.textContent = queue.shift();
-              qLine.textContent = queue.length ? `${queue.length} waiting in SnackbarHostState` : 'Queue empty';
-              snack.classList.add('cmp-on'); layout();
-              await sleep(2400);
-              snack.classList.remove('cmp-on'); showing = false; layout();
-              await sleep(400);
-            }
-            showing = false;
-            qLine.textContent = 'Queue empty';
-          }
-          function show(msg) {
-            queue.push(msg);
-            if (showing) qLine.textContent = `${queue.length} waiting in SnackbarHostState`;
-            if (showing) say(o, `${hl(`showSnackbar("${msg}")`)} <span class="muted">// suspends and waits. One snackbar at a time.</span>`);
-            pump();
-          }
-          function tapFab() {
-            if (!hasFab) return;
-            drafts++;
-            addRow(`Draft ${drafts}`, 'Just now', true);
-            content.scrollTo({ top: 0, behavior: 'smooth' });
-            replay(fab, 'pop');
-            say(o, `${hl('scope.launch { snackbarHostState.showSnackbar("Draft saved") }')} <span class="muted">// the snackbar appears above the FAB</span>`);
-            show(`Draft ${drafts} saved`);
-          }
-          layout();
-          say(o, 'Turn parts of the Scaffold on and off, then switch off innerPadding.');
-          el.append(
-            h('div', { class: 'cmp-sc-wrap' }, phone,
-              h('div', { class: 'cmp-sc-side' },
-                h('div', { class: 'controls' },
-                  sw('cmp-sc-topbar', 'topBar', true, v => setPart(() => { hasTop = v; }, v ? 'TopAppBar is back. innerPadding.top grows.' : 'No topBar. innerPadding.top is just the status bar.')),
-                  sw('cmp-sc-bottombar', 'bottomBar', true, v => setPart(() => { hasBottom = v; }, v ? 'NavigationBar is back. The FAB sits above it.' : 'No bottomBar. The FAB and snackbar drop to the gesture bar.')),
-                  sw('cmp-sc-fabon', 'floatingActionButton', true, v => setPart(() => { hasFab = v; }, v ? 'FAB slot filled.' : 'FAB slot empty.')),
-                  sw('cmp-sc-usepad', 'use innerPadding', true, v => setPart(() => { usePad = v; }, v ? 'Content padded by innerPadding.' : 'innerPadding ignored. Content starts at the very top of the window.'))),
-                pad,
-                h('div', { class: 'controls' },
-                  act('Tap the FAB', tapFab),
-                  cmd('showSnackbar("Synced")', () => { replay(snack, 'pop-soft'); show('Synced'); say(o, `${hl('showSnackbar("Synced")')} ${showing ? '<span class="muted">// queued behind the current one</span>' : ''}`); })),
-                qLine)),
-            o);
-          qLine.textContent = 'Queue empty';
-        },
-        predict: {
-          q: 'The app draws edge to edge and the content ignores <code>innerPadding</code>. Where does the first list item land?',
-          options: ['Below the top bar, as usual', 'Under the status bar and top bar, partly hidden', 'Scaffold pads the content for you anyway'],
-          a: 1,
-          why: 'Scaffold only measures the bars and hands you <code>innerPadding</code>. If you drop it, the content starts at the very top of the window, behind the bars.',
-        },
-      },
-
-      // 5 ─────────────────────────────────────────────
-      {
-        id: 'theming',
-        title: 'Theming with Material 3',
-        tagline: 'Read colors from roles, then swap the whole scheme at once.',
-        body: `
-<p><code>MaterialTheme</code> hands three things down the tree: a <code>colorScheme</code>, a <code>typography</code> scale and a set of <code>shapes</code>. Material components take their colors and styles from it. Your own composables should too. Write <code>MaterialTheme.colorScheme.primary</code>, not a hard-coded <code>Color</code>.</p>
-<p>A color scheme is a set of roles: <code>primary</code>, <code>onPrimary</code>, <code>primaryContainer</code>, <code>surface</code>, <code>onSurface</code> and more. Each “on” color is the one that reads well on top of its partner. Swap the scheme and every screen follows. Dark theme works this way: pick a dark scheme when <code>isSystemInDarkTheme()</code> is true.</p>
-<p>On Android 12 (API 31) and up, <code>dynamicLightColorScheme</code> and <code>dynamicDarkColorScheme</code> build a scheme from the user’s wallpaper. Those functions require API 31, so check the API level and keep your own schemes as the fallback.</p>`,
-        code: `@Composable
-fun AppTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColors      // darkColorScheme(primary = ..., ...)
-        else -> LightColors          // lightColorScheme(primary = ..., ...)
-    }
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AppTypography,
-        shapes = Shapes(medium = RoundedCornerShape(16.dp)),
-        content = content,
-    )
-}
-
-// Read roles from the theme, never fixed colors.
-Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-    Text("Trip to Lisbon", style = MaterialTheme.typography.titleLarge)
-}`,
-        remember: 'Use color roles, not colors. Swap the scheme and everything follows: dark theme, dynamic color, all of it.',
-        level: 'beginner',
-        terms: [
-          { term: 'MaterialTheme', def: 'The composable that provides a color scheme, typography and shapes to every Material component below it.' },
-          { term: 'ColorScheme', def: 'A set of named Material 3 color roles, such as primary, onPrimary and surface, that components read instead of fixed colors.' },
-          { term: 'Dynamic color', def: 'A color scheme generated from the user’s wallpaper, available through dynamicLightColorScheme and dynamicDarkColorScheme on Android 12 and up.' },
-          { term: 'isSystemInDarkTheme', def: 'A composable function that returns true when the device is set to dark theme.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Build the scheme from the wallpaper on Android 12 and up.', code: 'val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.[[S]]) {\n    val context = LocalContext.current\n    if (darkTheme) [[dynamicDarkColorScheme]](context) else dynamicLightColorScheme(context)\n} else {\n    if (darkTheme) DarkColors else LightColors\n}', why: '<code>VERSION_CODES.S</code> is Android 12, API 31. Below that, the dynamic functions can’t run, so fall back to your own schemes.' },
-          { type: 'bug', prompt: 'In dark theme this title is dark gray on a dark background. Tap the line that causes it.', code: '@Composable\nfun SectionTitle(text: String) {\n    Text(\n        text = text,\n        style = MaterialTheme.typography.titleLarge,\n        color = Color(0xFF1B1A24),\n    )\n}', bug: 5, fix: '        color = MaterialTheme.colorScheme.onSurface,', why: 'A fixed color ignores the theme. <code>onSurface</code> is dark in the light scheme and light in the dark one.' },
-        ],
-        quiz: [
-          { q: 'The app runs on Android 11 with <code>dynamicColor = true</code>. Which scheme does <code>AppTheme</code> use?', options: ['<code>dynamicLightColorScheme</code>', 'Your own <code>LightColors</code> or <code>DarkColors</code>', 'It crashes'], a: 1, why: 'The API check fails on Android 11, so the <code>when</code> falls through to your own schemes.' },
-          { q: 'Text inside a filled <code>Button</code> should use which role?', options: ['<code>primary</code>', '<code>onPrimary</code>', '<code>surface</code>'], a: 1, why: 'The button is painted <code>primary</code>. The “on” partner is picked to read well on top of it.' },
-          { q: 'How does a Compose app usually follow the system dark theme?', options: ['<code>isSystemInDarkTheme()</code> picks a dark color scheme for MaterialTheme', 'Android inverts the colors on its own', 'Each composable reads a setting and picks colors'], a: 0, why: 'One check at the theme level swaps the whole scheme. Components just read the roles.' },
-          { q: 'What color is the text?<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>Box(Modifier.background(MaterialTheme.colorScheme.primary)) {\n    Text("Pro")\n}</code></pre>', options: ['<code>onPrimary</code>, picked from the background', 'The content color from further up the tree, which may not read well on primary', 'Always white'], a: 1, why: 'A plain background only paints. <code>Surface(color = primary)</code> would also set <code>LocalContentColor</code> to <code>onPrimary</code> through <code>contentColorFor</code>.' },
-        ],
-        deeper: [
-          {
-            title: 'Surface picks the text color for you',
-            body: `<p>A <code>Text</code> without a color reads <code>LocalContentColor</code>. <code>Surface</code> sets it: its <code>contentColor</code> defaults to <code>contentColorFor(color)</code>, which returns the matching “on” role. Put a <code>Surface(color = primary)</code> around a Text and it turns <code>onPrimary</code> without you saying so. Scaffold, Card and Button do the same.</p>
-<p>A plain <code>Modifier.background</code> paints a color and nothing else. The Text keeps the content color from further up, which may be unreadable on the new background. And <code>contentColorFor</code> only knows the scheme’s own roles. For any other color it falls back to the current content color, so pass <code>contentColor</code> yourself.</p>`,
-            code: `Box(Modifier.background(MaterialTheme.colorScheme.primary)) {
-    Text("Pro")                 // keeps the outer content color
-}
-
-Surface(color = MaterialTheme.colorScheme.primary) {
-    Text("Pro")                 // onPrimary, from contentColorFor(primary)
-}
-
-Surface(color = BrandPurple, contentColor = Color.White) {
-    Text("Pro")                 // not a scheme role: say the content color
-}`,
-            visual(el) {
-              const CASES = [
-                { src: 'Box(Modifier.background(primary)) { Text("Pro") }', bg: 'var(--accent)', fg: 'var(--ink)', local: 'onSurface (from the Scaffold above)', ok: false, note: 'background only paints. The Text still uses the content color from the Scaffold above, and it is hard to read here.' },
-                { src: 'Surface(color = primary) { Text("Pro") }', bg: 'var(--accent)', fg: 'var(--accent-ink)', local: 'onPrimary', ok: true, note: 'Surface set LocalContentColor to contentColorFor(primary), which is onPrimary.' },
-                { src: 'Surface(color = primaryContainer) { Text("Pro") }', bg: 'var(--accent-soft)', fg: 'var(--accent)', local: 'onPrimaryContainer', ok: true, note: 'Each container role has its own “on” partner. contentColorFor finds it.' },
-                { src: 'Surface(color = BrandPurple) { Text("Pro") }', bg: 'var(--t-f)', fg: 'var(--ink)', local: 'onSurface (fallback)', ok: false, note: 'BrandPurple is not a scheme role, so contentColorFor falls back to the current content color. In dark theme that is light text on a light purple.' },
-              ];
-              const badge = h('span', { class: 'cmp-d2t-pro' }, 'Pro');
-              const card = h('div', { class: 'cmp-d2t-card' }, h('b', {}, 'Plan'), badge, h('span', { class: 'cmp-d2t-sub' }, 'Text on the Scaffold uses onSurface.'));
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              const btns = CASES.map(c => cmd(c.src, () => pick(c)));
-              function pick(c) {
-                btns.forEach((b, i) => b.setAttribute('aria-pressed', String(CASES[i] === c)));
-                badge.style.background = c.bg; badge.style.color = c.fg;
-                badge.classList.toggle('cmp-d2t-warn', !c.ok);
-                replay(badge, 'pop');
-                read.innerHTML = hl(`LocalContentColor = ${c.local}`);
-                say(o, `${c.ok ? '<span class="good">Readable.</span>' : '<span class="bad">Check the contrast.</span>'} ${esc(c.note)}`);
-              }
-              el.append(card, read, h('div', { class: 'controls' }, btns), o);
-              pick(CASES[0]);
-            },
-          },
-          {
-            title: 'Theme one part of the screen',
-            body: `<p><code>MaterialTheme</code> can be nested. An inner <code>MaterialTheme</code> overrides only what you pass and inherits the rest. <code>ColorScheme.copy</code> changes a few roles, so a danger zone can make its buttons use error colors while the rest of the screen stays on brand.</p>
-<p>The override only reaches the composables inside the inner call. For tokens Material doesn’t have, like a “success” color, create your own <code>CompositionLocal</code> next to your theme. The Compose, advanced track covers how.</p>`,
-            code: `@Composable
-fun DangerZone(content: @Composable () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    MaterialTheme(
-        colorScheme = scheme.copy(primary = scheme.error, onPrimary = scheme.onError),
-        content = content,              // typography and shapes are inherited
-    )
-}
-
-Column {
-    Button(onClick = onExport) { Text("Export data") }          // brand primary
-    DangerZone {
-        Button(onClick = onDelete) { Text("Delete account") }   // error colors
-    }
-}`,
-            visual(el) {
-              let nested = false;
-              const btn = (t, danger) => h('span', { class: `cmp-d2t-btn${danger ? ' cmp-d2t-dz' : ''}` }, t);
-              const zone = h('div', { class: 'cmp-d2t-zone' }, h('span', { class: 'cmp-d2t-zlabel' }, 'Danger zone'), btn('Delete account', true), btn('Reset app', true));
-              const screen = h('div', { class: 'cmp-d2t-screen', role: 'img', 'aria-label': 'Settings screen preview' },
-                h('b', {}, 'Settings'), btn('Export data'), btn('Sync now'), zone);
-              const code = h('div', { class: 'kt' });
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2t-nest' });
-              function paint() {
-                zone.classList.toggle('cmp-d2t-on', nested);
-                code.innerHTML = hl(nested ? 'MaterialTheme(colorScheme = scheme.copy(\n    primary = scheme.error, onPrimary = scheme.onError,\n)) {\n    DangerButtons()\n}' : 'DangerButtons()   // same theme as the rest');
-                zone.querySelectorAll('.cmp-d2t-btn').forEach(b => replay(b, 'pop-soft'));
-                say(o, nested ? 'Only the buttons inside the inner MaterialTheme switched to error colors. Export and Sync still read the outer primary.' : 'One theme for the whole screen. The dangerous buttons look like the safe ones.');
-              }
-              sw.addEventListener('change', () => { nested = sw.checked; paint(); });
-              el.append(screen, h('label', { class: 'switch', for: 'cmp-d2t-nest' }, sw, 'Wrap in a nested MaterialTheme'), code, o);
-              paint();
-            },
-          },
-        ],
-        underHood: {
-          body: `<p><code>MaterialTheme</code> is a <code>CompositionLocalProvider</code>. It puts the color scheme, typography and shapes into a CompositionLocal created with <code>staticCompositionLocalOf</code>. <code>MaterialTheme.colorScheme</code> is a getter marked <code>@Composable @ReadOnlyComposable</code> that reads that local’s current value.</p>
-<p>A static local does not track who read it, so changing the theme recomposes everything inside the provider. That trade is fine because a theme rarely changes, and it makes every read cheap. <code>ColorScheme</code> is an <code>@Immutable</code> class of plain <code>Color</code> values. <code>LocalContentColor</code> is a separate local with a default of black, which is why text outside any Surface or Scaffold shows black, even in dark theme.</p>`,
-          code: `// Inside Surface (simplified)
-CompositionLocalProvider(LocalContentColor provides contentColor) {
-    content()
-}
-
-// Inside Text (simplified): explicit color, then style color, then content color
-val textColor = color.takeOrElse { style.color.takeOrElse { LocalContentColor.current } }`,
-        },
-        mistakes: [
-          {
-            title: 'Checking dark theme in every composable',
-            bad: `@Composable
-fun Banner(text: String) {
-    val bg = if (isSystemInDarkTheme()) Color(0xFF1B1B1F) else Color.White
-    Text(text, Modifier.background(bg))
-}`,
-            good: `@Composable
-fun Banner(text: String) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-        Text(text)
-    }
-}`,
-            why: 'Each hand-made check ignores dynamic color and any in-app theme switch. The theme already chose a scheme. Read its roles.',
-          },
-          {
-            title: 'Hand-sized text instead of the type scale',
-            bad: `Text("Trips", fontSize = 22.sp, fontWeight = FontWeight.Bold)`,
-            good: `Text("Trips", style = MaterialTheme.typography.titleLarge)`,
-            why: 'Fixed sizes drift apart across screens and ignore your <code>Typography</code>. Use the scale roles so one change in the theme updates every title.',
-          },
-          {
-            title: 'No Surface at the root',
-            bad: `setContent {
-    AppTheme {
-        Text("Hello")         // LocalContentColor is still the default: black
-    }
-}`,
-            good: `setContent {
-    AppTheme {
-        Surface {             // provides surface color and onSurface text
-            Text("Hello")
-        }
-    }
-}`,
-            why: 'Nothing has set a content color yet, so the text is black on a dark window. A root <code>Surface</code> or <code>Scaffold</code> paints the background and sets the matching text color.',
-          },
-        ],
-        visual(el) {
-          const SEEDS = { brand: 'var(--t-k)', 'wallpaper 1': 'var(--t-n)', 'wallpaper 2': 'var(--t-s)', 'wallpaper 3': 'var(--t-t)' };
-          let dark = false, dynamic = true, api = 34, wall = 'wallpaper 1', square = false;
-          const scope = h('div', { class: 'cmp-th-scope' });
-          const phone = h('div', { class: 'cmp-th-phone', role: 'img', 'aria-label': 'Themed app preview' },
-            h('div', { class: 'cmp-th-bar' }, 'Trips'),
-            h('div', { class: 'cmp-th-body' },
-              h('div', { class: 'cmp-th-card' }, h('b', {}, 'Lisbon'), h('span', {}, 'May 12 to 16 · 2 travelers')),
-              h('div', { class: 'cmp-th-btns' }, h('span', { class: 'cmp-th-btn' }, 'Book'), h('span', { class: 'cmp-th-btn cmp-th-out' }, 'Share')),
-              h('p', { class: 'cmp-th-text' }, 'bodyMedium on surface. Every color here comes from a role.'),
-              h('div', { class: 'cmp-th-fab', 'aria-hidden': 'true' }, '+')));
-          const ROLES = [['primary', '--cmp-primary'], ['onPrimary', '--cmp-on-primary'], ['primaryContainer', '--cmp-container'], ['onPrimaryContainer', '--cmp-on-container'], ['surface', '--cmp-bg'], ['onSurface', '--cmp-on']];
-          const roles = h('div', { class: 'cmp-th-roles' }, ROLES.map(([n, v]) => h('span', { class: 'cmp-th-role' }, h('i', { style: `background: var(${v})` }), n)));
-          const which = h('div', { class: 'kt' });
-          const o = out();
-          const darkIn = h('input', { type: 'checkbox', id: 'cmp-th-dark' });
-          const dynIn = h('input', { type: 'checkbox', id: 'cmp-th-dyn', checked: true });
-          const apiBtns = [[30, 'Android 11 (API 30)'], [34, 'Android 14 (API 34)']].map(([n, label]) => act(label, () => { api = n; paint(api < 31 && dynamic ? `${label}: the API check fails, so the theme falls back to your own scheme.` : `${label}.`); }));
-          const wallBtns = Object.keys(SEEDS).filter(k => k !== 'brand').map(k => h('button', { class: 'cmd', onclick: () => pickWall(k) }, h('i', { class: 'cmp-th-swatch', style: `background:${SEEDS[k]}` }), k));
-          const shapeBtns = [false, true].map(sq => cmd(`medium = RoundedCornerShape(${sq ? 4 : 16}.dp)`, () => { square = sq; paint(`${hl(`RoundedCornerShape(${sq ? 4 : 16}.dp)`)} <span class="muted">// Card reads shapes.medium</span>`); }));
-          const usesDynamic = () => dynamic && api >= 31;
-          function pickWall(k) {
-            wall = k;
-            if (!usesDynamic()) { replay(phone, 'shake'); paint(`The wallpaper changed, but ${dynamic ? 'Android 11 has no dynamic color' : 'dynamicColor is off'}. The app keeps its own scheme.`); return; }
-            paint(`New wallpaper. The system rebuilds the dynamic scheme and the app follows. <span class="muted">// nothing in your code changed</span>`);
-          }
-          function paint(msg) {
-            const seed = usesDynamic() ? SEEDS[wall] : SEEDS.brand;
-            scope.style.setProperty('--cmp-seed', seed);
-            scope.classList.toggle('cmp-th-dark', dark);
-            scope.classList.toggle('cmp-th-square', square);
-            const src = usesDynamic() ? `${dark ? 'dynamicDarkColorScheme' : 'dynamicLightColorScheme'}(context)` : (dark ? 'DarkColors' : 'LightColors');
-            which.innerHTML = hl(`colorScheme = ${src}`);
-            apiBtns.forEach((b, i) => b.setAttribute('aria-pressed', String([30, 34][i] === api)));
-            wallBtns.forEach(b => b.setAttribute('aria-pressed', String(b.textContent.endsWith(wall))));
-            shapeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String([false, true][i] === square)));
-            replay(roles, 'pop-soft');
-            if (msg) say(o, msg);
-          }
-          darkIn.addEventListener('change', () => { dark = darkIn.checked; paint(`${hl(`isSystemInDarkTheme() == ${dark}`)} <span class="muted">// every role swaps at once</span>`); });
-          dynIn.addEventListener('change', () => { dynamic = dynIn.checked; paint(dynamic ? (api >= 31 ? 'dynamicColor on: the scheme comes from the wallpaper.' : 'dynamicColor on, but this is Android 11. The fallback still runs.') : 'dynamicColor off: your brand scheme everywhere.'); });
-          scope.append(phone, h('div', { class: 'cmp-th-side' }, which, roles,
-            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-th-dark' }, darkIn, 'Dark theme'), h('label', { class: 'switch', for: 'cmp-th-dyn' }, dynIn, 'dynamicColor')),
-            h('div', { class: 'controls' }, apiBtns)));
-          paint('Android 14 with dynamic color. Flip dark theme, then pick another wallpaper.');
-          el.append(scope,
-            h('div', { class: 'controls' }, wallBtns),
-            h('div', { class: 'controls' }, shapeBtns),
-            o);
-        },
-        predict: {
-          q: 'Android 14 with <code>dynamicColor</code> on. The user picks another wallpaper. What happens to the app’s <code>primary</code>?',
-          options: ['It stays your brand color', 'It changes to a color built from the new wallpaper', 'It changes only in dark theme'],
-          a: 1,
-          why: '<code>dynamicLightColorScheme</code> and <code>dynamicDarkColorScheme</code> read the system palette, which is built from the wallpaper. Every role follows it.',
-        },
-      },
-
-      // 6 ─────────────────────────────────────────────
-      {
-        id: 'remember',
-        title: 'State and remember',
-        tagline: 'Keep a value alive between recompositions.',
-        body: `
-<p>A composable can run many times. Every local variable inside it starts fresh on each run. To keep a value from one run to the next, wrap it in <code>remember { }</code>.</p>
-<p><code>remember</code> stores the object in the composition, in a slot tied to that spot in the code. The first run creates the value. Every later run gets the same object back. Pair it with <code>mutableStateOf</code> (or <code>mutableIntStateOf</code> for an Int) so that writing the value also triggers a recomposition.</p>
-<p>Forget <code>remember</code> and each recomposition builds a brand-new state object set to 0. Lint flags this as an error. Click <code>count++</code> on both counters below.</p>`,
-        code: `@Composable
-fun Counter() {
-    var count by remember { mutableIntStateOf(0) }
-    Column {
-        Text("Count: $count")
-        Button(onClick = { count++ }) { Text("+1") }
-    }
-}
-
-@Composable
-fun BrokenCounter() {
-    var count by mutableIntStateOf(0)   // no remember: a new state on every run
-    Column {
-        Text("Count: $count")           // always 0
-        Button(onClick = { count++ }) { Text("+1") }
-    }
-}`,
-        remember: 'mutableStateOf makes a value observable. remember keeps it alive across recompositions. You need both.',
-        level: 'beginner',
-        terms: [
-          { term: 'remember', def: 'Stores a value in the composition so later recompositions get the same object back instead of a new one.' },
-          { term: 'mutableStateOf', def: 'Creates an observable State holder; writing its value schedules a recomposition of everything that read it.' },
-          { term: 'mutableIntStateOf', def: 'A State holder specialized for Int that avoids boxing the number on every read and write.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Keep the count across recompositions and make writes update the screen.', code: 'var count by [[remember]] { [[mutableIntStateOf|mutableStateOf]](0) }\nButton(onClick = { count++ }) { Text("Count: $count") }', why: '<code>remember</code> keeps the state object alive. The state holder makes <code>count++</code> trigger a recomposition.' },
-          { type: 'bug', prompt: 'The switch snaps back every time you flip it. Tap the broken line.', code: '@Composable\nfun Toggle() {\n    var on by mutableStateOf(false)\n    Switch(checked = on, onCheckedChange = { on = it })\n}', bug: 2, fix: '    var on by remember { mutableStateOf(false) }', why: 'Without <code>remember</code>, every recomposition builds a new state set to <code>false</code>.' },
-        ],
-        quiz: [
-          { q: 'What does <code>remember { ... }</code> do?', options: ['Saves the value to disk', 'Runs the block once and returns the stored result on later recompositions', 'Makes the value observable'], a: 1, why: 'It caches the result in the composition. Observability comes from <code>mutableStateOf</code>.' },
-          { q: 'You tap +1 on <code>BrokenCounter</code> three times. What does it show?', options: ['Count: 3', 'Count: 1', 'Count: 0'], a: 2, why: 'Each tap triggers a recomposition, which creates a fresh state set to 0.' },
-          { q: 'Does a <code>remember</code>ed value survive rotating the phone?', options: ['Yes', 'No, the composition is rebuilt'], a: 1, why: 'Rotation recreates the Activity and its composition. The next lesson fixes that.' },
-        ],
-        deeper: [
-          {
-            title: 'Keys: build it again when an input changes',
-            body: `<p><code>remember(key) { }</code> keeps its value while the key stays equal. When the key changes, the old value is dropped and the block runs again. Use it for anything built from a parameter, like a formatter for a locale or a filtered list.</p>
-<p>Without the key, the first value stays for the whole life of the composable, even after the parameter changes.</p>`,
-            code: `@Composable
-fun PriceTag(cents: Long, locale: Locale) {
-    val format = remember(locale) { NumberFormat.getCurrencyInstance(locale) }
-    Text(format.format(cents / 100.0))
-}`,
-            visual(el) {
-              const LOC = { US: ['en-US', 'USD', 'Locale.US'], DE: ['de-DE', 'EUR', 'Locale.GERMANY'], UK: ['en-GB', 'GBP', 'Locale.UK'] };
-              let loc = 'US', cents = 1250, addr = 0x31c0, busy = false;
-              const next = () => '@' + (addr += 0x1b4).toString(16);
-              const fmt = (l, c) => { try { return new Intl.NumberFormat(LOC[l][0], { style: 'currency', currency: LOC[l][1] }).format(c / 100); } catch (e) { return (c / 100).toFixed(2); } };
-              const o = out();
-              const card = keyed => {
-                const c = { keyed, loc: 'US', id: next() };
-                c.obj = h('span', { class: 'cmp-obj' }, `NumberFormat(${LOC.US[0]}) ${c.id}`);
-                c.stack = h('div', { class: 'cmp-stack' }, c.obj);
-                c.price = h('span', { class: 'cmp-zk-price' }, fmt('US', cents));
-                c.el = h('div', { class: 'cmp-card' },
-                  h('div', { class: 'kt', html: hl(keyed ? 'remember(locale) { NumberFormat... }' : 'remember { NumberFormat... }') }),
-                  h('div', { class: 'cmp-mem' }, h('span', { class: 'cmp-label' }, 'slot'), c.stack),
-                  h('div', { class: 'cmp-row' }, h('span', { class: 'cmp-label' }, 'On screen'), c.price));
-                return c;
-              };
-              const A = card(false), B = card(true);
-              const paint = c => {
-                c.price.textContent = fmt(c.loc, cents);
-                c.el.classList.toggle('cmp-zk-stale', c.loc !== loc);
-                replay(c.price, 'cmp-flash');
-              };
-              async function setLocale(l) {
-                if (busy) return;
-                if (l === loc) { say(o, `${hl(`locale = ${LOC[l][2]}`)} <span class="muted">// same key: both slots reused</span>`); [A, B].forEach(c => replay(c.obj, 'pop')); return; }
-                busy = true; loc = l;
-                locBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(LOC)[i] === l)));
-                A.obj.classList.add('cmp-reuse'); replay(A.obj, 'pop');
-                const old = B.obj; old.classList.add('fly-out'); setTimeout(() => old.remove(), 400);
-                B.loc = l; B.id = next();
-                B.obj = h('span', { class: 'cmp-obj cmp-new drop-in' }, `NumberFormat(${LOC[l][0]}) ${B.id}`);
-                B.stack.append(B.obj);
-                await sleep(420);
-                if (!el.isConnected) return;
-                paint(A); paint(B);
-                say(o, `Key changed to ${LOC[l][2]}. <span class="good">remember(locale)</span> built a new formatter. <span class="bad">remember { }</span> still formats for ${LOC[A.loc][2]}.`);
-                busy = false;
-              }
-              function amount() {
-                if (busy) return;
-                cents += 100;
-                [A, B].forEach(c => { replay(c.obj, 'pop'); paint(c); });
-                say(o, `${hl('cents += 100')} <span class="muted">// a recomposition, keys unchanged: both slots reused</span>`);
-              }
-              const locBtns = Object.entries(LOC).map(([k, v]) => cmd(`locale = ${v[2]}`, () => setLocale(k)));
-              locBtns[0].setAttribute('aria-pressed', 'true');
-              say(o, 'Change the locale and compare the two slots.');
-              el.append(h('div', { class: 'cmp-pair' }, A.el, B.el), h('div', { class: 'controls' }, locBtns, cmd('cents += 100', amount)), o);
-            },
-          },
-          {
-            title: 'Slots belong to a place in the tree',
-            body: `<p>The composition stores remembered values by where the call sits. When an <code>if</code> stops calling a composable, its group and its slots are removed, and the remembered values go with them. When the branch comes back, <code>remember</code> runs its block again from scratch.</p>
-<p>The same happens when a screen leaves navigation or a lazy row scrolls far away. State that must outlive a branch belongs higher up: hoisted into the parent, saved with <code>rememberSaveable</code>, or kept in a ViewModel.</p>`,
-            code: `@Composable
-fun Order(showNotes: Boolean) {
-    if (showNotes) {
-        NotesEditor()   // its remember { } is forgotten when showNotes turns false
-    }
-}
-
-@Composable
-fun NotesEditor() {
-    var note by remember { mutableStateOf("") }
-    TextField(note, onValueChange = { note = it })
-}`,
-            visual(el) {
-              const NOTES = ['Gate code 41', 'Leave at the door', 'Ring twice'];
-              let show = true, hoist = false, note = '', typed = 0, busy = false, prev = new Set();
-              const table = h('div', { class: 'cmp-zt-table', 'aria-label': 'Slot table' });
-              const field = h('div', { class: 'cmp-zt-field' });
-              const toggle = h('input', { type: 'checkbox', id: 'cmp-rm-hoist' });
-              const showBtn = cmd('showNotes = false', () => flip());
-              const o = out();
-              function rows() {
-                const r = [{ k: 'order', d: 0, t: hoist ? 'group  Order(showNotes)' : 'group  Order(showNotes)' }];
-                if (hoist) r.push({ k: 'hoisted', d: 1, t: `slot   MutableState("${note}")`, slot: true });
-                if (show) {
-                  r.push({ k: 'if', d: 1, t: 'group  if (showNotes)' });
-                  r.push({ k: 'editor', d: 2, t: hoist ? 'group  NotesEditor(note, onNoteChange)' : 'group  NotesEditor()' });
-                  if (!hoist) r.push({ k: 'local', d: 3, t: `slot   MutableState("${note}")`, slot: true });
-                }
-                return r;
-              }
-              function paint() {
-                const r = rows(), now = new Set(r.map(x => x.k));
-                table.replaceChildren(...r.map(x => h('div', { class: ['cmp-zt-row', x.slot && 'cmp-zt-slot', !prev.has(x.k) && 'drop-in'].filter(Boolean).join(' '), style: `--d:${x.d}` }, x.t)));
-                prev = now;
-                field.replaceChildren(show
-                  ? h('span', {}, h('span', { class: 'cmp-label' }, 'Notes  '), note || h('span', { class: 'muted-text' }, '(empty)'))
-                  : h('span', { class: 'muted-text' }, 'Notes hidden'));
-                showBtn.innerHTML = hl(`showNotes = ${!show}`);
-              }
-              async function flip() {
-                if (busy) return; busy = true;
-                if (show) {
-                  const gone = [...table.children].filter(x => /if \(|NotesEditor|slot/.test(x.textContent) && !(hoist && x.textContent.startsWith('slot')));
-                  gone.forEach(x => x.classList.add('leave'));
-                  await sleep(420);
-                  if (!el.isConnected) return;
-                  show = false;
-                  if (!hoist) note = '';
-                  paint();
-                  say(o, hoist ? 'The NotesEditor group left. The note lives in Order, so it stays.' : '<span class="bad">The group left the table and took its slot with it.</span> The note is gone.');
-                } else {
-                  show = true; paint();
-                  say(o, hoist ? `<span class="good">Back with "${esc(note)}".</span> The state never left.` : 'NotesEditor is back in a new group. remember ran its block again: the note starts empty.');
-                }
-                busy = false;
-              }
-              function type() {
-                if (busy) return;
-                if (!show) { replay(field, 'shake'); say(o, 'The editor is hidden. Show it first.'); return; }
-                note = NOTES[typed++ % NOTES.length]; paint();
-                replay(table.querySelector('.cmp-zt-slot'), 'pop');
-                say(o, `${hl(`note = "${note}"`)} <span class="muted">// written into the slot</span>`);
-              }
-              toggle.addEventListener('change', () => {
-                if (busy) { toggle.checked = hoist; return; }
-                hoist = toggle.checked; show = true; note = ''; prev = new Set(); paint();
-                say(o, hoist ? 'The state now sits in Order. NotesEditor only gets the value and a callback.' : 'The state sits inside NotesEditor again.');
-              });
-              paint();
-              say(o, 'Type a note, then hide and show the editor.');
-              el.append(
-                h('div', { class: 'cmp-split' }, table, field),
-                h('div', { class: 'controls' }, act('Type a note', type), showBtn, h('label', { class: 'switch', for: 'cmp-rm-hoist' }, toggle, 'Hoist note into Order')),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p><code>remember</code> is a small inline function. It asks the current <code>Composer</code> for the next slot in the <em>slot table</em>, the structure that stores groups and remembered values in the order your code ran. On the first composition the slot is empty, so the block runs and its result is written there. On later runs the same slot comes back. With keys, the composer first checks each key against the value it stored for that key last time.</p>
-<p>That is why position matters: the composer finds your value by walking the same path of groups. Values that implement <code>RememberObserver</code> are told when they enter and leave the table, which is how effects start and stop.</p>`,
-          code: `// Simplified from androidx.compose.runtime
-@Composable
-inline fun <T> remember(key1: Any?, crossinline calculation: () -> T): T =
-    currentComposer.cache(currentComposer.changed(key1), calculation)
-
-inline fun <T> Composer.cache(invalid: Boolean, block: () -> T): T {
-    val stored = rememberedValue()                   // read the next slot
-    return if (invalid || stored === Composer.Empty) {
-        block().also { updateRememberedValue(it) }   // first run or new key
-    } else {
-        stored as T                                  // same object as last time
-    }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Copying a parameter into state and expecting updates',
-            bad: `@Composable
-fun NameField(initial: String) {
-    var text by remember { mutableStateOf(initial) }
-    TextField(text, onValueChange = { text = it })
-}`,
-            good: `@Composable
-fun NameField(initial: String) {
-    var text by remember(initial) { mutableStateOf(initial) }
-    TextField(text, onValueChange = { text = it })
-}`,
-            why: 'The block runs once, so a later <code>initial</code> is ignored. Key it on the parameter if a new value should reset the field, or hoist the state so there is one source of truth.',
-          },
-          {
-            title: 'Rebuilding a constant object on every run',
-            bad: `@Composable
-fun DayLabel(date: LocalDate) {
-    val format = DateTimeFormatter.ofPattern("d MMM")
-    Text(date.format(format))
-}`,
-            good: `private val DayFormat = DateTimeFormatter.ofPattern("d MMM")
-
-@Composable
-fun DayLabel(date: LocalDate) {
-    Text(date.format(DayFormat))
-}`,
-            why: 'Anything built in the body is built again on every recomposition. A true constant goes in a top-level <code>val</code>. Use <code>remember</code> for things that depend on composition, like the current locale.',
-          },
-        ],
-        visual(el) {
-          let busy = false, addr = 0x4f1a;
-          const newAddr = () => '@' + (addr += 0x2c3).toString(16);
-          const o = out('Click count++ on each counter.');
-          const make = good => {
-            const c = { good, n: good ? 3 : 0, id: newAddr() };
-            c.slot = h('div', { class: 'slot' }, h('span', { class: 'chip' }, String(c.n)));
-            c.obj = h('span', { class: 'cmp-obj' }, `MutableIntState(${c.n}) ${c.id}`);
-            c.stack = h('div', { class: 'cmp-stack' }, c.obj);
-            c.note = h('span', { class: 'tip' }, good ? 'Lives in slot 0 of the composition.' : 'Not stored anywhere. Made during the run.');
-            c.el = h('div', { class: 'cmp-card' },
-              h('span', { class: 'cmp-card-title' }, good ? 'Counter()' : 'BrokenCounter()'),
-              h('div', { class: 'kt', html: hl(good ? 'var count by remember { mutableIntStateOf(0) }' : 'var count by mutableIntStateOf(0)') }),
-              h('div', { class: 'cmp-row' }, h('span', { class: 'cmp-label' }, 'On screen'), c.slot, cmd('count++', () => click(c))),
-              h('div', { class: 'cmp-mem' }, h('span', { class: 'cmp-label' }, good ? 'remember slot' : 'state object'), c.stack),
-              c.note);
-            return c;
-          };
-          const good = make(true), bad = make(false);
-          async function recompose(c) {
-            replay(c.el, 'cmp-flash');
-            await sleep(380);
-            if (c.good) {
-              c.obj.classList.remove('cmp-new'); c.obj.classList.add('cmp-reuse'); replay(c.obj, 'pop');
-              c.note.textContent = 'remember handed back the same object.';
-              if (c.slot.textContent !== String(c.n)) swap(c.slot, String(c.n));
-            } else {
-              const old = c.obj; old.classList.add('fly-out'); setTimeout(() => old.remove(), 400);
-              c.n = 0; c.id = newAddr();
-              c.obj = h('span', { class: 'cmp-obj cmp-new drop-in' }, `MutableIntState(0) ${c.id}`);
-              c.stack.append(c.obj);
-              c.note.textContent = 'A brand-new object, starting at 0.';
-              replay(c.slot, 'shake');
-            }
-            await sleep(450);
-          }
-          async function click(c) {
-            if (busy) return; busy = true;
-            c.n++;
-            c.obj.textContent = `MutableIntState(${c.n}) ${c.id}`; replay(c.obj, 'pop');
-            say(o, `${hl(`count = ${c.n}`)} <span class="muted">// the write schedules a recomposition of ${c.good ? 'Counter' : 'BrokenCounter'}</span>`);
-            await sleep(700);
-            await recompose(c);
-            say(o, c.good
-              ? `<span class="good">Counter</span> ran again and remember returned the same object. Count: ${c.n}.`
-              : `<span class="bad">BrokenCounter</span> ran again. ${hl('mutableIntStateOf(0)')} made a new object. Count: 0.`);
-            busy = false;
-          }
-          async function both() {
-            if (busy) return; busy = true;
-            say(o, 'The parent recomposed, so both counters run again.');
-            await Promise.all([recompose(good), recompose(bad)]);
-            say(o, `Counter kept ${good.n}. BrokenCounter got a new object again, ${bad.id}.`);
-            busy = false;
-          }
-          el.append(h('div', { class: 'cmp-pair' }, good.el, bad.el),
-            h('div', { class: 'controls' }, act('Parent recomposes', both)),
-            o);
-        },
-        predict: {
-          q: 'In <code>Counter</code>, you tap <code>count++</code> and the composable runs again. Where does the new value live?',
-          options: ['In a new <code>MutableIntState</code> made by this run', 'In the same object as before: <code>remember</code> hands it back', 'In a local variable that is copied over'],
-          a: 1,
-          why: '<code>remember</code> stores the object in a slot of the composition. Every later run gets that same object, now holding the new value.',
-        },
-      },
-
-      // 7 ─────────────────────────────────────────────
-      {
-        id: 'saveable',
-        title: 'rememberSaveable',
-        tagline: 'State that survives rotation and process death.',
-        body: `
-<p>Rotating the phone is a configuration change. By default Android destroys the Activity and creates a new one, and Compose builds the whole composition again from scratch. Everything held by <code>remember</code> is gone.</p>
-<p><code>rememberSaveable</code> works like <code>remember</code>, and it also writes its value into the saved instance state <code>Bundle</code>. The new Activity reads it back. The same Bundle also survives the system killing your app in the background.</p>
-<p>A Bundle holds small, simple values: numbers, strings, <code>@Parcelize</code> classes. Use it for UI state like a text field or a selected tab. Keep big data in a ViewModel or a database.</p>`,
-        code: `@Composable
-fun Counters() {
-    var plain by remember { mutableIntStateOf(0) }
-    var saved by rememberSaveable { mutableIntStateOf(0) }
-
-    Column {
-        Button(onClick = { plain++ }) { Text("remember: $plain") }
-        Button(onClick = { saved++ }) { Text("rememberSaveable: $saved") }
-    }
-}
-// After rotation: plain is 0 again, saved keeps its value.
-// Custom types need @Parcelize or a Saver.`,
-        remember: 'remember lasts while the composition lives. rememberSaveable also survives rotation and process death.',
-        level: 'intermediate',
-        terms: [
-          { term: 'rememberSaveable', def: 'Like remember, but it also saves the value in the saved instance state Bundle so it survives rotation and process death.' },
-          { term: 'Saver', def: 'An object that tells rememberSaveable how to turn a custom type into Bundle-friendly values and back.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Keep the search text when the user rotates the phone.', code: 'var query by [[rememberSaveable]] { mutableStateOf("") }\nTextField(value = query, onValueChange = { query = it })', why: '<code>rememberSaveable</code> writes the text into the saved state, so the new Activity gets it back.' },
-          { type: 'bug', prompt: 'This crashes when the app goes to the background. Tap the line to fix.', code: 'data class Filter(val tag: String, val minPrice: Int)\n\n@Composable\nfun FilterBar() {\n    var filter by rememberSaveable { mutableStateOf(Filter("all", 0)) }\n    FilterChips(filter, onChange = { filter = it })\n}', bug: 0, fix: '@Parcelize data class Filter(val tag: String, val minPrice: Int) : Parcelable', why: 'A Bundle can’t hold a plain class. Make it <code>@Parcelize</code> and <code>Parcelable</code>, or pass a <code>Saver</code>.' },
-        ],
-        quiz: [
-          { q: 'You rotate the phone. Which value is kept?', options: ['<code>remember</code>', '<code>rememberSaveable</code>', 'Both'], a: 1, why: 'Rotation recreates the Activity. Only the Bundle-backed value comes back.' },
-          { q: 'Android kills your app in the background and the user returns to it. What happens to <code>rememberSaveable</code> state?', options: ['It is restored', 'It is lost'], a: 0, why: 'Saved instance state is written to disk by the system and restored with the new process.' },
-          { q: 'Where should a list of 500 items from the network live?', options: ['<code>rememberSaveable</code>', 'A ViewModel or a database'], a: 1, why: 'The Bundle has a small size limit. Save an id or a query there, not the data itself.' },
-          { q: 'Tabs switch with a plain <code>when (tab)</code>. Feed has a <code>rememberSaveable</code> search query. The user types, switches to Profile, then back to Feed. What is in the query?', options: ['The text they typed, because rememberSaveable survives everything', 'The text, but only after a rotation', 'Nothing: Feed left the composition, so its saved value was dropped'], a: 2, why: 'A composable that leaves the composition unregisters its saved values. Wrap each tab in <code>rememberSaveableStateHolder().SaveableStateProvider(key)</code> to keep them.' },
-          { q: 'Which line is the bug?<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>val FilterSaver = listSaver&lt;Filter, Any&gt;(\n    save = { listOf(it.tag, it.minPrice) },\n    restore = { Filter(it[1] as String, it[0] as Int) },\n)</code></pre>', options: ['The <code>save</code> line: lists cannot hold a String and an Int together', 'The <code>restore</code> line: it reads the values in the wrong order', 'The first line: a listSaver needs <code>@Parcelize</code>'], a: 1, why: 'save writes tag then price, so restore must read index 0 as the tag. The ClassCastException only shows when the screen is restored, so test with a rotation.' },
-        ],
-        deeper: [
-          {
-            title: 'A Saver for your own type',
-            body: `<p>A Bundle only holds simple types: primitives, strings, arrays, <code>Parcelable</code> and a few more. For your own class you have two options. On Android, mark it <code>@Parcelize</code> with the <code>kotlin-parcelize</code> plugin. Anywhere, including shared KMP code, write a <code>Saver</code> that turns it into Bundle-friendly values and back.</p>
-<p><code>mapSaver</code> and <code>listSaver</code> are the quick ways to build one. <code>save</code> runs when the state is about to be saved. <code>restore</code> runs only when the screen comes back, so a bug in it stays hidden until you rotate or the process dies.</p>`,
-            code: `data class Filter(val tag: String, val minPrice: Int)
-
-val FilterSaver = mapSaver(
-    save = { mapOf("tag" to it.tag, "min" to it.minPrice) },
-    restore = { Filter(it["tag"] as String, it["min"] as Int) },
-)
-
-var filter by rememberSaveable(stateSaver = FilterSaver) {
-    mutableStateOf(Filter("all", 0))
-}`,
-            visual(el) {
-              const TAGS = ['all', 'shoes', 'bags'];
-              let tag = 'all', min = 0, saver = true, busy = false;
-              const obj = h('div', { class: 'cmp-d2v-obj' });
-              const phone = h('div', { class: 'cmp-d2v-proc' }, h('span', { class: 'cmp-label' }, 'App process'), obj);
-              const bundle = h('div', { class: 'cmp-bundle' }, h('span', { class: 'cmp-bundle-title' }, 'Saved state Bundle'));
-              const bundleBody = h('div', { class: 'cmp-d2v-entries' }, h('span', { class: 'tip' }, 'Empty'));
-              bundle.append(bundleBody);
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2v-saver', checked: true });
-              const paintObj = () => { obj.innerHTML = hl(`Filter(tag = "${tag}", minPrice = ${min})`); };
-              function change(fn, src) {
-                if (busy) return;
-                fn(); paintObj(); replay(obj, 'pop-soft');
-                say(o, `${hl(src)} <span class="muted">// in memory only, nothing saved yet</span>`);
-              }
-              async function kill() {
-                if (busy) return; busy = true;
-                bundleBody.replaceChildren();
-                say(o, 'The app goes to the background. The system asks every rememberSaveable for its value.');
-                await sleep(700); if (!el.isConnected) return;
-                if (!saver) {
-                  replay(obj, 'shake'); phone.classList.add('cmp-d2v-crash');
-                  bundleBody.replaceChildren(h('span', { class: 'cmp-d2v-err drop-in' }, 'IllegalArgumentException'));
-                  say(o, '<span class="bad">crash:</span> a plain Filter can’t go into a Bundle. rememberSaveable needs a Saver or a Parcelable type.');
-                  await sleep(1400); if (!el.isConnected) return;
-                  phone.classList.remove('cmp-d2v-crash'); busy = false; return;
-                }
-                const entries = [`"tag" to "${tag}"`, `"min" to ${min}`];
-                say(o, `${hl('FilterSaver.save(filter)')} <span class="muted">// becomes a map of simple values</span>`);
-                for (const e of entries) {
-                  bundleBody.append(h('span', { class: 'cmp-d2v-code drop-in', html: hl(e) }));
-                  await sleep(380); if (!el.isConnected) return;
-                }
-                phone.classList.add('cmp-d2v-dead'); obj.textContent = 'process killed';
-                say(o, 'The system kills the process to free memory. The Bundle is kept by the system.');
-                await sleep(1100); if (!el.isConnected) return;
-                phone.classList.remove('cmp-d2v-dead'); obj.textContent = 'new process…';
-                say(o, 'The user comes back. A new process starts and gets the Bundle back.');
-                await sleep(800); if (!el.isConnected) return;
-                bundleBody.querySelectorAll('.cmp-d2v-code').forEach(x => replay(x, 'pop'));
-                paintObj(); replay(obj, 'cmp-flash');
-                say(o, `<span class="good">restored:</span> ${hl('FilterSaver.restore(map)')} built the same Filter again.`);
-                busy = false;
-              }
-              sw.addEventListener('change', () => {
-                if (busy) { sw.checked = saver; return; }
-                saver = sw.checked;
-                say(o, saver ? `${hl('rememberSaveable(stateSaver = FilterSaver)')} <span class="muted">// knows how to save Filter</span>` : `${hl('rememberSaveable { mutableStateOf(Filter(...)) }')} <span class="muted">// no Saver for a plain class</span>`);
-              });
-              paintObj();
-              say(o, 'Change the filter, then send the app to the background.');
-              el.append(
-                h('div', { class: 'stage' }, phone, bundle),
-                h('div', { class: 'controls' },
-                  cmd('filter = filter.copy(tag = …)', () => change(() => { tag = TAGS[(TAGS.indexOf(tag) + 1) % TAGS.length]; }, `filter = filter.copy(tag = "${TAGS[(TAGS.indexOf(tag) + 1) % TAGS.length]}")`)),
-                  cmd('filter = filter.copy(minPrice = minPrice + 10)', () => change(() => { min += 10; }, `filter = filter.copy(minPrice = ${min + 10})`)),
-                  act('Background, then process death', kill)),
-                h('label', { class: 'switch', for: 'cmp-d2v-saver' }, sw, 'stateSaver = FilterSaver'),
-                o);
-            },
-          },
-          {
-            title: 'What survives what',
-            body: `<p>Each place you can keep state has its own lifetime. <code>remember</code> lives as long as the composable stays in the composition. <code>rememberSaveable</code> also survives rotation and process death. A <code>ViewModel</code> survives rotation, but the system does not keep it through process death. <code>SavedStateHandle</code> is the ViewModel’s own small Bundle, so it survives both.</p>
-<p>Two cases surprise people. When a composable leaves the composition, its <code>rememberSaveable</code> value is dropped too, because nothing is left to save. And when the user swipes the app away from Recents, saved state is cleared on purpose. Only storage on disk, like Room or DataStore, survives that.</p>`,
-            visual(el) {
-              const HOLDERS = ['remember', 'rememberSaveable', 'ViewModel', 'SavedStateHandle', 'Room / DataStore'];
-              const EVENTS = [
-                { src: 'Rotate the device', keep: [0, 1, 1, 1, 1], note: 'Rotation recreates the Activity. The ViewModel store is kept across it, and the Bundle carries the saved values.' },
-                { src: 'Process death in the background', keep: [0, 1, 0, 1, 1], note: 'A new process starts. The old ViewModel is gone, but saved state is handed back.' },
-                { src: 'Composable leaves the composition', keep: [0, 0, 1, 1, 1], note: 'An if turned false. Both remember and rememberSaveable belonged to that spot in the tree, so both are dropped.' },
-                { src: 'User swipes the app from Recents', keep: [0, 0, 0, 0, 1], note: 'The user closed the app on purpose. Saved state is cleared too. Only data on disk is left.' },
-              ];
-              let busy = false, n = 7;
-              const vals = HOLDERS.map(() => h('span', { class: 'cmp-d2v-val' }, '7'));
-              const rows = HOLDERS.map((name, i) => h('div', { class: 'cmp-d2v-row' }, h('span', { class: 'cmp-d2v-name' }, name), vals[i]));
-              const grid = h('div', { class: 'cmp-d2v-grid' }, rows);
-              const o = out();
-              function bump() {
-                if (busy) return;
-                n++; vals.forEach(v => { v.textContent = String(n); v.className = 'cmp-d2v-val'; replay(v, 'pop-soft'); });
-                say(o, `${hl(`count = ${n}`)} <span class="muted">// written to all five places</span>`);
-              }
-              async function hit(ev) {
-                if (busy) return; busy = true;
-                say(o, `${esc(ev.src)}…`);
-                for (let i = 0; i < HOLDERS.length; i++) {
-                  await sleep(260); if (!el.isConnected) return;
-                  const v = vals[i];
-                  if (ev.keep[i]) { v.className = 'cmp-d2v-val cmp-d2v-kept'; replay(v, 'pop'); }
-                  else { v.className = 'cmp-d2v-val cmp-d2v-lost'; v.textContent = '0'; replay(v, 'shake'); }
-                }
-                say(o, `${ev.keep.filter(Boolean).length} of 5 kept. ${esc(ev.note)}`);
-                busy = false;
-              }
-              el.append(grid,
-                h('div', { class: 'controls' }, cmd('count++', bump)),
-                h('div', { class: 'controls' }, EVENTS.map(ev => act(ev.src, () => hit(ev)))),
-                o);
-              say(o, 'Each row holds the same count. Fire an event and see who keeps it.');
-            },
-          },
-          {
-            title: 'Keep state for screens that come back',
-            body: `<p>Say you switch tabs with a plain <code>when (tab)</code>. The old tab leaves the composition, so its <code>rememberSaveable</code> values are gone when you return. <code>rememberSaveableStateHolder()</code> fixes that. Wrap each screen in <code>SaveableStateProvider(key)</code> and the holder keeps that screen’s saved values while it is away, then hands them back.</p>
-<p>You use this more often than you think. Navigation Compose keeps one per back stack entry, which is why a screen you return to keeps its scroll and fields. Lazy lists keep one per item key, so <code>rememberSaveable</code> inside a row survives scrolling off screen. That is also why lazy item keys must be types a Bundle can hold.</p>`,
-            code: `@Composable
-fun HomeTabs(tab: Tab) {
-    val holder = rememberSaveableStateHolder()
-    holder.SaveableStateProvider(key = tab.name) {
-        when (tab) {
-            Tab.Feed -> FeedScreen()         // its rememberSaveable state is kept per key
-            Tab.Profile -> ProfileScreen()
-        }
-    }
-}`,
-            visual(el) {
-              let tab = 'Feed', held = false, busy = false;
-              const counts = { Feed: 0, Profile: 0 }, stash = {};
-              const num = h('b', { class: 'cmp-d2v-num' }, '0');
-              const screen = h('div', { class: 'cmp-d2v-screen' }, h('span', { class: 'cmp-label' }), num);
-              const store = h('div', { class: 'cmp-d2v-entries' });
-              const holderBox = h('div', { class: 'cmp-bundle' }, h('span', { class: 'cmp-bundle-title' }, 'SaveableStateHolder'), store);
-              const o = out();
-              const tabBtns = ['Feed', 'Profile'].map(t => cmd(`tab = Tab.${t}`, () => go(t)));
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2v-holder' });
-              function paint() {
-                screen.firstElementChild.textContent = `${tab}Screen · rememberSaveable`;
-                num.textContent = String(counts[tab]);
-                tabBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(['Feed', 'Profile'][i] === tab)));
-                const entries = Object.entries(stash);
-                store.replaceChildren(...(entries.length
-                  ? entries.map(([k, v]) => h('span', { class: 'cmp-d2v-code', html: hl(`"${k}" → likes = ${v}`) }))
-                  : [h('span', { class: 'tip' }, held ? 'Empty' : 'Not used')]));
-                holderBox.classList.toggle('cmp-d2v-off', !held);
-              }
-              async function go(t) {
-                if (busy || t === tab) return; busy = true;
-                const old = tab;
-                if (held) { stash[old] = counts[old]; paint(); }
-                screen.classList.add('cmp-fade');
-                say(o, `${old}Screen leaves the composition.${held ? ' The holder keeps its saved values.' : ' Its rememberSaveable values are dropped.'}`);
-                await sleep(450); if (!el.isConnected) return;
-                if (!held) counts[old] = 0;
-                tab = t;
-                const back = held && stash[t] !== undefined;
-                counts[t] = back ? stash[t] : (held ? counts[t] : 0);
-                if (back) delete stash[t];
-                screen.classList.remove('cmp-fade'); paint(); replay(num, back ? 'cmp-flash' : 'pop');
-                say(o, back ? `<span class="good">restored:</span> ${t}Screen got likes = ${counts[t]} back from the holder.` : `${t}Screen starts fresh at ${counts[t]}.${held ? '' : ' <span class="muted">Anything it had before is gone.</span>'}`);
-                busy = false;
-              }
-              function like() { if (busy) return; counts[tab]++; num.textContent = String(counts[tab]); replay(num, 'pop'); say(o, `${hl('likes++')} <span class="muted">// on ${tab}Screen</span>`); }
-              sw.addEventListener('change', () => {
-                if (busy) { sw.checked = held; return; }
-                held = sw.checked; Object.keys(stash).forEach(k => delete stash[k]); paint(); replay(holderBox, 'pop-soft');
-                say(o, held ? `${hl('holder.SaveableStateProvider(key = tab.name)')} <span class="muted">// like, switch tabs, come back</span>` : 'Plain when (tab). Like, switch tabs, come back.');
-              });
-              paint();
-              say(o, 'Like a few times, switch to Profile, then come back to Feed.');
-              el.append(
-                h('div', { class: 'stage' }, screen, holderBox),
-                h('div', { class: 'controls' }, tabBtns, cmd('likes++', like)),
-                h('label', { class: 'switch', for: 'cmp-d2v-holder' }, sw, 'Wrap in SaveableStateProvider'),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>Every <code>rememberSaveable</code> registers a value provider with the nearest <code>SaveableStateRegistry</code>, found through <code>LocalSaveableStateRegistry</code>. If you don’t pass a key, the key comes from <code>currentCompositeKeyHash</code>, which describes the call’s position in the tree. On Android, the registry at the root is connected to the <code>SavedStateRegistry</code> of the owner that hosts the composition, usually the Activity or a navigation back stack entry.</p>
-<p>When the Activity saves its state, the registry calls every provider, runs each value through its Saver, checks that the result can go into a Bundle, and stores everything as one map. On restore, the new registry starts with that map, and each <code>rememberSaveable</code> takes back the value under its key. When the composable leaves the composition, it unregisters its provider, so nothing is saved for it any more.</p>`,
-          code: `// rememberSaveable, as a sketch
-val registry = LocalSaveableStateRegistry.current
-val key = currentCompositeKeyHash.toString(36)           // its position in the tree
-val value = remember {
-    registry?.consumeRestored(key)?.let { saver.restore(it) } ?: init()
-}
-DisposableEffect(registry, key) {
-    val entry = registry?.registerProvider(key) { saver.save(value) }
-    onDispose { entry?.unregister() }                    // left the tree: forgotten
-}`,
-        },
-        mistakes: [
-          {
-            title: 'remember for what the user typed',
-            bad: `var note by remember { mutableStateOf("") }
-OutlinedTextField(value = note, onValueChange = { note = it })`,
-            good: `var note by rememberSaveable { mutableStateOf("") }
-OutlinedTextField(value = note, onValueChange = { note = it })`,
-            why: 'Users rotate the phone and switch apps in the middle of typing. Input they made belongs in <code>rememberSaveable</code> or a <code>SavedStateHandle</code>.',
-          },
-          {
-            title: 'A listSaver that restores in the wrong order',
-            bad: `val FilterSaver = listSaver<Filter, Any>(
-    save = { listOf(it.tag, it.minPrice) },
-    restore = { Filter(it[1] as String, it[0] as Int) },
-)`,
-            good: `val FilterSaver = listSaver<Filter, Any>(
-    save = { listOf(it.tag, it.minPrice) },
-    restore = { Filter(it[0] as String, it[1] as Int) },
-)`,
-            why: '<code>restore</code> only runs when the screen comes back, so this <code>ClassCastException</code> hides during normal use. Rotate, or turn on “Don’t keep activities” in developer options, to test restore paths.',
-          },
-          {
-            title: 'Saving the data instead of the key to it',
-            bad: `var results by rememberSaveable {
-    mutableStateOf(emptyList<Product>())   // 500 Parcelable products
-}`,
-            good: `var query by rememberSaveable { mutableStateOf("") }
-val results by vm.results.collectAsStateWithLifecycle()   // loaded from query`,
-            why: 'Saved state travels through a Binder transaction. Android recommends keeping it under 50 KB, and going past the 1 MB buffer throws <code>TransactionTooLargeException</code>. Save the query or an id and reload the data.',
-          },
-        ],
-        visual(el) {
-          const scr = (p, s) => `<div class="ui-m-bar">Counters</div><div class="ui-m-body"><div class="ui-m-row"><div>remember</div><b style="margin-left:auto">${p}</b></div><div class="ui-m-row"><div>rememberSaveable</div><b style="margin-left:auto">${s}</b></div><span class="ui-m-btn plus">+1 both</span></div>`;
-          const home = '<div class="ui-m-body" style="background:var(--sunk)"><div class="ui-m-center ui-m-muted">Home screen</div></div>';
+          const scr = n => `<div class="ui-m-body"><div style="font-size:0.95rem">${n} of 8 glasses</div></div>`;
           Lab.ui.phone(el, {
-            logTitle: 'What runs',
+            logTitle: 'Your code',
             predict: {
-              q: 'When does <code>rememberSaveable</code> put its value into the saved-state Bundle?',
-              options: ['On every change of the value', 'When the Activity saves its state, before it can be destroyed', 'Only when the process is killed'],
-              a: 1,
-              why: 'It registers with the saved-state registry. The registry asks for the value when the Activity saves its instance state, which happens before a rotation or a stop.',
+              q: '<code>WaterCount(glasses = 3)</code> shows “3 of 8 glasses”. Now the app calls <code>WaterCount(glasses = 4)</code>. What else must you write to make the screen say 4?',
+              options: ['Nothing: the function already describes the screen for any number', 'A line that finds the old text and replaces the 3', 'A second function for the number 4'],
+              a: 0,
+              why: 'That is what declarative means. The function describes the result for whatever number it gets, and Compose draws that.',
             },
             frames: [
-              { screen: scr(3, 3), log: '// remember and rememberSaveable, both at 3', say: 'Two counters. One uses <code>remember</code>, the other <code>rememberSaveable</code>.' },
-              { tap: '.plus', screen: scr(4, 4), log: 'count++ on both', say: 'Both go to 4. While the Activity lives, they behave the same.' },
-              { log: 'onSaveInstanceState(): Bundle { saved = 4 }', say: 'The user rotates. Before the old Activity goes, <code>rememberSaveable</code> writes its value into the Bundle. <code>remember</code> writes nothing.' },
-              { screen: '<div class="ui-m-body"><div class="ui-m-center ui-m-muted">new Activity, new composition</div></div>', log: 'onDestroy() → new Activity: onCreate()', say: 'The old Activity and its whole composition are gone. A new one starts from scratch.' },
-              { screen: scr(0, 4), log: ['remember { 0 }  // nothing to hand back', 'rememberSaveable: reads saved = 4'], say: '<code>remember</code> has no slot from before, so it starts at 0. <code>rememberSaveable</code> finds 4 in the Bundle.' },
-              { screen: home, log: '// app in the background: the system kills the process', say: 'The user switches apps, and the system kills the process to free memory.' },
-              { screen: scr(0, 4), log: 'new process: Bundle restored, saved = 4', say: 'The user comes back. A new process, a new Activity, and the same Bundle: the saved value survives process death too.' },
-              { screen: scr(0, 0), log: '// swiped away from Recents, opened again: no Bundle', say: 'If the user swipes the app away, they closed it. The saved state is thrown away and both start fresh.' },
+              { screen: '<div class="ui-m-body"></div>', log: '@Composable\nfun WaterCount(glasses: Int) {\n    Text("$glasses of 8 glasses")\n}'.split('\n').map(l => l.replace(/ /g, '&nbsp;')), say: 'One composable, <code>WaterCount</code>. It describes a screen for any number of glasses. Nothing is on the screen yet, because nobody has called it.' },
+              { screen: scr(3), log: 'setContent { WaterCount(glasses = 3) }', say: '<code>setContent</code> calls it with 3. Its <code>Text</code> puts one line on the screen.' },
+              { screen: scr(4), log: 'WaterCount(glasses = 4)', say: 'Called with 4, the same description gives a new screen. You never told Compose to change the old text.' },
+              { screen: scr(8), log: 'WaterCount(glasses = 8)', say: 'With 8, the screen says 8. One function, any number.' },
+              { screen: `<div class="ui-m-bar" style="font-size:0.75rem">Preview</div>${scr(5)}`, log: ['@Preview(showBackground = true)', '@Composable', 'fun WaterCountPreview() {', '&nbsp;&nbsp;&nbsp;&nbsp;WaterCount(glasses = 5)', '}'], say: 'A preview function has no parameters. It calls the composable with a sample value, and Android Studio draws the result in the editor, without the emulator.' },
             ],
           });
         },
+        code: `@Composable
+fun WaterCount(glasses: Int) {
+    Text("$glasses of 8 glasses")
+}
+
+@Preview(showBackground = true)
+@Composable
+fun WaterCountPreview() {
+    WaterCount(glasses = 3)     // the preview shows: 3 of 8 glasses
+}`,
+        remember: 'A composable is a @Composable function that describes what to show for its inputs. @Preview draws one in Android Studio.',
+        mistakes: [
+          { title: 'Calling a composable from a normal function', bad: 'fun showCount() {\n    Text("3 of 8 glasses")   // doesn’t compile\n}', good: '@Composable\nfun ShowCount() {\n    Text("3 of 8 glasses")\n}', why: 'Only a composable, or the code inside <code>setContent { }</code>, can call <code>Text</code>. Add <code>@Composable</code>, and give it a capital first letter like every composable.' },
+        ],
+        terms: [
+          { term: 'annotation', def: 'A word starting with <code>@</code> above a function, like <code>@Composable</code>, that gives it extra meaning.' },
+          { term: 'declarative', def: 'Describing what the screen should show, instead of giving step-by-step changes to make.' },
+          { term: '@Composable', def: 'An annotation that marks a function as a composable: a function that describes part of the UI.' },
+          { term: '@Preview', def: 'An annotation on a composable with no parameters. Android Studio draws it in the editor.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make a composable that shows a greeting, and a preview of it.', code: '@[[Composable]]\nfun Greeting(name: String) {\n    Text("Hello, $name")\n}\n\n@[[Preview]](showBackground = true)\n@Composable\nfun GreetingPreview() {\n    Greeting("Ada")\n}', why: '<code>@Composable</code> marks a function that describes UI. <code>@Preview</code> marks the one Android Studio should draw.' },
+          { type: 'bug', prompt: 'Android Studio shows no preview for this, because a preview function can’t take parameters. Tap the line to change.', code: '@Preview(showBackground = true)\n@Composable\nfun CityPreview(city: String) {\n    Text("Weather in $city")\n}', bug: 2, fix: 'fun CityPreview() {', why: 'Android Studio has no value to pass in. Use a preview function without parameters, with a sample value inside: <code>Text("Weather in Oslo")</code> would work.' },
+        ],
+        quiz: [
+          { q: 'What does “declarative” mean in Compose?', options: ['You describe what the screen should show, and Compose draws it', 'You give step-by-step orders to change each part of the screen', 'The screen is drawn once and never changes'], a: 0, why: 'You write what the result looks like for the current data. Compose does the drawing.' },
+          { q: 'Which function can call <code>Text("Hi")</code>?', options: ['A function marked <code>@Composable</code>', 'Any Kotlin function', 'Only <code>fun main()</code>'], a: 0, why: 'Composables can only be called from other composables, or inside <code>setContent { }</code>.' },
+          { q: 'What does <code>@Preview</code> do?', options: ['Android Studio draws that composable in the editor', 'It runs the app on the emulator', 'It hides the composable from the real app'], a: 0, why: 'It lets you see a composable while you write it. The app itself doesn’t change.' },
+        ],
+        docs: [['Thinking in Compose', 'https://developer.android.com/develop/ui/compose/mental-model'], ['Preview your UI with composable previews', 'https://developer.android.com/develop/ui/compose/tooling/previews']],
       },
 
-      // 8 ─────────────────────────────────────────────
+      {
+        id: 'text-and-modifiers',
+        title: 'Text and modifiers',
+        tagline: 'Make text bigger and bolder, and give it room.',
+        goals: ['Change how text looks with <code>fontSize</code> and <code>fontWeight</code>', 'Add space and set a size with a <code>Modifier</code>', 'Tell <code>dp</code> and <code>sp</code> apart'],
+        level: 'beginner', introduces: ['fontSize', 'sp', 'fontWeight', 'FontWeight', 'Bold', 'Modifier', 'padding', 'dp', 'fillMaxWidth', 'width', 'height'],
+        body: `
+<p>The water tracker says “3 of 8 glasses” in small letters, squeezed into the corner. That number is the most important thing on the screen. It should be big, bold, and have some room around it.</p>
+<p><code>Text</code> takes more arguments than the text itself, and named arguments keep them readable: <code>Text("3 of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)</code>. <code>sp</code> is the unit for text size; <code>28.sp</code> reads “28 sp”. Text measured in sp grows when someone picks larger text in the phone’s settings, so everyone can read it.</p>
+<p>Space and size come from a <code>Modifier</code>: a chain of instructions about size, space and more, that you hand to a composable through its <code>modifier</code> argument. (Later, modifiers also make things react to taps and drags.) Start with the word <code>Modifier</code> and add instructions with dots. <code>Modifier.padding(16.dp)</code> adds 16 dp of empty space on every side. <code>.fillMaxWidth()</code> makes the composable as wide as the space it is in. <code>.size(width = 160.dp, height = 80.dp)</code> gives it an exact size. You can put each instruction on its own line, starting with the dot.</p>
+<p><code>dp</code> is the unit for sizes and spaces. 16 dp look about the same size on every phone, whether its screen has few pixels or many. A simple rule: <code>sp</code> for text size, <code>dp</code> for everything else.</p>`,
+        visual(el) {
+          const txt = (style, box) => `<div class="ui-m-body"><div style="justify-self:${box.includes('width:100%') ? 'stretch' : 'start'};outline:1.5px dashed var(--accent);${box}"><span style="${style}">3 of 8 glasses</span></div></div>`;
+          const big = 'font-size:1.05rem;', bold = 'font-size:1.05rem;font-weight:800;';
+          Lab.ui.phone(el, {
+            logTitle: 'Your code',
+            predict: {
+              q: 'You add <code>modifier = Modifier.padding(16.dp)</code> to the Text. What happens?',
+              options: ['The letters get bigger', 'Empty space appears around the letters', 'The letters turn bold'],
+              a: 1,
+              why: 'Padding is empty space on every side. The letters keep their size; the Text takes up more room.',
+            },
+            frames: [
+              { screen: txt('', ''), log: 'Text("3 of 8 glasses")', say: 'Plain text. The dashed line marks the edges of the Text. The demo draws it so you can see them; your app won’t.' },
+              { screen: txt(big, ''), log: 'fontSize = 28.sp', say: '<code>fontSize</code> makes the letters bigger. The Text grows to fit them.' },
+              { screen: txt(bold, ''), log: 'fontWeight = FontWeight.Bold', say: '<code>FontWeight.Bold</code> makes the letters thicker.' },
+              { screen: txt(bold, 'padding:10px;'), log: 'modifier = Modifier.padding(16.dp)', say: 'Padding adds 16 dp of empty space inside the edges, on all four sides. The letters move away from the corner.' },
+              { screen: txt(bold, 'padding:10px;width:100%;box-sizing:border-box;'), log: '&nbsp;&nbsp;&nbsp;&nbsp;.fillMaxWidth()', say: '<code>fillMaxWidth()</code>: the Text becomes as wide as the screen. The letters stay at the start; only the area grows.' },
+              { screen: txt(bold, 'padding:10px;width:124px;height:75px;box-sizing:border-box;'), log: 'Modifier.padding(16.dp).size(width = 200.dp, height = 120.dp)', say: 'Swap <code>fillMaxWidth()</code> for <code>size(...)</code> and the Text gets exactly that size. The words no longer fit on one line, so they wrap onto two.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun WaterCount(glasses: Int) {
+    Text(
+        text = "$glasses of 8 glasses",
+        fontSize = 28.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .padding(16.dp)          // 16 dp of space on every side
+            .fillMaxWidth()          // as wide as the screen
+    )
+}
+
+@Composable
+fun Title() {
+    Text(
+        text = "Water today",
+        modifier = Modifier.size(width = 160.dp, height = 40.dp)   // exactly 160 by 40 dp
+    )
+}`,
+        remember: 'Text styles with fontSize (in sp) and fontWeight. A Modifier sets space and size (in dp), and more.',
+        mistakes: [
+          { title: 'Text size in dp', bad: 'Text("Water today", fontSize = 24.dp)   // type mismatch', good: 'Text("Water today", fontSize = 24.sp)', why: '<code>fontSize</code> needs a text size, so Kotlin refuses a <code>dp</code> value with a type mismatch error. Text size is always <code>sp</code>.' },
+        ],
+        terms: [
+          { term: 'Modifier', def: 'A chain of instructions about size, space and more, passed to a composable as <code>modifier = Modifier...</code>.' },
+          { term: 'padding', def: 'Empty space inside a composable’s edges: <code>Modifier.padding(16.dp)</code>.' },
+          { term: 'dp', def: 'The unit for sizes and spaces. It looks about the same size on every screen.' },
+          { term: 'sp', def: 'The unit for text size. It also grows with the text size someone picks in the phone’s settings.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give the text 24 dp of empty space on every side.', code: 'Text(\n    text = "Water today",\n    modifier = [[Modifier]].[[padding]](24.[[dp]])\n)', why: 'A modifier starts with <code>Modifier</code>, then adds instructions with a dot. Space is measured in <code>dp</code>.' },
+          { type: 'bug', prompt: 'This doesn’t compile. Tap the line with the wrong unit.', code: '@Composable\nfun Title() {\n    Text(\n        text = "Water today",\n        fontSize = 32.dp,\n        fontWeight = FontWeight.Bold\n    )\n}', bug: 4, fix: '        fontSize = 32.sp,', why: 'Text size is measured in <code>sp</code>. <code>dp</code> is for sizes and spaces.' },
+        ],
+        quiz: [
+          { q: 'Which unit do you use for <code>fontSize</code>?', options: ['<code>sp</code>', '<code>dp</code>', 'Pixels'], a: 0, why: '<code>sp</code> is for text, and it grows with the phone’s text size setting.' },
+          { q: 'What does <code>Modifier.fillMaxWidth()</code> do?', options: ['Makes the composable as wide as the space it is in', 'Makes the letters wider', 'Adds space on the left and right'], a: 0, why: 'The area of the composable grows. The letters keep their size.' },
+          { q: 'Where does <code>Modifier.padding(16.dp)</code> add space?', options: ['On all four sides', 'Only on the left', 'Only above'], a: 0, why: 'With one value, padding adds the same space on every side.' },
+        ],
+        docs: [['Compose modifiers', 'https://developer.android.com/develop/ui/compose/modifiers'], ['Style text', 'https://developer.android.com/develop/ui/compose/text/style-text']],
+      },
+
+      {
+        id: 'layouts',
+        title: 'Arranging things',
+        tagline: 'Put composables in a column, in a row, or on top of each other.',
+        goals: ['Stack composables top to bottom with <code>Column</code> and side by side with <code>Row</code>', 'Center things and put even space between them', 'Layer composables on top of each other with <code>Box</code>'],
+        level: 'beginner', introduces: ['Column', 'Row', 'Box', 'horizontalAlignment', 'verticalAlignment', 'Alignment', 'CenterHorizontally', 'CenterVertically', 'Center', 'verticalArrangement', 'horizontalArrangement', 'Arrangement', 'spacedBy', 'contentAlignment', 'fillMaxSize', 'safeDrawingPadding'],
+        body: `
+<p>Call two <code>Text</code>s one after the other, and Compose draws both in the same spot, on top of each other: a jumble. The water screen needs a title above the number, and more lines below. You have to say how things are arranged.</p>
+<p>Three composables do the arranging. <code>Column</code> puts the composables you call inside its braces (its <em>children</em>) from top to bottom. <code>Row</code> puts them side by side. <code>Box</code> puts them on top of each other, which is useful for a number in the middle of an area, or a label over a picture. The braces are a trailing lambda, as in the Kotlin lessons, with one child on each line inside: <code>Column { ... }</code>.</p>
+<p>Arguments decide where children go. In a <code>Column</code>, <code>horizontalAlignment = Alignment.CenterHorizontally</code> centers each child, and <code>verticalArrangement = Arrangement.spacedBy(8.dp)</code> puts 8 dp between each pair of children. A <code>Row</code> has the same pair turned around: <code>horizontalArrangement</code> spaces the children, and <code>verticalAlignment = Alignment.CenterVertically</code> lines them up through the middle. A <code>Box</code> takes <code>contentAlignment = Alignment.Center</code>.</p>
+<p>A screen usually starts with a <code>Column</code> that fills it: <code>Modifier.fillMaxSize()</code>. On Android 15 and newer, apps draw edge to edge, right up behind the clock and battery icons at the top. Add <code>.safeDrawingPadding()</code> to the chain to keep your content clear of them.</p>`,
+        visual(el) {
+          const t1 = '<div style="font-size:0.95rem">Water today</div>', t2 = '<div style="font-size:1.05rem;font-weight:800">3 of 8 glasses</div>';
+          const row = '<div style="display:flex;gap:10px;font-size:0.76rem"><span>Yesterday: 6</span><span>Best: 9</span></div>';
+          const col = (kids, center, gap) => `<div class="ui-m-body" style="gap:${gap}px;${center ? 'justify-items:center;' : 'justify-items:start;'}">${kids}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'Your code',
+            predict: {
+              q: 'You call <code>Text("Water today")</code> and then <code>Text("3 of 8 glasses")</code>, with nothing around them. Where does the second one appear?',
+              options: ['Below the first', 'To the right of the first', 'In the same spot, on top of the first'],
+              a: 2,
+              why: 'Without a layout, Compose puts every child in the top corner. Column, Row and Box decide where they go.',
+            },
+            frames: [
+              { screen: `<div class="ui-m-body">${t1.replace('style="', 'style="grid-area:1/1;')}${t2.replace('style="', 'style="grid-area:1/1;')}</div>`, log: ['Text("Water today")', 'Text("3 of 8 glasses")'], say: 'Two Texts with nothing around them land in the same corner, on top of each other.' },
+              { screen: col(t1 + t2, false, 0), log: ['Column {', '&nbsp;&nbsp;&nbsp;&nbsp;Text("Water today")', '&nbsp;&nbsp;&nbsp;&nbsp;Text("3 of 8 glasses")', '}'], say: '<code>Column</code> stacks its children from top to bottom, in the order you call them.' },
+              { screen: col(t1 + t2, true, 0), log: 'horizontalAlignment = Alignment.CenterHorizontally', say: 'Each child is now centered across the screen.' },
+              { screen: col(t1 + t2, true, 12), log: 'verticalArrangement = Arrangement.spacedBy(8.dp)', say: '8 dp of space between each pair of children. None is added above the first or below the last.' },
+              { screen: col(t1 + t2 + row, true, 12), log: ['Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {', '&nbsp;&nbsp;&nbsp;&nbsp;Text("Yesterday: 6")', '&nbsp;&nbsp;&nbsp;&nbsp;Text("Best: 9")', '}'], say: 'A <code>Row</code> as the third child. Its own children sit side by side, 16 dp apart. The Row itself is centered like the others.' },
+              { screen: col(t1 + t2 + row + '<div style="width:60px;height:60px;outline:1.5px dashed var(--accent);display:grid;place-items:center;font-weight:800">8</div>', true, 12), log: ['Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {', '&nbsp;&nbsp;&nbsp;&nbsp;Text("8")', '}'], say: 'A <code>Box</code> of 96 dp (dashed) with its child in the middle. More children would stack on top of each other, all centered.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun WaterScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Water today", fontSize = 24.sp)
+        Text("3 of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Yesterday: 6")
+            Text("Best: 9")
+        }
+    }
+}`,
+        remember: 'Column stacks down, Row goes across, Box layers on top. Alignment centers, Arrangement.spacedBy adds space between.',
+        mistakes: [
+          { title: 'No layout around several children', bad: '@Composable\nfun WaterScreen() {\n    Text("Water today")\n    Text("3 of 8 glasses")   // drawn on top of the title\n}', good: '@Composable\nfun WaterScreen() {\n    Column {\n        Text("Water today")\n        Text("3 of 8 glasses")\n    }\n}', why: 'Without a <code>Column</code> or <code>Row</code>, Compose places every child in the same corner.' },
+        ],
+        terms: [
+          { term: 'Column', def: 'Puts its children from top to bottom.' },
+          { term: 'Row', def: 'Puts its children side by side.' },
+          { term: 'Box', def: 'Puts its children on top of each other.' },
+          { term: 'children', def: 'The composables called inside a layout’s braces.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Put the two texts side by side, with 12 dp between them.', code: '[[Row]](horizontalArrangement = Arrangement.[[spacedBy]](12.dp)) {\n    Text("Yesterday: 6")\n    Text("Best: 9")\n}', why: '<code>Row</code> goes across. <code>Arrangement.spacedBy</code> puts the same space between each pair of children.' },
+          { type: 'bug', prompt: 'The title should sit above the number, but they sit side by side. Tap the line to change.', code: '@Composable\nfun WaterScreen() {\n    Row {\n        Text("Water today")\n        Text("3 of 8 glasses")\n    }\n}', bug: 2, fix: '    Column {', why: '<code>Row</code> places children across. <code>Column</code> stacks them from top to bottom.' },
+        ],
+        quiz: [
+          { q: 'Which layout puts its children on top of each other?', options: ['<code>Box</code>', '<code>Column</code>', '<code>Row</code>'], a: 0, why: 'A Box layers its children. Column and Row put them next to each other.' },
+          { q: 'In a <code>Column</code>, which argument centers the children across the screen?', options: ['<code>horizontalAlignment = Alignment.CenterHorizontally</code>', '<code>verticalArrangement = Arrangement.spacedBy(8.dp)</code>', '<code>Modifier.fillMaxSize()</code>'], a: 0, why: 'A Column stacks children downward; alignment decides where each one sits across.' },
+          { q: 'A Column of three Texts has <code>Arrangement.spacedBy(8.dp)</code>. Where is the space?', options: ['8 dp between each pair: two gaps', '8 dp above, between and below every Text', '8 dp only below the last Text'], a: 0, why: '<code>spacedBy</code> only adds space between children, not at the edges.' },
+        ],
+        docs: [['Compose layout basics', 'https://developer.android.com/develop/ui/compose/layouts/basics']],
+      },
+
+      {
+        id: 'images',
+        title: 'Images and icons',
+        tagline: 'Show pictures and small symbols from your drawables.',
+        goals: ['Show a picture from <code>res/drawable</code> with <code>Image</code>', 'Describe a picture for people who can’t see it with <code>contentDescription</code>', 'Add a small symbol with <code>Icon</code>'],
+        level: 'beginner', introduces: ['Image', 'painter', 'painterResource', 'contentDescription', 'stringResource', 'Icon'],
+        body: `
+<p>A picture of a glass above the number makes the water screen friendlier and easier to read at a glance. In the resources lesson, pictures went into <code>res/drawable</code>, and the code reached them through <code>R.drawable</code>. Compose shows them with <code>Image</code>.</p>
+<p><code>Image(painter = painterResource(R.drawable.glass), contentDescription = "A glass of water")</code>. <code>painterResource</code> loads a drawable, such as a PNG, JPG or WEBP file or a vector drawable, and turns it into a <em>painter</em>: something Compose can paint on the screen. Give the image a size with <code>Modifier.size(120.dp)</code>, or it uses the picture’s own size.</p>
+<p><code>contentDescription</code> is what a <em>screen reader</em> says aloud. A screen reader (TalkBack, on Android) reads the screen out loud for people who can’t see it well. Describe what matters: “A glass of water”, not “image”. If a picture is only decoration and the text next to it already says everything, pass <code>null</code>, and TalkBack skips it. Like any text, a description is best kept in <code>strings.xml</code>: <code>stringResource(R.string.glass_description)</code> reads a string resource inside a composable.</p>
+<p><code>Icon</code> is for small symbols, like a star or a plus sign. It takes the color of the content around it, and the drawable’s own size. To get one, right-click the <b>res</b> folder in Android Studio and choose <b>New &gt; Vector Asset</b>, pick an icon under <b>Clip art</b>, and it is saved in <code>res/drawable</code> at 24 dp. Then: <code>Icon(painter = painterResource(R.drawable.ic_star), contentDescription = null)</code>. Give it <code>Modifier.size(...)</code> to change its size.</p>`,
+        visual(el) {
+          const glass = '<svg viewBox="0 0 40 48" width="54" height="64" aria-hidden="true" style="color:var(--accent)"><path d="M10.6 22h18.8l-2.1 22H12.7z" fill="var(--accent-soft)"/><path d="M6 4h28l-4 40H10z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+          const star = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" fill="currentColor"/></svg>';
+          const focus = 'outline:2.5px solid var(--ok);outline-offset:3px;border-radius:4px;';
+          const scr = ({ img = false, icon = false, f = '' } = {}) => `<div class="ui-m-body" style="justify-items:center;gap:8px">${img ? `<span style="display:inline-flex;${f === 'img' ? focus : ''}">${glass}</span>` : ''}<div style="font-size:0.95rem">Water today</div><div style="font-size:1.05rem;font-weight:800${f === 'count' ? ';' + focus : ''}">3 of 8 glasses</div><div style="display:flex;gap:4px;align-items:center;font-size:0.8rem${f === 'best' ? ';' + focus : ''}">${icon ? star : ''}<span>Best: 9</span></div></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'Code and TalkBack',
+            predict: {
+              q: 'TalkBack moves through the screen and reaches an <code>Icon</code> whose <code>contentDescription</code> is <code>null</code>. What does it say?',
+              options: ['“Image”', 'Nothing: it skips the icon', 'The file name, “ic star”'],
+              a: 1,
+              why: '<code>null</code> means “decoration only”, so the screen reader leaves it out.',
+            },
+            frames: [
+              { screen: scr(), log: '// the water screen so far', say: 'The screen from the last lesson: text only.' },
+              { screen: scr({ img: true }), log: ['Image(', '&nbsp;&nbsp;painter = painterResource(R.drawable.glass),', '&nbsp;&nbsp;contentDescription = "A glass of water",', '&nbsp;&nbsp;modifier = Modifier.size(96.dp)', ')'], say: '<code>painterResource</code> loads <code>res/drawable/glass</code>. The <code>Image</code> draws it at 96 dp, above the title.' },
+              { screen: scr({ img: true, f: 'img' }), log: 'TalkBack: “A glass of water”', say: 'With TalkBack on, the green frame shows what is being read. For the picture, it reads the <code>contentDescription</code>.' },
+              { screen: scr({ img: true, f: 'count' }), log: 'TalkBack: “3 of 8 glasses”', say: 'A Text needs no description: TalkBack reads its words.' },
+              { screen: scr({ img: true, icon: true }), log: ['Row(verticalAlignment = Alignment.CenterVertically) {', '&nbsp;&nbsp;Icon(painterResource(R.drawable.ic_star), contentDescription = null)', '&nbsp;&nbsp;Text("Best: 9")', '}'], say: 'A small star <code>Icon</code> before “Best: 9”, in a Row. It takes the color of the text around it.' },
+              { screen: scr({ img: true, icon: true, f: 'best' }), log: 'TalkBack: “Best: 9”', say: 'The star has <code>null</code> as its description, so TalkBack skips it and reads only the text. Saying “star” would add nothing.' },
+            ],
+          });
+        },
+        code: `Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Image(
+        painter = painterResource(R.drawable.glass),
+        contentDescription = stringResource(R.string.glass_description),
+        modifier = Modifier.size(96.dp)
+    )
+    Text("3 of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            painter = painterResource(R.drawable.ic_star),
+            contentDescription = null       // decoration: the text says it all
+        )
+        Text("Best: 9")
+    }
+}
+// res/values/strings.xml:
+// <string name="glass_description">A glass of water</string>`,
+        remember: 'Image(painter = painterResource(R.drawable.x), contentDescription = ...) shows a picture. Use null only for decoration.',
+        mistakes: [
+          { title: 'Leaving out contentDescription', bad: 'Image(painter = painterResource(R.drawable.glass))\n// None of the following candidates is applicable:', good: 'Image(\n    painter = painterResource(R.drawable.glass),\n    contentDescription = "A glass of water"\n)', why: '<code>Image</code> comes in three versions (for a painter, a bitmap and a vector), and the error lists them all. None fits, because each one needs a <code>contentDescription</code>. Kotlin asks you to decide: a description, or <code>null</code> for decoration.' },
+        ],
+        terms: [
+          { term: 'painterResource', def: 'Loads a drawable from <code>res/drawable</code> so <code>Image</code> or <code>Icon</code> can draw it.' },
+          { term: 'contentDescription', def: 'The words a screen reader says for an image. <code>null</code> means “skip it, it’s decoration”.' },
+          { term: 'screen reader', def: 'A tool that reads the screen aloud for people who can’t see it well. On Android it is TalkBack.' },
+          { term: 'Icon', def: 'A small symbol in the color of the content around it. It takes the drawable’s own size; icons from Vector Asset are 24 dp.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show the drawable named sun, described as “Sunny”.', code: 'Image(\n    painter = [[painterResource]](R.drawable.sun),\n    [[contentDescription]] = "Sunny"\n)', why: '<code>painterResource</code> loads the drawable; <code>contentDescription</code> is what TalkBack says.' },
+          { type: 'bug', prompt: 'This wave picture is only decoration, but TalkBack reads “decoration” aloud. Tap the line to fix.', code: 'Image(\n    painter = painterResource(R.drawable.waves),\n    contentDescription = "decoration",\n    modifier = Modifier.fillMaxWidth()\n)', bug: 2, fix: '    contentDescription = null,', why: 'Any text you pass is read aloud. <code>null</code> tells TalkBack to skip a decorative picture.' },
+        ],
+        quiz: [
+          { q: 'What does <code>painterResource(R.drawable.glass)</code> do?', options: ['Loads the glass drawable so it can be drawn', 'Draws a new picture of a glass', 'Saves a picture into <code>res/drawable</code>'], a: 0, why: 'It reads the drawable you added to the project and gives Compose a painter for it.' },
+          { q: 'A picture is pure decoration. Which <code>contentDescription</code> fits?', options: ['<code>null</code>', '<code>"image"</code>', '<code>""</code>'], a: 0, why: '<code>null</code> tells the screen reader to skip it. Any text would be read aloud.' },
+          { q: 'You add a star with <b>New &gt; Vector Asset</b> and show it with <code>Icon</code>, with no size. How big is it?', options: ['24 dp', 'The whole screen width', '1 dp'], a: 0, why: 'Vector Asset saves icons at 24 dp, and an <code>Icon</code> takes its drawable’s own size. <code>Modifier.size(...)</code> changes it.' },
+        ],
+        docs: [['Loading images', 'https://developer.android.com/develop/ui/compose/graphics/images/loading'], ['Material icons', 'https://developer.android.com/develop/ui/compose/graphics/images/material']],
+      },
+
+      {
+        id: 'buttons',
+        title: 'Buttons and clicks',
+        tagline: 'Run your own code when someone taps.',
+        goals: ['Make a tappable button with <code>Button</code> and <code>onClick</code>', 'Put text and an icon inside a button', 'Pick a button style, and switch a button off with <code>enabled = false</code>'],
+        level: 'beginner', introduces: ['Button', 'onClick', 'OutlinedButton', 'TextButton', 'enabled'],
+        body: `
+<p>The water tracker needs an “Add a glass” button. A button is two things: what it shows, and what happens when someone taps it.</p>
+<p><code>Button(onClick = { Log.d("Hello", "Glass added") }) { Text("Add a glass") }</code>. <code>onClick</code> is a lambda, a function kept as a value, as in the Kotlin lessons: Compose holds on to it and runs it each time the button is tapped. The second pair of braces is a trailing lambda with what the button shows. Composables called there sit side by side, so an <code>Icon</code> and a <code>Text</code> make a button with a symbol. <code>Modifier.padding(end = 8.dp)</code> on the icon adds space on one side only; <code>end</code> is the side where text ends (the right, in languages written left to right).</p>
+<p>As in the Android lessons, <code>Log.d("Hello", "Glass added")</code> writes a line to Logcat with the tag <code>Hello</code>, and <code>tag:Hello</code> in Logcat’s search box shows only your lines, so you can check that a tap really ran your code.</p>
+<p>Buttons come in styles. <code>Button</code> is filled with color, for the main action on a screen. <code>OutlinedButton</code> has only a border, and <code>TextButton</code> is plain text, for less important actions. All of them take <code>onClick</code> and content the same way. Add <code>enabled = false</code> and a button turns grey and ignores taps, for when an action isn’t possible right now.</p>`,
+        visual(el) {
+          const plus = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>';
+          const off = 'background:var(--sunk);color:var(--muted);';
+          const scr = (styles, histOff) => `<div class="ui-m-body" style="justify-items:center;gap:10px"><div style="font-size:0.95rem">Water today</div><div style="font-size:1.05rem;font-weight:800">3 of 8 glasses</div><span style="justify-self:center" class="ui-m-btn b-add">${plus}Add a glass</span>${styles ? `<span style="justify-self:center" class="ui-m-btn ghost b-reset">Reset</span><span class="b-hist" style="padding:6px 12px;font-weight:700;font-size:0.8rem;border-radius:999px;color:${histOff ? 'var(--muted)' : 'var(--accent)'}">History</span>` : ''}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'Logcat, message column',
+            predict: {
+              q: 'A button has <code>enabled = false</code>. Someone taps it. What does Logcat show?',
+              options: ['The text from its <code>onClick</code>', 'Nothing: the tap is ignored', 'An error'],
+              a: 1,
+              why: 'A disabled button looks grey and doesn’t run <code>onClick</code> at all.',
+            },
+            frames: [
+              { screen: scr(false), log: [], say: 'A <code>Button</code> with an <code>Icon</code> and a <code>Text</code> inside. Nothing has been tapped yet, so Logcat is empty.' },
+              { tap: '.b-add', screen: scr(false), log: 'Glass added', say: 'A tap runs the lambda in <code>onClick</code>. Its <code>Log.d</code> line shows up in Logcat.' },
+              { tap: '.b-add', screen: scr(false), log: 'Glass added', say: 'Each tap runs it again. The text on the screen stays the same: this code only writes to Logcat.' },
+              { screen: scr(true), log: [], say: 'Two more styles: an <code>OutlinedButton</code> for Reset, and a <code>TextButton</code> for History, which is less important.' },
+              { tap: '.b-reset', screen: scr(true), log: 'Reset', say: 'Every style works the same way: tap, and its <code>onClick</code> runs.' },
+              { screen: scr(true, true), log: [], say: 'History gets <code>enabled = false</code>. It turns grey.' },
+              { tap: '.b-hist', screen: scr(true, true), log: [], say: 'A tap on it does nothing: <code>onClick</code> doesn’t run, so Logcat stays the same.' },
+            ],
+          });
+        },
+        code: `Button(onClick = { Log.d("Hello", "Glass added") }) {
+    Icon(
+        painter = painterResource(R.drawable.ic_add),
+        contentDescription = null,
+        modifier = Modifier.padding(end = 8.dp)    // 8 dp after the icon, before the text
+    )
+    Text("Add a glass")
+}
+
+OutlinedButton(onClick = { Log.d("Hello", "Reset") }) {
+    Text("Reset")
+}
+
+TextButton(onClick = { Log.d("Hello", "History") }, enabled = false) {
+    Text("History")        // grey, and taps do nothing
+}
+// Tap "Add a glass" twice. Logcat, filtered with tag:Hello:
+// Glass added
+// Glass added`,
+        remember: 'Button(onClick = { ... }) { Text("...") }: the first lambda runs on each tap, the second is what the button shows.',
+        mistakes: [
+          { title: 'Forgetting the braces in onClick', bad: 'Button(onClick = Log.d("Hello", "Glass added")) {\n    Text("Add a glass")\n}', good: 'Button(onClick = { Log.d("Hello", "Glass added") }) {\n    Text("Add a glass")\n}', why: 'Without braces, <code>Log.d</code> runs right away and its result is passed in. <code>onClick</code> needs a function to run later, so Kotlin refuses with a type mismatch error.' },
+        ],
+        terms: [
+          { term: 'Button', def: 'A tappable composable. <code>onClick</code> says what happens, the trailing lambda what it shows.' },
+          { term: 'onClick', def: 'The lambda a button runs each time it is tapped.' },
+          { term: 'enabled', def: 'When <code>false</code>, the button turns grey and ignores taps.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Write “Saved” to Logcat each time the button is tapped.', code: 'Button([[onClick]] = { Log.d("Hello", "Saved") }) {\n    [[Text]]("Save")\n}', why: '<code>onClick</code> holds the code to run on a tap. The trailing lambda holds what the button shows.' },
+          { type: 'bug', prompt: 'Tapping should write “Reset” to Logcat, but this doesn’t compile. Tap the wrong line.', code: 'OutlinedButton(\n    onClick = Log.d("Hello", "Reset")\n) {\n    Text("Reset")\n}', bug: 1, fix: '    onClick = { Log.d("Hello", "Reset") }', why: '<code>onClick</code> needs a function. The braces turn the code into a lambda that runs on each tap.' },
+        ],
+        quiz: [
+          { q: 'When does the code inside <code>onClick = { ... }</code> run?', options: ['Each time the button is tapped', 'Once, when the screen appears', 'Never, unless you call it yourself'], a: 0, why: 'Compose keeps the lambda and runs it for every tap.' },
+          { q: 'Which style fits a less important action?', options: ['<code>TextButton</code>', '<code>Button</code>', 'Both are the same'], a: 0, why: '<code>Button</code> is filled and stands out, for the main action. <code>TextButton</code> is plain text.' },
+          { q: 'In <code>Button(onClick = { ... }) { ... }</code>, what goes in the second pair of braces?', options: ['What the button shows', 'The code to run on a tap', 'The button’s color'], a: 0, why: 'The trailing lambda holds the content, like a <code>Text</code>. The code to run on a tap goes in <code>onClick</code>.' },
+        ],
+        docs: [['Button', 'https://developer.android.com/develop/ui/compose/components/button']],
+      },
+
+      {
+        id: 'state',
+        title: 'State',
+        tagline: 'Values that update the screen when they change.',
+        goals: ['Explain why a plain <code>var</code> doesn’t update the screen', 'Hold a changing value with <code>remember { mutableStateOf(...) }</code>', 'Change it in <code>onClick</code> and watch the screen follow'],
+        level: 'beginner', introduces: ['remember', 'mutableStateOf', 'getValue', 'setValue'],
+        body: `
+<p>Tap “Add a glass” and the screen should say 4, then 5. Try it with a plain <code>var glasses = 3</code> and <code>glasses++</code> in <code>onClick</code>: the variable goes up, but the screen still says 3. Compose has no idea the variable changed, so it never draws the screen again.</p>
+<p><em>State</em> is a value that Compose watches. <code>mutableStateOf(3)</code> makes a small box that holds 3. When a composable has read the box and its value changes, Compose runs that composable again, with the new value, and the screen updates. Running a composable again like this is called <em>recomposition</em>.</p>
+<p>That brings a new problem. Each time <code>WaterScreen</code> runs again, <code>mutableStateOf(3)</code> would make a fresh box holding 3. <code>remember { }</code> fixes it: the first time, it runs the code in its braces and keeps the result; every time after that, it hands back the same box. Android Studio marks a <code>mutableStateOf</code> without <code>remember</code> as an error for this reason.</p>
+<p>Together: <code>var glasses by remember { mutableStateOf(3) }</code>. <code>by</code> works like <code>by lazy</code> in the Kotlin lessons: you read and write <code>glasses</code> like a normal variable, and the reads and writes go to the box. Now <code>onClick = { glasses++ }</code> changes the state, and the screen follows. If <code>by</code> is underlined in red, add the two imports Android Studio suggests: <code>import androidx.compose.runtime.getValue</code> and <code>import androidx.compose.runtime.setValue</code>.</p>`,
+        visual(el) {
+          const scr = n => `<div class="ui-m-body" style="justify-items:center;gap:10px"><div style="font-size:0.95rem">Water today</div><div style="font-size:1.05rem;font-weight:800">${n} of 8 glasses</div><span style="justify-self:center" class="ui-m-btn b-add">Add a glass</span></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'What happens',
+            predict: {
+              q: 'With a plain <code>var glasses = 3</code>, you tap Add and <code>glasses++</code> runs. What does the screen show?',
+              options: ['4 of 8 glasses', '3 of 8 glasses', 'An error'],
+              a: 1,
+              why: 'The variable is 4, but Compose isn’t watching a plain variable, so it never draws the screen again.',
+            },
+            frames: [
+              { screen: scr(3), log: 'var glasses = 3', say: 'First try: a plain <code>var</code>, read by the Text.' },
+              { tap: '.b-add', screen: scr(3), log: ['tap → glasses++', 'glasses is now 4', 'screen not redrawn'], say: 'The variable changed, the screen didn’t. Nothing told Compose to run <code>WaterScreen</code> again.' },
+              { screen: scr(3), log: 'var glasses by mutableStateOf(3)   // no remember', say: 'Second try: state, but without <code>remember</code>.' },
+              { tap: '.b-add', screen: scr(3), log: ['tap → glasses++ → 4', 'WaterScreen runs again', 'mutableStateOf(3) makes a new box: 3'], say: 'Compose noticed and ran <code>WaterScreen</code> again. But that run made a brand new box holding 3, so the screen still says 3.' },
+              { screen: scr(3), log: 'var glasses by remember { mutableStateOf(3) }', say: 'Third try: <code>remember</code> keeps the box between runs.' },
+              { tap: '.b-add', screen: scr(4), log: ['tap → glasses++ → 4', 'WaterScreen runs again', 'remember gives back the same box: 4'], say: 'Now it works. The state changed, Compose ran <code>WaterScreen</code> again, and <code>remember</code> handed back the box holding 4.' },
+              { tap: '.b-add', screen: scr(5), log: ['tap → glasses++ → 5', 'WaterScreen runs again'], say: 'Every tap: change the state, and the screen follows.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun WaterScreen() {
+    var glasses by remember { mutableStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Water today", fontSize = 24.sp)
+        Text("$glasses of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Button(onClick = { glasses++ }) {
+            Text("Add a glass")
+        }
+        OutlinedButton(onClick = { glasses = 0 }) {
+            Text("Reset")
+        }
+    }
+}
+// Tap "Add a glass" twice: 2 of 8 glasses. Tap "Reset": 0 of 8 glasses.`,
+        remember: 'var x by remember { mutableStateOf(start) }: change x, and every composable that reads it runs again.',
+        mistakes: [
+          { title: 'A plain var for something on screen', bad: 'var glasses = 0\nButton(onClick = { glasses++ }) { Text("$glasses") }   // always shows 0', good: 'var glasses by remember { mutableStateOf(0) }\nButton(onClick = { glasses++ }) { Text("$glasses") }', why: 'Compose only redraws when a state it watches changes. A plain variable is not watched.' },
+        ],
+        terms: [
+          { term: 'state', def: 'A value Compose watches, made with <code>mutableStateOf</code>. Changing it updates the screen.' },
+          { term: 'recomposition', def: 'Compose running a composable again because a state it read has changed.' },
+          { term: 'remember', def: 'Keeps a value between runs of a composable, instead of making it again each time.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make a like counter that goes up on each tap.', code: 'var likes by [[remember]] { [[mutableStateOf]](0) }\nButton(onClick = { [[likes++]] }) {\n    Text("$likes likes")\n}', why: '<code>remember</code> keeps the box, <code>mutableStateOf</code> makes it watched, and <code>likes++</code> changes it.' },
+          { type: 'bug', prompt: 'Each tap runs <code>WaterScreen</code> again, but the number always jumps back to 0. Tap the line to fix.', code: '@Composable\nfun WaterScreen() {\n    var glasses by mutableStateOf(0)\n    Button(onClick = { glasses++ }) {\n        Text("$glasses of 8 glasses")\n    }\n}', bug: 2, fix: '    var glasses by remember { mutableStateOf(0) }', why: 'Without <code>remember</code>, every run makes a new box holding 0.' },
+        ],
+        quiz: [
+          { q: 'What does <code>mutableStateOf(0)</code> give you?', options: ['A box holding 0 that Compose watches', 'A plain number 0', 'A list of numbers'], a: 0, why: 'When its value changes, Compose runs the composables that read it again.' },
+          { q: 'Why wrap it in <code>remember { }</code>?', options: ['So the same box is kept each time the composable runs again', 'So the value is saved to a file', 'So the button can be tapped'], a: 0, why: 'Without it, each run would make a fresh box with the starting value.' },
+          { q: 'What is recomposition?', options: ['Compose running a composable again after a state it read changed', 'Restarting the whole app', 'Building the project in Android Studio'], a: 0, why: 'It is how the screen catches up with new state.' },
+        ],
+        docs: [['State and Jetpack Compose', 'https://developer.android.com/develop/ui/compose/state']],
+      },
+
+      {
+        id: 'recomposition',
+        title: 'How Compose redraws',
+        tagline: 'Only the parts that read a changed state run again.',
+        goals: ['Tell which composables run again after a state change', 'Explain why writing the same value changes nothing', 'Keep composables quick and free of side effects, because they can run often'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Every tap on “Add a glass” makes Compose run code again. Which code: the whole screen, every time? Knowing the answer tells you where to put things, and keeps your app fast.</p>
+<p>Split the screen into small composables: <code>Title()</code> shows “Water today”, and <code>GlassCount(glasses)</code> shows the number. When <code>glasses</code> changes, Compose runs again the composables that read it: <code>WaterScreen</code>, which reads <code>glasses</code> to pass it on, and <code>GlassCount</code>, which now gets a different value. <code>Title</code> gets nothing that changed, so Compose <em>skips</em> it: its code doesn’t run at all.</p>
+<p>Recomposition only happens when a state’s value really changes. Setting <code>glasses = 0</code> when it is already 0 is no change, so nothing runs. Changing a plain variable doesn’t count either, because Compose isn’t watching it.</p>
+<p>A composable can run often: after every tap, and during an animation even many times a second. Compose may also skip one you expected to run. So keep a composable’s body quick, and keep <em>side effects</em> out of it: work like writing to Logcat or saving a file. Put that work in <code>onClick</code>, which runs exactly once per tap.</p>`,
+        visual(el) {
+          const scr = n => `<div class="ui-m-body" style="justify-items:center;gap:10px"><div style="font-size:0.95rem">Water today</div><div style="font-size:1.05rem;font-weight:800">${n} of 8 glasses</div><span style="justify-self:center" class="ui-m-btn b-add">Add a glass</span><span style="justify-self:center" class="ui-m-btn ghost b-reset">Reset</span></div>`;
+          const ran = n => [`— glasses = ${n} —`, 'WaterScreen ran', 'Title skipped', `GlassCount(${n}) ran`];
+          Lab.ui.phone(el, {
+            logTitle: 'What ran',
+            predict: {
+              q: 'You tap Add, and <code>glasses</code> goes from 3 to 4. Does <code>Title()</code>, which always shows “Water today”, run again?',
+              options: ['Yes: the whole screen runs again', 'No: Compose skips it', 'Only if the phone is rotated'],
+              a: 1,
+              why: '<code>Title</code> has no inputs that changed, so Compose skips it.',
+            },
+            frames: [
+              { screen: scr(3), log: ['WaterScreen ran', 'Title ran', 'GlassCount(3) ran'], say: 'The first time, everything runs once to build the screen.' },
+              { tap: '.b-add', screen: scr(4), log: ran(4), say: '<code>glasses</code> changed. <code>WaterScreen</code> reads it, so it runs. <code>GlassCount</code> gets 4 instead of 3, so it runs. <code>Title</code> gets nothing new: skipped.' },
+              { tap: '.b-add', screen: scr(5), log: ran(5), say: 'Same pattern on every tap. The parts that don’t depend on <code>glasses</code> are left alone.' },
+              { tap: '.b-reset', screen: scr(0), log: ran(0), say: 'Reset sets <code>glasses = 0</code>. 5 to 0 is a change, so the same parts run.' },
+              { tap: '.b-reset', screen: scr(0), log: ['— glasses = 0, it was already 0 —', 'nothing ran'], say: 'Reset again: the value is already 0. No change, so no composable runs at all.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun WaterScreen() {
+    var glasses by remember { mutableStateOf(3) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Title()                    // skipped when glasses changes
+        GlassCount(glasses)        // runs again when glasses changes
+        Button(onClick = { glasses++ }) { Text("Add a glass") }
+        OutlinedButton(onClick = { glasses = 0 }) { Text("Reset") }
+    }
+}
+
+@Composable
+fun Title() {
+    Text("Water today", fontSize = 24.sp)
+}
+
+@Composable
+fun GlassCount(glasses: Int) {
+    Text("$glasses of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+}
+// Reset when glasses is already 0: no change, nothing runs again.`,
+        remember: 'When a state changes, only the composables that read it, or get a changed input, run again. The rest are skipped.',
+        mistakes: [
+          { title: 'Side effects in the body', bad: '@Composable\nfun GlassCount(glasses: Int) {\n    Log.d("Hello", "Glass added")   // runs whenever GlassCount runs\n    Text("$glasses of 8 glasses")\n}', good: 'Button(onClick = {\n    glasses++\n    Log.d("Hello", "Glass added")   // runs once per tap\n}) {\n    Text("Add a glass")\n}', why: 'A composable’s body can run any number of times, or be skipped. <code>onClick</code> runs exactly once for each tap.' },
+        ],
+        terms: [
+          { term: 'skipping', def: 'Compose leaving a composable out of a recomposition because none of its inputs changed.' },
+          { term: 'side effect', def: 'Work beyond describing the screen, like writing to Logcat or saving a file. It belongs in <code>onClick</code>, not in a composable’s body.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Fill in what happens to each composable when glasses changes from 2 to 3.', code: '@Composable\nfun Header() {\n    Text("Water today")\n}\n\n@Composable\nfun Count(glasses: Int) {\n    Text("$glasses of 8 glasses")\n}\n// glasses changes from 2 to 3:\n// Header is [[skipped]]. Count runs [[again]].', why: '<code>Header</code> has no inputs, so nothing about it changed. <code>Count</code> gets a new value.' },
+          { type: 'bug', prompt: 'The screen says “3 of 8 glasses”, and tapping Add never changes it: after a tap, no composable runs at all. Tap the line to fix.', code: '@Composable\nfun WaterScreen() {\n    var glasses by remember { mutableStateOf(3) }\n    Column {\n        GlassCount(glasses)\n        Button(onClick = { glasses = 3 }) {\n            Text("Add a glass")\n        }\n    }\n}', bug: 5, fix: '        Button(onClick = { glasses++ }) {', why: '<code>glasses</code> is already 3, so writing 3 again is no change, and Compose runs nothing. <code>glasses++</code> really changes the value, so <code>GlassCount</code> runs again with 4.' },
+        ],
+        quiz: [
+          { q: '<code>glasses</code> is 0. You run <code>glasses = 0</code>. What runs again?', options: ['Nothing', 'Every composable', 'Only <code>WaterScreen</code>'], a: 0, why: 'The value didn’t change, so there is nothing to redraw.' },
+          { q: 'Where should code that saves the count to a file go?', options: ['In <code>onClick</code>', 'In the body of <code>GlassCount</code>', 'In <code>Title</code>'], a: 0, why: 'A composable body can run many times or be skipped. <code>onClick</code> runs once per tap.' },
+          { q: '<code>Title()</code> takes no parameters and reads no state. What happens to it when <code>glasses</code> changes?', options: ['It is skipped', 'It runs again', 'It disappears from the screen'], a: 0, why: 'Skipped composables stay on the screen as they were. Their code just doesn’t run.' },
+        ],
+        docs: [['Lifecycle of composables', 'https://developer.android.com/develop/ui/compose/lifecycle'], ['Thinking in Compose', 'https://developer.android.com/develop/ui/compose/mental-model']],
+      },
+
       {
         id: 'hoisting',
         title: 'State hoisting',
-        tagline: 'State flows down. Events flow up.',
+        tagline: 'Move state up, so several composables can share it.',
+        goals: ['Turn a composable with its own state into one that takes a value and an event', 'Pass state down and events up between composables', 'Preview a stateless composable with any value'],
+        level: 'beginner', introduces: [],
         body: `
-<p>A stateful composable keeps its own state inside. That is easy to call, but nobody else can read or change that state. <em>Hoisting</em> moves the state up to the caller and gives the composable two parameters instead: <code>value</code> to show, and <code>onValueChange</code> to report what the user did.</p>
-<p>This gives you <em>unidirectional data flow</em>. State goes down as parameters. Events come up as lambda calls. The owner decides what the new state is. A stateless field does not even change its own text. It asks, and waits for the new value to come back down.</p>
-<p>Hoist state to the lowest common parent of everything that reads it. Here both the field and the Sign up button need the email, so it lives in <code>SignupScreen</code>.</p>`,
+<p>The water screen grows. A <code>GlassCounter</code> shows the number and the Add button, and below it a <code>GoalMessage</code> says “Goal reached!” once you reach 8. But if <code>glasses</code> is remembered inside <code>GlassCounter</code>, the message can’t see it. State made inside a composable belongs to that composable alone.</p>
+<p><em>State hoisting</em> means moving the state up, into the composable that calls both of them: here <code>WaterScreen</code>. <code>GlassCounter</code> then remembers nothing. Instead it gets two parameters: <code>glasses: Int</code>, the value to show, and <code>onAdd: () -&gt; Unit</code>, a function to call when the button is tapped. It hands that function on with <code>Button(onClick = onAdd)</code>. No braces here, and that is no mistake: <code>onAdd</code> already is a function, so you pass it on as it is. <code>onClick = { onAdd() }</code> does the same. A composable without state of its own is <em>stateless</em>; one that holds state is <em>stateful</em>.</p>
+<p>Values flow down, as parameters: <code>WaterScreen</code> passes <code>glasses</code> to <code>GlassCounter</code> and to <code>GoalMessage</code>. Events flow up, as lambdas: <code>GlassCounter</code> calls <code>onAdd()</code>, and <code>WaterScreen</code> decides what that means, <code>glasses++</code>. Only one place holds the number, so the two can never disagree. Inside <code>GoalMessage</code>, a plain <code>if</code> decides whether its Text is shown at all.</p>
+<p>Stateless composables are also easier to reuse and to check. A preview can show <code>GlassCounter(glasses = 8, onAdd = { })</code>, a full day, without tapping eight times. <code>{ }</code> is an empty lambda: in the preview, a tap does nothing.</p>`,
+        visual(el) {
+          const scr = (n, msg) => `<div class="ui-m-body" style="justify-items:center;gap:10px"><div style="font-size:1.05rem;font-weight:800">${n} of 8 glasses</div><span style="justify-self:center" class="ui-m-btn b-add">Add a glass</span>${msg ? '<div style="font-weight:700;color:var(--ok)">Goal reached!</div>' : ''}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'Down and up',
+            predict: {
+              q: '<code>glasses</code> is remembered inside <code>GlassCounter</code>. <code>GoalMessage</code> is called right next to it, in <code>WaterScreen</code>. Can <code>GoalMessage</code> read <code>glasses</code>?',
+              options: ['Yes: they are on the same screen', 'No: it belongs to <code>GlassCounter</code> alone'],
+              a: 1,
+              why: 'A value remembered inside a function is local to it, like any local variable in Kotlin.',
+            },
+            frames: [
+              { screen: scr(8, false), log: ['GlassCounter: glasses = 8 (its own)', 'GoalMessage: can’t see glasses'], say: 'Before hoisting: the counter reached 8, but the message never appears. Its state is locked inside <code>GlassCounter</code>.' },
+              { screen: scr(7, false), log: ['WaterScreen: glasses = 7', '↓ GlassCounter(glasses = 7)', '↓ GoalMessage(glasses = 7)'], say: 'After hoisting: <code>WaterScreen</code> holds the state and passes the value down to both.' },
+              { tap: '.b-add', screen: scr(7, false), log: '↑ GlassCounter calls onAdd()', say: 'A tap. <code>GlassCounter</code> changes nothing itself; it only reports the event upward.' },
+              { screen: scr(7, false), log: 'WaterScreen: glasses++ → 8', say: 'The owner of the state makes the change.' },
+              { screen: scr(8, true), log: ['↓ GlassCounter(glasses = 8)', '↓ GoalMessage(glasses = 8)'], say: 'Both get the new value. The number and the message update together, because they read the same state.' },
+            ],
+          });
+        },
         code: `@Composable
-fun SignupScreen() {
-    var email by rememberSaveable { mutableStateOf("") }
+fun WaterScreen() {
+    var glasses by remember { mutableStateOf(0) }    // the one place that holds it
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        GlassCounter(glasses = glasses, onAdd = { glasses++ })
+        GoalMessage(glasses = glasses)
+    }
+}
 
-    Column {
-        EmailField(value = email, onValueChange = { email = it })
-        Button(onClick = { /* submit */ }, enabled = "@" in email) {
-            Text("Sign up")
+@Composable
+fun GlassCounter(glasses: Int, onAdd: () -> Unit) {  // stateless
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("$glasses of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Button(onClick = onAdd) {
+            Text("Add a glass")
         }
     }
 }
 
-// Stateless: shows what it gets, reports what the user does.
 @Composable
-fun EmailField(value: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text("Email") },
-    )
-}`,
-        remember: 'Hoist state to the lowest common parent. Pass value down, pass onValueChange up.',
-        level: 'intermediate',
-        terms: [
-          { term: 'State hoisting', def: 'Moving state out of a composable into its caller and replacing it with a value parameter and an event callback.' },
-          { term: 'Stateless composable', def: 'A composable that holds no state of its own and only shows its parameters and reports events.' },
-          { term: 'Stateful composable', def: 'A composable that creates and owns its state internally, which makes it easy to call but hard to control from outside.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Finish the signature of a stateless search field.', code: '@Composable\nfun SearchField(query: String, [[onQueryChange]]: (String) -> [[Unit]]) {\n    TextField(value = query, onValueChange = onQueryChange)\n}', why: 'A stateless field takes the value to show and a callback that reports the new text.' },
-          { type: 'bug', prompt: 'Typing in the field does nothing. Tap the line that causes it.', code: '@Composable\nfun SignupScreen(vm: SignupViewModel) {\n    val email by vm.email.collectAsStateWithLifecycle()\n    Column {\n        EmailField(value = email, onValueChange = { vm.onEmailChange(email) })\n        Button(onClick = vm::submit, enabled = "@" in email) { Text("Sign up") }\n    }\n}', bug: 4, fix: '        EmailField(value = email, onValueChange = { vm.onEmailChange(it) })', why: 'The event carries the new text in <code>it</code>. Sending the old <code>email</code> back means the state never changes.' },
-        ],
-        quiz: [
-          { q: 'In unidirectional data flow, which way do events travel?', options: ['Down, from parent to child', 'Up, from child to the state owner'], a: 1, why: 'State goes down as parameters. Events go up through callbacks like <code>onValueChange</code>.' },
-          { q: 'What makes <code>EmailField(value, onValueChange)</code> stateless?', options: ['It has no parameters', 'It holds no state of its own and shows only what it is given', 'It uses <code>rememberSaveable</code>'], a: 1, why: 'The caller owns the state. The field just renders <code>value</code> and reports changes.' },
-          { q: 'The field keeps its text in its own <code>remember</code>. Can the parent clear it?', options: ['Yes, by calling it again', 'No, the parent can’t reach that state'], a: 1, why: 'State inside a composable is private to it. Hoist it if anyone else needs to read or change it.' },
-          { q: 'A search bar shares <code>query</code> and <code>expanded</code> between a field and a suggestions list. No business rule cares about <code>expanded</code>. Where should this state live?', options: ['In the screen’s ViewModel as two StateFlows', 'In a plain state holder class created with <code>rememberSearchBarState()</code>', 'In each composable’s own <code>remember</code>'], a: 1, why: 'Shared UI logic with no business rules fits a plain <code>@Stable</code> state holder. The ViewModel is for state that comes from or feeds the app’s logic.' },
-          { q: 'Why should a leaf like <code>EmailField</code> take <code>value</code> and <code>onValueChange</code> instead of the <code>SignupViewModel</code>?', options: ['It then works in previews, tests and other screens with plain values and lambdas', 'ViewModels cannot be passed as parameters to composables', 'A ViewModel parameter makes the field recompose on every frame'], a: 0, why: 'A leaf that takes the ViewModel can only run where that ViewModel and its dependencies can be built. Values and lambdas work anywhere.' },
-        ],
-        deeper: [
-          {
-            title: 'Pick the right owner',
-            body: `<p>Hoisting doesn’t mean “move everything to the ViewModel”. There are three common owners. State only one composable cares about, like whether its menu is open, stays in that composable with <code>remember</code>. State with UI logic that several composables share goes into a <em>plain state holder</em>: a small class you create with a <code>remember…State()</code> function, like <code>LazyListState</code> or your own <code>SearchBarState</code>. State that comes from or feeds business logic, like data from a repository, goes in the screen’s <code>ViewModel</code>.</p>
-<p>Ask two questions: who reads it, and does the app’s logic care about it? Hoist to the lowest owner that answers both.</p>`,
-            code: `@Stable
-class SearchBarState(initialQuery: String = "") {
-    var query by mutableStateOf(initialQuery)
-        private set
-    var expanded by mutableStateOf(false)
-        private set
-
-    fun onQueryChange(q: String) { query = q; expanded = q.isNotEmpty() }
-    fun close() { expanded = false }
-}
-
-@Composable
-fun rememberSearchBarState(): SearchBarState = remember { SearchBarState() }
-// Add a Saver and rememberSaveable if the query should survive rotation.`,
-            visual(el) {
-              const OWNERS = [['local', 'remember in the composable'], ['holder', 'plain state holder class'], ['vm', 'ViewModel']];
-              const CASES = [
-                { q: 'Is this overflow menu open?', a: 'local', why: 'Only the menu reads it, and no business logic cares. Keep it inside.' },
-                { q: 'Scroll position, so the screen can show “Back to top”', a: 'holder', why: 'LazyListState is a plain state holder. Hoist rememberLazyListState() to the screen so both the list and the button can use it.' },
-                { q: 'Query text, suggestions shown, expanded: a search bar’s UI logic', a: 'holder', why: 'Several fields that change together, with UI rules. A SearchBarState class keeps them in one place and easy to test.' },
-                { q: 'The list of orders loaded from the repository', a: 'vm', why: 'It comes from business logic and must survive rotation. That is the ViewModel’s job.' },
-              ];
-              let i = 0, busy = false;
-              const cols = OWNERS.map(([k, label]) => h('div', { class: 'cmp-d2h-col', 'data-k': k }, h('span', { class: 'cmp-label' }, label), h('div', { class: 'cmp-d2h-drop' })));
-              const card = h('div', { class: 'cmp-d2h-card' });
-              const o = out();
-              const btns = OWNERS.map(([k, label]) => act(label, () => answer(k)));
-              function show() {
-                if (i >= CASES.length) {
-                  card.textContent = 'All placed. Reset to try again.'; card.classList.add('cmp-d2h-done');
-                  btns.forEach(b => { b.disabled = true; });
-                  return;
-                }
-                card.textContent = CASES[i].q; card.classList.remove('cmp-d2h-done');
-                replay(card, 'drop-in');
-              }
-              async function answer(k) {
-                if (busy || i >= CASES.length) return;
-                const c = CASES[i];
-                if (k !== c.a) {
-                  replay(card, 'shake');
-                  say(o, `<span class="bad">Not quite.</span> ${k === 'vm' ? 'A ViewModel would work, but this is pure UI state. Hoist only as high as its readers.' : k === 'local' ? 'Others need to read or drive it, so it can’t stay private.' : 'A class adds structure that this case doesn’t need, or lacks the lifetime it needs.'}`);
-                  return;
-                }
-                busy = true;
-                const col = cols[OWNERS.findIndex(x => x[0] === k)];
-                const chip = h('span', { class: 'cmp-d2h-chip drop-in' }, c.q);
-                col.querySelector('.cmp-d2h-drop').append(chip);
-                replay(col, 'cmp-flash');
-                say(o, `<span class="good">Yes.</span> ${esc(c.why)}`);
-                i++;
-                await sleep(500); if (!el.isConnected) return;
-                show(); busy = false;
-              }
-              el.append(card, h('div', { class: 'controls' }, btns), h('div', { class: 'cmp-d2h-cols' }, cols), o);
-              show();
-              say(o, 'Where should this state live? Pick an owner.');
-            },
-          },
-          {
-            title: 'Pass values and lambdas, not the ViewModel',
-            body: `<p>Only the screen-level composable should know about the ViewModel. It collects the state and passes plain values and lambdas down. A leaf like <code>EmailField(value, onValueChange)</code> then works anywhere: in a <code>@Preview</code> with fake data, in a UI test with a lambda that records calls, and on another screen with a different ViewModel.</p>
-<p>A leaf that takes the ViewModel can only run where that ViewModel can be built, with its repository and everything behind it.</p>`,
-            code: `@Composable
-fun SignupRoute(vm: SignupViewModel = hiltViewModel()) {
-    val email by vm.email.collectAsStateWithLifecycle()
-    SignupScreen(email = email, onEmailChange = vm::onEmailChange, onSubmit = vm::submit)
-}
-
-@Preview
-@Composable
-fun SignupScreenPreview() {
-    SignupScreen(email = "ada@lab.dev", onEmailChange = {}, onSubmit = {})
-}`,
-            visual(el) {
-              const TRIES = [
-                { k: 'preview', src: 'Render the @Preview', ok: 'Rendered with email = "ada@lab.dev". No ViewModel needed.', bad: 'The preview can’t build SignupViewModel. It needs a repository and a network client.' },
-                { k: 'test', src: 'Run a UI test', ok: 'The test passed a lambda that records calls, typed, and checked it got "ada@". Done.', bad: 'The test has to build a fake repository and a whole ViewModel just to type into one field.' },
-                { k: 'reuse', src: 'Reuse on the Profile screen', ok: 'ProfileScreen passes its own email and callback. Same field, different owner.', bad: 'EmailField only knows SignupViewModel. Profile can’t use it without that ViewModel.' },
-              ];
-              let plain = true, busy = false;
-              const sig = h('div', { class: 'kt' });
-              const rows = TRIES.map(t => ({ t, mark: h('span', { class: 'cmp-d2h-mark' }, '·'), line: h('span', { class: 'cmp-d2h-line' }, t.src) }));
-              const list = h('div', { class: 'cmp-d2h-list' }, rows.map(r => h('div', { class: 'cmp-d2h-try' }, r.mark, r.line)));
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2h-plain', checked: true });
-              function paintSig() {
-                sig.innerHTML = hl(plain ? '@Composable\nfun EmailField(value: String, onValueChange: (String) -> Unit)' : '@Composable\nfun EmailField(vm: SignupViewModel)');
-                rows.forEach(r => { r.mark.textContent = '·'; r.mark.className = 'cmp-d2h-mark'; });
-              }
-              async function tryIt(r) {
-                if (busy) return; busy = true;
-                r.mark.textContent = '…'; r.mark.className = 'cmp-d2h-mark';
-                await sleep(450); if (!el.isConnected) return;
-                r.mark.textContent = plain ? '✓' : '✗';
-                r.mark.className = `cmp-d2h-mark ${plain ? 'cmp-d2h-ok' : 'cmp-d2h-no'}`;
-                replay(r.mark, 'pop');
-                say(o, `${plain ? '<span class="good">Works.</span>' : '<span class="bad">Stuck.</span>'} ${esc(plain ? r.t.ok : r.t.bad)}`);
-                busy = false;
-              }
-              sw.addEventListener('change', () => {
-                if (busy) { sw.checked = plain; return; }
-                plain = sw.checked; paintSig(); replay(sig, 'pop-soft');
-                say(o, plain ? 'Stateless leaf: it takes a value and a lambda.' : 'The leaf takes the whole ViewModel. Try the same three things.');
-              });
-              paintSig();
-              say(o, 'Try each use of EmailField. Then switch the signature and try again.');
-              el.append(sig, list,
-                h('div', { class: 'controls' }, rows.map(r => act(r.t.src, () => tryIt(r)))),
-                h('label', { class: 'switch', for: 'cmp-d2h-plain' }, sw, 'value + onValueChange'),
-                o);
-            },
-          },
-          {
-            title: 'Offer a stateful and a stateless version',
-            body: `<p>A reusable component often comes in two layers. The stateless one takes the value and a callback, so callers keep full control. A stateful overload owns the state and calls the stateless one, for callers who don’t care. Material follows the same idea: a <code>Slider</code> takes <code>value</code> and <code>onValueChange</code>, and its state lives with the caller.</p>
-<p>Write the stateless version first. The stateful one is then three lines, and tests and previews use the stateless one directly.</p>`,
-            code: `// Stateless: the caller owns the value
-@Composable
-fun Stepper(value: Int, onValueChange: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onValueChange(value - 1) }) { Text("−") }
-        Text("$value")
-        IconButton(onClick = { onValueChange(value + 1) }) { Text("+") }
+fun GoalMessage(glasses: Int) {
+    if (glasses >= 8) {
+        Text("Goal reached!")
     }
 }
 
-// Stateful convenience overload
+@Preview(showBackground = true)
 @Composable
-fun Stepper(modifier: Modifier = Modifier) {
-    var value by rememberSaveable { mutableIntStateOf(0) }
-    Stepper(value = value, onValueChange = { value = it }, modifier = modifier)
+fun GlassCounterPreview() {
+    GlassCounter(glasses = 8, onAdd = { })
 }`,
-          },
+        remember: 'Hoist state to the composable that calls everyone who needs it. Values go down as parameters, events go up as lambdas.',
+        terms: [
+          { term: 'state hoisting', def: 'Moving state up into a calling composable, and passing the value and an event function down instead.' },
+          { term: 'stateless', def: 'A composable that holds no state of its own: it shows what it is given.' },
+          { term: 'stateful', def: 'A composable that holds state with <code>remember</code>.' },
+          { term: 'event', def: 'Something that happened, like a tap, reported upward by calling a lambda such as <code>onAdd()</code>.' },
         ],
-        underHood: {
-          body: `<p>Hoisting is plain Kotlin: a value parameter and a function parameter. The interesting part is what happens to the lambda. Writing <code>onValueChange = { email = it }</code> inside a composable would create a new lambda object on every recomposition, and a new object would stop <code>EmailField</code> from skipping.</p>
-<p>With strong skipping, the default since Kotlin 2.0.20, the Compose compiler wraps lambdas created in a composable in <code>remember</code>, keyed on the values they capture. Here the lambda captures the <code>MutableState</code> behind <code>email</code>, which is the same object every time, so the same lambda instance is reused and <code>EmailField</code> can skip. The Compose, advanced track goes deeper on stability.</p>`,
-          code: `// You write
-var email by remember { mutableStateOf("") }
-EmailField(value = email, onValueChange = { email = it })
-
-// With strong skipping, the compiler produces roughly
-val emailState = remember { mutableStateOf("") }
-EmailField(
-    value = emailState.value,
-    onValueChange = remember(emailState) { { text: String -> emailState.value = text } },
-)`,
-        },
-        mistakes: [
-          {
-            title: 'Passing MutableState down',
-            bad: `@Composable
-fun EmailField(email: MutableState<String>) {
-    OutlinedTextField(value = email.value, onValueChange = { email.value = it })
-}`,
-            good: `@Composable
-fun EmailField(value: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = onValueChange)
-}`,
-            why: 'The child can now write the state behind the owner’s back, so any trimming or validation in the owner is skipped. With a callback, every change goes through the owner.',
-          },
-          {
-            title: 'Hoisting UI-only state into the ViewModel',
-            bad: `class ProfileViewModel : ViewModel() {
-    val menuExpanded = MutableStateFlow(false)
-    fun toggleMenu() { menuExpanded.update { !it } }
-}`,
-            good: `@Composable
-fun OverflowMenu(onSignOut: () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, "More") }
-    DropdownMenu(expanded, onDismissRequest = { expanded = false }) { /* items */ }
-}`,
-            why: 'Hoist only as high as the readers. Nothing outside the menu reads <code>expanded</code>, and no business rule depends on it, so the ViewModel only adds plumbing.',
-          },
+        challenges: [
+          { type: 'blank', prompt: 'Make this switch stateless: it gets the value and a function to call.', code: '@Composable\nfun LightButton(isOn: [[Boolean]], onToggle: () -> [[Unit]]) {\n    Button(onClick = [[onToggle]]) {\n        Text(if (isOn) "Turn off" else "Turn on")\n    }\n}', why: 'The value comes in as a normal parameter, the event as a function type. The button hands the event on.' },
+          { type: 'bug', prompt: 'This stateless counter doesn’t compile: <code>\'val\' cannot be reassigned.</code> Tap the line to fix.', code: '@Composable\nfun GlassCounter(glasses: Int, onAdd: () -> Unit) {\n    Column {\n        Text("$glasses of 8 glasses")\n        Button(onClick = { glasses++ }) {\n            Text("Add a glass")\n        }\n    }\n}', bug: 4, fix: '        Button(onClick = onAdd) {', why: 'A parameter can’t be changed. A stateless composable reports the tap with <code>onAdd</code>, and the owner of the state changes it.' },
         ],
-        visual(el) {
-          let hoisted = true, text = 'ada', shown = 'ada', busy = false;
-          const toggle = h('input', { type: 'checkbox', id: 'cmp-hoist', checked: true });
-          const stateChip = h('span', { class: 'cmp-state' });
-          const pvBtn = h('span', { class: 'cmp-pv-btn', 'aria-disabled': 'true' }, 'Sign up');
-          const parent = h('div', { class: 'cmp-comp' },
-            h('div', { class: 'cmp-comp-head' }, h('span', { class: 'cmp-comp-name' }, 'SignupScreen()'), pvBtn), stateChip);
-          const downLane = h('div', { class: 'cmp-lane cmp-down' }, h('span', { class: 'cmp-lane-label' }, 'value'));
-          const upLane = h('div', { class: 'cmp-lane cmp-up' }, h('span', { class: 'cmp-lane-label' }, 'onValueChange'));
-          const lanes = h('div', { class: 'cmp-lanes' }, downLane, upLane);
-          const fieldVal = h('span', {});
-          const field = h('div', { class: 'cmp-field' }, h('span', { class: 'cmp-field-label' }, 'Email'), h('span', { class: 'cmp-field-line' }, fieldVal, h('span', { class: 'cmp-caret' })));
-          const childSig = h('span', { class: 'cmp-comp-name' });
-          const childState = h('span', { class: 'cmp-state' });
-          const child = h('div', { class: 'cmp-comp' }, childSig, childState, field);
-          const o = out();
-          function paint() {
-            if (hoisted) {
-              stateChip.className = 'cmp-state'; stateChip.textContent = `var email = "${text}"`;
-              childSig.textContent = 'EmailField(value, onValueChange)';
-              childState.className = 'cmp-state cmp-none'; childState.textContent = 'no state inside';
-              lanes.classList.remove('cmp-off');
-            } else {
-              stateChip.className = 'cmp-state cmp-none'; stateChip.textContent = 'no email state here';
-              childSig.textContent = 'EmailField()';
-              childState.className = 'cmp-state'; childState.textContent = `var text = "${text}"`;
-              lanes.classList.add('cmp-off');
-            }
-            fieldVal.textContent = shown;
-          }
-          function paintButton() {
-            const on = hoisted && text.includes('@');
-            if ((pvBtn.getAttribute('aria-disabled') === 'false') !== on) replay(pvBtn, 'pop');
-            pvBtn.setAttribute('aria-disabled', String(!on));
-          }
-          async function travel(lane, cls, label) {
-            const c = h('span', { class: `cmp-travel ${cls}` }, label);
-            lane.append(c); await sleep(800); c.remove();
-          }
-          async function type(s) {
-            if (busy) return;
-            if (text.length + s.length > 22) { replay(field, 'shake'); say(o, 'The field is full. Clear it first.'); return; }
-            busy = true;
-            const next = text + s;
-            replay(field, 'pop-soft');
-            if (hoisted) {
-              say(o, `User typed ${hl(JSON.stringify(s))}. The field does not change itself. It calls ${hl(`onValueChange("${next}")`)}.`);
-              await travel(upLane, 'cmp-ev cmp-go-up', `onValueChange("${next}")`);
-              text = next; paint(); replay(stateChip, 'pop');
-              say(o, `${hl(`email = "${next}"`)} <span class="muted">// the owner updates its state</span>`);
-              await travel(downLane, 'cmp-go-down', `value = "${next}"`);
-              shown = next; paint(); replay(field, 'cmp-flash'); paintButton();
-              say(o, `EmailField recomposed with the new value. Sign up reads email too, so it is ${text.includes('@') ? '<span class="good">on</span>' : 'off until there is an @'}.`);
-            } else {
-              text = next; shown = next; paint(); replay(childState, 'pop'); paintButton();
-              say(o, `EmailField changed its own ${hl('text')}. SignupScreen never hears about it, so Sign up stays off.`);
-            }
-            busy = false;
-          }
-          async function clear() {
-            if (busy) return;
-            if (!hoisted) {
-              replay(parent, 'shake');
-              say(o, `<span class="bad">error:</span> Unresolved reference: email. The text lives inside EmailField, out of the parent’s reach.`);
-              return;
-            }
-            busy = true;
-            text = ''; paint(); replay(stateChip, 'pop');
-            say(o, `${hl('email = ""')} <span class="muted">// the parent resets its own state</span>`);
-            await travel(downLane, 'cmp-go-down', 'value = ""');
-            shown = ''; paint(); replay(field, 'cmp-flash'); paintButton();
-            say(o, 'The field followed. One source of truth, so nothing can disagree.');
-            busy = false;
-          }
-          toggle.addEventListener('change', () => {
-            if (busy) { toggle.checked = hoisted; return; }
-            hoisted = toggle.checked; text = 'ada'; shown = 'ada'; paint(); paintButton();
-            replay(child, 'pop-soft'); replay(parent, 'pop-soft');
-            say(o, hoisted ? 'Hoisted: SignupScreen owns email. Type and watch the round trip.' : 'Stateful: EmailField keeps its own text. Type, then try clearing it from the parent.');
-          });
-          paint(); paintButton();
-          say(o, 'Type into the field. The event goes up, the new value comes down.');
-          el.append(
-            h('label', { class: 'switch', for: 'cmp-hoist' }, toggle, 'Hoist the state'),
-            h('div', { class: 'cmp-flow' }, parent, lanes, child),
-            h('div', { class: 'controls' }, act('Type “@”', () => type('@')), act('Type “lab.dev”', () => type('lab.dev')), act('Type “x”', () => type('x')), cmd('email = ""', clear)),
-            o);
-        },
-        predict: {
-          q: 'The state is hoisted. The user types “@” into <code>EmailField</code>. What changes the text shown in the field?',
-          options: ['The field updates its own text, then tells the parent', 'The parent sets <code>email</code>, and the new value comes back down as <code>value</code>', 'Both update at the same time'],
-          a: 1,
-          why: 'A stateless field only reports the edit through <code>onValueChange</code>. The owner updates the state, and the field shows whatever comes back down.',
-        },
+        quiz: [
+          { q: 'Two composables need the same <code>glasses</code>. Where should the state live?', options: ['In the composable that calls both of them', 'Inside one of them', 'In both, one copy each'], a: 0, why: 'Hoisting it to the common caller gives one place for the value, shared by both.' },
+          { q: 'In <code>GlassCounter(glasses: Int, onAdd: () -&gt; Unit)</code>, what is <code>onAdd</code> for?', options: ['Reporting a tap upward', 'Holding the number', 'Drawing the button'], a: 0, why: 'Events go up as lambdas. The owner of the state decides what to do.' },
+          { q: 'Why are stateless composables easy to preview?', options: ['You can pass in any value, like 8 glasses', 'They don’t need <code>@Composable</code>', 'They have no parameters'], a: 0, why: 'The preview calls them with whatever value you want to see.' },
+        ],
+        docs: [['Where to hoist state', 'https://developer.android.com/develop/ui/compose/state-hoisting'], ['State and Jetpack Compose', 'https://developer.android.com/develop/ui/compose/state']],
       },
 
-      // Overlays ─────────────────────────────────────────────
       {
-        id: 'overlays',
-        title: 'Dialogs, bottom sheets, snackbars and menus',
-        tagline: 'A Boolean in state decides if the overlay exists. Your code turns it off.',
-        level: 'beginner',
+        id: 'saveable',
+        title: 'Surviving rotation',
+        tagline: 'Keep state when the Activity is created again.',
+        goals: ['Explain why <code>remember</code> loses its value when the phone rotates', 'Keep a value through rotation with <code>rememberSaveable</code>', 'Know which values it keeps, and when the app starts fresh'],
+        level: 'beginner', introduces: ['rememberSaveable'],
         body: `
-<p>Material 3 gives you four everyday overlays. <code>AlertDialog</code> asks a short question with confirm and dismiss buttons. <code>ModalBottomSheet</code> slides up a panel of choices. <code>DropdownMenu</code> opens a small list next to the button that opened it. A snackbar shows a brief message at the bottom, through the <code>SnackbarHost</code> in your <code>Scaffold</code> (see the Scaffold lesson).</p>
-<p>Dialogs, sheets and menus are not opened with a call. You keep a flag in state, like <code>var confirmDelete by remember { mutableStateOf(false) }</code>, and write <code>if (confirmDelete) AlertDialog(...)</code>. A tap sets the flag to <code>true</code> and the dialog enters composition. Setting it back to <code>false</code> removes it.</p>
-<p>When the user taps outside or presses back, the component calls <code>onDismissRequest</code>. It does not close itself: your lambda must set the flag to <code>false</code>. Each button must do the same. Use <code>rememberSaveable</code> for the flag if the dialog should survive rotation.</p>`,
-        code: `@OptIn(ExperimentalMaterial3Api::class)   // ModalBottomSheet is still experimental
-@Composable
-fun NoteActions(note: Note, onDelete: () -> Unit, onShare: (String) -> Unit) {
-    var menuOpen by remember { mutableStateOf(false) }
-    var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    var showShare by rememberSaveable { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-
-    Box {                                       // the menu anchors to this Box
-        IconButton(onClick = { menuOpen = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "More options")
-        }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(text = { Text("Share") }, onClick = { menuOpen = false; showShare = true })
-            DropdownMenuItem(text = { Text("Delete") }, onClick = { menuOpen = false; confirmDelete = true })
-        }
+<p>You’ve had 5 glasses. You turn the phone sideways, and the counter says 0. The rotation lesson explains why: Android destroys the Activity and creates a new one. Everything <code>remember</code> kept belonged to the old Activity, so it starts over.</p>
+<p><code>rememberSaveable</code> works like <code>remember</code>, and also writes the value into the Activity’s <em>saved state</em>: a small bag of values Android keeps for an Activity while it is recreated. It is the same <code>Bundle</code> that <code>onCreate</code> receives as <code>savedInstanceState</code>. When the new Activity builds the screen, <code>rememberSaveable</code> reads the value back. In code it is a one-word change: <code>var glasses by rememberSaveable { mutableStateOf(0) }</code>.</p>
+<p>The saved state also brings the value back when Android closed your app in the background to free memory, and the person then returns to it. It is not kept when the person closes the app on purpose, for example by swiping it away from the Recents screen (the list of recently used apps). Then the app starts fresh, as people expect.</p>
+<p><code>rememberSaveable</code> can keep simple values by itself: <code>Int</code>, <code>Double</code>, <code>String</code>, <code>Boolean</code> and the like. The Bundle is small, so save only what the screen needs to rebuild itself, such as a count or the text of a field, not long lists.</p>`,
+        visual(el) {
+          const scr = (n, side) => `<div class="ui-m-body" style="justify-items:center;gap:10px">${side ? '<span class="ui-m-chip">turned sideways</span>' : ''}<div style="font-size:1.05rem;font-weight:800">${n} of 8 glasses</div><span style="justify-self:center" class="ui-m-btn">Add a glass</span></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'What happens',
+            predict: {
+              q: '<code>glasses</code> is 5, kept with plain <code>remember</code>. You rotate the phone. What does the counter show?',
+              options: ['5 of 8 glasses', '0 of 8 glasses', 'The app crashes'],
+              a: 1,
+              why: 'Rotation creates a new Activity. <code>remember</code> started over, so <code>mutableStateOf(0)</code> runs again.',
+            },
+            frames: [
+              { screen: scr(5, false), log: 'var glasses by remember { mutableStateOf(0) }', say: 'Five glasses so far, kept with <code>remember</code>.' },
+              { screen: scr(0, true), log: ['↻ rotated', 'old Activity destroyed, new one created', 'remember starts over: 0'], say: 'The new Activity builds the screen from scratch. The 5 is gone.' },
+              { screen: scr(5, false), log: 'var glasses by rememberSaveable { mutableStateOf(0) }', say: 'Same app with one word changed: <code>rememberSaveable</code>.' },
+              { screen: scr(5, true), log: ['↻ rotated', 'saved state: glasses = 5', 'new Activity reads it back: 5'], say: 'Before the old Activity went away, the value was saved. The new one reads it back.' },
+              { screen: scr(5, false), log: ['app in the background, Android closes it to free memory', 'person comes back: glasses = 5'], say: 'The saved state also covers this: Android closed the app on its own, so it brings the value back.' },
+              { screen: scr(0, false), log: ['swiped away from Recents', 'opened again: fresh start, 0'], say: 'The person closed the app on purpose. Nothing is restored, and the counter starts at 0.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun WaterScreen() {
+    var glasses by rememberSaveable { mutableStateOf(0) }   // survives rotation
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        GlassCounter(glasses = glasses, onAdd = { glasses++ })
+        GoalMessage(glasses = glasses)
     }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete note?") },
-            text = { Text("“\${note.title}” will be removed from all your devices.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
-        )
-    }
-
-    if (showShare) {
-        ModalBottomSheet(onDismissRequest = { showShare = false }, sheetState = sheetState) {
-            listOf("WhatsApp", "E-posta", "Copy link").forEach { target ->
-                ListItem(
-                    headlineContent = { Text(target) },
-                    modifier = Modifier.clickable {
-                        onShare(target)
-                        scope.launch { sheetState.hide() }.invokeOnCompletion {
-                            if (!sheetState.isVisible) showShare = false
-                        }
-                    },
-                )
-            }
-        }
-    }
-}`,
-        remember: 'A flag in state shows the overlay. onDismissRequest and every button must set it back to false.',
+}
+// 5 of 8 glasses, rotate the phone: still 5 of 8 glasses`,
+        remember: 'remember forgets when the Activity is recreated; rememberSaveable puts simple values in the saved state and gets them back.',
         terms: [
-          { term: 'AlertDialog', def: 'A Material 3 dialog with a title, text and confirm and dismiss buttons, shown while it is in composition.' },
-          { term: 'onDismissRequest', def: 'The callback a dialog, sheet or menu calls when the user taps outside or presses back. Your code decides whether to close it.' },
-          { term: 'ModalBottomSheet', def: 'A panel that slides up from the bottom over a scrim. Its SheetState drives the show and hide animations.' },
-          { term: 'DropdownMenu', def: 'A popup list anchored to its parent, open while expanded is true.' },
+          { term: 'rememberSaveable', def: 'Like <code>remember</code>, but the value also survives rotation and Android closing the app in the background.' },
+          { term: 'saved state', def: 'A small bag of values Android keeps for an Activity while it is recreated: the <code>Bundle</code> that <code>onCreate</code> receives as <code>savedInstanceState</code>.' },
+          { term: 'Recents screen', def: 'The phone’s list of recently used apps. Swiping an app away there closes it for good.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Open the menu from the button and close it when the user taps outside.', code: 'var expanded by remember { mutableStateOf(false) }\nBox {\n    IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, "More options") }\n    DropdownMenu(expanded = [[expanded]], onDismissRequest = { expanded = [[false]] }) {\n        DropdownMenuItem(text = { Text("Share") }, onClick = { expanded = false; onShare() })\n    }\n}', why: 'The menu shows while <code>expanded</code> is true. A tap outside calls <code>onDismissRequest</code>, and only your lambda turns the flag off.' },
-          { type: 'bug', prompt: 'Tapping Delete removes the note, but the dialog stays on screen. Tap the wrong line.', code: 'var confirmDelete by rememberSaveable { mutableStateOf(false) }\nif (confirmDelete) {\n    AlertDialog(\n        onDismissRequest = { confirmDelete = false },\n        title = { Text("Delete note?") },\n        confirmButton = { TextButton(onClick = { onDelete() }) { Text("Delete") } },\n        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },\n    )\n}', bug: 5, fix: '        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },', why: 'The dialog is on screen because <code>confirmDelete</code> is true. Clicking a button does not change that. Each button must set the flag to false itself.' },
+          { type: 'blank', prompt: 'Keep the selected day when the phone rotates.', code: 'var day by [[rememberSaveable]] { [[mutableStateOf]]("Mon") }', why: '<code>rememberSaveable</code> keeps the String in the saved state, so it comes back after rotation.' },
+          { type: 'bug', prompt: 'The picked name jumps back to “Ada” whenever the phone rotates. Tap the line to change.', code: '@Composable\nfun NamePicker() {\n    var name by remember { mutableStateOf("Ada") }\n    Column {\n        Text("Picked: $name")\n        Button(onClick = { name = "Sam" }) { Text("Sam") }\n        Button(onClick = { name = "Lin" }) { Text("Lin") }\n    }\n}', bug: 2, fix: '    var name by rememberSaveable { mutableStateOf("Ada") }', why: 'Rotation creates a new Activity, and <code>remember</code> starts over. <code>rememberSaveable</code> restores the name.' },
         ],
         quiz: [
-          { q: 'The user taps the scrim outside an <code>AlertDialog</code>. What happens?', options: ['The dialog closes by itself', '<code>onDismissRequest</code> runs; the dialog closes only if your code sets the flag to false', 'Nothing, dialogs ignore outside taps'], a: 1, why: 'The dialog asks to be dismissed. It stays as long as the <code>if</code> around it is true.' },
-          { q: 'Why call <code>sheetState.hide()</code> before setting <code>showShare = false</code>?', options: ['So the slide-down animation plays before the sheet leaves composition', 'Because <code>hide()</code> saves the state', 'It is not needed; the result is the same'], a: 0, why: 'Removing the sheet from composition takes it away at once. <code>hide()</code> animates it down first, and <code>invokeOnCompletion</code> removes it afterwards.' },
-          { q: 'Where does a <code>DropdownMenu</code> appear?', options: ['Always at the top of the screen', 'Next to its parent, such as the Box that holds the button', 'In the middle of the screen'], a: 1, why: 'The menu is placed relative to its parent layout. Put it in the same <code>Box</code> as the button that opens it.' },
-          { q: 'A list lets the user delete any note after confirming. Which state shape fits best?', options: ['<code>var pendingDelete by remember { mutableStateOf&lt;Note?&gt;(null) }</code>: non-null means the dialog is open', '<code>var confirm by remember { mutableStateOf(false) }</code> plus a separate <code>var selected: Note?</code>', 'A global <code>object DialogState</code> with the note inside'], a: 0, why: 'One nullable value cannot drift apart the way a Boolean and a selection can, and the dialog always has the right note.' },
+          { q: 'Why does <code>remember</code> lose its value when the phone rotates?', options: ['The Activity is destroyed and created again', 'Rotation clears the phone’s memory', 'Compose resets every value once a minute'], a: 0, why: 'What <code>remember</code> kept belonged to the old Activity.' },
+          { q: 'Android closes your app in the background, and the person comes back. Which value is still there?', options: ['One kept with <code>rememberSaveable</code>', 'One kept with <code>remember</code>', 'Neither'], a: 0, why: 'The saved state is restored in this case too.' },
+          { q: 'The person swipes the app away from Recents and opens it again. What does <code>rememberSaveable</code> give back?', options: ['The starting value: a fresh start', 'The last saved value'], a: 0, why: 'Closing an app on purpose throws its saved state away.' },
         ],
-        deeper: [
-          {
-            title: 'Hide the sheet, then remove it',
-            body: `
-<p><code>SheetState</code> has suspend functions <code>show()</code> and <code>hide()</code> that animate the sheet. If a button inside the sheet just sets <code>showShare = false</code>, the sheet leaves composition at once and the slide-down never plays.</p>
-<p>The pattern from the docs: launch <code>sheetState.hide()</code>, and in <code>invokeOnCompletion</code> set the flag to <code>false</code> once <code>sheetState.isVisible</code> is false. Swipes down and taps on the scrim already animate before they call <code>onDismissRequest</code>.</p>`,
-            code: `Button(onClick = {
-    scope.launch { sheetState.hide() }.invokeOnCompletion {
-        if (!sheetState.isVisible) showShare = false   // remove only after the animation
-    }
-}) { Text("Done") }`,
-            visual(el) {
-              let open = false, busy = false;
-              const sheet = h('div', { class: 'cmp-ov-sheet' }, h('i', { class: 'cmp-ov-handle' }), h('div', { class: 'cmp-ov-sitem' }, 'WhatsApp'), h('div', { class: 'cmp-ov-sitem' }, 'E-posta'));
-              const scrim = h('div', { class: 'cmp-ov-scrim' });
-              const phone = h('div', { class: 'cmp-ov-phone cmp-ov-mini' }, h('div', { class: 'cmp-ov-bar' }, 'Notes'), h('div', { class: 'cmp-ov-note' }, 'Shopping list'), scrim, sheet);
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              const paint = (vis) => { read.innerHTML = hl(`showShare = ${open}\nsheetState.isVisible = ${vis}`); };
-              const openSheet = async () => {
-                if (busy || open) return; busy = true; open = true; paint(false);
-                scrim.classList.add('cmp-on'); sheet.style.transition = ''; void sheet.offsetWidth; sheet.classList.add('cmp-on');
-                await sleep(350); if (!el.isConnected) return; paint(true); busy = false;
-                say(o, 'Sheet open. Close it both ways and compare.');
-              };
-              async function closeDirect() {
-                if (busy || !open) return say(o, 'Open the sheet first.');
-                open = false; paint(true);
-                sheet.style.transition = 'none'; sheet.classList.remove('cmp-on'); scrim.classList.remove('cmp-on');
-                paint(false);
-                say(o, `${hl('showShare = false')} <span class="bad">// gone in one frame, no slide</span>`);
-              }
-              async function closeHide() {
-                if (busy || !open) return say(o, 'Open the sheet first.');
-                busy = true; sheet.style.transition = '';
-                say(o, `${hl('scope.launch { sheetState.hide() }')} <span class="muted">// animating…</span>`);
-                sheet.classList.remove('cmp-on'); scrim.classList.remove('cmp-on');
-                await sleep(450); if (!el.isConnected) return;
-                open = false; paint(false); replay(read, 'pop-soft');
-                say(o, `${hl('invokeOnCompletion { if (!sheetState.isVisible) showShare = false }')} <span class="good">// removed after the slide</span>`);
-                busy = false;
-              }
-              paint(false);
-              say(o, 'Open the sheet, then close it.');
-              el.append(h('div', { class: 'cmp-ov-wrap' }, phone, h('div', { class: 'cmp-ov-side' },
-                h('div', { class: 'controls' }, act('Open sheet', openSheet)),
-                h('div', { class: 'controls' }, cmd('showShare = false', closeDirect), cmd('sheetState.hide() then false', closeHide)),
-                read)), o);
-            },
-          },
-          {
-            title: 'Keep the item, not just a Boolean',
-            body: `
-<p>A dialog that confirms an action on one item needs to know which item. Two separate variables, a Boolean and a selected note, can drift apart. Keep one nullable value instead: the note waiting for confirmation. Non-null means the dialog is open, and the dialog always has the right note.</p>
-<p>When the dialog comes from data rather than a tap, such as “Your session expired”, put it in the ViewModel’s UI state and let the screen render it like everything else.</p>`,
-            code: `var pendingDelete by remember { mutableStateOf<Note?>(null) }
-
-NoteList(notes, onDeleteClick = { note -> pendingDelete = note })
-
-pendingDelete?.let { note ->
-    AlertDialog(
-        onDismissRequest = { pendingDelete = null },
-        title = { Text("Delete “\${note.title}”?") },
-        confirmButton = { TextButton(onClick = { pendingDelete = null; vm.delete(note.id) }) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
-    )
-}`,
-          },
-        ],
-        underHood: {
-          body: `
-<p><code>AlertDialog</code> is built on <code>Dialog</code>, and <code>ModalBottomSheet</code> uses its own dialog. Both open a separate Android window above your activity’s window. <code>DropdownMenu</code> uses a <code>Popup</code>, which is also its own window. That is why they draw above everything, including the Scaffold bars, no matter where in the tree you write them.</p>
-<p>The window lives exactly as long as the composable is in composition. The <code>if</code> around it is the switch: when it becomes false, Compose disposes the composable and the window is removed.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'An empty onDismissRequest',
-            bad: `if (confirmDelete) {
-    AlertDialog(
-        onDismissRequest = { },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
-        title = { Text("Delete note?") },
-    )
-}`,
-            good: `if (confirmDelete) {
-    AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
-        title = { Text("Delete note?") },
-    )
-}`,
-            why: 'With an empty lambda, back and outside taps do nothing, and with no Cancel button the only way out is to delete. Block dismissal only when you really must, and say why on screen.',
-          },
-          {
-            title: 'Closing the sheet without hide()',
-            bad: `ListItem(
-    headlineContent = { Text("Copy link") },
-    modifier = Modifier.clickable { copy(); showShare = false },
-)`,
-            good: `ListItem(
-    headlineContent = { Text("Copy link") },
-    modifier = Modifier.clickable {
-        copy()
-        scope.launch { sheetState.hide() }.invokeOnCompletion {
-            if (!sheetState.isVisible) showShare = false
-        }
-    },
-)`,
-            why: 'Setting the flag removes the sheet in one frame. It looks like a glitch next to the smooth slide the user gets when they swipe it down.',
-          },
-          {
-            title: 'remember for a dialog that must survive rotation',
-            bad: `var confirmDelete by remember { mutableStateOf(false) }`,
-            good: `var confirmDelete by rememberSaveable { mutableStateOf(false) }`,
-            why: 'Rotation recreates the activity. A plain <code>remember</code> flag resets to false and the question the user was reading disappears.',
-          },
-        ],
-        visual(el) {
-          let menuOpen = false, confirm = false, share = false, dismissOk = true, snackT = 0;
-          const notes = ['Shopping list', 'Meeting notes'];
-          const list = h('div', { class: 'cmp-ov-list' });
-          const moreBtn = h('button', { class: 'cmp-ov-more', type: 'button', 'aria-label': 'More options', onclick: () => setMenu(true) }, '⋮');
-          const menu = h('div', { class: 'cmp-ov-menu', role: 'menu' },
-            h('button', { type: 'button', class: 'cmp-ov-mi', onclick: () => { setMenu(false, true); setShare(true); } }, 'Share'),
-            h('button', { type: 'button', class: 'cmp-ov-mi', onclick: () => { setMenu(false, true); setConfirm(true); } }, 'Delete'));
-          const catcher = h('div', { class: 'cmp-ov-catch', onclick: () => dismiss('menu') });
-          const scrim = h('div', { class: 'cmp-ov-scrim', onclick: () => dismiss(confirm ? 'dialog' : 'sheet') });
-          const dlgText = h('p', {});
-          const dialog = h('div', { class: 'cmp-ov-dialog', role: 'dialog' }, h('b', {}, 'Delete note?'), dlgText,
-            h('div', { class: 'cmp-ov-btns' },
-              h('button', { type: 'button', onclick: () => { setConfirm(false, 'Cancel'); } }, 'Cancel'),
-              h('button', { type: 'button', onclick: () => { setConfirm(false, 'Delete'); remove(); } }, 'Delete')));
-          const sheet = h('div', { class: 'cmp-ov-sheet' }, h('i', { class: 'cmp-ov-handle' }),
-            ...['WhatsApp', 'E-posta', 'Copy link'].map(t => h('button', { type: 'button', class: 'cmp-ov-sitem', onclick: () => pick(t) }, t)));
-          const snack = h('div', { class: 'cmp-ov-snack', 'aria-live': 'polite' });
-          const phone = h('div', { class: 'cmp-ov-phone' },
-            h('div', { class: 'cmp-ov-bar' }, h('span', {}, 'Notes'), moreBtn), list, catcher, menu, scrim, dialog, sheet, snack);
-          const read = h('div', { class: 'kt' });
-          const o = out();
-          const paintList = () => list.replaceChildren(...notes.map(n => h('div', { class: 'cmp-ov-note' }, n)));
-          const paint = () => {
-            read.innerHTML = hl(`menuOpen = ${menuOpen}\nconfirmDelete = ${confirm}\nshowShare = ${share}`);
-            replay(read, 'pop-soft');
-            menu.classList.toggle('cmp-on', menuOpen); catcher.classList.toggle('cmp-on', menuOpen);
-            scrim.classList.toggle('cmp-on', confirm || share);
-            dialog.classList.toggle('cmp-on', confirm); sheet.classList.toggle('cmp-on', share);
-          };
-          function setMenu(v, quiet) {
-            if (v && !notes.length) return say(o, 'No notes left. Reset below.');
-            menuOpen = v; paint();
-            if (!quiet) say(o, v ? `${hl('menuOpen = true')} <span class="muted">// DropdownMenu enters composition next to the ⋮ button</span>` : `${hl('onDismissRequest = { menuOpen = false }')}`);
-          }
-          function setConfirm(v, why) {
-            confirm = v; dlgText.textContent = `“${notes[0] || ''}” will be removed from all your devices.`; paint();
-            say(o, v ? `${hl('confirmDelete = true')} <span class="muted">// if (confirmDelete) AlertDialog(…) now runs</span>` : `${hl(`${why}: confirmDelete = false`)} <span class="muted">// the dialog leaves composition</span>`);
-          }
-          function setShare(v) {
-            share = v; paint();
-            if (v) say(o, `${hl('showShare = true')} <span class="muted">// ModalBottomSheet slides up</span>`);
-          }
-          async function pick(t) {
-            say(o, `${hl(`onShare("${t}")`)} then ${hl('sheetState.hide()')} <span class="muted">// slide down…</span>`);
-            sheet.classList.remove('cmp-on'); scrim.classList.remove('cmp-on');
-            await sleep(420); if (!el.isConnected) return;
-            share = false; paint();
-            toast(`Shared to ${t}`);
-          }
-          function dismiss(what) {
-            const flag = what === 'menu' ? 'menuOpen' : what === 'dialog' ? 'confirmDelete' : 'showShare';
-            if (!dismissOk && what !== 'sheet') {
-              replay(what === 'menu' ? menu : dialog, 'shake');
-              say(o, `${hl('onDismissRequest = { }')} <span class="bad">// called, but nothing changes: ${flag} is still true</span>`);
-              return;
-            }
-            if (what === 'menu') { menuOpen = false; paint(); }
-            else if (what === 'dialog') { confirm = false; paint(); }
-            else { share = false; paint(); }
-            say(o, `${hl(`onDismissRequest = { ${flag} = false }`)} <span class="muted">// outside tap or back</span>`);
-          }
-          function back() {
-            if (confirm) dismiss('dialog'); else if (share) dismiss('sheet'); else if (menuOpen) dismiss('menu');
-            else say(o, 'Nothing is open. Back would leave the screen.');
-          }
-          function remove() {
-            const n = notes.shift(); paintList();
-            toast(`“${n}” deleted`);
-          }
-          function toast(msg) {
-            clearTimeout(snackT);
-            snack.textContent = msg; snack.classList.add('cmp-on');
-            snackT = setTimeout(() => snack.classList.remove('cmp-on'), 2400);
-          }
-          const sw = h('input', { type: 'checkbox', id: 'cmp-ov-dismiss', checked: true });
-          sw.addEventListener('change', () => {
-            dismissOk = sw.checked;
-            say(o, dismissOk ? `${hl('onDismissRequest = { confirmDelete = false }')} <span class="good">// outside taps and back close it</span>` : `${hl('onDismissRequest = { }')} <span class="bad">// open the dialog or menu, then tap outside</span>`);
-          });
-          paintList(); paint();
-          say(o, 'Tap ⋮ in the phone. Open the dialog and the sheet, then tap outside or press back.');
-          el.append(
-            h('div', { class: 'cmp-ov-wrap' }, phone,
-              h('div', { class: 'cmp-ov-side' }, read,
-                h('label', { class: 'switch', for: 'cmp-ov-dismiss' }, sw, 'onDismissRequest sets the flag'),
-                h('div', { class: 'controls' },
-                  act('Press back', back),
-                  act('Reset notes', () => { notes.splice(0, notes.length, 'Shopping list', 'Meeting notes'); menuOpen = confirm = share = false; paintList(); paint(); say(o, 'Notes restored.'); })))),
-            o);
-        },
-        predict: {
-          q: 'The dialog is open and <code>onDismissRequest = { }</code> is empty. The user presses back. What happens?',
-          options: ['The dialog closes anyway', 'The dialog stays: only your code can set the flag to false', 'The whole screen is closed'],
-          a: 1,
-          why: 'Back calls <code>onDismissRequest</code>, nothing more. The dialog is on screen as long as your flag is true, so an empty lambda keeps it there.',
-        },
+        docs: [['Save UI state in Compose', 'https://developer.android.com/develop/ui/compose/state-saving']],
       },
 
-      // 9 ─────────────────────────────────────────────
       {
         id: 'text-input',
-        title: 'Text input',
-        tagline: 'The field shows your state and reports every edit.',
+        title: 'Text fields',
+        tagline: 'Let people type, and use what they typed.',
+        goals: ['Add a box people can type in with <code>TextField</code>', 'Keep what they type with <code>rememberTextFieldState</code>', 'Read the typed text and turn it into a number'],
+        level: 'beginner', introduces: ['TextField', 'TextFieldState', 'rememberTextFieldState', 'state', 'label', 'keyboardOptions', 'KeyboardOptions', 'keyboardType', 'KeyboardType', 'Number', 'OutlinedTextField'],
         body: `
-<p><code>TextField</code> and <code>OutlinedTextField</code> are the Material 3 inputs. In the classic form you pass <code>value</code> and <code>onValueChange</code>. The field never changes its own text. It reports each edit, and you write the new text into state. Ignore the callback and typing does nothing.</p>
-<p><code>keyboardOptions</code> tells the soft keyboard what to show. <code>KeyboardType.Email</code> adds an @ key, <code>KeyboardType.Number</code> shows digits, and <code>imeAction</code> picks the action key, such as Next or Done. <code>keyboardActions</code> says what that key does. By default, Next moves focus to the next field. The keyboard type does not filter input, so validate the text yourself.</p>
-<p>Show errors with <code>isError</code> and explain them in <code>supportingText</code>. Wait until the user has typed something before you complain. Material 3 also has a newer overload that takes a <code>TextFieldState</code> in place of value and callback. The next lesson, TextFieldState and transformations, covers it.</p>`,
-        code: `@Composable
-fun LoginForm(onSubmit: (String, String) -> Unit) {
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    val emailError = email.isNotEmpty() && "@" !in email
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it.trim() },
-            label = { Text("Email") },
-            singleLine = true,
-            isError = emailError,
-            supportingText = { if (emailError) Text("Enter a valid email") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next,          // moves focus to Password
-            ),
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { onSubmit(email, password) }),
-        )
-    }
-}`,
-        remember: 'The field shows value and reports edits. Your state decides what it shows next.',
-        level: 'beginner',
-        terms: [
-          { term: 'OutlinedTextField', def: 'A Material 3 text input with an outlined border and a label that floats up when the field has focus or text.' },
-          { term: 'KeyboardOptions', def: 'Settings for the soft keyboard of a text field, such as keyboardType, imeAction and capitalization.' },
-          { term: 'ImeAction', def: 'The action key the soft keyboard shows for a field, such as Next, Search or Done.' },
-          { term: 'VisualTransformation', def: 'A change to how a text field draws its text, like hiding a password, without changing the value in state.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Show a number pad with a Done key for the PIN.', code: 'OutlinedTextField(\n    value = pin,\n    onValueChange = { pin = it.filter(Char::isDigit).take(4) },\n    label = { Text("PIN") },\n    keyboardOptions = KeyboardOptions(\n        keyboardType = KeyboardType.[[NumberPassword|Number]],\n        imeAction = ImeAction.[[Done]],\n    ),\n)', why: '<code>keyboardType</code> picks the keys and <code>imeAction</code> picks the action key. The filter in <code>onValueChange</code> does the real validation.' },
-          { type: 'bug', prompt: 'Typing in this field shows nothing. Tap the broken line.', code: '@Composable\nfun NameField() {\n    var name by remember { mutableStateOf("") }\n    OutlinedTextField(\n        value = name,\n        onValueChange = { },\n        label = { Text("Name") },\n    )\n}', bug: 5, fix: '        onValueChange = { name = it },', why: 'The field only shows <code>value</code>. The callback has to write the new text into state, or the field stays empty.' },
-        ],
-        quiz: [
-          { q: 'With <code>onValueChange = { }</code>, what happens when the user types?', options: ['The text appears anyway', 'Nothing changes, because the field keeps showing value'], a: 1, why: 'The field is controlled by your state. It never updates itself.' },
-          { q: 'Which option adds an @ key to the soft keyboard?', options: ['<code>imeAction = ImeAction.Next</code>', '<code>keyboardType = KeyboardType.Email</code>', '<code>singleLine = true</code>'], a: 1, why: 'The keyboard type chooses the layout. The IME action only changes the action key.' },
-          { q: 'You set <code>imeAction = ImeAction.Next</code> and no <code>keyboardActions</code>. What does the key do?', options: ['Submits the form', 'Moves focus to the next field', 'Nothing'], a: 1, why: 'Next moves focus by default. Pass <code>KeyboardActions(onNext = ...)</code> only to change that.' },
-          { q: 'A search field’s <code>onValueChange</code> sends the text into a Flow with <code>debounce(300)</code>, and the field shows the debounced value. What does the user see?', options: ['Smooth typing, with searches every 300 ms', 'Lost letters and a jumping cursor, because the field shows an old value', 'A crash, because <code>onValueChange</code> must not suspend'], a: 1, why: 'The field shows whatever value comes back on the next frame. Write the text to state right away and debounce the search that observes it.' },
-        ],
-        deeper: [
-          {
-            title: 'Keep value updates synchronous',
-            body: `<p>With <code>value</code> and <code>onValueChange</code>, the field reports an edit and then shows whatever <code>value</code> you pass back on the next frame. If that write is late, for example because it goes through a <code>Flow</code>, a debounce or a database first, the keyboard keeps typing on top of an old value. Letters get lost or the cursor jumps.</p>
-<p>So write the new text to state right away, in <code>onValueChange</code>. Do slow work like searching after that, by observing the state. The <code>TextFieldState</code> API has no <code>onValueChange</code> at all, so it can’t get out of sync this way.</p>`,
-            code: `class SearchViewModel(private val repo: SearchRepository) : ViewModel() {
-    var query by mutableStateOf("")
-        private set
-
-    fun onQueryChange(q: String) {
-        query = q                        // synchronous: the field shows it next frame
-    }
-
-    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val results = snapshotFlow { query }
-        .debounce(300)                   // slow work happens after, not in between
-        .mapLatest { repo.search(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-}`,
-            visual(el) {
-              const DELAY = 160, GAP = 70, WORD = 'hello';
-              let sync = true, value = '', busy = false, logN = 0;
-              const shown = h('span', {});
-              const field = h('div', { class: 'cmp-field cmp-d2i-field' }, h('span', { class: 'cmp-field-label' }, 'Search'), h('span', { class: 'cmp-field-line' }, shown, h('span', { class: 'cmp-caret' })));
-              const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
-              const o = out();
-              const modeBtns = [[true, 'onValueChange = { query = it }'], [false, 'onValueChange = { queryFlow.emit(it) }  // arrives later']].map(([s, src]) => cmd(src, () => {
-                if (busy) return;
-                sync = s; modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (s ? 0 : 1))));
-                say(o, s ? 'Synchronous: state changes inside the callback.' : `Async: each update reaches the state ${DELAY} ms later. <span class="muted">A simplified model.</span>`);
-              }));
-              function addLog(html) {
-                log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
-                while (log.children.length > 6) log.lastElementChild.remove();
-              }
-              const paint = () => { shown.textContent = value; };
-              async function typeFast() {
-                if (busy) return; busy = true;
-                value = ''; paint(); log.replaceChildren(); logN = 0;
-                say(o, `Typing ${hl(`"${WORD}"`)}, one key every ${GAP} ms…`);
-                for (const ch of WORD) {
-                  const proposed = value + ch;
-                  addLog(`key ${hl(`'${ch}'`)} → ${hl(`onValueChange("${proposed}")`)}`);
-                  if (sync) { value = proposed; paint(); replay(shown, 'pop-soft'); }
-                  else setTimeout(() => { if (!el.isConnected) return; value = proposed; paint(); addLog(`<span class="muted">late update:</span> ${hl(`value = "${proposed}"`)}`); }, DELAY);
-                  await sleep(GAP); if (!el.isConnected) return;
-                }
-                await sleep(DELAY + 120); if (!el.isConnected) return;
-                const ok = value === WORD;
-                replay(field, ok ? 'cmp-flash' : 'shake');
-                say(o, ok ? `<span class="good">Typed "${WORD}", got "${value}".</span> Every edit was built on the latest value.` : `<span class="bad">Typed "${WORD}", got "${esc(value)}".</span> Each edit was built on a value that was already old.`);
-                busy = false;
-              }
-              modeBtns[0].setAttribute('aria-pressed', 'true');
-              paint();
-              say(o, 'Type a word quickly, then switch to the late update and type again.');
-              el.append(field, h('div', { class: 'controls' }, modeBtns), h('div', { class: 'controls' }, act(`Type “${WORD}” fast`, typeFast)), log, o);
+<p>Not everyone aims for 8 glasses a day. The water screen should let people type their own goal. That needs a <em>text field</em>: a box that brings up the keyboard when tapped and shows what is typed.</p>
+<p>A text field needs a place to keep its text. <code>val goalState = rememberTextFieldState("8")</code> makes a <code>TextFieldState</code> that holds the text, starting as “8”, and remembers it. Then <code>TextField(state = goalState, label = { Text("Daily goal") })</code> draws the box. The field writes every key press into the state, and shows what the state holds. <code>label</code> is a small composable shown inside the field, so people know what to type.</p>
+<p>Read what was typed with <code>goalState.text</code>. It holds the typed characters, but it isn’t a <code>String</code> yet, so call <code>.toString()</code> first. Then it’s the Kotlin you know: <code>goalState.text.toString().toIntOrNull() ?: 8</code> gives the number, or 8 if the field is empty or holds no number. <code>text</code> is watched like state, so whatever reads it updates after each key press.</p>
+<p><code>rememberTextFieldState</code> uses <code>rememberSaveable</code> inside, so the typed text survives rotation too. <code>keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)</code> brings up a keyboard with digits. <code>OutlinedTextField</code> is the same field drawn with a border. In older code you may see <code>TextField(value = ..., onValueChange = ...)</code>: an earlier style that keeps the text in a <code>mutableStateOf</code> instead.</p>`,
+        visual(el) {
+          const keys = '<div style="position:absolute;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;background:var(--sunk)">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '✓'].map(k => `<span class="k-${k === '⌫' ? 'del' : k === '✓' ? 'ok' : k}" style="display:grid;place-items:center;padding:5px 0;border-radius:6px;background:var(--surface);font-weight:700;font-size:0.8rem">${k}</span>`).join('') + '</div>';
+          const scr = (goalText, focused, kb) => {
+            const goal = /^\d+$/.test(goalText) ? goalText : '8';
+            return `<div class="ui-m-body" style="justify-items:center;gap:10px"><div style="font-size:1.05rem;font-weight:800">3 of ${goal} glasses</div><span style="justify-self:center" class="ui-m-btn">Add a glass</span><div class="ui-m-field f-goal${focused ? ' on' : ''}" style="justify-self:stretch;display:grid;gap:2px"><span style="font-size:0.66rem;color:${focused ? 'var(--accent)' : 'var(--muted)'}">Daily goal</span><span style="color:var(--ink);min-height:1.2em">${goalText}${focused ? '<span style="color:var(--accent)">|</span>' : ''}</span></div></div>${kb ? keys : ''}`;
+          };
+          Lab.ui.phone(el, {
+            logTitle: 'State and code',
+            predict: {
+              q: 'The field is empty, so <code>goalState.text</code> is <code>""</code>. What does <code>goalState.text.toString().toIntOrNull() ?: 8</code> give?',
+              options: ['<code>0</code>', '<code>8</code>', 'A crash'],
+              a: 1,
+              why: '<code>""</code> is not a number, so <code>toIntOrNull()</code> gives <code>null</code>, and the Elvis operator picks 8.',
             },
-          },
-          {
-            title: 'Move focus from code',
-            body: `<p>To put the cursor in a field when the screen opens, attach a <code>FocusRequester</code> with <code>Modifier.focusRequester</code> and call <code>requestFocus()</code> from an effect, after the field is in the composition. To close the keyboard after submit, clear focus with <code>LocalFocusManager</code>.</p>`,
-            code: `val searchFocus = remember { FocusRequester() }
-val focusManager = LocalFocusManager.current
-
-OutlinedTextField(
-    value = query,
-    onValueChange = { query = it },
-    modifier = Modifier.focusRequester(searchFocus),
-    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus(); search(query) }),
-    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-)
-LaunchedEffect(Unit) { searchFocus.requestFocus() }`,
-          },
-        ],
-        underHood: {
-          body: `<p>The soft keyboard is a separate app, the IME. It talks to the focused field through an input connection and sends edit commands: commit this text, set this composing text, delete around the cursor. The field applies them to its own editing buffer.</p>
-<p>In the value-based API, the field then calls <code>onValueChange</code> and waits for you to pass the result back. The <code>TextFieldValue</code> form carries the text, the selection and the composition, the underlined word the keyboard is still working on. If the value you pass back differs from the buffer, the field resets the buffer and updates the keyboard to match. With <code>TextFieldState</code> there is no round trip. The state is the buffer, so the keyboard’s edits land in it directly, after your <code>InputTransformation</code> has seen them.</p>`,
-          code: `// The value-based field reports the whole editing state
-TextField(
-    value = fieldValue,                       // TextFieldValue(text, selection, composition)
-    onValueChange = { fieldValue = it },      // write it back, unchanged or filtered
-)`,
-        },
-        mistakes: [
-          {
-            title: 'A password field with a text keyboard',
-            bad: `OutlinedTextField(
-    value = password,
-    onValueChange = { password = it },
-    visualTransformation = PasswordVisualTransformation(),
-)`,
-            good: `OutlinedTextField(
-    value = password,
-    onValueChange = { password = it },
-    visualTransformation = PasswordVisualTransformation(),
-    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-)`,
-            why: 'The dots only change the drawing. With a normal text keyboard, the IME may suggest words and learn what was typed. <code>KeyboardType.Password</code> tells it this is a password.',
-          },
-        ],
-        visual(el) {
-          let email = '', password = '', active = 'email', type = 'Email', ignore = false, hidePw = true, touched = false, logN = 0, kbSig = '';
-          const log = h('div', { class: 'cmp-ti-log', 'aria-live': 'polite' });
-          const stateBox = h('div', { class: 'cmp-ti-state' });
-          const o = out();
-          const field = (id, label) => {
-            const input = h('input', { id, autocomplete: 'off', spellcheck: 'false' });
-            const wrap = h('div', { class: 'cmp-ti-field' }, h('label', { class: 'cmp-ti-label', for: id }, label), input);
-            return { input, wrap };
-          };
-          const em = field('cmp-ti-email', 'Email'), pw = field('cmp-ti-pass', 'Password');
-          const eye = h('button', { class: 'cmp-ti-eye', type: 'button', 'aria-label': 'Toggle password visibility', onmousedown: e => e.preventDefault(), onclick: () => { hidePw = !hidePw; paint(); say(o, hidePw ? `${hl('PasswordVisualTransformation()')} <span class="muted">// draws dots. The value in state is unchanged.</span>` : `${hl('VisualTransformation.None')} <span class="muted">// same value, drawn as plain text</span>`); } }, 'show');
-          pw.wrap.append(eye);
-          const support = h('div', { class: 'cmp-ti-support' });
-          const submit = h('span', { class: 'cmp-pv-btn', 'aria-disabled': 'true' }, 'Sign in');
-          const form = h('div', { class: 'cmp-ti-form' }, em.wrap, support, pw.wrap, h('div', { class: 'cmp-ti-support' }), submit);
-          const kb = h('div', { class: 'cmp-kb', 'aria-label': 'Soft keyboard preview' });
-          const typeBtns = ['Text', 'Email', 'Number'].map(t => cmd(`KeyboardType.${t}`, () => { type = t; focus('email'); paint(); say(o, `${hl(`keyboardType = KeyboardType.${t}`)} <span class="muted">// ${t === 'Email' ? 'adds @ and . keys' : t === 'Number' ? 'digits only on screen. A hardware keyboard can still type letters.' : 'a plain letter layout'}</span>`); }));
-          const ignoreIn = h('input', { type: 'checkbox', id: 'cmp-ti-ignore' });
-          const valid = () => email.includes('@') && email.length > 2 && password.length >= 6;
-          function addLog(html) {
-            log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
-            while (log.children.length > 5) log.lastElementChild.remove();
-          }
-          function paint() {
-            const err = touched && email.length > 0 && !email.includes('@');
-            em.input.value = email; pw.input.value = password;
-            pw.input.type = hidePw ? 'password' : 'text';
-            eye.textContent = hidePw ? 'show' : 'hide';
-            em.input.setAttribute('inputmode', type === 'Email' ? 'email' : type === 'Number' ? 'numeric' : 'text');
-            em.wrap.classList.toggle('cmp-ti-up', !!email || document.activeElement === em.input);
-            pw.wrap.classList.toggle('cmp-ti-up', !!password || document.activeElement === pw.input);
-            em.wrap.classList.toggle('cmp-ti-err', err);
-            support.textContent = err ? 'Enter a valid email' : '';
-            const on = valid();
-            if ((submit.getAttribute('aria-disabled') === 'false') !== on) replay(submit, 'pop');
-            submit.setAttribute('aria-disabled', String(!on));
-            stateBox.innerHTML = [
-              `email = ${JSON.stringify(email)}`,
-              `password = ${JSON.stringify(password)}`,
-              `emailError = ${err}`,
-            ].map(x => `<div>${hl(x)}</div>`).join('');
-            paintKb();
-          }
-          function paintKb() {
-            const letters = [['q', 'w', 'e', 'r', 't', 'y'], ['a', 'd', 'l', 'n', 'o', 's']];
-            const action = active === 'email' ? 'Next →' : 'Done ✓';
-            let rows;
-            if (active === 'email' && type === 'Number') rows = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['0']];
-            else if (active === 'email' && type === 'Email') rows = [...letters, ['@', '.', '.com']];
-            else rows = [...letters, [',', 'space']];
-            kb.classList.toggle('cmp-kb-off', !active);
-            const sig = rows.flat().join() + action;
-            if (sig === kbSig) return;
-            kbSig = sig;
-            kb.replaceChildren(...rows.map((r, i) => h('div', { class: 'cmp-kb-row' }, r.map(k => h('button', {
-              class: `cmp-kb-key${k === 'space' ? ' cmp-kb-wide' : ''}${['@', '.com'].includes(k) ? ' cmp-kb-new' : ''}`,
-              onmousedown: e => e.preventDefault(), onclick: () => key(k === 'space' ? ' ' : k),
-            }, k)), i === rows.length - 1 ? h('button', { class: 'cmp-kb-key cmp-kb-act', onmousedown: e => e.preventDefault(), onclick: imeKey }, action) : null)));
-          }
-          function edit(which, proposed) {
-            const cur = which === 'email' ? email : password;
-            if (ignore) {
-              paint(); replay((which === 'email' ? em : pw).wrap, 'shake');
-              addLog(`${hl(`onValueChange(${JSON.stringify(proposed)})`)} <span class="bad">ignored</span>`);
-              say(o, `The field asked for ${hl(JSON.stringify(proposed))}, but nothing wrote it to state. It still shows ${hl(JSON.stringify(cur))}.`);
-              return;
-            }
-            if (which === 'email') { email = proposed.trim(); touched = true; } else password = proposed;
-            addLog(`${hl(`onValueChange(${JSON.stringify(proposed)})`)} <span class="muted">→ state</span>`);
-            paint();
-            say(o, which === 'email' && email && !email.includes('@')
-              ? `${hl('isError = true')} <span class="muted">// no @ yet, so supportingText explains</span>`
-              : `${hl(`${which} = ${JSON.stringify(which === 'email' ? email : password)}`)} <span class="muted">// state changed, the field recomposed with it</span>`);
-          }
-          function focus(which) { active = which; (which === 'email' ? em : pw).input.focus(); paint(); }
-          function key(k) {
-            if (!active) focus('email');
-            const f = active === 'email' ? em : pw, cur = active === 'email' ? email : password;
-            if (cur.length > 24) { replay(f.wrap, 'shake'); return; }
-            f.input.focus();
-            edit(active, cur + k);
-          }
-          function imeKey() {
-            if (active === 'email') {
-              addLog(`${hl('ImeAction.Next')} <span class="muted">→ focus moves to Password</span>`);
-              focus('password');
-              say(o, 'Next did its default job: focus moved to the Password field.');
-            } else {
-              addLog(`${hl('KeyboardActions(onDone)')} <span class="muted">→ onSubmit()</span>`);
-              pw.input.blur(); active = null; paint();
-              if (valid()) { replay(submit, 'pop'); say(o, '<span class="good">onSubmit(email, password)</span> ran from the Done key. The keyboard closes.'); }
-              else { replay(form, 'shake'); say(o, '<span class="bad">onDone ran, but the form is not valid yet.</span> It needs an email with @ and a 6+ character password.'); }
-            }
-          }
-          for (const [which, f] of [['email', em], ['password', pw]]) {
-            f.input.addEventListener('focus', () => { active = which; paint(); });
-            f.input.addEventListener('input', () => edit(which, f.input.value));
-            f.input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); active = which; imeKey(); } });
-          }
-          ignoreIn.addEventListener('change', () => {
-            ignore = ignoreIn.checked;
-            say(o, ignore ? `${hl('onValueChange = { }')} <span class="muted">// try typing now</span>` : `${hl('onValueChange = { email = it.trim() }')} <span class="muted">// state follows the edits again</span>`);
+            frames: [
+              { screen: scr('8', false, false), log: ['goalState.text = "8"', 'goal = 8'], say: 'The field starts with the text “8” from <code>rememberTextFieldState("8")</code>. The label tells people what it is for.' },
+              { tap: '.f-goal', screen: scr('8', true, true), log: 'keyboard opens (digits only)', say: 'A tap on the field brings up the keyboard. <code>KeyboardType.Number</code> asks for one with digits.' },
+              { tap: '.k-del', screen: scr('', true, true), log: ['goalState.text = ""', 'toIntOrNull() → null, so goal = 8'], say: 'Delete the 8. The field is empty, so the goal falls back to 8 and the line above still says 8.' },
+              { tap: '.k-6', screen: scr('6', true, true), log: ['goalState.text = "6"', 'goal = 6'], say: 'Type 6. The field writes it into the state, and the Text that reads the goal updates right away.' },
+              { screen: scr('6', false, false), log: ['↻ rotated', 'goalState.text = "6"'], say: 'Rotate the phone: the text is still 6, because <code>rememberTextFieldState</code> saves it.' },
+            ],
           });
-          email = 'ada'; touched = true;
-          log.append(h('div', {}, '// each onValueChange call shows up here'));
-          paint();
-          say(o, 'Type in the fields, or tap the keyboard keys below. Every edit goes through onValueChange.');
-          el.append(
-            h('div', { class: 'controls' }, typeBtns, h('label', { class: 'switch', for: 'cmp-ti-ignore' }, ignoreIn, 'ignore onValueChange')),
-            h('div', { class: 'cmp-ti-wrap' }, form, h('div', { class: 'cmp-sc-side' }, stateBox, log)),
-            kb, o);
-          typeBtns[1].setAttribute('aria-pressed', 'true');
-          typeBtns.forEach((b, i) => b.addEventListener('click', () => typeBtns.forEach((x, j) => x.setAttribute('aria-pressed', String(i === j)))));
         },
-        predict: {
-          q: 'The user types one letter in the email field. What happens before the new letter shows on screen?',
-          options: ['The field draws the letter itself, then calls <code>onValueChange</code>', '<code>onValueChange</code> runs, your state changes, and the field recomposes with the new value', 'Nothing: the keyboard writes straight into the field'],
-          a: 1,
-          why: 'With the value and callback overload, the field shows only what you pass in. Each edit is a request through <code>onValueChange</code>.',
-        },
-      },
+        code: `@Composable
+fun WaterScreen() {
+    var glasses by rememberSaveable { mutableStateOf(0) }
+    val goalState = rememberTextFieldState("8")
+    val goal = goalState.text.toString().toIntOrNull() ?: 8
 
-      // 9a ─────────────────────────────────────────────
-      {
-        id: 'text-field-state',
-        title: 'TextFieldState and transformations',
-        tagline: 'The state is the edit buffer: change it directly, and shape input before it lands.',
-        level: 'intermediate',
-        body: `
-<p>The newer text field API takes a <code>TextFieldState</code> in place of <code>value</code> and <code>onValueChange</code>. Create it with <code>rememberTextFieldState()</code>, which also survives rotation and process death. Read the text with <code>state.text</code>, and change it with <code>state.edit { }</code>, <code>setTextAndPlaceCursorAtEnd()</code> or <code>clearText()</code>. There is no callback to forget, and no round trip that can fall behind the keyboard.</p>
-<p>Two hooks shape the text. An <code>InputTransformation</code> runs right after each user edit, before it is stored. It can change the edit or reject it with <code>revertAllChanges()</code>, and <code>InputTransformation.maxLength(10)</code> is built in. An <code>OutputTransformation</code> only changes what is drawn. Below, the state holds 10 plain digits while the field shows a formatted phone number.</p>`,
-        code: `object DigitsOnly : InputTransformation {
-    override fun TextFieldBuffer.transformInput() {
-        if (!asCharSequence().all { it.isDigit() }) revertAllChanges()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("$glasses of $goal glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Button(onClick = { glasses++ }) {
+            Text("Add a glass")
+        }
+        TextField(
+            state = goalState,
+            label = { Text("Daily goal") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
     }
 }
-
-object PhoneFormat : OutputTransformation {
-    override fun TextFieldBuffer.transformOutput() {
-        if (length > 0) insert(0, "(")
-        if (length > 4) insert(4, ")")
-        if (length > 8) insert(8, "-")
-    }
-}
-
-val phone = rememberTextFieldState()
-OutlinedTextField(
-    state = phone,
-    label = { Text("Phone") },
-    lineLimits = TextFieldLineLimits.SingleLine,
-    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-    inputTransformation = InputTransformation.maxLength(10).then(DigitsOnly),
-    outputTransformation = PhoneFormat,     // draws (555)123-4567, stores 5551234567
-)`,
-        remember: 'TextFieldState is the buffer. InputTransformation changes what is stored, OutputTransformation only what is drawn.',
+// Type 6 in the field: 0 of 6 glasses`,
+        remember: 'val s = rememberTextFieldState() and TextField(state = s): read the typed text with s.text.toString().',
+        mistakes: [
+          { title: 'A TextFieldState that isn’t remembered', bad: 'TextField(state = TextFieldState(), label = { Text("Daily goal") })', good: 'val goalState = rememberTextFieldState()\nTextField(state = goalState, label = { Text("Daily goal") })', why: 'A plain <code>TextFieldState()</code> is made again each time the composable runs, so the typed text vanishes after the next recomposition, for example after a tap on Add. <code>rememberTextFieldState</code> keeps it.' },
+        ],
         terms: [
-          { term: 'TextFieldState', def: 'A snapshot-backed holder for a text field’s text and selection, edited directly instead of through onValueChange.' },
-          { term: 'InputTransformation', def: 'A filter that runs on each user edit before it is saved to the TextFieldState. It can change or revert the edit.' },
-          { term: 'OutputTransformation', def: 'A formatter that changes only how the text is drawn, while the stored text stays as it is.' },
-          { term: 'TextFieldBuffer', def: 'The editable buffer passed to edit { } and to transformations, with insert, replace, append, delete and selection.' },
+          { term: 'TextField', def: 'A box people can type in. It brings up the keyboard when tapped.' },
+          { term: 'TextFieldState', def: 'Holds a text field’s text. Read it with <code>.text.toString()</code>.' },
+          { term: 'rememberTextFieldState', def: 'Makes a <code>TextFieldState</code> and keeps it, through rotation too.' },
+          { term: 'label', def: 'A small composable inside a text field that says what to type.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'A 4-digit PIN field: digits only, at most 4.', code: 'val pin = [[rememberTextFieldState]]()\nOutlinedTextField(\n    state = pin,\n    label = { Text("PIN") },\n    inputTransformation = InputTransformation.[[maxLength]](4).then(DigitsOnly),\n    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),\n)', why: '<code>rememberTextFieldState</code> creates and saves the state. <code>maxLength</code> rejects the fifth digit before it is stored.' },
-          { type: 'bug', prompt: 'This does not compile: <code>send</code> takes a String. Tap the line.', code: 'val message = rememberTextFieldState()\nOutlinedTextField(state = message, label = { Text("Message") })\nButton(onClick = {\n    chat.send(message.text)\n    message.clearText()\n}) { Text("Send") }', bug: 3, fix: '    chat.send(message.text.toString())', why: '<code>state.text</code> is a <code>CharSequence</code> snapshot, not a String. Call <code>toString()</code> when you hand it on.' },
+          { type: 'blank', prompt: 'Make a field for a name, labelled “Name”.', code: 'val nameState = [[rememberTextFieldState]]()\nTextField(\n    state = nameState,\n    [[label]] = { Text("Name") }\n)', why: '<code>rememberTextFieldState()</code> keeps the text, starting empty. <code>label</code> says what the field is for.' },
+          { type: 'bug', prompt: 'This screen crashes as soon as it opens, because the field starts empty. Tap the line to fix.', code: '@Composable\nfun AgeField() {\n    val ageState = rememberTextFieldState()\n    val age = ageState.text.toString().toInt()\n    Column {\n        TextField(state = ageState, label = { Text("Age") })\n        Text("Age: $age")\n    }\n}', bug: 3, fix: '    val age = ageState.text.toString().toIntOrNull() ?: 0', why: '<code>"".toInt()</code> crashes. <code>toIntOrNull()</code> gives <code>null</code> instead, and <code>?: 0</code> picks a fallback.' },
         ],
         quiz: [
-          { q: 'An OutputTransformation adds dashes to a card number. What does <code>state.text</code> hold?', options: ['The digits with dashes', 'Only the digits the user typed'], a: 1, why: 'Output transformations change the drawing only. The stored text stays plain.' },
-          { q: 'You call <code>rememberTextFieldState(initialText = user.name)</code> and <code>user</code> loads later. What does the field show?', options: ['The loaded name', 'The value from the first composition'], a: 1, why: '<code>initialText</code> is used once, when the state is created. Set the text with an edit call when the data arrives.' },
-          { q: 'Inside <code>transformInput()</code>, the buffer holds letters in a digits-only field. What do you call?', options: ['<code>revertAllChanges()</code>', '<code>clearText()</code> on the state', 'Nothing, the keyboard type filters it'], a: 0, why: '<code>revertAllChanges()</code> drops this edit and keeps the previous text. The keyboard type never filters input.' },
-          { q: 'Which order is right for one keystroke in a field with an <code>InputTransformation</code> and an <code>OutputTransformation</code>?', options: ['Output transformation, then input transformation, then the state is stored', 'Keyboard edit, commit to the state, input transformation, output transformation', 'Keyboard edit, input transformation on the buffer, commit to the state, output transformation for drawing'], a: 2, why: 'The input transformation shapes the edit before it is committed. The output transformation only changes what is drawn from the stored text.' },
-          { q: 'A <code>TextFieldState</code> lives in a ViewModel. The process is killed in the background. What happens to the text?', options: ['It is restored like <code>rememberTextFieldState()</code>', 'It is lost unless you save and restore it yourself', 'It is kept because TextFieldState is Parcelable'], a: 1, why: 'Only <code>rememberTextFieldState()</code> saves itself. A state created in a ViewModel needs your own saving, for example through SavedStateHandle.' },
+          { q: 'Why call <code>.toString()</code> on <code>goalState.text</code> before <code>toIntOrNull()</code>?', options: ['It holds typed characters, but isn’t a String yet', 'To delete the text', 'To show the keyboard'], a: 0, why: '<code>toIntOrNull()</code> works on a String, so turn the characters into one first.' },
+          { q: 'The person types 12 and rotates the phone. What does the field show?', options: ['12', 'Nothing', 'The starting text'], a: 0, why: '<code>rememberTextFieldState</code> uses <code>rememberSaveable</code> inside.' },
+          { q: 'What is <code>label = { Text("Daily goal") }</code> for?', options: ['Telling people what to type in the field', 'Setting the starting text', 'Choosing the keyboard'], a: 0, why: 'The label is shown inside the field as a hint about its purpose.' },
         ],
-        deeper: [
-          {
-            title: 'Change the text from code',
-            body: `<p>Every change goes through the state. <code>edit { }</code> hands you a <code>TextFieldBuffer</code> with <code>insert</code>, <code>replace</code>, <code>append</code>, <code>delete</code> and <code>selectAll()</code>. Shortcuts cover the common cases: <code>setTextAndPlaceCursorAtEnd()</code> replaces everything and puts the cursor at the end, and <code>clearText()</code> empties the field. <code>state.selection</code> tells you where the cursor is.</p>`,
-            code: `val state = rememberTextFieldState("Hello Android")
-
-state.edit { insert(5, ",") }                    // "Hello, Android"
-state.edit { replace(7, 14, "Compose") }         // "Hello, Compose"
-state.edit { selectAll() }                       // selection = TextRange(0, 14)
-state.setTextAndPlaceCursorAtEnd("Hello")        // selection = TextRange(5, 5)
-state.clearText()                                // selection = TextRange(0, 0)`,
-          },
-          {
-            title: 'Observe the text',
-            body: `<p>With no <code>onValueChange</code>, you watch the state instead. In a composable, collect <code>snapshotFlow { state.text.toString() }</code> inside a <code>LaunchedEffect</code>. Or keep the <code>TextFieldState</code> in the ViewModel and build a Flow there. A state created in a ViewModel does not save itself the way <code>rememberTextFieldState()</code> does, so restore it yourself if it must survive process death.</p>`,
-            code: `val username = rememberTextFieldState(initialUiState.username)
-LaunchedEffect(username) {
-    snapshotFlow { username.text.toString() }.collectLatest {
-        loginViewModel.updateUsername(it)
-    }
-}
-TextField(state = username)
-
-// or hold it in the ViewModel
-class LoginViewModel : ViewModel() {
-    val username = TextFieldState()
-    val password = TextFieldState()
-}`,
-          },
-          {
-            title: 'Passwords: SecureTextField',
-            body: `<p>For passwords there is <code>SecureTextField</code>, built on the same state-based field. It hides the text for you, so you don't need <code>PasswordVisualTransformation</code>. It takes the same <code>TextFieldState</code>, so reading and clearing work as above.</p>`,
-            code: `val password = rememberTextFieldState()
-SecureTextField(state = password)`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>TextFieldState</code> is a plain snapshot state holder, like <code>mutableStateOf</code>. Reading <code>state.text</code> during composition subscribes to it, and an edit from the keyboard or from your code is a snapshot write that triggers recomposition.</p>
-<p>The keyboard's edit commands are applied to a <code>TextFieldBuffer</code>. Your <code>InputTransformation</code> runs on that buffer right away, and only the result is committed to the state. That is why transformations should only edit the buffer and never write other state: they run in the middle of committing an edit.</p>`,
-          code: `// The order of one user edit
-// keyboard command → TextFieldBuffer
-//   → inputTransformation.transformInput()   (change or revert)
-//   → committed to TextFieldState            (recomposition)
-//   → outputTransformation.transformOutput() (drawing only)`,
-        },
-        mistakes: [
-          {
-            title: 'Expecting initialText to follow your data',
-            bad: `val name = rememberTextFieldState(initialText = user.name)
-// user loads later: the field stays empty`,
-            good: `val name = rememberTextFieldState()
-LaunchedEffect(user.id) {
-    name.setTextAndPlaceCursorAtEnd(user.name)
-}`,
-            why: '<code>initialText</code> is used once, when the state is created. A different value on a later recomposition is ignored. Set the text with an edit call when the data arrives.',
-          },
-          {
-            title: 'Writing other state inside transformInput',
-            bad: `object CountingFilter : InputTransformation {
-    override fun TextFieldBuffer.transformInput() {
-        viewModel.charCount = length       // writes state mid-edit
-    }
-}`,
-            good: `LaunchedEffect(state) {
-    snapshotFlow { state.text.length }.collect { viewModel.charCount = it }
-}`,
-            why: 'The docs say not to change state inside a transformation. Edit the buffer there, and observe the committed text elsewhere.',
-          },
-        ],
-        visual(el) {
-          let text = '555', fmt = true;
-          const shown = h('span', { class: 'cmp-d2i-shown' });
-          const field = h('div', { class: 'cmp-field cmp-d2i-field' }, h('span', { class: 'cmp-field-label' }, 'Phone'), h('span', { class: 'cmp-field-line' }, shown, h('span', { class: 'cmp-caret' })));
-          const read = h('div', { class: 'kt' });
-          const o = out();
-          const sw = h('input', { type: 'checkbox', id: 'cmp-d2i-fmt', checked: true });
-          const format = s => {
-            let b = s;
-            if (b.length > 0) b = '(' + b;
-            if (b.length > 4) b = b.slice(0, 4) + ')' + b.slice(4);
-            if (b.length > 8) b = b.slice(0, 8) + '-' + b.slice(8);
-            return b;
-          };
-          function paint() {
-            shown.textContent = fmt ? format(text) : text;
-            read.innerHTML = hl(`phone.text = "${text}"   // what is stored\nshown on screen = "${fmt ? format(text) : text}"`);
-          }
-          function edit(proposed, label) {
-            if (proposed.length > 10) {
-              replay(field, 'shake');
-              say(o, `${hl('InputTransformation.maxLength(10)')} <span class="bad">rejected</span> ${esc(label)}. The state keeps 10 digits.`);
-              return;
-            }
-            if (!/^\d*$/.test(proposed)) {
-              replay(field, 'shake');
-              say(o, `${hl('DigitsOnly')} called ${hl('revertAllChanges()')}: ${esc(label)} had characters that are not digits. <span class="muted">Nothing was stored.</span>`);
-              return;
-            }
-            text = proposed; paint(); replay(shown, 'pop-soft');
-            say(o, `${esc(label)} <span class="muted">→</span> ${hl(`phone.text = "${text}"`)}${fmt ? ' <span class="muted">// PhoneFormat only changes the drawing</span>' : ''}`);
-          }
-          const key = d => h('button', { class: 'cmp-kb-key', type: 'button', onclick: () => edit(text + d, `typed ${d}`) }, d);
-          const pad = h('div', { class: 'cmp-d2i-pad' },
-            ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(key),
-            h('button', { class: 'cmp-kb-key', type: 'button', 'aria-label': 'Delete', onclick: () => edit(text.slice(0, -1), 'backspace') }, '⌫'),
-            key('0'));
-          sw.addEventListener('change', () => {
-            fmt = sw.checked; paint(); replay(shown, 'pop-soft');
-            say(o, fmt ? `${hl('outputTransformation = PhoneFormat')} <span class="muted">// same state, formatted drawing</span>` : 'No OutputTransformation. The field draws exactly what is stored.');
-          });
-          paint();
-          say(o, 'Type digits on the pad. Then try pasting a formatted number.');
-          el.append(
-            h('div', { class: 'cmp-ti-wrap' }, h('div', { class: 'cmp-ly-group' }, field, pad), read),
-            h('div', { class: 'controls' },
-              cmd('phone.setTextAndPlaceCursorAtEnd("")', () => { text = ''; paint(); say(o, `${hl('setTextAndPlaceCursorAtEnd("")')} <span class="muted">// code edits go through the state too</span>`); }),
-              act('Paste "+1 (555) 010-9999"', () => edit('+1 (555) 010-9999', 'the paste'))),
-            h('label', { class: 'switch', for: 'cmp-d2i-fmt' }, sw, 'outputTransformation = PhoneFormat'),
-            o);
-        },
-        predict: {
-          q: 'The field holds 555. The user pastes "+1 (555) 010-9999" into a field with <code>maxLength(10)</code> and a digits-only <code>InputTransformation</code>. What does <code>phone.text</code> hold after?',
-          options: ['"15550109999"', '"555": the edit is rejected', '"+1 (555) 010-9999"'],
-          a: 1,
-          why: 'The InputTransformation runs on the proposed edit before it is stored. This paste is too long and has non-digits, so it is rejected and the state keeps its old text.',
-        },
+        docs: [['Configure text fields', 'https://developer.android.com/develop/ui/compose/text/user-input']],
       },
 
-      // 10 ─────────────────────────────────────────────
       {
         id: 'lists',
-        title: 'Lists and grids',
-        tagline: 'Compose only what is on screen.',
+        title: 'Long lists',
+        tagline: 'Show hundreds of rows, but build only the ones on screen.',
+        goals: ['Show a scrolling list with <code>LazyColumn</code>', 'Add rows with <code>items</code> and a single row with <code>item</code>', 'Explain why a long list should not be a <code>Column</code>'],
+        level: 'beginner', introduces: ['LazyColumn', 'LazyRow', 'items'],
         body: `
-<p>A <code>Column</code> composes every child, even the ones far off screen. For long lists, or lists of unknown length, use a lazy layout. <code>LazyColumn</code> and <code>LazyRow</code> compose only the items in view, plus a little ahead, and drop the ones that scroll away. <code>LazyVerticalGrid</code> does the same in columns.</p>
-<p>You don’t call children directly. You describe them in a small DSL: <code>item { }</code> for one, <code>items(list) { }</code> for many, and <code>stickyHeader { }</code> for a header that pins to the top while its section scrolls past. In a grid, <code>GridCells.Fixed(3)</code> sets the column count and <code>GridCells.Adaptive(120.dp)</code> fits as many columns as it can.</p>
-<p>Use <code>contentPadding</code> for space around the items. It pads the content, not the viewport, so items scroll through that space instead of being clipped at it. Scroll the list below and watch the composed count.</p>`,
+<p>The water tracker gets a History screen: one row for every day you tracked, like “Mon 19 Oct: 6 glasses”. After a year that is 365 rows, and only about seven fit on the screen at once. If you put all 365 in a <code>Column</code>, Compose builds every row before it shows anything, and a <code>Column</code> doesn’t scroll on its own either.</p>
+<p><code>LazyColumn</code> is a column for long lists. It scrolls, and it is <em>lazy</em>: it builds only the rows you can see. When a row scrolls away, it is dropped. When a new row scrolls in, it is built at that moment. <code>LazyRow</code> does the same from left to right.</p>
+<p>Inside the braces of a <code>LazyColumn</code> you don’t write composables directly. You describe the rows: <code>item { }</code> adds one row, and <code>items(days) { day -> ... }</code> adds one row for every value in the list. Like a <code>for</code> loop, it hands you each value in turn, here called <code>day</code>. If <code>items</code> is underlined in red, add the import Android Studio suggests: <code>import androidx.compose.foundation.lazy.items</code>.</p>`,
+        visual(el) {
+          const days = ['Mon 19 Oct: 6', 'Sun 18 Oct: 8', 'Sat 17 Oct: 5', 'Fri 16 Oct: 9', 'Thu 15 Oct: 7', 'Wed 14 Oct: 8', 'Tue 13 Oct: 4', 'Mon 12 Oct: 8', 'Sun 11 Oct: 6', 'Sat 10 Oct: 7', 'Fri 9 Oct: 8', 'Thu 8 Oct: 5'];
+          const row = d => `<div class="ui-m-row"><div>${d} glasses</div></div>`;
+          const list = (from, head) => `<div class="ui-m-bar">History</div><div class="ui-m-body">${head ? '<b>365 days</b>' : ''}${days.slice(from, from + (head ? 6 : 7)).map(row).join('')}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'What Compose builds',
+            predict: {
+              q: 'History has 365 days and about 7 rows fit on the screen. How many rows does <code>LazyColumn</code> build when the screen opens?',
+              options: ['All 365', 'About the 7 on screen', 'Only the first one'],
+              a: 1,
+              why: 'Lazy means it builds only what you can see, and builds more as you scroll.',
+            },
+            frames: [
+              { screen: list(0, true), say: '<code>item { }</code> made the heading, <code>items(days) { }</code> makes one row per day.' },
+              { log: ['built: heading', 'built: Mon 19, Sun 18, Sat 17, Fri 16, Thu 15, Wed 14'], say: 'Only the rows that fit on the screen are built. The other 359 days are still only data in the list.' },
+              { screen: list(2), log: ['dropped: heading, Mon 19', 'built: Tue 13, Mon 12'], say: 'The user scrolls down. Rows that leave the screen are dropped, new rows are built as they arrive.' },
+              { screen: list(5), log: ['dropped: Sun 18, Sat 17, Fri 16', 'built: Sun 11, Sat 10, Fri 9'], say: 'However long the list, only a screenful of rows exists at any moment.' },
+              { screen: list(0, true), log: ['dropped: …', 'built: heading, Mon 19, Sun 18 …'], say: 'Scroll back up and the first rows are built again, fresh.' },
+              { log: '// a Column would build all 365 rows at the start, and not scroll', say: 'A <code>Column</code> builds every child right away. Fine for 5 rows, slow for 365. Use <code>LazyColumn</code> when a list is long or you don’t know its length.' },
+            ],
+          });
+        },
         code: `@Composable
-fun ContactList(groups: Map<Char, List<Contact>>) {
-    LazyColumn(
-        contentPadding = PaddingValues(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        groups.forEach { (letter, contacts) ->
-            stickyHeader(key = letter) { LetterHeader(letter) }
-            items(contacts, key = { it.id }) { contact ->
-                ContactRow(contact)
-            }
+fun HistoryList(days: List<String>) {
+    LazyColumn {
+        item {
+            Text("History", fontWeight = FontWeight.Bold)   // one row: a heading
+        }
+        items(days) { day ->                                // one row per day
+            Text(day, modifier = Modifier.padding(16.dp))
         }
     }
 }
 
-@Composable
-fun PhotoGrid(photos: List<Photo>) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 120.dp),
-        contentPadding = PaddingValues(8.dp),
-    ) {
-        items(photos, key = { it.id }) { photo -> PhotoTile(photo) }
+// HistoryList(listOf("Mon 19 Oct: 6 glasses", "Sun 18 Oct: 8 glasses"))
+// shows: History, Mon 19 Oct: 6 glasses, Sun 18 Oct: 8 glasses,
+// and scrolls when the list is long`,
+        remember: 'For a long list use LazyColumn { items(list) { value -> ... } }. It builds only the rows on screen.',
+        mistakes: [
+          { title: 'A long list in a Column', bad: `Column {
+    for (day in days) {
+        Text(day)
     }
-}`,
-        remember: 'Lazy lists compose only what is on screen. Describe items with items { }, never a loop in a scrolling Column.',
-        level: 'beginner',
+}
+// 365 days: all built at once, and no scrolling`, good: `LazyColumn {
+    items(days) { day ->
+        Text(day)
+    }
+}
+// builds only what is on screen, and scrolls`, why: 'A <code>Column</code> builds every child before it shows anything. <code>LazyColumn</code> scrolls and builds rows as they appear.' },
+        ],
         terms: [
-          { term: 'LazyVerticalGrid', def: 'A lazy grid that lays items out in columns and composes only the rows on screen.' },
-          { term: 'GridCells', def: 'The column rule for a lazy grid: Fixed for an exact count, Adaptive for as many columns of a minimum size as fit.' },
-          { term: 'stickyHeader', def: 'A lazy list item that stays pinned to the top while the items after it scroll, until the next header pushes it away.' },
-          { term: 'contentPadding', def: 'Padding around the content of a lazy list, inside the scroll area, so items can scroll through it.' },
+          { term: 'LazyColumn', def: 'A scrolling column that builds only the rows on screen. <code>LazyRow</code> is the same, side to side.' },
+          { term: 'lazy', def: 'Doing work only when it is needed. A lazy list builds a row when it scrolls into view.' },
+          { term: 'items', def: 'Inside a <code>LazyColumn</code>: <code>items(list) { value -> ... }</code> adds one row for every value. <code>item { }</code> adds a single row.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Show photos in as many 120 dp columns as fit.', code: 'LazyVerticalGrid(\n    columns = GridCells.[[Adaptive]](minSize = 120.dp),\n) {\n    [[items]](photos, key = { it.id }) { PhotoTile(it) }\n}', why: '<code>Adaptive</code> picks the column count from the width. <code>items</code> describes one cell per photo.' },
-          { type: 'bug', prompt: 'This screen crashes as soon as it opens. Tap the line that causes it.', code: '@Composable\nfun FeedScreen(posts: List<Post>) {\n    Column(Modifier.verticalScroll(rememberScrollState())) {\n        FeedHeader()\n        LazyColumn {\n            items(posts, key = { it.id }) { PostCard(it) }\n        }\n    }\n}', bug: 2, fix: '    Column {   // or move FeedHeader() into item { } inside the LazyColumn', why: 'A scrolling Column gives its children infinite height. A LazyColumn can’t measure in infinite height, so it throws.' },
-        ],
-        quiz: [
-          { q: 'A LazyColumn has 10,000 items and 8 fit on screen. About how many are composed?', options: ['10,000', 'About 8 to 10', 'Exactly 1'], a: 1, why: 'Only visible items, plus one or two prefetched ahead, are composed.' },
-          { q: 'What does <code>contentPadding</code> do that <code>Modifier.padding</code> on the list does not?', options: ['Items scroll through the padded space instead of being clipped at it', 'It adds space between items', 'Nothing, they are the same'], a: 0, why: '<code>Modifier.padding</code> shrinks the viewport. <code>contentPadding</code> pads the content inside it.' },
-          { q: 'Which call adds one header that pins to the top while its section scrolls?', options: ['<code>item { }</code>', '<code>stickyHeader { }</code>', '<code>items(list) { }</code>'], a: 1, why: 'A sticky header stays at the top until the next header pushes it out.' },
-          { q: 'A “Back to top” button reads <code>listState.firstVisibleItemIndex &gt; 0</code> directly in composition. What is the problem?', options: ['Nothing, the index rarely changes', 'The reader recomposes on every index change; <code>derivedStateOf</code> recomposes it only when the answer flips', 'It crashes, because LazyListState cannot be read in composition'], a: 1, why: 'Scroll values change very often. derivedStateOf turns them into a Boolean that changes only when it really flips.' },
-        ],
-        deeper: [
-          {
-            title: 'LazyListState: read and drive the scroll',
-            body: `<p>Hoist <code>rememberLazyListState()</code> and pass it to the list as <code>state</code>. It tells you where the list is with <code>firstVisibleItemIndex</code> and <code>firstVisibleItemScrollOffset</code>, and it moves the list with <code>scrollToItem</code> and <code>animateScrollToItem</code>, which are suspend functions.</p>
-<p>These values change very often. The offset changes on every frame of a scroll. If a composable reads them directly, it recomposes just as often. For a yes or no question like “show the Back to top button?”, wrap the read in <code>derivedStateOf</code>, so readers recompose only when the answer flips. The Compose, advanced track explains <code>derivedStateOf</code> in depth.</p>`,
-            code: `val listState = rememberLazyListState()
-val scope = rememberCoroutineScope()
-val showTop by remember {
-    derivedStateOf { listState.firstVisibleItemIndex > 0 }
-}
-
-Box {
-    LazyColumn(state = listState) {
-        items(posts, key = { it.id }) { PostRow(it) }
-    }
-    AnimatedVisibility(showTop, Modifier.align(Alignment.BottomEnd)) {
-        FloatingActionButton(onClick = { scope.launch { listState.animateScrollToItem(0) } }) {
-            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Back to top")
+          { type: 'blank', prompt: 'Show one row for every day in the history.', code: `@Composable
+fun HistoryList(days: List<String>) {
+    [[LazyColumn]] {
+        [[items]](days) { day ->
+            Text(day)
         }
     }
-}`,
-            visual(el) {
-              const PITCH = 46;
-              let idx = 0, off = 0, show = false, raf = 0;
-              const counts = { offset: 0, index: 0, derived: 0 };
-              const inner = h('div', { class: 'cmp-d2z-inner' });
-              for (let i = 0; i < 40; i++) inner.append(h('div', { class: 'cmp-d2z-row' }, h('i', {}, String(i)), `Post ${i}`));
-              const view = h('div', { class: 'cmp-d2z-view', tabindex: '0', 'aria-label': 'Scrollable list' }, inner);
-              const fab = h('button', { class: 'cmp-d2z-fab', type: 'button', 'aria-label': 'Back to top', onclick: () => top() }, '↑');
-              const frame = h('div', { class: 'cmp-d2z-frame' }, view, fab);
-              const read = h('div', { class: 'kt' });
-              const badge = () => h('span', { class: 'cmp-badge' }, '0');
-              const B = { offset: badge(), index: badge(), derived: badge() };
-              const meters = h('div', { class: 'cmp-d2z-meters' },
-                h('div', {}, h('span', { class: 'cmp-fx-name' }, 'reads firstVisibleItemScrollOffset'), B.offset),
-                h('div', {}, h('span', { class: 'cmp-fx-name' }, 'reads firstVisibleItemIndex'), B.index),
-                h('div', {}, h('span', { class: 'cmp-fx-name' }, 'reads derivedStateOf { index > 0 }'), B.derived));
-              const o = out();
-              const hit = k => { counts[k]++; B[k].textContent = String(counts[k]); replay(B[k], 'pop'); };
-              function update() {
-                raf = 0;
-                if (!el.isConnected) return;
-                const st = Math.max(0, view.scrollTop - 8), ni = Math.floor(st / PITCH), no = Math.round(st - ni * PITCH);
-                if (no !== off || ni !== idx) hit('offset');
-                if (ni !== idx) hit('index');
-                if ((ni > 0) !== show) { show = ni > 0; hit('derived'); fab.classList.toggle('cmp-on', show); }
-                idx = ni; off = no;
-                read.innerHTML = hl(`listState.firstVisibleItemIndex = ${idx}\nlistState.firstVisibleItemScrollOffset = ${off}\nshowTop = ${show}`);
-              }
-              view.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(update); }, { passive: true });
-              function top() {
-                view.scrollTo({ top: 0, behavior: 'smooth' });
-                say(o, `${hl('scope.launch { listState.animateScrollToItem(0) }')} <span class="muted">// back to the first item</span>`);
-              }
-              read.innerHTML = hl('listState.firstVisibleItemIndex = 0\nlistState.firstVisibleItemScrollOffset = 0\nshowTop = false');
-              say(o, 'Scroll the list and compare how often each reader would recompose.');
-              el.append(
-                h('div', { class: 'cmp-d2z-wrap' }, frame, h('div', { class: 'cmp-ly-group' }, read, meters)),
-                h('div', { class: 'controls' },
-                  act('Scroll down', () => { view.scrollBy({ top: 200, behavior: 'smooth' }); say(o, 'Scrolling. Watch the three counters.'); }),
-                  cmd('listState.animateScrollToItem(0)', top)),
-                o);
-            },
-          },
-          {
-            title: 'Load more near the end',
-            body: `<p>For long feeds you load data in pages. The list can tell you when to fetch the next one: <code>listState.layoutInfo</code> lists the visible items and the total count. When the last visible index gets close to the end, ask the ViewModel for more, and show a loading row as the last item.</p>
-<p>Wrap the check in <code>derivedStateOf</code> so it is computed on scroll but only changes when the answer does, and react to it in a <code>LaunchedEffect</code>. For real network paging, the Paging 3 library does this for you, with <code>collectAsLazyPagingItems()</code>.</p>`,
-            code: `val listState = rememberLazyListState()
-val nearEnd by remember {
-    derivedStateOf {
-        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        last >= listState.layoutInfo.totalItemsCount - 3
+}`, why: '<code>LazyColumn</code> is the scrolling list. <code>items(days)</code> adds a row for each day and hands it to you as <code>day</code>.' },
+          { type: 'bug', prompt: 'Android Studio marks one line red with <code>@Composable invocations can only happen from the context of a @Composable function</code>. Tap the line.', code: `@Composable
+fun HistoryList(days: List<String>) {
+    LazyColumn {
+        Text("History")
+        items(days) { day ->
+            Text(day)
+        }
     }
-}
-LaunchedEffect(nearEnd) {
-    if (nearEnd) vm.loadNextPage()          // the ViewModel ignores calls while loading
-}
-
-LazyColumn(state = listState) {
-    items(posts, key = { it.id }) { PostRow(it) }
-    if (isLoading) item(key = "loading") { LoadingRow() }
-}`,
-            visual(el) {
-              const PAGE = 10, MAX = 40;
-              let total = 0, loading = false, raf = 0, ended = false;
-              const inner = h('div', { class: 'cmp-d2z-inner' });
-              const footer = h('div', { class: 'cmp-d2z-foot' });
-              const view = h('div', { class: 'cmp-d2z-view', tabindex: '0', 'aria-label': 'Scrollable feed' }, inner, footer);
-              const frame = h('div', { class: 'cmp-d2z-frame' }, view);
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              function addPage() {
-                for (let i = 0; i < PAGE; i++) { total++; inner.append(h('div', { class: `cmp-d2z-row${loading ? ' cmp-ls-in' : ''}` }, h('i', {}, String(total - 1)), `Post ${total - 1}`)); }
-              }
-              function lastVisible() {
-                const v = view.getBoundingClientRect();
-                let last = 0;
-                [...inner.children].forEach((r, i) => { if (r.getBoundingClientRect().top < v.bottom) last = i; });
-                return last;
-              }
-              async function load() {
-                loading = true;
-                footer.replaceChildren(h('span', { class: 'cmp-d2z-spin', 'aria-hidden': 'true' }), 'Loading page…');
-                say(o, `${hl('nearEnd = true')} → ${hl('vm.loadNextPage()')} <span class="muted">// the loading row shows as the last item</span>`);
-                await sleep(900); if (!el.isConnected) return;
-                addPage(); loading = false;
-                if (total >= MAX) { ended = true; footer.textContent = 'End of feed'; } else footer.replaceChildren();
-                say(o, `<span class="good">Page loaded.</span> ${total} items now.${ended ? ' No more pages.' : ' Keep scrolling.'}`);
-                check();
-              }
-              function check() {
-                raf = 0;
-                if (!el.isConnected) return;
-                const last = lastVisible(), near = last >= total - 3;
-                read.innerHTML = hl(`lastVisibleIndex = ${last}\ntotalItemsCount = ${total}\nnearEnd = ${near}`);
-                if (near && !loading && !ended) load();
-              }
-              view.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(check); }, { passive: true });
-              addPage();
-              read.innerHTML = hl(`lastVisibleIndex = 0\ntotalItemsCount = ${total}\nnearEnd = false`);
-              say(o, 'Scroll toward the end of the list. A new page loads before you reach it.');
-              el.append(
-                h('div', { class: 'cmp-d2z-wrap' }, frame, read),
-                h('div', { class: 'controls' }, act('Scroll to the end', () => view.scrollTo({ top: view.scrollHeight, behavior: 'smooth' }))),
-                o);
-            },
-          },
+}`, bug: 3, fix: '        item { Text("History") }', why: 'Inside a <code>LazyColumn</code> you describe rows, you don’t draw them directly. A single row goes inside <code>item { }</code>.' },
         ],
-        underHood: {
-          body: `<p>The <code>LazyColumn { }</code> block does not compose anything. It runs a small DSL that records <em>intervals</em>: “items 0 to 29 come from this list, with this key and this content lambda”. The list itself is a <code>LazyLayout</code>, built on <code>SubcomposeLayout</code>.</p>
-<p>During measure, it starts at the first visible index, composes one item, measures it, and repeats until the viewport is full. Items that scroll away are disposed or kept for reuse: a new item of the same <code>contentType</code> can take over an old item’s composition instead of building one from scratch. Between frames, a prefetcher composes and measures the next item in the scroll direction, so it is ready before it appears.</p>`,
-          code: `LazyColumn {
-    item { Header() }                                   // interval: 1 item
-    items(posts, key = { it.id }, contentType = { "post" }) { PostRow(it) }  // interval: posts.size
-}
-// Only the items that fit the viewport, plus the prefetched one, are composed.`,
-        },
-        mistakes: [
-          {
-            title: 'Items with zero height before they load',
-            bad: `items(photos, key = { it.id }) { photo ->
-    AsyncImage(model = photo.url, contentDescription = photo.title)
-}`,
-            good: `items(photos, key = { it.id }) { photo ->
-    AsyncImage(
-        model = photo.url,
-        contentDescription = photo.title,
-        modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
-    )
-}`,
-            why: 'Before the images load, every item is 0 px tall, so all of them fit in the viewport and the list composes them all at once. Give items their size up front, or a placeholder of the right size.',
-          },
-          {
-            title: 'animateItem without keys',
-            bad: `LazyColumn {
-    items(tasks) { task ->
-        TaskRow(task, Modifier.animateItem())
-    }
-}`,
-            good: `LazyColumn {
-    items(tasks, key = { it.id }) { task ->
-        TaskRow(task, Modifier.animateItem())
-    }
-}`,
-            why: 'Without keys, items are tracked by position. When a task moves, the list sees new content at the old positions, so nothing slides. Keys let <code>animateItem</code> find where each item went.',
-          },
+        quiz: [
+          { q: 'Why use <code>LazyColumn</code> instead of <code>Column</code> for two years of history?', options: ['It builds only the rows on screen, and it scrolls', 'It sorts the days', 'It makes the text bigger'], a: 0, why: 'A <code>Column</code> builds all 730 rows at once. <code>LazyColumn</code> builds what you can see.' },
+          { q: 'In <code>items(days) { day -> Text(day) }</code>, what is <code>day</code>?', options: ['One value from the list, a different one for each row', 'The whole list', 'The number of rows'], a: 0, why: 'Like the variable in a <code>for</code> loop, it is the current value.' },
+          { q: 'Which one shows a list that scrolls from left to right?', options: ['<code>LazyRow</code>', '<code>LazyColumn</code>', '<code>Row</code>'], a: 0, why: '<code>LazyRow</code> is the side-to-side version. A plain <code>Row</code> builds everything and doesn’t scroll.' },
         ],
-        visual(el) {
-          const FIRST = ['Ada', 'Alan', 'Anita', 'Arun', 'Ava', 'Ben', 'Bianca', 'Bo', 'Bruno', 'Bea', 'Carla', 'Chen', 'Cleo', 'Cyrus', 'Cora', 'Dana', 'Dev', 'Dina', 'Dmitri', 'Duke', 'Eli', 'Emma', 'Ezra', 'Esme', 'Eve', 'Farah', 'Felix', 'Fiona', 'Femi', 'Finn'];
-          const DATA = FIRST.map((n, i) => ({ id: i + 1, name: n, letter: n[0] }));
-          let mode = 'column', sticky = true, padded = false, raf = 0, busy = false;
-          const inner = h('div', { class: 'cmp-ls-inner' });
-          const view = h('div', { class: 'cmp-ls-view', tabindex: '0', 'aria-label': 'Scrollable lazy list' }, inner);
-          const frame = h('div', { class: 'cmp-ls-frame' }, view, h('div', { class: 'cmp-ls-band cmp-b1' }), h('div', { class: 'cmp-ls-band cmp-b2' }));
-          const map = h('div', { class: 'cmp-ls-map', 'aria-hidden': 'true' });
-          const count = h('span', { class: 'cmp-ls-count' });
-          const code = h('div', { class: 'kt' });
-          const o = out();
-          let nodes = [], ticks = [], seen = new Set();
-          const modeBtns = [['column', 'LazyColumn'], ['row', 'LazyRow'], ['grid', 'LazyVerticalGrid(GridCells.Fixed(3))']].map(([m, src]) => cmd(src, () => setMode(m)));
-          const stickyIn = h('input', { type: 'checkbox', id: 'cmp-ls-sticky', checked: true });
-          const padIn = h('input', { type: 'checkbox', id: 'cmp-ls-pad' });
-          function build() {
-            nodes = [];
-            const withHeads = mode === 'column' && sticky;
-            let last = '';
-            for (const d of DATA) {
-              if (withHeads && d.letter !== last) { last = d.letter; nodes.push(h('div', { class: 'cmp-ls-head' }, d.letter)); }
-              nodes.push(h('div', { class: 'cmp-ls-item', 'data-i': d.id - 1 }, h('i', {}, d.letter), h('span', {}, mode === 'column' ? `${d.name} · #${d.id}` : d.name)));
-            }
-            inner.replaceChildren(...nodes);
-            ticks = nodes.map(n => h('span', { class: `cmp-ls-tick${n.classList.contains('cmp-ls-head') ? ' cmp-h' : ''}` }));
-            map.replaceChildren(...ticks);
-            frame.className = `cmp-ls-frame cmp-ls-${mode}${padded ? ' cmp-ls-padded' : ''}`;
-            seen = new Set();
-            view.scrollTo(0, 0);
-            const lines = {
-              column: `LazyColumn(${padded ? 'contentPadding = PaddingValues(vertical = 24.dp)' : ''}) {\n${withHeads ? '    groups.forEach { (letter, people) ->\n        stickyHeader { Header(letter) }\n        items(people, key = { it.id }) { Row(it) }\n    }' : '    items(people, key = { it.id }) { Row(it) }'}\n}`,
-              row: `LazyRow(${padded ? 'contentPadding = PaddingValues(horizontal = 24.dp)' : ''}) {\n    items(people, key = { it.id }) { Card(it) }\n}`,
-              grid: `LazyVerticalGrid(\n    columns = GridCells.Fixed(3),${padded ? '\n    contentPadding = PaddingValues(vertical = 24.dp),' : ''}\n) {\n    items(people, key = { it.id }) { Tile(it) }\n}`,
-            };
-            code.innerHTML = hl(lines[mode]);
-            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(['column', 'row', 'grid'][i] === mode)));
-            stickyIn.disabled = mode !== 'column';
-            update(true);
-          }
-          function update(quiet) {
-            raf = 0;
-            if (!el.isConnected && !quiet) return;
-            const v = view.getBoundingClientRect(), horiz = mode === 'row', AHEAD = 40;
-            let n = 0, added = 0;
-            nodes.forEach((node, i) => {
-              const r = node.getBoundingClientRect();
-              const on = horiz ? r.right > v.left - AHEAD && r.left < v.right + AHEAD : r.bottom > v.top - AHEAD && r.top < v.bottom + AHEAD;
-              node.classList.toggle('cmp-ls-off', !on);
-              ticks[i].classList.toggle('cmp-on', on);
-              if (on) {
-                n++;
-                if (!seen.has(i)) { seen.add(i); added++; if (!quiet) replay(node, 'cmp-ls-in'); }
-              } else if (seen.has(i)) seen.delete(i);
-            });
-            count.textContent = `composed: ${n} of ${nodes.length}`;
-            if (added && !quiet && !busy) say(o, `Composed ${added} new item${added > 1 ? 's' : ''} as they came into view. <span class="muted">Items that scrolled away were disposed.</span>`);
-          }
-          view.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(() => update(false)); }, { passive: true });
-          function setMode(m) {
-            mode = m; build();
-            say(o, m === 'row' ? 'LazyRow: the same idea sideways. Scroll it horizontally.' : m === 'grid' ? 'LazyVerticalGrid: rows of three, still only the visible rows are composed.' : 'LazyColumn: scroll and watch the composed window slide over the map.');
-          }
-          async function scrollTo(i) {
-            if (busy) return;
-            const node = nodes.find(n => n.dataset.i === String(i));
-            if (!node) return;
-            busy = true;
-            if (mode === 'row') view.scrollTo({ left: node.offsetLeft - (padded ? 24 : 0), behavior: 'smooth' });
-            else view.scrollTo({ top: node.offsetTop - (padded ? 24 : 0) - (mode === 'column' && sticky ? 30 : 0), behavior: 'smooth' });
-            say(o, `${hl(`scope.launch { listState.animateScrollToItem(${i}) }`)} <span class="muted">// scrolling…</span>`);
-            await sleep(700);
-            busy = false; update(false);
-            say(o, `${hl(`animateScrollToItem(${i})`)} done. Still only ${seen.size} items composed, out of ${nodes.length}.`);
-          }
-          stickyIn.addEventListener('change', () => { sticky = stickyIn.checked; build(); say(o, sticky ? 'stickyHeader on: each letter pins to the top while its section scrolls.' : 'No headers. Just items(people).'); });
-          padIn.addEventListener('change', () => {
-            padded = padIn.checked; build();
-            say(o, padded ? `${hl('contentPadding = 24.dp')} <span class="muted">// the shaded band is padding. Scroll: items pass under it, not clipped.</span>` : 'No contentPadding. The first item touches the edge.');
-          });
-          build();
-          say(o, 'Scroll the list. Only items near the viewport are composed.');
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            h('div', { class: 'cmp-ls-wrap' }, frame, h('div', { class: 'cmp-ly-group' }, count, map)),
-            h('div', { class: 'controls' },
-              h('label', { class: 'switch', for: 'cmp-ls-sticky' }, stickyIn, 'stickyHeader'),
-              h('label', { class: 'switch', for: 'cmp-ls-pad' }, padIn, 'contentPadding'),
-              cmd('animateScrollToItem(22)', () => scrollTo(22)), cmd('animateScrollToItem(0)', () => scrollTo(0))),
-            code, o);
-          requestAnimationFrame(() => update(true));
-        },
-        predict: {
-          q: 'A LazyColumn holds 30 names. You scroll down by a screen. What happens to the rows that left the top?',
-          options: ['They stay composed, just off screen', 'They are no longer composed. Only rows near the viewport are', 'All 30 were composed when the list first showed'],
-          a: 1,
-          why: 'Lazy layouts compose only what is visible plus a small margin. Rows that scroll away leave the composition, and new ones are composed as they come in.',
-        },
+        docs: [['Lists and grids', 'https://developer.android.com/develop/ui/compose/lists']],
       },
 
-      // 11 ─────────────────────────────────────────────
       {
         id: 'lazy-keys',
-        title: 'LazyColumn and keys',
-        tagline: 'Tie item state to the item, not its position.',
+        title: 'Keys in lists',
+        tagline: 'Give every row a name tag so its state stays with it.',
+        goals: ['Explain why a row’s remembered state can jump to another row', 'Give list rows a <code>key</code>', 'Choose a key that is unique and never changes'],
+        level: 'beginner', introduces: ['mutableStateListOf'],
         body: `
-<p><code>LazyColumn</code> composes only the rows that are on screen. Each row is its own little composition, and any <code>remember</code> inside it belongs to that row.</p>
-<p>By default Compose identifies a row by its <em>position</em>. Remove the first item and the row at index 0 now shows the second item, but it still holds the first item’s remembered state. Your check mark lands on the wrong thing.</p>
-<p>Pass <code>key = { it.id }</code> and Compose tracks rows by a stable id instead. State moves with its item, and <code>Modifier.animateItem()</code> can animate the move. Better still, keep data like <code>checked</code> in your list itself.</p>`,
-        code: `data class Grocery(val id: Int, val name: String)
+<p>The water screen now lists today’s drinks under the counter, and each row has a small Note field. You write “after my run” on drink #2, then delete drink #1. Suddenly the note sits on drink #3. You never touched the notes. What happened?</p>
+<p>The drinks live in <code>WaterScreen</code> as <code>val drinks = remember { mutableStateListOf&lt;Drink&gt;() }</code>. <code>mutableStateListOf</code> makes a list that works like <code>mutableListOf</code>, with <code>add</code> and <code>remove</code>, and that Compose watches like state: change it, and the screen updates. Each row keeps its own note with <code>rememberTextFieldState()</code>. Without more information, a lazy list matches that remembered state by <em>position</em>: “the second row has a note”. When drink #1 is removed, every row moves up one place, but the notes stay at their old positions.</p>
+<p>A <em>key</em> fixes this. <code>items(drinks, key = { drink -> drink.id }) { ... }</code> gives every row a name tag. Now Compose remembers “the row with id 2 has a note”, and the note moves with that row wherever it goes.</p>
+<p>A good key is unique (no two rows share one) and never changes for the same item, like an id number. A size like 250 ml is a poor key, because two drinks can have the same size. A lazy list also saves each row’s state under its key, so it can give it back when the row scrolls away and returns. That works for <code>rememberSaveable</code> and <code>rememberTextFieldState</code>; plain <code>remember</code> inside a row starts fresh after scrolling. Saving is also why keys must be simple values such as an <code>Int</code> or a <code>String</code>.</p>`,
+        visual(el) {
+          const row = (id, ml, note) => `<div class="ui-m-row"><div style="flex:1">#${id} · ${ml} ml</div><span class="ui-m-chip"${note ? '' : ' style="color:var(--muted)"'}>${note || 'Note'}</span><span class="ui-m-chip del">✕</span></div>`;
+          const scr = (rows, tag) => `<div class="ui-m-bar">Water</div><div class="ui-m-body"><b>${rows.length} of 8 glasses</b><span class="ui-m-muted">${tag}</span>${rows.map(r => row(...r)).join('')}</div>`;
+          const four = [[1, 250, ''], [2, 500, 'after my run'], [3, 250, ''], [4, 250, '']];
+          Lab.ui.phone(el, {
+            logTitle: 'Remembered notes',
+            predict: {
+              q: 'No keys. Drink #2 has the note “after my run”. The user deletes drink #1. Which drink shows the note now?',
+              options: ['#2', '#3', 'None'],
+              a: 1,
+              why: 'Without keys the note belongs to position 2. After the delete, drink #3 is in position 2.',
+            },
+            frames: [
+              { screen: scr(four, 'items(drinks), no key'), log: ['row 1: ""', 'row 2: "after my run"', 'row 3: ""', 'row 4: ""'], say: 'No key: each remembered note is stored by position.' },
+              { tap: '.del', say: 'The user deletes drink #1, the first row.' },
+              { screen: scr([[2, 500, ''], [3, 250, 'after my run'], [4, 250, '']], 'items(drinks), no key'), log: ['row 1: "" (was #1’s)', 'row 2: "after my run" (was #2’s)', 'row 3: ""'], say: 'Every drink moved up one place, but the notes stayed where they were. Drink #3 has the note by mistake.' },
+              { screen: scr(four, 'items(drinks, key = { it.id })'), log: ['id 1: ""', 'id 2: "after my run"', 'id 3: ""', 'id 4: ""'], say: 'Same list with <code>key = { it.id }</code>. Now each note is stored by the drink’s id.' },
+              { tap: '.del', say: 'The user deletes drink #1 again.' },
+              { screen: scr([[2, 500, 'after my run'], [3, 250, ''], [4, 250, '']], 'items(drinks, key = { it.id })'), log: ['id 2: "after my run"', 'id 3: ""', 'id 4: ""'], say: 'Drink #1’s row and its state are gone. Drink #2 keeps its note, because the note belongs to id 2, not to a position.' },
+            ],
+          });
+        },
+        code: `data class Drink(val id: Int, val ml: Int)
+
+// In WaterScreen:
+val drinks = remember { mutableStateListOf<Drink>() }
+DrinkList(drinks, onDelete = { drink -> drinks.remove(drink) })
 
 @Composable
-fun GroceryList(items: List<Grocery>) {
+fun DrinkList(drinks: List<Drink>, onDelete: (Drink) -> Unit) {
     LazyColumn {
-        items(items, key = { it.id }) { item ->
-            var checked by rememberSaveable { mutableStateOf(false) }
-            ListItem(
-                headlineContent = { Text(item.name) },
-                leadingContent = {
-                    Checkbox(checked = checked, onCheckedChange = { checked = it })
-                },
-                modifier = Modifier.animateItem(),
-            )
+        items(drinks, key = { drink -> drink.id }) { drink ->
+            DrinkRow(drink, onDelete = { onDelete(drink) })   // its note follows drink.id
         }
     }
+}
+
+@Composable
+fun DrinkRow(drink: Drink, onDelete: () -> Unit) {
+    val note = rememberTextFieldState()     // saved for this row's key
+    Column(modifier = Modifier.padding(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("#\${drink.id}: \${drink.ml} ml")
+            TextButton(onClick = onDelete) { Text("Delete") }
+        }
+        TextField(state = note, label = { Text("Note") })
+    }
 }`,
-        remember: 'No key: state sticks to the position. key = { it.id }: state sticks to the item.',
-        level: 'intermediate',
+        remember: 'items(list, key = { it.id }): a unique id that never changes keeps each row’s state with its item.',
+        mistakes: [
+          { title: 'A key that is not unique', bad: `items(drinks, key = { drink -> drink.ml }) { ... }
+// two drinks of 250 ml: the app crashes
+// IllegalArgumentException: Key "250" was already used. If you are using
+// LazyColumn/Row please make sure you provide a unique key for each item.`, good: `items(drinks, key = { drink -> drink.id }) { ... }
+// every drink has its own id`, why: 'Sizes repeat. Two rows with the same key crash the list, so use an id that only one item has.' },
+        ],
         terms: [
-          { term: 'LazyColumn', def: 'A vertical list that composes only the rows currently on screen and reuses the space as you scroll.' },
-          { term: 'Item key', def: 'A stable, unique id passed as key to a lazy list so each row’s state follows its item instead of its position.' },
-          { term: 'Modifier.animateItem', def: 'A lazy list item modifier that animates rows appearing, disappearing and moving to a new position.' },
+          { term: 'key', def: 'A value that names one row in a lazy list, given with <code>key = { ... }</code>. Remembered state follows the key.' },
+          { term: 'unique', def: 'Not shared with anything else. No two rows may have the same key.' },
+          { term: 'mutableStateListOf', def: 'Makes a list you can <code>add</code> to and <code>remove</code> from, which Compose watches like state.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Give each row a stable key so its state follows the todo.', code: 'LazyColumn {\n    items(todos, [[key]] = { it.[[id]] }) { todo ->\n        TodoRow(todo)\n    }\n}', why: 'A unique id that never changes is the right key. Positions shift when items move.' },
-          { type: 'bug', prompt: 'Remove the first item and the check mark lands on the wrong row. Tap the line that causes it.', code: 'data class Grocery(val id: Int, val name: String)\n\n@Composable\nfun GroceryList(items: List<Grocery>) {\n    LazyColumn {\n        itemsIndexed(items, key = { index, _ -> index }) { _, item ->\n            var checked by remember { mutableStateOf(false) }\n            GroceryRow(item, checked, onCheckedChange = { checked = it })\n        }\n    }\n}', bug: 5, fix: '        itemsIndexed(items, key = { _, item -> item.id }) { _, item ->', why: 'An index key is the same as no key. State stays at the position. Key by <code>item.id</code>.' },
-        ],
-        quiz: [
-          { q: 'No keys. Row 0 (“Milk”) is checked with <code>remember</code> state. You remove Milk. What is checked now?', options: ['Nothing', 'Eggs, the item that moved into row 0', 'Milk, still on screen'], a: 1, why: 'Row 0 keeps its remembered state and now shows Eggs.' },
-          { q: 'Which makes a good key?', options: ['The list index', 'A stable unique id from the data', '<code>Random.nextInt()</code>'], a: 1, why: 'A key must stay the same for the same item and differ between items. Indexes shift; random values change on every run.' },
-          { q: 'Which line is the bug?<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>LazyColumn {\n    items(todos, key = { it.hashCode() }) { todo -&gt;\n        TodoRow(todo, Modifier.animateItem())\n    }\n}</code></pre>', options: ['<code>LazyColumn {</code>: it needs a <code>state</code>', '<code>TodoRow(todo, Modifier.animateItem())</code>: animateItem needs a contentType', '<code>items(todos, key = { it.hashCode() })</code>: the hash changes whenever a field changes'], a: 2, why: 'Editing a todo changes its hash, so the list sees a removed and a new item: row state resets and it animates out and in. Key on the stable id.' },
-          { q: 'A chat inserts new messages at the top while the user reads further down. With <code>key = { it.id }</code>, what happens to the message they are reading?', options: ['It slides down by one row per new message', 'It stays in place, because the list keeps the key of the first visible item', 'The list jumps to the top'], a: 1, why: 'LazyListState remembers the first visible item’s key and finds it again. Without keys it can only keep the index, so the content slides.' },
-        ],
-        deeper: [
-          {
-            title: 'Keys must be unique',
-            body: `<p>Two items with the same key crash the list with <code>IllegalArgumentException: Key ... was already used</code>. Compose can’t tell which row owns which state. Ids from your database or server are unique. Names and titles are not.</p>
-<p>On Android a key must also fit in a <code>Bundle</code>, so use an <code>Int</code>, <code>Long</code>, <code>String</code> or a <code>Parcelable</code>. The list saves keys to restore scroll position and <code>rememberSaveable</code> state.</p>`,
-            visual(el) {
-              let byName = false, items, nextId, crashed = false, busy = false;
-              const toggle = h('input', { type: 'checkbox', id: 'cmp-dk-name' });
-              const head = h('div', { class: 'kt' });
-              const list = h('div', { class: 'cmp-lazy cmp-dk-list', role: 'list', 'aria-label': 'Grocery list' });
-              const o = out();
-              const keyOf = it => (byName ? `"${it.name}"` : String(it.id));
-              function paint(fresh) {
-                head.innerHTML = hl(`items(items, key = { it.${byName ? 'name' : 'id'} }) { ... }`);
-                list.replaceChildren(...items.map(it => h('div', { class: 'cmp-item' + (it === fresh ? ' drop-in' : ''), role: 'listitem' },
-                  h('span', { class: 'cmp-box', 'aria-hidden': 'true' }), h('span', { class: 'cmp-name' }, it.name), h('span', { class: 'cmp-tag' }, `key = ${keyOf(it)}`))));
-              }
-              function reset() {
-                byName = toggle.checked; crashed = false;
-                items = [{ id: 1, name: 'Milk' }, { id: 2, name: 'Eggs' }, { id: 3, name: 'Bread' }];
-                nextId = 4; paint();
-                say(o, byName ? 'Keyed by name. Fine while every name is different.' : 'Keyed by id. Every row has its own number.');
-              }
-              async function add(name) {
-                if (busy) return;
-                if (crashed) { replay(list, 'shake'); say(o, 'The app crashed. Reset the list.'); return; }
-                if (items.length >= 6) { replay(list, 'shake'); say(o, 'Six rows is enough for this demo. Reset the list.'); return; }
-                busy = true;
-                const it = { id: nextId++, name };
-                const clash = items.find(x => keyOf(x) === keyOf(it));
-                items.push(it); paint(it);
-                await sleep(450);
-                if (!el.isConnected) return;
-                if (clash) {
-                  crashed = true;
-                  list.append(h('div', { class: 'cmp-dk-crash drop-in' }, h('b', {}, 'FATAL EXCEPTION: main'), `IllegalArgumentException: Key ${keyOf(it)} was already used.`));
-                  replay(list, 'shake');
-                  say(o, `<span class="bad">Crash.</span> Two items share ${hl(`key = ${keyOf(it)}`)}. Turn off the name key and try again.`);
-                } else say(o, `${hl(`add(Grocery(id = ${it.id}, name = "${name}"))`)} <span class="muted">→</span> <span class="good">new key ${esc(keyOf(it))}, no clash</span>`);
-                busy = false;
-              }
-              toggle.addEventListener('change', () => { if (busy) { toggle.checked = byName; return; } reset(); });
-              el.append(
-                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-dk-name' }, toggle, 'key = { it.name }'), head),
-                list,
-                h('div', { class: 'controls' }, cmd('items.add(Grocery(name = "Milk"))', () => add('Milk')), cmd('items.add(Grocery(name = "Tea"))', () => add('Tea')), act('Reset list', () => { if (!busy) reset(); })),
-                o);
-              reset();
-            },
-          },
-          {
-            title: 'Keys hold your scroll position',
-            body: `<p><code>LazyListState</code> remembers the key of the first visible item, not just its index. When new items arrive above it, the list finds that key again and keeps it in place. Without keys it can only keep the index, so the content slides down under the reader.</p>
-<p>This matters for chats and feeds that insert at the top while someone is reading.</p>`,
-            visual(el) {
-              const ROW = 40;
-              let keyed = true, items, first, fresh, busy = false;
-              const toggle = h('input', { type: 'checkbox', id: 'cmp-sa-key', checked: true });
-              const col = h('div', { class: 'cmp-sa-col' });
-              const view = h('div', { class: 'cmp-sa-view', role: 'img', 'aria-label': 'Feed viewport' }, col);
-              const idx = h('div', { class: 'kt' });
-              const o = out();
-              const paintIdx = () => { idx.innerHTML = hl(`firstVisibleItemIndex = ${first}`); };
-              function paint(newOnes) {
-                col.replaceChildren(...items.map(it => h('div', { class: ['cmp-sa-row', it.read && 'cmp-sa-reading', newOnes && newOnes.includes(it) && 'cmp-ls-in'].filter(Boolean).join(' ') }, it.name, it.read ? h('span', { class: 'cmp-tag' }, 'reading') : null)));
-              }
-              const place = animate => {
-                col.style.transition = animate ? 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none';
-                col.style.transform = `translateY(${-first * ROW}px)`;
-              };
-              function reset() {
-                keyed = toggle.checked; fresh = 0;
-                items = Array.from({ length: 9 }, (_, i) => ({ id: i + 1, name: `Post ${i + 1}`, read: i === 4 }));
-                first = 4; paint(); place(false); paintIdx();
-                say(o, `You scrolled to Post 5 and are reading it. ${keyed ? 'Items have keys.' : 'No keys: the list only knows indexes.'}`);
-              }
-              async function arrive() {
-                if (busy) return;
-                if (fresh >= 6) { replay(view, 'shake'); say(o, 'Enough new posts. Reset to try again.'); return; }
-                busy = true;
-                const add = [1, 2, 3].map(() => ({ id: 100 + ++fresh, name: `New post ${fresh}` }));
-                items = [...add, ...items];
-                paint(add);
-                if (keyed) first += 3;
-                place(false); paintIdx(); replay(idx, 'pop-soft');
-                if (!keyed) replay(view, 'shake');
-                await sleep(450);
-                if (!el.isConnected) return;
-                say(o, keyed
-                  ? `<span class="good">Post 5 stayed put.</span> The list found its key at index ${first} and moved the scroll there.`
-                  : `<span class="bad">The content jumped.</span> The index stayed ${first}, which is now ${esc(items[first].name)}. Post 5 slid down.`);
-                busy = false;
-              }
-              toggle.addEventListener('change', () => { if (busy) { toggle.checked = keyed; return; } reset(); });
-              el.append(
-                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-sa-key' }, toggle, 'key = { it.id }'), idx),
-                view,
-                h('div', { class: 'controls' }, cmd('posts.addAll(0, newPosts)', arrive), act('Reset', () => { if (!busy) reset(); })),
-                o);
-              reset();
-            },
-          },
-          {
-            title: 'contentType for mixed rows',
-            body: `<p>When rows of different shapes share one list, also pass <code>contentType</code>. A row that scrolls off is not thrown away at once. Compose keeps it to reuse for the next row coming in, but only for a row of the same type. A header is never rebuilt into a post.</p>`,
-            code: `LazyColumn {
-    items(
-        feed,
-        key = { it.id },
-        contentType = { if (it is FeedItem.Header) "header" else "post" },
-    ) { item ->
-        when (item) {
-            is FeedItem.Header -> SectionHeader(item)
-            is FeedItem.Post -> PostCard(item)
+          { type: 'blank', prompt: 'Give each day row its id as the key.', code: `data class Day(val id: Int, val text: String)
+
+LazyColumn {
+    items(days, [[key]] = { day -> day.[[id]] }) { day ->
+        Text(day.text)
+    }
+}`, why: 'The key goes in <code>key = { ... }</code>. The id is unique and never changes, so it is a good key.' },
+          { type: 'bug', prompt: 'Deleting a drink makes the notes jump to the wrong drinks. Tap the line to change.', code: `data class Drink(val id: Int, val ml: Int)
+
+@Composable
+fun DrinkList(drinks: List<Drink>, onDelete: (Drink) -> Unit) {
+    LazyColumn {
+        items(drinks) { drink ->
+            DrinkRow(drink, onDelete = { onDelete(drink) })
         }
     }
-}`,
-          },
+}`, bug: 5, fix: '        items(drinks, key = { drink -> drink.id }) { drink ->', why: 'Without a key, remembered state stays at a position. With <code>key = { drink -> drink.id }</code> it follows the drink.' },
         ],
-        underHood: {
-          body: `<p><code>LazyColumn</code> is built on <code>SubcomposeLayout</code>. During measure it works out which items fit on screen and composes each one on demand as its own small piece of composition, tagged with the item’s key. If you pass no key, the key is a wrapper around the index.</p>
-<p>On every measure pass the list rebuilds a map from key to index. When an item moves, its composition, its <code>remember</code> slots and its placement animation move with it. A <code>SaveableStateHolder</code> keyed the same way keeps the <code>rememberSaveable</code> values of rows that scrolled off, ready for when they come back.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Keying by hashCode or the whole item',
-            bad: `LazyColumn {
-    items(todos, key = { it.hashCode() }) { todo ->
-        TodoRow(todo)
-    }
-}`,
-            good: `LazyColumn {
-    items(todos, key = { it.id }) { todo ->
-        TodoRow(todo)
-    }
-}`,
-            why: 'A data class hash changes when any field changes. Edit a todo and the list sees one item removed and a new one added, so its row state resets and it animates out and back in.',
-          },
-          {
-            title: 'remember in a row for state that must last',
-            bad: `items(posts, key = { it.id }) { post ->
-    var expanded by remember { mutableStateOf(false) }
-    PostCard(post, expanded, onToggle = { expanded = !expanded })
-}`,
-            good: `items(posts, key = { it.id }) { post ->
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    PostCard(post, expanded, onToggle = { expanded = !expanded })
-}`,
-            why: 'Rows that scroll far off screen leave the composition, and their <code>remember</code> slots go with them. <code>rememberSaveable</code> keeps the value per key. State the app depends on belongs in the ViewModel.',
-          },
+        quiz: [
+          { q: 'Without keys, how does a lazy list match a row’s remembered state?', options: ['By the row’s position', 'By the row’s text', 'It doesn’t remember anything'], a: 0, why: 'By position, so state can land on the wrong item when rows move.' },
+          { q: 'Which is the best key for today’s drinks?', options: ['The drink’s id number', 'The drink’s size in ml', 'The row’s position'], a: 0, why: 'An id is unique and stays the same. Sizes repeat, and positions change.' },
+          { q: 'Two rows get the same key. What happens?', options: ['The app crashes', 'Compose picks one at random', 'Nothing'], a: 0, why: 'Keys must be unique. A repeated key throws <code>IllegalArgumentException: Key "..." was already used.</code>' },
         ],
-        visual(el) {
-          const POOL = ['Milk', 'Eggs', 'Bread', 'Apples', 'Coffee', 'Rice', 'Tea', 'Butter', 'Honey'];
-          let keyed, items, nextId, truth, slots, rowsById, rowEls, busy = false;
-          const toggle = h('input', { type: 'checkbox', id: 'cmp-keys' });
-          const head = h('div', { class: 'kt' });
-          const list = h('div', { class: 'cmp-lazy', role: 'list', 'aria-label': 'Grocery list' });
-          const o = out();
-          function makeRow() {
-            const r = h('button', { class: 'cmp-item', role: 'listitem' },
-              h('span', { class: 'cmp-box', 'aria-hidden': 'true' }), h('span', { class: 'cmp-name' }), h('span', { class: 'cmp-tag' }));
-            r.addEventListener('animationend', () => r.classList.remove('drop-in', 'flip', 'pop'));
-            r.addEventListener('click', () => tap(r));
-            return r;
-          }
-          function paintRow(r, item, i, checked) {
-            r.dataset.name = item.name; r.dataset.id = item.id;
-            r.children[1].textContent = item.name;
-            r.children[2].textContent = keyed ? `key = ${item.id}` : `index ${i}`;
-            r.classList.toggle('cmp-on', checked);
-            r.classList.toggle('cmp-wrong', !keyed && checked !== !!truth[item.id]);
-            r.setAttribute('aria-pressed', String(checked));
-          }
-          function tap(r) {
-            if (busy) return;
-            if (keyed) {
-              const i = items.findIndex(x => String(x.id) === r.dataset.id);
-              if (i < 0) return;
-              truth[items[i].id] = !truth[items[i].id];
-              paintRow(r, items[i], i, truth[items[i].id]);
-            } else {
-              const i = rowEls.indexOf(r);
-              if (i < 0) return;
-              slots[i] = !slots[i]; truth[items[i].id] = slots[i];
-              rowEls.forEach((x, j) => paintRow(x, items[j], j, slots[j]));
-            }
-            replay(r.children[0], 'pop');
-            say(o, `${r.dataset.name} is ${r.classList.contains('cmp-on') ? 'checked' : 'unchecked'}. Now change the list.`);
-          }
-          function reset() {
-            keyed = toggle.checked;
-            head.innerHTML = hl(keyed ? 'items(items, key = { it.id }) { item -> ... }' : 'items(items) { item -> ... }');
-            items = POOL.slice(0, 4).map((name, i) => ({ id: i + 1, name }));
-            nextId = 5; truth = { 1: true }; slots = [true, false, false, false];
-            rowsById = new Map(); rowEls = [];
-            list.replaceChildren(...items.map((it, i) => {
-              const r = makeRow(); paintRow(r, it, i, !!truth[it.id]);
-              if (keyed) rowsById.set(it.id, r); else rowEls.push(r);
-              return r;
-            }));
-            say(o, `Milk is checked. Remove it and watch where the check mark goes. <span class="muted">// ${keyed ? 'keyed by id' : 'no key: rows are tracked by index'}</span>`);
-          }
-          async function keyedUpdate() {
-            const alive = new Set(items.map(x => x.id));
-            const gone = [...rowsById].filter(([id]) => !alive.has(id));
-            if (gone.length) { gone.forEach(([, r]) => r.classList.add('leave')); await sleep(420); }
-            const tops = new Map([...rowsById].map(([id, r]) => [id, r.getBoundingClientRect().top]));
-            gone.forEach(([id, r]) => { r.remove(); rowsById.delete(id); tops.delete(id); });
-            items.forEach((it, i) => {
-              let r = rowsById.get(it.id);
-              if (!r) { r = makeRow(); r.classList.add('drop-in'); rowsById.set(it.id, r); }
-              paintRow(r, it, i, !!truth[it.id]);
-            });
-            list.replaceChildren(...items.map(it => rowsById.get(it.id)));
-            for (const [id, top] of tops) {
-              const r = rowsById.get(id), dy = top - r.getBoundingClientRect().top;
-              if (!dy) continue;
-              r.style.transition = 'none'; r.style.transform = `translateY(${dy}px)`;
-            }
-            void list.offsetWidth;
-            for (const r of rowsById.values()) { r.style.transition = 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)'; r.style.transform = ''; }
-            await sleep(480);
-          }
-          async function slotUpdate() {
-            const n = Math.min(rowEls.length, items.length);
-            for (let i = 0; i < n; i++) {
-              const r = rowEls[i];
-              if (r.dataset.name !== items[i].name) {
-                setTimeout(() => { replay(r, 'flip'); setTimeout(() => paintRow(r, items[i], i, slots[i]), 200); }, i * 70);
-              } else paintRow(r, items[i], i, slots[i]);
-            }
-            await sleep(n * 70 + 450);
-            if (rowEls.length > items.length) {
-              const r = rowEls.pop(); slots.pop();
-              r.classList.add('leave'); await sleep(420); r.remove();
-            }
-            while (rowEls.length < items.length) {
-              const i = rowEls.length, r = makeRow();
-              slots.push(false); rowEls.push(r); r.classList.add('drop-in'); list.append(r);
-              paintRow(r, items[i], i, false);
-            }
-            rowEls.forEach((r, i) => paintRow(r, items[i], i, slots[i]));
-          }
-          async function op(kind) {
-            if (busy) return;
-            if (kind === 'remove' && !items.length) { replay(list, 'shake'); say(o, '<span class="bad">IndexOutOfBoundsException:</span> the list is empty. Add an item first.'); return; }
-            if (kind === 'add' && items.length >= 6) { replay(list, 'shake'); say(o, 'Six is enough for this demo. Remove one first.'); return; }
-            busy = true;
-            const src = { remove: 'items.removeAt(0)', add: 'items.add(0, newItem)', reverse: 'items.reverse()' }[kind];
-            if (kind === 'remove') items.shift();
-            else if (kind === 'add') { items.unshift({ id: nextId, name: POOL[(nextId - 1) % POOL.length] }); nextId++; }
-            else items.reverse();
-            if (keyed) await keyedUpdate(); else await slotUpdate();
-            if (keyed) say(o, `${hl(src)} <span class="muted">→</span> <span class="good">each check mark moved with its item.</span> The key ties state to the id.`);
-            else {
-              const wrong = items.filter((it, i) => slots[i] !== !!truth[it.id]).map(it => it.name);
-              say(o, `${hl(src)} <span class="muted">→</span> ${wrong.length
-                ? `<span class="bad">state on the wrong item:</span> ${esc(wrong.join(', '))}. The remembered check stayed at its index.`
-                : 'No mix-up this time, but the state still belongs to the index, not the item.'}`);
-            }
-            busy = false;
-          }
-          toggle.addEventListener('change', () => { if (busy) { toggle.checked = keyed; return; } reset(); });
-          reset();
-          el.append(
-            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-keys' }, toggle, 'key = { it.id }'), head),
-            list,
-            h('div', { class: 'controls' }, cmd('items.removeAt(0)', () => op('remove')), cmd('items.add(0, newItem)', () => op('add')), cmd('items.reverse()', () => op('reverse'))),
-            h('p', { class: 'tip' }, 'Tap a row to check it. Red rows show a check that belongs to a different item.'),
-            o);
-        },
-        predict: {
-          q: '<code>key = { it.id }</code> is on. You check Milk, then reverse the list. Where is the check mark?',
-          options: ['On Milk, wherever it moved', 'On whatever row is now at index 0', 'Gone: reversing resets every row'],
-          a: 0,
-          why: 'With a stable key, Compose tracks each row by its id, so remembered state moves with its item.',
-        },
+        docs: [['Item keys', 'https://developer.android.com/develop/ui/compose/lists']],
       },
 
-      // Images ─────────────────────────────────────────────
       {
-        id: 'images',
-        title: 'Loading images with Coil',
-        tagline: 'AsyncImage downloads, sizes, caches and fades in a picture from a URL.',
-        level: 'beginner',
+        id: 'scaffold',
+        title: 'Screen structure',
+        tagline: 'A top bar, the content and an add button, each in its place.',
+        goals: ['Build a screen with <code>Scaffold</code>', 'Add a top bar and a floating action button', 'Keep content clear of the bars with <code>innerPadding</code>'],
+        level: 'beginner', introduces: ['Scaffold', 'TopAppBar', 'topBar', 'floatingActionButton', 'FloatingActionButton', 'innerPadding', 'OptIn', 'ExperimentalMaterial3Api', '::'],
         body: `
-<p>Compose has no built-in way to show a picture from a URL. The common choice is Coil, a Kotlin image library built on coroutines. <code>AsyncImage</code> takes a <code>model</code> (a URL string or an <code>ImageRequest</code>), downloads it off the main thread, decodes it and draws it. In Coil 3 the network code is a separate artifact: add <code>coil-network-okhttp</code> next to <code>coil-compose</code>, or every URL ends in the error state.</p>
-<p>While the image loads, <code>AsyncImage</code> draws your <code>placeholder</code>. If the request fails it draws <code>error</code>. If the model is <code>null</code>, no request runs and it draws <code>fallback</code>, which defaults to the error painter. <code>crossfade(true)</code> fades the picture in over the placeholder instead of popping it in.</p>
-<p>Coil keeps two caches, both on by default. The memory cache holds decoded bitmaps, so a row you scroll back to shows its image at once. The disk cache holds the downloaded bytes, so after the app restarts Coil reads from disk instead of the network.</p>
-<p>Give every meaningful image a <code>contentDescription</code> that TalkBack can read aloud. Pass <code>null</code> for pure decoration.</p>`,
-        code: `// build.gradle.kts (check coil-kt.github.io for the latest version)
-// implementation("io.coil-kt.coil3:coil-compose:3.6.3")
-// implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
-
+<p>Most app screens share one shape: a bar at the top with the screen’s title, the content in the middle, and often a square button with rounded corners at the bottom to add something. The water screen should look like that too: a “Water” bar on top, and “Add a glass” as that corner button. You could place these by hand with <code>Box</code>, but every screen would need the same fiddly work.</p>
+<p><code>Scaffold</code> has a named place, a <em>slot</em>, for each part. <code>topBar = { TopAppBar(title = { Text("Water") }) }</code> fills the top. <code>floatingActionButton = { FloatingActionButton(onClick = { ... }) { ... } }</code> adds the corner button, called a <em>FAB</em>. Each slot takes a lambda with UI inside, like the content of a <code>Button</code>.</p>
+<p>The content goes in the last lambda, which hands you <code>innerPadding</code>: how much room the bars take up, the phone’s status bar included. Apply it with <code>Modifier.padding(innerPadding)</code>, or the top bar will cover your first rows. Because it already includes the status bar, you don’t add <code>safeDrawingPadding()</code> inside a Scaffold.</p>
+<p>In the current Material 3 version, <code>TopAppBar</code> is still marked <em>experimental</em>: its details may change. Android Studio asks you to accept that by writing <code>@OptIn(ExperimentalMaterial3Api::class)</code> above your function. <code>ExperimentalMaterial3Api::class</code> means “the marker called ExperimentalMaterial3Api”. If Android Studio later shows the <code>@OptIn</code> line in grey, it is no longer needed, and you can delete it.</p>`,
+        visual(el) {
+          const drinks = ['#1 · 250 ml', '#2 · 500 ml', '#3 · 250 ml', '#4 · 250 ml'];
+          const body = n => `<div class="ui-m-body"><b>${n} of 8 glasses</b>${drinks.slice(0, n).map(t => `<div class="ui-m-row"><div>${t}</div></div>`).join('')}</div>`;
+          const bar = '<div class="ui-m-bar">Water</div>';
+          const fab = '<span class="ui-m-fab">+</span>';
+          Lab.ui.phone(el, {
+            logTitle: 'Scaffold slots',
+            predict: {
+              q: 'The content ignores <code>innerPadding</code>. What happens to the counter at the top?',
+              options: ['It hides under the top bar', 'The app crashes', 'Compose adds the space anyway'],
+              a: 0,
+              why: 'Scaffold only tells you how much room the bars take. Your content has to use that number.',
+            },
+            frames: [
+              { screen: body(3), log: 'Scaffold { innerPadding -> Column { ... } }', say: 'A Scaffold with only content: the counter and today’s drinks.' },
+              { screen: `<div style="position:relative;flex:1;display:flex;flex-direction:column"><div class="ui-m-bar" style="position:absolute;left:0;right:0;top:0;z-index:1">Water</div>${body(3)}</div>`, log: 'topBar = { TopAppBar(title = { Text("Water") }) }', say: 'Add a top bar. It is drawn over the top of the content, and the counter disappears under it.' },
+              { screen: `${bar}${body(3)}`, log: 'Column(modifier = Modifier.padding(innerPadding))', say: 'Pass <code>innerPadding</code> to the content. It starts below the bar now.' },
+              { screen: `${bar}${body(3)}${fab}`, log: 'floatingActionButton = { FloatingActionButton(...) { ... } }', say: 'The FAB slot puts the button in the bottom corner, above the content.' },
+              { tap: '.ui-m-fab', screen: `${bar}${body(4)}${fab}`, log: 'onClick → drinks.add(Drink(4, 250))', say: 'Tapping the FAB runs its <code>onClick</code>. It adds a drink, and the counter and the list show it.' },
+            ],
+          });
+        },
+        code: `@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArticleRow(article: Article, onClick: () -> Unit) {
-    Row(Modifier.clickable(onClick = onClick).padding(12.dp)) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalPlatformContext.current)
-                .data(article.imageUrl)              // String?; null shows the fallback
-                .crossfade(true)
-                .build(),
-            contentDescription = article.imageAlt,   // "Lighthouse at dusk"
-            placeholder = painterResource(R.drawable.image_placeholder),
-            error = painterResource(R.drawable.image_broken),
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp)),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(article.title, style = MaterialTheme.typography.titleMedium)
+fun WaterScreen() {
+    val drinks = remember { mutableStateListOf<Drink>() }
+    var nextId by remember { mutableStateOf(1) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("Water") })
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                drinks.add(Drink(id = nextId, ml = 250))
+                nextId++                      // the next drink gets a new id
+            }) {
+                Icon(painterResource(R.drawable.ic_add), contentDescription = "Add a glass")
+            }
+        },
+    ) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
+            Text("\${drinks.size} of 8 glasses", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            DrinkList(drinks, onDelete = { drink -> drinks.remove(drink) })
+        }
     }
-}`,
-        remember: 'AsyncImage with a URL, a placeholder, an error painter and a real contentDescription. Coil sizes and caches it for you.',
+}
+// (the goal field from the text fields lesson is left out to keep this short)`,
+        remember: 'Scaffold(topBar = { ... }, floatingActionButton = { ... }) { innerPadding -> ... }, and always use innerPadding.',
         terms: [
-          { term: 'AsyncImage', def: 'Coil’s composable that runs an image request in the background and draws the result, a placeholder or an error painter.' },
-          { term: 'ImageRequest', def: 'A Coil object that describes one load: the data (URL), crossfade, size and cache options.' },
-          { term: 'Memory cache', def: 'Coil’s in-memory store of recently decoded bitmaps. A hit draws the image in the same frame, with no crossfade.' },
-          { term: 'Disk cache', def: 'Coil’s on-disk store of downloaded image bytes. It survives an app restart, so the network is not needed again.' },
+          { term: 'Scaffold', def: 'A ready-made screen layout with slots for a top bar, a floating action button and the content.' },
+          { term: 'slot', def: 'A parameter that takes a piece of UI as a lambda, like <code>topBar = { ... }</code>.' },
+          { term: 'FAB', def: 'Floating action button: a square button with rounded corners for the screen’s main action, made with <code>FloatingActionButton</code>.' },
+          { term: 'innerPadding', def: 'The space the bars take, status bar included, handed to the content. Apply it with <code>Modifier.padding(innerPadding)</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Show a grey box while loading, a broken-image icon on failure, and fill the square without stretching.', code: 'AsyncImage(\n    model = article.imageUrl,\n    contentDescription = article.imageAlt,\n    [[placeholder]] = painterResource(R.drawable.image_placeholder),\n    [[error]] = painterResource(R.drawable.image_broken),\n    contentScale = ContentScale.[[Crop]],\n    modifier = Modifier.size(96.dp),\n)', why: '<code>placeholder</code> draws during loading and <code>error</code> after a failure. <code>ContentScale.Crop</code> fills the square and trims the edges, keeping the aspect ratio.' },
-          { type: 'bug', prompt: 'Every image shows the error painter, even with a working URL. Tap the wrong line.', code: 'AsyncImage(\n    model = ImageRequest.Builder(LocalPlatformContext.current)\n        .data(article.imageUrl)\n        .crossfade(true),\n    contentDescription = article.imageAlt,\n    modifier = Modifier.size(96.dp),\n)', bug: 3, fix: '        .crossfade(true).build(),', why: '<code>model</code> is <code>Any?</code>, so passing the builder compiles. Coil then treats the builder itself as the data, finds no fetcher for it, and the request fails. Call <code>build()</code>.' },
+          { type: 'blank', prompt: 'Give the History screen a top bar titled “History”.', code: `Scaffold(
+    [[topBar]] = {
+        [[TopAppBar]](title = { Text("History") })
+    },
+) { innerPadding ->
+    LazyColumn(modifier = Modifier.padding(innerPadding)) {
+        items(days) { day -> Text(day) }
+    }
+}`, why: 'The <code>topBar</code> slot holds a <code>TopAppBar</code>, whose <code>title</code> is another slot with a <code>Text</code>.' },
+          { type: 'bug', prompt: 'The first day in the list is always hidden behind the top bar. Tap the line to change.', code: `Scaffold(
+    topBar = { TopAppBar(title = { Text("History") }) },
+) { innerPadding ->
+    LazyColumn {
+        items(days) { day -> Text(day) }
+    }
+}`, bug: 3, fix: '    LazyColumn(modifier = Modifier.padding(innerPadding)) {', why: 'The content must use <code>innerPadding</code>, or it starts at the very top, under the bar.' },
         ],
         quiz: [
-          { q: 'You scroll an image off screen and straight back. Where does Coil get it?', options: ['From the network again', 'From the memory cache, drawn at once with no crossfade', 'From the disk cache, with a crossfade'], a: 1, why: 'The decoded bitmap is still in the memory cache. Coil skips the crossfade for memory hits because there is nothing to wait for.' },
-          { q: 'The model is <code>null</code> and you set only <code>placeholder</code> and <code>error</code>. What is drawn?', options: ['The placeholder, forever', 'The error painter', 'Nothing'], a: 1, why: 'A null model shows <code>fallback</code>, and <code>fallback</code> defaults to <code>error</code>.' },
-          { q: 'A Coil 3 app shows the error painter for every https URL. The URLs work in a browser. Likely cause?', options: ['The disk cache is full', 'The <code>coil-network-okhttp</code> (or Ktor) artifact is missing', 'crossfade is off'], a: 1, why: 'Since Coil 3 the core artifacts cannot load from the network. You add one of the network artifacts.' },
-          { q: 'You show a 4000 × 3000 photo in a 96 dp box with <code>Image(rememberAsyncImagePainter(url), …)</code>. What does Coil decode?', options: ['About 96 dp worth of pixels, because the painter reads the box size', 'The full original size, because the painter cannot see the layout', 'Nothing until you add <code>crossfade(true)</code>'], a: 1, why: 'Without a size resolver the painter loads the original, about 48 MB decoded. <code>AsyncImage</code> waits for its constraints and decodes near the drawn size.' },
-          { q: 'A row with an image scrolls out of a LazyColumn before the download finishes. What happens to the request?', options: ['Its job is cancelled when the painter leaves the composition', 'It finishes in the background and fills the disk cache', 'It is paused and resumes when the row returns'], a: 0, why: 'AsyncImagePainter launches the request when it enters composition and cancels it when it leaves, so fast flings do not finish unseen downloads.' },
+          { q: 'What does <code>innerPadding</code> tell you?', options: ['How much room the bars take', 'The size of the FAB', 'The space between list rows'], a: 0, why: 'Apply it to the content so nothing hides behind the bars.' },
+          { q: 'Where does a <code>FloatingActionButton</code> go?', options: ['In the <code>floatingActionButton</code> slot', 'Inside the <code>TopAppBar</code>', 'Anywhere in the content'], a: 0, why: 'The slot puts it in the bottom corner, above the content.' },
+          { q: 'Inside a Scaffold, do you still need <code>safeDrawingPadding()</code> on the content?', options: ['No: <code>innerPadding</code> already includes the status bar', 'Yes, always', 'Only in dark mode'], a: 0, why: 'Scaffold works out the room for the bars and the status bar, and hands it to you as <code>innerPadding</code>.' },
         ],
-        deeper: [
-          {
-            title: 'Decode at the size you draw',
-            body: `
-<p>A phone photo can be 4000 × 3000 pixels. At 4 bytes a pixel that is about 48 MB of memory once decoded, for a thumbnail that is 96 dp wide on screen.</p>
-<p><code>AsyncImage</code> waits for its layout constraints and asks Coil to decode near that size, so the same photo costs well under 1 MB. <code>rememberAsyncImagePainter</code> cannot see the on-screen size and loads the image at its original dimensions unless you give it a size resolver. Use <code>AsyncImage</code> unless you have a reason not to.</p>`,
-            code: `// Decodes near 96 dp × 96 dp: AsyncImage reads the constraints.
-AsyncImage(model = url, contentDescription = null, modifier = Modifier.size(96.dp))
+        docs: [['Scaffold', 'https://developer.android.com/develop/ui/compose/components/scaffold'], ['App bars', 'https://developer.android.com/develop/ui/compose/components/app-bars']],
+      },
 
-// Decodes at the original size: the painter cannot see the layout.
-Image(painter = rememberAsyncImagePainter(url), contentDescription = null, modifier = Modifier.size(96.dp))`,
-            visual(el) {
-              const ROWS = 10, FULL = 48, SMALL = 0.6;
-              let mode = 'async', rows = 1;
-              const fill = h('span', { style: 'width:0%' });
-              const meter = h('div', { class: 'meter cmp-im-meter' }, fill);
-              const mb = h('div', { class: 'cmp-label' });
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              const btns = [
-                cmd('AsyncImage(model = url)', () => set('async')),
-                cmd('rememberAsyncImagePainter(url)', () => set('painter')),
-              ];
-              function paint() {
-                const per = mode === 'async' ? SMALL : FULL;
-                const total = per * rows;
-                const cap = 256;
-                fill.style.width = `${Math.min(100, (total / cap) * 100)}%`;
-                meter.classList.toggle('cmp-im-hot', total > cap * 0.75);
-                mb.textContent = `${rows} row${rows > 1 ? 's' : ''} × ${mode === 'async' ? 'under 1 MB' : 'about 48 MB'} = ${mode === 'async' ? `under ${rows} MB` : `about ${total} MB`} of bitmaps`;
-                read.innerHTML = hl(mode === 'async'
-                  ? '// size comes from the constraints (96.dp)\ndecoded ≈ thumbnail size'
-                  : '// no size resolver\ndecoded = 4000 × 3000 (original)');
-              }
-              function set(m) {
-                mode = m; btns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (m === 'async' ? 0 : 1)))); paint(); replay(meter, 'pop-soft');
-                say(o, m === 'async'
-                  ? '<span class="good">AsyncImage</span> decodes near the drawn size. Ten rows still fit easily.'
-                  : '<span class="bad">rememberAsyncImagePainter</span> without a size decodes the full photo. Show ten rows and memory runs out.');
-              }
-              const more = act('Show 10 rows', () => { rows = rows === 1 ? ROWS : 1; more.textContent = rows === 1 ? 'Show 10 rows' : 'Show 1 row'; paint(); });
-              el.append(h('div', { class: 'controls' }, btns, more), meter, mb, read, o);
-              set('async');
+      {
+        id: 'theming',
+        title: 'Theming',
+        tagline: 'Pick colors and text styles once; the whole app follows, even in dark mode.',
+        goals: ['Give the app its own colors with <code>lightColorScheme</code> and <code>darkColorScheme</code>', 'Read colors and text styles from <code>MaterialTheme</code>', 'Make a screen that really turns dark in dark mode'],
+        level: 'beginner', introduces: ['MaterialTheme', 'colorScheme', 'typography', 'isSystemInDarkTheme', 'lightColorScheme', 'darkColorScheme', 'Color', 'Surface', 'dynamicColor'],
+        body: `
+<p>The water tracker should be water blue, and turn dark at night when the phone is in dark mode. Writing a color into every <code>Text</code> by hand means changing it in fifty places, and twice for dark mode.</p>
+<p>A new Android Studio project already has a <em>theme</em> in <code>ui/theme/Theme.kt</code>, named after the project: <code>HelloTheme</code> in the Hello project from the Android lessons. For a project called Water it is <code>WaterTheme</code>, and <code>setContent</code> wraps your screen in it. Inside, it calls <code>MaterialTheme(colorScheme = ...)</code>. <code>lightColorScheme(primary = Color(0xFF00639B))</code> sets your own colors: <code>Color(0xFF00639B)</code> is a color written as a hex number, as on web pages (<code>FF</code> means fully visible, then red <code>00</code>, green <code>63</code>, blue <code>9B</code>). Roles you leave out keep Material’s default colors.</p>
+<p>The colors have <em>roles</em> instead of names like “blue”: <code>primary</code> for the main accent, <code>surface</code> and <code>background</code> for what is behind your content, and <code>onPrimary</code> or <code>onSurface</code> for text drawn on top of them. Material parts like <code>Button</code> and <code>TopAppBar</code> use them on their own. Your own UI reads them: <code>color = MaterialTheme.colorScheme.primary</code>, <code>style = MaterialTheme.typography.headlineSmall</code>. Something must also paint the background: <code>Scaffold</code> and <code>Surface</code> do, and they make plain <code>Text</code> inside them use the matching “on” color.</p>
+<p><code>isSystemInDarkTheme()</code> is <code>true</code> when the phone is in dark mode, and the theme then picks the dark set (<code>darkColorScheme</code>). A color written by hand, like <code>Color.Black</code>, never changes. One surprise: the template’s theme has <code>dynamicColor = true</code>, so on Android 12 and newer it takes its colors from the phone’s wallpaper instead of yours. Set it to <code>false</code> in <code>Theme.kt</code> to see your blue.</p>`,
+        visual(el) {
+          const L = { bg: '#F8F9FF', ink: '#191C20', pri: '#00639B', onPri: '#FFFFFF', fab: '#CEE5FF', onFab: '#001D33' };
+          const D = { bg: '#101418', ink: '#E0E2E8', pri: '#94CCFF', onPri: '#003353', fab: '#004A76', onFab: '#CEE5FF' };
+          const W = { bg: '#F7FBF1', ink: '#191D17', pri: '#3B6939', onPri: '#FFFFFF', fab: '#BCF0B4', onFab: '#002204' };
+          // c: colors, black: add the hand-written line, fixed: that line uses a role, raw: no Scaffold (nothing paints)
+          const scr = (c, { black, fixed, raw } = {}) => {
+            const bg = raw ? '#FFFFFF' : c.bg, ink = raw ? '#000000' : c.ink;
+            return `<div style="flex:1;position:relative;display:flex;flex-direction:column;background:${bg};color:${ink}">${raw ? '' : `<div class="ui-m-bar" style="background:${c.bg};color:${c.ink};border-bottom:1px solid rgba(127,127,127,0.25)">Water</div>`}<div class="ui-m-body"><b style="font-size:1.05rem">3 of 8 glasses</b><span style="color:${c.pri};font-weight:700">Goal: 8</span>${black ? `<span style="color:${fixed ? c.ink : '#000000'}">Best day: 9 glasses</span>` : ''}<span class="ui-m-btn" style="background:${c.pri};color:${c.onPri}">Reset</span></div>${raw ? '' : `<span class="ui-m-fab" style="background:${c.fab};color:${c.onFab}">+</span>`}</div>`;
+          };
+          Lab.ui.phone(el, {
+            logTitle: 'Where the colors come from',
+            predict: {
+              q: 'One <code>Text</code> uses <code>color = Color.Black</code>. The phone switches to dark mode. What happens to that text?',
+              options: ['It stays black, on a dark background', 'It turns white by itself', 'It disappears from the screen'],
+              a: 0,
+              why: 'A color written by hand never changes. Only colors read from the theme follow dark mode.',
             },
-          },
-          {
-            title: 'Describe the picture, or say nothing',
-            body: `
-<p>TalkBack reads <code>contentDescription</code> aloud. Write what the image shows, in the user’s language, from a string resource so it gets translated. A news photo gets a description. A decorative divider or a background pattern gets <code>null</code>, so TalkBack skips it.</p>
-<p>Don’t write “image” or the file name. When the text next to the image already says everything, the image is decoration too.</p>`,
-            code: `// Meaningful: say what it shows
-AsyncImage(
-    model = author.photoUrl,
-    contentDescription = stringResource(R.string.cd_author_photo, author.name),  // "Maya’s photo"
+            frames: [
+              { screen: scr(L), log: ['isSystemInDarkTheme() = false', 'colorScheme = WaterLight'], say: 'Light mode, inside a Scaffold. The goal uses <code>colorScheme.primary</code>, the Button and the FAB take theme colors by themselves.' },
+              { screen: scr(D), log: ['isSystemInDarkTheme() = true', 'colorScheme = WaterDark'], say: 'The user turns on dark mode. The theme swaps the whole color scheme, and the Scaffold paints the dark background. No change to your screen code.' },
+              { screen: scr(D, { raw: true }), log: '// same, without Scaffold or Surface', say: 'The same screen as a plain <code>Column</code>, with no Scaffold or Surface. Nothing paints the background, and plain Text stays black. Only the Button follows the theme.' },
+              { screen: scr(L, { black: true }), log: '+ Text("Best day: 9 glasses", color = Color.Black)', say: 'Back in the Scaffold. Now add a line with a color written by hand. In light mode it looks fine.' },
+              { screen: scr(D, { black: true }), log: 'Color.Black stays black', say: 'In dark mode it stays black on a near-black background: almost invisible.' },
+              { screen: scr(D, { black: true, fixed: true }), log: 'color = MaterialTheme.colorScheme.onSurface', say: 'Use a role instead, or leave the color out. <code>onSurface</code> means “text on a surface”: dark in light mode, light in dark mode.' },
+              { screen: scr(W, { black: true, fixed: true }), log: ['Android 12+, dynamicColor = true', 'colors from the wallpaper'], say: 'On a phone with a green wallpaper, the template’s <code>dynamicColor = true</code> picks green instead of your blue. Set it to <code>false</code> to use your own colors.' },
+            ],
+          });
+        },
+        code: `// ui/theme/Theme.kt (shortened)
+private val WaterLight = lightColorScheme(
+    primary = Color(0xFF00639B),             // water blue
+    primaryContainer = Color(0xFFCEE5FF),    // the FAB's color
+)
+private val WaterDark = darkColorScheme(
+    primary = Color(0xFF94CCFF),
+    primaryContainer = Color(0xFF004A76),
 )
 
-// Decorative: the headline next to it already says it all
-AsyncImage(model = article.bannerUrl, contentDescription = null)`,
-          },
-          {
-            title: 'One ImageLoader for the whole app',
-            body: `
-<p><code>AsyncImage</code> uses a singleton <code>ImageLoader</code>. Each loader owns its own memory cache, disk cache and HTTP client, so make one and share it. On Android, implement <code>SingletonImageLoader.Factory</code> on your <code>Application</code> to set app-wide defaults such as crossfade and the cache sizes.</p>`,
-            code: `class NewsApp : Application(), SingletonImageLoader.Factory {
-    override fun newImageLoader(context: PlatformContext): ImageLoader =
-        ImageLoader.Builder(context)
-            .crossfade(true)                               // default for every request
-            .memoryCache {
-                MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)         // share of app memory
-                    .build()
-            }
-            .diskCache {
-                DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("image_cache"))
-                    .maxSizePercent(0.02)                  // share of free disk space
-                    .build()
-            }
-            .build()
-}`,
-          },
-        ],
-        underHood: {
-          body: `
-<p><code>AsyncImage</code> creates an <code>AsyncImagePainter</code>. When the painter enters composition it launches the request in a coroutine. When it leaves composition, for example when a row scrolls out of a lazy list, that job is cancelled, so a fast fling does not finish downloads nobody will see.</p>
-<p>The request walks the caches in order: memory cache (decoded bitmap), then disk cache (raw bytes, decoded again), then the network (bytes saved to disk, decoded, then saved in memory). The crossfade is skipped when the memory cache answers, because the image is ready on the first frame.</p>`,
-        },
+@Composable
+fun WaterTheme(content: @Composable () -> Unit) {   // content: the UI in its braces
+    val colors = if (isSystemInDarkTheme()) WaterDark else WaterLight
+    MaterialTheme(colorScheme = colors, content = content)
+}
+// The template's version also has dynamicColor = true, which uses the
+// wallpaper's colors on Android 12 and newer. Set it to false.
+
+// In MainActivity
+setContent {
+    WaterTheme {
+        WaterScreen()      // its Scaffold paints the background
+    }
+}
+
+// In WaterScreen
+Text("\${drinks.size} of 8 glasses", style = MaterialTheme.typography.headlineSmall)
+Text("Goal: 8", color = MaterialTheme.colorScheme.primary)`,
+        remember: 'Read colors and text styles from MaterialTheme, put the screen in a Scaffold or Surface, and dark mode works.',
         mistakes: [
-          {
-            title: 'Only the Compose artifact',
-            bad: `implementation("io.coil-kt.coil3:coil-compose:3.6.3")`,
-            good: `implementation("io.coil-kt.coil3:coil-compose:3.6.3")
-implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")`,
-            why: 'Coil 3 moved network loading out of the core. Without a network artifact every http and https URL fails and you only ever see the error painter.',
-          },
-          {
-            title: 'SubcomposeAsyncImage in a long list',
-            bad: `items(articles, key = { it.id }) { a ->
-    SubcomposeAsyncImage(
-        model = a.imageUrl,
-        loading = { CircularProgressIndicator() },
-        contentDescription = a.imageAlt,
-    )
-}`,
-            good: `items(articles, key = { it.id }) { a ->
-    AsyncImage(
-        model = a.imageUrl,
-        placeholder = painterResource(R.drawable.image_placeholder),
-        contentDescription = a.imageAlt,
-    )
-}`,
-            why: 'SubcomposeAsyncImage composes its slots during layout, which is slower than normal composition. Coil’s docs advise against it in performance-critical places such as lazy lists. A placeholder painter is cheap.',
-          },
-          {
-            title: 'A useless description',
-            bad: `AsyncImage(model = article.imageUrl, contentDescription = "image")`,
-            good: `AsyncImage(model = article.imageUrl, contentDescription = article.imageAlt)`,
-            why: 'TalkBack reads “image”, which tells the user nothing. Describe what the picture shows, or pass null if it is decoration.',
-          },
+          { title: 'A screen with nothing behind it', bad: `setContent {
+    WaterTheme {
+        Column {
+            Text("3 of 8 glasses")
+        }
+    }
+}
+// dark mode: white background, black text`, good: `setContent {
+    WaterTheme {
+        Surface {
+            Column {
+                Text("3 of 8 glasses")
+            }
+        }
+    }
+}
+// dark mode: dark background, light text`, why: 'A <code>Column</code> paints nothing. <code>Surface</code> (or <code>Scaffold</code>) paints the theme’s color and makes the text inside it the matching “on” color.' },
         ],
-        visual(el) {
-          const URL = 'https://cdn.example.com/lighthouse.jpg';
-          let ph = true, cf = true, busy = false, model = URL;
-          const mem = new Set(), disk = new Set();
-          const pic = h('div', { class: 'cmp-im-pic', 'aria-hidden': 'true' }, h('i', { class: 'cmp-im-sun' }), h('i', { class: 'cmp-im-tower' }));
-          const phLayer = h('div', { class: 'cmp-im-ph' }, 'placeholder');
-          const errLayer = h('div', { class: 'cmp-im-err' }, h('b', {}, '⚠'), 'error');
-          const frame = h('div', { class: 'cmp-im-frame' }, phLayer, pic, errLayer);
-          const row = h('div', { class: 'cmp-im-row' }, frame, h('div', { class: 'cmp-im-text' }, h('b', {}, 'Lighthouse at dusk'), h('small', {}, 'Travel · 3 min read')));
-          const stage = (name, sub) => {
-            const pill = h('span', { class: 'cmp-im-pill' }, 'empty');
-            const n = h('div', { class: 'cmp-im-stage' }, h('b', {}, name), h('small', {}, sub), pill);
-            return Object.assign(n, { pill });
-          };
-          const sMem = stage('Memory cache', 'decoded bitmaps');
-          const sDisk = stage('Disk cache', 'downloaded bytes');
-          const sNet = stage('Network', 'cdn.example.com');
-          sNet.pill.textContent = 'origin';
-          const stages = [sMem, sDisk, sNet];
-          const stateLine = h('div', { class: 'cmp-label cmp-im-state' });
-          const read = h('div', { class: 'kt' });
-          const o = out();
-          const paintRead = () => {
-            read.innerHTML = hl(`AsyncImage(\n    model = ImageRequest.Builder(context)\n        .data(${model === null ? 'null' : model === 'bad' ? '"…/missing.jpg"' : 'url'})\n        .crossfade(${cf})\n        .build(),\n    placeholder = ${ph ? 'painterResource(R.drawable.ph)' : 'null'},\n    error = painterResource(R.drawable.broken),\n    contentDescription = "Lighthouse at dusk",\n)`);
-          };
-          const paintCaches = () => {
-            sMem.pill.textContent = mem.size ? 'lighthouse.jpg' : 'empty';
-            sDisk.pill.textContent = disk.size ? 'lighthouse.jpg' : 'empty';
-            sMem.pill.classList.toggle('cmp-im-has', mem.size > 0);
-            sDisk.pill.classList.toggle('cmp-im-has', disk.size > 0);
-          };
-          const setState = s => { stateLine.textContent = `painter.state = ${s}`; };
-          const calm = () => stages.forEach(s => s.classList.remove('cmp-im-on', 'cmp-im-hit', 'cmp-im-miss'));
-          function show(layer, fade) {
-            [phLayer, pic, errLayer].forEach(l => { l.classList.remove('cmp-im-show'); l.style.transition = 'none'; });
-            if (!layer) return;
-            void layer.offsetWidth;
-            layer.style.transition = fade ? 'opacity 0.9s ease' : 'none';
-            layer.classList.add('cmp-im-show');
-          }
-          const check = async (s, ms, hit) => {
-            calm(); s.classList.add('cmp-im-on');
-            await sleep(ms);
-            if (!el.isConnected) return false;
-            s.classList.remove('cmp-im-on'); s.classList.add(hit ? 'cmp-im-hit' : 'cmp-im-miss');
-            return true;
-          };
-          async function load(m) {
-            if (busy) return; busy = true;
-            model = m; paintRead(); calm();
-            if (m === null) {
-              show(errLayer, false); setState('Error (fallback)');
-              say(o, `${hl('model = null')} <span class="muted">// no request at all. fallback defaults to the error painter.</span>`);
-              busy = false; return;
-            }
-            const key = m === URL ? 'lighthouse' : 'bad';
-            if (mem.has(key)) {
-              await check(sMem, 160, true); if (!el.isConnected) return;
-              show(pic, false); setState('Success(dataSource = MEMORY_CACHE)');
-              say(o, '<span class="good">memory cache hit:</span> drawn in the first frame. No crossfade, because there was nothing to wait for.');
-              busy = false; return;
-            }
-            show(ph ? phLayer : null, false); setState('Loading');
-            if (!await check(sMem, 260, false)) return;
-            if (disk.has(key)) {
-              if (!await check(sDisk, 500, true)) return;
-              mem.add(key); paintCaches();
-              show(pic, cf); setState('Success(dataSource = DISK)');
-              say(o, `<span class="good">disk cache hit:</span> no network. Coil decoded the saved bytes and put the bitmap in memory. ${cf ? '<span class="muted">Crossfade (slowed down here).</span>' : ''}`);
-              busy = false; return;
-            }
-            if (!await check(sDisk, 260, false)) return;
-            calm(); sNet.classList.add('cmp-im-on');
-            say(o, `<span class="muted">downloading… ${ph ? 'the placeholder holds the space.' : 'no placeholder: the box is empty.'}</span>`);
-            await sleep(1300); if (!el.isConnected) return;
-            sNet.classList.remove('cmp-im-on');
-            if (key === 'bad') {
-              sNet.classList.add('cmp-im-miss'); replay(sNet, 'shake');
-              show(errLayer, cf); setState('Error(HTTP 404)');
-              say(o, '<span class="bad">404:</span> the error painter replaces the placeholder. Nothing is cached.');
-              busy = false; return;
-            }
-            sNet.classList.add('cmp-im-hit');
-            disk.add(key); mem.add(key); paintCaches();
-            show(pic, cf); setState('Success(dataSource = NETWORK)');
-            say(o, `<span class="good">network:</span> bytes saved to disk, bitmap saved in memory. ${cf ? 'The image fades in over the placeholder <span class="muted">(slowed down here)</span>.' : 'crossfade(false): the image pops in.'}`);
-            busy = false;
-          }
-          function scrollBack() {
-            if (busy) return;
-            show(null); setState('Empty'); calm();
-            say(o, '<span class="muted">The row left composition, then came back. AsyncImage asks again…</span>');
-            setTimeout(() => load(URL), 350);
-          }
-          function restart() {
-            if (busy) return;
-            mem.clear(); paintCaches(); show(null); calm(); setState('Empty');
-            replay(sMem, 'shake');
-            say(o, 'The process died: the memory cache is gone. The disk cache is still there. Load the photo again.');
-          }
-          const sw = (id, label, on, fn) => {
-            const i = h('input', { type: 'checkbox', id, checked: on });
-            i.addEventListener('change', () => { fn(i.checked); paintRead(); });
-            return h('label', { class: 'switch', for: id }, i, label);
-          };
-          paintRead(); paintCaches(); setState('Empty');
-          say(o, 'Load the photo, scroll it away and back, then restart the app and load it again.');
-          el.append(
-            h('div', { class: 'controls' },
-              cmd('load(url)', () => load(URL)),
-              act('Scroll away and back', scrollBack),
-              act('Restart the app', restart)),
-            h('div', { class: 'controls' },
-              cmd('load("…/missing.jpg")', () => load('bad')),
-              cmd('load(null)', () => load(null)),
-              sw('cmp-im-phon', 'placeholder', true, v => { ph = v; }),
-              sw('cmp-im-cfon', 'crossfade(true)', true, v => { cf = v; })),
-            h('div', { class: 'cmp-im-wrap' },
-              h('div', { class: 'cmp-im-left' }, row, stateLine),
-              h('div', { class: 'cmp-im-pipe' }, sMem, h('span', { class: 'arrow' }, '↓'), sDisk, h('span', { class: 'arrow' }, '↓'), sNet)),
-            read, o);
-        },
-        predict: {
-          q: 'You load the photo, then restart the app and load it again. Where does Coil get it this time?',
-          options: ['The memory cache', 'The disk cache', 'The network again'],
-          a: 1,
-          why: 'The memory cache dies with the process. The disk cache keeps the downloaded bytes, so after a restart Coil reads and decodes them from disk.',
-        },
+        terms: [
+          { term: 'theme', def: 'The colors and text styles of the whole app, set once with <code>MaterialTheme</code> and read everywhere inside it.' },
+          { term: 'color role', def: 'A color named by its job, such as <code>primary</code> or <code>onSurface</code> (“text on a surface”), not by its shade.' },
+          { term: 'Surface', def: 'A composable that paints a theme color behind its content and sets the text color to match. <code>Scaffold</code> does the same for a whole screen.' },
+          { term: 'dynamic color', def: 'On Android 12 and newer, colors taken from the phone’s wallpaper. The template turns it on with <code>dynamicColor = true</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show the counter in the theme’s headline style and the goal in the primary color.', code: `Text("3 of 8 glasses", style = MaterialTheme.[[typography]].headlineSmall)
+Text("Goal: 8", color = MaterialTheme.[[colorScheme]].primary)`, why: 'Text styles live in <code>typography</code>, colors in <code>colorScheme</code>.' },
+          { type: 'bug', prompt: 'In dark mode one line is almost invisible. Tap it.', code: `Column {
+    Text("3 of 8 glasses", style = MaterialTheme.typography.headlineSmall)
+    Text("Best day: 9 glasses", color = Color.Black)
+    Button(onClick = onReset) { Text("Reset") }
+}`, bug: 2, fix: '    Text("Best day: 9 glasses", color = MaterialTheme.colorScheme.onSurface)', why: '<code>Color.Black</code> never changes. <code>onSurface</code> is dark in light mode and light in dark mode.' },
+        ],
+        quiz: [
+          { q: 'You set <code>primary</code> to water blue, but on your Android 14 phone the buttons are green. Why?', options: ['<code>dynamicColor</code> is on, so the colors come from the wallpaper', 'Android 14 can’t show blue', 'The hex number is wrong'], a: 0, why: 'The template turns on dynamic color for Android 12 and newer. Set <code>dynamicColor</code> to <code>false</code> to see your own colors.' },
+          { q: 'What is <code>onPrimary</code> for?', options: ['Text and icons drawn on top of the primary color', 'A brighter primary color', 'The color of the top bar only'], a: 0, why: '“On” roles are for content that sits on top of the matching color, so it stays readable.' },
+          { q: 'Dark mode is on, but your screen stays white. What is missing?', options: ['A <code>Scaffold</code> or <code>Surface</code> to paint the background', 'A call to <code>isSystemInDarkTheme()</code> in every Text', 'Nothing: screens are always white'], a: 0, why: 'The theme only holds the colors. <code>Scaffold</code> or <code>Surface</code> paints them behind your content.' },
+        ],
+        docs: [['Material Design 3 in Compose', 'https://developer.android.com/develop/ui/compose/designsystems/material3']],
       },
 
-      // 12 ─────────────────────────────────────────────
+      {
+        id: 'overlays',
+        title: 'Dialogs and sheets',
+        tagline: 'Ask before resetting, offer choices from the bottom.',
+        goals: ['Show an <code>AlertDialog</code> controlled by a Boolean state', 'Close it from its buttons and from <code>onDismissRequest</code>', 'Show a <code>ModalBottomSheet</code> with a few choices'],
+        level: 'beginner', introduces: ['AlertDialog', 'onDismissRequest', 'confirmButton', 'dismissButton', 'ModalBottomSheet'],
+        body: `
+<p>The water screen’s Reset button removes all of today’s drinks, and that can’t be undone. So the app should ask first: “Reset today?” That question appears in a <em>dialog</em>, a small box over the screen. And not every drink is a 250 ml glass: when the user taps the FAB, a <em>bottom sheet</em>, a panel that slides up from the bottom, can offer “Glass, 250 ml” or “Bottle, 500 ml”.</p>
+<p>In Compose, a dialog is a composable like any other: it is on screen while you call it. So you control it with a Boolean state, <code>var showDialog by remember { mutableStateOf(false) }</code>, and write <code>if (showDialog) { AlertDialog(...) }</code>. The Reset button sets it to <code>true</code>.</p>
+<p><code>AlertDialog</code> has slots for <code>title</code>, <code>text</code>, <code>confirmButton</code> and <code>dismissButton</code>, usually filled with a <code>TextButton</code>. <code>onDismissRequest</code> runs when the user taps outside the dialog or presses Back. Compose never closes the dialog for you: each of these must set <code>showDialog = false</code>.</p>
+<p><code>ModalBottomSheet(onDismissRequest = { showSheet = false }) { ... }</code> works the same way. When the user swipes it down or taps outside, it slides away and then calls <code>onDismissRequest</code>. It is marked experimental, so it needs the <code>@OptIn</code> line from the Scaffold lesson.</p>`,
+        visual(el) {
+          const scr = (rows) => `<div class="ui-m-bar">Water</div><div class="ui-m-body"><b>${rows.length} of 8 glasses</b>${rows.map(t => `<div class="ui-m-row"><div>${t}</div></div>`).join('')}<span class="ui-m-btn ghost rs">Reset</span></div><span class="ui-m-fab">+</span>`;
+          const three = ['#1 · 250 ml', '#2 · 500 ml', '#3 · 250 ml'];
+          const dialog = `<div class="ui-m-scrim out"><div class="ui-m-dialog"><b>Reset today?</b><span class="ui-m-muted">This removes all of today’s drinks.</span><div style="display:flex;justify-content:flex-end;gap:14px"><span class="cancel" style="color:var(--accent);font-weight:700">Cancel</span><span class="ok" style="color:var(--accent);font-weight:700">Reset</span></div></div></div>`;
+          const sheet = `<div class="ui-m-scrim"></div><div class="ui-m-sheet"><b>Add a drink</b><div class="ui-m-row"><div style="color:var(--accent);font-weight:700">Glass, 250 ml</div></div><div class="ui-m-row b500"><div style="color:var(--accent);font-weight:700">Bottle, 500 ml</div></div></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'State and callbacks',
+            predict: {
+              q: 'Suppose <code>onDismissRequest = { }</code> is left empty. The user taps outside the dialog. What happens?',
+              options: ['The dialog stays open', 'The dialog closes anyway', 'The app crashes'],
+              a: 0,
+              why: 'The dialog shows while <code>showDialog</code> is true. Only your code can set it back to false.',
+            },
+            frames: [
+              { screen: scr(three), log: 'showDialog = false', say: 'Three drinks so far. The dialog isn’t called, because <code>showDialog</code> is false.' },
+              { tap: '.rs', screen: scr(three) + dialog, log: ['Reset onClick → showDialog = true', 'if (showDialog) → AlertDialog(...) is called'], say: 'Reset sets the state to true. The screen recomposes, the <code>if</code> is true, and the dialog appears.' },
+              { tap: '.out', screen: scr(three), log: ['tap outside → onDismissRequest()', 'showDialog = false'], say: 'A tap outside calls <code>onDismissRequest</code>. It sets the state to false, so the dialog is no longer called. The drinks are safe.' },
+              { tap: '.rs', screen: scr(three) + dialog, log: 'Reset onClick → showDialog = true', say: 'The user taps Reset again.' },
+              { tap: '.ok', screen: scr([]), log: ['confirmButton onClick:', 'showDialog = false', 'onReset() → drinks.clear()'], say: 'This time they confirm. The confirm button closes the dialog, then resets the day.' },
+              { tap: '.ui-m-fab', screen: scr([]) + sheet, log: 'FAB onClick → showSheet = true', say: 'The FAB now opens a bottom sheet. It follows the same rule: on screen while <code>showSheet</code> is true.' },
+              { tap: '.b500', screen: scr(['#4 · 500 ml']), log: ['onPick(500) → drinks.add(...)', 'showSheet = false'], say: 'Picking the bottle adds a 500 ml drink and sets <code>showSheet</code> to false. Swiping the sheet down would call its <code>onDismissRequest</code> instead.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun ResetButton(onReset: () -> Unit) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    OutlinedButton(onClick = { showDialog = true }) { Text("Reset") }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },   // tap outside or Back
+            title = { Text("Reset today?") },
+            text = { Text("This removes all of today's drinks.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDialog = false
+                    onReset()
+                }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SizeSheet(onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        TextButton(onClick = { onPick(250) }) { Text("Glass, 250 ml") }
+        TextButton(onClick = { onPick(500) }) { Text("Bottle, 500 ml") }
+    }
+}
+
+// In WaterScreen, the FAB sets showSheet = true, and:
+// if (showSheet) {
+//     SizeSheet(
+//         onPick = { ml ->
+//             drinks.add(Drink(id = nextId, ml = ml))
+//             nextId++
+//             showSheet = false
+//         },
+//         onDismiss = { showSheet = false },
+//     )
+// }
+// ResetButton(onReset = { drinks.clear() })   // clear() empties the list`,
+        remember: 'A dialog or sheet is on screen while you call it: if (show) { AlertDialog(...) }, and every way out sets show = false.',
+        mistakes: [
+          { title: 'Forgetting @OptIn for the sheet', bad: `@Composable
+fun SizeSheet(onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) { ... }
+}
+// error: This material API is experimental and is likely
+// to change or to be removed in the future.`, good: `@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SizeSheet(onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) { ... }
+}`, why: 'Experimental parts don’t compile until you accept them with <code>@OptIn</code>. The error text is the warning the Material team wrote.' },
+        ],
+        terms: [
+          { term: 'dialog', def: 'A small box over the screen that asks a question, made with <code>AlertDialog</code>.' },
+          { term: 'bottom sheet', def: 'A panel that slides up from the bottom of the screen, made with <code>ModalBottomSheet</code>.' },
+          { term: 'onDismissRequest', def: 'Runs when the user tries to close the dialog or sheet without a button: tapping outside, Back, or swiping a sheet down.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show the dialog only while the state is true, and close it when the user taps outside.', code: `if ([[showDialog]]) {
+    AlertDialog(
+        onDismissRequest = { showDialog = [[false]] },
+        title = { Text("Reset today?") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Reset") } },
+    )
+}`, why: 'The <code>if</code> decides whether the dialog is called. <code>onDismissRequest</code> must set the state back to false.' },
+          { type: 'bug', prompt: 'The dialog pops up the moment the screen opens, before anyone taps Reset. Tap the line to change.', code: `@Composable
+fun ResetButton(onReset: () -> Unit) {
+    var showDialog by remember { mutableStateOf(true) }
+    OutlinedButton(onClick = { showDialog = true }) { Text("Reset") }
+    if (showDialog) {
+        AlertDialog(onDismissRequest = { showDialog = false }, ...)
+    }
+}`, bug: 2, fix: '    var showDialog by remember { mutableStateOf(false) }', why: 'The state starts as <code>true</code>, so the <code>if</code> calls the dialog straight away. It should start closed.' },
+        ],
+        quiz: [
+          { q: 'How do you close an <code>AlertDialog</code>?', options: ['Set the state that controls it to false', 'Call <code>close()</code> on it', 'Compose closes it after any tap'], a: 0, why: 'It is on screen while the <code>if</code> calls it. Change the state and it is gone.' },
+          { q: 'When does <code>onDismissRequest</code> run?', options: ['When the user taps outside or presses Back', 'When the user taps the confirm button', 'When the dialog first appears'], a: 0, why: 'Buttons have their own <code>onClick</code>. <code>onDismissRequest</code> is for the other ways out.' },
+          { q: 'Which line must sit above a function that uses <code>ModalBottomSheet</code>?', options: ['<code>@OptIn(ExperimentalMaterial3Api::class)</code>', '<code>@Preview</code>', 'None'], a: 0, why: 'The bottom sheet is marked experimental, so you opt in.' },
+        ],
+        docs: [['Dialog', 'https://developer.android.com/develop/ui/compose/components/dialog'], ['Bottom sheets', 'https://developer.android.com/develop/ui/compose/components/bottom-sheets']],
+      },
+
       {
         id: 'gestures',
-        title: 'Gestures and clicks',
-        tagline: 'clickable for taps, pointerInput for everything else.',
+        title: 'Gestures',
+        tagline: 'Make anything tappable, and let the user drag it.',
+        goals: ['Make any element respond to taps with <code>clickable</code>', 'Follow a finger with <code>draggable</code>', 'Move an element with <code>offset</code>'],
+        level: 'beginner', introduces: ['clickable', 'draggable', 'rememberDraggableState', 'Orientation', 'Horizontal', 'offset', 'IntOffset', 'roundToInt', 'Float', 'mutableFloatStateOf'],
         body: `
-<p>For a plain tap, use <code>Modifier.clickable</code>. It handles the press, draws the ripple from the theme, and tells accessibility services the element can be clicked. You can pass <code>indication = null</code> to drop the ripple, but then users get no feedback when they press.</p>
-<p><code>combinedClickable</code> adds <code>onDoubleClick</code> and <code>onLongClick</code>. There is a catch. Once you set <code>onDoubleClick</code>, a single tap has to wait out the double-tap timeout before <code>onClick</code> fires, because it might still turn into a double tap.</p>
-<p>For raw gestures, use <code>Modifier.pointerInput</code> with a detector like <code>detectTapGestures</code>, which gives you the tap position, or <code>detectDragGestures</code>. These are low level: no ripple and no click semantics unless you add them. The key you pass to <code>pointerInput</code> restarts the detector when it changes.</p>`,
-        code: `@Composable
-fun PhotoCard(photo: Photo, onOpen: () -> Unit, onLike: () -> Unit, onMenu: () -> Unit) {
-    Image(
-        painter = painterResource(photo.res),
-        contentDescription = photo.title,
-        modifier = Modifier.combinedClickable(
-            onClick = onOpen,              // waits out the double-tap timeout
-            onDoubleClick = onLike,
-            onLongClick = onMenu,
-            onLongClickLabel = "Photo options",
-        ),
-    )
-}
+<p>People expect to tap the big glass picture to add a glass, not only the button. And a drink row should slide to the side when they drag it, to show a Delete button hidden behind it.</p>
+<p>A <code>Modifier</code> does more than size and space: it can also add behaviour, like reacting to taps. <code>Modifier.clickable { ... }</code> makes any composable run your lambda when tapped. It also shows the ripple effect (a soft shading that spreads from the finger) and tells screen readers like TalkBack that the element can be tapped. For a real button, still use <code>Button</code>; <code>clickable</code> is for rows, cards and pictures.</p>
+<p>For dragging, <code>Modifier.draggable(orientation = Orientation.Horizontal, state = rememberDraggableState { delta -> ... })</code> calls your lambda again and again while the finger moves. <code>delta</code> is how far it moved since the last call, in pixels: positive to the right, negative to the left. A swipe is a quick drag; making the row fly away or snap back when the finger lifts takes extra code.</p>
+<p><code>draggable</code> only notices the movement. To move the row, add the distance up in a state and shift the row with <code>Modifier.offset { IntOffset(offsetX.roundToInt(), 0) }</code>: so many pixels to the side, 0 up or down. The distance is a <code>Float</code>, a decimal number like <code>Double</code> but smaller, written <code>0f</code>. <code>roundToInt()</code> turns it into the nearest <code>Int</code> (Android Studio offers its import, <code>kotlin.math.roundToInt</code>), and <code>mutableFloatStateOf(0f)</code> is <code>mutableStateOf</code> made for Floats.</p>`,
+        visual(el) {
+          const glass = '<svg class="gl" viewBox="0 0 40 48" width="44" height="52" aria-hidden="true" style="color:var(--accent);justify-self:center"><path d="M10.6 22h18.8l-2.1 22H12.7z" fill="var(--accent-soft)"/><path d="M6 4h28l-4 40H10z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+          const swipeRow = x => `<div style="position:relative;overflow:hidden"><span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:var(--accent);font-weight:700" class="dl">Delete</span><div class="ui-m-row drag" style="background:var(--surface);transform:translateX(${Math.round(x / 2.6)}px);transition:transform 0.3s"><div>#2 · 500 ml</div></div></div>`;
+          // a phone has about 2.6 pixels per dp, so the picture moves x / 2.6
+          const scr = (n, x, gone) => `<div class="ui-m-bar">Water</div><div class="ui-m-body">${glass}<b style="justify-self:center">${n} of 8 glasses</b><div class="ui-m-row"><div>#1 · 250 ml</div></div>${gone ? '' : swipeRow(x)}${n > 2 || gone ? '<div class="ui-m-row"><div>#3 · 250 ml</div></div>' : ''}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'What your code sees',
+            predict: {
+              q: 'The user drags the row about 150 pixels to the left and lets go. Where does the row end up?',
+              options: ['It stays 150 pixels to the left', 'It springs back to the start', 'It flies off the screen'],
+              a: 0,
+              why: '<code>offsetX</code> keeps its last value. Springing back would be extra code you write yourself.',
+            },
+            frames: [
+              { screen: scr(2, 0), say: 'A glass picture with <code>clickable</code>, and drink rows with <code>draggable</code> and <code>offset</code>.' },
+              { tap: '.gl', screen: scr(3, 0), log: 'clickable → onAdd()', say: 'A tap on the picture runs the <code>clickable</code> lambda, which adds a glass.' },
+              { tap: '.drag', screen: scr(3, -48), log: 'delta = -48.0 → offsetX = -48', say: 'The finger starts moving left on drink #2. Each small movement calls the lambda with <code>delta</code>, and <code>offsetX += delta</code>.' },
+              { screen: scr(3, -114), log: 'delta = -66.0 → offsetX = -114', say: 'The state changes, and <code>offset</code> moves the row to the new place. Delete starts to show behind it.' },
+              { screen: scr(3, -150), log: 'delta = -36.0 → offsetX = -150', say: '-48, -66 and -36 add up to -150: the deltas add up to the full distance.' },
+              { screen: scr(3, -150), log: '// finger lifted: no more calls', say: 'The finger lifts. No more calls, so <code>offsetX</code> stays at -150 and the row stays there, with Delete showing.' },
+              { tap: '.dl', screen: scr(2, 0, true), log: 'Delete onClick → onDelete()', say: 'Tapping Delete removes drink #2.' },
+            ],
+          });
+        },
+        code: `// Tap the picture to add a glass
+Image(
+    painter = painterResource(R.drawable.glass),
+    contentDescription = stringResource(R.string.glass_description),
+    modifier = Modifier
+        .size(96.dp)
+        .clickable { onAdd() },
+)
 
 @Composable
-fun DraggableDot() {
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    Box(
-        Modifier
-            .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    offset += dragAmount
-                }
-            }
-            .size(56.dp)
-            .background(MaterialTheme.colorScheme.primary, CircleShape)
-    )
+fun SwipeDrinkRow(drink: Drink, onDelete: () -> Unit) {
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    Box(contentAlignment = Alignment.CenterEnd) {               // CenterEnd: middle of the right edge
+        TextButton(onClick = onDelete) { Text("Delete") }   // waits behind the row
+        Surface(                                              // paints over Delete
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.roundToInt(), 0) }   // move it sideways
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta -> offsetX += delta },
+                ),
+        ) {
+            Text("#\${drink.id}: \${drink.ml} ml", modifier = Modifier.padding(16.dp))
+        }
+    }
 }`,
-        remember: 'clickable for taps. combinedClickable for double and long press. pointerInput for raw gestures, with no ripple for free.',
-        level: 'intermediate',
+        remember: 'clickable { } for taps on anything; draggable reports how far the finger moved, and offset moves the element.',
+        mistakes: [
+          { title: 'Dragging, but nothing moves', bad: `var offsetX by remember { mutableFloatStateOf(0f) }
+Text(
+    "500 ml",
+    modifier = Modifier.draggable(
+        orientation = Orientation.Horizontal,
+        state = rememberDraggableState { delta -> offsetX += delta },
+    ),
+)
+// offsetX changes, but the row stays put`, good: `Text(
+    "500 ml",
+    modifier = Modifier
+        .offset { IntOffset(offsetX.roundToInt(), 0) }
+        .draggable(
+            orientation = Orientation.Horizontal,
+            state = rememberDraggableState { delta -> offsetX += delta },
+        ),
+)`, why: '<code>draggable</code> only measures the finger. <code>offset</code> is what moves the element on screen.' },
+        ],
         terms: [
-          { term: 'combinedClickable', def: 'A modifier like clickable that also reports double taps and long presses through onDoubleClick and onLongClick.' },
-          { term: 'pointerInput', def: 'A modifier that runs a suspend block to read raw pointer events, restarting the block when its keys change.' },
-          { term: 'Indication', def: 'The visual feedback a clickable element draws on press, such as the Material ripple.' },
-          { term: 'detectDragGestures', def: 'A pointerInput detector that reports each drag movement as a change and a dragAmount offset.' },
+          { term: 'clickable', def: 'A modifier that runs a lambda when the element is tapped, with a ripple and screen reader support.' },
+          { term: 'draggable', def: 'A modifier that reports finger movement in one direction, as <code>delta</code> pixels.' },
+          { term: 'offset', def: 'A modifier that shifts an element by a number of pixels, with <code>IntOffset(x, y)</code>.' },
+          { term: 'Float', def: 'A decimal number type like <code>Double</code>, but smaller. Written with an <code>f</code>: <code>0f</code>, <code>2.5f</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Track a drag and move the box by it.', code: 'Modifier.pointerInput(Unit) {\n    [[detectDragGestures]] { change, dragAmount ->\n        change.[[consume]]()\n        offset += dragAmount\n    }\n}', why: 'The detector hands you each movement. Consuming the change stops parents, like a scrolling list, from also handling it.' },
-          { type: 'bug', prompt: 'After a new video loads, taps still seek using the old duration. Tap the line that causes it.', code: '@Composable\nfun SeekBar(durationMs: Long, onSeek: (Float) -> Unit) {\n    Box(\n        Modifier\n            .fillMaxWidth()\n            .height(48.dp)\n            .pointerInput(Unit) {\n                detectTapGestures { offset ->\n                    onSeek(offset.x / size.width * durationMs)\n                }\n            }\n    )\n}', bug: 6, fix: '            .pointerInput(durationMs, onSeek) {', why: 'With <code>Unit</code> as the key, the detector never restarts and keeps the first <code>durationMs</code> it captured. Key it on the values it reads.' },
+          { type: 'blank', prompt: 'Add a glass when the user taps anywhere on the picture.', code: `Image(
+    painterResource(R.drawable.glass),
+    contentDescription = "A glass of water",
+    modifier = Modifier.[[clickable]] { [[onAdd]]() },
+)`, why: '<code>clickable</code> works on any composable, including an <code>Image</code>. Its lambda runs on each tap.' },
+          { type: 'bug', prompt: 'While dragging, the row jitters near the start instead of following the finger. Tap the line to change.', code: `var offsetX by remember { mutableFloatStateOf(0f) }
+Text(
+    "500 ml",
+    modifier = Modifier
+        .offset { IntOffset(offsetX.roundToInt(), 0) }
+        .draggable(
+            orientation = Orientation.Horizontal,
+            state = rememberDraggableState { delta -> offsetX = delta },
+        ),
+)`, bug: 7, fix: '            state = rememberDraggableState { delta -> offsetX += delta },', why: '<code>delta</code> is only the latest small movement. Add each one with <code>+=</code> to get the full distance.' },
         ],
         quiz: [
-          { q: 'You add <code>onDoubleClick</code> to a <code>combinedClickable</code>. What happens on a single tap?', options: ['<code>onClick</code> fires right away', '<code>onClick</code> fires once the double-tap timeout passes', '<code>onClick</code> never fires'], a: 1, why: 'Compose has to wait to see if a second tap is coming.' },
-          { q: 'Which gives you the exact position of a tap?', options: ['<code>Modifier.clickable</code>', '<code>pointerInput</code> with <code>detectTapGestures</code>', 'Both'], a: 1, why: '<code>onTap</code> in <code>detectTapGestures</code> receives an <code>Offset</code>. <code>clickable</code> only says that a click happened.' },
-          { q: 'Why prefer <code>clickable</code> over <code>pointerInput</code> for a button-like tap?', options: ['It is faster', 'It adds ripple feedback and click semantics for accessibility', '<code>pointerInput</code> can’t detect taps'], a: 1, why: 'A raw detector gives you neither feedback nor semantics. <code>clickable</code> includes both.' },
-          { q: 'A row inside a vertical LazyColumn uses <code>detectDragGestures</code> for swipe-to-archive. Users cannot scroll the list from the rows. Which fix fits?', options: ['Use <code>detectHorizontalDragGestures</code>, which only claims horizontal movement', 'Call <code>change.consume()</code> less often', 'Put <code>pointerInput</code> after <code>offset</code> in the chain'], a: 0, why: 'detectDragGestures claims any direction past touch slop. The horizontal detector never claims a vertical swipe, so the list keeps it.' },
-          { q: 'A swipe-to-archive row is built only with <code>pointerInput</code>. What do TalkBack users get?', options: ['The swipe as an action, because pointerInput adds semantics', 'A double-tap that triggers the swipe', 'Nothing: add a <code>CustomAccessibilityAction</code> in <code>semantics</code> so Archive shows up in the actions menu'], a: 2, why: 'Raw detectors add no semantics. Expose the same action through semantics so screen reader and Switch Access users can use it.' },
+          { q: 'What does <code>delta</code> mean in <code>rememberDraggableState { delta -> ... }</code>?', options: ['How far the finger moved since the last call', 'The total distance from the start', 'Whether the finger is down'], a: 0, why: 'It is a small step. Adding them up gives the whole distance.' },
+          { q: 'You want a whole card to open its details when tapped. What do you use?', options: ['<code>Modifier.clickable { ... }</code>', '<code>Modifier.draggable(...)</code>', '<code>Modifier.offset { ... }</code>'], a: 0, why: '<code>clickable</code> is for taps. <code>draggable</code> is for movement, <code>offset</code> moves things.' },
+          { q: 'What is <code>2.7f.roundToInt()</code>?', options: ['<code>3</code>', '<code>2</code>', '<code>2.7</code>'], a: 0, why: 'It rounds to the nearest whole number, and 2.7 is closer to 3.' },
         ],
-        deeper: [
-          {
-            title: 'Who gets the drag?',
-            body: `<p>A swipeable row inside a scrolling list means two gesture handlers see the same finger. Each one waits until the finger has moved past the <em>touch slop</em>, a few dp, and the first one to claim the movement consumes it. The other then sees consumed changes and backs off.</p>
-<p><code>detectDragGestures</code> claims a drag in any direction, so a vertical swipe on the row is eaten by the row, and the list can’t scroll from there. <code>detectHorizontalDragGestures</code> only claims horizontal movement. On a vertical swipe it never claims, and the list scrolls as usual. Pick the detector that matches the direction you need. <code>Modifier.draggable</code> works the same way with an <code>orientation</code>.</p>`,
-            code: `Modifier.pointerInput(Unit) {
-    detectHorizontalDragGestures { change, dragAmount ->
-        change.consume()
-        offsetX += dragAmount              // vertical swipes go to the list
-    }
-}`,
-            visual(el) {
-              let horiz = false, busy = false, scrollY = 0, rowX = 0;
-              const rows = [];
-              for (let i = 0; i < 9; i++) rows.push(h('div', { class: `cmp-d2g-row${i === 2 ? ' cmp-d2g-me' : ''}` }, i === 2 ? 'Swipeable row' : `Message ${i + 1}`));
-              const col = h('div', { class: 'cmp-d2g-col' }, rows);
-              const finger = h('span', { class: 'cmp-d2g-finger', 'aria-hidden': 'true' });
-              const frame = h('div', { class: 'cmp-d2g-frame', role: 'img', 'aria-label': 'List with a swipeable row' }, col, finger);
-              const code = h('div', { class: 'kt' });
-              const o = out();
-              const modeBtns = [[false, 'detectDragGestures'], [true, 'detectHorizontalDragGestures']].map(([v, src]) => cmd(src, () => {
-                if (busy) return;
-                horiz = v; paint();
-                say(o, v ? 'The row only claims horizontal drags now.' : 'The row claims a drag in any direction.');
-              }));
-              function paint() {
-                modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === (horiz ? 1 : 0))));
-                code.innerHTML = hl(`Row(Modifier.pointerInput(Unit) {\n    ${horiz ? 'detectHorizontalDragGestures { change, dx ->' : 'detectDragGestures { change, dragAmount ->'}\n        change.consume()\n        offsetX += ${horiz ? 'dx' : 'dragAmount.x'}\n    }\n})`);
-              }
-              const place = () => { col.style.transform = `translateY(${-scrollY}px)`; rows[2].style.transform = `translateX(${rowX}px)`; };
-              async function swipe(dir) {
-                if (busy) return; busy = true;
-                frame.classList.remove('cmp-d2g-win-row', 'cmp-d2g-win-list');
-                scrollY = 0; rowX = 0; col.style.transition = rows[2].style.transition = 'transform 0.3s'; place();
-                await sleep(320); if (!el.isConnected) return;
-                col.style.transition = rows[2].style.transition = 'none';
-                const r = rows[2].getBoundingClientRect(), f = frame.getBoundingClientRect();
-                let x = r.left - f.left + r.width * 0.6, y = r.top - f.top + r.height / 2;
-                finger.style.left = `${x}px`; finger.style.top = `${y}px`; finger.classList.add('cmp-on');
-                const vertical = dir === 'up';
-                const winner = vertical ? (horiz ? 'list' : 'row') : 'row';
-                say(o, `Finger down on the row, moving ${vertical ? 'up' : 'left'}…`);
-                for (let s = 1; s <= 12; s++) {
-                  await sleep(55); if (!el.isConnected) return;
-                  const dx = vertical ? 0 : -9, dy = vertical ? -9 : 0;
-                  x += dx; y += dy;
-                  finger.style.left = `${x}px`; finger.style.top = `${y}px`;
-                  if (s === 2) {
-                    frame.classList.add(winner === 'row' ? 'cmp-d2g-win-row' : 'cmp-d2g-win-list');
-                    say(o, `Past touch slop: the ${winner === 'row' ? 'row' : 'list'} claims the gesture and consumes it.`);
-                  }
-                  if (s > 2) {
-                    if (winner === 'list') scrollY = Math.min(140, scrollY - dy);
-                    else rowX = Math.max(-110, rowX + dx);
-                    place();
-                  }
-                }
-                finger.classList.remove('cmp-on');
-                if (vertical && !horiz) say(o, '<span class="bad">Stuck.</span> The row claimed a vertical drag, then only used dragAmount.x. The list never got to scroll.');
-                else if (vertical) say(o, '<span class="good">The list scrolled.</span> The horizontal detector never claimed a vertical drag.');
-                else say(o, `<span class="good">The row moved.</span> A horizontal swipe is the row’s, with either detector.`);
-                busy = false;
-              }
-              paint();
-              say(o, 'Pick a detector, then swipe up on the row.');
-              el.append(
-                h('div', { class: 'cmp-sc-wrap' }, frame, h('div', { class: 'cmp-sc-side' }, code,
-                  h('div', { class: 'controls' }, act('Swipe up on the row', () => swipe('up')), act('Swipe left on the row', () => swipe('left'))))),
-                h('div', { class: 'controls' }, modeBtns), o);
-            },
-          },
-          {
-            title: 'Settle on release with velocity',
-            body: `<p>A swipe should finish on its own when the finger lifts. Move the item with an <code>Animatable</code>: <code>snapTo</code> while dragging, <code>animateTo</code> on release. Then decide where it settles. Distance alone feels wrong, because a short, fast flick clearly means “throw it away”.</p>
-<p>A <code>VelocityTracker</code> collects recent pointer positions and estimates the speed at release. Archive if the item moved past half its width <em>or</em> the release was fast enough. Material’s <code>SwipeToDismissBox</code> packages the same idea for list items.</p>`,
-            code: `val offsetX = remember { Animatable(0f) }
-val scope = rememberCoroutineScope()
-val currentOnArchive by rememberUpdatedState(onArchive)
-
-Modifier
-    .pointerInput(Unit) {                    // before offset: positions stay in the row's space
-        val tracker = VelocityTracker()
-        val minFling = 600.dp.toPx()
-        detectHorizontalDragGestures(
-            onDragStart = { tracker.resetTracking() },
-            onDragEnd = {
-                val v = tracker.calculateVelocity().x
-                val gone = abs(offsetX.value) > size.width / 2f || abs(v) > minFling
-                scope.launch {
-                    if (gone) {
-                        offsetX.animateTo(if (offsetX.value < 0f) -size.width.toFloat() else size.width.toFloat())
-                        currentOnArchive()
-                    } else offsetX.animateTo(0f, spring())
-                }
-            },
-        ) { change, dragAmount ->
-            change.consume()
-            tracker.addPosition(change.uptimeMillis, change.position)
-            scope.launch { offsetX.snapTo(offsetX.value + dragAmount) }
-        }
-    }
-    .offset { IntOffset(offsetX.value.roundToInt(), 0) }`,
-            visual(el) {
-              const MIN_FLING = 600;
-              let useVel = true, busy = false, x = 0, n = 1, drag = null;
-              const card = h('div', { class: 'cmp-d2g-card' }, h('b', {}, 'Email 1'), h('small', {}, 'Drag me, or use the buttons'));
-              const under = h('div', { class: 'cmp-d2g-under' }, 'Archive');
-              const track = h('div', { class: 'cmp-d2g-track' }, under, card);
-              const read = h('div', { class: 'kt' });
-              const o = out();
-              const sw = h('input', { type: 'checkbox', id: 'cmp-d2g-vel', checked: true });
-              const W = () => track.clientWidth || 300;
-              const setX = (v, ms) => { x = v; card.style.transition = ms ? `transform ${ms}ms cubic-bezier(0.2, 0.8, 0.2, 1)` : 'none'; card.style.transform = `translateX(${x}px)`; };
-              function show(v) { read.innerHTML = hl(`offset = ${Math.round(x)} px (${Math.round(Math.abs(x) / W() * 100)}% of width)\nvelocity = ${Math.round(v)} dp/s   // fling at ${MIN_FLING}\nuseVelocity = ${useVel}`); }
-              async function release(v) {
-                const far = Math.abs(x) > W() / 2, fast = useVel && Math.abs(v) > MIN_FLING;
-                show(v);
-                if (far || fast) {
-                  setX(x < 0 ? -W() - 20 : W() + 20, 320);
-                  say(o, `<span class="good">Archived.</span> ${far ? 'It passed half the width.' : `Only ${Math.round(Math.abs(x) / W() * 100)}% of the width, but the release was fast.`}`);
-                  await sleep(900); if (!el.isConnected) return;
-                  n++; card.firstElementChild.textContent = `Email ${n}`;
-                  setX(0, 0); replay(card, 'drop-in');
-                } else {
-                  setX(0, 450);
-                  say(o, `<span class="muted">Sprang back.</span> ${!useVel && Math.abs(v) > MIN_FLING ? '<span class="bad">That flick was fast, but velocity is ignored, so it feels broken.</span>' : 'Not far enough and not fast enough.'}`);
-                }
-              }
-              async function sim(frac, ms, label) {
-                if (busy || drag) return; busy = true;
-                say(o, `${esc(label)}…`);
-                const target = -frac * W(), steps = Math.max(4, Math.round(ms / 30));
-                for (let i = 1; i <= steps; i++) {
-                  setX(target * i / steps, 0);
-                  await sleep(ms / steps); if (!el.isConnected) return;
-                }
-                await release(-frac * W() / (ms / 1000));
-                busy = false;
-              }
-              let hist = [];
-              card.addEventListener('pointerdown', e => {
-                if (busy) return;
-                drag = { start: e.clientX - x }; hist = [{ t: performance.now(), x }];
-                card.setPointerCapture && card.setPointerCapture(e.pointerId);
-                card.classList.add('cmp-d2g-held');
-              });
-              card.addEventListener('pointermove', e => {
-                if (!drag) return;
-                setX(e.clientX - drag.start, 0);
-                hist.push({ t: performance.now(), x }); hist = hist.filter(p => performance.now() - p.t < 100);
-                show(0);
-              });
-              const up = () => {
-                if (!drag) return;
-                drag = null; card.classList.remove('cmp-d2g-held');
-                const a = hist[0], b = hist[hist.length - 1], dt = (b.t - a.t) / 1000;
-                busy = true;
-                release(dt > 0 ? (b.x - a.x) / dt : 0).then(() => { busy = false; });
-              };
-              card.addEventListener('pointerup', up);
-              card.addEventListener('pointercancel', up);
-              sw.addEventListener('change', () => {
-                useVel = sw.checked; show(0);
-                say(o, useVel ? 'Distance or velocity: a fast flick counts.' : 'Distance only: try the quick flick now.');
-              });
-              show(0);
-              say(o, 'Drag the card left and let go, or use a button.');
-              el.append(track, read,
-                h('div', { class: 'controls' },
-                  act('Slow drag to 30%', () => sim(0.3, 900, 'Slow drag to 30%')),
-                  act('Quick flick, 25%', () => sim(0.25, 90, 'Quick flick to 25%')),
-                  act('Slow drag to 60%', () => sim(0.6, 1000, 'Slow drag to 60%'))),
-                h('label', { class: 'switch', for: 'cmp-d2g-vel' }, sw, 'Use VelocityTracker'),
-                o);
-            },
-          },
-          {
-            title: 'Give custom gestures a way in for everyone',
-            body: `<p>A swipe made with <code>pointerInput</code> is invisible to TalkBack and Switch Access. Those users can’t perform the gesture, and nothing tells them it exists. Add the same action through semantics, so it shows up in the accessibility actions menu.</p>
-<p><code>clickable</code> and <code>combinedClickable</code> add click semantics on their own. Raw detectors never do. The Accessibility track covers semantics in depth.</p>`,
-            code: `Modifier
-    .pointerInput(Unit) { detectHorizontalDragGestures(/* swipe to archive */) }
-    .semantics {
-        customActions = listOf(
-            CustomAccessibilityAction(label = "Archive") { onArchive(); true },
-        )
-    }`,
-          },
-        ],
-        underHood: {
-          body: `<p>The block you pass to <code>pointerInput</code> is a suspend function. Compose runs it in a coroutine tied to the modifier and restarts it when a key changes. Inside, the detectors are ordinary loops that suspend until the next pointer event arrives.</p>
-<p>Each event travels through the hit-tested elements in three passes: <code>Initial</code> from parent to child, <code>Main</code> from child to parent, and <code>Final</code> from parent to child again. Detectors normally act in the Main pass, so the innermost element gets the first chance. “Consuming” just sets a flag on the <code>PointerInputChange</code>. Other handlers check that flag and back off, which is how the row and the list in step 1 avoid fighting.</p>`,
-          code: `// A tiny tap detector, written by hand
-Modifier.pointerInput(Unit) {
-    awaitEachGesture {
-        awaitFirstDown()                         // suspends until a finger touches
-        val up = waitForUpOrCancellation()       // null if another handler consumed it
-        if (up != null) {
-            up.consume()
-            onTap(up.position)
-        }
-    }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Moving with the value version of offset',
-            bad: `var offsetX by remember { mutableFloatStateOf(0f) }
-Box(
-    Modifier
-        .offset(x = offsetX.dp)
-        .pointerInput(Unit) { detectHorizontalDragGestures { _, dx -> offsetX += dx } }
-)`,
-            good: `var offsetX by remember { mutableFloatStateOf(0f) }
-Box(
-    Modifier
-        .offset { IntOffset(offsetX.roundToInt(), 0) }
-        .pointerInput(Unit) { detectHorizontalDragGestures { _, dx -> offsetX += dx } }
-)`,
-            why: 'The value version reads the state during composition, so the Box recomposes on every frame of the drag. It also treats pixels as dp, so the box outruns the finger on dense screens. The lambda version reads in the layout phase, in pixels.',
-          },
-          {
-            title: 'A tiny clickable icon',
-            bad: `Icon(
-    Icons.Default.Close,
-    contentDescription = "Close",
-    modifier = Modifier.size(24.dp).clickable { onClose() },
-)`,
-            good: `IconButton(onClick = onClose) {
-    Icon(Icons.Default.Close, contentDescription = "Close")
-}`,
-            why: 'The touch target is only 24 dp, hard to hit. <code>IconButton</code> keeps the 24 dp icon but makes the target at least 48 dp and gives it the button role.',
-          },
-        ],
-        visual(el) {
-          const LONG = 400, DOUBLE = 300;
-          const MODES = {
-            click: { label: 'Modifier.clickable', src: 'Modifier.clickable { count++ }', hint: 'Tap the card.' },
-            combined: { label: 'combinedClickable', src: 'combinedClickable(onClick, onDoubleClick, onLongClick)', hint: 'Tap, double tap, or press and hold the card.' },
-            tap: { label: 'detectTapGestures', src: 'pointerInput(Unit) { detectTapGestures { offset -> } }', hint: 'Tap anywhere in the pad.' },
-            drag: { label: 'detectDragGestures', src: 'pointerInput(Unit) { detectDragGestures { change, dragAmount -> } }', hint: 'Drag the dot.' },
-          };
-          let mode = 'click', ripple = true, count = 0, logN = 0, pos = { x: 40, y: 40 };
-          let downAt = 0, longTimer = 0, tapTimer = 0, longFired = false, pendingTap = false, dragging = false, last = null, moved = { x: 0, y: 0 }, lastLog = 0;
-          const pad = h('div', { class: 'cmp-gs-pad' });
-          const num = h('b', {}, '0'), sub = h('small', {});
-          const target = h('div', { class: 'cmp-gs-target', role: 'button', 'aria-label': 'Gesture target' }, num, sub);
-          const meter = h('span', {});
-          const meterBox = h('div', { class: 'cmp-gs-meter', 'aria-hidden': 'true' }, meter);
-          const puck = h('div', { class: 'cmp-gs-puck' }, 'drag');
-          const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
-          const o = out();
-          const rippleIn = h('input', { type: 'checkbox', id: 'cmp-gs-ripple', checked: true });
-          const modeBtns = Object.entries(MODES).map(([k, m]) => cmd(m.label, () => setMode(k), { 'aria-label': m.src }));
-          const clearTimers = () => { clearTimeout(longTimer); clearTimeout(tapTimer); longTimer = tapTimer = 0; };
-          function addLog(html) {
-            log.prepend(h('div', { class: 'drop-in', html: `<span class="muted">${++logN}</span> ${html}` }));
-            while (log.children.length > 5) log.lastElementChild.remove();
-          }
-          function bar(ms, wait) {
-            meter.className = wait ? 'cmp-gs-wait' : '';
-            meter.style.transition = 'none'; meter.style.width = '0';
-            void meter.offsetWidth;
-            meter.style.transition = `width ${ms}ms linear`; meter.style.width = '100%';
-          }
-          function stopBar() { const w = getComputedStyle(meter).width; meter.style.transition = 'none'; meter.style.width = w; }
-          function wave(e, host) {
-            if (!ripple || mode === 'tap' || mode === 'drag') return;
-            const r = host.getBoundingClientRect();
-            const w = h('span', { class: 'cmp-gs-wave', style: `left:${e.clientX - r.left}px;top:${e.clientY - r.top}px` });
-            host.prepend(w); setTimeout(() => w.remove(), 650);
-          }
-          function bump(label) { count++; num.textContent = String(count); replay(num, 'pop'); sub.textContent = label; }
-          function setMode(k) {
-            clearTimers(); mode = k; pendingTap = false; longFired = false;
-            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(MODES)[i] === k)));
-            rippleIn.disabled = k === 'tap' || k === 'drag';
-            target.classList.toggle('cmp-gs-full', k === 'tap');
-            count = 0; num.textContent = '0';
-            sub.textContent = k === 'combined' ? 'tap · double · hold' : k === 'tap' ? 'onTap(offset)' : 'onClick';
-            meter.style.transition = 'none'; meter.style.width = '0';
-            const kids = [target];
-            if (k === 'combined') kids.push(meterBox);
-            if (k === 'drag') kids.splice(0, 1, puck);
-            pad.replaceChildren(...kids);
-            if (k === 'drag') place();
-            num.style.display = k === 'tap' ? 'none' : '';
-            log.replaceChildren();
-            addLog(`${hl(MODES[k].src)}`);
-            say(o, `${MODES[k].hint}${k === 'tap' || k === 'drag' ? ' <span class="muted">// pointerInput draws no ripple</span>' : ''}`);
-          }
-          function place() { puck.style.transform = `translate(${pos.x}px, ${pos.y}px)`; puck.textContent = `${Math.round(pos.x)}, ${Math.round(pos.y)}`; }
-          target.addEventListener('pointerdown', e => {
-            if (mode === 'drag') return;
-            wave(e, target);
-            if (mode !== 'combined') return;
-            downAt = performance.now(); longFired = false;
-            clearTimeout(longTimer);
-            bar(LONG, false);
-            longTimer = setTimeout(() => {
-              if (!el.isConnected) return;
-              longFired = true; pendingTap = false; clearTimeout(tapTimer);
-              bump('onLongClick'); replay(target, 'shake');
-              addLog(`<span class="good">onLongClick()</span> <span class="muted">held ${LONG} ms</span>`);
-              say(o, `Held for ${LONG} ms: ${hl('onLongClick()')} fired while your finger was still down.`);
-            }, LONG);
-          });
-          target.addEventListener('pointerup', e => {
-            if (mode === 'drag') return;
-            if (mode === 'click') {
-              bump('onClick');
-              addLog(`<span class="good">onClick()</span> <span class="muted">fires on release</span>`);
-              say(o, `${hl('onClick()')} ran on release${ripple ? ', and the ripple showed the press.' : '. No ripple, so the press gave no feedback.'}`);
-              return;
-            }
-            if (mode === 'tap') {
-              const r = pad.getBoundingClientRect(), x = Math.round(e.clientX - r.left), y = Math.round(e.clientY - r.top);
-              const dot = h('span', { class: 'cmp-gs-dot pop', style: `left:${x}px;top:${y}px` }, h('span', {}, `Offset(${x}, ${y})`));
-              pad.append(dot);
-              while (pad.querySelectorAll('.cmp-gs-dot').length > 3) pad.querySelector('.cmp-gs-dot').remove();
-              addLog(`<span class="good">onTap</span>(${hl(`Offset(${x}.0, ${y}.0)`)})`);
-              say(o, `${hl('detectTapGestures')} gave the exact position. <span class="muted">No ripple and no click semantics come with it.</span>`);
-              return;
-            }
-            clearTimeout(longTimer); stopBar();
-            if (longFired) { longFired = false; return; }
-            if (pendingTap) {
-              clearTimeout(tapTimer); pendingTap = false;
-              bump('onDoubleClick'); replay(target, 'pop');
-              addLog(`<span class="good">onDoubleClick()</span> <span class="muted">second tap inside ${DOUBLE} ms</span>`);
-              say(o, `Two taps inside ${DOUBLE} ms: ${hl('onDoubleClick()')}. onClick never ran.`);
-              return;
-            }
-            pendingTap = true;
-            bar(DOUBLE, true);
-            addLog(`<span class="muted">tap up · waiting ${DOUBLE} ms for a second tap…</span>`);
-            tapTimer = setTimeout(() => {
-              if (!el.isConnected || !pendingTap) return;
-              pendingTap = false; bump('onClick');
-              addLog(`<span class="good">onClick()</span> <span class="muted">${Math.round(performance.now() - downAt)} ms after the press</span>`);
-              say(o, `${hl('onClick()')} ran late: Compose waited ${DOUBLE} ms in case it was a double tap.`);
-            }, DOUBLE);
-          });
-          target.addEventListener('pointerleave', () => { if (mode === 'combined' && !longFired && longTimer) { clearTimeout(longTimer); stopBar(); } });
-          puck.addEventListener('pointerdown', e => {
-            dragging = true; last = { x: e.clientX, y: e.clientY }; moved = { x: 0, y: 0 };
-            puck.setPointerCapture && puck.setPointerCapture(e.pointerId);
-            puck.classList.add('cmp-gs-held');
-            addLog(`<span class="good">onDragStart</span>`);
-          });
-          puck.addEventListener('pointermove', e => {
-            if (!dragging) return;
-            const dx = e.clientX - last.x, dy = e.clientY - last.y;
-            last = { x: e.clientX, y: e.clientY };
-            const maxX = pad.clientWidth - 60, maxY = pad.clientHeight - 60;
-            pos = { x: Math.max(0, Math.min(maxX, pos.x + dx)), y: Math.max(0, Math.min(maxY, pos.y + dy)) };
-            moved.x += dx; moved.y += dy;
-            place();
-            const now = performance.now();
-            if (now - lastLog > 250) { lastLog = now; addLog(`dragAmount = ${hl(`Offset(${dx.toFixed(1)}, ${dy.toFixed(1)})`)} <span class="muted">→ offset += it</span>`); }
-          });
-          const endDrag = () => {
-            if (!dragging) return;
-            dragging = false; puck.classList.remove('cmp-gs-held');
-            addLog(`<span class="good">onDragEnd</span> <span class="muted">moved ${Math.round(moved.x)}, ${Math.round(moved.y)}</span>`);
-            say(o, `The dot sits at ${hl(`offset = Offset(${Math.round(pos.x)}, ${Math.round(pos.y)})`)}. <span class="muted">Each change was consumed so a parent would not also scroll.</span>`);
-          };
-          puck.addEventListener('pointerup', endDrag);
-          puck.addEventListener('pointercancel', endDrag);
-          rippleIn.addEventListener('change', () => {
-            ripple = rippleIn.checked;
-            say(o, ripple ? `${hl('indication = ripple()')} <span class="muted">// press feedback is back</span>` : `${hl('indication = null')} <span class="muted">// clicks still work, but nothing shows the press</span>`);
-          });
-          async function demoDouble() {
-            if (mode !== 'combined') setMode('combined');
-            const r = target.getBoundingClientRect();
-            const ev = t => target.dispatchEvent(new PointerEvent(t, { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true }));
-            ev('pointerdown'); await sleep(80); ev('pointerup'); await sleep(140); ev('pointerdown'); await sleep(80); ev('pointerup');
-          }
-          setMode('click');
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            pad,
-            h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-gs-ripple' }, rippleIn, 'indication = ripple()'), act('Simulate a double tap', demoDouble)),
-            log, o);
-        },
-        predict: {
-          q: 'The card uses <code>Modifier.clickable</code> with <code>indication = null</code>. The user taps it. What happens?',
-          options: ['Nothing: no ripple means no click', '<code>onClick</code> runs, but nothing shows the press', 'A default ripple is drawn anyway'],
-          a: 1,
-          why: 'The indication only draws the press feedback. The click handling and its semantics stay the same.',
-        },
+        docs: [['Tap and press', 'https://developer.android.com/develop/ui/compose/touch-input/pointer-input/tap-and-press'], ['Drag, swipe, and fling', 'https://developer.android.com/develop/ui/compose/touch-input/pointer-input/drag-swipe-fling']],
       },
 
-      // 13 ─────────────────────────────────────────────
       {
         id: 'effects',
-        title: 'Side effects: LaunchedEffect',
-        tagline: 'Run a coroutine that follows a key.',
+        title: 'Side effects',
+        tagline: 'Do something when a screen appears, not on every redraw.',
+        goals: ['Explain why waiting doesn’t belong in a composable’s body', 'Run code when a composable appears with <code>LaunchedEffect</code>', 'Restart it by changing its key'],
+        level: 'intermediate', introduces: ['LaunchedEffect', 'delay'],
         body: `
-<p>A composable can run at any time and many times, so it must not start work directly in its body. To run suspend code tied to the screen, use <code>LaunchedEffect(key) { ... }</code>.</p>
-<p>When the effect enters the composition, it launches a coroutine. If a key changes, Compose <em>cancels</em> that coroutine and launches a new one with the new key. A recomposition with the same key leaves it alone. When the composable leaves the screen, the coroutine is cancelled.</p>
-<p><code>LaunchedEffect</code> is a composable, so you can’t call it from an <code>onClick</code>. For work started by an event, get a scope with <code>rememberCoroutineScope()</code> and call <code>scope.launch</code>. Its jobs live until the composable leaves. Setup that is not a coroutine, like a listener, belongs in the next lesson, DisposableEffect and SideEffect.</p>`,
-        code: `@Composable
-fun ProfileScreen(userId: Int, repo: UserRepository) {
-    var user by remember { mutableStateOf<User?>(null) }
-    val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
-
-    // Restarts whenever userId changes. The old load is cancelled.
-    LaunchedEffect(userId) {
-        user = null
-        user = repo.loadUser(userId)
-    }
-
-    Column {
-        Text(user?.name ?: "Loading…")
-        Button(onClick = {
-            scope.launch { snackbar.showSnackbar("Saved") }
-        }) { Text("Save") }
-    }
-}`,
-        remember: 'LaunchedEffect(key) cancels and relaunches when the key changes. Use rememberCoroutineScope for clicks.',
-        level: 'intermediate',
-        terms: [
-          { term: 'LaunchedEffect', def: 'A composable that launches a coroutine when it enters the composition and cancels and relaunches it when a key changes.' },
-          { term: 'rememberCoroutineScope', def: 'Returns a CoroutineScope tied to the composition, for launching coroutines from event handlers like onClick.' },
-          { term: 'Side effect', def: 'Work that reaches outside a composable, like loading data or showing a snackbar, which must not run directly in the composable body.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Rerun the search when the query changes, and scroll to the top on a tap.', code: 'LaunchedEffect([[query]]) {\n    results = repo.search(query)\n}\nval scope = [[rememberCoroutineScope]]()\nButton(onClick = { scope.launch { listState.animateScrollToItem(0) } }) {\n    Text("Top")\n}', why: 'The key restarts the effect on a new query. A click needs a scope, since <code>LaunchedEffect</code> can’t run in <code>onClick</code>.' },
-          { type: 'bug', prompt: 'Open user 1, then user 2. The screen still shows user 1. Tap the bug.', code: '@Composable\nfun ProfileScreen(userId: Int, repo: UserRepository) {\n    var user by remember { mutableStateOf<User?>(null) }\n    LaunchedEffect(Unit) {\n        user = repo.loadUser(userId)\n    }\n    Text(user?.name ?: "Loading…")\n}', bug: 3, fix: '    LaunchedEffect(userId) {', why: 'With <code>Unit</code> as the key, the effect never restarts. Key it on <code>userId</code> so a new id loads again.' },
-        ],
-        quiz: [
-          { q: '<code>LaunchedEffect(userId)</code> is loading user 1 when <code>userId</code> becomes 2. What happens?', options: ['Both loads keep running', 'The load for 1 is cancelled and a load for 2 starts', 'Nothing until the first load ends'], a: 1, why: 'A new key cancels the old coroutine and launches a fresh one.' },
-          { q: 'The screen recomposes but <code>userId</code> stays the same. Does the effect restart?', options: ['Yes', 'No'], a: 1, why: 'Only a key change restarts it. Recomposition alone does not.' },
-          { q: 'You want to start a coroutine when a button is tapped. What do you use?', options: ['<code>LaunchedEffect</code> inside <code>onClick</code>', '<code>rememberCoroutineScope()</code> and <code>scope.launch</code>'], a: 1, why: '<code>onClick</code> is not a composable context, so <code>LaunchedEffect</code> can’t be called there.' },
-          { q: 'A splash runs <code>LaunchedEffect(Unit) { delay(3_000); onTimeout() }</code>. The parent passes a new <code>onTimeout</code> after one second. Which lambda runs?', options: ['The new one, because lambdas are read when called', 'Neither: the effect restarts and waits 3 more seconds', 'The first one, unless you read it through <code>rememberUpdatedState(onTimeout)</code>'], a: 2, why: 'The block captured the first lambda. rememberUpdatedState gives the effect the latest one without restarting the timer.' },
-        ],
-        deeper: [
-          {
-            title: 'rememberUpdatedState for long effects',
-            body: `<p>Some effects should not restart, like a splash screen timeout, so they use a constant key. But the block captured the values from the first composition. If the parent later passes a new <code>onTimeout</code>, the effect still calls the old one.</p>
-<p><code>rememberUpdatedState(onTimeout)</code> returns a State that always holds the latest value. Read it inside the effect and you get the current callback without restarting the timer.</p>`,
-            code: `@Composable
-fun Splash(onTimeout: () -> Unit) {
-    val currentOnTimeout by rememberUpdatedState(onTimeout)
-    LaunchedEffect(Unit) {
-        delay(3_000)
-        currentOnTimeout()   // the latest lambda, not the first one
-    }
-}`,
-            visual(el) {
-              const MS = 3000;
-              let latest = 'goHome', captured = 'goHome', run = 0, live = false;
-              const toggle = h('input', { type: 'checkbox', id: 'cmp-ru-on' });
-              const fill = h('span', { class: 'cmp-job-fill' });
-              const jobState = h('span', { class: 'cmp-job-state' }, 'running');
-              const chip = h('span', { class: 'cmp-job' }, fill, h('span', { class: 'cmp-job-label' }, 'delay(3_000)'), jobState);
-              const capEl = h('span', { class: 'cmp-obj' });
-              const latEl = h('span', { class: 'cmp-obj' });
-              const head = h('div', { class: 'kt' });
-              const o = out();
-              const paint = () => {
-                capEl.textContent = `captured: ${captured}`;
-                latEl.textContent = `latest: ${latest}`;
-                head.innerHTML = hl(toggle.checked ? 'val current by rememberUpdatedState(onTimeout)\nLaunchedEffect(Unit) { delay(3_000); current() }' : 'LaunchedEffect(Unit) { delay(3_000); onTimeout() }');
-              };
-              function start() {
-                const me = ++run; live = true; captured = latest;
-                chip.classList.remove('cmp-done', 'cmp-cancel'); jobState.textContent = 'running';
-                fill.style.transition = 'none'; fill.style.width = '0';
-                void fill.offsetWidth;
-                fill.style.transition = `width ${MS}ms linear`; fill.style.width = '100%';
-                paint();
-                say(o, `Splash entered the composition. The effect captured ${hl(`onTimeout = ${captured}`)}. Change it before the timer ends.`);
-                setTimeout(() => {
-                  if (me !== run || !el.isConnected) return;
-                  live = false;
-                  chip.classList.add('cmp-done'); jobState.textContent = 'done'; replay(chip, 'pop');
-                  const called = toggle.checked ? latest : captured;
-                  say(o, called === latest
-                    ? `<span class="good">Called ${called}().</span> That is what the parent passed last.`
-                    : `<span class="bad">Called ${called}().</span> The parent now passes ${latest}, but the block kept the lambda from the first composition.`);
-                }, MS);
-              }
-              function setLatest(name) {
-                if (latest === name) { replay(latEl, 'pop'); return; }
-                latest = name; paint(); replay(latEl, 'pop');
-                say(o, live
-                  ? `Parent recomposed with ${hl(`onTimeout = ${name}`)}. Same key, so the timer keeps going.`
-                  : `${hl(`onTimeout = ${name}`)} <span class="muted">// restart Splash to run the timer again</span>`);
-              }
-              toggle.addEventListener('change', start);
-              el.append(
-                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-ru-on' }, toggle, 'rememberUpdatedState')),
-                head,
-                h('div', { class: 'cmp-fx' },
-                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'LaunchedEffect(Unit)'), h('div', { class: 'cmp-jobs' }, chip)),
-                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'onTimeout'), h('div', { class: 'cmp-jobs' }, capEl, latEl))),
-                h('div', { class: 'controls' }, cmd('onTimeout = goLogin', () => setLatest('goLogin')), cmd('onTimeout = goHome', () => setLatest('goHome')), act('Restart Splash', start)),
-                o);
-              start();
+<p>If an hour goes by without a glass, the water screen should show “Time for a glass of water?”. Each new glass should start the hour again. That needs waiting, and the body of a composable is the wrong place: it runs again on every recomposition, maybe many times a second, and it must finish quickly so the screen can be drawn.</p>
+<p>Anything a composable does besides describing the screen, such as waiting, saving or sending a message, is a <em>side effect</em>. <code>LaunchedEffect(key) { ... }</code> runs its block when it first appears on screen, and not again when the screen recomposes. Inside it, <code>delay(5000)</code> waits 5000 milliseconds (5 seconds) without freezing the screen. <code>delay</code> only works in places like this block that are allowed to wait. In Kotlin’s words, a function that can wait is a <code>suspend</code> function, and a place allowed to run one is a <em>coroutine</em>. The block of <code>LaunchedEffect</code> is a coroutine.</p>
+<p>The <em>key</em> decides when to start over. When the key changes, the running block is stopped and starts again from the top. So <code>LaunchedEffect(glasses)</code> starts a fresh hour after every glass. When the composable leaves the screen, the block is stopped, so this reminder only runs while the water screen is shown. A key that never changes, such as <code>Unit</code> (<code>Unit</code> is also a value, the only one of its type), means “run once, while this is on screen”.</p>`,
+        visual(el) {
+          const scr = (n, remind) => `<div class="ui-m-bar">Water</div><div class="ui-m-body"><b>${n} of 8 glasses</b>${remind ? '<div class="ui-m-card"><b>Time for a glass of water?</b></div>' : ''}<span class="ui-m-btn add">Add a glass</span></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'LaunchedEffect(glasses)',
+            predict: {
+              q: 'The block waits 1 hour, then shows the reminder. 40 minutes in, the user adds a glass. When does the reminder show?',
+              options: ['1 hour after that glass', '20 minutes after that glass', 'Never'],
+              a: 0,
+              why: 'Adding a glass changes <code>glasses</code>, the key. The old wait is stopped and a new 1-hour wait starts.',
             },
-          },
-          {
-            title: 'produceState: an effect that returns State',
-            body: `<p>A common pattern is a LaunchedEffect that loads something into a remembered State. <code>produceState</code> packs that up: it returns a State with an initial value and runs a producer coroutine that sets <code>value</code>. Keys work like LaunchedEffect keys, so a new <code>url</code> cancels the old producer and starts a new one. It is built from <code>remember { mutableStateOf() }</code> and a <code>LaunchedEffect</code>.</p>`,
-            code: `@Composable
-fun loadNetworkImage(url: String, repo: ImageRepository): State<Result<Image>> =
-    produceState<Result<Image>>(initialValue = Result.Loading, url, repo) {
-        val image = repo.load(url)
-        value = if (image == null) Result.Error else Result.Success(image)
-    }`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>LaunchedEffect(key) { }</code> is little more than <code>remember(key) { LaunchedEffectImpl(context, block) }</code>. That object implements <code>RememberObserver</code>. After a composition is applied, Compose calls its <code>onRemembered()</code>, which launches your block in a scope built from the composition’s coroutine context, including its frame clock.</p>
-<p>When the key changes, <code>remember</code> creates a new object. The old one gets <code>onForgotten()</code> and cancels its job, then the new one launches. <code>DisposableEffect</code> uses the same hooks and calls your <code>onDispose</code> from <code>onForgotten()</code>. Effects never run in the middle of composition. If a composition is abandoned, nothing launches.</p>`,
-          code: `// Simplified from androidx.compose.runtime
-@Composable
-fun LaunchedEffect(key1: Any?, block: suspend CoroutineScope.() -> Unit) {
-    val context = currentComposer.applyCoroutineContext
-    remember(key1) { LaunchedEffectImpl(context, block) }
+            frames: [
+              { screen: scr(3), log: ['10:00  glasses = 3: block starts', '       delay(3600000)…'], say: 'The screen appears. <code>LaunchedEffect(glasses)</code> starts its block, which waits one hour.' },
+              { tap: '.add', screen: scr(4), log: ['10:40  tap: glasses = 4', '       key 3 → 4: old wait stopped', '       block starts again, delay(3600000)…'], say: 'Forty minutes in, the user adds a glass. The key changes, the old wait is stopped, and a fresh hour begins.' },
+              { log: '11:00  recomposition: block keeps waiting', say: 'Other state changes and the screen recomposes. The key is still 4, so the block is not restarted.' },
+              { screen: scr(4, true), log: '11:40  wait over: showReminder = true', say: 'One hour after the last glass, the block sets <code>showReminder = true</code>, and the reminder appears.' },
+              { tap: '.add', screen: scr(5), log: ['11:45  tap: glasses = 5', '       block starts again: showReminder = false'], say: 'A new glass changes the key again. The block starts from the top, hides the reminder and waits another hour.' },
+              { screen: '<div class="ui-m-bar">History</div><div class="ui-m-body"><div class="ui-m-row"><div>Mon 19 Oct: 6 glasses</div></div><div class="ui-m-row"><div>Sun 18 Oct: 8 glasses</div></div></div>', log: '11:50  user leaves the screen: block stopped', say: 'The user opens another screen. The water screen leaves, so the block is stopped too. Nothing keeps running in the background.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun Reminder(glasses: Int) {
+    var showReminder by remember { mutableStateOf(false) }
+
+    LaunchedEffect(glasses) {         // starts again after every new glass
+        showReminder = false
+        delay(3600000)                // wait one hour (3,600,000 ms); the screen keeps working
+        showReminder = true
+    }
+
+    if (showReminder) {
+        Text("Time for a glass of water?")
+    }
 }
 
-class LaunchedEffectImpl(
-    context: CoroutineContext,
-    private val task: suspend CoroutineScope.() -> Unit,
-) : RememberObserver {
-    private val scope = CoroutineScope(context)
-    private var job: Job? = null
-    override fun onRemembered() { job = scope.launch(block = task) }
-    override fun onForgotten() { job?.cancel(); job = null }
-    override fun onAbandoned() { job?.cancel(); job = null }
+@Composable
+fun Tip() {
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {            // Unit never changes: run once
+        delay(5000)
+        visible = false
+    }
+    if (visible) {
+        Text("Tip: drag a drink to the left to delete it")
+    }
 }`,
-        },
+        remember: 'LaunchedEffect(key) { ... } runs when it appears, starts over when the key changes, and stops when it leaves the screen.',
         mistakes: [
-          {
-            title: 'Launching from the composable body',
-            bad: `@Composable
-fun Feed(vm: FeedViewModel) {
-    val scope = rememberCoroutineScope()
-    scope.launch { vm.refresh() }   // runs on every recomposition
-    FeedList(vm.items)
-}`,
-            good: `@Composable
-fun Feed(vm: FeedViewModel) {
-    LaunchedEffect(Unit) { vm.refresh() }   // once per entry
-    FeedList(vm.items)
-}`,
-            why: 'The body runs on every recomposition, so each one starts another refresh. An effect launches once when it enters. Loading that should survive rotation belongs in the ViewModel.',
-          },
-          {
-            title: 'Collecting a Flow without the lifecycle',
-            bad: `var messages by remember { mutableStateOf(emptyList<Message>()) }
-LaunchedEffect(Unit) {
-    vm.messages.collect { messages = it }
-}`,
-            good: `val messages by vm.messages.collectAsStateWithLifecycle()`,
-            why: 'The composition stays alive while the app is in the background, so the effect keeps collecting. <code>collectAsStateWithLifecycle()</code> stops below STARTED and hands you State directly.',
-          },
-          {
-            title: 'A key that is new on every run',
-            bad: `class SearchRequest(val query: String, val page: Int)
-
-LaunchedEffect(SearchRequest(query, page)) {
-    results = repo.search(query, page)
-}`,
-            good: `LaunchedEffect(query, page) {
-    results = repo.search(query, page)
-}`,
-            why: 'Keys are compared with <code>equals()</code>. A plain class without it is a new key on every recomposition, so the effect cancels and relaunches each time. Pass the values, or use a <code>data class</code>.',
-          },
+          { title: 'Waiting in the body', bad: `@Composable
+fun Tip() {
+    var visible by remember { mutableStateOf(true) }
+    delay(5000)
+    visible = false
+    ...
+}
+// error: Suspend function 'suspend fun delay(timeMillis: Long): Unit'
+// can only be called from a coroutine or another suspend function.`, good: `@Composable
+fun Tip() {
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(5000)
+        visible = false
+    }
+    ...
+}`, why: '<code>delay</code> is a <code>suspend</code> function: it can only run in a coroutine, a place allowed to wait. The block of <code>LaunchedEffect</code> is one; the body of a composable is not.' },
         ],
-        visual(el) {
-          const NAMES = { 1: 'Ada', 2: 'Grace', 3: 'Linus' };
-          const LOAD_MS = 2600, SAVE_MS = 1500;
-          let userId = 1, onScreen = true, jobN = 0, effect = null, scopeJobs = [];
-          const effLane = h('div', { class: 'cmp-jobs' }), scopeLane = h('div', { class: 'cmp-jobs' });
-          const title = h('span', { class: 'cmp-screen-title' }), sub = h('span', { class: 'tip' });
-          const screen = h('div', { class: 'cmp-screen' }, h('span', { class: 'cmp-status' }, 'ProfileScreen'), title, sub);
-          const o = out();
-          const idBtns = [1, 2, 3].map(id => cmd(`userId = ${id}`, () => setUser(id)));
-          const leaveBtn = act('Leave the screen', toggleScreen);
-          const paintIds = () => idBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i + 1 === userId)));
-          function job(lane, label, ms, onDone) {
-            const fill = h('span', { class: 'cmp-job-fill' });
-            const state = h('span', { class: 'cmp-job-state' }, 'running');
-            const chip = h('span', { class: 'cmp-job drop-in' }, fill, h('span', { class: 'cmp-job-label' }, `#${++jobN} ${label}`), state);
-            lane.append(chip);
-            while (lane.children.length > 4) lane.firstElementChild.remove();
-            requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.transition = `width ${ms}ms linear`; fill.style.width = '100%'; }));
-            const j = { n: jobN, live: true };
-            j.timer = setTimeout(() => {
-              if (!j.live || !screen.isConnected) return;
-              j.live = false; chip.classList.add('cmp-done'); state.textContent = 'done'; replay(chip, 'pop'); onDone();
-            }, ms);
-            j.cancel = () => {
-              if (!j.live) return false;
-              j.live = false; clearTimeout(j.timer);
-              const w = getComputedStyle(fill).width;
-              fill.style.transition = 'none'; fill.style.width = w;
-              chip.classList.add('cmp-cancel'); state.textContent = 'cancelled'; replay(chip, 'shake');
-              return true;
-            };
-            return j;
-          }
-          function startEffect() {
-            const id = userId;
-            title.textContent = 'Loading…'; sub.textContent = `userId = ${id}`; replay(screen, 'pop-soft');
-            effect = job(effLane, `loadUser(${id})`, LOAD_MS, () => {
-              title.textContent = NAMES[id]; replay(screen, 'cmp-flash');
-              say(o, `<span class="good">done:</span> ${hl(`user = User("${NAMES[id]}")`)} <span class="muted">// coroutine #${effect.n} finished</span>`);
-            });
-            return effect;
-          }
-          function setUser(id) {
-            if (!onScreen) { replay(screen, 'shake'); say(o, 'ProfileScreen is not in the composition. Come back to the screen first.'); return; }
-            if (id === userId) {
-              replay(screen, 'cmp-flash');
-              say(o, `${hl(`userId = ${id}`)} <span class="muted">// same key: ProfileScreen recomposed, the effect was left alone</span>`);
-              return;
-            }
-            const old = effect, cancelled = old && old.cancel();
-            const from = userId; userId = id; paintIds();
-            const j = startEffect();
-            say(o, `Key changed ${from} → ${id}. ${cancelled ? `<span class="bad">Cancelled #${old.n}</span>, then launched` : 'Launched'} <span class="good">#${j.n}</span>.`);
-          }
-          function recompose() {
-            if (!onScreen) { replay(screen, 'shake'); say(o, 'Nothing to recompose. ProfileScreen is not on screen.'); return; }
-            replay(screen, 'cmp-flash');
-            say(o, `${hl('count++')} <span class="muted">// ProfileScreen recomposed. userId is still ${userId}, so the effect keeps going.</span>`);
-          }
-          function save() {
-            if (!onScreen) { replay(screen, 'shake'); say(o, 'The button is gone with the screen. Nothing to tap.'); return; }
-            const j = job(scopeLane, 'showSnackbar("Saved")', SAVE_MS, () => {
-              scopeJobs = scopeJobs.filter(x => x !== j);
-              say(o, `<span class="good">done:</span> snackbar shown <span class="muted">// coroutine #${j.n} from rememberCoroutineScope</span>`);
-            });
-            scopeJobs.push(j);
-            say(o, `${hl('scope.launch { snackbar.showSnackbar("Saved") }')} <span class="muted">// started by a click. A key change won’t cancel it.</span>`);
-          }
-          function toggleScreen() {
-            if (onScreen) {
-              onScreen = false;
-              const c = [effect, ...scopeJobs].filter(j => j && j.cancel()).map(j => '#' + j.n);
-              scopeJobs = [];
-              screen.classList.add('cmp-gone'); title.textContent = 'Left the screen'; sub.textContent = 'not in the composition';
-              leaveBtn.textContent = 'Come back';
-              say(o, `ProfileScreen left the composition. ${c.length ? `<span class="bad">Cancelled ${c.join(', ')}</span>.` : 'No coroutines were running.'} <span class="muted">Every effect and scope job dies with it.</span>`);
-            } else {
-              onScreen = true;
-              screen.classList.remove('cmp-gone');
-              leaveBtn.textContent = 'Leave the screen';
-              const j = startEffect();
-              say(o, `Back in the composition. LaunchedEffect starts fresh: <span class="good">#${j.n}</span>.`);
-            }
-          }
-          paintIds();
-          const first = startEffect();
-          say(o, `LaunchedEffect(1) launched <span class="good">#${first.n}</span>. Change userId before it finishes.`);
-          el.append(
-            h('div', { class: 'cmp-split' },
-              h('div', { class: 'cmp-fx' },
-                h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'LaunchedEffect(userId)'), effLane),
-                h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'scope.launch'), scopeLane)),
-              screen),
-            h('div', { class: 'controls' }, idBtns, cmd('count++', recompose)),
-            h('div', { class: 'controls' }, cmd('onClick = { scope.launch { ... } }', save), leaveBtn),
-            o);
-        },
-        predict: {
-          q: 'A <code>LaunchedEffect</code> load and a <code>scope.launch</code> save are both running. The user leaves the screen. What happens to them?',
-          options: ['Both keep running until they finish', 'Both are cancelled', 'Only the LaunchedEffect is cancelled'],
-          a: 1,
-          why: 'Both belong to the composable. The LaunchedEffect job and the <code>rememberCoroutineScope</code> scope are cancelled when it leaves the composition.',
-        },
+        terms: [
+          { term: 'side effect', def: 'Something a composable does besides describing the screen: waiting, saving, sending.' },
+          { term: 'LaunchedEffect', def: 'Runs a block when it appears on screen, starts it over when its key changes, and stops it when it leaves.' },
+          { term: 'key (of an effect)', def: 'The value in <code>LaunchedEffect(key)</code>. A new value restarts the block.' },
+          { term: 'delay', def: '<code>delay(ms)</code> waits that many milliseconds without freezing the screen. It is a <code>suspend</code> function, so it runs inside a coroutine such as the block of <code>LaunchedEffect</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Hide the tip 5 seconds after the screen opens.', code: `var visible by remember { mutableStateOf(true) }
+[[LaunchedEffect]](Unit) {
+    [[delay]](5000)
+    visible = false
+}`, why: '<code>LaunchedEffect(Unit)</code> runs once while the screen is shown. <code>delay(5000)</code> waits 5 seconds.' },
+          { type: 'bug', prompt: 'The reminder shows one hour after the screen opens, even when the user had a glass five minutes ago. Tap the line to change.', code: `var showReminder by remember { mutableStateOf(false) }
+LaunchedEffect(Unit) {
+    showReminder = false
+    delay(3600000)
+    showReminder = true
+}`, bug: 1, fix: 'LaunchedEffect(glasses) {', why: 'With <code>Unit</code> the block runs once and never starts over. With <code>glasses</code> as the key, every new glass starts a new hour.' },
+        ],
+        quiz: [
+          { q: 'The screen recomposes because some other state changed. Does a <code>LaunchedEffect(Unit)</code> block start again?', options: ['No', 'Yes, every time', 'Only if it already finished'], a: 0, why: 'Recomposition doesn’t restart it. Only a new key, or leaving and coming back, does.' },
+          { q: 'What happens to a running <code>LaunchedEffect</code> block when its key changes?', options: ['It is stopped and starts again from the top', 'It keeps going and a second copy starts', 'Nothing'], a: 0, why: 'One block per effect: the old one is stopped, a new one starts.' },
+          { q: 'The user leaves the screen during <code>delay(5000)</code>. What happens to the block?', options: ['It is stopped', 'It finishes the wait in the background', 'The app waits before leaving'], a: 0, why: 'The effect left the screen, so its block is stopped.' },
+        ],
+        docs: [['Side-effects in Compose', 'https://developer.android.com/develop/ui/compose/side-effects']],
       },
 
-      // 13a ────────────────────────────────────────────
       {
         id: 'disposable-effect',
-        title: 'DisposableEffect and SideEffect',
-        tagline: 'Effects that are not coroutines: register and clean up, or publish state after each composition.',
-        level: 'intermediate',
+        title: 'Cleaning up',
+        tagline: 'Start listening when a screen appears, stop when it goes.',
+        goals: ['Pair a start with a stop using <code>DisposableEffect</code>', 'Put the cleanup in <code>onDispose</code>', 'Predict when the cleanup runs'],
+        level: 'intermediate', introduces: ['DisposableEffect', 'onDispose'],
         body: `
-<p>Some setup is not a coroutine: adding a listener, a lifecycle observer or a sensor callback. <code>DisposableEffect(key) { }</code> runs its block when it enters the composition, and the block must end with <code>onDispose { }</code>. Compose calls <code>onDispose</code> before the effect restarts for a new key, and when the composable leaves.</p>
-<p>So whatever the block registers, <code>onDispose</code> unregisters. Register in a <code>LaunchedEffect</code> or in the body instead, and nothing ever unregisters: each restart adds another listener, and they all keep firing and keep the old screen in memory.</p>
-<p><code>SideEffect { }</code> is the other non-coroutine effect. It has no keys and no cleanup. It runs after every successful recomposition, and is meant for publishing Compose state to code that Compose doesn't manage.</p>`,
-        code: `@Composable
-fun ScreenAnalytics(onStart: () -> Unit, onStop: () -> Unit) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val currentOnStart by rememberUpdatedState(onStart)
-    val currentOnStop by rememberUpdatedState(onStop)
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) currentOnStart()
-            else if (event == Lifecycle.Event.ON_STOP) currentOnStop()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }   // undo it
-    }
-}`,
-        remember: 'DisposableEffect: what the block registers, onDispose removes. SideEffect: publish state after each successful composition.',
-        terms: [
-          { term: 'DisposableEffect', def: 'An effect for setup that needs cleanup. Its block must end with onDispose, which runs before a key restart and when the composable leaves.' },
-          { term: 'onDispose', def: 'The cleanup block of a DisposableEffect, where you undo what the effect registered.' },
-          { term: 'SideEffect', def: 'An effect that runs after every successful recomposition, used to publish Compose state to non-Compose objects.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Observe the lifecycle of the current owner and stop observing when it changes or the screen leaves.', code: 'val owner = LocalLifecycleOwner.current\n[[DisposableEffect]](owner) {\n    val observer = LifecycleEventObserver { _, e -> log(e) }\n    owner.lifecycle.addObserver(observer)\n    [[onDispose]] { owner.lifecycle.removeObserver(observer) }\n}', why: 'The owner is the key, so a new owner disposes the old observer first. <code>onDispose</code> is the last statement of the block.' },
-          { type: 'bug', prompt: 'Open and leave this screen a few times. Every network change now fires several callbacks. Tap the line.', code: '@Composable\nfun OfflineBanner(manager: ConnectivityManager, onOnline: (Boolean) -> Unit) {\n    DisposableEffect(manager) {\n        val callback = bannerCallback(onOnline)\n        manager.registerDefaultNetworkCallback(callback)\n        onDispose { }\n    }\n}', bug: 5, fix: '        onDispose { manager.unregisterNetworkCallback(callback) }', why: 'An empty <code>onDispose</code> compiles, but nothing unregisters. Each visit adds another callback that outlives the screen.' },
-        ],
-        quiz: [
-          { q: 'A <code>DisposableEffect(sensor)</code> is running. <code>sensor</code> changes. What runs, in order?', options: ['The new block only', 'onDispose of the old effect, then the block with the new sensor', 'The block, then onDispose'], a: 1, why: 'A key change disposes the old effect first, then starts the new one.' },
-          { q: 'When does <code>SideEffect { }</code> run?', options: ['Once, when it enters the composition', 'After every successful recomposition', 'Only when its key changes'], a: 1, why: 'SideEffect has no keys. It runs each time a composition that contains it is applied.' },
-          { q: 'You add a click listener to a classic View from Compose. Which effect?', options: ['<code>LaunchedEffect</code>', '<code>DisposableEffect</code>', '<code>SideEffect</code>'], a: 1, why: 'Registering needs a matching unregister, and only DisposableEffect has a cleanup block.' },
-          { q: 'An analytics client must be tagged with the current user type. Which code fits?', options: ['<code>SideEffect { analytics.setUserProperty(...) }</code>', 'Write <code>analytics.setUserProperty(...)</code> straight in the composable body', '<code>DisposableEffect(Unit) { analytics.setUserProperty(...); onDispose { } }</code>'], a: 0, why: 'SideEffect runs only after a composition is applied, so the outside object always matches the screen. A body write can leak a value from a discarded composition.' },
-          { q: 'You want a location listener on while the screen is started and off when it stops or leaves. Which is the shortest correct choice?', options: ['<code>LaunchedEffect(Unit) { manager.requestLocationUpdates(l) }</code>', '<code>SideEffect { manager.requestLocationUpdates(l) }</code>', '<code>LifecycleStartEffect(manager) { …; onStopOrDispose { manager.removeUpdates(l) } }</code>'], a: 2, why: 'LifecycleStartEffect runs on ON_START and its onStopOrDispose block runs on ON_STOP or when the composable leaves. The other two never unregister.' },
-        ],
-        deeper: [
-          {
-            title: 'SideEffect: publish state after a composition is applied',
-            body: `<p>Sometimes an object outside Compose needs the current value, for example an analytics client that tags events with the user type. Writing it in the composable body looks the same, but a composition can be thrown away before it is applied. A write from the body then leaks a value the screen never showed.</p>
-<p><code>SideEffect { }</code> runs only after a composition succeeds, so the outside object always matches the screen. Keep it cheap: it runs after every recomposition of that composable.</p>`,
-            code: `@Composable
-fun rememberAnalytics(user: User): Analytics {
-    val analytics = remember { Analytics() }
-    SideEffect {
-        analytics.setUserProperty("userType", user.userType)
-    }
-    return analytics
-}`,
-            visual(el) {
-              let inSide = true, screen = 'free', ext = 'free', runs = 0;
-              const toggle = h('input', { type: 'checkbox', id: 'cmp-se-on', checked: true });
-              const head = h('div', { class: 'kt' });
-              const scrEl = h('span', { class: 'cmp-obj' }), extEl = h('span', { class: 'cmp-obj' }), runEl = h('span', { class: 'cmp-badge' }, '0');
-              const o = out();
-              function paint() {
-                head.innerHTML = hl(inSide ? 'SideEffect { analytics.userType = user.type }' : 'analytics.userType = user.type   // in the body');
-                scrEl.textContent = `screen: ${screen}`;
-                extEl.textContent = `analytics: ${ext}`;
-                extEl.className = 'cmp-obj ' + (ext === screen ? 'cmp-reuse' : 'cmp-new');
-                runEl.textContent = runs; replay(runEl, 'pop');
-              }
-              function applied(v) {
-                screen = v; ext = v; runs++; paint(); replay(scrEl, 'pop');
-                say(o, `Recomposed with ${hl(`user.type = ${v}`)} and applied. ${inSide ? 'SideEffect ran after it.' : 'The body wrote it during composition.'} <span class="good">They match.</span>`);
-              }
-              function abandoned() {
-                if (inSide) {
-                  replay(scrEl, 'shake'); paint();
-                  say(o, `A composition with ${hl('user.type = trial')} was thrown away. <span class="good">SideEffect never ran</span>, so analytics still says ${ext}.`);
-                } else {
-                  ext = 'trial'; runs++; paint(); replay(extEl, 'shake');
-                  say(o, `A composition with ${hl('user.type = trial')} was thrown away, but <span class="bad">the body already wrote trial</span>. Events are now tagged with a value the screen never showed.`);
-                }
-              }
-              toggle.addEventListener('change', () => { inSide = toggle.checked; screen = 'free'; ext = 'free'; runs = 0; paint(); say(o, inSide ? 'The write is in SideEffect. Reset to free.' : 'The write is in the body. Reset to free.'); });
-              paint();
-              say(o, 'Recompose a few times, then throw a composition away.');
-              el.append(
-                h('div', { class: 'controls' }, h('label', { class: 'switch', for: 'cmp-se-on' }, toggle, 'write inside SideEffect')),
-                head,
-                h('div', { class: 'cmp-fx' },
-                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'values'), h('div', { class: 'cmp-jobs' }, scrEl, extEl)),
-                  h('div', { class: 'cmp-fx-lane' }, h('span', { class: 'cmp-fx-name' }, 'writes'), h('div', { class: 'cmp-jobs' }, runEl))),
-                h('div', { class: 'controls' }, cmd('user.type = pro  // applied', () => applied('pro')), cmd('user.type = free  // applied', () => applied('free')), act('Throw away a composition', abandoned)),
-                o);
-            },
-          },
-          {
-            title: 'Lifecycle effects do the observer for you',
-            body: `<p>Lifecycle 2.7.0 added effects for the most common DisposableEffect: watching the lifecycle. <code>LifecycleStartEffect</code> runs its block on <code>ON_START</code> and needs an <code>onStopOrDispose</code> block, which runs on <code>ON_STOP</code> or when the composable leaves. <code>LifecycleResumeEffect</code> does the same for resume and pause. For a one-shot action with no cleanup, use <code>LifecycleEventEffect</code>.</p>`,
-            code: `LifecycleStartEffect(locationManager) {
-    val listener = LocationListener { location -> /* update UI */ }
-    locationManager.requestLocationUpdates(listener)
-    onStopOrDispose { locationManager.removeUpdates(listener) }
-}
-
-LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-    analytics.logView("article_detail")
-}`,
-          },
-          {
-            title: 'Pick the effect by the job',
-            body: `<p>The question is what the work looks like. Suspend work tied to the screen: <code>LaunchedEffect</code>. Work started by a click: <code>rememberCoroutineScope</code>. Something you register and must unregister: <code>DisposableEffect</code>. A value an outside object should mirror: <code>SideEffect</code>. If a choice feels awkward, the work often belongs in a ViewModel instead.</p>`,
-            code: `LaunchedEffect(id) { article = repo.load(id) }          // suspend, follows a key
-val scope = rememberCoroutineScope()                      // for onClick
-DisposableEffect(view) { view.add(l); onDispose { view.remove(l) } }
-SideEffect { player.volume = volume }                     // mirror state outward`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>DisposableEffect</code> is built like <code>LaunchedEffect</code>: a remembered object that implements <code>RememberObserver</code>. When the composition is applied, <code>onRemembered()</code> runs your block and keeps the result. When the key changes or the composable leaves, <code>onForgotten()</code> calls the <code>onDispose</code> you returned.</p>
-<p>The block's type is <code>DisposableEffectScope.() -&gt; DisposableEffectResult</code>, and only <code>onDispose { }</code> creates that result. That is why it must be the last statement, and why the compiler complains when it is missing. <code>SideEffect</code> skips the remember step: it queues your block to run once the current composition has been applied.</p>`,
-          code: `// Simplified from androidx.compose.runtime
-@Composable
-fun DisposableEffect(key1: Any?, effect: DisposableEffectScope.() -> DisposableEffectResult) {
-    remember(key1) { DisposableEffectImpl(effect) }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'An empty onDispose',
-            bad: `DisposableEffect(view) {
-    view.viewTreeObserver.addOnGlobalLayoutListener(listener)
-    onDispose { }
-}`,
-            good: `DisposableEffect(view) {
-    view.viewTreeObserver.addOnGlobalLayoutListener(listener)
-    onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
-}`,
-            why: 'The docs call an empty onDispose a bad sign. If nothing needs undoing, you likely wanted LaunchedEffect or SideEffect. If something does, undo it here.',
-          },
-          {
-            title: 'Keying on Unit when the object can change',
-            bad: `val owner = LocalLifecycleOwner.current
-DisposableEffect(Unit) {
-    owner.lifecycle.addObserver(observer)
-    onDispose { owner.lifecycle.removeObserver(observer) }
-}`,
-            good: `val owner = LocalLifecycleOwner.current
-DisposableEffect(owner) {
-    owner.lifecycle.addObserver(observer)
-    onDispose { owner.lifecycle.removeObserver(observer) }
-}`,
-            why: 'With Unit, the effect keeps watching the first owner forever, even after the composable moves to a new one. Key on every object the block registers with.',
-          },
-          {
-            title: 'Real work in SideEffect',
-            bad: `SideEffect {
-    repo.refresh()     // runs after every recomposition
-}`,
-            good: `LaunchedEffect(Unit) {
-    repo.refresh()     // once per entry, cancelled on leave
-}`,
-            why: 'SideEffect runs after every successful recomposition, so a refresh there fires again and again. It is for cheap writes that mirror state.',
-          },
-        ],
+<p>Some people track water with a smart bottle that measures each sip. Your app has a <code>SmartBottle</code> class for it: the bottle calls your listener after every sip, like the Observer pattern. The water screen should listen while it is shown. When the user leaves the screen, it must stop listening. Otherwise the bottle keeps calling a screen that is gone, which wastes work and keeps memory busy.</p>
+<p>Many things come in pairs like this: add a listener and remove it, start something and stop it. <code>DisposableEffect(key) { ... }</code> is made for pairs. Its block runs when it appears on screen, like <code>LaunchedEffect</code>, and must end with <code>onDispose { ... }</code>: the cleanup.</p>
+<p>The cleanup runs when the composable leaves the screen. It also runs when the key changes, just before the block runs again with the new key: stop listening to the old bottle, then start listening to the new one. To <em>dispose</em> of something means to clean it up when you are done with it.</p>`,
         visual(el) {
-          Lab.ui.timeline(el, {
-            lanes: ['key', 'DE', 'LE 1', 'LE 2', 'LE 3'],
-            span: 10,
-            unit: 's',
+          const scr = (bottle, msg) => `<div class="ui-m-bar">Water</div><div class="ui-m-body"><div class="ui-m-card"><span class="ui-m-muted">Bottle: ${bottle}</span><b>${msg}</b></div><span><span class="ui-m-chip">Home</span> <span class="ui-m-chip">Office</span></span></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'DisposableEffect(bottle)',
             predict: {
-              q: 'The listener is registered in <code>LaunchedEffect(sensor)</code> with no cleanup. The sensor key changes twice. How many listeners are registered now?',
-              options: ['1', '2', '3'],
-              a: 2,
-              why: 'Each key change cancels the coroutine and starts the block again. Cancelling a coroutine does not unregister a listener, so every restart adds one.',
+              q: 'The user switches from the Home bottle to the Office bottle. What runs first?',
+              options: ['The cleanup for Home, then the block for Office', 'The block for Office, and Home keeps its listener', 'Both bottles get a new listener'],
+              a: 0,
+              why: 'A new key means: clean up the old effect, then start the new one.',
             },
             frames: [
-              { now: 0, say: 'The same screen written two ways. <b>DE</b>: <code>DisposableEffect(sensor)</code> with <code>onDispose</code>. <b>LE 1 to 3</b>: listeners registered by <code>LaunchedEffect(sensor)</code> with no cleanup.' },
-              { bars: [{ lane: 0, from: 0, to: 3, label: 'acc', tone: 'muted' }, { lane: 1, from: 0, to: 3, label: 'acc', tone: 'ok' }, { lane: 2, from: 0, to: 3, label: 'acc' }], say: 'The screen enters the composition. Both versions register one accelerometer listener.' },
-              { bars: [{ lane: 0, from: 3, to: 6, label: 'gyro', tone: 'muted' }, { lane: 1, from: 3, to: 6, label: 'gyro', tone: 'ok' }, { lane: 2, from: 3, to: 6, label: 'leak', tone: 'err' }, { lane: 3, from: 3, to: 6, label: 'gyro' }], marks: [{ at: 3, label: 'key', tone: 'muted' }], say: 'The key changes. <code>onDispose</code> unregisters the old listener first, then the block registers the new one. The LaunchedEffect only adds: the old listener stays.' },
-              { bars: [{ lane: 0, from: 6, to: 8, label: 'acc', tone: 'muted' }, { lane: 1, from: 6, to: 8, label: 'acc', tone: 'ok' }, { lane: 2, from: 6, to: 8, label: 'leak', tone: 'err' }, { lane: 3, from: 6, to: 8, label: 'leak', tone: 'err' }, { lane: 4, from: 6, to: 8, label: 'acc' }], marks: [{ at: 6, label: 'key', tone: 'muted' }], say: 'Back to the accelerometer. Still one listener on the left. Three on the right, all firing for every event.' },
-              { bars: [{ lane: 2, from: 8, to: 10, label: 'leak', tone: 'err' }, { lane: 3, from: 8, to: 10, label: 'leak', tone: 'err' }, { lane: 4, from: 8, to: 10, label: 'leak', tone: 'err' }], marks: [{ at: 8, label: 'leave', tone: 'err' }], say: 'The screen leaves the composition. <code>onDispose</code> runs one last time: nothing is registered. The three other listeners live on and keep the old screen in memory.' },
+              { screen: scr('Home', 'No sips yet'), log: 'block: home.addListener(listener)', say: 'The water screen appears with the Home bottle. The block adds a listener.' },
+              { screen: scr('Home', 'Last sip: 120 ml'), log: 'home calls listener(120)', say: 'A sip is measured. The bottle calls the listener, which sets a state, and the screen shows it.' },
+              { screen: scr('Office', 'No sips yet'), log: ['key home → office', 'onDispose: home.removeListener(listener)', 'block: office.addListener(listener)'], say: 'The user switches bottles. The key changed, so the cleanup runs first for Home, then the block runs for Office.' },
+              { log: '// home has no listener from this screen now', say: 'Sips from the Home bottle no longer reach this screen. Only Office is heard.' },
+              { screen: '<div class="ui-m-bar">History</div><div class="ui-m-body"><div class="ui-m-row"><div>Mon 19 Oct: 6 glasses</div></div><div class="ui-m-row"><div>Sun 18 Oct: 8 glasses</div></div></div>', log: 'leaves screen → onDispose: office.removeListener(listener)', say: 'The user leaves. The cleanup runs one last time. Nothing is left listening.' },
             ],
           });
         },
+        code: `// SmartBottle comes from your app: it has a name, addListener and removeListener.
+@Composable
+fun BottleStatus(bottle: SmartBottle) {
+    var lastSip by remember { mutableStateOf(0) }
+
+    DisposableEffect(bottle) {
+        val listener: (Int) -> Unit = { ml -> lastSip = ml }
+        bottle.addListener(listener)            // start
+        onDispose {
+            bottle.removeListener(listener)     // stop: screen left, or bottle changed
+        }
+    }
+
+    Text("\${bottle.name}: last sip $lastSip ml")
+}`,
+        remember: 'DisposableEffect(key) { start; onDispose { stop } }: the stop runs when the screen leaves or the key changes.',
+        mistakes: [
+          { title: 'Adding a listener in the body', bad: `@Composable
+fun BottleStatus(bottle: SmartBottle) {
+    var lastSip by remember { mutableStateOf(0) }
+    bottle.addListener { ml -> lastSip = ml }
+    Text("Last sip: $lastSip ml")
+}
+// every recomposition adds one more listener,
+// and none is ever removed`, good: `DisposableEffect(bottle) {
+    val listener: (Int) -> Unit = { ml -> lastSip = ml }
+    bottle.addListener(listener)
+    onDispose { bottle.removeListener(listener) }
+}`, why: 'The body runs on every recomposition. <code>DisposableEffect</code> adds the listener once and removes it at the right moment.' },
+        ],
+        terms: [
+          { term: 'DisposableEffect', def: 'An effect for start and stop pairs. Its block runs when it appears; <code>onDispose</code> runs when it leaves or its key changes.' },
+          { term: 'onDispose', def: 'The cleanup block that must end every <code>DisposableEffect</code>.' },
+          { term: 'dispose', def: 'To clean something up when you are done with it.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Listen to the bottle while the screen is shown, and stop when it leaves.', code: `[[DisposableEffect]](bottle) {
+    bottle.addListener(listener)
+    [[onDispose]] {
+        bottle.removeListener(listener)
+    }
+}`, why: '<code>DisposableEffect</code> holds the start; <code>onDispose</code> holds the matching stop.' },
+          { type: 'bug', prompt: 'After switching to another bottle and back, each sip from the first bottle shows up three times. Tap the wrong line.', code: `DisposableEffect(bottle) {
+    bottle.addListener(listener)
+    onDispose {
+        bottle.addListener(listener)
+    }
+}`, bug: 3, fix: '        bottle.removeListener(listener)', why: 'The cleanup must undo the start. Adding again in <code>onDispose</code> piles up listeners: the first bottle gets one at the start, one more when you switch away, and a third when you come back.' },
+        ],
+        quiz: [
+          { q: 'When does <code>onDispose</code> run?', options: ['When the composable leaves the screen, or the key changes', 'Every time the screen recomposes', 'Only when the app closes'], a: 0, why: 'Those are the two moments when the old effect is no longer wanted.' },
+          { q: 'Which job fits <code>DisposableEffect</code> better than <code>LaunchedEffect</code>?', options: ['Add a listener now and remove it later', 'Wait 5 seconds, then hide a tip', 'Show a dialog'], a: 0, why: 'It is made for start and stop pairs. Waiting belongs in <code>LaunchedEffect</code>.' },
+          { q: 'The user switches from the Home bottle to the Office bottle. How many listeners from this screen does the Home bottle have afterwards?', options: ['None', 'One', 'Two'], a: 0, why: 'The key changed, so <code>onDispose</code> removed the Home listener before the block added one to Office.' },
+        ],
+        docs: [['DisposableEffect', 'https://developer.android.com/develop/ui/compose/side-effects']],
       },
 
-      // 13b ────────────────────────────────────────────
       {
         id: 'snapshot-flow',
-        title: 'snapshotFlow: from State to Flow',
-        tagline: 'React to State changes with Flow operators, without restarting the effect.',
-        level: 'intermediate',
+        title: 'Watching state over time',
+        tagline: 'React each time a state changes, even one your code doesn’t change.',
+        goals: ['Read a list’s scroll position with <code>rememberLazyListState</code>', 'Turn state changes into a stream of values with <code>snapshotFlow</code>', 'Handle each new value with <code>collect</code>'],
+        level: 'intermediate', introduces: ['snapshotFlow', 'collect', 'rememberLazyListState', 'firstVisibleItemIndex', 'initialFirstVisibleItemIndex'],
         body: `
-<p>Keying a <code>LaunchedEffect</code> on a value that changes all the time, like the scroll position, cancels and relaunches the coroutine on every change. Often you want one long collector instead. <code>snapshotFlow { }</code> turns Compose State into a cold <code>Flow</code>.</p>
-<p>When collected, it runs the block, records which State objects it read, and emits the result. When one of them changes, it runs the block again and emits only if the result is different from the last one, like <code>distinctUntilChanged()</code>. From there you have every Flow operator: <code>map</code>, <code>filter</code>, <code>debounce</code>.</p>
-<p>Collect it inside a <code>LaunchedEffect</code> keyed on the state holder, such as the <code>LazyListState</code>, so the collector starts once and lives with the screen. It works in a ViewModel too, for state the ViewModel owns.</p>`,
-        code: `val listState = rememberLazyListState()
-
-LaunchedEffect(listState) {
-    snapshotFlow { listState.firstVisibleItemIndex }
-        .map { index -> index > 0 }
-        .distinctUntilChanged()
-        .filter { it }
-        .collect { analytics.log("scrolled_past_first") }
-}
-
-LazyColumn(state = listState) { /* ... */ }`,
-        remember: 'snapshotFlow re-runs its block when a State it read changes, and emits only new values. One collector, no restarts.',
-        terms: [
-          { term: 'snapshotFlow', def: 'A function that turns the State objects read in its block into a cold Flow that emits when the result changes.' },
-          { term: 'Conflation', def: 'Keeping only the latest value when several changes happen before the collector looks, so intermediate values can be skipped.' },
-          { term: 'distinctUntilChanged', def: 'A Flow operator that drops a value equal to the one just emitted. snapshotFlow already behaves this way for its block.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Show the scroll-to-top button only once the user has scrolled, with one long collector.', code: 'LaunchedEffect(listState) {\n    [[snapshotFlow]] { listState.[[firstVisibleItemIndex]] }\n        .map { it > 0 }\n        .[[distinctUntilChanged]]()\n        .collect { showTop = it }\n}', why: 'The block reads State, so it re-runs on scroll. After <code>map</code> many indexes give the same Boolean, so <code>distinctUntilChanged</code> passes only the flips.' },
-          { type: 'bug', prompt: 'This crashes with IllegalStateException as soon as it is collected. Tap the line.', code: 'var lastSeen by mutableStateOf(0)\n\nLaunchedEffect(listState) {\n    snapshotFlow { lastSeen = listState.firstVisibleItemIndex; lastSeen }\n        .collect { analytics.log("seen", it) }\n}', bug: 3, fix: '    snapshotFlow { listState.firstVisibleItemIndex }', why: 'The block runs in a read-only snapshot and must not write State. Read in the block, and do writes in <code>collect</code>.' },
-        ],
-        quiz: [
-          { q: 'The block reads <code>count</code>. <code>count</code> goes 3 → 3. Does snapshotFlow emit?', options: ['Yes, every write emits', 'No, the result is equal to the last one'], a: 1, why: 'It emits only when the result differs from the previous one.' },
-          { q: 'Why prefer snapshotFlow over <code>LaunchedEffect(listState.firstVisibleItemIndex)</code>?', options: ['It is the only way to read the index', 'The keyed effect cancels and relaunches on every scroll step', 'LaunchedEffect cannot read State'], a: 1, why: 'A fast-changing key restarts the coroutine constantly. snapshotFlow keeps one collector running.' },
-          { q: '<code>count</code> is set to 1, 2, 3 in one click handler. A collector of <code>snapshotFlow { count }</code> is guaranteed to see', options: ['1, 2 and 3', 'At least the latest value, 3, but maybe not 1 and 2', 'Nothing'], a: 1, why: 'snapshotFlow is for state, not events. Changes made before the collector looks can be conflated to the latest value.' },
-          { q: '<code>class Paging { var page = 0 }</code>. You collect <code>snapshotFlow { paging.page }</code> and later set <code>paging.page = 2</code>. What does the collector see?', options: ['2, on the next frame', 'An <code>IllegalStateException</code>', 'Only the first value, 0: a plain var is not snapshot State, so changes are not tracked'], a: 2, why: 'snapshotFlow only tracks snapshot State objects read in the block. A plain field can be read, but changing it never triggers an emission.' },
-        ],
-        deeper: [
-          {
-            title: 'State, not events: values can be skipped',
-            body: `<p>snapshotFlow is conflated. It reacts when changes are applied, and the docs say the block may skip intermediate changes. Several writes in one click handler show up as one emission with the last value. Writes spread over separate frames usually show up one by one.</p>
-<p>So use it for "what is the value now", never for "count every click". For events, call a function or send them through a Channel or a SharedFlow.</p>`,
-            code: `var count by mutableIntStateOf(0)
-
-Button(onClick = { count++; count++; count++ }) { Text("+3") }
-
-LaunchedEffect(Unit) {
-    snapshotFlow { count }.collect { println("count = $it") }
-}
-// one tap usually prints one line with the latest value, not three`,
-            visual(el) {
-              let count = 0;
-              const log = h('div', { class: 'cmp-gs-log', 'aria-live': 'polite' });
-              const val = h('span', { class: 'cmp-obj' });
-              const o = out();
-              const paint = () => { val.textContent = `count = ${count}`; };
-              function emit(v) { log.prepend(h('div', { class: 'drop-in', html: hl(`collect: count = ${v}`) })); while (log.children.length > 6) log.lastElementChild.remove(); }
-              async function sameFrame() {
-                const from = count; count += 3; paint(); replay(val, 'pop');
-                say(o, `${hl('count++; count++; count++')} in one handler: ${from + 1}, ${from + 2}, ${from + 3}. <span class="muted">The collector looks once.</span>`);
-                await sleep(300); if (!el.isConnected) return;
-                emit(count);
-              }
-              async function frames() {
-                say(o, 'Three writes, one per frame. The collector catches up between them.');
-                for (let i = 0; i < 3; i++) {
-                  count++; paint(); replay(val, 'pop');
-                  await sleep(260); if (!el.isConnected) return;
-                  emit(count);
-                }
-              }
-              function same() {
-                replay(val, 'pop');
-                say(o, `${hl(`count = ${count}`)} <span class="muted">// same value: the block re-runs, nothing is emitted</span>`);
-              }
-              paint(); emit(0);
-              say(o, 'The first value is emitted as soon as collection starts.');
-              el.append(val, h('div', { class: 'controls' }, cmd('count += 3 in one handler', sameFrame), cmd('count++ in three frames', frames), cmd('count = count', same)), log, o);
-            },
-          },
-          {
-            title: 'The block only reads',
-            body: `<p>The block runs in a read-only snapshot. Writing State inside it fails with <code>IllegalStateException</code>. Keep the block a plain read with no side effects, because it can run more than once for the same inputs. Do writes and other work in <code>collect</code>.</p>
-<p>Only snapshot State is tracked. A plain <code>var</code> or a field of a normal class can be read in the block, but changing it never makes the flow emit.</p>`,
-            code: `// Good: read in the block, act in collect
-snapshotFlow { listState.isScrollInProgress }
-    .collect { scrolling -> player.dimControls(scrolling) }
-
-// Never re-emits: page is not snapshot State
-class Paging { var page = 0 }
-snapshotFlow { paging.page }`,
-          },
-          {
-            title: 'From a ViewModel',
-            body: `<p>snapshotFlow is not tied to composition. A ViewModel that keeps its input in <code>mutableStateOf</code>, or a <code>TextFieldState</code>, can turn it into a Flow, add <code>debounce</code>, and expose results with <code>stateIn</code>.</p>`,
-            code: `class SearchViewModel(private val repo: SearchRepository) : ViewModel() {
-    val query = TextFieldState()
-
-    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val results = snapshotFlow { query.text.toString() }
-        .debounce(300)
-        .mapLatest { repo.search(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>Compose State lives in snapshots. When snapshotFlow is collected, it runs the block in a read-only snapshot with a read observer, so it learns exactly which State objects the block touched. It also registers to hear when other snapshots are applied.</p>
-<p>When an applied change touches one of the recorded objects, the block runs again, the read set is recorded again, and the new result is compared with the last one. Changes to objects the block didn't read are ignored. This is the same tracking that decides which composables recompose.</p>`,
-          code: `// The idea, simplified
-val reads = mutableSetOf<Any>()
-var last = Snapshot.takeSnapshot { reads += it }.run { enter(block) }
-emit(last)
-// on every applied change that touches something in reads:
-//     reads.clear(); val next = run block again; if (next != last) emit(next)`,
-        },
-        mistakes: [
-          {
-            title: 'Keying an effect on a fast-changing value',
-            bad: `LaunchedEffect(listState.firstVisibleItemIndex) {
-    if (listState.firstVisibleItemIndex > 0) analytics.log("scrolled")
-}`,
-            good: `LaunchedEffect(listState) {
-    snapshotFlow { listState.firstVisibleItemIndex > 0 }
-        .filter { it }
-        .collect { analytics.log("scrolled") }
-}`,
-            why: 'The keyed version relaunches on every scroll step and logs again and again. The snapshotFlow version starts once and logs only when the Boolean becomes true.',
-          },
-          {
-            title: 'Counting events with snapshotFlow',
-            bad: `snapshotFlow { tapCount }.collect { sendTapToServer() }`,
-            good: `Button(onClick = { viewModel.onTap() }) { Text("Like") }`,
-            why: 'Several taps before the collector looks become one emission. Events should go through a callback, a Channel or a SharedFlow.',
-          },
-        ],
+<p>The History list grows long. A user scrolls back to look at last month, leaves, and next time History should open at the same place. But the list scrolls by itself when the user swipes; there is no <code>onClick</code> where you could save the position.</p>
+<p>First, get hold of the scroll position. <code>val listState = rememberLazyListState()</code> creates the list’s state, and <code>LazyColumn(state = listState)</code> uses it. <code>listState.firstVisibleItemIndex</code> is the index of the row at the top of the screen. To open at a saved place, pass it in: <code>rememberLazyListState(initialFirstVisibleItemIndex = lastSeen)</code>.</p>
+<p><code>snapshotFlow { listState.firstVisibleItemIndex }</code> watches the state read inside its braces. Every time the result changes, it hands out the new value, so you get a <em>flow</em>: a stream of values that arrive one by one over time. If the value is the same as last time, it hands out nothing.</p>
+<p><code>.collect { index -> saveLastSeen(index) }</code> runs its lambda for every value that arrives, and then keeps waiting for the next. Because it waits for as long as the screen is shown, it goes inside <code>LaunchedEffect(listState)</code>, which stops it when the screen leaves.</p>`,
         visual(el) {
-          Lab.ui.timeline(el, {
-            lanes: ['index', 'keyed', 'flow'],
-            span: 10,
-            unit: 's',
+          const days = ['Mon 19 Oct', 'Sun 18 Oct', 'Sat 17 Oct', 'Fri 16 Oct', 'Thu 15 Oct', 'Wed 14 Oct', 'Tue 13 Oct', 'Mon 12 Oct'];
+          const scr = (top, nudge) => `<div class="ui-m-bar">History</div><div class="ui-m-body">${days.slice(top, top + 5).map((p, i) => `<div class="ui-m-row" style="${i === 0 && nudge ? 'padding-top:0' : ''}"><span class="ui-m-chip">${top + i}</span><div>${p}</div></div>`).join('')}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'snapshotFlow → collect',
             predict: {
-              q: 'The user flings through several items. With <code>LaunchedEffect(listState.firstVisibleItemIndex)</code>, how many coroutines get launched?',
-              options: ['One for the whole screen', 'One for every index change', 'None until the fling stops'],
-              a: 1,
-              why: 'The key changes on every new index, and each change cancels the running coroutine and launches a new one.',
+              q: 'The user scrolls a little, but row 2 is still the top row. Does <code>saveLastSeen</code> run again?',
+              options: ['No, the value didn’t change', 'Yes, on every scroll', 'Yes, but with the old value'],
+              a: 0,
+              why: '<code>snapshotFlow</code> hands out a value only when the result is different from the last one.',
             },
             frames: [
-              { now: 0, say: 'Goal: log “scrolled” once when the user leaves the top. Lane 1: <code>firstVisibleItemIndex</code>. Lane 2: <code>LaunchedEffect(index)</code>, keyed on it. Lane 3: one <code>snapshotFlow</code> collector.' },
-              { bars: [{ lane: 0, from: 0, to: 2, label: '0', tone: 'muted' }, { lane: 1, from: 0, to: 2, label: '#1' }, { lane: 2, from: 0, to: 2, label: 'collect', tone: 'ok' }], say: 'Both start with the screen. The keyed effect runs coroutine #1. The other one starts a single <code>snapshotFlow</code> collector.' },
-              { bars: [{ lane: 0, from: 2, to: 4, label: '1', tone: 'muted' }, { lane: 1, from: 2, to: 4, label: '#2', tone: 'warm' }, { lane: 2, from: 2, to: 4, label: 'log', tone: 'ok' }], marks: [{ at: 2, label: 'index 1', tone: 'muted' }], say: 'Index becomes 1. The keyed effect cancels #1 and launches #2, which logs. The flow maps 1 to <code>true</code>, emits, and logs once.' },
-              { bars: [{ lane: 0, from: 4, to: 6, label: '2', tone: 'muted' }, { lane: 1, from: 4, to: 6, label: '#3', tone: 'warm' }, { lane: 2, from: 4, to: 6, label: 'collect', tone: 'ok' }], say: 'Index 2. The keyed effect restarts and logs again. The flow maps to <code>true</code> again, and <code>distinctUntilChanged</code> drops it.' },
-              { bars: [{ lane: 0, from: 6, to: 10, label: '3 4 5 6', tone: 'muted' }, { lane: 1, from: 6, to: 7, label: '#4', tone: 'warm' }, { lane: 1, from: 7, to: 8, label: '#5', tone: 'warm' }, { lane: 1, from: 8, to: 9, label: '#6', tone: 'warm' }, { lane: 1, from: 9, to: 10, label: '#7', tone: 'warm' }, { lane: 2, from: 6, to: 10, label: 'collect', tone: 'ok' }], say: 'A fling changes the index four more times: four more launches and four more log events. The collector just keeps running.' },
-              { now: 10, say: 'Keyed effect: 7 launches and 6 “scrolled” events. <code>snapshotFlow</code>: 1 collector and 1 event, which is what you wanted.' },
+              { screen: scr(0), log: ['LaunchedEffect starts', 'value 0 → saveLastSeen(0)'], say: 'History opens. <code>collect</code> gets the first value, 0, and saves it. Then it waits.' },
+              { screen: scr(2), log: 'value 2 → saveLastSeen(2)', say: 'The user scrolls. The top row is now index 2. A new value arrives and is saved.' },
+              { screen: scr(2, true), log: '// still 2: nothing handed out', say: 'A small scroll, but the top row is still index 2. Same value, so <code>collect</code> doesn’t run.' },
+              { screen: scr(3), log: 'value 3 → saveLastSeen(3)', say: 'Row 3 reaches the top: a new value.' },
+              { screen: scr(1), log: 'value 1 → saveLastSeen(1)', say: 'Scrolling back up works the same: every change of the top row arrives.' },
+              { screen: '<div class="ui-m-bar">Water</div><div class="ui-m-body"><b>3 of 8 glasses</b><div class="ui-m-row"><div>#1 · 250 ml</div></div></div>', log: 'leaves screen → LaunchedEffect stopped, collect stopped', say: 'The user goes back to the water screen. <code>LaunchedEffect</code> is stopped, and with it the waiting <code>collect</code>. The last saved index is 1.' },
             ],
           });
         },
+        code: `@Composable
+fun HistoryList(days: List<String>, lastSeen: Int, saveLastSeen: (Int) -> Unit) {
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = lastSeen)
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }   // watch the top row
+            .collect { index -> saveLastSeen(index) }      // runs for each new value
+    }
+
+    LazyColumn(state = listState) {
+        items(days) { day -> Text(day, modifier = Modifier.padding(16.dp)) }
+    }
+}`,
+        remember: 'snapshotFlow { state } hands out a new value each time the state changes; collect { } handles each one, inside LaunchedEffect.',
+        terms: [
+          { term: 'snapshotFlow', def: 'Watches the state read inside its braces and hands out a new value each time the result changes.' },
+          { term: 'flow', def: 'A stream of values that arrive one by one over time.' },
+          { term: 'collect', def: 'Runs a lambda for every value of a flow, and keeps waiting for more. Lives inside <code>LaunchedEffect</code>.' },
+          { term: 'firstVisibleItemIndex', def: 'On a list state: the index of the row at the top of the screen.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Save the top row’s index every time it changes.', code: `LaunchedEffect(listState) {
+    [[snapshotFlow]] { listState.firstVisibleItemIndex }
+        .[[collect]] { index -> saveLastSeen(index) }
+}`, why: '<code>snapshotFlow</code> turns the changing state into values; <code>collect</code> handles each one.' },
+          { type: 'bug', prompt: 'The app saves 0 once and never again, however far the user scrolls. Tap the wrong line.', code: `val listState = rememberLazyListState()
+val top = listState.firstVisibleItemIndex
+LaunchedEffect(listState) {
+    snapshotFlow { top }
+        .collect { index -> saveLastSeen(index) }
+}`, bug: 3, fix: '    snapshotFlow { listState.firstVisibleItemIndex }', why: '<code>top</code> is a plain <code>Int</code> copied once. <code>snapshotFlow</code> only notices state read inside its braces, so read <code>listState</code> there.' },
+        ],
+        quiz: [
+          { q: 'The top row stays index 4 while the user scrolls a little. How many new values does <code>snapshotFlow</code> hand out?', options: ['None', 'One per scroll movement', 'One per second'], a: 0, why: 'It hands out a value only when the result is different from the previous one.' },
+          { q: 'Why does the <code>collect</code> go inside <code>LaunchedEffect</code>?', options: ['It keeps waiting for values, and must stop when the screen leaves', 'So it runs only once', 'It doesn’t need to'], a: 0, why: '<code>LaunchedEffect</code> is the place that may wait, and it stops when the screen goes. <code>collect</code> runs for every new value, not once.' },
+          { q: 'What is <code>listState.firstVisibleItemIndex</code>?', options: ['The index of the row at the top of the screen', 'How many rows the list has', 'The last row the user tapped'], a: 0, why: 'It changes as the user scrolls, which is why it is worth watching.' },
+        ],
+        docs: [['Side-effects in Compose', 'https://developer.android.com/develop/ui/compose/side-effects'], ['Lists and grids', 'https://developer.android.com/develop/ui/compose/lists']],
+      },
+
+      {
+        id: 'navigation',
+        title: 'Moving between screens',
+        tagline: 'One Activity, many screens, and a back stack that Compose keeps for you.',
+        goals: ['Describe screens as routes with <code>@Serializable</code>', 'Set up a <code>NavHost</code> and move with <code>navigate</code>', 'Pass a value to the next screen and read it with <code>toRoute</code>'],
+        level: 'beginner', introduces: ['Serializable', 'NavHost', 'rememberNavController', 'startDestination', 'composable', 'navigate', 'popBackStack', 'toRoute'],
+        body: `
+<p>The water tracker now has two screens: Today, with the counter and today’s drinks, and History, with the long list of past days. The History button on Today should open History; Back should return. In a Compose app each screen is a composable, all inside one Activity, and the <em>Navigation Compose</em> library switches between them and keeps a back stack, like the one you saw for Activities.</p>
+<p>Each screen gets a <em>route</em>: a small type that names it. <code>@Serializable object Today</code> is a route without data. <code>@Serializable data class History(val goal: Int)</code> is a route that carries the daily goal, so History can mark the days that reached it. <code>@Serializable</code> lets Navigation store a route with its data and restore it, after rotation too. It needs two lines in the app’s <code>build.gradle.kts</code>, shown at the end of the code: the Kotlin serialization plugin and the <code>navigation-compose</code> library.</p>
+<p><code>val navController = rememberNavController()</code> makes the object that moves between screens. <code>NavHost(navController, startDestination = Today) { ... }</code> shows the current screen; inside it, <code>composable&lt;Today&gt; { ... }</code> says what to show for each route. <code>navController.navigate(History(goal = 8))</code> puts History on top of the stack. The Back gesture removes it again, and so does <code>navController.popBackStack()</code> from your code.</p>
+<p>On the History screen, <code>entry.toRoute()</code> gives back the route with its data, so you can read <code>goal</code>. Screens don’t get the <code>navController</code> itself: pass them a lambda like <code>onOpenHistory</code>, as you did when hoisting state. Google also makes a newer library, Navigation 3, in which the back stack is a list you change yourself; the Compose navigation guide recommends Navigation Compose for Compose apps, and many existing apps use it.</p>`,
+        visual(el) {
+          const today = '<div class="ui-m-bar">Water</div><div class="ui-m-body"><b>3 of 8 glasses</b><div class="ui-m-row"><div>#1 · 250 ml</div></div><div class="ui-m-row"><div>#2 · 500 ml</div></div><span class="hist" style="justify-self:start;padding:6px 12px;font-weight:700;font-size:0.8rem;color:var(--accent)">History</span></div><span class="ui-m-fab">+</span>';
+          const history = '<div class="ui-m-bar">← History</div><div class="ui-m-body"><span class="ui-m-muted">Goal: 8 glasses</span><div class="ui-m-row"><div>Mon 19 Oct: 6</div></div><div class="ui-m-row"><div>Sun 18 Oct: 8 ✓</div></div><div class="ui-m-row"><div>Sat 17 Oct: 5</div></div><div class="ui-m-row"><div>Fri 16 Oct: 9 ✓</div></div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'Back stack (top last)',
+            predict: {
+              q: 'The user opens History, then makes the Back gesture. What do they see?',
+              options: ['The Today screen', 'The phone’s home screen', 'History again'],
+              a: 0,
+              why: 'Back removes the top screen from the stack, which shows the one below: Today.',
+            },
+            frames: [
+              { screen: today, log: 'stack: [Today]', say: 'The app starts on <code>startDestination = Today</code>. The back stack holds one screen.' },
+              { tap: '.hist', log: 'onOpenHistory(8) → navController.navigate(History(goal = 8))', say: 'The user taps History. The Today screen calls <code>onOpenHistory(8)</code>, and the NavHost code navigates.' },
+              { screen: history, log: 'stack: [Today, History(goal=8)]', say: 'History goes on top. Its <code>composable&lt;History&gt;</code> reads the goal with <code>toRoute()</code> and marks the days that reached 8.' },
+              { screen: today, log: ['Back gesture → pop', 'stack: [Today]'], say: 'Back pops History off the stack. Today is shown again, with its drinks as they were.' },
+              { screen: '<div class="ui-m-center"><span class="ui-m-muted">Home screen</span></div>', log: ['Back gesture on the start screen', 'nothing to pop → Android handles Back'], say: 'On the start screen there is nothing left to pop, so Navigation lets Android handle Back: the user leaves the app and sees the home screen.' },
+            ],
+          });
+        },
+        code: `@Serializable object Today
+@Serializable data class History(val goal: Int)
+
+@Composable
+fun WaterApp() {
+    val navController = rememberNavController()
+    NavHost(navController, startDestination = Today) {
+        composable<Today> {
+            WaterScreen(onOpenHistory = { goal -> navController.navigate(History(goal)) })
+        }
+        composable<History> { entry ->
+            val route: History = entry.toRoute()
+            HistoryScreen(goal = route.goal, onBack = { navController.popBackStack() })
+        }
+    }
+}
+
+// app/build.gradle.kts, lines from the Navigation release page:
+// plugins {
+//     kotlin("plugin.serialization") version "2.0.21"   // your project's Kotlin version
+// }
+// dependencies {
+//     implementation("androidx.navigation:navigation-compose:2.10.2")
+// }`,
+        remember: 'Routes are @Serializable types; NavHost maps each route to a screen; navigate(route) pushes, Back or popBackStack() pops.',
+        mistakes: [
+          { title: 'Handing the navController to a screen', bad: `@Composable
+fun WaterScreen(navController: NavController) {
+    ...
+    navController.navigate(History(goal))
+}`, good: `@Composable
+fun WaterScreen(onOpenHistory: (Int) -> Unit) {
+    ...
+    onOpenHistory(goal)
+}`, why: 'A screen that only reports “open History” is easier to preview and reuse. The NavHost decides where that leads. The Navigation guide warns against passing the controller.' },
+        ],
+        terms: [
+          { term: 'route', def: 'A type that names a screen, and may carry its data, like <code>History(val goal: Int)</code>.' },
+          { term: 'NavHost', def: 'Shows the screen for the current route. Each <code>composable&lt;Route&gt; { }</code> inside it says what to show.' },
+          { term: 'navigate', def: '<code>navController.navigate(route)</code> puts that route’s screen on top of the back stack.' },
+          { term: '@Serializable', def: 'Marks a class or object so it can be stored and restored. Navigation needs it on every route.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Start on Today, and show the water screen for its route.', code: `NavHost(navController, [[startDestination]] = Today) {
+    [[composable]]<Today> {
+        WaterScreen(onOpenHistory = { goal -> navController.navigate(History(goal)) })
+    }
+}`, why: '<code>startDestination</code> is the first screen. <code>composable&lt;Today&gt;</code> says what to show for that route.' },
+          { type: 'bug', prompt: 'Tapping History should open the history, but the Today screen opens again on top of itself. Tap the wrong line.', code: `NavHost(navController, startDestination = Today) {
+    composable<Today> {
+        WaterScreen(onOpenHistory = { goal -> navController.navigate(Today) })
+    }
+    composable<History> { entry ->
+        HistoryScreen(goal = entry.toRoute<History>().goal)
+    }
+}`, bug: 2, fix: '        WaterScreen(onOpenHistory = { goal -> navController.navigate(History(goal)) })', why: 'The route decides which screen opens. <code>History(goal)</code> opens History and carries the goal.' },
+        ],
+        quiz: [
+          { q: 'What does <code>navController.navigate(History(goal = 6))</code> do?', options: ['Puts the History screen, with goal 6, on top of the back stack', 'Replaces the whole app with a new Activity', 'Sets today’s goal to 6'], a: 0, why: 'Navigate pushes a screen. Back pops it.' },
+          { q: 'Which route should carry data?', options: ['<code>@Serializable data class History(val goal: Int)</code>', '<code>@Serializable object History</code>', 'Neither can'], a: 0, why: 'A data class has properties for the data. An <code>object</code> is for screens that need none.' },
+          { q: 'The user makes the Back gesture on the start screen. What happens?', options: ['They leave the app', 'Nothing', 'The start screen opens again'], a: 0, why: 'There is nothing left to pop, so Back leaves the app, as on any app’s first screen.' },
+        ],
+        docs: [['Navigation with Compose', 'https://developer.android.com/develop/ui/compose/navigation'], ['Design your navigation graph', 'https://developer.android.com/guide/navigation/design']],
       },
     ],
   });
