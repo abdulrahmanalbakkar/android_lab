@@ -758,7 +758,7 @@ fun WaterScreen() {
             frames: [
               { screen: scr(), log: '// the water screen so far', say: 'The screen from the last lesson: text only.' },
               { screen: scr({ img: true }), log: ['Image(', '&nbsp;&nbsp;painter = painterResource(R.drawable.glass),', '&nbsp;&nbsp;contentDescription = "A glass of water",', '&nbsp;&nbsp;modifier = Modifier.size(96.dp)', ')'], say: '<code>painterResource</code> loads <code>res/drawable/glass</code>. The <code>Image</code> draws it at 96 dp, above the title.' },
-              { screen: scr({ img: true, f: 'img' }), log: 'TalkBack: “A glass of water”', say: 'With TalkBack on, the green frame shows what is being read. For the picture, it reads the <code>contentDescription</code>.' },
+              { screen: scr({ img: true, f: 'img' }), log: 'TalkBack: “A glass of water, Image”', say: 'With TalkBack on, the green frame shows what is being read. For the picture, it reads the <code>contentDescription</code>, then that it is an image.' },
               { screen: scr({ img: true, f: 'count' }), log: 'TalkBack: “3 of 8 glasses”', say: 'A Text needs no description: TalkBack reads its words.' },
               { screen: scr({ img: true, icon: true }), log: ['Row(verticalAlignment = Alignment.CenterVertically) {', '&nbsp;&nbsp;Icon(painterResource(R.drawable.ic_star), contentDescription = null)', '&nbsp;&nbsp;Text("Best: 9")', '}'], say: 'A small star <code>Icon</code> before “Best: 9”, in a Row. It takes the color of the text around it.' },
               { screen: scr({ img: true, icon: true, f: 'best' }), log: 'TalkBack: “Best: 9”', say: 'The star has <code>null</code> as its description, so TalkBack skips it and reads only the text. Saying “star” would add nothing.' },
