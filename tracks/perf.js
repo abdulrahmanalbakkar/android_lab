@@ -1,2519 +1,815 @@
-/* Performance and debugging track. Same shape as tracks/kotlin.js.
-   Demo styles live in the css string below; every class is prefixed pf-.
-   Baseline Profiles and Macrobenchmark live in the testing track. */
+/* Performance track. Same shape as tracks/kotlin.js.
+   Lessons (assembled from rb/perf/chunk_*.js) use only the shared Lab.ui demos, so the track needs no css of its own. */
 (() => {
-  const { h, sleep, hl, replay } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const line = (o, html, cls = '') => { const d = h('div', { class: `line drop-in ${cls}`, html }); o.append(d); return d; };
-  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const toggle = (id, label, checked, onchange) => {
-    const input = h('input', { type: 'checkbox', id, checked: checked || null, onchange() { onchange(input.checked); } });
-    return { input, el: h('label', { class: 'switch', for: id }, input, h('span', { html: label })) };
-  };
-  // visual() runs before the lesson page is attached, so loops wait for the node to appear and stop once it leaves.
-  const alive = node => { let seen = false; const t0 = Date.now(); return () => { if (node.isConnected) { seen = true; return true; } return !seen && Date.now() - t0 < 5000; }; };
-  const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
-
-  const css = `
-.pf-label { font: 600 0.74rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.pf-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; min-width: 0; }
-.pf-split { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; min-width: 0; }
-.out .pf-pre { white-space: pre; }
-.pf-stat { font: 600 0.85rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.pf-stat b { color: var(--ink); }
-.pf-stat .pf-badnum { color: var(--err); }
-
-/* 1 frame budget */
-.pf-graph { position: relative; height: 140px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; padding: 8px 10px 0; overflow: hidden; min-width: 0; }
-.pf-frames { position: absolute; left: 10px; right: 10px; bottom: 0; height: 132px; display: flex; align-items: flex-end; justify-content: flex-end; gap: 3px; overflow: hidden; }
-.pf-fbar { flex: 0 0 9px; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; animation: drop-in 0.25s ease-out both; }
-.pf-fbar i { display: block; }
-.pf-fw { background: var(--accent); }
-.pf-aw { background: var(--warm); }
-.pf-fbar.pf-late .pf-aw, .pf-fbar.pf-late .pf-fw { background: var(--err); }
-.pf-fbar.pf-miss { flex-basis: 9px; height: 4px; background: var(--line); border-radius: 2px; }
-.pf-budget { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--ok); pointer-events: none; transition: bottom 0.3s; }
-.pf-budget span { position: absolute; left: 10px; bottom: 2px; font: 600 0.72rem var(--mono); color: var(--ok); background: var(--bg); padding: 0 4px; border-radius: 4px; }
-.pf-rail { position: relative; height: 40px; background: var(--sunk); border-radius: 999px; min-width: 0; }
-.pf-ball { position: absolute; top: 6px; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; background: var(--accent); }
-.pf-rail.pf-stutter .pf-ball { background: var(--err); }
-
-/* 2 ANR */
-.pf-phone { position: relative; justify-content: flex-start; align-items: stretch; gap: 8px; }
-.pf-app-title { font: 700 1rem var(--display); }
-.pf-note { flex: 1; border-radius: 10px; background: var(--sunk); padding: 8px 10px; font-size: 0.86rem; color: var(--muted); }
-.pf-pbtn { align-self: flex-start; padding: 6px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 0.86rem; }
-.pf-pstatus { font: 600 0.78rem var(--mono); color: var(--muted); min-height: 1.4em; }
-.pf-dialog { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); display: grid; place-items: center; padding: 10px; }
-.pf-dialog[hidden] { display: none; }
-.pf-dlg { background: var(--surface); color: var(--ink); border-radius: 14px; padding: 12px; display: grid; gap: 8px; font-size: 0.84rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
-.pf-dlg b { font-family: var(--display); font-size: 0.95rem; }
-.pf-dlg button { all: unset; cursor: pointer; font: 700 0.82rem var(--body); color: var(--accent); padding: 2px 0; }
-.pf-dlg button:focus-visible { outline: 2px solid var(--accent); }
-.pf-tap { position: absolute; top: 3px; width: 8px; height: 22px; margin-left: -4px; border-radius: 4px; background: var(--warm); }
-.pf-wait { position: absolute; top: 12px; height: 6px; border-radius: 3px; background: var(--warm); opacity: 0.55; }
-.pf-limit { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--err); }
-.pf-ioring { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--sunk); border-top-color: var(--accent); animation: spin 0.8s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 6px; }
-
-/* 3 leaks */
-.pf-heap-stage { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 16px; padding: 16px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; align-items: start; min-width: 0; }
-.pf-root { border: 2px solid var(--ink); border-radius: 12px; background: var(--surface); padding: 10px 12px; display: grid; gap: 6px; font: 500 0.82rem var(--mono); min-width: 0; }
-.pf-root-name { font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
-.pf-refs { display: flex; flex-wrap: wrap; gap: 4px; }
-.pf-ref { padding: 1px 7px; border-radius: 999px; background: var(--err-soft); color: var(--err); font-weight: 600; }
-.pf-acts { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; min-height: 96px; min-width: 0; }
-.pf-act { min-width: 120px; flex: 0 1 140px; transition: border-color 0.2s, opacity 0.2s; }
-.pf-act small { font-size: 0.72rem; color: var(--muted); }
-.pf-act.pf-alive { border-color: var(--ok); }
-.pf-act.pf-dead { border-style: dashed; opacity: 0.75; }
-.pf-act.pf-leak { border-color: var(--err); background: var(--err-soft); opacity: 1; }
-.pf-heap { display: grid; gap: 6px; }
-.pf-heap-bar { height: 12px; background: var(--sunk); border-radius: 99px; overflow: hidden; }
-.pf-heap-bar span { display: block; height: 100%; width: 0; background: var(--ok); border-radius: 99px; transition: width 0.5s, background 0.3s; }
-.pf-heap-bar.pf-high span { background: var(--warm); }
-.pf-heap-bar.pf-full span { background: var(--err); }
-
-/* 4 flame chart */
-.pf-flame { display: flex; flex-direction: column-reverse; gap: 2px; padding: 10px; background: var(--code-bg); border-radius: 12px; min-width: 0; position: relative; }
-.pf-frow { position: relative; height: 26px; }
-.pf-fl { all: unset; box-sizing: border-box; position: absolute; top: 0; bottom: 0; padding: 0 6px; border-radius: 4px; font: 500 0.74rem/26px var(--mono); color: var(--code-ink); background: rgba(169, 140, 255, 0.32); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: left 0.35s, width 0.35s, opacity 0.3s; border: 1px solid rgba(0, 0, 0, 0.35); }
-.pf-fl:hover { background: rgba(169, 140, 255, 0.5); }
-.pf-fl:focus-visible { outline: 2px solid var(--t-f); }
-.pf-fl.pf-warm { background: rgba(255, 156, 85, 0.45); }
-.pf-fl.pf-hot { background: rgba(255, 113, 137, 0.6); }
-.pf-fl.pf-sel { outline: 2px solid var(--t-f); outline-offset: -2px; }
-.pf-fl.pf-grow { animation: pf-grow 0.5s ease-out both; transform-origin: left; }
-@keyframes pf-grow { from { transform: scaleX(0); } }
-.pf-fbudget { position: absolute; top: 4px; bottom: 4px; width: 0; border-left: 2px dashed var(--t-s); pointer-events: none; transition: left 0.35s, opacity 0.3s; }
-.pf-fbudget span { position: absolute; top: 0; left: 4px; font: 600 0.68rem var(--mono); color: var(--t-s); white-space: nowrap; }
-
-/* 5 compose inspector */
-.pf-insp { display: grid; gap: 2px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
-.pf-ihead, .pf-irow { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; }
-.pf-ihead { font: 600 0.68rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.pf-ihead span:not(:first-child), .pf-irow span:not(:first-child) { text-align: right; }
-.pf-irow { font: 500 0.82rem var(--mono); transition: background 0.3s; }
-.pf-irow > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.pf-irow .pf-rec { font-weight: 700; font-variant-numeric: tabular-nums; }
-.pf-irow .pf-skp { color: var(--muted); font-variant-numeric: tabular-nums; }
-.pf-irow.pf-hit { background: var(--warm-soft); }
-.pf-irow.pf-hit .pf-rec { color: var(--warm); }
-.pf-irow.pf-skipped { background: var(--ok-soft); }
-.pf-irow.pf-new { background: var(--accent-soft); }
-.pf-d1 > span:first-child { padding-left: 14px; }
-.pf-d2 > span:first-child { padding-left: 28px; }
-.pf-report { white-space: pre; }
-
-/* 6 startup */
-.pf-launcher { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; }
-.pf-launcher i { aspect-ratio: 1; border-radius: 12px; background: var(--sunk); }
-.pf-launcher i.pf-me { background: var(--accent); }
-.pf-splash { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: var(--accent-ink); font: 800 1.4rem var(--display); }
-.pf-content { width: 100%; display: grid; gap: 8px; }
-.bar.pf-proc { background: var(--muted); }
-.bar.pf-app { background: var(--warm); }
-.bar.pf-appseg { background: var(--warm); border-right: 2px solid var(--bg); }
-.bar.pf-actb { background: var(--accent); }
-.bar.pf-frame { background: var(--ok); }
-.pf-ttid { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ok); }
-
-/* 7 R8 */
-.pf-dex { display: grid; gap: 1px; background: var(--code-bg); border-radius: 12px; padding: 10px 12px; overflow-x: auto; min-width: 0; }
-.pf-dl { font: 500 0.82rem/1.65 var(--mono); color: var(--code-ink); white-space: pre; border-radius: 5px; padding: 0 6px; transition: opacity 0.3s, background 0.3s; }
-.pf-dl.pf-cls { color: var(--t-t); }
-.pf-dl.pf-gone { opacity: 0.3; text-decoration: line-through; }
-.pf-dl.pf-inl { background: rgba(255, 212, 121, 0.12); }
-.pf-dl.pf-ren { background: rgba(169, 140, 255, 0.14); }
-.pf-dl.pf-kept { background: rgba(158, 223, 165, 0.14); }
-.pf-dl .pf-why { color: var(--t-c); font-style: italic; }
-.pf-size { font: 700 1.5rem var(--display); font-variant-numeric: tabular-nums; }
-
-@media (max-width: 600px) {
-  .pf-split { grid-template-columns: minmax(0, 1fr); }
-  .pf-heap-stage { grid-template-columns: minmax(0, 1fr); }
-  .pf-ihead, .pf-irow { grid-template-columns: minmax(0, 1fr) 46px 46px; padding: 5px 4px; }
-}
-
-/* depth steps */
-.pf-dz-graph { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: 14px; padding: 14px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; align-items: start; min-width: 0; }
-.pf-dz-col { display: grid; gap: 8px; min-width: 0; }
-.pf-dz-heap { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 8px; min-width: 0; }
-.obj.pf-dz-obj { min-width: 0; padding: 8px 10px; font-size: 0.78rem; transition: border-color 0.25s, background 0.25s, opacity 0.3s; }
-.pf-dz-obj .obj-name { overflow-wrap: anywhere; }
-.pf-dz-obj.pf-dz-root { border-color: var(--accent); }
-.pf-dz-refs { color: var(--muted); font-size: 0.72rem; overflow-wrap: anywhere; }
-.pf-dz-st { font: 600 0.7rem var(--mono); color: var(--muted); }
-.pf-dz-mark { border-color: var(--ok) !important; background: var(--ok-soft); }
-.pf-dz-free { opacity: 0.4; border-style: dashed !important; }
-.pf-dz-free .obj-name { text-decoration: line-through; }
-.pf-dz-kept { border-color: var(--err) !important; background: var(--err-soft); }
-.pf-dz-kept .pf-dz-st { color: var(--err); }
-.legend i.pf-dz-key { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--line); }
-.legend i.pf-dz-key.pf-dz-free { opacity: 1; border-style: dashed; border-color: var(--muted); }
-.pf-dz-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
-.pf-dz-link { font: 600 0.76rem var(--mono); padding: 5px 9px; border-radius: 8px; border: 2px solid var(--ink); background: var(--surface); transition: opacity 0.3s, border-color 0.3s, background 0.3s; min-width: 0; overflow-wrap: anywhere; }
-.pf-dz-link.pf-dz-gone { opacity: 0.35; border-style: dashed; text-decoration: line-through; }
-.pf-dz-link.pf-dz-free { opacity: 0.45; border-style: dashed; }
-.pf-dz-link.pf-dz-kept { border-color: var(--err); background: var(--err-soft); color: var(--err); }
-.pf-dz-arrow { font: 700 0.9rem var(--mono); color: var(--muted); }
-.pf-dz-phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.pf-dz-phase { display: grid; gap: 2px; padding: 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); opacity: 0.55; transition: opacity 0.25s, border-color 0.25s; min-width: 0; }
-.pf-dz-phase b { font: 700 1.4rem var(--display); font-variant-numeric: tabular-nums; }
-.pf-dz-phase small { color: var(--muted); font-size: 0.74rem; }
-.pf-dz-phase.pf-dz-on { opacity: 1; border-color: var(--warm); }
-.pf-dz-phase.pf-dz-on b { color: var(--warm); }
-@media (max-width: 600px) {
-  .pf-dz-graph { grid-template-columns: minmax(0, 1fr); }
-  .pf-dz-phase .pf-label { font-size: 0.62rem; letter-spacing: 0.02em; }
-}
-/* depth pass 2 */
-.pf-d2-wrap .cmd { white-space: normal; text-align: left; }
-.pf-d2-limit { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--ok); }
-.pf-d2-val { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 600 0.74rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
-.legend i.pf-d2-key { height: 0; border-top: 2px dashed var(--ok); border-radius: 0; vertical-align: 3px; }
-.pf-d2-stripbox { position: relative; height: 110px; padding: 6px 8px 0; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
-.pf-d2-strip { display: grid; grid-template-columns: repeat(100, minmax(0, 1fr)); gap: 1px; align-items: end; height: 100%; }
-.pf-d2-f { display: block; background: var(--accent); border-radius: 1px 1px 0 0; animation: drop-in 0.25s ease-out both; }
-.pf-d2-f.pf-d2-late { background: var(--err); }
-.pf-d2-budget { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--ok); pointer-events: none; }
-.pf-d2-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 96px), 1fr)); gap: 8px; min-width: 0; }
-.pf-d2-num { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
-.pf-d2-num b { font: 700 1.05rem var(--mono); font-variant-numeric: tabular-nums; }
-.pf-d2-skel { min-height: 40px; opacity: 0.55; }
-.pf-d2-mt { display: grid; gap: 6px; min-width: 0; }
-.pf-d2-mrow { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 6.5em 8em; gap: 4px 10px; align-items: center; padding: 6px 8px; border-radius: 10px; font: 500 0.8rem var(--mono); min-width: 0; transition: background 0.3s; }
-.pf-d2-mrow.pf-d2-skew { background: var(--warm-soft); }
-.pf-d2-mn { overflow-wrap: anywhere; min-width: 0; }
-.pf-d2-mv { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-.pf-d2-mc { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-.pf-d2-states { position: relative; display: flex; height: 34px; border-radius: 8px; overflow: hidden; background: var(--sunk); min-width: 0; }
-.pf-d2-st { height: 100%; border-right: 1px solid var(--bg); animation: pf-grow 0.5s ease-out both; transform-origin: left; }
-.pf-d2-b16 { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed var(--ink); }
-@media (max-width: 600px) {
-  .pf-d2-mrow { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .pf-d2-mrow .pf-heap-bar { grid-column: 1 / -1; grid-row: 2; }
-}
-/* gap lesson: main thread */
-.pf-mt-wrapcmd .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
-.pf-mt-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; min-width: 0; }
-.pf-mt-box { display: grid; gap: 8px; align-content: start; padding: 12px; border-radius: 12px; border: 1px dashed var(--line); background: var(--bg); min-width: 0; min-height: 150px; }
-.pf-mt-q { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.pf-mt-msg { font: 600 0.76rem var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); overflow-wrap: anywhere; }
-.pf-mt-msg small { color: var(--muted); font-weight: 500; }
-.pf-mt-msg.pf-mt-frame { border-color: var(--accent); background: var(--accent-soft); }
-.pf-mt-msg.pf-mt-heavy { border-color: var(--err); background: var(--err-soft); }
-.pf-mt-msg.pf-mt-tap { border-color: var(--warm); background: var(--warm-soft); }
-.pf-mt-msg.pf-mt-later { border-style: dashed; opacity: 0.75; }
-.pf-mt-run { font: 700 0.86rem var(--mono); color: var(--ink); overflow-wrap: anywhere; }
-.pf-mt-run.pf-mt-hot { color: var(--err); }
-.pf-mt-bar { display: block; height: 8px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
-.pf-mt-fill { display: block; height: 100%; width: 0; background: var(--accent); }
-.pf-mt-spin { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); }
-.pf-mt-dot { display: block; width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(var(--accent) 0 25%, transparent 25%); }
-`;
-
-  // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
-  const leaksDepth = {
-    deeper: [
-      {
-        title: 'The GC traces from roots, so cycles are fine',
-        body: `<p>ART does not count references. It starts at the GC roots, marks everything it can reach, and frees the rest. Two objects that point at each other but that no root reaches are freed together. A cycle between an Activity and its presenter is not a leak.</p>
-<p>A leak needs a path from a root. Toggle the stale listener, then run a GC and watch the mark phase.</p>`,
-        visual(el) {
-          const OBJS = {
-            thread: { name: 'main thread', root: true, refs: ['act2'] },
-            repo: { name: 'object LocationRepo', root: true, refs: [] },
-            act2: { name: 'MapActivity #2', note: 'on screen', refs: ['pres2'] },
-            pres2: { name: 'MapPresenter #2', refs: ['act2'] },
-            act1: { name: 'MapActivity #1', note: 'destroyed', refs: ['pres1', 'bmp1'] },
-            pres1: { name: 'MapPresenter #1', refs: ['act1'] },
-            bmp1: { name: 'Bitmap 12 MB', refs: [] },
-          };
-          let busy = false, holds = false;
-          const els = {};
-          const o = out();
-          const build = (id) => {
-            const O = OBJS[id];
-            const refs = h('span', { class: 'pf-dz-refs' });
-            const st = h('span', { class: 'pf-dz-st' }, O.note || (O.root ? 'GC root' : ''));
-            const box = h('div', { class: `obj pf-dz-obj${O.root ? ' pf-dz-root' : ''}` }, h('span', { class: 'obj-name' }, O.name), refs, st);
-            els[id] = { box, refs, st };
-            return box;
-          };
-          const roots = h('div', { class: 'pf-dz-col' }, h('span', { class: 'pf-label' }, 'roots'), build('thread'), build('repo'));
-          const heap = h('div', { class: 'pf-dz-heap' }, ['act2', 'pres2', 'act1', 'pres1', 'bmp1'].map(build));
-          function paint() {
-            OBJS.repo.refs = holds ? ['act1'] : [];
-            for (const [id, O] of Object.entries(OBJS)) {
-              els[id].refs.textContent = O.refs.length ? '→ ' + O.refs.map(r => OBJS[r].name.replace(/ \d+ MB$/, '')).join(', ') : '→ nothing';
-              els[id].box.classList.remove('pf-dz-mark', 'pf-dz-free', 'pf-dz-kept');
-              els[id].st.textContent = O.note || (O.root ? 'GC root' : '');
-            }
-          }
-          const sw = toggle('pf-dz-holds', 'LocationRepo still holds <b>#1’s listener</b>', false, v => { if (busy) { sw.input.checked = holds; return; } holds = v; paint(); say(o, v ? 'Now a root reaches MapActivity #1 through the forgotten listener. Run a GC.' : 'No root reaches MapActivity #1 any more. Run a GC.'); });
-          async function gc() {
-            if (busy) return; busy = true;
-            try {
-              paint();
-              say(o, '<span class="muted">mark:</span> start at the roots and follow every reference…');
-              const seen = new Set(), queue = Object.keys(OBJS).filter(k => OBJS[k].root);
-              while (queue.length) {
-                const id = queue.shift();
-                if (seen.has(id)) continue;
-                seen.add(id);
-                els[id].box.classList.add('pf-dz-mark'); replay(els[id].box, 'pop');
-                await sleep(380); if (!el.isConnected) return;
-                OBJS[id].refs.forEach(r => { if (!seen.has(r)) queue.push(r); });
-              }
-              await sleep(300); if (!el.isConnected) return;
-              const dead = Object.keys(OBJS).filter(k => !seen.has(k));
-              dead.forEach(k => { els[k].box.classList.add('pf-dz-free'); els[k].st.textContent = 'freed'; });
-              if (holds) {
-                ['act1', 'pres1', 'bmp1'].forEach(k => { els[k].box.classList.add('pf-dz-kept'); els[k].st.textContent = 'leaked'; });
-                say(o, '<span class="bad">leak:</span> LocationRepo is a root, and its listener reaches MapActivity #1, its presenter and its 12 MB bitmap. Nothing was freed.');
-              } else {
-                say(o, '<span class="good">sweep:</span> MapActivity #1 and its presenter point at each other, but no root reaches them. The cycle and the bitmap were freed together.');
-              }
-            } finally { busy = false; }
-          }
-          paint();
-          o.innerHTML = 'MapActivity #1 was destroyed by a rotation. It still forms a cycle with its presenter.';
-          el.append(
-            h('div', { class: 'controls' }, sw.el, act('Run GC', gc)),
-            h('div', { class: 'pf-dz-graph' }, roots, heap),
-            h('div', { class: 'legend' },
-              h('span', {}, h('i', { class: 'pf-dz-key pf-dz-mark' }), 'reached from a root'),
-              h('span', {}, h('i', { class: 'pf-dz-key pf-dz-free' }), 'freed'),
-              h('span', {}, h('i', { class: 'pf-dz-key pf-dz-kept' }), 'leaked')),
-            o);
-        },
-      },
-      {
-        title: 'Hidden references: lambdas and delayed messages',
-        body: `<p>A lambda or anonymous object that uses the Activity captures it. Post it with <code>Handler.postDelayed</code> and the main thread’s message queue holds the Activity until the message runs. That queue is reachable from a root, so a rotation during the delay leaks the old Activity until then.</p>
-<p>Remove the callback in <code>onDestroy</code>, or use <code>lifecycleScope</code> with <code>delay</code>, which is cancelled with the Activity.</p>`,
-        code: `// Leaks for 30 s after a rotation
-handler.postDelayed({ showTip() }, 30_000)
-
-// Cancelled with the Activity
-lifecycleScope.launch {
-    delay(30_000)
-    showTip()
-}`,
-        visual(el) {
-          const MODES = [
-            ['post', 'handler.postDelayed({ showTip() }, 30_000)', 'postDelayed(…, 30_000)'],
-            ['remove', 'handler.removeCallbacksAndMessages(null) // in onDestroy', 'removeCallbacksAndMessages(null)'],
-            ['scope', 'lifecycleScope.launch { delay(30_000); showTip() }', 'lifecycleScope.launch { delay(…) }'],
-          ];
-          const T = 6000;
-          let mode = 'post', state = 'idle', t0 = 0;
-          const chain = h('div', { class: 'pf-dz-chain' });
-          const timer = h('span', { class: 'bar wait', style: 'left:0;width:0' });
-          const countdown = h('span', { class: 'pf-stat' });
-          const o = out();
-          const modeBtns = MODES.map(([k, , label]) => cmd(label, () => { mode = k; reset(); }));
-          const link = (txt, cls = '') => h('span', { class: `pf-dz-link ${cls}` }, txt);
-          function paintChain() {
-            const act1 = state === 'retained' ? 'pf-dz-kept' : state === 'freed' ? 'pf-dz-free' : '';
-            const cut = state === 'freed' || state === 'idle';
-            const holder = mode === 'scope' ? 'Job (lifecycleScope)' : 'Message in main queue';
-            chain.replaceChildren(
-              link('main Looper'), h('span', { class: 'pf-dz-arrow' }, '→'),
-              link(holder, cut && state === 'freed' ? 'pf-dz-gone' : ''), h('span', { class: 'pf-dz-arrow' }, cut && state === 'freed' ? '×' : '→'),
-              link('lambda { showTip() }', cut && state === 'freed' ? 'pf-dz-gone' : ''), h('span', { class: 'pf-dz-arrow' }, '→'),
-              link(state === 'idle' ? 'MapActivity #1 (on screen)' : 'MapActivity #1 (destroyed)', act1));
-          }
-          function reset() {
-            state = 'idle'; t0 = 0; timer.style.width = '0'; countdown.textContent = 'tip due in 30 s';
-            press(modeBtns, modeBtns[MODES.findIndex(m => m[0] === mode)]);
-            paintChain();
-            say(o, `<span class="muted">mode:</span> ${hl(MODES.find(m => m[0] === mode)[1])}. The tip is scheduled. Rotate before it fires.`);
-          }
-          const isAlive = alive(chain);
-          const tick = () => {
-            if (!isAlive()) return;
-            if (state === 'retained') {
-              const p = Math.min(1, (performance.now() - t0) / T);
-              timer.style.width = p * 100 + '%';
-              countdown.textContent = `message runs in ${Math.ceil(30 * (1 - p))} s (sped up)`;
-              if (p >= 1) {
-                state = 'freed'; paintChain();
-                countdown.textContent = 'message ran';
-                say(o, '<span class="bad">late:</span> the message finally ran showTip() on a dead Activity, then the queue let go. For 30 s the old screen and its views stayed in memory.');
-              }
-            }
-            requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-          reset();
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            chain,
-            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'retained'), h('div', { class: 'lane-track' }, timer))),
-            h('div', { class: 'pf-row' }, act('Rotate the phone', () => {
-              if (state !== 'idle') { replay(chain, 'shake'); say(o, '<span class="muted">already rotated:</span> pick a mode to start over.'); return; }
-              if (mode === 'post') {
-                state = 'retained'; t0 = performance.now(); paintChain();
-                say(o, '<span class="bad">retained:</span> MapActivity #1 is destroyed, but the pending message still reaches it through the lambda. LeakCanary would flag it 5 s from now.');
-              } else {
-                state = 'freed'; paintChain(); countdown.textContent = mode === 'scope' ? 'coroutine cancelled' : 'message removed';
-                say(o, mode === 'scope'
-                  ? '<span class="good">freed:</span> lifecycleScope was cancelled in onDestroy, so the coroutine and its lambda are gone. Nothing reaches MapActivity #1.'
-                  : '<span class="good">freed:</span> onDestroy removed the pending message, which cut the only path to MapActivity #1.');
-              }
-            }), countdown),
-            o);
-        },
-      },
-      {
-        title: 'Fragments: drop view references in onDestroyView',
-        body: `<p>A Fragment on the back stack lives on after its view is destroyed. Any field that holds the binding or a View keeps the whole old view tree alive until the Fragment itself is destroyed. Clear such fields in <code>onDestroyView</code>.</p>`,
-        code: `class FeedFragment : Fragment(R.layout.feed) {
-    private var _binding: FeedBinding? = null
-    private val binding get() = _binding!!
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        _binding = FeedBinding.bind(view)
-    }
-
-    override fun onDestroyView() {
-        _binding = null      // the view tree can be freed now
-        super.onDestroyView()
-    }
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>LeakCanary hooks into the lifecycle callbacks. When an Activity, Fragment, Fragment view or ViewModel is destroyed, it wraps the object in a <code>WeakReference</code> tied to a <code>ReferenceQueue</code>. Five seconds later it checks the queue. If the reference was not enqueued, it forces a GC and checks again. An object that is still there is counted as retained.</p>
-<p>When enough objects are retained (5 while the app is visible, 1 once it goes to the background), LeakCanary dumps the heap to an <code>.hprof</code> file. Its parser, Shark, finds the shortest path from a GC root to each retained object. That path is the leak trace you read.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'A ViewModel that holds an Activity or View',
-        bad: `class MapViewModel(
-    private val activity: Activity,      // outlives rotation, keeps the old Activity
-) : ViewModel() {
-    fun permissionGranted() = ContextCompat.checkSelfPermission(
-        activity, ACCESS_FINE_LOCATION) == PERMISSION_GRANTED
-}`,
-        good: `@HiltViewModel
-class MapViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
-) : ViewModel() {
-    fun permissionGranted() = ContextCompat.checkSelfPermission(
-        context, ACCESS_FINE_LOCATION) == PERMISSION_GRANTED
-}`,
-        why: 'A ViewModel survives rotation, so it keeps the destroyed Activity and its views. Hold the application context, or keep Context out of the ViewModel entirely.',
-      },
-      {
-        title: 'Caching a View in a companion object',
-        bad: `class PlayerActivity : ComponentActivity() {
-    companion object {
-        var progressBar: ProgressBar? = null   // static field, a GC root
-    }
-}`,
-        good: `class PlayerActivity : ComponentActivity() {
-    private val viewModel: PlayerViewModel by viewModels()
-    // the ViewModel holds progress as state; the View reads it
-}`,
-        why: 'A static field lives as long as the process. A View knows its Context, so this pins the whole Activity. Share state, not Views.',
-      },
-    ],
-  };
-
-  const composePerfDepth = {
-    deeper: [
-      {
-        title: 'Read state in the latest phase you can',
-        body: `<p>Compose renders a frame in three phases: composition, layout and draw. A state read is tracked in the phase where it happens. Read an animated value in the composable body and every frame runs all three phases. Read it inside a lambda modifier like <code>offset { }</code> and only layout and draw run. Read it in <code>graphicsLayer { }</code> or <code>drawBehind { }</code> and only draw runs.</p>
-<p>Switch modifiers and watch the per-second counts.</p>`,
-        code: `val x by animateFloatAsState(if (moved) 300f else 0f, label = "x")
-
-// Recomposes every frame
-Box(Modifier.offset(x = x.dp))
-
-// Only relayout and redraw
-Box(Modifier.offset { IntOffset(x.roundToInt(), 0) })
-
-// Only redraw
-Box(Modifier.graphicsLayer { translationX = x })`,
-        visual(el) {
-          const MODES = [
-            ['comp', 'Modifier.offset(x = x.dp)', [1, 1, 1]],
-            ['layout', 'Modifier.offset { IntOffset(x, 0) }', [0, 1, 1]],
-            ['draw', 'Modifier.graphicsLayer { translationX = x }', [0, 0, 1]],
-          ];
-          const NAMES = ['Composition', 'Layout', 'Draw'];
-          let mode = 0, counts = [0, 0, 0], since = performance.now(), x = 0;
-          const ball = h('span', { class: 'pf-ball', style: 'left:14px' });
-          const rail = h('div', { class: 'pf-rail' }, ball);
-          const phases = NAMES.map(n => {
-            const num = h('b', {}, '0');
-            const box = h('div', { class: 'pf-dz-phase' }, h('span', { class: 'pf-label' }, n), num, h('small', {}, 'runs per second'));
-            return { box, num };
-          });
-          const o = out();
-          const modeBtns = MODES.map(([, src], i) => cmd(src, () => {
-            mode = i; counts = [0, 0, 0]; since = performance.now();
-            press(modeBtns, modeBtns[i]);
-            paintOn();
-            say(o, [
-              '<span class="bad">every phase, every frame:</span> x is read during composition, so the composable recomposes 60 times a second.',
-              '<span class="good">layout and draw only:</span> the read moved into the offset lambda, which runs during layout. Composition stays at 0.',
-              '<span class="good">draw only:</span> graphicsLayer reads x while drawing, so the box just moves on the GPU layer.',
-            ][i]);
-          }));
-          const paintOn = () => phases.forEach((p, i) => p.box.classList.toggle('pf-dz-on', !!MODES[mode][2][i]));
-          const isAlive = alive(rail);
-          const frame = now => {
-            if (!isAlive()) return;
-            x = (Math.sin(now / 600) + 1) / 2;
-            ball.style.left = `calc(14px + ${x} * (100% - 28px))`;
-            MODES[mode][2].forEach((on, i) => { counts[i] += on; });
-            if (now - since >= 500) {
-              const k = 1000 / (now - since);
-              phases.forEach((p, i) => { p.num.textContent = String(Math.round(counts[i] * k)); });
-              counts = [0, 0, 0]; since = now;
-            }
-            requestAnimationFrame(frame);
-          };
-          requestAnimationFrame(frame);
-          press(modeBtns, modeBtns[0]); paintOn();
-          o.innerHTML = 'The box is animating. Right now x is read in composition. Try the other two modifiers.';
-          el.append(h('div', { class: 'controls' }, modeBtns), rail, h('div', { class: 'pf-dz-phases' }, phases.map(p => p.box)), o);
-        },
-      },
-      {
-        title: 'Never write state you just read during composition',
-        body: `<p>Composition should only read state. If a composable reads a value and then writes it in the same pass, the write invalidates the composable it was just read in. Compose schedules it again, it writes again, and the loop never ends. This is called a <em>backwards write</em>.</p>
-<p>Change state in event handlers or effects instead. Then it changes once per event.</p>`,
-        code: `// Backwards write: recomposes forever
-@Composable
-fun Badge(count: MutableState<Int>) {
-    Text("\${count.value}")
-    count.value++                    // written after it was read
-}
-
-// Fine: the write happens in an event
-@Composable
-fun Badge(count: MutableState<Int>) {
-    Text("\${count.value}", Modifier.clickable { count.value++ })
-}`,
-        visual(el) {
-          let running = false, recs = 0, frames = 0, stopAt = 0;
-          const recEl = h('b', {}, '0'), frameEl = h('b', {}, '0');
-          const cpu = h('div', { class: 'pf-heap-bar' }, h('span'));
-          const badge = h('span', { class: 'chip total' }, '0');
-          const o = out();
-          let value = 0;
-          const paint = () => { recEl.textContent = recs; frameEl.textContent = frames; badge.textContent = value; };
-          const isAlive = alive(badge);
-          function loop() {
-            if (!isAlive() || !running) return;
-            if (performance.now() > stopAt) {
-              running = false; cpu.className = 'pf-heap-bar'; cpu.firstChild.style.width = '6%';
-              say(o, '<span class="bad">stopped by the demo:</span> on a phone this never stops. The UI thread spends every frame recomposing, and the app janks or freezes.');
-              return;
-            }
-            recs++; frames++; value++; paint();
-            requestAnimationFrame(loop);
-          }
-          paint(); cpu.firstChild.style.width = '6%';
-          o.innerHTML = 'One badge, two ways to change its count.';
-          el.append(
-            h('div', { class: 'controls' },
-              cmd('count.value++ // in the composable body', () => {
-                if (running) return;
-                running = true; stopAt = performance.now() + 3500;
-                cpu.className = 'pf-heap-bar pf-full'; cpu.firstChild.style.width = '100%';
-                say(o, '<span class="bad">loop:</span> read count, wrote count + 1, which invalidated the scope that read it. Compose recomposes, and it happens again…');
-                requestAnimationFrame(loop);
-              }),
-              cmd('onClick = { count.value++ }', () => {
-                if (running) { replay(badge, 'shake'); return; }
-                recs++; frames++; value++; paint(); replay(badge, 'pop');
-                cpu.className = 'pf-heap-bar'; cpu.firstChild.style.width = '12%';
-                setTimeout(() => { if (cpu.isConnected && !running) cpu.firstChild.style.width = '6%'; }, 400);
-                say(o, '<span class="good">one event, one recomposition:</span> the click changed the count, Compose redrew the badge once, then went idle.');
-              })),
-            h('div', { class: 'pf-split' },
-              h('div', { class: 'pf-heap' },
-                h('div', { class: 'pf-stat' }, 'recompositions ', recEl, ' · frames ', frameEl),
-                h('span', { class: 'pf-label' }, 'main thread busy'), cpu),
-              badge),
-            o);
-        },
-      },
-      {
-        title: 'Measure a release build, not debug',
-        body: `<p>Debug builds run Compose with extra checks and without R8 or a Baseline Profile, so they are much slower than what users get. Use the Layout Inspector in debug to find <em>what</em> recomposes. Measure <em>how long</em> things take with Macrobenchmark on a release-like build.</p>`,
-        code: `@Test fun scrollFeed() = benchmarkRule.measureRepeated(
-    packageName = "com.example.feed",
-    metrics = listOf(FrameTimingMetric()),
-    iterations = 5,
-    startupMode = StartupMode.WARM,
-) {
-    startActivityAndWait()
-    device.findObject(By.res("feed")).fling(Direction.DOWN)
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>The Compose compiler rewrites every <code>@Composable</code> function. It adds a <code>Composer</code> parameter and a <code>$changed</code> bit mask that says which arguments are known to be unchanged. The body is wrapped in a restart group. If every parameter is unchanged, the function calls <code>skipToGroupEnd()</code> and does nothing.</p>
-<p>At the end, the restart group registers a lambda that can call the function again. When a state object read inside it changes, the snapshot system marks that scope invalid and the Recomposer reruns only that lambda. Reads inside layout and draw lambdas are tracked by separate observers, which invalidate only layout or draw.</p>`,
-      code: `// Simplified shape of what the compiler generates
-@Composable
-fun Greeting(name: String, $composer: Composer, $changed: Int) {
-    $composer.startRestartGroup(/* key */)
-    var dirty = $changed
-    if (($changed and 0b0110) == 0) {
-        dirty = dirty or if ($composer.changed(name)) 0b0100 else 0b0010
-    }
-    if ((dirty and 0b0011) != 0b0010 || !$composer.skipping) {
-        Text("Hello $name", $composer, 0)
-    } else {
-        $composer.skipToGroupEnd()
-    }
-    $composer.endRestartGroup()?.updateScope { c, _ -> Greeting(name, c, $changed or 1) }
-}`,
-    },
-    mistakes: [
-      {
-        title: 'Heavy work in the composable body',
-        bad: `@Composable
-fun Contacts(contacts: List<Contact>) {
-    val sorted = contacts.sortedBy { it.name }   // on every recomposition
-    LazyColumn { items(sorted, key = { it.id }) { ContactRow(it) } }
-}`,
-        good: `@Composable
-fun Contacts(contacts: List<Contact>) {
-    val sorted = remember(contacts) { contacts.sortedBy { it.name } }
-    LazyColumn { items(sorted, key = { it.id }) { ContactRow(it) } }
-}`,
-        why: 'The body can run many times per second. <code>remember(contacts)</code> sorts once per new list. Sorting in the ViewModel is often even better.',
-      },
-      {
-        title: 'Using the index as a lazy key',
-        bad: `LazyColumn {
-    itemsIndexed(messages, key = { index, _ -> index }) { _, m ->
-        MessageRow(m)
-    }
-}`,
-        good: `LazyColumn {
-    items(messages, key = { it.id }) { m ->
-        MessageRow(m)
-    }
-}`,
-        why: 'Insert a message at the top and every index shifts, so every row gets a new key and its <code>remember</code> state moves to the wrong row. Use a stable id.',
-      },
-    ],
-  };
-
-  // ─── Depth pass 2: frame, anr, profiler, startup, r8 ───────────────────
-  const frameDepth = {
-    deeper: [
-      {
-        title: 'Two threads per frame: main and RenderThread',
-        body: `<p>A frame passes through two threads. The main thread handles input, animation, measure and layout, then records drawing commands. RenderThread turns those commands into GPU work and hands the finished buffer to the system compositor. Either one can make a frame late.</p>
-<p>So a light main thread is not enough. A new large bitmap has to be uploaded to the GPU, and many stacked full-screen layers or blurs cost GPU time, and both of those show up on RenderThread. In a system trace, look at both rows before you choose a fix.</p>`,
-        visual(el) {
-          const BUDGET = 16.7, SCALE = 34;
-          const WORK = [
-            { id: 'pf-d2-layout', label: 'deeply nested layout (+9 ms main)', th: 'main', ms: 9 },
-            { id: 'pf-d2-upload', label: 'new 4K bitmap each frame (+11 ms RenderThread)', th: 'rt', ms: 11 },
-            { id: 'pf-d2-blur', label: 'stacked full-screen blurs (+7 ms RenderThread)', th: 'rt', ms: 7 },
-          ];
-          const on = {};
-          const root = h('div', { class: 'viz' });
-          const live = alive(root);
-          const mk = name => {
-            const bar = h('span', { class: 'bar run', style: 'left:0;width:0' });
-            const val = h('span', { class: 'pf-d2-val' });
-            const track = h('div', { class: 'lane-track' }, bar, h('span', { class: 'pf-d2-limit', style: `left:${(BUDGET / SCALE) * 100}%` }), val);
-            return { bar, val, late: 0, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) };
-          };
-          const lanes = { main: mk('main'), rt: mk('RenderThread') };
-          const stat = h('span', { class: 'pf-stat' });
-          const o = out('Both threads fit the 16.7 ms budget. Add work to one of them.');
-          let frames = 0;
-          const extra = th => WORK.filter(w => on[w.id] && w.th === th).reduce((a, w) => a + w.ms, 0);
-          function tick() {
-            if (!live()) return;
-            frames++;
-            const ms = { main: 5 + Math.random() * 2 + extra('main'), rt: 3 + Math.random() * 1.5 + extra('rt') };
-            for (const k of ['main', 'rt']) {
-              const l = lanes[k], late = ms[k] > BUDGET;
-              l.bar.style.width = (Math.min(ms[k], SCALE) / SCALE) * 100 + '%';
-              l.bar.style.background = late ? 'var(--err)' : '';
-              l.val.textContent = ms[k].toFixed(1) + ' ms';
-              if (late) l.late++;
-            }
-            const worst = ms.main > ms.rt ? 'main' : 'RenderThread';
-            stat.innerHTML = `frame ${frames}: ${Math.max(ms.main, ms.rt) > BUDGET ? `<span class="pf-badnum">late, ${worst} took ${Math.max(ms.main, ms.rt).toFixed(1)} ms</span>` : '<b>on time</b>'} · late so far: main <b>${lanes.main.late}</b>, RenderThread <b>${lanes.rt.late}</b>`;
-            setTimeout(tick, 650);
-          }
-          const toggles = WORK.map(w => toggle(w.id, w.label, false, v => {
-            on[w.id] = v; lanes.main.late = 0; lanes.rt.late = 0;
-            say(o, !v ? 'Removed. Watch the bars settle.' : w.th === 'main'
-              ? '<span class="bad">main thread</span> now runs past the budget. Fix: flatten the layout, or move the work off main.'
-              : '<span class="bad">RenderThread</span> is the slow one now, while main stays light. Fix: smaller or reused bitmaps, fewer layers.');
-          }));
-          root.append(
-            h('div', { class: 'controls' }, toggles.map(t => t.el)),
-            h('div', { class: 'timeline' }, lanes.main.el, lanes.rt.el),
-            h('div', { class: 'legend' }, h('span', {}, h('i', { style: 'background:var(--accent)' }), 'stage time'), h('span', {}, h('i', { style: 'background:var(--err)' }), 'over budget'), h('span', {}, h('i', { class: 'pf-d2-key' }), '16.7 ms budget')),
-            h('div', { class: 'pf-row' }, stat),
-            o);
-          el.append(root);
-          tick();
-        },
-      },
-      {
-        title: 'Judge jank by percentiles, not the average',
-        body: `<p>An average hides stutter. A scroll with 95 frames at 8 ms and 5 frames at 60 ms averages 10.6 ms, well under budget, yet the user sees five hitches. Look at the slow end of the distribution instead.</p>
-<p>Macrobenchmark's <code>FrameTimingMetric</code> reports percentiles (P50, P90, P95, P99) for <code>frameDurationCpuMs</code>, and on Android 12+ for <code>frameOverrunMs</code>: how far past its deadline each frame finished. A positive overrun is a frame the user could see as jank.</p>`,
-        code: `@Test fun scrollFeed() = benchmarkRule.measureRepeated(
-    packageName = "com.example.feed",
-    metrics = listOf(FrameTimingMetric()),
-    compilationMode = CompilationMode.Partial(),
-    startupMode = StartupMode.WARM,
-    iterations = 5,
-) {
-    startActivityAndWait()
-    device.findObject(By.res("feed")).fling(Direction.DOWN)
-}
-// frameDurationCpuMs   P50 7.9   P90 9.1   P95 10.2   P99 58.4
-// frameOverrunMs       P50 -8.6  P90 -7.4  P95 -6.1   P99 41.2`,
-        visual(el) {
-          const MAXMS = 70, N = 100, BUDGET = 16.7;
-          let hitch = false, steady = false, busy = false;
-          const strip = h('div', { class: 'pf-d2-strip', 'aria-hidden': 'true' });
-          const line16 = h('span', { class: 'pf-d2-budget', style: `bottom:${(BUDGET / MAXMS) * 100}%` });
-          const box = h('div', { class: 'pf-d2-stripbox' }, strip, line16);
-          const nums = {};
-          const statEl = h('div', { class: 'pf-d2-nums' }, ['average', 'P50', 'P90', 'P99', 'over 16.7 ms'].map(k => h('div', { class: 'pf-d2-num' }, h('span', { class: 'pf-label' }, k), (nums[k] = h('b', {}, '—')))));
-          const o = out();
-          function gen() {
-            let seed = 7;
-            const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-            return Array.from({ length: N }, (_, i) => {
-              let ms = 7 + rnd() * 2;
-              if (steady) ms += 6;
-              if (hitch && [12, 33, 51, 70, 88].includes(i)) ms = 55 + rnd() * 10;
-              return ms;
-            });
-          }
-          function stats(fs) {
-            const s = [...fs].sort((a, b) => a - b), avg = fs.reduce((a, b) => a + b, 0) / fs.length;
-            const set = (k, v, bad) => { nums[k].textContent = v; nums[k].className = bad ? 'pf-badnum' : ''; };
-            set('average', avg.toFixed(1) + ' ms', avg > BUDGET);
-            set('P50', s[49].toFixed(1) + ' ms', s[49] > BUDGET);
-            set('P90', s[89].toFixed(1) + ' ms', s[89] > BUDGET);
-            set('P99', s[98].toFixed(1) + ' ms', s[98] > BUDGET);
-            const over = fs.filter(x => x > BUDGET).length;
-            set('over 16.7 ms', String(over), over > 0);
-            return { avg, p99: s[98], over };
-          }
-          const bar = ms => h('span', { class: 'pf-d2-f' + (ms > BUDGET ? ' pf-d2-late' : ''), style: `height:${(Math.min(ms, MAXMS) / MAXMS) * 100}%` });
-          async function record() {
-            if (busy) return; busy = true;
-            try {
-              const fs = gen();
-              strip.replaceChildren();
-              Object.values(nums).forEach(n => { n.textContent = '—'; n.className = ''; });
-              say(o, `${hl('fling(Direction.DOWN)')} <span class="muted">// recording 100 frames</span>`);
-              for (let i = 0; i < N; i += 5) {
-                strip.append(...fs.slice(i, i + 5).map(bar));
-                await sleep(40); if (!el.isConnected) return;
-              }
-              const r = stats(fs);
-              o.append(h('div', { class: 'line drop-in', html: r.over === 0 ? '<span class="good">smooth:</span> every frame fits.'
-                : r.avg < BUDGET ? `<span class="bad">the average says fine (${r.avg.toFixed(1)} ms), P99 says ${r.p99.toFixed(0)} ms:</span> ${r.over} visible hitches.`
-                : `<span class="bad">every frame is slower.</span> P50 moved, so this is steady extra work, not a hitch.` }));
-            } finally { busy = false; }
-          }
-          const t1 = toggle('pf-d2-hitch', '5 hitches (GC, image decode)', false, v => { hitch = v; say(o, 'Record again to see the new numbers.'); });
-          const t2 = toggle('pf-d2-steady', '+6 ms on every frame', false, v => { steady = v; say(o, 'Record again to see the new numbers.'); });
-          const fs0 = gen(); strip.append(...fs0.map(bar)); stats(fs0);
-          o.innerHTML = 'A smooth scroll of 100 frames. Add hitches or steady work, then record.';
-          el.append(
-            h('div', { class: 'controls' }, t1.el, t2.el, act('Record scroll', record)),
-            box, statEl, o);
-        },
-      },
-      {
-        title: 'Tag frames with what the user was doing',
-        body: `<p>JankStats in production tells you that frames were slow, not where. Add UI state to <code>PerformanceMetricsState</code>, such as the screen and whether the list is scrolling. Each <code>FrameData</code> that JankStats reports then carries the states that were active during that frame, so you can group jank by screen and action.</p>`,
-        code: `val metrics = PerformanceMetricsState.getHolderForHierarchy(window.decorView)
-metrics.state?.putState("screen", "feed")
-
-recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-    override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-        if (newState == RecyclerView.SCROLL_STATE_IDLE) metrics.state?.removeState("scroll")
-        else metrics.state?.putState("scroll", "dragging")
-    }
-})
-
-JankStats.createAndTrack(window) { frame ->
-    if (frame.isJank) analytics.logJank(frame.frameDurationUiNanos, frame.states)
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>On every vsync the display system signals your app, and <code>Choreographer</code> runs its frame callbacks on the main thread in a fixed order: input, animation, insets animation, traversal, commit. Traversal is measure, layout and draw. Compose joins the same frame: its recomposer and animations wait on a frame clock that Choreographer drives.</p>
-<p>Draw does not touch pixels. It records commands into display lists on <code>RenderNode</code>s. The main thread syncs the changed display lists to RenderThread and is free to start the next frame. RenderThread issues the GPU commands and queues the finished buffer, and SurfaceFlinger composites it onto the screen at a later vsync.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Moving things a fixed step per frame',
-        bad: `override fun onDraw(canvas: Canvas) {
-    x += 4f                       // 240 px/s at 60 Hz, 480 px/s at 120 Hz
-    canvas.drawCircle(x, cy, r, paint)
-    invalidate()
-}`,
-        good: `private val animator = ValueAnimator.ofFloat(0f, 600f).apply {
-    duration = 1_000              // same speed at any refresh rate
-    addUpdateListener { x = it.animatedValue as Float; invalidate() }
-}
-override fun onDraw(canvas: Canvas) { canvas.drawCircle(x, cy, r, paint) }`,
-        why: 'Frame-counted motion runs twice as fast on a 120 Hz screen and slows down whenever frames drop. Drive motion by time.',
-      },
-      {
-        title: 'Allocating objects in onDraw',
-        bad: `override fun onDraw(canvas: Canvas) {
-    val paint = Paint().apply { color = accent }   // every frame
-    canvas.drawRect(bounds, paint)
-}`,
-        good: `private val paint = Paint()
-
-override fun onDraw(canvas: Canvas) {
-    paint.color = accent
-    canvas.drawRect(bounds, paint)
-}`,
-        why: '<code>onDraw</code> can run every frame. New objects each time feed the garbage collector, and its work competes with your frames. Lint flags this as <code>DrawAllocation</code>.',
-      },
-    ],
-  };
-
-  const anrDepth = {
-    deeper: [
-      {
-        title: 'Every component has a deadline',
-        body: `<p>Input is one kind of ANR. The system also times the callbacks of your other components, all of which run on the main thread by default. A <code>BroadcastReceiver</code> must finish <code>onReceive()</code> within a set time, which is 5 seconds while your app has an Activity in the foreground. A service must get through <code>onCreate()</code> and <code>onStartCommand()</code> within a few seconds. For apps targeting Android 14, a <code>JobService</code> that doesn't return from <code>onStartJob()</code> or <code>onStopJob()</code> within a few seconds gets a reported ANR too.</p>
-<p>The ANR title in Play Console tells you which deadline you missed. Block the main thread from two places and read the titles.</p>`,
-        visual(el) {
-          const SEC = 300, TOTAL = 8;
-          const KINDS = {
-            tap: { label: 'click handler', start: 0.5, block: 'exportNotes()  // 7 s on main', fix: 'scope.launch { withContext(Dispatchers.IO) { exportNotes() } }',
-              anr: 'ANR in com.example.notes: Input dispatching timed out (Waited 5000ms for MotionEvent)' },
-            rx: { label: 'BroadcastReceiver', start: 0, block: 'onReceive() { uploadLogs() }  // 7 s on main', fix: 'onReceive() { WorkManager.getInstance(context).enqueue(upload) }',
-              anr: 'ANR in com.example.notes: Broadcast of Intent { act=com.example.SYNC_DONE cmp=com.example.notes/.SyncReceiver }' },
-          };
-          let kind = 'tap', fixed = false, busy = false;
-          const root = h('div', { class: 'viz' });
-          const mkLane = name => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) }; };
-          const main = mkLane('main'), bg = mkLane('background');
-          const limit = h('span', { class: 'pf-limit' });
-          main.track.append(limit);
-          const clock = h('span', { class: 'clock' }, '0.0 s');
-          const src = h('div', { class: 'kt' });
-          const o = out();
-          const keys = Object.keys(KINDS);
-          const kBtns = keys.map(k => act(KINDS[k].label, () => { if (busy) return; kind = k; paint(); }));
-          const fixT = toggle('pf-d2-anrfix', 'Use the fix', false, v => { if (busy) { fixT.input.checked = fixed; return; } fixed = v; paint(); });
-          function paint() {
-            press(kBtns, kBtns[keys.indexOf(kind)]);
-            const k = KINDS[kind];
-            src.innerHTML = hl(fixed ? k.fix : k.block);
-            limit.style.left = ((k.start + 5) / TOTAL) * 100 + '%';
-            [main, bg].forEach(l => l.track.querySelectorAll('.bar').forEach(b => b.remove()));
-            clock.textContent = '0.0 s';
-            say(o, `Deadline: 5 s after the ${kind === 'tap' ? 'tap' : 'broadcast is delivered'}. Press Run.`);
-          }
-          const bar = (lane, cls, s) => { const b = h('span', { class: `bar ${cls}`, style: `left:${(s / TOTAL) * 100}%;width:0` }); lane.track.append(b); return b; };
-          async function run() {
-            if (busy) return; busy = true;
-            try {
-              paint();
-              const k = KINDS[kind];
-              say(o, hl(fixed ? k.fix : k.block));
-              const blk = bar(main, fixed ? 'run' : 'block', k.start);
-              const work = fixed ? bar(bg, 'run', k.start + 0.1) : null;
-              let anr = false;
-              const t0 = performance.now();
-              for (;;) {
-                const t = Math.min((performance.now() - t0) / SEC, 7.5);
-                clock.textContent = t.toFixed(1) + ' s';
-                if (fixed) { blk.style.width = (Math.max(0, Math.min(t, k.start + 0.1) - k.start) / TOTAL) * 100 + '%'; work.style.width = (Math.max(0, Math.min(t, k.start + 7) - k.start - 0.1) / TOTAL) * 100 + '%'; }
-                else blk.style.width = (Math.max(0, Math.min(t, k.start + 7) - k.start) / TOTAL) * 100 + '%';
-                if (!fixed && !anr && t >= k.start + 5) { anr = true; line(o, `<span class="bad">${k.anr}</span>`); replay(main.el, 'shake'); }
-                if (t >= 7.5) break;
-                await sleep(30); if (!root.isConnected) return;
-              }
-              line(o, fixed ? '<span class="good">main returned at once.</span> The slow part ran in the background, no ANR.' : 'main was blocked past the deadline. The title names the component, so you know where to look.');
-            } finally { busy = false; }
-          }
-          paint();
-          o.innerHTML = 'Pick where the slow call happens, then run it.';
-          root.append(
-            h('div', { class: 'controls' }, kBtns, fixT.el),
-            src,
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'threads · red line: deadline'), clock),
-            h('div', { class: 'timeline' }, main.el, bg.el),
-            h('div', { class: 'controls' }, act('Run', run)),
-            o);
-          el.append(root);
-        },
-      },
-      {
-        title: 'Blocked on a lock, not on work',
-        body: `<p>Many ANR traces show a main thread that does nothing at all. Its state is <code>Blocked</code>: it is waiting for a lock that a background thread holds while it does slow I/O. StrictMode doesn't catch this, because the main thread never touches the disk or network itself.</p>
-<p>Never hold a lock across I/O. Do the slow part first, then take the lock only to swap in the result. Better still, publish the result through something the main thread can read without a lock, like a <code>StateFlow</code>.</p>`,
-        code: `// Before: the lock is held for the whole download
-fun refresh() = synchronized(lock) { articles = api.fetchAll() }
-fun current(): List<Article> = synchronized(lock) { articles }    // main waits here
-
-// After: slow part outside, a short lock (or a StateFlow) for the swap
-fun refresh() {
-    val fresh = api.fetchAll()
-    synchronized(lock) { articles = fresh }
-}`,
-        visual(el) {
-          const SEC = 320, TOTAL = 8;
-          let fixed = false, busy = false;
-          const root = h('div', { class: 'viz' });
-          const mkLane = name => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) }; };
-          const io = mkLane('IO thread'), main = mkLane('main');
-          main.track.append(h('span', { class: 'pf-limit', style: `left:${(5.5 / TOTAL) * 100}%` }));
-          const owner = h('span', { class: 'chip', style: 'height:36px;font-size:0.82rem' }, 'lock free');
-          const clock = h('span', { class: 'clock' }, '0.0 s');
-          const o = out();
-          const fixT = toggle('pf-d2-shortlock', 'Swap the result under a short lock', false, v => { if (busy) { fixT.input.checked = fixed; return; } fixed = v; say(o, v ? 'Now the download runs outside the lock. Run it.' : 'The lock is held during the download. Run it.'); });
-          const bar = (lane, cls, s) => { const b = h('span', { class: `bar ${cls}`, style: `left:${(s / TOTAL) * 100}%;width:0` }); lane.track.append(b); return b; };
-          const W = (a, b) => (Math.max(0, b - a) / TOTAL) * 100 + '%';
-          async function run() {
-            if (busy) return; busy = true;
-            try {
-              [io, main].forEach(l => l.track.querySelectorAll('.bar').forEach(b => b.remove()));
-              say(o, `${hl('refresh()')} on IO, then the user taps and main calls ${hl('current()')} at 0.5 s`);
-              const dl = bar(io, fixed ? 'run' : 'block', 0), swap = fixed ? bar(io, 'block', 6) : null;
-              const wait = bar(main, fixed ? 'run' : 'wait', 0.5);
-              let anr = false, tapped = false;
-              const t0 = performance.now();
-              for (;;) {
-                const t = Math.min((performance.now() - t0) / SEC, 7);
-                clock.textContent = t.toFixed(1) + ' s';
-                dl.style.width = W(0, Math.min(t, 6));
-                if (swap) swap.style.width = W(6, Math.min(t, 6.08));
-                owner.textContent = !fixed && t < 6 ? 'held by IO (download)' : fixed && t >= 6 && t < 6.08 ? 'held by IO (swap)' : 'lock free';
-                if (t >= 0.5) {
-                  if (fixed) { wait.style.width = W(0.5, Math.min(t, 0.56)); if (!tapped) { tapped = true; line(o, '<span class="good">0.5 s: main got the lock at once</span> and showed the old list. No waiting.'); } }
-                  else wait.style.width = W(0.5, Math.min(t, 6));
-                }
-                if (!fixed && !anr && t >= 5.5) {
-                  anr = true; replay(main.el, 'shake');
-                  line(o, '<span class="bad">ANR: Input dispatching timed out</span>');
-                  ['"main" prio=5 tid=1 Blocked', '  at com.example.news.ArticleCache.current(ArticleCache.kt:31)', '  - waiting to lock &lt;0x0b3c2e1f&gt; (a java.lang.Object) held by thread 14',
-                    '"DefaultDispatcher-worker-2" prio=5 tid=14 Native', '  at java.net.SocketInputStream.socketRead0(Native method)', '  - locked &lt;0x0b3c2e1f&gt; (a java.lang.Object)'].forEach(s => line(o, s, 'pf-pre'));
-                }
-                if (t >= 7) break;
-                await sleep(30); if (!root.isConnected) return;
-              }
-              if (fixed) line(o, '6.0 s: IO swapped in the new list in a few microseconds.');
-            } finally { busy = false; }
-          }
-          o.innerHTML = 'The IO thread refreshes the cache while holding its lock. Run it.';
-          root.append(
-            h('div', { class: 'controls' }, fixT.el),
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'cache lock'), owner, clock),
-            h('div', { class: 'timeline' }, io.el, main.el),
-            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar block' }), 'holds the lock'), h('span', {}, h('i', { class: 'bar wait' }), 'waiting for the lock'), h('span', {}, h('i', { class: 'bar run' }), 'running')),
-            h('div', { class: 'controls' }, act('Run', run)),
-            o);
-          el.append(root);
-        },
-      },
-      {
-        title: 'Read your ANRs from the field',
-        body: `<p>Play Console groups ANRs and shows the main thread's stack for each cluster. On Android 11 and later, your app can also read its own recent exits on the next launch with <code>ApplicationExitInfo</code>. For an ANR it includes the full thread dump, so you can send it to your own crash reporting.</p>`,
-        code: `if (Build.VERSION.SDK_INT >= 30) {
-    val am = getSystemService(ActivityManager::class.java)
-    am.getHistoricalProcessExitReasons(packageName, 0, 5)
-        .filter { it.reason == ApplicationExitInfo.REASON_ANR }
-        .forEach { info ->
-            val dump = info.traceInputStream?.bufferedReader()?.use { it.readText() }
-            crashReporter.logAnr(info.timestamp, info.description, dump)
-        }
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>For input, the system's input dispatcher sends each event to your window and waits for the app to report that it finished handling it. If an event stays unfinished for 5 seconds, the dispatcher reports an ANR to the activity manager. Component timeouts work the same way: the system starts a timer when it hands your app the callback and cancels it when the app reports back.</p>
-<p>On an ANR, the system sends your process <code>SIGQUIT</code>. ART's signal catcher thread then writes the stack of every thread to a trace file, which is what Play Console and <code>ApplicationExitInfo</code> show you. A foreground app then gets the "isn't responding" dialog. A background ANR usually ends with the process killed and no dialog.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'commit() on the main thread',
-        bad: `fun onSaveClicked(text: String) {
-    prefs.edit().putString("draft", text).commit()   // waits for the disk
-}`,
-        good: `fun onSaveClicked(text: String) {
-    scope.launch { dataStore.edit { it[DRAFT] = text } }   // writes off main
-}`,
-        why: '<code>commit()</code> writes the file before it returns. On slow or busy storage that can take hundreds of milliseconds or more. DataStore does its I/O on a background dispatcher.',
-      },
-      {
-        title: 'Waiting on a Future from the main thread',
-        bad: `button.setOnClickListener {
-    val user = executor.submit(Callable { api.user(id) }).get()   // blocks main
-    show(user)
-}`,
-        good: `button.setOnClickListener {
-    lifecycleScope.launch {
-        val user = withContext(Dispatchers.IO) { api.user(id) }
-        show(user)
-    }
-}`,
-        why: 'Moving work to another thread doesn’t help if main then waits for it. <code>get()</code>, <code>join()</code> and <code>runBlocking</code> all park the main thread.',
-      },
-      {
-        title: 'Real work inside onReceive',
-        bad: `override fun onReceive(context: Context, intent: Intent) {
-    val report = LogCollector.buildReport(context)   // seconds of I/O
-    api.upload(report)
-}`,
-        good: `override fun onReceive(context: Context, intent: Intent) {
-    WorkManager.getInstance(context).enqueue(
-        OneTimeWorkRequestBuilder<UploadLogsWorker>().build()
-    )
-}`,
-        why: '<code>onReceive()</code> runs on the main thread with a short deadline. Hand anything slow to WorkManager, which also survives the process being killed.',
-      },
-    ],
-  };
-
-  const profilerDepth = {
-    deeper: [
-      {
-        title: 'Call chart for order, flame chart for totals',
-        body: `<p>One method recording has several views. The <em>call chart</em> is a timeline: x is time, so a function called three times shows up as three bars, in the order they ran. The <em>flame chart</em> merges identical call stacks, so those three calls become one wide bar and you see the total at a glance.</p>
-<p>Use the call chart to see when things ran and what overlapped. Use the flame chart, or the top down and bottom up tables, to see where the time went. Switch views and click a bar.</p>`,
-        visual(el) {
-          const CALLS = [
-            ['doFrame', 0, 0, 24], ['onBindViewHolder', 1, 1, 7], ['formatDate', 2, 2, 6],
-            ['onBindViewHolder', 1, 8, 14], ['formatDate', 2, 9, 13],
-            ['onBindViewHolder', 1, 15, 23], ['formatDate', 2, 16, 19], ['decodeBitmap', 2, 19, 23],
-          ].map(([n, d, s, e]) => ({ n, d, s, e, ms: e - s }));
-          const MERGED = [
-            { n: 'doFrame', d: 0, s: 0, ms: 24, calls: 1 }, { n: 'onBindViewHolder', d: 1, s: 0, ms: 20, calls: 3 },
-            { n: 'formatDate', d: 2, s: 0, ms: 11, calls: 3 }, { n: 'decodeBitmap', d: 2, s: 11, ms: 4, calls: 1 },
-          ];
-          const SPAN = 24;
-          let view = 'call';
-          const flame = h('div', { class: 'pf-flame', role: 'group', 'aria-label': 'Recording of one frame' });
-          const axis = h('div', { class: 'pf-row' });
-          const o = out();
-          const vBtns = [act('Call chart', () => setView('call')), act('Flame chart', () => setView('flame'))];
-          function render() {
-            const rows = [0, 1, 2].map(() => h('div', { class: 'pf-frow' }));
-            const items = view === 'call' ? CALLS : MERGED;
-            items.forEach((c, i) => rows[c.d].append(h('button', {
-              class: 'pf-fl pf-grow' + (c.n === 'decodeBitmap' || c.n === 'formatDate' ? ' pf-warm' : ''),
-              style: `left:${(c.s / SPAN) * 100}%;width:calc(${(c.ms / SPAN) * 100}% - 2px);animation-delay:${i * 40}ms`,
-              title: `${c.n}: ${c.ms} ms`, 'aria-label': `${c.n}, ${c.ms} ms`,
-              onclick() { pick(c); },
-            }, c.n)));
-            flame.replaceChildren(...rows);
-            axis.replaceChildren(h('span', { class: 'pf-label' }, view === 'call' ? 'x axis: time, 0 to 24 ms' : 'x axis: share of total time, not order'));
-          }
-          function setView(v) {
-            view = v; press(vBtns, vBtns[v === 'call' ? 0 : 1]); render();
-            say(o, v === 'call' ? 'Call chart: three separate onBindViewHolder calls, in order, with gaps between them.' : 'Flame chart: the three calls merged into one 20 ms bar. formatDate adds up to 11 ms across them.');
-          }
-          function pick(c) {
-            if (view === 'call') {
-              const nth = CALLS.filter(x => x.n === c.n).indexOf(c) + 1;
-              say(o, `${hl(c.n)} <span class="muted">call ${nth}, ran from ${c.s} to ${c.e} ms</span> · ${c.ms} ms`);
-            } else say(o, `${hl(c.n)} <span class="good">${c.ms} ms total</span> <span class="muted">across ${c.calls} call${c.calls > 1 ? 's' : ''}, ${Math.round((c.ms / SPAN) * 100)}% of the frame</span>`);
-          }
-          press(vBtns, vBtns[0]); render();
-          o.innerHTML = 'One 24 ms frame binding three rows. Click a bar, then switch views.';
-          el.append(h('div', { class: 'controls' }, vBtns), flame, axis, o);
-        },
-      },
-      {
-        title: 'Sampling and tracing change the numbers',
-        body: `<p>A <em>traced</em> recording hooks every method entry and exit. It counts every call exactly, but each hook costs time, so tiny functions called thousands of times look much slower than they are. A <em>sampled</em> recording takes the call stacks at a fixed interval. Its overhead is low, but it estimates time from how often a function shows up, and very short calls may never be caught.</p>
-<p>Sample to find where time goes. Trace when you need exact call counts. Neither is a stopwatch, so confirm a fix with a benchmark.</p>`,
-        visual(el) {
-          const FN = [
-            { n: 'parseFeed()', calls: 1, ms: 40 },
-            { n: 'Article.hashCode()', calls: 20000, ms: 10 },
-            { n: 'formatDate()', calls: 60, ms: 6 },
-            { n: 'onScrollTick()', calls: 30, ms: 0.6 },
-          ];
-          const COST = 0.001; // ms of hook overhead per traced call, illustrative
-          let mode = 'real';
-          const rows = FN.map(f => {
-            const fill = h('span');
-            const val = h('span', { class: 'pf-d2-mv' }), calls = h('span', { class: 'pf-d2-mc' });
-            return { f, fill, val, calls, el: h('div', { class: 'pf-d2-mrow' }, h('span', { class: 'pf-d2-mn' }, f.n), h('div', { class: 'pf-heap-bar' }, fill), val, calls) };
-          });
-          const o = out();
-          const MODES = [['real', 'what really happened'], ['trace', 'traced recording'], ['sample', 'sampled, every 1 ms']];
-          const mBtns = MODES.map(([k, label]) => act(label, () => setMode(k)));
-          const shown = f => mode === 'trace' ? f.ms + f.calls * COST : mode === 'sample' ? Math.floor(f.ms) : f.ms;
-          function setMode(k) {
-            mode = k; press(mBtns, mBtns[MODES.findIndex(m => m[0] === k)]);
-            const max = Math.max(...FN.map(shown));
-            rows.forEach(r => {
-              const v = shown(r.f);
-              r.fill.style.width = (v / max) * 100 + '%';
-              r.val.textContent = mode === 'sample' ? (v ? `≈${v} ms` : 'not seen') : `${+v.toFixed(2)} ms`;
-              r.calls.textContent = mode === 'sample' ? 'calls ?' : `${r.f.calls.toLocaleString('en-US')} calls`;
-              r.el.classList.toggle('pf-d2-skew', mode === 'trace' && r.f.calls > 1000);
-              replay(r.el, 'pop-soft');
-            });
-            say(o, {
-              real: 'The truth: parseFeed is the cost. hashCode is cheap per call.',
-              trace: '<span class="bad">hashCode looks three times slower:</span> 20,000 calls each paid the hook cost. The counts are exact, the time is inflated.',
-              sample: 'Close to the truth for the big items. <span class="muted">onScrollTick runs 30 times for 0.02 ms each and fell between samples.</span>',
-            }[k]);
-          }
-          setMode('real');
-          el.append(h('div', { class: 'controls' }, mBtns), h('div', { class: 'pf-d2-mt' }, rows.map(r => r.el)),
-            h('p', { class: 'tip' }, 'The overhead per call here is made up to show the effect. Real overhead depends on the device and the runtime.'), o);
-        },
-      },
-      {
-        title: 'Read thread states in a system trace',
-        body: `<p>In a Perfetto system trace each thread's row is colored by state. <em>Running</em> means it has a CPU and does work. <em>Runnable</em> means it is ready but waits for a free CPU. <em>Sleeping</em> means it waits for something, like a lock, a binder reply or a message. <em>Uninterruptible sleep</em> usually means it waits for disk I/O.</p>
-<p>A slow frame where main is mostly sleeping is a waiting problem, not a CPU problem, and a method trace won't show it. Pick a slow frame below.</p>`,
-        visual(el) {
-          const ST = { run: ['Running', 'var(--accent)'], rnbl: ['Runnable', 'var(--warm)'], sleep: ['Sleeping', 'var(--muted)'], io: ['Uninterruptible sleep', 'var(--err)'] };
-          const SCEN = {
-            cpu: { label: 'CPU-heavy bind', segs: [['run', 23]], diag: 'Running the whole time: your own code is the cost. Record a method trace or add trace sections to find it.' },
-            busy: { label: 'busy device', segs: [['run', 6], ['rnbl', 8], ['run', 5], ['rnbl', 4]], diag: 'Runnable: ready to run but no free CPU. Other threads or apps compete. Check what else runs on the CPUs at that moment.' },
-            lock: { label: 'lock or binder', segs: [['run', 4], ['sleep', 15], ['run', 4]], diag: 'Sleeping: waiting for a lock, a binder reply or a message. Select the slice to see which thread woke it up.' },
-            disk: { label: 'disk read', segs: [['run', 3], ['io', 17], ['run', 3]], diag: 'Uninterruptible sleep: usually blocked on disk I/O. Move the read off the main thread.' },
-          };
-          const SPAN = 26;
-          const strip = h('div', { class: 'pf-d2-states', 'aria-hidden': 'true' });
-          const o = out();
-          const keys = Object.keys(SCEN);
-          const sBtns = keys.map(k => act(SCEN[k].label, () => pick(k)));
-          function pick(k) {
-            press(sBtns, sBtns[keys.indexOf(k)]);
-            strip.replaceChildren(...SCEN[k].segs.map(([s, ms], i) => h('span', { class: 'pf-d2-st', style: `width:${(ms / SPAN) * 100}%;background:${ST[s][1]};animation-delay:${i * 80}ms`, title: `${ST[s][0]} ${ms} ms` })),
-              h('span', { class: 'pf-d2-b16', style: `left:${(16.7 / SPAN) * 100}%` }));
-            say(o, SCEN[k].diag);
-          }
-          pick('lock');
-          el.append(h('div', { class: 'controls' }, sBtns),
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'main thread, one 23 ms frame · dashed line: 16.7 ms')),
-            strip,
-            h('div', { class: 'legend' }, Object.values(ST).map(([n, c]) => h('span', {}, h('i', { style: `background:${c}` }), n))),
-            o);
-        },
-      },
-    ],
-    underHood: {
-      body: `<p>A traced Java and Kotlin recording asks ART to call a hook on every method entry and exit, which is why it slows the app so much. A sampled recording asks ART to record the threads' stacks at a set interval. The callstack sample task uses <code>simpleperf</code>, which samples through the kernel's performance events and also sees native frames.</p>
-<p>A system trace is a Perfetto recording of kernel events, like scheduler switches and CPU frequency, plus sections from the framework and your app. <code>trace("label") { }</code> calls <code>Trace.beginSection</code> and <code>endSection</code>, which check whether app tracing is on first, so they cost very little when nobody is recording.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Manual sections without finally',
-        bad: `Trace.beginSection("loadFeed")
-val feed = repo.load()          // throws: the section never ends
-Trace.endSection()`,
-        good: `val feed = trace("loadFeed") { repo.load() }   // ends in a finally block`,
-        why: 'A section that never ends stretches to the end of the trace and hides everything after it. <code>trace { }</code> always closes it.',
-      },
-      {
-        title: 'A trace section across a suspension point',
-        bad: `suspend fun refresh() = trace("refresh") {
-    api.fetch()                 // suspends, may resume on another thread
-}`,
-        good: `suspend fun refresh() = traceAsync("refresh", 1) {
-    api.fetch()
-}`,
-        why: 'A normal section must begin and end on the same thread. After a suspension the coroutine can resume elsewhere and close the wrong slice. Async sections are matched by name and cookie instead.',
-      },
-      {
-        title: 'Building section names in a hot path',
-        bad: `fun bind(item: Article) = trace("bind \${item.id}") {
-    title.text = item.title
-}`,
-        good: `fun bind(item: Article) = trace("ArticleAdapter.bind") {
-    title.text = item.title
-}`,
-        why: 'The string template runs on every call, even when nobody is tracing. Constant names are free and group nicely in the trace.',
-      },
-    ],
-  };
-
-  const startupDepth = {
-    deeper: [
-      {
-        title: 'First frame vs full display',
-        body: `<p>Time to initial display (TTID) ends at the first frame, which may show only a skeleton. Time to full display (TTFD) ends when the content the user came for is on screen. You mark that moment with <code>reportFullyDrawn()</code>. Logcat then prints <code>Fully drawn</code>, and Macrobenchmark reports <code>timeToFullDisplayMs</code> next to <code>timeToInitialDisplayMs</code>.</p>
-<p>In Compose, use <code>ReportDrawnWhen</code> or <code>ReportDrawnAfter</code> from activity-compose. Report too early and the number flatters you. Never report and there is no number at all.</p>`,
-        code: `@Composable
-fun FeedScreen(viewModel: FeedViewModel) {
-    val feed by viewModel.feed.collectAsStateWithLifecycle()
-    ReportDrawnWhen { feed.isNotEmpty() }      // reports once the feed is there
-    if (feed.isEmpty()) FeedSkeleton() else FeedList(feed)
-}`,
-        visual(el) {
-          const TOTAL = 1450, SLOW = 1.6;
-          const MODES = { never: 'never called', early: 'right after setContent', when: 'ReportDrawnWhen { feed.isNotEmpty() }' };
-          let mode = 'when', busy = false;
-          const root = h('div', { class: 'viz' });
-          const lanes = {};
-          const tl = h('div', { class: 'timeline' }, [['main', 'main'], ['io', 'feed load'], ['mark', 'reported']].map(([k, n]) => {
-            lanes[k] = h('div', { class: 'lane-track' });
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, n), lanes[k]);
-          }));
-          const clock = h('span', { class: 'clock' }, '0 ms');
-          const screen = h('div', { class: 'phone' });
-          const o = out();
-          const keys = Object.keys(MODES);
-          const mBtns = keys.map(k => act(MODES[k], () => { if (busy) return; mode = k; press(mBtns, mBtns[keys.indexOf(k)]); }));
-          const show = w => screen.replaceChildren(w === 'home' ? h('div', { class: 'pf-launcher' }, Array.from({ length: 9 }, (_, i) => h('i', { class: i === 4 ? 'pf-me' : null })))
-            : w === 'skel' ? h('div', { class: 'pf-content drop-in' }, [1, 2, 3].map(() => h('div', { class: 'item pf-d2-skel' }, ' ')))
-            : h('div', { class: 'pf-content drop-in' }, ['Top stories', 'Markets', 'Sport'].map(t => h('div', { class: 'item' }, t))));
-          const SEGS = [['main', 0, 200, 'pf-proc'], ['main', 200, 430, 'pf-actb'], ['main', 430, 460, 'pf-frame'], ['io', 460, 1250, 'run'], ['main', 1250, 1290, 'pf-frame']];
-          const mark = at => lanes.mark.append(h('span', { class: 'pf-ttid', style: `left:${(at / TOTAL) * 100}%` }));
-          async function launch() {
-            if (busy) return; busy = true;
-            try {
-              Object.values(lanes).forEach(l => l.replaceChildren()); show('home');
-              say(o, `cold start, reportFullyDrawn: ${MODES[mode]}`);
-              const bars = SEGS.map(([l, s, e, c]) => { const b = h('span', { class: `bar ${c}`, style: `left:${(s / TOTAL) * 100}%;width:0` }); lanes[l].append(b); return { b, s, e }; });
-              const t0 = performance.now();
-              let skel = false, full = false, early = false;
-              for (;;) {
-                const t = Math.min((performance.now() - t0) / SLOW, 1300);
-                clock.textContent = Math.round(t) + ' ms';
-                bars.forEach(x => { x.b.style.width = (Math.max(0, Math.min(t, x.e) - x.s) / TOTAL) * 100 + '%'; });
-                if (!skel && t >= 460) { skel = true; show('skel'); line(o, '<span class="good">Displayed com.example.news/.MainActivity: +460ms</span> <span class="muted">// TTID, a skeleton</span>'); }
-                if (mode === 'early' && !early && t >= 460) { early = true; mark(460); line(o, 'Fully drawn com.example.news/.MainActivity: +460ms <span class="bad">// claims done while the skeleton shows</span>'); }
-                if (!full && t >= 1290) {
-                  full = true; show('content');
-                  if (mode === 'when') { mark(1290); line(o, '<span class="good">Fully drawn com.example.news/.MainActivity: +1s290ms</span> <span class="muted">// TTFD, real content</span>'); }
-                  if (mode === 'never') line(o, '<span class="muted">no Fully drawn line, and Macrobenchmark reports no timeToFullDisplayMs</span>');
-                }
-                if (t >= 1300) break;
-                await sleep(30); if (!root.isConnected) return;
-              }
-            } finally { busy = false; }
-          }
-          press(mBtns, mBtns[2]); show('content');
-          SEGS.forEach(([l, s, e, c]) => lanes[l].append(h('span', { class: `bar ${c}`, style: `left:${(s / TOTAL) * 100}%;width:${((e - s) / TOTAL) * 100}%` })));
-          mark(1290); clock.textContent = '1290 ms';
-          o.innerHTML = 'Last launch: skeleton at 460 ms, real feed at 1290 ms. Pick where reportFullyDrawn happens and launch.';
-          root.append(h('div', { class: 'controls pf-d2-wrap' }, mBtns),
-            h('div', { class: 'pf-split' }, h('div', { class: 'viz' }, h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'cold start'), clock), tl), screen),
-            h('div', { class: 'controls' }, act('Cold start', launch)),
-            o);
-          el.append(root);
-        },
-      },
-      {
-        title: 'App Startup: an order, and a way out',
-        body: `<p>Libraries used to add their own <code>ContentProvider</code> just to run setup code. Every provider is created before <code>Application.onCreate</code>, on the main thread. App Startup replaces them with one <code>InitializationProvider</code>. Each <code>Initializer</code> lists the initializers it depends on, and App Startup runs those first.</p>
-<p>To take one off the startup path, remove its <code>meta-data</code> entry from the merged manifest and call <code>AppInitializer</code> on first use.</p>`,
-        code: `class AnalyticsInitializer : Initializer<Analytics> {
-    override fun create(context: Context): Analytics = Analytics.start(context, Logger.instance)
-    override fun dependencies(): List<Class<out Initializer<*>>> =
-        listOf(LoggerInitializer::class.java)       // runs before this one
-}
-
-// AndroidManifest.xml: take Ads off the startup path
-// <provider android:name="androidx.startup.InitializationProvider"
-//     android:authorities="\${applicationId}.androidx-startup"
-//     tools:node="merge">
-//     <meta-data android:name="com.example.AdsInitializer" tools:node="remove" />
-// </provider>
-
-// Later, on the first screen that shows an ad
-AppInitializer.getInstance(context).initializeComponent(AdsInitializer::class.java)`,
-        visual(el) {
-          const TOTAL = 1050, SLOW = 2;
-          let lazyAds = false, busy = false, adsDone = false, started = false, lastEnd = 790;
-          const root = h('div', { class: 'viz' });
-          const lanes = {};
-          const tl = h('div', { class: 'timeline' }, [['prov', 'InitializationProvider'], ['app', 'Application.onCreate'], ['act', 'Activity'], ['later', 'on first use']].map(([k, n]) => {
-            lanes[k] = h('div', { class: 'lane-track' });
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, n), lanes[k]);
-          }));
-          const clock = h('span', { class: 'clock' }, '0 ms');
-          const o = out();
-          const plan = () => {
-            const p = [['prov', 'LoggerInitializer', 40, 'pf-appseg'], ['prov', 'AnalyticsInitializer', 180, 'pf-appseg'], ['prov', 'WorkManagerInitializer', 30, 'pf-appseg']];
-            if (!lazyAds) p.push(['prov', 'AdsInitializer', 240, 'pf-appseg']);
-            p.push(['app', 'CrashReporter.install', 40, 'pf-appseg'], ['act', 'onCreate + first frame', 260, 'pf-actb']);
-            let t = 0; return p.map(([l, n, ms, c]) => { const s = t; t += ms; return { l, n, s, e: t, c }; });
-          };
-          const lazyT = toggle('pf-d2-lazyads', 'AdsInitializer: <code>tools:node="remove"</code>', false, v => { if (busy) { lazyT.input.checked = lazyAds; return; } lazyAds = v; say(o, v ? 'Ads is no longer in the merged manifest. Start the app again.' : 'Ads runs in the provider again.'); });
-          async function coldStart() {
-            if (busy) return; busy = true;
-            try {
-              Object.values(lanes).forEach(l => l.replaceChildren()); adsDone = false; started = false;
-              const p = plan(), end = p[p.length - 1].e;
-              say(o, 'cold start: the provider runs initializers before Application.onCreate');
-              const bars = p.map(x => { const b = h('span', { class: `bar ${x.c}`, title: x.n, style: `left:${(x.s / TOTAL) * 100}%;width:0` }); lanes[x.l].append(b); return { ...x, b }; });
-              const logged = new Set(), t0 = performance.now();
-              for (;;) {
-                const t = Math.min((performance.now() - t0) / SLOW, end);
-                clock.textContent = Math.round(t) + ' ms';
-                bars.forEach(x => {
-                  x.b.style.width = (Math.max(0, Math.min(t, x.e) - x.s) / TOTAL) * 100 + '%';
-                  if (t > x.s && !logged.has(x.n)) { logged.add(x.n); line(o, `${esc(x.n)} <span class="muted">${x.e - x.s} ms</span>${x.n === 'LoggerInitializer' ? ' <span class="muted">// first: Analytics depends on it</span>' : ''}`); }
-                });
-                if (t >= end) break;
-                await sleep(30); if (!root.isConnected) return;
-              }
-              started = true; lastEnd = end;
-              line(o, `<span class="good">first frame at ${end} ms</span>${lazyAds ? ', 240 ms sooner without Ads' : ''}`);
-            } finally { busy = false; }
-          }
-          function openAds() {
-            if (busy) return;
-            if (!started) { say(o, 'Start the app first.'); return; }
-            if (!lazyAds) { say(o, 'Ads already ran during startup, before the first frame.'); return; }
-            if (adsDone) { say(o, 'initializeComponent() returns the instance it already created. It runs once.'); return; }
-            adsDone = true;
-            const s = lastEnd + 50;
-            lanes.later.append(h('span', { class: 'bar pf-appseg drop-in', title: 'AdsInitializer', style: `left:${(s / TOTAL) * 100}%;width:${(240 / TOTAL) * 100}%` }));
-            say(o, `${hl('AppInitializer.getInstance(context).initializeComponent(AdsInitializer::class.java)')} <span class="muted">// 240 ms, after startup, only for users who reach ads</span>`);
-          }
-          plan().forEach(x => lanes[x.l].append(h('span', { class: `bar ${x.c}`, title: x.n, style: `left:${(x.s / TOTAL) * 100}%;width:${((x.e - x.s) / TOTAL) * 100}%` })));
-          clock.textContent = '790 ms'; started = true;
-          o.innerHTML = 'Last cold start: four initializers in the provider, first frame at 790 ms.';
-          root.append(h('div', { class: 'controls' }, lazyT.el),
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'main thread'), clock), tl,
-            h('div', { class: 'controls' }, act('Cold start', coldStart), act('Open the screen with ads', openAds)),
-            o);
-          el.append(root);
-        },
-      },
-      {
-        title: 'Every process runs Application.onCreate',
-        body: `<p>A component declared with <code>android:process</code>, like a <code>:sync</code> service or a library's separate crash-handler process, runs in its own process. That process creates your <code>Application</code> too, so its <code>onCreate</code> runs your whole startup again: analytics, the DI graph, the database. Check which process you are in and set up only what it needs.</p>`,
-        code: `override fun onCreate() {
-    super.onCreate()
-    if (Build.VERSION.SDK_INT >= 28 && getProcessName() != packageName) {
-        return                                   // a secondary process: skip app-wide setup
-    }
-    initMainProcess()
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>The launcher asks <code>system_server</code> to start your Activity. With no process for your app, it asks Zygote to fork one. Zygote has already loaded the framework classes, which saves a lot of time. The new process runs <code>ActivityThread.main()</code> and attaches to the system, which answers with <code>bindApplication</code>.</p>
-<p>On the main thread your app then runs, in this order: <code>Application.attachBaseContext()</code>, every <code>ContentProvider.onCreate()</code> (App Startup's included), then <code>Application.onCreate()</code>. Only after that is the Activity created, started, resumed, laid out and drawn. When that first frame is drawn, the system logs <code>Displayed</code>.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'A splash condition that can wait forever',
-        bad: `// MainActivity
-splash.setKeepOnScreenCondition { !viewModel.feedLoaded.value }
-// feedLoaded flips only after the network answers`,
-        good: `// ViewModel: ready after the cached feed, or after 2 s at most
-val isReady = MutableStateFlow(false)
-init {
-    viewModelScope.launch {
-        withTimeoutOrNull(2_000) { repo.cachedFeed().first() }
-        isReady.value = true
-    }
-}`,
-        why: 'Offline or on a slow network the user stares at the logo forever. Gate the splash on local data with a timeout, and show loading states on the real screen.',
-      },
-      {
-        title: 'Eager injection into Application',
-        bad: `@HiltAndroidApp
-class NewsApp : Application() {
-    @Inject lateinit var ads: AdsSdk        // built during super.onCreate()
-}`,
-        good: `@HiltAndroidApp
-class NewsApp : Application() {
-    @Inject lateinit var ads: dagger.Lazy<AdsSdk>   // built on first ads.get()
-}`,
-        why: 'Hilt injects Application fields inside <code>super.onCreate()</code>, so every injected object and its dependencies are built before the first frame. <code>dagger.Lazy</code> or <code>Provider</code> defers that.',
-      },
-    ],
-  };
-
-  const r8Depth = {
-    deeper: [
-      {
-        title: 'Pick the narrowest keep option',
-        body: `<p><code>-keep</code> keeps a class and the members you list, with their names. <code>-keepclassmembers</code> keeps the listed members only if the class survives shrinking anyway. <code>-keepclasseswithmembers</code> keeps class and members only if all listed members exist. The modifier <code>allowobfuscation</code> keeps code but lets R8 rename it, and <code>allowshrinking</code> lets R8 remove it when unused.</p>
-<p>Since AGP 9.0, <code>-keep class A</code> no longer keeps the default constructor too. Write <code>-keep class A { &lt;init&gt;(); }</code> when reflection creates it. Gson needs the field names below. Try each rule and read what Gson gets.</p>`,
-        visual(el) {
-          const RULES = [
-            ['none', 'no rule'],
-            ['keep', '-keep class ...UserDto'],
-            ['keepf', '-keep class ...UserDto { <fields>; }'],
-            ['members', '-keepclassmembers class ...UserDto { <fields>; }'],
-            ['obf', '-keep,allowobfuscation class ...UserDto { <fields>; }'],
-          ];
-          let rule = 'none', used = true;
-          const rows = {
-            cls: h('div', { class: 'pf-dl pf-cls' }), name: h('div', { class: 'pf-dl' }), email: h('div', { class: 'pf-dl' }), dump: h('div', { class: 'pf-dl' }),
-          };
-          const dex = h('div', { class: 'pf-dex', 'aria-live': 'polite' }, Object.values(rows));
-          const o = out();
-          const rBtns = RULES.map(([k, src]) => h('button', { class: 'cmd', onclick() { rule = k; paint(true); } }, src));
-          const usedT = toggle('pf-d2-used', 'ProfileScreen reads <code>user.name</code>', true, v => { used = v; paint(true); });
-          function result() {
-            // state per row: 'kept' | 'ren' | 'gone'
-            const keepCls = ['keep', 'keepf', 'obf'].includes(rule);
-            const clsLive = keepCls || used;
-            const cls = !clsLive ? 'gone' : rule === 'keep' || rule === 'keepf' ? 'kept' : 'ren';
-            const fieldsKept = rule === 'keepf' || (rule === 'members' && clsLive);
-            const fieldsRen = rule === 'obf';
-            const field = readByCode => !clsLive ? 'gone' : fieldsKept ? 'kept' : fieldsRen ? 'ren' : readByCode && used ? 'ren' : 'gone';
-            return { cls, name: field(true), email: field(false), dump: 'gone' };
-          }
-          const TXT = {
-            cls: { kept: 'class com.example.api.UserDto', ren: 'class a.c', gone: 'class com.example.api.UserDto', why: 'nothing references it' },
-            name: { kept: '    val name: String', ren: '    val a: String', gone: '    val name: String', why: 'removed' },
-            email: { kept: '    val email: String', ren: '    val b: String', gone: '    val email: String', why: 'only Gson reads it' },
-            dump: { kept: '    fun debugDump()', ren: '    fun c()', gone: '    fun debugDump()', why: 'never called' },
-          };
-          function paint(anim) {
-            press(rBtns, rBtns[RULES.findIndex(r => r[0] === rule)]);
-            const r = result();
-            for (const k of Object.keys(rows)) {
-              const st = r[k], el2 = rows[k];
-              el2.className = 'pf-dl' + (k === 'cls' ? ' pf-cls' : '') + (st === 'gone' ? ' pf-gone' : st === 'ren' ? ' pf-ren' : rule !== 'none' ? ' pf-kept' : '');
-              el2.innerHTML = hl(TXT[k][st]) + (st === 'gone' ? `  <span class="pf-why">// ${TXT[k].why}</span>` : st === 'ren' ? '  <span class="pf-why">// renamed</span>' : '');
-              if (anim) replay(el2, 'flip');
-            }
-            const n = Object.values(r).filter(s => s !== 'gone').length;
-            const ok = r.name === 'kept' && r.email === 'kept';
-            say(o, !used && r.cls === 'gone' ? '<span class="good">Nothing uses UserDto, so R8 removed all of it.</span> Correct and smallest.'
-              : !used ? `<span class="muted">Nothing uses UserDto, but the rule keeps ${n} of 4 lines.</span> Dead weight.`
-              : ok ? `<span class="good">Gson: name = "Ada", email = "ada@example.com".</span> ${n} of 4 lines kept.`
-              : `<span class="bad">Gson: name = ${r.name === 'kept' ? '"Ada"' : 'null'}, email = null.</span> ${r.cls === 'kept' ? 'The class name survived, but Gson matches field names.' : 'Gson looks for fields named name and email.'}`);
-          }
-          paint(false);
-          el.append(h('div', { class: 'controls' }, usedT.el), h('div', { class: 'controls pf-d2-wrap' }, rBtns), dex, o);
-        },
-      },
-      {
-        title: 'Library rules land in your app',
-        body: `<p>Libraries ship consumer keep rules inside their AARs, and R8 merges them with yours. One broad rule, like <code>-keep class com.chart.** { *; }</code>, keeps a whole library at full size. Global options were worse: a library could add <code>-dontobfuscate</code> or <code>-dontoptimize</code> and switch that off for your entire app.</p>
-<p>AGP 9.0 ignores such global options when they come from a prebuilt dependency, and fails the build when your own library module tries to publish them. To see what R8 really used, add <code>-printconfiguration</code> and read the merged file. To learn why a class stayed, use <code>-whyareyoukeeping</code>.</p>`,
-        code: `# app/proguard-rules.pro
--printconfiguration build/outputs/logs/configuration.txt
--whyareyoukeeping class com.chart.internal.LegacyRenderer
-
-# AGP 9 marks dropped global options in that file:
-# # REMOVED CONSUMER RULE: -dontobfuscate`,
-        visual(el) {
-          let chart = true, legacy = true, agp = 8;
-          const conf = h('div', { class: 'pf-dex' });
-          const size = h('span', { class: 'pf-size' }, '—');
-          const obf = h('span', { class: 'pf-stat' });
-          const o = out();
-          const aBtns = [8, 9].map(v => act(`AGP ${v}.x`, () => { agp = v; press(aBtns, aBtns[v - 8]); build(); }));
-          const tc = toggle('pf-d2-libchart', 'charts library ships <code>-keep class com.chart.** { *; }</code>', true, v => { chart = v; build(); });
-          const tl = toggle('pf-d2-liblegacy', 'old ads SDK ships <code>-dontobfuscate</code>', true, v => { legacy = v; build(); });
-          function build() {
-            const L = (cls, t) => h('div', { class: 'pf-dl drop-in ' + cls, html: t });
-            const rows = [L('pf-why', '# from app/proguard-rules.pro'), L('', hl('-keep class com.example.api.UserDto { <fields>; }'))];
-            if (chart) rows.push(L('pf-why', '# from com.chart:charts consumer rules'), L('pf-kept', hl('-keep class com.chart.** { *; }')));
-            if (legacy) rows.push(L('pf-why', '# from com.legacy:ads-sdk consumer rules'), agp === 8 ? L('pf-inl', hl('-dontobfuscate')) : L('pf-gone', '# REMOVED CONSUMER RULE: -dontobfuscate'));
-            conf.replaceChildren(...rows);
-            const off = legacy && agp === 8;
-            size.textContent = (6.9 + (chart ? 1.3 : 0) + (off ? 0.4 : 0)).toFixed(1) + ' MB';
-            replay(size, 'pop');
-            obf.innerHTML = off ? 'obfuscation: <span class="pf-badnum">off for the whole app</span>' : 'obfuscation: <b>on</b>';
-            say(o, off ? '<span class="bad">One library turned off renaming for every class you ship.</span> Switch to AGP 9 or drop the SDK.'
-              : chart ? 'Renaming works. The charts rule still keeps every class in that library, used or not.' : '<span class="good">Only your own narrow rule is left.</span>');
-          }
-          press(aBtns, aBtns[0]); build();
-          el.append(h('div', { class: 'controls' }, aBtns), h('div', { class: 'controls' }, tc.el, tl.el),
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'configuration.txt'), size, obf), conf, o);
-        },
-      },
-    ],
-    underHood: {
-      body: `<p>R8 reads your compiled classes and all library classes in one pass. AAPT2 writes keep rules for every class your manifest and layouts name, such as Activities, Services and custom Views, and AGP adds them to yours. Together these are the roots. R8 traces everything reachable from them and drops the rest. Then it optimizes what is left: it inlines, merges classes, removes unused parameters and turns enums into plain ints where it can. Last it renames, writes DEX directly, and records every rename in <code>mapping.txt</code>.</p>
-<p>Since AGP 8.12, stack frames from an optimized build name the source file <code>r8-map-id-</code> plus an id instead of <code>SourceFile</code>. The id points at the exact mapping file, so retrace tools can pick the right one.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Keeping whole packages',
-        bad: `-keep class com.example.** { *; }`,
-        good: `-keep class com.example.api.UserDto { <fields>; }
-# or switch the models to kotlinx.serialization, which needs no rule`,
-        why: 'One wildcard rule switches R8 off for all your code: nothing is removed, renamed or inlined. Keep only what reflection touches.',
-      },
-      {
-        title: 'Silencing every warning',
-        bad: `-dontwarn **`,
-        good: `# optional SLF4J binding, never loaded on Android
--dontwarn org.slf4j.impl.StaticLoggerBinder`,
-        why: 'R8 warns when code refers to classes that are missing. Hiding all of them also hides the one that crashes at runtime with <code>NoClassDefFoundError</code>.',
-      },
-      {
-        title: 'Using class names as data',
-        bad: `analytics.log("screen_view", screen::class.simpleName)   // "a" in release`,
-        good: `sealed interface Screen { val analyticsName: String }
-data object Home : Screen { override val analyticsName = "home" }
-
-analytics.log("screen_view", screen.analyticsName)`,
-        why: 'Obfuscation renames classes, so <code>simpleName</code> becomes "a" or "b" in release builds. Use explicit strings for anything you store, log or send.',
-      },
-    ],
-  };
-
-  // ─── Gap lesson: the main thread's message loop ───────────────────────
-  const mainThreadLesson = {
-    id: 'main-thread',
-    title: 'The main thread: Looper, Handler, MessageQueue',
-    tagline: 'One thread, one queue, one message at a time.',
-    level: 'intermediate',
-    body: `
-<p>When your app starts, the system creates one thread for it, the <em>main thread</em>. It is also called the UI thread, because it dispatches input to views and draws them. Under the hood it runs a <code>Looper</code>: an endless loop that takes the next message from a <code>MessageQueue</code> and runs it, one at a time, in order.</p>
-<p>Everything on the main thread arrives as a message: a tap, the next frame from Choreographer, a lifecycle callback, and the <code>Runnable</code>s you post with a <code>Handler</code>. A <code>Handler</code> is bound to one Looper. <code>post</code> adds a message that is ready now, <code>postDelayed</code> one that becomes ready later, and <code>removeCallbacks</code> takes it out again.</p>
-<p>Because there is only one loop, a slow message makes everything behind it wait. Post a 300 ms task below and watch the frames and your tap queue up behind it. That waiting is jank, and when it lasts seconds, an ANR.</p>`,
-    code: `val mainHandler = Handler(Looper.getMainLooper())
-val showTip = Runnable { tipView.isVisible = true }
-
-// from any thread: run this on the main thread, after what is already queued
-mainHandler.post { statusView.text = "Saved" }
-
-// run later; the delay is a minimum, not a promise
-mainHandler.postDelayed(showTip, 1_000)
-
-// the screen is going away: take it out of the queue
-mainHandler.removeCallbacks(showTip)
-
-// Today you mostly write the same thing with coroutines
-lifecycleScope.launch {                       // Dispatchers.Main
-    val draft = withContext(Dispatchers.IO) { dao.loadDraft() }
-    editor.setText(draft.text)                // back on the main queue
-}`,
-    remember: 'The main thread is a loop over one queue. Every message waits for the one before it, so keep each one short.',
-    deeper: [
-      {
-        title: 'Your own Looper: HandlerThread',
-        body: `<p>A plain <code>Thread</code> has no queue. <code>Looper.prepare()</code> creates one for the current thread and <code>Looper.loop()</code> runs it until you quit. <code>HandlerThread</code> does both for you. Post to it with a <code>Handler</code> built on its looper, and the work runs on that thread, one message at a time, in order.</p>
-<p>When you are done, call <code>quitSafely()</code>: it handles the messages that are already due and drops the delayed ones. In new code a coroutine dispatcher usually does this job, but you will meet HandlerThread in camera, sensor and media APIs that take a Handler or Looper.</p>`,
-        code: `val writer = HandlerThread("draft-writer").apply { start() }
-val writerHandler = Handler(writer.looper)
-
-writerHandler.post { dao.save(draft) }      // runs on draft-writer, in order
-
-// when the screen is gone
-writer.quitSafely()
-
-// What Looper.prepare() and loop() look like inside a thread
-thread {
-    Looper.prepare()
-    val handler = Handler(Looper.myLooper()!!)
-    Looper.loop()                            // blocks here, handling messages
-}`,
-      },
-      {
-        title: 'Coroutines on Main post messages too',
-        body: `<p><code>Dispatchers.Main</code> on Android is built on a Handler for the main Looper. When a coroutine on Main resumes after <code>withContext(Dispatchers.IO)</code> or a <code>delay</code>, the rest of it is posted as a message to the main queue. So the same rule holds: the code between two suspension points is one message, and it must be short.</p>
-<p><code>Dispatchers.Main.immediate</code>, which <code>lifecycleScope</code> and <code>viewModelScope</code> use, skips the post when you are already on the main thread and runs the code right away. See <em>Dispatchers and withContext</em> in the coroutines track.</p>`,
-        code: `viewModelScope.launch {                      // Main.immediate: starts inline
-    _state.value = Loading
-    val list = withContext(Dispatchers.IO) { repo.load() }
-    _state.value = Success(list)            // resumed by a message on the main queue
-}`,
-      },
-      {
-        title: 'Three shortcuts to the same queue',
-        body: `<p>You don’t always need your own Handler. <code>Activity.runOnUiThread</code>, <code>View.post</code> and <code>View.postDelayed</code> put a message on the main queue as well. <code>runOnUiThread</code> runs the action right away if you are already on the UI thread, and posts it otherwise.</p>`,
-        code: `executor.execute {
-    val bitmap = BitmapFactory.decodeFile(path)          // worker thread
-    imageView.post { imageView.setImageBitmap(bitmap) }  // main thread
-}
-
-runOnUiThread { progress.isVisible = false }`,
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Handler() without a Looper',
-        bad: `val handler = Handler()            // deprecated: takes the current thread's Looper`,
-        good: `val handler = Handler(Looper.getMainLooper())`,
-        why: 'The no-argument constructor picks a Looper implicitly. On a thread without one it crashes, and on the wrong thread your work runs somewhere you did not expect. Always pass the Looper.',
-      },
-      {
-        title: 'Delayed posts that outlive the screen',
-        bad: `override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    handler.postDelayed({ showTip() }, 30_000)
-}`,
-        good: `override fun onDestroy() {
-    handler.removeCallbacksAndMessages(null)
-    super.onDestroy()
-}
-// or: lifecycleScope.launch { delay(30_000); showTip() }`,
-        why: 'The queue holds the Runnable, and the Runnable holds the Activity. After a rotation the old Activity stays in memory until the message runs. See <em>Memory leaks</em>.',
-      },
-      {
-        title: 'Touching views from a worker thread',
-        bad: `thread {
-    val bitmap = download(url)
-    avatarView.setImageBitmap(bitmap)     // CalledFromWrongThreadException
-}`,
-        good: `thread {
-    val bitmap = download(url)
-    avatarView.post { avatarView.setImageBitmap(bitmap) }
-}`,
-        why: 'Views are not thread-safe. Only the thread that created the view hierarchy may touch it, so hand the result back through the main queue.',
-      },
-    ],
-    terms: [
-      { term: 'Main thread', def: 'The thread the system creates for your app at launch. It dispatches input, runs lifecycle callbacks and draws the UI.' },
-      { term: 'Looper', def: 'Runs a message loop for one thread: it takes messages from the thread’s MessageQueue and handles them one by one.' },
-      { term: 'MessageQueue', def: 'The time-ordered list of messages and Runnables waiting to run on a Looper’s thread.' },
-      { term: 'Handler', def: 'Posts messages and Runnables to one Looper’s queue, now or after a delay, and can remove them again.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Show a tip in one second on the main thread, and cancel it when the screen goes away.', code: 'val handler = Handler(Looper.[[getMainLooper]]())\nval showTip = Runnable { tipView.isVisible = true }\nhandler.[[postDelayed]](showTip, 1_000)\n// onDestroy\nhandler.[[removeCallbacks]](showTip)', why: 'The handler is bound to the main Looper. <code>postDelayed</code> queues the Runnable for later, and <code>removeCallbacks</code> takes it out again.' },
-      { type: 'bug', prompt: 'This crashes with CalledFromWrongThreadException. Tap the line.', code: 'fun loadAvatar(url: String) {\n    thread {\n        val bitmap = download(url)\n        avatarView.setImageBitmap(bitmap)\n    }\n}', bug: 3, fix: '        avatarView.post { avatarView.setImageBitmap(bitmap) }', why: 'The download belongs on the worker thread. The view update must go back to the main queue, which <code>View.post</code> does.' },
-    ],
-    quiz: [
-      { q: 'A 300 ms task is running on the main thread when the user taps. What happens to the tap?', options: ['It interrupts the task', 'It waits in the queue until the task finishes', 'It is dropped'], a: 1, why: 'The Looper runs one message at a time. Everything behind a slow message waits.' },
-      { q: 'What does <code>postDelayed(r, 500)</code> promise?', options: ['r runs exactly 500 ms from now', 'r runs within 500 ms', 'r runs no earlier than 500 ms from now, later if the queue is busy'], a: 2, why: 'After 500 ms the message is ready, but it still waits for whatever is running.' },
-      { q: 'Why is <code>Handler()</code> with no arguments deprecated?', options: ['It picks the current thread’s Looper implicitly, which causes bugs', 'Handlers are replaced by coroutines', 'It leaks memory on every post'], a: 0, why: 'Passing the Looper, like <code>Looper.getMainLooper()</code>, makes the target thread explicit.' },
-      { q: 'This runs on the main thread inside an Activity. What is logged, in order?<pre class="code mini">handler.post { log("A") }\nlog("B")\nlifecycleScope.launch { log("C") }</pre>', options: ['A, B, C', 'B, A, C', 'B, C, A'], a: 2, why: 'post() queues A behind the current message. lifecycleScope uses Dispatchers.Main.immediate, so C runs right away because you are already on the main thread.' },
-      { q: 'A HandlerThread has one message due now and one posted with a 5 second delay. You call <code>quitSafely()</code>. What happens?', options: ['Both messages run, then the thread ends', 'The due message runs; the delayed one is dropped', 'Both are dropped and the thread ends at once'], a: 1, why: 'quitSafely() handles the messages that are already due and drops the delayed ones. quit() would drop everything.' },
-    ],
-    predict: {
-          q: 'You post a 300 ms task to the main thread. What happens to the spinning animation while it runs?',
-          options: ['It keeps turning: animations run on their own thread', 'It freezes: its frame messages wait in the same queue', 'It speeds up to catch up'],
-          a: 1,
-          why: 'This animation moves once per frame, and each frame is a message for the same Looper. One message runs at a time, so the frames wait.',
-        },
-    visual(el) {
-      const SLOW = 8, FRAME = 16.7, STEP = 5;
-      const root = h('div', { class: 'viz' });
-      const live = alive(root);
-      let t = 0, nextVsync = FRAME, running = null, seq = 0, drawn = 0, missed = 0, spin = 0, lastTap = '';
-      const queue = [];
-      const runName = h('span', { class: 'pf-mt-run' }, 'idle');
-      const runFill = h('span', { class: 'pf-mt-fill' });
-      const qList = h('div', { class: 'pf-mt-q', 'aria-label': 'MessageQueue' });
-      const dot = h('span', { class: 'pf-mt-dot' });
-      const clock = h('span', { class: 'clock' });
-      const stat = h('span', { class: 'pf-stat' });
-      const o = out('Frames arrive every 16.7 ms. Post something.');
-      const enqueue = (label, delay, cost, kind) => { const m = { id: ++seq, label, due: t + delay, cost, left: cost, kind, at: t }; queue.push(m); return m; };
-      function step() {
-        t += STEP;
-        while (t >= nextVsync) {
-          const pending = queue.some(m => m.kind === 'frame') || (running && running.kind === 'frame');
-          if (pending) missed++;
-          else { const f = enqueue('Choreographer: doFrame', 0, 3, 'frame'); f.due = nextVsync; }
-          nextVsync += FRAME;
-        }
-        let budget = STEP;
-        while (budget > 0) {
-          if (!running) {
-            const ready = queue.filter(m => m.due <= t).sort((a, b) => a.due - b.due || a.id - b.id)[0];
-            if (!ready) break;
-            queue.splice(queue.indexOf(ready), 1);
-            running = ready;
-          }
-          const d = Math.min(budget, running.left);
-          running.left -= d; budget -= d;
-          if (running.left <= 0) {
-            if (running.kind === 'frame') { drawn++; spin += 24; }
-            if (running.kind === 'tap') {
-              const waited = Math.round(t - running.at);
-              lastTap = `${waited} ms`;
-              o.append(h('div', { class: 'line drop-in', html: `tap handled after <span class="${waited > 100 ? 'bad' : 'good'}">${waited} ms</span>` }));
-            }
-            if (running.kind === 'tip') o.append(h('div', { class: 'line drop-in', html: `showTip ran at ${Math.round(t)} ms, <span class="muted">${Math.round(t - running.due)} ms after it became due</span>` }));
-            if (running.kind === 'heavy') o.append(h('div', { class: 'line drop-in', html: '<span class="bad">parse(json) done.</span> Everything behind it waited 300 ms.' }));
-            running = null;
-          }
-        }
-        while (o.children.length > 4) o.firstElementChild.remove();
-      }
-      function paint() {
-        runName.textContent = running ? running.label : 'idle: waiting for a message';
-        runName.className = 'pf-mt-run' + (running && running.kind === 'heavy' ? ' pf-mt-hot' : '');
-        runFill.style.width = running ? `${(1 - running.left / running.cost) * 100}%` : '0%';
-        const shown = queue.slice().sort((a, b) => a.due - b.due || a.id - b.id);
-        qList.replaceChildren(...shown.slice(0, 6).map(m => h('span', { class: `pf-mt-msg pf-mt-${m.kind}` + (m.due > t ? ' pf-mt-later' : '') },
-          m.label, h('small', {}, m.due > t ? ` in ${Math.ceil(m.due - t)} ms` : ' ready'))),
-          shown.length > 6 ? h('span', { class: 'pf-mt-msg' }, `+${shown.length - 6} more`) : '');
-        dot.style.transform = `rotate(${spin}deg)`;
-        clock.textContent = `${Math.round(t)} ms`;
-        stat.innerHTML = `frames drawn <b>${drawn}</b> · vsyncs missed <span class="${missed ? 'pf-badnum' : ''}">${missed}</span>${lastTap ? ` · last tap waited <b>${lastTap}</b>` : ''}`;
-      }
-      function loop() { if (!live()) return; step(); paint(); setTimeout(loop, STEP * SLOW); }
-      root.append(
-        h('div', { class: 'controls pf-mt-wrapcmd' },
-          cmd('handler.post { saveDraft() }', () => { enqueue('saveDraft()', 0, 2, 'post'); say(o, 'Posted. It runs after whatever is already ready.'); }),
-          cmd('handler.postDelayed(showTip, 500)', () => { if (queue.some(m => m.kind === 'tip')) return; enqueue('showTip', 500, 1, 'tip'); say(o, 'Queued for 500 ms from now.'); }),
-          cmd('handler.removeCallbacks(showTip)', () => { const i = queue.findIndex(m => m.kind === 'tip'); if (i >= 0) { queue.splice(i, 1); say(o, '<span class="good">removed</span> from the queue before it ran.'); } else say(o, '<span class="muted">nothing to remove</span>'); }),
-          cmd('handler.post { parse(json) }  // 300 ms', () => { enqueue('parse(json)', 0, 300, 'heavy'); say(o, '<span class="bad">A 300 ms message is queued.</span> Tap the screen while it runs.'); }),
-          act('Tap the screen', () => { enqueue('input: tap', 0, 1, 'tap'); })),
-        h('div', { class: 'pf-mt-wrap' },
-          h('div', { class: 'pf-mt-box' }, h('span', { class: 'pf-label' }, 'MessageQueue (by due time)'), qList),
-          h('div', { class: 'pf-mt-box' }, h('span', { class: 'pf-label' }, 'Looper.loop() runs'), runName, h('span', { class: 'pf-mt-bar' }, runFill),
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-mt-spin', 'aria-hidden': 'true' }, dot), h('span', { class: 'pf-stat' }, 'animation: turns once per drawn frame')))),
-        h('div', { class: 'pf-row' }, stat, clock),
-        h('p', { class: 'tip' }, 'Shown 8x slower than real time.'),
-        o);
-      el.append(root);
-      paint(); loop();
-    },
-  };
+  const css = ``;
 
   Lab.addTrack({
     id: 'perf',
-    title: 'Performance and debugging',
-    description: 'Find out why an app janks, freezes, leaks or starts slowly, and fix it with the right tool.',
-    group: 'Going deeper', requires: ['android'],
+    title: 'Performance',
+    description: 'Find out why an app stutters, freezes, leaks memory or starts slowly, measure it with the right tool, and fix it. Then shrink the release build with R8, and keep the code it can’t see you use.',
+    group: 'Going deeper', requires: ['arch'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────
       {
         id: 'frame',
-        title: 'The 16 ms frame',
-        tagline: 'Every frame has a deadline. Miss it and the user sees a stutter.',
-        level: 'intermediate',
+        title: 'Frames and jank',
+        tagline: 'The screen gets a new picture many times a second, and each one has a deadline.',
+        goals: ['Work out how much time one frame gets at 60 and 120 Hz', 'Explain what jank is and why one slow job causes it', 'Find the Logcat line that says frames were skipped'],
+        level: 'beginner', introduces: [],
         body: `
-<p>The display refreshes on a fixed beat called vsync. At 60 Hz your app gets 16.7 ms to produce each frame. At 90 Hz it gets 11.1 ms, and at 120 Hz only 8.3 ms. If a frame is not ready in time, the screen shows the old frame again. That repeat is <em>jank</em>, and users feel it as a stutter in scrolling and animation.</p>
-<p>Most of that budget is spent on the main thread. It handles input, runs animations, runs Compose composition and layout (or View measure and layout), and records the drawing commands. A separate RenderThread then sends them to the GPU. Your own code shares the main thread with all of that, so a 20 ms JSON parse or bitmap decode in a click handler or <code>onBindViewHolder</code> drops at least one frame.</p>
-<p>The fix is to keep the main thread for UI work only. Move parsing, disk, network and heavy math to <code>Dispatchers.Default</code> or <code>Dispatchers.IO</code>, then post the small result back. JankStats can log slow frames from real users.</p>`,
-        code: `// Before: 30 ms of work on the main thread drops two frames at 60 Hz
-fun onSearch(query: String) {
-    val results = index.search(query)
-    _results.value = results
-}
-
-// After: the heavy part runs on a background thread
-fun onSearch(query: String) {
-    viewModelScope.launch {
-        val results = withContext(Dispatchers.Default) { index.search(query) }
-        _results.value = results            // back on main, cheap
+<p>Lin scrolls through her 80 recipes. Most of the time the list glides, but every few rows it stops for a moment and then jumps ahead. Nothing crashes and nothing is wrong on the screen, yet the app feels cheap. That stutter has a name, and this track is about finding slow spots like it and fixing them.</p>
+<p>A phone’s screen shows a new picture many times a second. Each picture is a <em>frame</em>. The <em>refresh rate</em>, in hertz (Hz), says how many: at 60 Hz the screen wants 60 frames a second, so the app has 1000 ÷ 60 ≈ 16.7 milliseconds to get each one ready. That is the <em>frame budget</em>. Many newer phones run at 90 or 120 Hz, which leaves 11.1 or only 8.3 ms. In that time the main thread runs the composables that changed, works out where everything goes, and draws.</p>
+<p>When a frame isn’t ready by its deadline, the screen shows the old picture again. The list stands still for a moment, then jumps to catch up. That stop-and-jump is <em>jank</em>. One 40 ms job at 60 Hz misses two deadlines. While you scroll, <code>LazyColumn</code> builds each new row as it comes into view, inside a frame, so slow code in a row janks the whole scroll.</p>
+<p>A long stall leaves a note in Logcat, under the tag <code>Choreographer</code>, the part of Android that times the frames: <code>Skipped 42 frames!  The application may be doing too much work on its main thread.</code> It only appears when 30 or more frames in a row were missed, half a second at 60 Hz. Shorter stutters need the tools in the next lessons.</p>`,
+        visual(el) {
+          const dl = [16.7, 33.3, 50, 66.7, 83.3].map(at => ({ at, label: '', tone: 'muted' }));
+          Lab.ui.timeline(el, {
+            lanes: ['main thread', 'screen'],
+            span: 100,
+            unit: 'ms',
+            predict: {
+              q: 'At 60 Hz there is a deadline every 16.7 ms. One frame’s work takes 40 ms. How many times does the screen show the old picture again?',
+              options: ['None: the screen waits for it', 'Twice', 'Forty times'],
+              a: 1,
+              why: 'The work starts at one deadline and runs past the next two. At both, the screen has nothing new, so it shows the old frame again.',
+            },
+            frames: [
+              { marks: dl, now: 0, say: 'Time runs left to right, 100 ms in all. Each thin mark is a deadline: at 60 Hz the screen takes a new frame every 16.7 ms.' },
+              { bars: [{ lane: 0, from: 0, to: 9, label: 'frame 1', tone: 'ok' }, { lane: 1, from: 16.7, to: 33.3, label: '1', tone: 'ok' }], now: 16.7, say: 'The main thread gets frame 1 ready in 9 ms, well inside the budget. At the first deadline the screen shows it.' },
+              { bars: [{ lane: 0, from: 16.7, to: 25, label: 'frame 2', tone: 'ok' }, { lane: 1, from: 33.3, to: 50, label: '2', tone: 'ok' }], now: 33.3, say: 'Frame 2 is quick too. The list moves a little with every frame: smooth.' },
+              { bars: [{ lane: 0, from: 33.3, to: 73.3, label: 'new row: 40 ms', tone: 'err' }], now: 50, say: 'A new recipe row scrolls into view, and building it takes 40 ms. The deadline at 50 ms comes, and frame 3 isn’t ready.' },
+              { bars: [{ lane: 1, from: 50, to: 66.7, label: '2 again', tone: 'warm' }, { lane: 1, from: 66.7, to: 83.3, label: '2 again', tone: 'warm' }], now: 73.3, say: 'Two deadlines pass with nothing new, so the screen shows frame 2 twice more. For 33 ms the list stands still.' },
+              { bars: [{ lane: 1, from: 83.3, to: 100, label: '3', tone: 'ok' }], now: 83.3, say: 'Frame 3 lands at the next deadline, and the list jumps ahead to catch up. That stop-and-jump is jank. At 120 Hz the same 40 ms would miss even more deadlines.' },
+            ],
+          });
+        },
+        code: `@Composable
+fun RecipeList(recipes: List<Recipe>) {
+    LazyColumn {
+        items(recipes, key = { recipe -> recipe.id }) { recipe ->
+            RecipeRow(recipe)   // runs inside a frame, as the row scrolls into view
+        }
     }
 }
 
-// Log frames that missed their deadline (androidx.metrics:metrics-performance)
-val jankStats = JankStats.createAndTrack(window) { frame ->
-    if (frame.isJank) Log.w("Jank", "\${frame.frameDurationUiNanos / 1_000_000} ms")
-}`,
-        remember: '60 Hz = 16.7 ms, 120 Hz = 8.3 ms. The main thread is for UI. Everything else goes off it.',
+@Composable
+fun RecipeRow(recipe: Recipe) {
+    // At 60 Hz the whole frame, this row included, gets 16.7 ms.
+    // Keep this body quick: no file reads, no big calculations.
+    Text("\${recipe.title} · \${recipe.minutes} min")
+}
+
+// Logcat, tag:Choreographer, after a long stall:
+// Skipped 42 frames!  The application may be doing too much work on its main thread.`,
+        play: `fun main() {
+    val workMs = 40.0          // one slow row
+    for (hz in listOf(60, 90, 120)) {
+        val budgetMs = 1000.0 / hz
+        println("$hz Hz: $budgetMs ms per frame, late: \${workMs > budgetMs}")
+    }
+    // Change workMs to 10.0. At which rates is the frame on time now?
+}
+// 60 Hz: 16.666666666666668 ms per frame, late: true
+// 90 Hz: 11.11111111111111 ms per frame, late: true
+// 120 Hz: 8.333333333333334 ms per frame, late: true`,
+        remember: '60 Hz gives each frame 16.7 ms, 120 Hz only 8.3 ms. A frame that misses its deadline is jank.',
         terms: [
-          { term: 'Frame budget', def: 'The time available to produce one frame: 1000 ms divided by the refresh rate, so 16.7 ms at 60 Hz.' },
-          { term: 'Jank', def: 'A visible stutter caused by frames that miss their vsync deadline, so the screen repeats an old frame.' },
-          { term: 'Vsync', def: 'The display refresh signal that marks each frame deadline; Choreographer schedules app frames on it.' },
-          { term: 'RenderThread', def: 'A per-app thread that takes the drawing commands recorded on the main thread and sends them to the GPU.' },
+          { term: 'frame', def: 'One picture on the screen. A smooth app gets a new one ready for every refresh.' },
+          { term: 'refresh rate', def: 'How many frames the screen shows per second, in hertz (Hz): 60, 90 or 120 on most phones.' },
+          { term: 'frame budget', def: 'The time the app has to get one frame ready: 1000 ms divided by the refresh rate, 16.7 ms at 60 Hz.' },
+          { term: 'jank', def: 'A visible stutter: frames missed their deadline, so the screen showed the old picture again and then jumped.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Run the CPU-heavy search off the main thread.', code: 'viewModelScope.launch {\n    val results = [[withContext]](Dispatchers.[[Default|IO]]) {\n        index.search(query)\n    }\n    _results.value = results\n}', why: '<code>withContext</code> suspends the caller and runs the block on another dispatcher. <code>Default</code> fits CPU work like searching or sorting.' },
-          { type: 'bug', prompt: 'Scrolling this photo list stutters. Tap the line that costs frames.', code: 'override fun onBindViewHolder(holder: PhotoHolder, position: Int) {\n    val photo = photos[position]\n    holder.title.text = photo.title\n    holder.image.setImageBitmap(BitmapFactory.decodeFile(photo.path))\n}', bug: 3, fix: '    holder.image.load(File(photo.path))   // Coil decodes off the main thread', why: 'Decoding a full photo takes tens of milliseconds and runs on the main thread during scroll. An image loader decodes in the background, downsamples, and caches.' },
+          { type: 'blank', prompt: 'Show only the lines about skipped frames in Logcat’s query box.', code: `tag:[[Choreographer]]`, why: '<code>Choreographer</code> is the part of Android that times frames. It writes the “Skipped … frames!” line under its own tag.' },
+          { type: 'bug', prompt: 'This should print the budget at 120 Hz, but it prints 16.666666666666668. Tap the line to change.', code: `fun main() {
+    val hz = 120
+    val budgetMs = 1000.0 / 60
+    println("At $hz Hz each frame gets $budgetMs ms")
+}`, bug: 2, fix: '    val budgetMs = 1000.0 / hz', why: 'The budget is 1000 ms divided by the refresh rate. Dividing by <code>hz</code> gives 8.333333333333334 at 120 Hz.' },
         ],
         quiz: [
-          { q: 'What is the frame budget at 120 Hz?', options: ['16.7 ms', '11.1 ms', '8.3 ms'], a: 2, why: '1000 ms / 120 = 8.3 ms. High refresh screens leave less room for main-thread work.' },
-          { q: 'A frame takes 25 ms on a 60 Hz screen. What does the user see?', options: ['The frame shows 9 ms late but smoothly', 'The previous frame stays up for an extra vsync, a stutter', 'The app shows an ANR dialog'], a: 1, why: 'The frame missed its deadline, so the display repeats the old one. An ANR takes seconds, not milliseconds.' },
-          { q: 'Which of these runs on the main thread?', options: ['Compose composition and layout', 'Sending draw commands to the GPU', 'Work inside <code>withContext(Dispatchers.IO)</code>'], a: 0, why: 'Composition, layout and recording draw commands are main-thread work. RenderThread talks to the GPU.' },
-          { q: 'Put one frame in order, from the vsync signal to the screen.', options: ['Input, animation, traversal (measure, layout, draw) on main, then RenderThread issues GPU work, then SurfaceFlinger composites', 'Traversal on main, then input and animation, then RenderThread, then SurfaceFlinger composites', 'Input on main, then RenderThread draws pixels, then main runs layout, then SurfaceFlinger composites'], a: 0, why: 'Choreographer runs input, animation and traversal on the main thread. Draw only records display lists, RenderThread turns them into GPU work, and SurfaceFlinger puts the buffer on screen.' },
-          { q: 'A scroll on a 60 Hz phone has 95 frames at 8 ms and 5 frames at 60 ms. The average is 10.6 ms. What is the right reading?', options: ['It is smooth, because the average is well under 16.7 ms', 'The user sees five hitches; look at P95 or P99 and frameOverrunMs, not the average', 'About 10% of the time is lost evenly across every frame'], a: 1, why: 'An average hides the slow end. Five frames far over budget are five visible stutters, which percentiles show and the mean does not.' },
+          { q: 'At 60 Hz, how long does the app have to get one frame ready?', options: ['60 ms', 'About 16.7 ms', 'One second'], a: 1, why: '1000 ms ÷ 60 frames ≈ 16.7 ms per frame.' },
+          { q: 'A frame isn’t ready when its deadline comes. What does the screen show?', options: ['A blank screen', 'An error dialog', 'The previous frame again'], a: 2, why: 'The screen keeps the old picture until a new frame is ready. The pause and the jump after it are jank.' },
+          { q: 'Scrolling stutters, but Logcat has no “Skipped … frames!” line. How can that be?', options: ['Jank can’t happen when the line is missing', 'The line only appears after 30 or more missed frames in a row', 'Logcat only works at 60 Hz'], a: 1, why: 'Short stutters of a few frames don’t reach the limit of 30. They are still jank, and the profiler later in this track finds them.' },
         ],
-        deeper: frameDepth.deeper,
-        underHood: frameDepth.underHood,
-        mistakes: frameDepth.mistakes,
-        predict: {
-          q: 'Every frame now includes a 12 ms JSON parse on the main thread. You switch the display from 60 Hz to 120 Hz. What happens?',
-          options: ['Frames get smoother: the screen is faster', 'Frames start to miss: the budget drops from 16.7 ms to 8.3 ms', 'Nothing: the frame budget doesn’t depend on the display'],
-          a: 1,
-          why: 'The budget is one refresh interval. A faster display gives each frame less time, so work that fit at 60 Hz no longer fits at 120 Hz.',
-        },
-        visual(el) {
-          const SCALE = 3, MAXMS = 43, KEEP = 30;
-          let hz = 60, work = 0, vsync = 0, pending = 0, pos = 0;
-          const hist = [];
-          const root = h('div', { class: 'viz' });
-          const live = alive(root);
-          const frames = h('div', { class: 'pf-frames' });
-          const budgetTag = h('span');
-          const budget = h('div', { class: 'pf-budget' }, budgetTag);
-          const graph = h('div', { class: 'pf-graph', 'aria-hidden': 'true' }, frames, budget);
-          const ball = h('span', { class: 'pf-ball' });
-          const rail = h('div', { class: 'pf-rail', 'aria-hidden': 'true' }, ball);
-          const stat = h('span', { class: 'pf-stat' });
-          const o = out('Smooth: every frame fits the budget. Add work on the main thread.');
-          const hzBtns = [60, 90, 120].map(v => act(`${v} Hz`, () => { hz = v; press(hzBtns, hzBtns[[60, 90, 120].indexOf(v)]); paintBudget(); say(o, `${v} Hz: each frame has <span class="good">${(1000 / v).toFixed(1)} ms</span>.${work ? ` Your ${work} ms of extra work still does not fit.` : ''}`); }));
-          const paintBudget = () => { const b = 1000 / hz; budget.style.bottom = (b * SCALE) + 'px'; budgetTag.textContent = `${b.toFixed(1)} ms budget at ${hz} Hz`; };
-          const addWork = (ms, src) => { work = Math.min(work + ms, 32); say(o, `${hl(src)} <span class="muted">// main thread now does +${work} ms of your work per frame</span>`); };
-          function tick() {
-            if (!live()) return;
-            vsync++;
-            const b = 1000 / hz;
-            if (pending > 0) {
-              pending--; hist.push(false);
-              frames.append(h('div', { class: 'pf-fbar pf-miss', title: 'missed vsync' }));
-              rail.classList.add('pf-stutter');
-            } else {
-              const fw = 2.5 + Math.random() * 1.5;
-              const aw = work ? work * (0.85 + Math.random() * 0.3) : Math.random() * 1.2;
-              const d = fw + aw, late = d > b;
-              pending = Math.ceil(d / b) - 1;
-              const cap = Math.min(d, MAXMS) / d;
-              frames.append(h('div', { class: 'pf-fbar' + (late ? ' pf-late' : ''), title: `${d.toFixed(1)} ms` },
-                h('i', { class: 'pf-fw', style: `height:${fw * SCALE * cap}px` }), h('i', { class: 'pf-aw', style: `height:${aw * SCALE * cap}px` })));
-              hist.push(true);
-              pos = (vsync * b * 0.3) % 100; // time-based animation: after a stall it jumps
-              ball.style.left = `calc(14px + ${pos} * (100% - 28px) / 100)`;
-              rail.classList.remove('pf-stutter');
-            }
-            while (frames.children.length > KEEP) frames.firstElementChild.remove();
-            if (hist.length > 60) hist.shift();
-            const missed = hist.filter(x => !x).length;
-            stat.innerHTML = `last ${hist.length} vsyncs: <b>${hist.length - missed}</b> new frames, <span class="${missed ? 'pf-badnum' : ''}">${missed} repeats</span>`;
-            setTimeout(tick, b * 8); // 8x slow motion
-          }
-          press(hzBtns, hzBtns[0]); paintBudget();
-          root.append(
-            h('div', { class: 'controls' }, h('span', { class: 'pf-label' }, 'Display'), hzBtns),
-            graph,
-            h('div', { class: 'legend' },
-              h('span', {}, h('i', { style: 'background:var(--accent)' }), 'framework: input, layout, draw'),
-              h('span', {}, h('i', { style: 'background:var(--warm)' }), 'your code on main'),
-              h('span', {}, h('i', { style: 'background:var(--err)' }), 'late frame'),
-              h('span', {}, h('i', { style: 'background:var(--line);height:4px' }), 'repeated frame')),
-            rail,
-            h('div', { class: 'pf-row' }, stat),
-            h('div', { class: 'controls' },
-              cmd('Json.decodeFromString(body)', () => addWork(12, 'Json.decodeFromString(body)')),
-              cmd('BitmapFactory.decodeFile(path)', () => addWork(20, 'BitmapFactory.decodeFile(path)')),
-              cmd('withContext(Dispatchers.Default) { ... }', () => { work = 0; say(o, '<span class="good">moved off main:</span> the main thread only does UI work again. Frames fit.'); })),
-            o);
-          el.append(root);
-          tick();
-        },
+        docs: [['Slow rendering', 'https://developer.android.com/topic/performance/vitals/render']],
       },
-
-      mainThreadLesson,
 
       // 2 ─────────────────────────────────────────────
       {
-        id: 'anr',
-        title: 'ANRs and StrictMode',
-        tagline: 'Block the main thread for 5 seconds and Android offers to kill your app.',
-        level: 'intermediate',
+        id: 'main-thread',
+        title: 'The main thread',
+        tagline: 'Let StrictMode point at the slow work hiding on the main thread.',
+        goals: ['List the places where your code runs on the main thread', 'Turn on StrictMode in the debug build', 'Follow a StrictMode report to the line that blocks, and move that work off the main thread'],
+        level: 'beginner', introduces: ['StrictMode', 'setThreadPolicy', 'ThreadPolicy', 'detectDiskReads', 'detectDiskWrites', 'detectNetwork', 'penaltyLog', 'BuildConfig', 'DEBUG', 'buildFeatures', 'buildConfig'],
         body: `
-<p>ANR means Application Not Responding. The most common one fires when the main thread does not handle an input event, like a tap or a key press, within 5 seconds. The system then shows a dialog that lets the user close your app. Other ANRs fire when a <code>BroadcastReceiver</code> or a <code>Service</code> does not finish its callback in time. Play Console counts them, and a high ANR rate hurts your store ranking.</p>
-<p>ANRs come from the same mistakes as jank, only longer. Common causes are disk or database reads on the main thread, <code>runBlocking</code> on main, a lock held by a background thread, and a slow binder call to another process. Network on the main thread throws <code>NetworkOnMainThreadException</code> right away, so you find that one in testing.</p>
-<p>StrictMode finds the rest before users do. Turn it on in debug builds. It reports every disk read, disk write or network call on the main thread with a stack trace, and its VM policy catches leaked Activities and unclosed resources. Pick a penalty: <code>penaltyLog()</code> writes to Logcat, <code>penaltyDeath()</code> crashes so nobody can miss it.</p>`,
-        code: `class NotesApp : Application() {
+<p>Sam adds a quick <b>Export</b> button to Recipes. On his new phone it works at once. On Lin’s older phone the screen hangs for a moment after every tap. Writing a file takes a few milliseconds on one phone and hundreds on another, so slow work can hide on your own phone and show up only on someone else’s.</p>
+<p>From the coroutines track you know the rule: the main thread draws the screen, so it must never wait. The hard part is noticing where your code runs on it. Code in <code>onClick</code>, in a composable’s body and in lifecycle callbacks such as <code>onCreate</code> runs on the main thread, and so does a coroutine from <code>LaunchedEffect</code> or <code>viewModelScope</code> unless you give it another dispatcher. Reading or writing a file or a database, or talking to a server, blocks the thread while it waits.</p>
+<p><code>StrictMode</code> is Android’s own checker for this. You tell it what to watch for on the main thread, such as <code>detectDiskReads()</code>, <code>detectDiskWrites()</code> and <code>detectNetwork()</code>, and what to do when it sees one. That event is a <em>violation</em>, and <code>penaltyLog()</code> writes each one to Logcat under the tag <code>StrictMode</code>, with a stack trace that leads to your line. Turn it on in <code>RecipesApp.onCreate()</code>, which runs once when the app starts, before any screen.</p>
+<p>StrictMode is for you while you build the app, not for users, so turn it on only in the debug build. The debug build is the one Run installs; the release build is the one you give to users. <code>BuildConfig.DEBUG</code> is <code>true</code> only in the debug build. Gradle makes the <code>BuildConfig</code> class once you add <code>buildFeatures { buildConfig = true }</code> inside <code>android { }</code> in <code>app/build.gradle.kts</code>. When StrictMode points at a line, the fix is the one you know: put the slow part inside <code>withContext(Dispatchers.IO)</code>.</p>`,
+        visual(el) {
+          const list = `<div class="ui-m-bar">Recipes</div><div class="ui-m-body"><div class="ui-m-row"><div>Pancakes · 20 min</div></div><div class="ui-m-row"><div>Tomato soup · 30 min</div></div><div class="ui-m-row"><div>Lentil curry · 40 min</div></div><span class="ui-m-btn exp">Export recipes</span></div>`;
+          const done = list.replace('</div></div><span', '</div></div><span class="ui-m-muted">Exported 80 recipes</span><span');
+          Lab.ui.phone(el, {
+            logTitle: 'Logcat · tag:StrictMode',
+            predict: {
+              q: 'StrictMode is on with <code>detectDiskWrites()</code> and <code>penaltyLog()</code>. The Export button writes a file right inside <code>onClick</code>. What happens when Lin taps it?',
+              options: ['A StrictMode line with a stack trace appears in Logcat', 'The app crashes', 'Nothing: the write is quick on her phone'],
+              a: 0,
+              why: 'StrictMode reports every disk write on the main thread, fast or slow. <code>penaltyLog()</code> only writes it down; the app keeps running.',
+            },
+            frames: [
+              { screen: list, say: 'Recipes on Lin’s older phone, in the debug build with StrictMode on. The panel shows Logcat with the query <code>tag:StrictMode</code>.' },
+              { tap: '.exp', log: 'StrictMode  D  StrictMode policy violation; ~duration=212 ms: android.os.strictmode.DiskWriteViolation', say: 'She taps Export. The <code>onClick</code> writes the file on the main thread, and for 212 ms the screen can’t move. StrictMode reports a disk write on the main thread.' },
+              { log: '	at com.example.recipes.ExportKt.saveExportNow(Export.kt:12)', say: 'Further down the stack trace (the system’s lines in between are cut here), the first line from your package names the function and the line: <code>saveExportNow</code>, line 12 of <code>Export.kt</code>.' },
+              { screen: done, say: 'The file is written, late. On Sam’s phone the same write took a few milliseconds, which is why he never saw a problem.' },
+              { screen: list, say: 'The fix: the write moves inside <code>withContext(Dispatchers.IO)</code> in a <code>suspend</code> function, and the button calls it from <code>scope.launch</code>.' },
+              { tap: '.exp', screen: done, say: 'Tap again: no new StrictMode line, and the screen keeps moving while the file is written.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts, inside android { }:
+// buildFeatures { buildConfig = true }
+
+@HiltAndroidApp
+class RecipesApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.DEBUG) {               // only in the debug build
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy.Builder()
                     .detectDiskReads()
                     .detectDiskWrites()
                     .detectNetwork()
-                    .penaltyLog()
-                    .build()
-            )
-            StrictMode.setVmPolicy(
-                StrictMode.VmPolicy.Builder()
-                    .detectActivityLeaks()
-                    .detectLeakedClosableObjects()
-                    .penaltyLog()
+                    .penaltyLog()              // write each violation to Logcat
                     .build()
             )
         }
     }
 }
 
-// The fix StrictMode points you to: do the read on an IO thread
-suspend fun readDraft(): String = withContext(Dispatchers.IO) {
-    draftFile.readText()
+// Export.kt: StrictMode pointed here. Before, the write ran on the main thread:
+// fun saveExportNow(folder: File, recipes: List<Recipe>) {
+//     File(folder, "recipes.txt").writeText(exportText(recipes))
+// }
+suspend fun saveExport(folder: File, recipes: List<Recipe>) {
+    withContext(Dispatchers.IO) {              // now the write waits on a background thread
+        File(folder, "recipes.txt").writeText(exportText(recipes))
+    }
 }`,
-        remember: 'No input handled for 5 s = ANR. StrictMode in debug catches disk and network on main first.',
+        remember: 'Turn on StrictMode in the debug build. Every line it logs is main-thread work to move into withContext(Dispatchers.IO).',
         terms: [
-          { term: 'ANR', def: 'Application Not Responding: the system reports an app whose main thread failed to handle input or finish a component callback in time.' },
-          { term: 'Input dispatch timeout', def: 'The 5 second limit for the main thread to handle a touch or key event before the system raises an ANR.' },
-          { term: 'StrictMode', def: 'A developer tool that detects slow or risky calls, such as disk access on the main thread, and reports them with a stack trace.' },
-          { term: 'NetworkOnMainThreadException', def: 'The exception Android throws when an app opens a network connection on the main thread.' },
+          { term: 'StrictMode', def: 'Android’s checker that watches the main thread for disk and network work and reports it. Set up with <code>StrictMode.setThreadPolicy(...)</code>.' },
+          { term: 'violation', def: 'One time StrictMode saw what you asked it to watch for, such as a disk write on the main thread.' },
+          { term: 'penaltyLog', def: 'Tells StrictMode to write each violation to Logcat, with a stack trace, under the tag <code>StrictMode</code>.' },
+          { term: 'BuildConfig.DEBUG', def: '<code>true</code> in the debug build, <code>false</code> in the release build. Needs <code>buildFeatures { buildConfig = true }</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Report disk reads on the main thread to Logcat.', code: 'StrictMode.setThreadPolicy(\n    StrictMode.ThreadPolicy.Builder()\n        .detect[[DiskReads]]()\n        .penalty[[Log]]()\n        .build()\n)', why: '<code>detectDiskReads()</code> picks what to watch and <code>penaltyLog()</code> picks what happens. Use <code>detectAll()</code> to watch everything.' },
-          { type: 'bug', prompt: 'Users report an ANR when they tap this button on a slow network. Tap the line.', code: '@Composable\nfun ProfileButton(api: Api, id: String, onLoaded: (User) -> Unit) {\n    val scope = rememberCoroutineScope()\n    Button(onClick = { onLoaded(runBlocking { api.fetchUser(id) }) }) {\n        Text("Load profile")\n    }\n}', bug: 3, fix: '    Button(onClick = { scope.launch { onLoaded(api.fetchUser(id)) } }) {', why: '<code>runBlocking</code> parks the main thread until the request ends. If that takes 5 seconds, the next tap times out. <code>launch</code> suspends instead and keeps the main thread free.' },
+          { type: 'blank', prompt: 'Report every file read on the main thread in Logcat.', code: `StrictMode.setThreadPolicy(
+    StrictMode.ThreadPolicy.Builder()
+        .[[detectDiskReads]]()
+        .[[penaltyLog]]()
+        .build()
+)`, why: '<code>detectDiskReads()</code> says what to watch for, and <code>penaltyLog()</code> says what to do: write it to Logcat.' },
+          { type: 'bug', prompt: 'StrictMode logs a <code>DiskReadViolation</code> in <code>loadNote</code>, which a <code>LaunchedEffect</code> calls. Tap the line to change.', code: `suspend fun loadNote(folder: File): String {
+    val file = File(folder, "note.txt")
+    return file.readText()
+}`, bug: 2, fix: '    return withContext(Dispatchers.IO) { file.readText() }', why: 'A <code>suspend</code> function runs on the thread that called it, here the main thread. <code>withContext(Dispatchers.IO)</code> moves the read to a background thread and gives back its text.' },
         ],
         quiz: [
-          { q: 'How long can the main thread leave a tap unhandled before an ANR?', options: ['16 ms', '1 second', '5 seconds'], a: 2, why: 'The input dispatch timeout is 5 seconds. 16 ms is the frame budget, which causes jank, not an ANR.' },
-          { q: 'Where should StrictMode penalties be turned on?', options: ['Debug builds', 'Release builds, to catch users’ problems', 'Only in unit tests'], a: 0, why: 'StrictMode adds overhead and <code>penaltyDeath()</code> crashes on purpose. Use it while developing, and use Play Console vitals for release.' },
-          { q: 'You call <code>URL(url).readText()</code> on the main thread. What happens?', options: ['It works but may jank', '<code>NetworkOnMainThreadException</code> is thrown', 'An ANR after 5 seconds, always'], a: 1, why: 'Android blocks network on the main thread by default for apps targeting API 11 and up. Disk reads are allowed, which is why StrictMode exists.' },
-          { q: 'An ANR trace shows the main thread in state Blocked, waiting for a lock that a worker holds while it writes a file. StrictMode was on in that debug build and reported nothing. Why?', options: ['StrictMode only reports network calls', 'The main thread never touched the disk itself; it only waited on a lock', 'StrictMode only reports problems that last longer than 5 seconds'], a: 1, why: 'StrictMode flags disk and network calls made on the main thread. Waiting on a lock is not one of them. Do the I/O first and take the lock only to swap in the result.' },
-          { q: 'Which line makes this screen prone to an ANR?<pre class="code mini">override fun onCreate(s: Bundle?) {   // 1\n  super.onCreate(s)                    // 2\n  val u = runBlocking { repo.load() }  // 3\n  setContent { Profile(u) }            // 4\n}</pre>', options: ['Line 2', 'Line 3', 'Line 4'], a: 1, why: 'runBlocking parks the main thread until the load finishes, so input and frames wait behind it. Load in a coroutine and show a loading state instead.' },
+          { q: 'Which of these runs on the main thread?', options: ['The code in a button’s <code>onClick</code>', 'The block inside <code>withContext(Dispatchers.IO)</code>', 'Both'], a: 0, why: 'Taps are handled on the main thread. <code>withContext(Dispatchers.IO)</code> runs its block on a background thread.' },
+          { q: 'What does <code>penaltyLog()</code> do?', options: ['Crashes the app on the first violation', 'Moves the slow work to another thread', 'Writes each violation to Logcat with a stack trace'], a: 2, why: 'It only reports. Moving the work is your job, once you know where it is.' },
+          { q: 'Why turn on StrictMode only when <code>BuildConfig.DEBUG</code> is <code>true</code>?', options: ['It is a tool for you while you build; users don’t need its checks or log lines', 'It doesn’t compile in the release build', 'It makes the debug build faster'], a: 0, why: 'StrictMode finds problems during development. The release build is the one you give to users.' },
         ],
-        deeper: anrDepth.deeper,
-        underHood: anrDepth.underHood,
-        mistakes: anrDepth.mistakes,
-        predict: {
-          q: 'A file read on the main thread takes 7 s on slow storage. The user taps the screen during it. What do they get?',
-          options: ['A short freeze, then the tap runs', 'An ANR dialog: the tap was not handled within 5 seconds', 'A crash from StrictMode'],
-          a: 1,
-          why: 'The tap waits behind the read. After 5 seconds without handling input, the system reports Application Not Responding.',
-        },
-        visual(el) {
-          const SEC = 380, TOTAL = 8; // ms of real time per simulated second, timeline length in s
-          let busy = false, strict = true;
-          const root = h('div', { class: 'viz' });
-          const status = h('span', { class: 'pf-pstatus' }, 'Ready');
-          const wait = h('button', { onclick() { dialog.hidden = true; status.textContent = 'Waiting…'; } }, 'Wait');
-          const close = h('button', { onclick() { dialog.hidden = true; note.textContent = '(process killed, draft lost)'; status.textContent = 'App closed'; } }, 'Close app');
-          const dialog = h('div', { class: 'pf-dialog', hidden: true }, h('div', { class: 'pf-dlg', role: 'dialog' }, h('b', {}, 'Notes isn’t responding'), wait, close));
-          const note = h('div', { class: 'pf-note' }, 'Groceries: eggs, rice, lemons…');
-          const phone = h('div', { class: 'phone pf-phone' }, h('span', { class: 'pf-app-title' }, 'Notes'), note, h('span', { class: 'pf-pbtn' }, 'Save'), status, dialog);
-          const mkLane = name => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) }; };
-          const main = mkLane('main'), io = mkLane('IO thread'), input = mkLane('tap waiting');
-          input.track.append(h('span', { class: 'pf-limit', style: `left:${(5.5 / TOTAL) * 100}%`, title: '5 s after the tap' }));
-          const clock = h('span', { class: 'clock' }, '0.0 s');
-          const tl = h('div', { class: 'timeline' }, main.el, io.el, input.el);
-          const o = out('StrictMode is on. Pick how the app reads the draft file.');
-          const strictT = toggle('pf-strict', 'StrictMode (debug)', true, v => { strict = v; say(o, v ? 'StrictMode on: main-thread disk access gets logged.' : 'StrictMode off: nothing warns you.'); });
-          const clear = () => { [main, io].forEach(l => l.track.replaceChildren()); input.track.querySelectorAll('.pf-tap, .pf-wait').forEach(x => x.remove()); dialog.hidden = true; clock.textContent = '0.0 s'; };
-          const bar = (lane, cls, s, e) => { const b = h('span', { class: `bar ${cls}`, style: `left:${(s / TOTAL) * 100}%;width:${((e - s) / TOTAL) * 100}%` }); lane.track.append(b); return b; };
-          async function animate(len, onT) {
-            const t0 = performance.now();
-            while (root.isConnected) {
-              const t = Math.min((performance.now() - t0) / SEC, len);
-              clock.textContent = t.toFixed(1) + ' s';
-              onT(t);
-              if (t >= len) return true;
-              await sleep(30);
-            }
-            return false;
-          }
-          async function onMain() {
-            if (busy) return; busy = true; clear();
-            note.textContent = 'Groceries: eggs, rice, lemons…';
-            status.textContent = 'Saving…';
-            say(o, `${hl('draftFile.readText()')} <span class="muted">// on the main thread, slow storage: 7 s</span>`);
-            if (strict) {
-              line(o, '<span class="bad">D/StrictMode: StrictMode policy violation; ~duration=7012 ms: android.os.strictmode.DiskReadViolation</span>');
-              line(o, '    at java.io.FileInputStream.&lt;init&gt;(FileInputStream.java:160)', 'pf-pre');
-              line(o, '    at com.example.notes.DraftStore.read(DraftStore.kt:18)', 'pf-pre');
-            }
-            const blk = bar(main, 'block', 0, 0);
-            const tap = h('span', { class: 'pf-tap', style: `left:${(0.5 / TOTAL) * 100}%`, hidden: true });
-            const w = h('span', { class: 'pf-wait', style: `left:${(0.5 / TOTAL) * 100}%;width:0` });
-            input.track.append(tap, w);
-            let anr = false;
-            const ok = await animate(7, t => {
-              blk.style.width = (t / TOTAL) * 100 + '%';
-              if (t >= 0.5) { tap.hidden = false; w.style.width = ((t - 0.5) / TOTAL) * 100 + '%'; }
-              if (!anr && t >= 5.5) {
-                anr = true; dialog.hidden = false; replay(phone, 'shake');
-                line(o, '<span class="bad">ANR in com.example.notes: Input dispatching timed out. Waited 5000ms for MotionEvent</span>');
-              }
-            });
-            if (!ok) return;
-            bar(main, 'run', 7, 7.15);
-            if (status.textContent !== 'App closed') status.textContent = 'Saved, 7 s late';
-            line(o, 'main thread free at 7.0 s. The queued tap finally runs.');
-            busy = false;
-          }
-          async function onIo() {
-            if (busy) return; busy = true; clear();
-            note.textContent = 'Groceries: eggs, rice, lemons…';
-            status.innerHTML = '<span class="pf-ioring"></span>Saving…';
-            say(o, `${hl('withContext(Dispatchers.IO) { draftFile.readText() }')}`);
-            bar(main, 'run', 0, 0.1);
-            const ioBar = bar(io, 'run', 0, 0);
-            const tap = h('span', { class: 'pf-tap', style: `left:${(0.5 / TOTAL) * 100}%`, hidden: true });
-            input.track.append(tap);
-            let tapped = false;
-            const ok = await animate(7, t => {
-              ioBar.style.width = (t / TOTAL) * 100 + '%';
-              if (!tapped && t >= 0.5) { tapped = true; tap.hidden = false; bar(main, 'run', 0.5, 0.6); line(o, '<span class="good">tap at 0.5 s handled in 10 ms.</span> The main thread was idle.'); }
-            });
-            if (!ok) return;
-            bar(main, 'run', 7, 7.1);
-            status.textContent = 'Saved';
-            line(o, 'read done on IO. Result posted back to main. No StrictMode warning, no ANR.');
-            busy = false;
-          }
-          function onNet() {
-            if (busy) return; clear();
-            status.textContent = 'Notes keeps stopping';
-            bar(main, 'block', 0, 0.05);
-            say(o, `${hl('URL(syncUrl).readText()')} <span class="muted">// on the main thread</span>`);
-            line(o, '<span class="bad">FATAL EXCEPTION: main  android.os.NetworkOnMainThreadException</span>');
-            line(o, 'Thrown with or without StrictMode. You find this one at once.');
-            replay(phone, 'shake');
-          }
-          root.append(
-            h('div', { class: 'controls' }, strictT.el),
-            h('div', { class: 'pf-split' }, h('div', { class: 'viz' }, h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'Threads'), clock), tl), phone),
-            h('div', { class: 'controls' },
-              cmd('draftFile.readText()  // main', onMain),
-              cmd('withContext(Dispatchers.IO) { ... }', onIo),
-              cmd('URL(syncUrl).readText()  // main', onNet)),
-            o);
-          el.append(root);
-        },
+        docs: [['StrictMode', 'https://developer.android.com/reference/android/os/StrictMode']],
       },
 
       // 3 ─────────────────────────────────────────────
       {
-        id: 'leaks',
-        title: 'Memory leaks',
-        tagline: 'A destroyed Activity that something still points at can never be freed.',
-        level: 'intermediate',
+        id: 'anr',
+        title: 'ANRs',
+        tagline: 'What makes Android say “isn’t responding”, and how to find the cause.',
+        goals: ['Name the deadlines that trigger an ANR', 'Explain why waiting for other work on the main thread causes one', 'Find the ANR line in Logcat and see why Google Play counts them'],
+        level: 'beginner', introduces: [],
         body: `
-<p>The garbage collector frees an object once nothing reachable points at it. It starts from GC roots, such as static fields and running threads, and follows every reference. An Activity holds its whole view tree, its bitmaps and its context. On every rotation Android destroys the old Activity and creates a new one. If a longer-lived object still references the old one, all of that stays in memory. A few rotations later the app slows down from constant GC, then crashes with <code>OutOfMemoryError</code>.</p>
-<p>The usual suspects: a singleton or <code>companion object</code> that stores an Activity, View or Context; a listener or callback registered with a long-lived object and never removed; a coroutine or thread that captures a View and outlives the screen. Fixes follow from that. Store <code>applicationContext</code> in singletons. Pair every register with an unregister in the matching lifecycle callback. Launch UI work in <code>lifecycleScope</code> or <code>viewLifecycleOwner.lifecycleScope</code> so it is cancelled with the screen.</p>
-<p>LeakCanary finds leaks for you. Add it as a <code>debugImplementation</code> dependency and nothing else. It watches destroyed Activities, Fragments and ViewModels, dumps the heap when one stays alive, and prints a leak trace. Read the trace from the GC root down. The reference marked with <code>~~~</code> is the one to cut.</p>`,
-        code: `// Leak: an object lives as long as the process and keeps an Activity
-object LocationRepo {
-    private val listeners = mutableListOf<(Location) -> Unit>()
-    fun addListener(l: (Location) -> Unit) { listeners += l }
-    fun removeListener(l: (Location) -> Unit) { listeners -= l }
-}
-
-class MapActivity : ComponentActivity() {
-    private val onLocation: (Location) -> Unit = { showOnMap(it) }   // captures this Activity
-
-    override fun onStart() {
-        super.onStart()
-        LocationRepo.addListener(onLocation)
-    }
-    override fun onStop() {
-        LocationRepo.removeListener(onLocation)   // without this, every rotation leaks
-        super.onStop()
-    }
-}
-
-// Singletons keep the application context, never an Activity
-object Analytics {
-    private lateinit var appContext: Context
-    fun init(context: Context) { appContext = context.applicationContext }
-}
-
-// build.gradle.kts: no code needed
-// debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")`,
-        remember: 'Long-lived things must not hold short-lived things. Register in onStart, unregister in onStop.',
-        terms: [
-          { term: 'Memory leak', def: 'Memory the app no longer needs that the garbage collector can’t free because a reachable object still references it.' },
-          { term: 'GC root', def: 'A starting point for garbage collection, such as a static field or a live thread; anything reachable from one stays in memory.' },
-          { term: 'LeakCanary', def: 'A debug-only library that detects retained Activities, Fragments and ViewModels and prints the reference chain that keeps them alive.' },
-          { term: 'applicationContext', def: 'The Context of the Application object, which lives as long as the process and is safe to keep in singletons.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Keep only a safe context, and stop listening when the screen stops.', code: 'fun init(context: Context) {\n    appContext = context.[[applicationContext]]\n}\n\noverride fun onStop() {\n    LocationRepo.[[removeListener]](onLocation)\n    super.onStop()\n}', why: 'The application context never belongs to a destroyed screen. Removing the listener cuts the only path from the singleton to the Activity.' },
-          { type: 'bug', prompt: 'LeakCanary reports a leaked <code>RecyclerView</code> after you navigate away from this Fragment. Tap the line.', code: 'class FeedFragment : Fragment(R.layout.feed) {\n    private val viewModel: FeedViewModel by viewModels()\n    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n        super.onViewCreated(view, savedInstanceState)\n        val list = view.findViewById<RecyclerView>(R.id.list)\n        lifecycleScope.launch {\n            viewModel.items.collect { (list.adapter as FeedAdapter).submitList(it) }\n        }\n    }\n}', bug: 5, fix: '        viewLifecycleOwner.lifecycleScope.launch {', why: 'A Fragment outlives its view on the back stack. <code>lifecycleScope</code> keeps collecting and holds <code>list</code> after <code>onDestroyView</code>. The view lifecycle scope is cancelled with the view.' },
-        ],
-        quiz: [
-          { q: 'Why does a singleton holding an Activity leak?', options: ['The singleton is reachable from a GC root, so the Activity it points at stays reachable too', 'Singletons copy the Activity on each rotation', 'The Activity holds the singleton'], a: 0, why: 'Reachability flows from the root through the singleton to the Activity, so the GC must keep it.' },
-          { q: 'What should a long-lived object keep when it needs a Context?', options: ['The current Activity', '<code>context.applicationContext</code>', 'A View’s context'], a: 1, why: 'The application context lives as long as the process, so holding it leaks nothing.' },
-          { q: 'In a LeakCanary trace, what does <code>Leaking: YES</code> on <code>MapActivity</code> mean?', options: ['It is destroyed but still reachable', 'It is still on screen', 'It threw an exception'], a: 0, why: 'LeakCanary knows the Activity was destroyed, so being reachable means it leaked. Look up the trace for the reference to cut.' },
-          { q: 'An Activity and its presenter reference each other. After a rotation nothing else points at either of them. Is the old Activity leaked?', options: ['Yes, the cycle keeps both alive', 'No, the GC traces from roots, so an unreachable cycle is freed', 'Only until LeakCanary forces a GC'], a: 1, why: 'ART does not count references. It marks what it can reach from GC roots and frees the rest, cycles included. A leak needs a path from a root.' },
-          { q: 'A Fragment keeps <code>private var binding: FeedBinding?</code> and goes onto the back stack. What prevents its old view tree from staying in memory?', options: ['Set binding = null in onDestroyView()', 'Set binding = null in onDestroy()', 'Nothing, the Fragment clears view fields itself'], a: 0, why: 'A back-stack Fragment outlives its view. Clearing the field in onDestroyView lets the old view tree go now, not when the Fragment is finally destroyed.' },
-        ],
-        deeper: leaksDepth.deeper,
-        underHood: leaksDepth.underHood,
-        mistakes: leaksDepth.mistakes,
+<p>Sam is on a train and taps Refresh in Recipes. The screen freezes, and a few seconds later Android shows <b>Recipes isn’t responding</b>, with <b>Close app</b> and <b>Wait</b>. Most people tap Close app. Google Play counts these too: <em>Android vitals</em> in the Play Console shows the share of users who saw one, and at 0.47% or more, Play is likely to show the app to fewer people.</p>
+<p>You met the main rule in the coroutines track: if a tap or key press isn’t handled within 5 seconds, that is an ANR. It isn’t the only deadline. Android also calls the other components from the manifest on the main thread and gives them a limit: a <code>&lt;receiver&gt;</code>, the code that reacts to a system event, must finish within 5 seconds while the app is on screen, and a service’s start-up code within a few seconds.</p>
+<p>So an ANR always means the main thread was stuck: busy with a long job, or waiting for something else. The classic one is waiting on purpose. <code>runBlocking</code> blocks the thread it runs on until the coroutines inside finish, which is why it is never used in an app. In an <code>onClick</code> around a network call, the main thread waits for the server, and in a tunnel that wait can last far longer than 5 seconds. Sending work to another thread doesn’t help either if the main thread then waits for it.</p>
+<p>When it happens on your phone, Android writes it to Logcat: <code>ANR in com.example.recipes (com.example.recipes/.MainActivity)</code>, followed by a <code>Reason</code> line. <code>Input dispatching timed out</code> there means a tap waited too long. The line comes from Android itself, so clear <code>package:mine</code> from the query box to see it. For your users’ phones, the Play Console collects ANRs with the stack trace of the main thread: the first lines from your package show where it was stuck.</p>`,
         visual(el) {
-          Lab.ui.graph(el, {
-            height: 300,
-            nodes: [
-              { id: 'root', label: 'GC root<small>static field</small>', x: 17, y: 12, tone: 'muted' },
-              { id: 'repo', label: 'LocationRepo<small>object</small>', x: 50, y: 12 },
-              { id: 'sys', label: 'GC root<small>system</small>', x: 17, y: 55, tone: 'muted' },
-              { id: 'l1', label: 'listener #1', x: 50, y: 50, hidden: true },
-              { id: 'a1', label: 'MapActivity #1<small>views, bitmaps</small>', x: 50, y: 88 },
-              { id: 'l2', label: 'listener #2', x: 83, y: 50, hidden: true },
-              { id: 'a2', label: 'MapActivity #2', x: 83, y: 88, hidden: true },
-            ],
+          const rows = '<div class="ui-m-row r1"><div>Pancakes · 20 min</div></div><div class="ui-m-row"><div>Tomato soup · 30 min</div></div><div class="ui-m-row"><div>Lentil curry · 40 min</div></div>';
+          const list = `<div class="ui-m-bar">Recipes</div><div class="ui-m-body">${rows}<span class="ui-m-btn refresh">Refresh</span></div>`;
+          const busy = `<div class="ui-m-bar">Recipes</div><div class="ui-m-body">${rows}<span class="ui-m-muted">Refreshing…</span></div>`;
+          const anr = list + '<div class="ui-m-scrim"><div class="ui-m-dialog"><b>Recipes isn’t responding</b><span class="ui-m-btn ghost">Close app</span><span class="ui-m-btn ghost">Wait</span></div></div>';
+          const detail = '<div class="ui-m-bar">← Pancakes</div><div class="ui-m-body"><div class="ui-m-row"><div>1. Mix flour and eggs</div></div><div class="ui-m-row"><div>2. Fry for 2 minutes</div></div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'Main thread',
             predict: {
-              q: 'You rotate the phone. Android destroys <code>MapActivity #1</code>, but a listener it registered is still in <code>LocationRepo</code>. Can the GC free #1?',
-              options: ['Yes, destroyed Activities are always freed', 'No, it is still reachable from a GC root', 'Only when the device is low on memory'],
+              q: 'Refresh runs <code>runBlocking { repository.refresh(force = true) }</code> in its <code>onClick</code>. Sam is in a tunnel, so the server never answers. He taps Pancakes one second later. What does he see?',
+              options: ['Pancakes opens at once', '“Recipes isn’t responding” about 5 seconds after his tap', 'Nothing ever: the app stays frozen without a message'],
               a: 1,
-              why: 'The GC frees objects by reachability, not by lifecycle. A static object holds the listener, and the listener holds the Activity.',
+              why: 'The main thread is stuck in <code>runBlocking</code>, so the tap waits in line. After 5 seconds without handling it, Android shows the ANR dialog.',
             },
             frames: [
-              { add: [['root', 'repo'], ['sys', 'a1']], say: 'MapActivity #1 is on screen, held by the system. <code>LocationRepo</code> is an <code>object</code>, so a static field keeps it alive as long as the process.' },
-              { show: ['l1'], add: [['repo', 'l1', 'listeners'], ['l1', 'a1', 'captures']], say: '<code>onStart</code> registers a listener. The lambda captures <code>this</code>, the Activity.' },
-              { show: ['a2'], remove: [['sys', 'a1']], add: [['sys', 'a2']], say: 'Rotate. Android destroys #1, creates #2, and the system lets go of #1.' },
-              { hl: ['root', 'repo', 'l1', 'a1'], add: [['root', 'repo', '', 'err'], ['repo', 'l1', 'listeners', 'err'], ['l1', 'a1', 'captures', 'err']], say: 'But #1 is still reachable: root → <code>LocationRepo</code> → listener → Activity. The GC cannot free it, or its views and bitmaps. That is a leak.' },
-              { show: ['l2'], add: [['repo', 'l2', 'listeners'], ['l2', 'a2', 'captures']], say: '#2 registers its own listener. Every rotation adds one more dead Activity that never goes away.' },
-              { remove: [['repo', 'l1'], ['l1', 'a1']], add: [['root', 'repo'], ['repo', 'l2', 'listeners']], gone: ['l1', 'a1'], say: 'The fix: <code>removeListener</code> in <code>onStop</code>. Nothing reachable points at #1 any more, so the next GC frees it.' },
+              { screen: list, log: 'free: drawing frames, handling taps', say: 'Recipes, with Sam in a tunnel. The panel shows what the main thread is doing.' },
+              { tap: '.refresh', log: 'Refresh: runBlocking waits for the server', say: 'He taps Refresh. Its <code>onClick</code> runs <code>runBlocking</code> around the network call, so the main thread stops and waits for the server.' },
+              { tap: '.r1', log: 'tap on Pancakes: waiting in line', say: 'A second later he taps Pancakes. Nothing happens: the tap waits until the main thread is free.' },
+              { screen: anr, log: '5 s without handling the tap', say: 'Five seconds after his tap, Android gives up waiting and shows the ANR dialog. Most people close the app here.' },
+              { log: 'ActivityManager  E  ANR in com.example.recipes (com.example.recipes/.MainActivity)', say: 'Logcat gets a line from Android. Its <code>Reason</code> line starts with <code>Input dispatching timed out</code>: a tap waited too long.' },
+              { screen: busy, log: 'fixed: onClick calls viewModel.refresh(force = true)', say: 'The fix: <code>onClick</code> calls the ViewModel, which starts the refresh in <code>viewModelScope.launch</code>. The coroutine waits; the main thread doesn’t.' },
+              { tap: '.r1', screen: detail, log: 'tap on Pancakes: handled at once', say: 'While the refresh is still waiting for the server, the tap on Pancakes opens it at once.' },
             ],
           });
         },
+        code: `// Before: the main thread waits for the server. In a tunnel, that is an ANR.
+Button(onClick = {
+    runBlocking { repository.refresh(force = true) }   // blocks the main thread
+}) {
+    Text("Refresh")
+}
+
+// After: the ViewModel starts a coroutine, and the main thread stays free.
+Button(onClick = { viewModel.refresh(force = true) }) {
+    Text("Refresh")
+}
+
+// RecipesViewModel (shortened: the real refresh also sets isRefreshing and catches IOException)
+fun refresh(force: Boolean) {
+    viewModelScope.launch {
+        repository.refresh(force)    // waits without blocking the main thread
+    }
+}
+
+// Logcat (clear package:mine first):
+// ANR in com.example.recipes (com.example.recipes/.MainActivity)`,
+        remember: 'An ANR means the main thread was stuck past a deadline: 5 s for a tap. Never make it wait, not even for another thread.',
+        mistakes: [
+          {
+            title: 'Waiting for a background thread from the main thread',
+            bad: `fun onRefresh() {
+    runBlocking {
+        withContext(Dispatchers.IO) {   // the work runs on a background thread...
+            repository.refresh(force = true)
+        }
+    }                                   // ...but the main thread waits right here
+}`,
+            good: `fun onRefresh() {
+    viewModelScope.launch {
+        repository.refresh(force = true)
+    }
+}`,
+            why: 'Moving work to another thread doesn’t help when the main thread then waits for it. <code>runBlocking</code> always waits; <code>launch</code> starts the work and returns at once.',
+          },
+        ],
+        terms: [
+          { term: 'Android vitals', def: 'The part of the Google Play Console that counts ANRs, crashes and slow starts on your users’ phones.' },
+          { term: 'ANR rate', def: 'The share of daily users who saw an ANR. At 0.47% or more, Google Play is likely to show the app to fewer people.' },
+          { term: 'Input dispatching timed out', def: 'The <code>Reason</code> of an ANR where a tap or key press wasn’t handled within 5 seconds.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Start the refresh in the ViewModel without blocking the main thread.', code: `fun refresh(force: Boolean) {
+    viewModelScope.[[launch]] {
+        repository.refresh(force)
+    }
+}`, why: '<code>launch</code> starts a coroutine and returns at once. The coroutine can wait for the server while the main thread keeps drawing.' },
+          { type: 'bug', prompt: 'In a tunnel, tapping Refresh ends in “Recipes isn’t responding”. Tap the line to change.', code: `Button(onClick = {
+    runBlocking { repository.refresh(force = true) }
+}) {
+    Text("Refresh")
+}`, bug: 1, fix: '    viewModel.refresh(force = true)', why: '<code>runBlocking</code> holds the main thread until the server answers. <code>viewModel.refresh</code> starts a coroutine in <code>viewModelScope</code> and returns at once.' },
+        ],
+        quiz: [
+          { q: 'Which of these can cause an ANR?', options: ['A coroutine in <code>viewModelScope</code> that waits for the network', '<code>runBlocking</code> around a network call in <code>onClick</code>', '<code>delay(10000)</code> inside a <code>LaunchedEffect</code>'], a: 1, why: '<code>runBlocking</code> blocks the main thread. The other two wait inside a coroutine, which leaves the thread free.' },
+          { q: 'Which Logcat line tells you an ANR happened?', options: ['<code>Skipped 42 frames!</code>', '<code>StrictMode policy violation</code>', '<code>ANR in com.example.recipes (com.example.recipes/.MainActivity)</code>'], a: 2, why: 'Android writes <code>ANR in</code> and the app’s name, then a <code>Reason</code> line. The other two are warnings about slow work, not ANRs.' },
+          { q: 'Why does Google Play care about ANRs?', options: ['It removes the app after the first one', 'At an ANR rate of 0.47% or more, it is likely to show the app to fewer people', 'It doesn’t: ANRs only happen in debug builds'], a: 1, why: 'Android vitals counts ANRs on real users’ phones, and a high rate hurts how often Play shows the app.' },
+        ],
+        docs: [['ANRs', 'https://developer.android.com/topic/performance/vitals/anr'], ['Diagnose and fix ANRs', 'https://developer.android.com/topic/performance/anrs/diagnose-and-fix-anrs']],
       },
 
       // 4 ─────────────────────────────────────────────
       {
-        id: 'profiler',
-        title: 'Android Studio Profiler',
-        tagline: 'Measure first. The slow part is rarely where you guess.',
-        level: 'advanced',
+        id: 'leaks',
+        title: 'Memory leaks',
+        tagline: 'Let LeakCanary find the screens your app forgot to let go of.',
+        goals: ['Add LeakCanary to the debug build only', 'Read a leak trace and find the reference that causes the leak', 'Fix a leak by keeping <code>applicationContext</code> instead of an Activity'],
+        level: 'beginner', introduces: ['leakcanary'],
         body: `
-<p>The Profiler in Android Studio runs tasks against a live app. <em>Find CPU hotspots</em> records Java and Kotlin method calls, so you see which functions take the time. <em>Capture system activities</em> records a system trace with Perfetto: every thread, every frame, and when your process was waiting on the CPU, disk or a lock. Start there for jank and slow startup. <em>Heap dump</em> takes a snapshot of every object, and <em>Track memory consumption</em> records allocations over time.</p>
-<p>Method traces come with a flame chart. Each bar is a function. Its callers sit below it and the functions it calls sit above. Width is total time spent in that call stack, merged across calls, so left to right is not a timeline. Look for wide bars with little on top of them: that time is spent in the function itself. Click a bar to zoom in.</p>
-<p>Profile a build that behaves like release. Debuggable builds turn off optimizations and can run several times slower. Mark the release build <code>profileable</code> in the manifest, or use the Profiler's low overhead mode. Add your own trace sections with <code>trace("label") { }</code> so they show up by name in system traces. In a heap dump, sort by retained size and look for duplicate bitmaps, huge caches and destroyed Activities.</p>`,
-        code: `// Name your own code in system traces (androidx.tracing:tracing-ktx)
-fun bind(holder: ArticleHolder, item: Article) = trace("ArticleAdapter.bind") {
-    holder.title.text = item.title
-    holder.date.text = dateFormatter.format(item.publishedAt)
+<p>Recipes gets a cooking timer: <code>CookTimer.start(this, 10)</code> shows a toast when ten minutes are up. Lin starts it and turns the phone to read the recipe sideways. Everything still works. But from then on the old screen, with everything on it, stays in memory. Do that often enough and the app slows down, until it crashes with an <code>OutOfMemoryError</code>.</p>
+<p>You saw the cause in the Context lesson. Android frees an object only when nothing points to it any more. A <em>memory leak</em> is something long-lived, like an <code>object</code> or a ViewModel, keeping something short-lived, like an Activity. <code>CookTimer</code> is an <code>object</code>, so it lives as long as the app, and it kept <code>MainActivity</code> #1 after Android destroyed it. Leaks don’t fail on the spot, which is why they are hard to see.</p>
+<p><em>LeakCanary</em> is a library that finds them for you. Add it with <code>debugImplementation</code>, as in the testing track, so only the debug build has it and users never get it. No code needed. When an Activity is destroyed, LeakCanary checks 5 seconds later whether it is really gone. If it isn’t, the Activity is <em>retained</em>. Once 5 objects are retained (or 1, when the app is in the background), it saves a copy of the app’s memory and shows a notification. Tap it to read what it found.</p>
+<p>It shows a <em>leak trace</em>: the chain of references, read from top to bottom, from something that is always kept down to the leaked object. <code>Leaking: NO</code> marks objects that are fine to keep, like a class. The reference underlined with <code>~~~</code> is the suspect: cut that one. Here it is <code>CookTimer.screen</code>, so the timer should keep <code>applicationContext</code>, the Context of the whole app, instead.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'android', label: 'Android', x: 50, y: 12, tone: 'muted' },
+              { id: 'a1', label: 'MainActivity #1<small>its whole screen</small>', x: 24, y: 48 },
+              { id: 'a2', label: 'MainActivity #2', x: 72, y: 48, hidden: true },
+              { id: 'timer', label: 'CookTimer<small>object: lives as long as the app</small>', x: 26, y: 86, tone: 'warm' },
+              { id: 'app', label: 'application­Context', x: 72, y: 86, tone: 'ok', hidden: true },
+            ],
+            predict: {
+              q: 'Lin starts the timer, which stores <code>MainActivity</code> #1 in <code>CookTimer.screen</code>. Then she turns the phone, and Android destroys #1. Can its memory be freed?',
+              options: ['Yes: destroyed screens are always freed', 'No: <code>CookTimer</code> still points to it', 'Only when the phone runs low on memory'],
+              a: 1,
+              why: 'Android frees an object when nothing points to it. <code>CookTimer</code> lives as long as the app and still points to #1.',
+            },
+            frames: [
+              { add: [['android', 'a1', 'on screen', 'ok']], say: '<code>MainActivity</code> #1 is on screen, and Android points to it. <code>CookTimer</code> is an <code>object</code>: it exists as long as the app runs.' },
+              { add: [['timer', 'a1', 'screen', 'warm']], hl: ['timer'], say: 'Lin taps Start. <code>CookTimer.start(this, 10)</code> stores the Activity in <code>screen</code>, to show a toast in ten minutes.' },
+              { remove: [['android', 'a1']], show: ['a2'], add: [['android', 'a2', 'on screen', 'ok']], say: 'She turns the phone. Android destroys #1, makes #2 and lets go of #1.' },
+              { hl: ['a1'], say: 'But <code>CookTimer.screen</code> still points to #1, so it can’t be freed, and neither can anything on its screen. Five seconds later, LeakCanary counts it as retained.' },
+              { remove: [['timer', 'a1']], show: ['app'], add: [['timer', 'app', 'screen', 'ok']], gone: ['a1'], say: 'The fix: <code>screen = context.applicationContext</code>. Nothing points to #1 any more, so Android frees it. The toast still works.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts: debug build only, so users never get it
+dependencies {
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 }
 
-// The fix the flame chart pointed to: build the formatter once, not per row
-private val dateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
-    .withZone(ZoneId.systemDefault())
+// The leak LeakCanary found:
+object CookTimer {
+    private var screen: Context? = null
+    fun start(context: Context, minutes: Int) {
+        screen = context                      // a MainActivity, kept after rotation
+    }
+}
 
-// AndroidManifest.xml, inside <application>: profile a release build
-// <profileable android:shell="true" />`,
-        remember: 'System trace for jank and startup, method trace for hot code, heap dump for memory. Profile release-like builds.',
+// Its leak trace (lines above and below cut):
+// ├─ com.example.recipes.CookTimer class
+// │    Leaking: NO (a class is never leaking)
+// │    ↓ static CookTimer.screen
+// │                       ~~~~~~
+// ╰→ com.example.recipes.MainActivity instance
+//      Leaking: YES (ObjectWatcher was watching this because com.example.recipes.MainActivity received Activity#onDestroy() callback and Activity#mDestroyed is true)`,
+        remember: 'Add LeakCanary with debugImplementation, read the trace top to bottom, and cut the reference underlined with ~~~.',
+        mistakes: [
+          {
+            title: 'Keeping the Activity in something that outlives it',
+            bad: `object CookTimer {
+    private var screen: Context? = null
+    fun start(context: Context, minutes: Int) {
+        screen = context
+    }
+}`,
+            good: `object CookTimer {
+    private var screen: Context? = null
+    fun start(context: Context, minutes: Int) {
+        screen = context.applicationContext
+    }
+}`,
+            why: 'An <code>object</code> lives as long as the app. <code>applicationContext</code> lives just as long, so keeping it leaks nothing. The Activity lives only until the next rotation.',
+          },
+        ],
         terms: [
-          { term: 'System trace', def: 'A Perfetto recording of all threads, CPU scheduling and frames over time, used to find jank and slow startup.' },
-          { term: 'Method trace', def: 'A recording of which Java and Kotlin functions ran and for how long, shown as call charts and flame charts.' },
-          { term: 'Flame chart', def: 'A chart that merges identical call stacks, with bar width showing total time, so the widest bars are the hottest code paths.' },
-          { term: 'Heap dump', def: 'A snapshot of every object in the app heap with its size and references, used to find leaks and memory hogs.' },
+          { term: 'LeakCanary', def: 'A library for the debug build that notices destroyed screens that stay in memory and shows why.' },
+          { term: 'retained', def: 'Still in memory 5 seconds after it should be gone. LeakCanary counts retained objects.' },
+          { term: 'leak trace', def: 'The chain of references that keeps a leaked object in memory. The suspect reference is underlined with <code>~~~</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Name this code in a system trace and make the release build profileable.', code: 'fun bind(item: Article) = [[trace]]("ArticleRow.bind") {\n    title.text = item.title\n}\n\n// AndroidManifest.xml\n// <[[profileable]] android:shell="true" />', why: '<code>trace</code> wraps the block in a named section. <code>profileable</code> lets the Profiler attach to a non-debuggable build.' },
-          { type: 'bug', prompt: 'A heap dump shows <code>Bitmap</code> retained size climbing to 400 MB. Tap the line.', code: '// Thumbnail cache, sized to 1/8 of the heap in KB\nval maxKb = (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()\nval thumbCache = object : LruCache<String, Bitmap>(maxKb) {\n    override fun sizeOf(key: String, value: Bitmap): Int = 1\n}', bug: 3, fix: '    override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024', why: 'The limit is in KB, but <code>sizeOf</code> counts every bitmap as 1. The cache keeps tens of thousands of bitmaps instead of a few megabytes.' },
+          { type: 'blank', prompt: 'Add LeakCanary so that only the debug build gets it.', code: `dependencies {
+    [[debugImplementation]]("com.squareup.leakcanary:leakcanary-android:2.14")
+}`, why: 'As in the testing track, <code>debugImplementation</code> leaves the library out of the release build, the one users install.' },
+          { type: 'bug', prompt: 'LeakCanary shows <code>MainActivity</code> leaking through <code>static Reminders.context</code>. Tap the line to change.', code: `object Reminders {
+    private var context: Context? = null
+    fun init(screen: Context) {
+        context = screen
+    }
+}`, bug: 3, fix: '        context = screen.applicationContext', why: 'An <code>object</code> outlives every screen. Keeping <code>applicationContext</code>, which lives as long as the app, cuts the path to the Activity.' },
         ],
         quiz: [
-          { q: 'In a flame chart, what does a bar’s width show?', options: ['When the function ran', 'Total time spent in that call stack', 'How many objects it allocated'], a: 1, why: 'Flame charts merge identical stacks and size them by time. Use a call chart to see order over time.' },
-          { q: 'Which recording shows dropped frames, every thread and waits on locks?', options: ['System trace', 'Heap dump', 'Allocation tracking'], a: 0, why: 'A system trace shows the timeline of all threads and frames. Method traces only show function timing.' },
-          { q: 'Why profile a profileable release build instead of debug?', options: ['Debug builds skip optimizations and add overhead, so timings are wrong', 'The Profiler can’t attach to debug builds', 'Release builds log more'], a: 0, why: 'Debuggable builds run slower in ways users never see. You end up fixing the wrong thing.' },
-          { q: 'In a system trace, a slow frame shows the main thread mostly Sleeping, not Running. What is the next step?', options: ['Record a method trace to find the slow function', 'Find what main waits for, like a lock, a binder reply or a message', 'Switch to a sampled recording with a shorter interval'], a: 1, why: 'Sleeping means the thread waits for something. That is a waiting problem, and a method trace of CPU work will not show it.' },
-          { q: 'A traced recording says a one-line getter called 50,000 times takes 30% of the time. A sampled recording barely shows it. Which is closer to the truth?', options: ['The traced one, because it counts every call exactly', 'The sampled one, because tracing adds a hook cost to every call and inflates tiny functions', 'Neither; the getter is inlined and should not appear at all'], a: 1, why: 'Traced recordings hook every entry and exit, so many tiny calls look much slower than they are. Confirm with a benchmark before you optimize.' },
-          { q: 'What is wrong with this trace section?<pre class="code mini">suspend fun load() = trace("load") {\n  val a = api.fetch()   // suspends\n  db.save(a)\n}</pre>', options: ['trace { } cannot be used from Kotlin', 'After fetch() suspends, the coroutine may resume on another thread and close the wrong slice', 'The label has to be built with a string template'], a: 1, why: 'A normal section must begin and end on the same thread. Across a suspension point, use an async section, which is matched by name and cookie.' },
+          { q: 'Why is LeakCanary added with <code>debugImplementation</code>?', options: ['So only the debug build has it, and users never get it', 'Because it only works in Kotlin', 'To make the release build smaller than the debug build'], a: 0, why: 'LeakCanary is a tool for you. Its checks and memory copies have no place on users’ phones.' },
+          { q: 'In a leak trace, what does a reference underlined with <code>~~~</code> mean?', options: ['The object is fine to keep', 'The line has a typo', 'It is a suspect: one of these references causes the leak'], a: 2, why: 'LeakCanary rules out what it can and underlines what is left. Cutting the suspect reference fixes the leak.' },
+          { q: 'Which may keep an Activity without leaking it?', options: ['A ViewModel', 'An <code>object</code>', 'Neither: both outlive the Activity'], a: 2, why: 'Both can live longer than the screen, so a kept Activity can’t be freed. They may keep <code>applicationContext</code>.' },
         ],
-        deeper: profilerDepth.deeper,
-        underHood: profilerDepth.underHood,
-        mistakes: profilerDepth.mistakes,
-        predict: {
-          q: 'In the flame chart, a wide bar has almost nothing stacked on top of it. Where is its time going?',
-          options: ['Into the functions it calls', 'Into the function itself: that is self time', 'Into waiting for the GPU'],
-          a: 1,
-          why: 'Callees sit above a bar. If they are narrow or missing, the bar’s width is spent in its own code, which makes it the place to optimize.',
-        },
-        visual(el) {
-          const BUDGET = 16.7;
-          const tree = cached => ({ n: 'Choreographer#doFrame', c: [
-            { n: 'input', self: 1 },
-            { n: 'ViewRootImpl.performTraversals', c: [
-              { n: 'RecyclerView.onLayout', c: [
-                { n: 'ArticleAdapter.onBindViewHolder', c: [
-                  { n: 'DateUtils.format', c: [
-                    cached ? null : { n: 'SimpleDateFormat.<init>', self: 1, c: [{ n: 'DateFormatSymbols.getInstance', self: 7 }, { n: 'Calendar.getInstance', self: 3 }] },
-                    { n: cached ? 'DateTimeFormatter.format' : 'SimpleDateFormat.format', self: 3 }] },
-                  { n: 'TextView.setText', self: 5 }] },
-                { n: 'View.measure', self: 2 }] }] },
-            { n: 'View.draw', self: 3 }] });
-          let cached = false, zoom = null, sel = null, recording = false;
-          const root = h('div', { class: 'viz' });
-          const flame = h('div', { class: 'pf-flame', role: 'group', 'aria-label': 'Flame chart of one frame on the main thread' });
-          const o = out();
-          const budgetMark = h('span', { class: 'pf-fbudget' }, h('span', {}, '16.7 ms'));
-          function build() {
-            const t = tree(cached);
-            // sizes bottom-up, then places children left to right
-            const size = node => { node.c = (node.c || []).filter(Boolean); node.c.forEach(size); node.selfMs = node.self || 0; node.ms = (node.self || 0) + node.c.reduce((a, k) => a + k.ms, 0); };
-            size(t);
-            const place = (node, s, d, parent) => { node.s = s; node.e = s + node.ms; node.d = d; node.parent = parent; let x = s; node.c.forEach(k => { place(k, x, d + 1, node); x += k.ms; }); };
-            place(t, 0, 0, null);
-            return t;
-          }
-          let data = build();
-          const all = () => { const xs = []; const go = n => { xs.push(n); n.c.forEach(go); }; go(data); return xs; };
-          function render(grow) {
-            const z = zoom || data, span = z.e - z.s;
-            const nodes = all();
-            const depth = Math.max(...nodes.map(n => n.d)) + 1;
-            const rows = Array.from({ length: depth }, () => h('div', { class: 'pf-frow' }));
-            nodes.forEach(n => {
-              const l = (n.s - z.s) / span, w = n.ms / span;
-              if (l + w <= 0.0001 || l >= 0.9999) return;
-              const cl = Math.max(0, l), cw = Math.min(1, l + w) - cl;
-              const heat = n.selfMs >= 5 ? ' pf-hot' : n.selfMs >= 2 ? ' pf-warm' : '';
-              const b = h('button', { class: 'pf-fl' + heat + (n === sel ? ' pf-sel' : '') + (grow ? ' pf-grow' : ''), style: `left:${cl * 100}%;width:calc(${cw * 100}% - 2px)`, title: `${n.n}: ${n.ms} ms`, 'aria-label': `${n.n}, ${n.ms} ms`, onclick() { pick(n); } }, n.n);
-              rows[n.d].append(b);
-            });
-            budgetMark.style.left = `${Math.min(100, (BUDGET - z.s) / span * 100)}%`;
-            budgetMark.style.opacity = z === data ? '1' : '0';
-            flame.replaceChildren(...rows);
-            flame.append(budgetMark);
-          }
-          function info(n) {
-            const pct = Math.round((n.ms / data.ms) * 100);
-            return `${hl(n.n)}  total <span class="good">${n.ms} ms</span>  self ${n.selfMs} ms  <span class="muted">(${pct}% of the frame)</span>`;
-          }
-          function pick(n) {
-            if (recording) return;
-            sel = n; zoom = n.c.length ? n : n.parent || n;
-            render(false);
-            say(o, info(n));
-            if (n.n === 'DateFormatSymbols.getInstance') line(o, 'Wide and nothing on top: self time. A new <code>SimpleDateFormat</code> per row loads locale data every time.');
-          }
-          function summary() {
-            say(o, `${hl('Choreographer#doFrame')} <span class="${data.ms > BUDGET ? 'bad' : 'good'}">${data.ms} ms</span> <span class="muted">// budget ${BUDGET} ms at 60 Hz</span>`);
-            line(o, data.ms > BUDGET ? 'Over budget. Click the widest bars to drill in.' : '<span class="good">Fits the budget.</span> The formatter is built once and reused.');
-          }
-          async function record() {
-            if (recording) return; recording = true;
-            zoom = null; sel = null;
-            say(o, 'Find CPU hotspots: recording one scroll frame…');
-            flame.replaceChildren();
-            await sleep(500); if (!root.isConnected) return;
-            render(true);
-            await sleep(500);
-            recording = false; summary();
-          }
-          const cacheT = toggle('pf-cache', 'Reuse one <code>DateTimeFormatter</code>', false, v => { cached = v; data = build(); zoom = null; sel = null; render(true); summary(); });
-          render(false); summary();
-          root.append(
-            h('div', { class: 'controls' }, cacheT.el),
-            h('div', { class: 'pf-row' }, h('span', { class: 'pf-label' }, 'main thread · one frame · callers below, callees above')),
-            flame,
-            h('div', { class: 'legend' },
-              h('span', {}, h('i', { style: 'background:rgba(169,140,255,0.6)' }), 'time in callees'),
-              h('span', {}, h('i', { style: 'background:var(--warm)' }), 'some self time'),
-              h('span', {}, h('i', { style: 'background:var(--err)' }), '5 ms+ self time')),
-            h('div', { class: 'controls' },
-              act('Record: Find CPU hotspots', record),
-              act('Zoom out', () => { if (recording) return; zoom = null; sel = null; render(false); summary(); })),
-            o);
-          el.append(root);
-        },
+        docs: [['LeakCanary: getting started', 'https://square.github.io/leakcanary/getting_started/'], ['Capture a heap dump', 'https://developer.android.com/studio/profile/capture-heap-dump']],
       },
 
       // 5 ─────────────────────────────────────────────
       {
-        id: 'compose-perf',
-        title: 'Compose performance debugging',
-        tagline: 'Count recompositions, read the compiler’s verdict, then fix the one that matters.',
-        level: 'advanced',
+        id: 'profiler',
+        title: 'Profiling',
+        tagline: 'Measure where the time goes before you change anything.',
+        goals: ['Start a profiler task on your running app', 'Read a flame chart and find the function that takes the time', 'Measure a piece of code with <code>measureTimeMillis</code>'],
+        level: 'intermediate', introduces: ['measureTimeMillis'],
         body: `
-<p>Before you change code, find which composables run too often. The Layout Inspector in Android Studio shows two counts per composable on a running debug app: how many times it recomposed and how many times it skipped. Interact with the screen and watch the counts. A row that recomposes on every keystroke or every scroll pixel is your lead. Composition tracing adds composable names to system traces, so you can see their cost in time too.</p>
-<p>Then ask the compiler why. Compose compiler reports list every class as <em>stable</em> or <em>unstable</em> and every parameter that made a composable restart. The Compose, advanced track explains stability in depth. Here, read the report and act on it: an <code>unstable</code> parameter that gets a new instance each time can’t be skipped.</p>
-<p>Three fixes cover most cases. Give lazy list items a <code>key</code> so inserting a row does not rebind every row below it. Wrap state that changes often but matters rarely, such as scroll position, in <code>derivedStateOf</code>. Make data classes stable with immutable collections or <code>@Immutable</code>. Strong skipping already remembers lambdas for you, so a lambda in a parameter is rarely the problem now. A lambda that captures a new unstable object each time still is.</p>`,
-        code: `@Immutable   // tags is a List, so Item was unstable before this
-data class Item(val id: Long, val title: String, val tags: List<String>)
+<p>Recipes gets a search box, and typing in it feels slow: each letter shows up a moment late. Lin is sure it is the database and starts rewriting the DAO. A day later the search is just as slow. The slow part is rarely where you guess, so measure first.</p>
+<p>The <em>profiler</em> in Android Studio records what your running app does. Open the <b>More actions</b> menu (three dots) next to the Run button and choose <b>Profile 'app' with complete data</b>. Then pick a <em>task</em>: <b>Find CPU Hotspots</b> records which functions run and for how long; <b>Analyze Memory Usage (Heap Dump)</b> takes a snapshot of every object in memory, the same kind of copy LeakCanary makes. Start the task, do the slow thing for a few seconds, and stop.</p>
+<p>Find CPU Hotspots shows a <em>flame chart</em> for each thread. Every bar is a function, and the bars on top of it are the functions it called. A bar’s width is the share of the recorded time spent in it, including what it called. Left to right is not a timeline: all calls of a function through the same chain are added up into one bar. Look for a wide bar with nothing wide on top. Its own code is the <em>hotspot</em>.</p>
+<p>Two habits help. A debuggable app runs slower than the one users get, so trust the shares more than the exact numbers. And for one piece of code, <code>measureTimeMillis { ... }</code> from Kotlin runs its block and gives back how many milliseconds it took. Measure again after every fix.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: [' ', ' ', ' ', ' '],
+            span: 100,
+            unit: '%',
+            predict: {
+              q: 'In a flame chart, a wide bar has nothing on top of it. Where does its time go?',
+              options: ['Into its own code', 'Into the functions it calls', 'Into waiting for the next frame'],
+              a: 0,
+              why: 'The bars on top are the functions it called. With none there, all of its width is spent in its own lines: that is the hotspot.',
+            },
+            frames: [
+              { now: 0, say: 'Lin records 3 seconds of typing with Find CPU Hotspots. This is the main thread’s flame chart, built here from the bottom up. Width is the share of the time.' },
+              { bars: [{ lane: 3, from: 0, to: 100, label: 'onQueryChange', tone: 'accent' }], now: 100, say: 'At the bottom, <code>onQueryChange</code> in the ViewModel, called for every letter. It is full width: all the recorded time is spent in it or in what it calls.' },
+              { bars: [{ lane: 2, from: 0, to: 95, label: 'search', tone: 'accent' }], say: 'On top: what it called. <code>search</code> takes 95% of the time. The thin 5% with nothing on top is the rest of <code>onQueryChange</code>’s own code.' },
+              { bars: [{ lane: 1, from: 0, to: 3, label: 'first', tone: 'muted' }, { lane: 1, from: 3, to: 94, label: 'filter', tone: 'accent' }], say: '<code>search</code> reads the recipes from the repository with <code>first()</code>, a thin 3%: the database Lin suspected is not the problem. Then it runs <code>filter</code> over them.' },
+              { bars: [{ lane: 0, from: 3, to: 93, label: 'similar', tone: 'err' }], say: '<code>similar</code> compares the search with every title. It is wide and has nothing on top: its own code takes 90% of the time. That is the hotspot.' },
+              { say: 'The fix goes where the chart points: the filter moves into <code>withContext(Dispatchers.Default)</code>, and the letters show up at once. Record again to check: the main thread’s chart is now almost empty.' },
+            ],
+          });
+        },
+        code: `class SearchViewModel(private val repository: RecipeRepository) : ViewModel() {
+    val results = MutableStateFlow(listOf<Recipe>())
 
-@Composable
-fun ItemList(items: List<Item>, onOpen: (Long) -> Unit) {
-    val listState = rememberLazyListState()
-    val showTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    Box {
-        LazyColumn(state = listState) {
-            items(items, key = { it.id }) { item ->
-                ItemRow(item, onClick = { onOpen(item.id) })
-            }
+    fun onQueryChange(query: String) {
+        viewModelScope.launch {
+            results.value = search(query)
         }
-        if (showTop) ScrollToTopButton(listState)
     }
-}
 
-// build.gradle.kts: write stability reports to build/compose_compiler
-composeCompiler {
-    reportsDestination = layout.buildDirectory.dir("compose_compiler")
-    metricsDestination = layout.buildDirectory.dir("compose_compiler")
+    private suspend fun search(query: String): List<Recipe> {
+        val all = repository.recipes.first()      // only 3% of the time
+        // The flame chart showed similar() taking 90% of the main thread:
+        return withContext(Dispatchers.Default) {
+            all.filter { recipe -> similar(recipe.title, query) }
+        }
+    }
 }`,
-        remember: 'Inspector counts show what runs too often. Compiler reports show why. key, derivedStateOf and stable types fix most of it.',
+        play: `import kotlin.system.measureTimeMillis
+
+fun main() {
+    val titles = mutableListOf<String>()
+    for (i in 1..200000) {
+        titles.add("Recipe $i")
+    }
+    val ms = measureTimeMillis {
+        val found = titles.filter { it.contains("99") }
+        println("Found \${found.size} recipes")
+    }
+    println("Search took $ms ms")
+    // Change 200000 to 2000000. Does the time grow too?
+}
+// Found 7382 recipes
+// Search took 85 ms   (the number changes from run to run)`,
+        remember: 'Measure before you fix: in a flame chart, the wide bar with nothing on top is the hotspot.',
         terms: [
-          { term: 'Layout Inspector', def: 'An Android Studio tool that shows the live UI tree of a running app, including recomposition and skip counts per composable.' },
-          { term: 'Recomposition count', def: 'How many times a composable has run again since it first appeared, as shown in the Layout Inspector.' },
-          { term: 'Compose compiler reports', def: 'Text files from the Compose compiler that list each class’s stability and each composable’s skippable and restartable status.' },
-          { term: 'Composition tracing', def: 'A runtime-tracing dependency that adds composable function names to system traces so you can see how long each one takes.' },
+          { term: 'profiler', def: 'An Android Studio tool that records what your running app does: which functions take time, what is in memory.' },
+          { term: 'profiler task', def: 'One kind of recording, such as <b>Find CPU Hotspots</b> or <b>Analyze Memory Usage (Heap Dump)</b>.' },
+          { term: 'flame chart', def: 'A chart of bars, one per function, with the functions it called on top. Width is the share of the time, not a timeline.' },
+          { term: 'hotspot', def: 'The code that takes most of the time: a wide bar with nothing wide on top of it.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Stop rebinding every row on insert, and stop recomposing on every scroll step.', code: 'val showTop by remember {\n    [[derivedStateOf]] { listState.firstVisibleItemIndex > 0 }\n}\nLazyColumn(state = listState) {\n    items(items, key = { it.[[id]] }) { ItemRow(it) }\n}', why: '<code>derivedStateOf</code> only notifies readers when the Boolean flips. A stable <code>key</code> lets Compose move existing rows instead of rebinding them by position.' },
-          { type: 'bug', prompt: 'The Layout Inspector shows <code>Feed</code> recomposing on every scroll step. Tap the line.', code: '@Composable\nfun Feed(listState: LazyListState, posts: List<Post>) {\n    val showTop = listState.firstVisibleItemIndex > 0\n    Box {\n        LazyColumn(state = listState) { items(posts, key = { it.id }) { PostRow(it) } }\n        if (showTop) ScrollToTop(listState)\n    }\n}', bug: 2, fix: '    val showTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }', why: 'Reading <code>firstVisibleItemIndex</code> in composition subscribes <code>Feed</code> to every index change. <code>derivedStateOf</code> narrows that to the moment the Boolean changes.' },
+          { type: 'blank', prompt: 'Time how long the filter takes, in milliseconds.', code: `val ms = [[measureTimeMillis]] {
+    titles.filter { it.contains("99") }
+}
+println("Search took $ms ms")`, why: '<code>measureTimeMillis</code> runs the block and gives back how long it took.' },
+          { type: 'bug', prompt: 'Lin wanted to move the hotspot off the main thread, but the flame chart of the main thread still shows <code>similar</code>. Tap the line to change.', code: `private suspend fun search(query: String): List<Recipe> {
+    val all = repository.recipes.first()
+    return withContext(Dispatchers.Main) {
+        all.filter { recipe -> similar(recipe.title, query) }
+    }
+}`, bug: 2, fix: '    return withContext(Dispatchers.Default) {', why: '<code>Dispatchers.Main</code> is the main thread. Heavy calculations belong on <code>Dispatchers.Default</code>.' },
         ],
         quiz: [
-          { q: 'Where do you see per-composable recomposition and skip counts?', options: ['Layout Inspector', 'Logcat', 'The APK Analyzer'], a: 0, why: 'The Layout Inspector shows both counts live while you use the app.' },
-          { q: 'A compiler report shows <code>unstable item: Item</code>. What does that mean for <code>ItemRow</code>?', options: ['It skips only when it gets the same <code>Item</code> instance', 'It never compiles', 'It always skips'], a: 0, why: 'With strong skipping, unstable parameters are compared by instance. A new but equal object still triggers recomposition.' },
-          { q: 'When does <code>derivedStateOf</code> help?', options: ['When the input changes much more often than the result', 'For every piece of state', 'Only for network results'], a: 0, why: 'Scroll position changes constantly, but “show the button” flips rarely. Readers only recompose when the derived value changes.' },
-          { q: '<code>x</code> is an animated State that changes every frame. Which modifier runs only layout and draw, not composition, on each frame?', options: ['<code>Modifier.offset(x = x.value.dp)</code>', '<code>Modifier.offset { IntOffset(x.value.toInt(), 0) }</code>', '<code>Modifier.padding(start = x.value.dp)</code>'], a: 1, why: 'The lambda version reads the state during layout, so composition is skipped. The other two read it in the composable body, which runs all three phases.' },
-          { q: 'Which line causes endless recomposition?<pre class="code mini">@Composable fun Seen() {\n  var n by remember { mutableIntStateOf(0) } // 1\n  Text("Seen $n times")                      // 2\n  n++                                        // 3\n}</pre>', options: ['Line 1', 'Line 2', 'Line 3'], a: 2, why: 'This is a backwards write: composition writes the state it just read, which schedules it again, forever. Change state in event handlers or effects.' },
+          { q: 'Which profiler task shows which functions take the time?', options: ['Analyze Memory Usage (Heap Dump)', 'Find CPU Hotspots', 'Layout Inspector'], a: 1, why: 'Find CPU Hotspots records the functions that run. A heap dump is a snapshot of memory, and Layout Inspector is not a profiler task.' },
+          { q: 'In a flame chart, what does a bar’s width show?', options: ['When the function ran', 'How many lines the function has', 'The share of the recorded time spent in that function and what it called'], a: 2, why: 'All calls through the same chain are added up into one bar. Left to right is not time.' },
+          { q: 'Why measure before you change code?', options: ['The profiler makes the app faster', 'The slow part is often not where you guess', 'Lint needs a recording first'], a: 1, why: 'Lin rewrote the DAO, but reading the recipes took only 3% of the time. One recording pointed at the real 90%.' },
         ],
-        deeper: composePerfDepth.deeper,
-        underHood: composePerfDepth.underHood,
-        mistakes: composePerfDepth.mistakes,
-        predict: {
-          q: 'Without <code>derivedStateOf</code>, <code>FeedScreen</code> reads the first visible index to decide whether to show a “back to top” button. You scroll down 3 rows. How often does it recompose?',
-          options: ['Once, when the button appears', '3 times: once per index change', 'Never: scrolling isn’t state'],
-          a: 1,
-          why: 'Reading the index subscribes to every change of it. <code>derivedStateOf</code> turns it into a Boolean that only changes once.',
-        },
-        visual(el) {
-          const pool = ['Kotlin', 'Compose', 'Flow', 'Room', 'Hilt', 'Ktor'];
-          let imm = false, derived = false, keyed = false, busy = false, scrolled = false, next = 3, uid = 4;
-          let items = [{ id: 1, t: 'Kotlin' }, { id: 2, t: 'Compose' }, { id: 3, t: 'Flow' }];
-          const root = h('div', { class: 'viz' });
-          const mk = (name, depth) => {
-            const rec = h('span', { class: 'pf-rec' }, '0'), skp = h('span', { class: 'pf-skp' }, '0'), nm = h('span', {}, name);
-            const r = { rec: 0, skp: 0, nm, el: h('div', { class: `pf-irow pf-d${depth}` }, nm, rec, skp) };
-            r.paint = () => { rec.textContent = r.rec; skp.textContent = r.skp; };
-            return r;
-          };
-          const screen = mk('FeedScreen', 0), search = mk('SearchBar', 1), list = mk('ItemList', 1);
-          let rows = items.map(it => Object.assign(mk(`ItemRow("${it.t}")`, 2), { item: it }));
-          const rowsBox = h('div', { style: 'display:grid;gap:2px' });
-          const insp = h('div', { class: 'pf-insp' }, h('div', { class: 'pf-ihead' }, h('span', {}, 'Layout Inspector'), h('span', {}, 'Recomp.'), h('span', {}, 'Skipped')), screen.el, search.el, list.el, rowsBox);
-          const report = h('div', { class: 'kt pf-report' });
-          const o = out('Interact with the screen and watch the counts. Then turn on a fix and do it again.');
-          const paintRows = () => { rowsBox.replaceChildren(...rows.map(r => r.el)); rows.forEach(r => { r.nm.textContent = `ItemRow("${r.item.t}")`; r.paint(); }); };
-          const paintReport = () => {
-            report.innerHTML = hl(imm
-              ? 'stable class Item {\n  stable val id: Long\n  stable val title: String\n  runtime val tags: List<String>\n}\nrestartable skippable fun ItemRow(\n  stable item: Item\n  stable onClick: Function0<Unit>\n)'
-              : 'unstable class Item {\n  stable val id: Long\n  stable val title: String\n  unstable val tags: List<String>\n}\nrestartable skippable fun ItemRow(\n  unstable item: Item\n  stable onClick: Function0<Unit>\n)');
-          };
-          const flash = (r, kind) => { r.el.classList.remove('pf-hit', 'pf-skipped', 'pf-new'); void r.el.offsetWidth; r.el.classList.add(kind); setTimeout(() => r.el.classList.remove(kind), 900); };
-          const hit = r => { r.rec++; r.paint(); flash(r, 'pf-hit'); };
-          const skip = r => { r.skp++; r.paint(); flash(r, 'pf-skipped'); };
-          async function type() {
-            if (busy) return; busy = true;
-            items = items.map(it => ({ ...it }));
-            say(o, `${hl('query = "k"')} <span class="muted">// ViewModel emits a new list of new Item objects</span>`);
-            hit(screen); hit(search); hit(list);
-            rows.forEach(r => { r.item = items[rows.indexOf(r)]; imm ? skip(r) : hit(r); });
-            line(o, imm ? '<span class="good">Rows skipped:</span> Item is stable, so equal items compare with equals().' : '<span class="bad">Every row recomposed:</span> unstable Item compares by instance, and each one is new.');
-            await sleep(900); busy = false;
-          }
-          async function scroll() {
-            if (busy) return; busy = true;
-            const steps = scrolled ? [2, 1, 0] : [1, 2, 3];
-            say(o, `${hl(`scroll ${scrolled ? 'up' : 'down'} 3 rows`)} <span class="muted">// firstVisibleItemIndex: ${steps.join(', ')}</span>`);
-            let runs = 0;
-            for (const s of steps) {
-              const flips = (s === 0) || (s === 1 && !scrolled);
-              if (!derived || flips) { hit(screen); skip(search); skip(list); runs++; }
-              await sleep(420); if (!root.isConnected) return;
-            }
-            scrolled = !scrolled;
-            line(o, derived ? `<span class="good">FeedScreen ran ${runs} time.</span> showTop only flipped once.` : `<span class="bad">FeedScreen ran ${runs} times,</span> once per index change. Children skipped.`);
-            busy = false;
-          }
-          async function insert() {
-            if (busy) return; busy = true;
-            const adding = rows.length < 4;
-            if (adding) {
-              const it = { id: uid++, t: pool[next++ % pool.length] };
-              items = [it, ...items];
-              say(o, `${hl(`items.add(0, Item("${it.t}"))`)}`);
-            } else {
-              items = items.slice(1);
-              say(o, `${hl('items.removeAt(0)')}`);
-            }
-            hit(screen); skip(search); hit(list);
-            if (keyed) {
-              if (adding) { const r = Object.assign(mk('', 2), { item: items[0] }); rows.unshift(r); paintRows(); flash(r, 'pf-new'); rows.slice(1).forEach(skip); }
-              else { const r = rows.shift(); r.el.classList.add('leave'); await sleep(420); paintRows(); rows.forEach(skip); }
-              line(o, '<span class="good">With keys,</span> rows follow their item. Only the inserted or removed row changed.');
-            } else {
-              const old = rows.length;
-              if (adding) { const r = Object.assign(mk('', 2), { item: items[old] }); rows.push(r); }
-              else { const r = rows.pop(); r.el.classList.add('leave'); await sleep(420); }
-              rows.forEach((r, i) => { r.item = items[i]; });
-              paintRows();
-              rows.forEach((r, i) => { if (i < (adding ? old : rows.length)) hit(r); else flash(r, 'pf-new'); });
-              line(o, '<span class="bad">Without keys,</span> rows are tied to positions. Every row got a different item and recomposed.');
-            }
-            await sleep(500); busy = false;
-          }
-          const tImm = toggle('pf-imm', '<code>@Immutable</code> Item', false, v => { imm = v; paintReport(); replay(report, 'pop-soft'); });
-          const tDer = toggle('pf-derived', '<code>derivedStateOf</code>', false, v => { derived = v; });
-          const tKey = toggle('pf-key', '<code>key = { it.id }</code>', false, v => { keyed = v; });
-          paintRows(); paintReport();
-          root.append(
-            h('div', { class: 'controls' }, tImm.el, tDer.el, tKey.el),
-            insp,
-            h('div', { class: 'controls' },
-              act('Type in search', type),
-              act('Scroll the list', scroll),
-              act('Insert or remove top item', insert)),
-            o,
-            h('span', { class: 'pf-label' }, 'build/compose_compiler: <module>-classes.txt and <module>-composables.txt'),
-            report);
-          el.append(root);
-        },
+        docs: [['Profile your app performance', 'https://developer.android.com/studio/profile'], ['Flame chart', 'https://developer.android.com/studio/profile/chart-glossary/flame-chart']],
       },
 
       // 6 ─────────────────────────────────────────────
       {
-        id: 'startup',
-        title: 'App startup',
-        tagline: 'Cold, warm, hot, and everything Application.onCreate makes the user wait for.',
-        level: 'intermediate',
+        id: 'compose-perf',
+        title: 'Compose performance',
+        tagline: 'Help Compose skip the parts of the screen that didn’t change.',
+        goals: ['Tell a stable parameter from an unstable one', 'Explain why a new list on every run stops Compose from skipping', 'Check a fix with Layout Inspector’s recomposition counts'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A <em>cold start</em> begins with no process: the system forks one, creates your <code>Application</code>, runs <code>Application.onCreate</code>, then creates the Activity and draws the first frame. A <em>warm start</em> reuses a live process but creates the Activity again, for example after the user backed out of it. A <em>hot start</em> just brings an existing Activity back to the front. Optimize cold start first, because it is the slowest and includes the other two. Android vitals flags cold starts of 5 seconds or more as excessive.</p>
-<p>Everything in <code>Application.onCreate</code> runs before the first frame, on the main thread. Analytics, ads, crash reporting, image loaders and databases all like to init there. Ask for each one: does the first screen need it? If not, create it lazily with <code>by lazy</code>, inject it lazily, or start it on a background thread after the first frame. The App Startup library lets libraries share one <code>ContentProvider</code> and declare init order, instead of each library adding its own provider.</p>
-<p>Show a branded screen right away with the SplashScreen API. Call <code>installSplashScreen()</code> before <code>super.onCreate()</code>, and keep it up only while you load what the first screen truly needs. Logcat prints <code>Displayed</code> with the time to initial display. Call <code>reportFullyDrawn()</code> when real content is shown, and Macrobenchmark from the Testing track reports both.</p>`,
-        code: `class MainActivity : ComponentActivity() {
-    private val viewModel: MainViewModel by viewModels()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        val splash = installSplashScreen()        // before super.onCreate
-        super.onCreate(savedInstanceState)
-        splash.setKeepOnScreenCondition { !viewModel.isReady.value }
-        setContent { NewsApp(viewModel) }
-    }
-}
-
-class NewsApplication : Application() {
-    // Built the first time a screen asks for it, not during startup
-    val imageLoader by lazy { ImageLoader.Builder(this).crossfade(true).build() }
-
-    override fun onCreate() {
-        super.onCreate()
-        CrashReporter.install(this)               // must catch startup crashes: keep it
-    }
-}
-
-// App Startup: run an initializer from one shared ContentProvider
-class AnalyticsInitializer : Initializer<Analytics> {
-    override fun create(context: Context): Analytics = Analytics.start(context.applicationContext)
-    override fun dependencies(): List<Class<out Initializer<*>>> = emptyList()
-}`,
-        remember: 'Cold start pays for Application.onCreate. Init only what the first frame needs, the rest lazily.',
-        terms: [
-          { term: 'Warm start', def: 'A launch where the app process is still alive but the Activity has to be created again.' },
-          { term: 'Hot start', def: 'A launch where the Activity is still in memory and only needs to come back to the foreground.' },
-          { term: 'TTID', def: 'Time to initial display: from launch until the first frame, printed in Logcat as Displayed.' },
-          { term: 'App Startup', def: 'A Jetpack library that runs component initializers from one shared ContentProvider in a declared order.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Show the splash screen and keep it until the first data is ready.', code: 'override fun onCreate(savedInstanceState: Bundle?) {\n    val splash = [[installSplashScreen]]()\n    super.onCreate(savedInstanceState)\n    splash.[[setKeepOnScreenCondition]] { !viewModel.isReady.value }\n    setContent { NewsApp(viewModel) }\n}', why: '<code>installSplashScreen()</code> must run before <code>super.onCreate()</code>. The keep condition is checked before each frame, so it should be a cheap state read.' },
-          { type: 'bug', prompt: 'Cold start takes 3 seconds on a slow network. Tap the line.', code: 'class NewsApplication : Application() {\n    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)\n    private val remoteConfig by lazy { RemoteConfigClient(this) }\n    override fun onCreate() {\n        super.onCreate()\n        CrashReporter.install(this)\n        runBlocking { remoteConfig.fetchAndActivate() }\n    }\n}', bug: 6, fix: '        appScope.launch { remoteConfig.fetchAndActivate() }', why: '<code>runBlocking</code> holds the main thread in <code>Application.onCreate</code> until the network answers, so no Activity can start. Fetch in the background and use cached values for the first screen.' },
-        ],
-        quiz: [
-          { q: 'The process is alive but the user backed out of the Activity. Next launch is a…', options: ['Cold start', 'Warm start', 'Hot start'], a: 1, why: 'The process survives, so the Application is reused, but the Activity is created again.' },
-          { q: 'Where must <code>installSplashScreen()</code> be called?', options: ['Before <code>super.onCreate()</code>', 'In <code>onResume()</code>', 'In <code>Application.onCreate()</code>'], a: 0, why: 'It has to set up the splash theme before the Activity inflates its own.' },
-          { q: 'Which belongs in <code>Application.onCreate</code>?', options: ['Crash reporting', 'Downloading the feed', 'Building every repository'], a: 0, why: 'Crash reporting must catch startup crashes. Everything else can wait for the screen that needs it.' },
-          { q: 'In a cold start, which order does your code run in on the main thread?', options: ['attachBaseContext(), every ContentProvider.onCreate(), Application.onCreate(), then the Activity and its first frame', 'Application.onCreate(), every ContentProvider.onCreate(), attachBaseContext(), then the Activity', 'attachBaseContext(), Application.onCreate(), the Activity, then every ContentProvider.onCreate()'], a: 0, why: 'Providers, App Startup’s included, run after attachBaseContext and before Application.onCreate. All of it happens before the Activity draws.' },
-          { q: 'Your app has a sync service declared with <code>android:process=":sync"</code>. Analytics shows two app starts every time it syncs. Why?', options: ['App Startup runs each initializer twice', 'The :sync process creates its own Application, so onCreate runs your startup again there', 'Hilt builds a second copy of every singleton on sync'], a: 1, why: 'Every process runs Application.onCreate. Check which process you are in and set up only what that process needs.' },
-        ],
-        deeper: startupDepth.deeper,
-        underHood: startupDepth.underHood,
-        mistakes: startupDepth.mistakes,
+<p>The Recipes screen shows the cooking timer at the top, and below it the list of quick recipes. Layout Inspector’s recomposition counts show something odd: <code>RecipeList</code> runs again every second, in step with the timer, although the recipes never change. With a short list nobody notices. With a long one, every second costs a frame.</p>
+<p>You know <em>skipping</em> from the Compose track: when a composable runs again, Compose skips a child whose inputs didn’t change. How it decides “didn’t change” depends on the type. A <em>stable</em> type is one where Compose can tell: <code>Int</code>, <code>String</code>, <code>Boolean</code>, and a data class like <code>Recipe</code>, whose properties are all <code>val</code>s of stable types. Compose compares those with <code>==</code>.</p>
+<p>An <em>unstable</em> type is one Compose can’t be sure about, like a <code>List</code> (the object behind it might be a mutable list that changes in place) or a class with a <code>var</code> property. Compose compares those with <code>===</code>: the very same object means skip, a new object means run again, even if its contents are equal. Since Kotlin 2.0.20 this rule is on by default, under the name <em>strong skipping</em>.</p>
+<p>Now the odd count makes sense. <code>quickRecipes(state.recipes, 20)</code> in the composable’s body runs <code>filter</code>, which makes a new <code>List</code> every time, so <code>RecipeList</code> gets a new object every second. Make the list once instead, in the ViewModel: add a <code>quickRecipes</code> property to <code>RecipesUiState</code> and fill it from <code>getQuickRecipes()</code>. The same object then comes back until the recipes really change, and Compose skips <code>RecipeList</code>.</p>`,
         visual(el) {
+          const tick = (t, list, tone) => [
+            { lane: 0, from: t, to: t + 0.85, label: 'ran', tone: 'accent' },
+            { lane: 1, from: t, to: t + 0.85, label: 'ran', tone: 'accent' },
+            { lane: 2, from: t, to: t + 0.85, label: list, tone },
+          ];
           Lab.ui.timeline(el, {
-            lanes: ['main: eager', 'main: lazy', 'bg: lazy'],
-            span: 1100,
+            lanes: ['RecipesContent', 'Timer text', 'RecipeList'],
+            span: 5,
+            unit: 's',
             predict: {
-              q: '<code>Application.onCreate</code> initializes analytics, ads and an image loader. When can the first frame appear?',
-              options: ['Only after all three finish: they run on the main thread before any Activity', 'Right away: SDKs always start in the background', 'Before them: the Activity is created first'],
+              q: 'Every second, <code>RecipesContent</code> runs <code>quickRecipes(state.recipes, 20)</code> and passes the result to <code>RecipeList</code>. The recipes didn’t change. Does <code>RecipeList</code> run again?',
+              options: ['Yes: it gets a new <code>List</code> object each time', 'No: the contents are the same', 'Only every other second'],
               a: 0,
-              why: 'In a cold start the main thread runs <code>Application.onCreate</code> first, then the Activity, then the first frame. Every init in between delays it.',
+              why: 'A <code>List</code> is unstable, so Compose compares it with <code>===</code>. <code>quickRecipes</code> calls <code>filter</code>, which makes a new object every time, so the check fails.',
             },
             frames: [
-              { now: 0, say: 'A cold start. The user taps the icon and there is no process yet. The top lane is the main thread with every SDK in <code>onCreate</code>, the others the same app made lazy.' },
-              { bars: [{ lane: 0, from: 0, to: 180, tone: 'muted', label: 'fork' }], say: 'The system forks a process and binds your <code>Application</code>.' },
-              { bars: [{ lane: 0, from: 180, to: 400, tone: 'warm', label: 'Analytics' }, { lane: 0, from: 400, to: 640, tone: 'warm', label: 'Ads' }, { lane: 0, from: 640, to: 730, tone: 'warm', label: 'Images' }, { lane: 0, from: 730, to: 780, tone: 'err', label: 'Crash' }], say: '<code>Application.onCreate</code> initializes four SDKs, one after another, on the main thread. No Activity exists yet.' },
-              { bars: [{ lane: 0, from: 780, to: 1000, label: 'Activity' }, { lane: 0, from: 1000, to: 1080, tone: 'ok', label: 'frame' }], marks: [{ at: 1080, label: '1080 ms', tone: 'err' }], say: 'Then <code>onCreate</code> and <code>setContent</code>, then the first frame. Logcat prints <code>Displayed … +1s80ms</code>.' },
-              { bars: [{ lane: 1, from: 0, to: 180, tone: 'muted', label: 'fork' }, { lane: 1, from: 180, to: 230, tone: 'err', label: 'Crash' }], say: 'Same app, made lazy. Only the crash reporter stays in <code>onCreate</code>: it has to catch crashes during startup.' },
-              { bars: [{ lane: 1, from: 230, to: 450, label: 'Activity' }, { lane: 1, from: 450, to: 530, tone: 'ok', label: 'frame' }], marks: [{ at: 530, label: '530 ms', tone: 'ok' }], say: 'The Activity starts much sooner, and the first frame lands at 530 ms.' },
-              { bars: [{ lane: 2, from: 530, to: 750, tone: 'warm', label: 'Analytics' }, { lane: 2, from: 760, to: 850, tone: 'warm', label: 'Images' }], say: 'After the first frame, analytics starts on a background thread, and the image loader is built <code>by lazy</code> when a screen first needs it. Ads wait until a screen shows one.' },
+              { now: 0, say: 'One row per composable, five seconds of the timer ticking. Each bar is one run, or one skip.' },
+              { bars: tick(0, 'ran', 'err'), say: 'The timer ticks. <code>RecipesContent</code> reads the seconds, so it runs again, and <code>quickRecipes(...)</code> makes a new list. <code>RecipeList</code> gets a new object: it runs too.' },
+              { bars: tick(1, 'ran', 'err'), say: 'Next second, the same. Same recipes, new <code>List</code> object, <code>===</code> is false. Layout Inspector: 2 recompositions, 0 skips.' },
+              { bars: tick(2, 'skipped', 'muted'), say: 'After the fix, <code>RecipesContent</code> passes <code>state.quickRecipes</code>, made once by the ViewModel. It is the very same object as last time, so Compose skips <code>RecipeList</code>.' },
+              { bars: tick(3, 'skipped', 'muted'), say: 'Only the parts that read the seconds run. Layout Inspector now counts skips for <code>RecipeList</code>.' },
+              { bars: tick(4, 'ran', 'ok'), marks: [{ at: 4, label: 'new recipe', tone: 'ok' }], say: 'Lin adds a recipe. The ViewModel makes a new list, and <code>RecipeList</code> runs: exactly when it should.' },
             ],
           });
         },
+        code: `// Before: a new List every run, so RecipeList can never be skipped
+// (onRefresh and onFavorite left out)
+@Composable
+fun RecipesContent(state: RecipesUiState, seconds: Int) {
+    Column {
+        Text("Timer: $seconds s")                     // changes every second
+        RecipeList(quickRecipes(state.recipes, 20))   // new List object each time
+    }
+}
+
+// After: the UI state gets a quickRecipes property...
+data class RecipesUiState(
+    val isLoading: Boolean = true,
+    val recipes: List<Recipe> = listOf(),
+    val quickRecipes: List<Recipe> = listOf(),        // new
+    val isRefreshing: Boolean = false,
+    val note: String = "",
+)
+
+// ...which RecipesViewModel fills once per change, in init:
+viewModelScope.launch {
+    getQuickRecipes().collect { list ->
+        _uiState.value = _uiState.value.copy(quickRecipes = list)
+    }
+}
+
+@Composable
+fun RecipesContent(state: RecipesUiState, seconds: Int) {
+    Column {
+        Text("Timer: $seconds s")
+        RecipeList(state.quickRecipes)    // the same object until the recipes change: skipped
+    }
+}
+
+// Stable: every property is a val of a stable type, so Compose compares with ==
+data class Recipe(val id: Int, val title: String, val minutes: Int, val favorite: Boolean = false)`,
+        remember: 'Stable values are compared with ==, unstable ones like List with ===. Don’t build a new list in a composable’s body.',
+        terms: [
+          { term: 'stable', def: 'A type where Compose can tell whether the value changed, like <code>Int</code>, <code>String</code> or a data class of <code>val</code>s of stable types. Compared with <code>==</code>.' },
+          { term: 'unstable', def: 'A type Compose can’t be sure about, like <code>List</code> or a class with a <code>var</code>. Compared with <code>===</code>: only the same object is skipped.' },
+          { term: 'strong skipping', def: 'The rule, on since Kotlin 2.0.20, that lets Compose skip a composable with unstable parameters when it gets the very same objects.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make <code>Note</code> stable: every property must be read-only.', code: `data class Note(
+    [[val]] id: Int,
+    [[val]] text: String,
+)`, why: 'A data class whose properties are all <code>val</code>s of stable types, like <code>Int</code> and <code>String</code>, is stable. A <code>var</code> makes it unstable.' },
+          { type: 'bug', prompt: 'The UI state already has <code>quickRecipes</code>, filled by the ViewModel, yet <code>RecipeList</code> runs every second. Tap the line to change.', code: `@Composable
+fun RecipesContent(state: RecipesUiState, seconds: Int) {
+    Column {
+        Text("Timer: $seconds s")
+        RecipeList(state.quickRecipes.toList())
+    }
+}`, bug: 4, fix: '        RecipeList(state.quickRecipes)', why: '<code>toList()</code> makes a new <code>List</code> every second, even with the same recipes in it. <code>state.quickRecipes</code> on its own is the same object until the recipes change, so Compose can skip.' },
+        ],
+        quiz: [
+          { q: 'Which parameter type does Compose treat as stable?', options: ['<code>String</code>', '<code>List&lt;Recipe&gt;</code>', 'A class with a <code>var</code> property'], a: 0, why: '<code>String</code> can’t change, so Compose can compare it with <code>==</code>. The other two are unstable.' },
+          { q: 'With strong skipping, how does Compose compare an unstable parameter like a <code>List</code>?', options: ['Are the contents equal (<code>==</code>)?', 'It never compares and always runs', 'Is it the very same object (<code>===</code>)?'], a: 2, why: 'For unstable types only the same object counts as unchanged. A new list with equal contents still runs.' },
+          { q: 'How do you check that <code>RecipeList</code> is skipped now?', options: ['Layout Inspector’s recomposition counts', 'Logcat with <code>tag:Choreographer</code>', 'LeakCanary'], a: 0, why: 'Layout Inspector counts, per composable, how often it ran and how often it was skipped.' },
+        ],
+        docs: [['Stability in Compose', 'https://developer.android.com/develop/ui/compose/performance/stability'], ['Strong skipping mode', 'https://developer.android.com/develop/ui/compose/performance/stability/strongskipping']],
       },
 
       // 7 ─────────────────────────────────────────────
       {
+        id: 'startup',
+        title: 'Startup time',
+        tagline: 'Show the first screen sooner by doing less before it.',
+        goals: ['Tell a cold, a warm and a hot start apart', 'Read the time to the first screen from Logcat', 'Move work the first screen doesn’t need out of startup with <code>by lazy</code>'],
+        level: 'intermediate', introduces: [],
+        body: `
+<p>Lin taps the Recipes icon and looks at an empty screen for almost two seconds. People notice that every single time they open the app, and Android vitals counts slow starts too. Most of that wait is code you wrote, running before the first screen.</p>
+<p>There are three kinds of start. A <em>cold start</em> begins with no process: Android starts one, creates <code>RecipesApp</code> and runs its <code>onCreate</code>, then creates <code>MainActivity</code>, runs its <code>onCreate</code> with <code>setContent</code>, and draws the first frame. In a <em>warm start</em> the process is still running, but the Activity has to be created again. In a <em>hot start</em> the Activity is still there and comes back to the front, as after Home. A cold start does the most, so measure that one.</p>
+<p>Everything <code>RecipesApp</code> does when it is made, in its properties and in its <code>onCreate</code>, runs on the main thread before any screen can be drawn. For each line, ask: does the first screen need this? If not, create it later. You know <code>by lazy</code> from <code>val container by lazy { ... }</code> in the dependency injection lesson: it builds the value the first time someone reads it. A crash logger is one thing that must stay, so it can catch crashes during startup.</p>
+<p>To measure, end the app’s process first: <code>adb shell am force-stop com.example.recipes</code> (<code>am</code> is the device’s activity manager). Then tap the icon. Android writes a line like <code>Displayed com.example.recipes/.MainActivity for user 0: +1s650ms</code>: the time from the tap to the first frame. Android writes it, not your app, so clear <code>package:mine</code> and type <code>tag:ActivityTaskManager</code> in Logcat’s query box.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['before', 'after', 'Default'],
+            span: 2400,
+            unit: 'ms',
+            predict: {
+              q: '<code>RecipesApp</code> has <code>val searchIndex = SearchIndex.build()</code>, which takes 800 ms. When can the first screen appear?',
+              options: ['Only after the index is built', 'Right away: <code>RecipesApp</code> is made in the background', 'Before it: the Activity comes first'],
+              a: 0,
+              why: 'In a cold start the main thread makes <code>RecipesApp</code> and runs its <code>onCreate</code> first, then the Activity, then the first frame. Every line in between delays the screen.',
+            },
+            frames: [
+              { now: 0, say: 'Two cold starts of Recipes. The top row is the main thread with the search index built during startup. The middle row is the main thread after the fix, and the bottom row a background thread of <code>Dispatchers.Default</code>.' },
+              { bars: [{ lane: 0, from: 0, to: 300, label: 'process', tone: 'muted' }], say: 'Lin taps the icon. There is no process yet, so Android starts one. Your code hasn’t run.' },
+              { bars: [{ lane: 0, from: 300, to: 1100, label: 'search index', tone: 'err' }, { lane: 0, from: 1100, to: 1200, label: 'crash log', tone: 'accent' }], say: 'Making <code>RecipesApp</code> builds the search index (800 ms), then its <code>onCreate</code> sets up the crash logger. No screen exists yet.' },
+              { bars: [{ lane: 0, from: 1200, to: 1650, label: 'MainActivity', tone: 'ok' }], marks: [{ at: 1650, label: '+1s650ms', tone: 'err' }], say: 'Then <code>MainActivity.onCreate</code> and the first frame. Logcat: <code>Displayed … +1s650ms</code>.' },
+              { bars: [{ lane: 1, from: 0, to: 300, label: 'process', tone: 'muted' }, { lane: 1, from: 300, to: 400, label: 'crash log', tone: 'accent' }, { lane: 1, from: 400, to: 850, label: 'MainActivity', tone: 'ok' }], marks: [{ at: 850, label: '+850ms', tone: 'ok' }], say: 'The same app with <code>val searchIndex by lazy { ... }</code>. Only the crash logger stays in <code>onCreate</code>, and the first frame comes at 850 ms.' },
+              { bars: [{ lane: 2, from: 1500, to: 2300, label: 'search index', tone: 'warm' }], say: 'The index is built the first time something reads it: when Lin opens Search, inside the search’s <code>withContext(Dispatchers.Default)</code>, off the main thread. If she never searches, it is never built.' },
+            ],
+          });
+        },
+        code: `@HiltAndroidApp
+class RecipesApp : Application() {
+    // Before: val searchIndex = SearchIndex.build(), built during startup (800 ms)
+    // Now built the first time something reads it:
+    val searchIndex by lazy { SearchIndex.build() }
+
+    override fun onCreate() {
+        super.onCreate()
+        CrashLog.install(this)   // stays: it must catch crashes during startup
+    }
+}
+
+// Logcat, tag:ActivityTaskManager, cold start before and after:
+// Displayed com.example.recipes/.MainActivity for user 0: +1s650ms
+// Displayed com.example.recipes/.MainActivity for user 0: +850ms`,
+        remember: 'Measure a cold start with the Displayed line, and move everything the first screen doesn’t need out of startup.',
+        terms: [
+          { term: 'cold start', def: 'Starting the app with no process: Android starts one, runs <code>Application.onCreate</code>, then the Activity, then the first frame.' },
+          { term: 'warm start', def: 'The process is still running, but the Activity has to be created again.' },
+          { term: 'hot start', def: 'The Activity is still there and comes back to the front, as after pressing Home.' },
+          { term: 'Displayed', def: 'The Logcat line from <code>ActivityTaskManager</code> with the time from the tap to the first frame, such as <code>+850ms</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Show only Android’s startup lines in Logcat.', code: `tag:[[ActivityTaskManager]]`, why: 'The <code>Displayed</code> line comes from Android, under the tag <code>ActivityTaskManager</code>. Clear <code>package:mine</code> first, or it is hidden.' },
+          { type: 'bug', prompt: 'Lin wants the search index built only when Search first needs it, not during startup. Tap the line to change.', code: `class RecipesApp : Application() {
+    val searchIndex = SearchIndex.build()
+
+    override fun onCreate() {
+        super.onCreate()
+        CrashLog.install(this)
+    }
+}`, bug: 1, fix: '    val searchIndex by lazy { SearchIndex.build() }', why: 'A plain <code>val</code> is built as soon as <code>RecipesApp</code> is made, before any screen. <code>by lazy</code> waits until something reads it.' },
+        ],
+        quiz: [
+          { q: 'Lin presses Home, then taps the Recipes icon again. Which kind of start is that?', options: ['Cold', 'Warm', 'Hot'], a: 2, why: 'The process and the Activity are still there. The Activity only comes back to the front.' },
+          { q: 'In a cold start, what runs before the first frame?', options: ['Only <code>MainActivity.onCreate</code>', 'Nothing: the screen comes first', '<code>RecipesApp.onCreate</code>, then <code>MainActivity.onCreate</code>'], a: 2, why: 'Android makes the app’s <code>Application</code> object before any Activity, all on the main thread.' },
+          { q: 'Why doesn’t <code>package:mine</code> show the <code>Displayed</code> line?', options: ['It only appears in release builds', 'Android writes it, not your app', 'It appears only after 5 seconds'], a: 1, why: '<code>package:mine</code> keeps your app’s lines. The startup time is measured and written by the system.' },
+        ],
+        docs: [['App startup time', 'https://developer.android.com/topic/performance/vitals/launch-time']],
+      },
+
+      // 8 ─────────────────────────────────────────────
+      {
         id: 'r8',
         title: 'Shrinking with R8',
-        tagline: 'Smaller, faster release builds, and the keep rules that stop them breaking.',
-        level: 'advanced',
+        tagline: 'Turn on R8 for the release build, and try that build on your own phone.',
+        goals: ['Turn on R8 for the release build', 'Explain what R8 removes and renames', 'Build the release app, install it on your phone and keep its <code>mapping.txt</code>'],
+        level: 'intermediate', introduces: ['buildTypes', 'assembleRelease', 'signingConfig', 'signingConfigs', 'getByName'],
         body: `
-<p>With <code>isMinifyEnabled = true</code>, R8 replaces D8 as the step that turns your release build's bytecode into DEX, and it does three jobs. <em>Shrinking</em> starts from entry points like your Activities and removes every class, method and field nothing reaches. <em>Optimization</em> inlines small methods, removes dead branches and merges classes. <em>Obfuscation</em> renames what is left to short names like <code>a.b</code>. Apps often lose a large part of their code size, and they start a little faster too. <code>isShrinkResources = true</code> then removes resources the remaining code no longer uses.</p>
-<p>R8 can only see direct references. Code reached through reflection looks unused, so it gets removed or renamed. Typical victims: classes loaded with <code>Class.forName</code>, JSON models that Gson reads by field name, and classes named in XML or native code. Tell R8 about them with keep rules in <code>proguard-rules.pro</code>. Keep as little as you can. Prefer libraries that ship their own rules, and codegen-based ones like kotlinx.serialization, which need almost none.</p>
-<p>Renamed code makes crash stack traces unreadable: <code>at a.b.c(r8-map-id-5f2c1a:12)</code>. Every build writes <code>mapping.txt</code>, which maps the short names back. Keep it for every release. Upload it to Play Console and Crashlytics, or run <code>retrace</code> on a trace by hand. Always test the minified release build before shipping, because keep rule bugs only show up there.</p>`,
+<p>Recipes is almost ready for users, and most of its download is library code it never calls. Every unused class still has to be downloaded, installed and loaded. One setting lets a tool called <em>R8</em> cut that away, and it usually makes the app a little faster too.</p>
+<p>A <em>build type</em> is one way of building the app. You met the two in the main-thread lesson: <code>debug</code> is the one Run installs, <code>release</code> is the one for users. Inside <code>buildTypes { release { } }</code> in <code>app/build.gradle.kts</code>, <code>optimization { enable = true }</code> turns R8 on. R8 starts from what Android can start, such as the activities in the manifest, and follows every call. Classes and functions nothing reaches are removed: that is <em>shrinking</em>. It also simplifies the code that is left, renames it to short names like <code>a.b</code>, and drops unused resources.</p>
+<p>R8 runs only in the release build, so try that build on a phone before you ship. <code>./gradlew assembleRelease</code> builds it. A phone only installs an app that is <em>signed</em>: it carries a digital signature that shows who made it. Run signs the debug build with a <em>debug key</em> that Android Studio made for you. Without a signing setting, the release build comes out as <code>app-release-unsigned.apk</code>, which a phone won’t install. To try it on your own phone, add <code>signingConfig = signingConfigs.getByName("debug")</code> inside <code>release { }</code>. Never use the debug key for the version you publish: that one gets a key of your own.</p>
+<p>Renamed code makes a stack trace hard to read. Every release build writes <code>mapping.txt</code>, under <code>app/build/outputs/mapping/release/</code>, with every old name and its new one. Android Studio’s Logcat uses it to show the real names, and Google Play gets it with the app when you publish, for crashes from your users. Each build overwrites it, so keep a copy for every version you publish.</p>`,
+        visual(el) {
+          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const classes = s => '<pre class="ui-out">' + esc(s) + '</pre>';
+          const before = 'MainActivity\nRecipeRepository\nOldExporter  (unused)\n… many library classes';
+          const after = 'MainActivity  (same name)\na.b  ← RecipeRepository\n(removed)  OldExporter\n… far fewer library classes';
+          Lab.ui.terminal(el, {
+            panelTitle: 'Classes in the release app',
+            predict: {
+              q: 'Nothing in Recipes calls <code>OldExporter</code> any more. The release build has <code>optimization { enable = true }</code>. What does R8 do with that class?',
+              options: ['Removes it', 'Keeps it with its full name', 'Stops the build with an error'],
+              a: 0,
+              why: 'R8 follows every call from what Android can start. A class it never reaches is removed, and the build carries on.',
+            },
+            frames: [
+              { panel: classes(before), say: 'Recipes before R8 (this panel is a summary, not real output). Every class is in the app with its full name, even <code>OldExporter</code>.' },
+              { cmd: './gradlew assembleRelease', out: 'BUILD SUCCESSFUL in 52s', panel: classes(after), say: 'R8 runs as part of the release build. <code>OldExporter</code> is gone, <code>RecipeRepository</code> is now called <code>a.b</code>, and <code>MainActivity</code> keeps its name, because the manifest names it.' },
+              { cmd: 'adb install app/build/outputs/apk/release/app-release.apk', out: 'Performing Streamed Install\nSuccess', say: 'With <code>signingConfig = signingConfigs.getByName("debug")</code> in <code>release { }</code>, the release app is signed with the debug key, so Lin’s test phone installs it.' },
+              { cmd: 'cat app/build/outputs/mapping/release/mapping.txt', out: 'com.example.recipes.data.RecipeRepository -&gt; a.b:', say: 'One line from <code>mapping.txt</code> (the rest is cut): the old name, an arrow, the new name. Lin keeps a copy of this file for the version she publishes.' },
+              { say: 'She opens every screen of the release app. Only this build is shrunk, so only this build can show what R8 broke. The next lesson is about exactly that.' },
+            ],
+          });
+        },
         code: `// app/build.gradle.kts
 android {
     buildTypes {
         release {
-            isMinifyEnabled = true      // R8: shrink, optimize, obfuscate code
-            isShrinkResources = true    // then drop resources nothing uses
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            optimization {
+                enable = true   // R8: shrink, simplify and rename the release build
+            }
+            // Only to try the release build on your own phone, never for the version you publish:
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
 
-// proguard-rules.pro
-// Gson reads these fields by name, so keep the class and its members
-// -keep class com.example.api.UserDto { *; }
-// Loaded with Class.forName("com.example.plugins.PdfPlugin")
-// -keep class com.example.plugins.PdfPlugin { <init>(); }
-// Keep line numbers so retrace can point at the right line
-// -keepattributes SourceFile,LineNumberTable
+// Terminal: build the release app, then install it
+// ./gradlew assembleRelease
+// adb install app/build/outputs/apk/release/app-release.apk
 
-// Output: app/build/outputs/mapping/release/mapping.txt`,
-        remember: 'R8 removes and renames what it can’t see used. Reflection needs keep rules. Keep mapping.txt for every release.',
+// After the build, app/build/outputs/mapping/release/mapping.txt has lines like:
+// com.example.recipes.data.RecipeRepository -> a.b:`,
+        remember: 'optimization { enable = true } in release turns on R8. Try the signed release build on a phone, and keep its mapping.txt.',
         terms: [
-          { term: 'R8', def: 'The Android compiler step that shrinks, optimizes and obfuscates release code while converting it to DEX.' },
-          { term: 'Keep rule', def: 'A line in a ProGuard rules file that stops R8 from removing or renaming the classes and members it matches.' },
-          { term: 'Obfuscation', def: 'Renaming classes, methods and fields to short meaningless names to make code smaller and harder to read.' },
-          { term: 'mapping.txt', def: 'The file R8 writes for each build that maps obfuscated names back to the original ones, used to retrace crash stack traces.' },
+          { term: 'R8', def: 'The tool that shrinks, simplifies and renames the code of a release build when <code>optimization { enable = true }</code> is set.' },
+          { term: 'build type', def: 'One way of building the app: <code>debug</code> for Run, <code>release</code> for users. Set in <code>buildTypes { }</code>.' },
+          { term: 'shrinking', def: 'Removing the classes and functions that nothing in the app reaches.' },
+          { term: 'signing', def: 'Adding a digital signature that shows who made the app. A phone installs only signed apps.' },
+          { term: 'mapping.txt', def: 'The file each release build writes with every old name and its new short name, used to read crashes. Overwritten by every build.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Turn on code and resource shrinking for release.', code: 'release {\n    is[[MinifyEnabled]] = true\n    is[[ShrinkResources]] = true\n    proguardFiles(\n        getDefaultProguardFile("proguard-android-optimize.txt"),\n        "proguard-rules.pro"\n    )\n}', why: '<code>isMinifyEnabled</code> runs R8 on code. <code>isShrinkResources</code> needs it, because it removes resources only after code shrinking shows they are unused.' },
-          { type: 'bug', prompt: 'After enabling R8, every user’s name parses as <code>null</code>. Tap the rule that is wrong.', code: '# proguard-rules.pro\n# Gson reads UserDto fields by name\n-keep class com.example.api.UserDto\n-keepattributes Signature\n-keepattributes SourceFile,LineNumberTable', bug: 2, fix: '-keep class com.example.api.UserDto { *; }', why: 'Without a member block, <code>-keep class</code> keeps only the class name. R8 still renames <code>name</code> to <code>a</code>, so Gson finds no matching JSON key. <code>{ *; }</code> keeps the fields too.' },
+          { type: 'blank', prompt: 'Sign the release build with the debug key, to try it on your own phone.', code: `release {
+    [[signingConfig]] = signingConfigs.getByName("[[debug]]")
+}`, why: '<code>signingConfigs.getByName("debug")</code> is the debug key that Run already uses. Fine for your test phone, never for the version you publish.' },
+          { type: 'bug', prompt: 'Lin wants R8 on the build that users get, but her release app is as big as before. Tap the line to change.', code: `android {
+    buildTypes {
+        debug {
+            optimization {
+                enable = true
+            }
+        }
+    }
+}`, bug: 2, fix: '        release {', why: 'The settings inside <code>debug { }</code> only change what Run builds. R8 belongs in <code>release { }</code>.' },
         ],
         quiz: [
-          { q: 'What is <code>mapping.txt</code> for?', options: ['Turning obfuscated stack traces back into real names', 'Listing which resources to keep', 'Signing the APK'], a: 0, why: 'It maps <code>a.b.c</code> back to your class and method names. Upload it with every release.' },
-          { q: 'Why does a class loaded with <code>Class.forName</code> need a keep rule?', options: ['R8 can’t see reflection, so the class looks unused and is removed', 'Reflection only works in debug', 'Keep rules make reflection faster'], a: 0, why: 'R8 follows direct references from entry points. A class name in a string is invisible to it.' },
-          { q: 'Which build should you test before shipping?', options: ['The minified release build', 'Debug is enough', 'Only unit tests'], a: 0, why: 'Missing keep rules only break the R8-processed build. Debug builds never run R8.' },
-          { q: 'Gson parses a JSON response fine in debug. In the minified release build every field comes back null or default. What happened?', options: ['Gson does not run on release builds', 'R8 renamed the fields, so the JSON names no longer match them', 'isShrinkResources removed the JSON from the APK'], a: 1, why: 'Gson reads fields by name through reflection, which R8 cannot see. Keep the model’s field names, or use a codegen library like kotlinx.serialization.' },
-          { q: 'A class is used normally, so R8 keeps it anyway. You only need its field names to stay unrenamed. Which option is the narrowest fit?', options: ['<code>-keep class Model { *; }</code>', '<code>-keepclassmembers class Model { &lt;fields&gt;; }</code>', '<code>-keepclasseswithmembers class Model { &lt;fields&gt;; }</code>'], a: 1, why: '-keepclassmembers keeps the listed members only if the class survives shrinking anyway. -keep would also force the class itself to stay.' },
+          { q: 'What does R8 remove?', options: ['Classes and functions that nothing in the app reaches', 'Every comment and blank line', 'All library code'], a: 0, why: 'It follows every call from what Android can start. What it never reaches is removed.' },
+          { q: 'The release build has no signing setting. What happens when you try to install it on a phone?', options: ['It installs like the debug build', 'The phone won’t install <code>app-release-unsigned.apk</code>', 'Gradle signs it with your own key'], a: 1, why: 'A phone installs only signed apps. For a test phone, sign the release build with the debug key.' },
+          { q: 'A crash from the release app shows names like <code>a.b</code>. What turns them back into real names?', options: ['<code>mapping.txt</code> from that build', 'A lint baseline', 'LeakCanary'], a: 0, why: 'Every release build writes <code>mapping.txt</code>. Android Studio and the Play Console use it to show the original names. Keep a copy, because the next build overwrites it.' },
         ],
-        deeper: r8Depth.deeper,
-        underHood: r8Depth.underHood,
-        mistakes: r8Depth.mistakes,
+        docs: [['Enable app optimization', 'https://developer.android.com/topic/performance/app-optimization/enable-app-optimization'], ['Sign your app', 'https://developer.android.com/studio/publish/app-signing']],
+      },
+
+      // 9 ─────────────────────────────────────────────
+      {
+        id: 'keep-rules',
+        title: 'Keep rules',
+        tagline: 'Tell R8 to leave alone the code it can’t see you use.',
+        goals: ['Explain why a class found by its name looks unused to R8', 'Recognise the crash this causes in the release app', 'Write a narrow keep rule in a <code>.keep</code> file'],
+        level: 'intermediate', introduces: ['forName', 'ClassNotFoundException'],
+        body: `
+<p>Recipes can now import recipes. Lin picks <b>Web</b> or <b>Pdf</b> in a menu, and the app finds the class that does the work by its name: <code>Class.forName("com.example.recipes.importers.\${source}Importer")</code>. <code>Class.forName</code> takes a full class name as text, the package plus the class, and gives back that class while the app runs. Here the name is put together from what Lin picked, so the full text only exists while the app runs.</p>
+<p>R8 only follows code that names a class directly. Nothing names <code>WebImporter</code> that way, so to R8 it looks unused, and it is removed. The build still succeeds. In the debug build everything works too, because R8 doesn’t run there. Only the release app crashes, with <code>ClassNotFoundException</code>, when Lin picks Web. That is why you try the release build before you ship.</p>
+<p>A <em>keep rule</em> tells R8 what to leave alone. Keep rules go in a file ending in <code>.keep</code> in the folder <code>app/src/main/keepRules/</code>. <code>-keep class com.example.recipes.importers.WebImporter { &lt;init&gt;(); }</code> keeps the class, with its name, and its constructor, which keep rules write as <code>&lt;init&gt;()</code>. The app needs the constructor to make an importer from the class. Keep only what is found by name: everything you keep stays big and keeps its long name. Libraries such as Retrofit and kotlinx.serialization bring their own keep rules, so you rarely need many.</p>`,
         visual(el) {
-          const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const dex = s => '<pre class="ui-out">' + esc(s) + '</pre>';
-          const before = 'com.example.news.ArticleRepository\ncom.example.news.LegacyExporter\ncom.example.news.PluginLoader\ncom.example.plugins.PdfPlugin\n… 1,240 more classes';
-          const after = 'a.a       ← ArticleRepository\na.d       ← PluginLoader\n(removed)   LegacyExporter\n(removed)   PdfPlugin\n… 410 more classes';
-          const fixed = 'a.a       ← ArticleRepository\na.d       ← PluginLoader\n(removed)   LegacyExporter\ncom.example.plugins.PdfPlugin   kept\n… 410 more classes';
           Lab.ui.terminal(el, {
-            panelTitle: 'Classes in the release DEX',
             predict: {
-              q: '<code>PluginLoader</code> loads <code>PdfPlugin</code> only with <code>Class.forName(...)</code>, and there is no keep rule. When does that show up?',
-              options: ['As an R8 error during the build', 'At run time, when the release app reaches that code', 'Never: R8 follows <code>Class.forName</code>'],
+              q: '<code>WebImporter</code> is only found with <code>Class.forName</code>, from a name put together while the app runs. There is no keep rule. When do you find out?',
+              options: ['The release build fails', 'The release app crashes when it reaches that code', 'Never: R8 works out the name'],
               a: 1,
-              why: 'R8 only sees direct references. It removes the class without a warning, the build succeeds, and the minified app crashes when the reflection runs.',
+              why: 'R8 can’t know a name that only exists while the app runs. It removes the class without a warning, the build passes, and the app crashes when <code>Class.forName</code> runs.',
             },
             frames: [
-              { panel: dex(before), say: 'The release build has <code>isMinifyEnabled = true</code>. Before R8, every class keeps its full name.' },
-              { cmd: './gradlew :app:assembleRelease', out: '&gt; Task :app:minifyReleaseWithR8\n\nBUILD SUCCESSFUL in 52s', panel: dex(after), say: 'R8 starts from entry points and removes what nothing reaches, then renames the rest. <code>PdfPlugin</code> is only named in a string, so it looks unused.' },
-              { cmd: 'adb install -r app/build/outputs/apk/release/app-release.apk', out: 'Performing Streamed Install\nSuccess', say: 'The build passed. Install the minified APK, the one users will get.' },
-              { cmd: 'adb logcat -v brief -s AndroidRuntime', out: 'E/AndroidRuntime( 4211): FATAL EXCEPTION: main\nE/AndroidRuntime( 4211): java.lang.ClassNotFoundException: com.example.plugins.PdfPlugin\nE/AndroidRuntime( 4211): \tat java.lang.Class.forName(Class.java:536)\nE/AndroidRuntime( 4211): \tat a.d.a(r8-map-id-5f2c1a:12)', say: 'Open a PDF and it crashes. The class is gone, and your own frame is renamed to <code>a.d.a</code>.' },
-              { cmd: 'retrace app/build/outputs/mapping/release/mapping.txt crash.txt', out: 'java.lang.ClassNotFoundException: com.example.plugins.PdfPlugin\n\tat java.lang.Class.forName(Class.java:536)\n\tat com.example.news.PluginLoader.load(PluginLoader.kt:12)', say: '<code>retrace</code> reads <code>mapping.txt</code> and turns <code>a.d.a</code> back into <code>PluginLoader.load</code>, line 12.' },
-              { cmd: "echo '-keep class com.example.plugins.PdfPlugin { <init>(); }' >> app/proguard-rules.pro", say: 'Add the narrowest keep rule: the class and the constructor that reflection calls.' },
-              { cmd: './gradlew :app:assembleRelease', out: '&gt; Task :app:minifyReleaseWithR8\n\nBUILD SUCCESSFUL in 49s', panel: dex(fixed), say: 'Build again. <code>PdfPlugin</code> stays, with its real name, so <code>Class.forName</code> can find it. Everything else is still shrunk.' },
+              { say: 'Recipes with <code>optimization { enable = true }</code> in the release build type. Import finds <code>WebImporter</code> and <code>PdfImporter</code> only by their names, with <code>Class.forName</code>.' },
+              { cmd: './gradlew assembleRelease', out: 'BUILD SUCCESSFUL in 52s', say: 'R8 runs as part of the release build. Nothing in the code names the importers directly, so R8 removes them. The build passes.' },
+              { cmd: 'adb logcat -v tag -s AndroidRuntime', out: 'E/AndroidRuntime: FATAL EXCEPTION: main\nE/AndroidRuntime: Process: com.example.recipes, PID: 4211\nE/AndroidRuntime: java.lang.ClassNotFoundException: com.example.recipes.importers.WebImporter', say: 'On her test phone, Lin picks Web in the Import menu, and the release app crashes. (<code>-v tag</code> prints only the level and tag before each line; the lines after these are cut.) The class is gone.' },
+              { cmd: 'cat app/src/main/keepRules/importers.keep', out: '-keep class com.example.recipes.importers.WebImporter { &lt;init&gt;(); }\n-keep class com.example.recipes.importers.PdfImporter { &lt;init&gt;(); }', say: 'She adds a new file in <code>keepRules</code> with one rule per importer: keep this class, its name and its constructor. As narrow as possible.' },
+              { cmd: './gradlew assembleRelease', out: 'BUILD SUCCESSFUL in 49s', say: 'Build again. Both importers stay, with their real names, so <code>Class.forName</code> finds them. Everything else is still shrunk and renamed.' },
+              { say: 'Import works in the release app, from the web and from a PDF.' },
             ],
           });
         },
+        code: `// In the Import screen. source is what Lin picked in the menu: "Web" or "Pdf"
+val importerClass = Class.forName("com.example.recipes.importers.\${source}Importer")
+// ...then the app makes an importer from that class, with its constructor
+
+// The release app without a keep rule (adb logcat -v tag -s AndroidRuntime):
+// E/AndroidRuntime: java.lang.ClassNotFoundException: com.example.recipes.importers.WebImporter
+
+// app/src/main/keepRules/importers.keep
+// -keep class com.example.recipes.importers.WebImporter { <init>(); }
+// -keep class com.example.recipes.importers.PdfImporter { <init>(); }`,
+        play: `class WebImporter
+class PdfImporter
+
+fun main() {
+    val source = "Web"                          // what Lin picked
+    val found = Class.forName("\${source}Importer")
+    println("Found \${found.name}")
+    // Change "Web" to "Pdf", then to "Csv". Which one crashes, and why?
+}
+// Found WebImporter`,
+        remember: 'R8 removes what nothing names directly. Keep each class that is only found by its name, with a narrow rule in a .keep file.',
+        terms: [
+          { term: 'Class.forName', def: 'Finds a class from its full name, given as text, while the app runs.' },
+          { term: 'ClassNotFoundException', def: 'The crash when <code>Class.forName</code> gets a name of a class that isn’t in the app, for example because R8 removed it.' },
+          { term: 'keep rule', def: 'A line that tells R8 to leave something alone, such as <code>-keep class com.example.Foo { &lt;init&gt;(); }</code>, in a <code>.keep</code> file.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Recipes gets a <code>CsvImporter</code>, also found with <code>Class.forName</code>. Keep it and its constructor.', code: `-[[keep]] class com.example.recipes.importers.CsvImporter { <[[init]]>(); }`, why: '<code>-keep class</code> keeps the class and its name. <code>&lt;init&gt;()</code> is how a keep rule writes the constructor.' },
+          { type: 'bug', prompt: 'In the play, Lin picks Csv and the program crashes with <code>ClassNotFoundException: CsvImporter</code>. Tap the line to change so it finds an importer that exists.', code: `class WebImporter
+class PdfImporter
+
+fun main() {
+    val source = "Csv"
+    val found = Class.forName("\${source}Importer")
+    println("Found \${found.name}")
+}`, bug: 4, fix: '    val source = "Pdf"', why: 'There is no class named <code>CsvImporter</code>, so <code>Class.forName</code> throws. <code>"Pdf"</code> makes the name <code>PdfImporter</code>, which exists. In the release app, a class R8 removed is missing in the same way.' },
+        ],
+        quiz: [
+          { q: 'Why does <code>WebImporter</code> need a keep rule?', options: ['<code>Class.forName</code> is slow', 'Keep rules make the class faster', 'Its name is put together while the app runs, so R8 can’t see that it is used'], a: 2, why: 'R8 only follows code that names the class directly. Without a rule it removes the class.' },
+          { q: 'Without the keep rule, where does the crash show up?', options: ['In the release app, when it reaches <code>Class.forName</code>', 'In the debug build too', 'During <code>./gradlew assembleRelease</code>'], a: 0, why: 'R8 runs only in the release build, and it removes the class without a warning. The build passes; the app crashes later.' },
+          { q: 'In <code>-keep class com.example.recipes.importers.WebImporter { &lt;init&gt;(); }</code>, what is <code>&lt;init&gt;()</code>?', options: ['The class’s <code>init { }</code> block', 'The constructor', 'The first function in the class'], a: 1, why: 'Keep rules write the constructor as <code>&lt;init&gt;()</code>. The app needs it to make an importer from the class.' },
+        ],
+        docs: [['Add keep rules', 'https://developer.android.com/topic/performance/app-optimization/add-keep-rules']],
       },
     ],
   });

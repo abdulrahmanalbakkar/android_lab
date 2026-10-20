@@ -1,2733 +1,1342 @@
-/* Testing and quality track. Same shape as tracks/kotlin.js.
-   Demo styles live in the css string below; every class is prefixed tst-. */
+/* Testing track.
+   Same shape as tracks/kotlin.js. Demos use the visual kit (Lab.ui); any track CSS goes in the css string, every class
+   starting with tst-. */
 (() => {
-  const { h, sleep, hl, replay } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const fmt = ms => (ms >= 1000 ? (ms / 1000).toFixed(ms >= 10000 ? 0 : 1) + ' s' : Math.round(ms) + ' ms');
-
-  const css = `
-.tst-label { font: 600 0.74rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.tst-sub { display: grid; gap: 10px; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); min-width: 0; }
-.tst-row { min-width: 0; }
-.tst-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; min-width: 0; }
-
-/* 1 pyramid */
-.tst-pyr { display: grid; gap: 6px; justify-items: center; padding: 16px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
-.tst-layer { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; width: var(--tst-w); max-width: 100%; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); font: 600 0.86rem var(--mono); cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.15s; }
-.tst-layer:hover { transform: translateY(-1px); }
-.tst-layer small { color: var(--muted); font-weight: 500; }
-.tst-layer.tst-unit { border-color: var(--ok); }
-.tst-layer.tst-inst { border-color: var(--warm); }
-.tst-layer.tst-ui { border-color: var(--accent); }
-.tst-layer[aria-pressed="true"].tst-unit { background: var(--ok-soft); }
-.tst-layer[aria-pressed="true"].tst-inst { background: var(--warm-soft); }
-.tst-layer[aria-pressed="true"].tst-ui { background: var(--accent-soft); }
-.tst-info { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; align-items: center; font-size: 0.92rem; }
-.tst-dots { display: inline-flex; gap: 5px; }
-.tst-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--sunk); border: 1px solid var(--line); }
-.tst-dots i.on { background: var(--ink); border-color: var(--ink); }
-.bar.tst-c-unit { background: var(--ok); min-width: 3px; }
-.bar.tst-c-inst { background: var(--warm); min-width: 3px; }
-.bar.tst-c-ui { background: var(--accent); min-width: 3px; }
-.tst-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 500 0.82rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.tst-stats b { color: var(--ink); }
-
-/* 2 fakes */
-.tst-wire { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; padding: 16px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
-.tst-gwt { display: grid; gap: 4px; padding: 10px; border-radius: 12px; background: var(--code-bg); min-width: 0; max-width: 100%; overflow-x: auto; }
-.tst-gwt-line { font: 500 0.8rem/1.5 var(--mono); color: var(--code-ink); white-space: pre; padding: 3px 8px; border-radius: 6px; border-left: 3px solid transparent; transition: background 0.2s, border-color 0.2s; }
-.tst-gwt-line.tst-on { background: rgba(255, 212, 121, 0.14); border-left-color: var(--t-f); }
-.tst-gwt-line.tst-pass { background: rgba(158, 223, 165, 0.15); border-left-color: var(--t-k); }
-.tst-gwt-line.tst-fail { background: rgba(255, 138, 155, 0.18); border-left-color: var(--t-e); }
-.tst-link { font: 700 1.3rem var(--mono); color: var(--muted); transition: color 0.2s; }
-.tst-link.tst-busy { color: var(--accent); animation: pulse 0.6s infinite; }
-.tst-dep { display: grid; gap: 6px; justify-items: center; min-width: 170px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--warm); background: var(--surface); font: 500 0.84rem var(--mono); text-align: center; transition: border-color 0.25s; }
-.tst-dep.tst-fake { border-color: var(--ok); }
-.tst-dep b { font-weight: 700; }
-.tst-dep small { color: var(--muted); }
-.tst-hist { display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; align-items: center; }
-.tst-res { font: 600 0.78rem var(--mono); padding: 4px 9px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-variant-numeric: tabular-nums; }
-.tst-res.tst-bad { background: var(--err-soft); color: var(--err); }
-
-/* 3 coroutines */
-.tst-clocks { display: flex; flex-wrap: wrap; gap: 10px 22px; font: 500 0.8rem var(--mono); color: var(--muted); }
-.tst-clocks b { display: inline-block; min-width: 4.5em; font: 700 1.05rem var(--mono); color: var(--warm); font-variant-numeric: tabular-nums; }
-.tst-clocks b.tst-vt { color: var(--accent); }
-.tst-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: 0.5; }
-.tst-queue { display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; align-items: center; padding: 8px; border-radius: 10px; border: 2px dashed var(--line); background: var(--surface); }
-.tst-queue:empty::before { content: "queue empty"; font: 500 0.8rem var(--mono); color: var(--muted); }
-.tst-task { font: 600 0.78rem var(--mono); padding: 5px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); }
-.tst-state { font: 600 0.9rem var(--mono); }
-.tst-state .chip { height: 36px; font-size: 0.86rem; }
-
-/* 4 flows */
-.tst-lane { display: grid; gap: 8px; align-content: start; padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; min-height: 150px; }
-.tst-lane.tst-live { border-color: var(--accent); }
-.tst-evs { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; min-height: 40px; }
-.tst-ev { font: 600 0.78rem var(--mono); padding: 5px 10px; border-radius: 8px; background: var(--surface); border: 2px solid var(--ink); color: var(--ink); white-space: nowrap; }
-.tst-ev.tst-ok { border-color: var(--ok); background: var(--ok-soft); }
-.tst-ev.tst-no { border-color: var(--err); background: var(--err-soft); }
-.tst-ev.tst-gone { opacity: 0.4; text-decoration: line-through; }
-.tst-script { display: grid; gap: 3px; background: var(--code-bg); border-radius: 14px; padding: 12px; overflow-x: auto; min-width: 0; }
-.tst-script .tst-gwt-line.tst-skip { opacity: 0.35; text-decoration: line-through; }
-.tst-timer { font: 700 0.85rem var(--mono); color: var(--warm); font-variant-numeric: tabular-nums; }
-
-/* 5 compose */
-.tst-split { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; min-width: 0; }
-.phone.tst-phone { justify-content: flex-start; align-items: stretch; gap: 8px; height: 330px; width: 210px; position: relative; padding: 16px 12px; }
-.tst-ph-title { font: 800 1.2rem var(--display); border-radius: 6px; }
-.tst-ph-count { color: var(--muted); font-size: 0.86rem; border-radius: 6px; }
-.tst-ph-list { display: grid; gap: 5px; padding: 4px; border-radius: 8px; overflow: hidden; max-height: 150px; }
-.tst-ph-row { padding: 6px 9px; border-radius: 8px; background: var(--sunk); font-size: 0.84rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tst-ph-btn { justify-self: start; align-self: start; padding: 7px 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 0.86rem; }
-.tst-ph-fab { position: absolute; right: 12px; bottom: 12px; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: var(--warm-soft); color: var(--warm); font: 800 1.5rem var(--display); }
-.tst-ph-toast { position: absolute; left: 12px; bottom: 64px; right: 12px; padding: 6px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font-size: 0.8rem; text-align: center; }
-.tst-hit { outline: 3px solid var(--warm); outline-offset: 2px; }
-.tst-tree { display: grid; gap: 2px; background: var(--code-bg); border-radius: 14px; padding: 12px; overflow-x: auto; min-width: 0; }
-.tst-node { font: 500 0.8rem/1.5 var(--mono); color: var(--code-ink); white-space: pre; padding: 2px 8px; border-radius: 6px; border: 1px solid transparent; }
-.tst-node .tst-prop { color: var(--t-c); }
-.tst-node.tst-match { background: rgba(255, 212, 121, 0.16); border-color: var(--t-f); }
-
-/* 6 baseline profiles */
-.tst-methods { width: min(100%, 480px); display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; padding: 10px; border-radius: 12px; background: var(--bg); border: 1px dashed var(--line); }
-.tst-m { aspect-ratio: 1; border-radius: 3px; border: 1.5px dashed var(--muted); transition: background 0.25s, border-color 0.25s; }
-.tst-m.tst-jit { background: var(--warm); border: 1.5px solid var(--warm); }
-.tst-m.tst-aot { background: var(--accent); border: 1.5px solid var(--accent); }
-.tst-m.tst-cold { opacity: 0.35; }
-.bar.tst-sys { background: var(--muted); opacity: 0.55; }
-.bar.tst-interp { background: repeating-linear-gradient(45deg, var(--warm) 0 5px, transparent 5px 9px); }
-.bar.tst-aotbar { background: var(--accent); }
-.tst-frame { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--ok); border-radius: 2px; }
-.legend i.tst-sq { width: 12px; height: 12px; border-radius: 3px; }
-
-@media (max-width: 720px) { .tst-split { grid-template-columns: minmax(0, 1fr); } .tst-split .phone { justify-self: center; } }
-@media (max-width: 520px) { .tst-methods { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
-
-/* depth steps */
-.phone.tst-dz-phone { width: 170px; height: 220px; justify-content: flex-start; align-items: stretch; gap: 10px; padding: 16px 12px; }
-.tst-dz-panel { border-radius: 10px; background: var(--accent-soft); border: 2px solid var(--accent); box-sizing: border-box; min-height: 0; transition: none; }
-.tst-dz-panel[style*="height: 0px"], .tst-dz-panel[style*="height:0"] { border-width: 0; }
-/* depth pass 2 */
-.tst-d2-row { display: grid; grid-template-columns: minmax(0, 15em) auto minmax(0, 1fr); gap: 6px 10px; align-items: center; padding: 6px; border-radius: 10px; border: 2px solid transparent; min-width: 0; transition: border-color 0.2s, background 0.2s; }
-.tst-d2-row .cmd, .tst-d2-wrap .cmd { text-align: left; white-space: normal; }
-.tst-d2-file { font: 600 0.74rem var(--mono); color: var(--muted); }
-.tst-d2-row.tst-d2-best { border-color: var(--ok); background: var(--ok-soft); }
-.tst-d2-msg { font-size: 0.88rem; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
-.tst-d2-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
-.tst-d2-dex { display: grid; gap: 4px; min-width: 0; }
-.tst-d2-pages { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
-.tst-d2-pg { aspect-ratio: 1; border-radius: 3px; background: var(--sunk); border: 1px solid var(--line); min-width: 0; transition: background 0.2s; }
-.tst-d2-pg.tst-d2-start { background: var(--warm-soft); border-color: var(--warm); }
-.tst-d2-pg.tst-d2-hit { background: var(--warm); }
-.tst-d2-ms { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 600 0.74rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
-@media (max-width: 560px) {
-  .tst-d2-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .tst-d2-msg { grid-column: 1 / -1; }
-  .tst-d2-pages { grid-template-columns: repeat(15, minmax(0, 1fr)); }
-}
-
-/* promoted: robolectric */
-.tst-wrap .cmd { white-space: normal; text-align: left; overflow-wrap: anywhere; }
-.tst-rb-loop { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; min-width: 0; }
-.tst-rb-box { display: grid; gap: 6px; align-content: start; min-height: 96px; padding: 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
-.tst-rb-box.tst-rb-hot { border-color: var(--accent); }
-.tst-rb-msg { font: 600 0.76rem var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--warm-soft); color: var(--ink); border: 1px solid var(--warm); overflow-wrap: anywhere; }
-.tst-rb-msg.tst-rb-ran { background: var(--ok-soft); border-color: var(--ok); }
-.tst-rb-arrow { font: 700 1.2rem var(--mono); color: var(--muted); }
-@media (max-width: 520px) { .tst-rb-loop { grid-template-columns: minmax(0, 1fr); } .tst-rb-arrow { transform: rotate(90deg); justify-self: center; } }
-
-/* promoted: mockk */
-.tst-mk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; min-width: 0; }
-.tst-mk-calls { display: grid; gap: 4px; min-height: 64px; align-content: start; }
-.tst-mk-call { font: 600 0.78rem var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--sunk); color: var(--ink); overflow-wrap: anywhere; }
-.tst-mk-call.tst-mk-boom { background: var(--err-soft); color: var(--err); }
-.tst-mk-slot { font: 600 0.8rem var(--mono); color: var(--accent); overflow-wrap: anywhere; }
-
-/* promoted: screenshots */
-.tst-ss-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; min-width: 0; }
-.tst-ss-pane { display: grid; gap: 6px; min-width: 0; }
-.tst-ss-img { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 1px; padding: 4px; border-radius: 10px; background: var(--line); border: 1px solid var(--line); }
-.tst-ss-px { aspect-ratio: 1; background: var(--surface); min-width: 0; }
-.tst-ss-px.k-card { background: var(--sunk); }
-.tst-ss-px.k-title { background: var(--ink); }
-.tst-ss-px.k-text { background: var(--muted); }
-.tst-ss-px.k-btn { background: var(--accent); }
-.tst-ss-px.k-btn2 { background: var(--warm); }
-.tst-ss-px.k-aa { background: var(--line); }
-.tst-ss-img.tst-ss-diff .tst-ss-px { background: var(--surface); }
-.tst-ss-img.tst-ss-diff .tst-ss-px.tst-ss-hit { background: var(--err); }
-.tst-ss-img.tst-ss-empty .tst-ss-px { background: var(--sunk); opacity: 0.5; }
-
-/* promoted: hilt testing */
-.tst-hl-tests { display: grid; gap: 8px; min-width: 0; }
-.tst-hl-row { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); min-width: 0; }
-.tst-hl-row b { font: 600 0.8rem var(--mono); overflow-wrap: anywhere; }
-.tst-hl-bind { font: 600 0.76rem var(--mono); padding: 3px 8px; border-radius: 999px; justify-self: start; overflow-wrap: anywhere; }
-.tst-hl-bind.tst-hl-real { background: var(--err-soft); color: var(--err); }
-.tst-hl-bind.tst-hl-fake { background: var(--ok-soft); color: var(--ok); }
-.tst-hl-comp { font: 600 0.72rem var(--mono); color: var(--muted); }
-@media (max-width: 520px) { .tst-hl-row { grid-template-columns: minmax(0, 1fr) auto; } .tst-hl-row b { grid-column: 1 / -1; } }
-`;
-
-  // ─── Depth: Go deeper, under the hood, common mistakes ─────────────────
-  const pressed = (buttons, keys, k) => buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(keys[i] === k)));
-  const gwt = lines => lines.map(src => h('div', { class: 'tst-gwt-line', html: hl(src) }));
-  const mark = (rows, i, cls) => rows.forEach((r, j) => { r.classList.remove('tst-on', 'tst-pass', 'tst-fail'); if (j === i && cls) r.classList.add(cls); });
-
-  const coroutinesDepth = {
-    deeper: [
-      {
-        title: 'Step the clock: advanceTimeBy and runCurrent',
-        body: `<p><code>advanceUntilIdle()</code> runs everything. To test what happens <em>between</em> events, step the clock yourself. <code>advanceTimeBy(ms)</code> moves virtual time forward and runs every task scheduled <em>before</em> the new time. A task scheduled exactly at the new time is not run yet. <code>runCurrent()</code> runs the tasks due right now.</p>
-<p>The ViewModel below waits 300 ms after the last keystroke before it searches. Step the clock and see when the search runs.</p>`,
-        code: `@Test fun searchesOnlyAfterTypingStops() = runTest {
-    vm.onQuery("kot")
-    advanceTimeBy(300)               // clock at 300, search not run yet
-    assertEquals(SearchState.Idle, vm.state.value)
-    runCurrent()                     // runs the task due at 300
-    assertEquals(SearchState.Results(12), vm.state.value)
-}`,
-        visual(el) {
-          const END = 1200;
-          let now = 0, tasks = [], state = 'Idle', typed = 0;
-          const WORDS = ['kot', 'kotl', 'kotli', 'kotlin'];
-          const cursor = h('span', { class: 'cursor', style: 'left:0' });
-          const track = h('div', { class: 'lane-track' }, cursor);
-          const clock = h('b', { class: 'tst-vt' }, '0 ms');
-          const stateSlot = h('span', {}, h('span', { class: 'chip' }, 'Idle'));
-          const queueEl = h('div', { class: 'tst-queue', 'aria-label': 'Scheduled tasks' });
-          const o = out();
-          const pct = t => (Math.min(t, END) / END) * 100 + '%';
-          const setState = s => { state = s; stateSlot.replaceChildren(h('span', { class: 'chip drop-in' }, s)); };
-          function paint() {
-            cursor.style.left = pct(now);
-            clock.textContent = now + ' ms';
-            track.querySelectorAll('.tst-tick').forEach(x => x.remove());
-            tasks.forEach(t => track.append(h('span', { class: 'tst-tick', style: `left:${pct(t.at)};opacity:1;background:var(--accent);width:3px` })));
-            queueEl.replaceChildren(...tasks.map(t => h('span', { class: 'tst-task drop-in' }, `search("${t.q}") at ${t.at} ms`)));
-          }
-          const run = list => list.forEach(t => { tasks = tasks.filter(x => x !== t); setState(`Results(${t.q.length * 3})`); });
-          function reset() { now = 0; tasks = []; typed = 0; setState('Idle'); paint(); }
-          reset();
-          o.innerHTML = 'Type a query to schedule a debounced search, then step the clock.';
-          el.append(
-            h('div', { class: 'controls' },
-              cmd('vm.onQuery(…)', () => {
-                if (now > END - 300) { replay(track, 'shake'); say(o, '<span class="muted">end of the timeline:</span> press Reset to start again.'); return; }
-                const q = WORDS[Math.min(typed++, WORDS.length - 1)];
-                const had = tasks.length;
-                tasks = [{ at: now + 300, q }];
-                if (state !== 'Idle' && !had) setState('Idle');
-                paint(); replay(queueEl, 'pop-soft');
-                say(o, had ? `typed "${q}": the old search was cancelled and a new one is due at ${now + 300} ms.` : `typed "${q}": a search is due at ${now + 300} ms.`);
-              }),
-              cmd('advanceTimeBy(100)', () => step(100)),
-              cmd('advanceTimeBy(300)', () => step(300)),
-              cmd('runCurrent()', () => {
-                const due = tasks.filter(t => t.at <= now);
-                if (!due.length) { replay(queueEl, 'shake'); say(o, `${hl('runCurrent()')} <span class="muted">// nothing is due at ${now} ms</span>`); return; }
-                run(due); paint(); replay(stateSlot, 'pop');
-                say(o, `${hl('runCurrent()')} <span class="good">// ran the search due at ${now} ms</span>`);
-              }),
-              cmd('advanceUntilIdle()', () => {
-                if (!tasks.length) { say(o, `${hl('advanceUntilIdle()')} <span class="muted">// nothing queued, clock stays at ${now} ms</span>`); return; }
-                now = Math.max(now, ...tasks.map(t => t.at)); run([...tasks]); paint(); replay(clock, 'pop');
-                say(o, `${hl('advanceUntilIdle()')} <span class="good">// jumped to ${now} ms and ran everything</span>`);
-              })),
-            h('div', { class: 'tst-clocks' }, h('span', {}, 'currentTime ', clock), h('span', { class: 'tst-state' }, 'vm.state ', stateSlot)),
-            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'virtual time'), track)),
-            queueEl, o);
-          function step(ms) {
-            if (now + ms > END) { replay(track, 'shake'); say(o, '<span class="muted">end of the timeline:</span> press Reset to start again.'); return; }
-            const target = now + ms;
-            const ran = tasks.filter(t => t.at < target);
-            const atEdge = tasks.filter(t => t.at === target);
-            now = target; run(ran); paint(); replay(clock, 'pop');
-            if (ran.length) say(o, `${hl(`advanceTimeBy(${ms})`)} <span class="good">// the search was due before ${now} ms, so it ran</span>`);
-            else if (atEdge.length) say(o, `${hl(`advanceTimeBy(${ms})`)} <span class="bad">// clock is at ${now} ms, but the task due exactly at ${now} has not run. Call runCurrent().</span>`);
-            else say(o, `${hl(`advanceTimeBy(${ms})`)} <span class="muted">// clock at ${now} ms, nothing due yet</span>`);
-          }
-        },
-      },
-      {
-        title: 'Endless coroutines go in backgroundScope',
-        body: `<p><code>runTest</code> waits for every coroutine launched in its scope before it returns. A collector of a <code>StateFlow</code> or a ticker never finishes, so the test hangs until <code>runTest</code>’s timeout fails it.</p>
-<p>Launch such collectors in <code>backgroundScope</code> instead. It shares the same scheduler, and <code>runTest</code> cancels it when the test body ends.</p>`,
-        visual(el) {
-          const MODES = [['plain', 'launch { … }'], ['bg', 'backgroundScope.launch { … }']];
-          let mode = 'plain', busy = false;
-          const script = h('div', { class: 'tst-script' });
-          const timer = h('span', { class: 'bar wait', style: 'left:0;width:0;opacity:0' });
-          const child = h('span', { class: 'chip' }, 'not started');
-          const verdict = h('span', { class: 'tst-res' }, 'not run');
-          const o = out();
-          let rows = [];
-          const modeBtns = MODES.map(([k, src]) => cmd(src, () => { if (busy) return; mode = k; paint(); say(o, `<span class="muted">mode:</span> the collector is launched with ${hl(src)}. Run the test.`); }));
-          function paint() {
-            rows = gwt([
-              '@Test fun countsTicks() = runTest {',
-              '    val seen = mutableListOf<Int>()',
-              mode === 'bg' ? '    backgroundScope.launch { vm.ticks.toList(seen) }' : '    launch { vm.ticks.toList(seen) }',
-              '    advanceTimeBy(3_000); runCurrent()',
-              '    assertEquals(listOf(1, 2, 3), seen)',
-              '}   // runTest now waits for its children',
-            ]);
-            script.replaceChildren(...rows);
-            pressed(modeBtns, MODES.map(m => m[0]), mode);
-            timer.style.width = '0'; timer.style.opacity = '0'; child.textContent = 'not started'; child.className = 'chip';
-            verdict.textContent = 'not run'; verdict.className = 'tst-res';
-          }
-          async function runIt() {
-            if (busy) return; busy = true;
-            const live = () => el.isConnected;
-            try {
-              paint();
-              for (let i = 0; i < rows.length; i++) {
-                mark(rows, i, 'tst-on');
-                if (i === 2) { child.textContent = 'collecting'; child.className = 'chip bool drop-in'; }
-                await sleep(420); if (!live()) return;
-              }
-              mark(rows, 4, 'tst-pass'); await sleep(300); if (!live()) return;
-              if (mode === 'bg') {
-                child.textContent = 'cancelled'; child.className = 'chip drop-in';
-                verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
-                mark(rows, 5, 'tst-pass');
-                say(o, '<span class="good">passed:</span> the body finished, runTest cancelled backgroundScope, and the endless collector went with it.');
-                return;
-              }
-              mark(rows, 5, 'tst-on');
-              say(o, 'The body is done, but one child is still collecting. runTest waits for it…');
-              const T = 2600, t0 = performance.now();
-              timer.style.opacity = '1';
-              while (performance.now() - t0 < T) {
-                timer.style.width = ((performance.now() - t0) / T) * 100 + '%';
-                await sleep(50); if (!live()) return;
-              }
-              timer.style.width = '100%';
-              mark(rows, 5, 'tst-fail');
-              verdict.textContent = 'FAILED: timed out'; verdict.className = 'tst-res tst-bad drop-in';
-              say(o, '<span class="bad">failed:</span> the collector never completes, so runTest timed out even though every assertion passed.');
-            } finally { busy = false; }
-          }
-          paint();
-          o.innerHTML = 'The ViewModel exposes an endless flow of ticks. Run the test both ways.';
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            script,
-            h('div', { class: 'tst-clocks' }, h('span', { class: 'tst-state' }, 'collector ', child), verdict),
-            h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'waiting (sped up)'), h('div', { class: 'lane-track' }, timer))),
-            h('div', { class: 'controls' }, cmd('run the test', runIt)),
-            o);
-        },
-      },
-    ],
-    underHood: {
-      body: `<p><code>runTest</code> creates a <code>TestScope</code> whose dispatcher is a <code>StandardTestDispatcher</code> with a <code>TestCoroutineScheduler</code>. If <code>Dispatchers.Main</code> was replaced with a test dispatcher, <code>runTest</code> reuses that dispatcher’s scheduler, so both share one clock.</p>
-<p>The scheduler is a queue of tasks ordered by virtual time. When a coroutine on a test dispatcher calls <code>delay(1_000)</code>, nothing sleeps. The dispatcher adds “resume this continuation” to the queue at <code>currentTime + 1_000</code>, and the coroutine suspends. Advancing takes tasks off the queue in time order, sets <code>currentTime</code> to each task’s time and runs it.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'runBlocking with real delays',
-        bad: `@Test fun retries() = runBlocking {
-    vm.sync()
-    delay(3_500)          // the test really waits
-    assertEquals(SyncState.Done, vm.state.value)
-}`,
-        good: `@Test fun retries() = runTest {
-    vm.sync()
-    advanceUntilIdle()    // skips the delays
-    assertEquals(SyncState.Done, vm.state.value)
-}`,
-        why: 'Real waits make the suite slow and flaky, since 3.5 s may not be enough on a busy CI machine. <code>runTest</code> runs the same code on virtual time.',
-      },
-      {
-        title: 'setMain without resetMain',
-        bad: `@Before fun setUp() {
-    Dispatchers.setMain(StandardTestDispatcher())
-}`,
-        good: `@Before fun setUp() {
-    Dispatchers.setMain(StandardTestDispatcher())
-}
-@After fun tearDown() {
-    Dispatchers.resetMain()
-}`,
-        why: 'The replaced Main stays installed for the next test in the same process, with a scheduler that test does not control. A JUnit rule that does both is the safest form.',
-      },
-      {
-        title: 'Code under test on a hard-coded dispatcher',
-        bad: `class SyncViewModel(private val repo: SyncRepository) : ViewModel() {
-    fun sync() = viewModelScope.launch(Dispatchers.IO) {
-        _state.value = repo.sync()
-    }
-}`,
-        good: `class SyncViewModel(
-    private val repo: SyncRepository,
-    private val io: CoroutineDispatcher = Dispatchers.IO,
-) : ViewModel() {
-    fun sync() = viewModelScope.launch(io) { _state.value = repo.sync() }
-}`,
-        why: 'Work on the real IO pool runs on other threads, outside the test scheduler. <code>advanceUntilIdle()</code> can return before it finishes. Inject the dispatcher and pass a test one.',
-      },
-    ],
-  };
-
-  const composeUiDepth = {
-    deeper: [
-      {
-        title: 'What the rule waits for, and what it does not',
-        body: `<p>Before every finder and assertion, the rule waits until Compose is idle: no pending recomposition, layout or draw, and no running animations. It also waits for registered Espresso idling resources.</p>
-<p>It does not know about your own background work. If the ViewModel loads on a real <code>Dispatchers.IO</code> thread, the assertion can run before the data arrives. Use a fake repository that returns at once, or wait for the result with <code>waitUntil</code>. Never <code>Thread.sleep</code>.</p>`,
-        code: `rule.onNodeWithText("Refresh").performClick()
-rule.waitUntil(timeoutMillis = 5_000) {
-    rule.onAllNodesWithText("Ada Lovelace").fetchSemanticsNodes().isNotEmpty()
-}
-rule.onNodeWithText("Ada Lovelace").assertIsDisplayed()`,
-        visual(el) {
-          const MODES = [['fake', 'fake repo, returns at once'], ['io', 'real repo on Dispatchers.IO'], ['wait', 'real repo + waitUntil']];
-          let mode = 'fake', busy = false;
-          const script = h('div', { class: 'tst-script' });
-          const screen = h('div', { class: 'tst-ph-count' }, 'Loading…');
-          const bar = h('span', { class: 'bar run', style: 'left:0;width:0' });
-          const verdict = h('span', { class: 'tst-res' }, 'not run');
-          const o = out();
-          let rows = [];
-          const modeBtns = MODES.map(([k, label]) => h('button', { class: 'cmd', onclick() { if (busy) return; mode = k; paint(); say(o, `<span class="muted">setup:</span> ${label}. Run the test.`); } }, label));
-          function paint() {
-            const lines = ['rule.setContent { ProfileScreen(vm) }', 'rule.onNodeWithText("Refresh").performClick()'];
-            if (mode === 'wait') lines.push('rule.waitUntilExactlyOneExists(hasText("Ada Lovelace"))');
-            lines.push('rule.onNodeWithText("Ada Lovelace").assertIsDisplayed()');
-            rows = gwt(lines); script.replaceChildren(...rows);
-            pressed(modeBtns, MODES.map(m => m[0]), mode);
-            screen.textContent = 'Profile'; screen.className = 'tst-ph-count';
-            bar.style.width = '0'; verdict.textContent = 'not run'; verdict.className = 'tst-res';
-          }
-          async function runIt() {
-            if (busy) return; busy = true;
-            const live = () => el.isConnected;
-            let loaded = false, loadP = 0, t0 = 0;
-            const LOAD = 1400;
-            const tick = () => { if (!t0) return; loadP = Math.min(1, (performance.now() - t0) / LOAD); bar.style.width = loadP * 100 + '%'; if (loadP >= 1 && !loaded) { loaded = true; screen.textContent = 'Ada Lovelace'; screen.className = 'tst-ph-title drop-in'; } };
-            try {
-              paint();
-              mark(rows, 0, 'tst-on'); await sleep(450); if (!live()) return;
-              mark(rows, 1, 'tst-on'); screen.textContent = 'Loading…';
-              if (mode === 'fake') { await sleep(250); if (!live()) return; loaded = true; bar.style.width = '100%'; screen.textContent = 'Ada Lovelace'; screen.className = 'tst-ph-title drop-in'; }
-              else t0 = performance.now();
-              await sleep(400); if (!live()) return; tick();
-              let i = 2;
-              if (mode === 'wait') {
-                mark(rows, 2, 'tst-on');
-                while (!loaded) { await sleep(100); if (!live()) return; tick(); replay(rows[2], 'pop-soft'); }
-                await sleep(200); if (!live()) return;
-                i = 3;
-              }
-              mark(rows, i, 'tst-on'); await sleep(350); if (!live()) return; tick();
-              if (loaded) {
-                mark(rows, i, 'tst-pass'); verdict.textContent = 'PASSED'; verdict.className = 'tst-res drop-in';
-                say(o, mode === 'fake' ? '<span class="good">passed:</span> the fake answered during the click, so the name was there before the assertion.' : '<span class="good">passed:</span> waitUntil polled the tree until the name showed up, then the assertion ran.');
-              } else {
-                mark(rows, i, 'tst-fail'); verdict.textContent = 'FAILED'; verdict.className = 'tst-res tst-bad drop-in';
-                say(o, '<span class="bad">failed:</span> Compose was idle, so the rule let the assertion run. The IO thread was still loading.');
-                while (!loaded) { await sleep(100); if (!live()) return; tick(); }
-              }
-            } finally { busy = false; }
-          }
-          paint();
-          o.innerHTML = 'Pick a setup and run the same test.';
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            h('div', { class: 'tst-split' },
-              h('div', { class: 'phone tst-dz-phone' }, h('span', { class: 'tst-ph-btn' }, 'Refresh'), screen),
-              h('div', { class: 'tst-sub' }, script,
-                h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'data load'), h('div', { class: 'lane-track' }, bar))),
-                h('div', { class: 'controls' }, cmd('run the test', runIt), verdict))),
-            o);
-        },
-      },
-      {
-        title: 'Freeze the clock to test an animation',
-        body: `<p>The rule drives Compose with a test clock, <code>rule.mainClock</code>. By default it advances on its own, so after <code>performClick()</code> the rule waits until animations finish and you only see the end state.</p>
-<p>Set <code>autoAdvance = false</code> to stop it. Then move time yourself with <code>advanceTimeBy</code> or <code>advanceTimeByFrame</code> and check the UI in the middle of an animation.</p>`,
-        code: `@Test fun panelIsHalfOpenMidAnimation() {
-    rule.mainClock.autoAdvance = false
-    rule.setContent { ExpandingPanel() }        // tween(300) on height
-    rule.onNodeWithText("Details").performClick()
-    rule.mainClock.advanceTimeBy(150)
-    rule.onNodeWithTag("panel").assertHeightIsAtLeast(40.dp)
-    rule.mainClock.advanceTimeBy(150)
-    rule.onNodeWithTag("panel").assertHeightIsEqualTo(120.dp)
-}`,
-        visual(el) {
-          const DUR = 300, FULL = 120;
-          let auto = true, t = null, open = false, busy = false;
-          const panel = h('div', { class: 'tst-dz-panel', style: 'height:0' });
-          const clock = h('b', { class: 'tst-vt' }, '0 ms');
-          const heightEl = h('b', {}, '0 dp');
-          const o = out();
-          const ease = x => 1 - Math.pow(1 - x, 3);
-          let clockMs = 0;
-          function paint() {
-            const p = !open ? 0 : t == null ? 1 : Math.min(1, t / DUR);
-            const hdp = Math.round(FULL * ease(p));
-            panel.style.height = (hdp / FULL) * 90 + 'px';
-            heightEl.textContent = hdp + ' dp';
-            clock.textContent = clockMs + ' ms';
-          }
-          const sw = h('input', { type: 'checkbox', id: 'tst-dz-auto', onchange() { auto = !sw.checked; t = null; open = false; clockMs = 0; paint(); say(o, auto ? 'autoAdvance is on: the rule runs animations to the end for you.' : '<span class="muted">autoAdvance = false:</span> time only moves when you advance it.'); } });
-          async function click() {
-            if (busy) return;
-            if (open) { replay(panel, 'shake'); say(o, '<span class="muted">already open:</span> press Reset to close it.'); return; }
-            open = true; t = 0;
-            if (!auto) { paint(); say(o, `${hl('performClick()')} <span class="muted">// animation started, clock frozen at ${clockMs} ms, height 0 dp</span>`); return; }
-            busy = true;
-            try {
-              const start = clockMs;
-              while (t < DUR) { t = Math.min(DUR, t + 16); clockMs = start + t; paint(); await sleep(16); if (!el.isConnected) return; }
-              say(o, `${hl('performClick()')} <span class="good">// the rule waited for the animation: height is already ${FULL} dp</span>`);
-            } finally { busy = false; }
-          }
-          function adv(ms) {
-            if (busy) return;
-            if (auto) { replay(clock, 'shake'); say(o, '<span class="muted">tip:</span> turn off autoAdvance first. With it on, there is nothing in between to inspect.'); return; }
-            clockMs += ms;
-            if (t != null) t = Math.min(DUR, t + ms);
-            paint(); replay(heightEl, 'pop');
-            say(o, t == null ? `clock at ${clockMs} ms. Nothing is animating yet. Click first.` : t >= DUR ? `clock at ${clockMs} ms. The animation is done: ${heightEl.textContent}.` : `clock at ${clockMs} ms, ${t} ms into the animation. Height is ${heightEl.textContent}.`);
-          }
-          paint();
-          o.innerHTML = 'autoAdvance is on. Click Details and see what the test observes.';
-          el.append(
-            h('label', { class: 'switch', for: 'tst-dz-auto' }, sw, h('span', { html: hl('mainClock.autoAdvance = false') })),
-            h('div', { class: 'controls' }, cmd('performClick()', click), cmd('mainClock.advanceTimeByFrame()', () => adv(16)), cmd('mainClock.advanceTimeBy(100)', () => adv(100))),
-            h('div', { class: 'tst-split' },
-              h('div', { class: 'phone tst-dz-phone' }, h('span', { class: 'tst-ph-btn' }, 'Details'), panel),
-              h('div', { class: 'tst-sub' }, h('div', { class: 'tst-clocks' }, h('span', {}, 'mainClock ', clock), h('span', {}, 'panel height ', heightEl)))),
-            o);
-        },
-      },
-    ],
-    underHood: {
-      body: `<p>The compose rule hosts your content in an Activity and installs a test frame clock, the one you control through <code>mainClock</code>. Frames only happen when that clock advances.</p>
-<p>Every finder first calls <code>waitForIdle()</code>. That loop advances the clock if <code>autoAdvance</code> is on, applies pending snapshot changes, and checks that the Recomposer has no pending work and the layout is clean. With Espresso on the classpath, it also waits for registered idling resources. Only then does it read the semantics tree.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Sleeping instead of waiting for a condition',
-        bad: `rule.onNodeWithText("Refresh").performClick()
-Thread.sleep(2_000)
-rule.onNodeWithText("4 messages").assertIsDisplayed()`,
-        good: `rule.onNodeWithText("Refresh").performClick()
-rule.waitUntil(timeoutMillis = 5_000) {
-    rule.onAllNodesWithText("4 messages").fetchSemanticsNodes().isNotEmpty()
-}
-rule.onNodeWithText("4 messages").assertIsDisplayed()`,
-        why: 'A fixed sleep is too long on a fast machine and too short on a slow one. <code>waitUntil</code> returns as soon as the condition holds and fails clearly on timeout.',
-      },
-      {
-        title: 'Asserting a lazy item that was never composed',
-        bad: `rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
-        good: `rule.onNodeWithTag("inbox_list")
-    .performScrollToNode(hasText("Invoice #40"))
-rule.onNodeWithText("Invoice #40").assertIsDisplayed()`,
-        why: 'A <code>LazyColumn</code> only composes rows near the screen, so a row far down is not in the semantics tree at all. Scroll to it first.',
-      },
-      {
-        title: 'Matching part of a text without substring',
-        bad: `rule.onNodeWithText("messages").assertExists()   // the Text says "3 messages"`,
-        good: `rule.onNodeWithText("messages", substring = true).assertExists()`,
-        why: 'Text finders match the whole string by default. Pass <code>substring = true</code>, or better, match the full text the user sees.',
-      },
-    ],
-  };
-
-  // ─── Depth pass 2: pyramid, fakes, flows, baseline ─────────────────────
-  const pyramidDepth = {
-    deeper: [
-      {
-        title: 'Test each bug at the lowest layer that catches it',
-        body: `<p>When a bug reaches users, ask which layer could have caught it, and add the test at the lowest one that can. A wrong price format is pure logic, so a unit test catches it in milliseconds. A wrong Room query needs a real SQLite engine, so it needs an integration test with an in-memory database. A button wired to the wrong screen only shows up when something drives the UI.</p>
-<p>Pick a bug and try each layer.</p>`,
-        visual(el) {
-          const LAYERS = [
-            { k: 'unit', name: 'unit test with a fake', ms: 8 },
-            { k: 'int', name: 'integration: real Room, in memory', ms: 300 },
-            { k: 'ui', name: 'UI test on a device', ms: 4000 },
-          ];
-          const BUGS = [
-            { label: 'Price shows 12.5 instead of $12.50', low: 'unit', res: {
-              unit: 'formatter test fails: expected $12.50', int: 'caught too, but the database adds nothing here', ui: 'caught too, 500 times slower' } },
-            { label: 'Room query sorts oldest first', low: 'int', res: {
-              unit: null, int: 'the real query runs on SQLite and the order check fails', ui: 'caught, if a UI test happens to look at the order' }, miss: 'missed: the fake has no SQL. It returns the list you gave it.' },
-            { label: 'Pay opens Settings instead of Receipt', low: 'ui', res: {
-              unit: null, int: null, ui: 'tap Pay, assert Receipt is shown: fails' }, miss: 'missed: no screen, no navigation at this layer.' },
-          ];
-          let bug = 0, busy = false;
-          const rows = LAYERS.map(l => {
-            const t = h('span', { class: 'tst-res' }, 'not run');
-            const msg = h('span', { class: 'tst-d2-msg' }, '');
-            const btn = h('button', { class: 'cmd', onclick: () => tryLayer(l) }, l.name);
-            return { l, t, msg, row: h('div', { class: 'tst-d2-row' }, btn, t, msg) };
-          });
-          const o = out();
-          const bugBtns = BUGS.map((b, i) => h('button', { class: 'cmd', onclick() { if (busy) return; bug = i; paint(); } }, b.label));
-          function paint() {
-            pressed(bugBtns, BUGS.map((_, i) => i), bug);
-            rows.forEach(r => { r.t.textContent = 'not run'; r.t.className = 'tst-res'; r.msg.textContent = ''; r.row.classList.remove('tst-d2-best'); });
-            say(o, `<span class="muted">bug:</span> ${BUGS[bug].label}. Which layer catches it?`);
-          }
-          async function tryLayer(l) {
-            if (busy) return; busy = true;
-            const r = rows.find(x => x.l === l), b = BUGS[bug], hit = b.res[l.k];
-            r.t.textContent = 'running'; r.t.className = 'tst-res';
-            await sleep(250 + Math.min(900, l.ms / 5));
-            if (!el.isConnected) return;
-            r.t.textContent = hit ? `caught · ${fmt(l.ms)}` : `missed · ${fmt(l.ms)}`;
-            r.t.className = 'tst-res drop-in' + (hit ? '' : ' tst-bad');
-            r.msg.textContent = hit || b.miss;
-            if (hit && l.k === b.low) {
-              r.row.classList.add('tst-d2-best'); replay(r.row, 'pop-soft');
-              say(o, `<span class="good">lowest layer:</span> ${l.name}. Put the regression test here.`);
-            } else if (hit) say(o, 'Caught, but a cheaper layer might do it. Try the ones below.');
-            else say(o, '<span class="bad">missed.</span> Go one layer up.');
-            busy = false;
-          }
-          el.append(h('div', { class: 'controls tst-d2-wrap' }, bugBtns), h('div', { class: 'tst-sub' }, rows.map(r => r.row)), o);
-          paint();
-        },
-      },
-    ],
-    underHood: {
-      body: `<p>Local tests compile against <code>android.jar</code>, which holds the API signatures and no real code. To make it runnable on the JVM, the Android Gradle plugin generates a copy where every method throws <code>RuntimeException("Method ... not mocked.")</code>. That is the error you see when plain unit test code touches <code>Uri</code> or <code>TextUtils</code>.</p>
-<p>An instrumented run builds two APKs, your app and a test APK, and installs both. Gradle then starts them with <code>am instrument</code>. The system starts your app's process with <code>AndroidJUnitRunner</code> inside it, so the tests run in the same process as your code and use the real framework. Robolectric sits in between: it loads real Android framework code into a sandboxed class loader on the JVM and swaps the parts that need native code or hardware for Java "shadows". The next lesson, <em>Robolectric: Android on the JVM</em>, shows when to use it.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Silencing "not mocked" with returnDefaultValues',
-        bad: `android {
-    testOptions {
-        unitTests.isReturnDefaultValues = true
-    }
-}
-// TextUtils.isEmpty("") now returns false, and the test still passes`,
-        good: `// Keep the rule in plain Kotlin and test that
-fun isBlankTitle(title: String) = title.isBlank()
-
-// or run the test with the real framework on Robolectric
-@RunWith(AndroidJUnit4::class)
-class TitleRulesTest { /* ... */ }`,
-        why: 'With that flag every stub method returns 0, false or null. Tests go green while checking nothing real. Move logic out of Android types, or use Robolectric where you truly need the framework.',
-      },
-      {
-        title: 'Checking a pure rule through a UI test',
-        bad: `// androidTest: a device run to check a formatting rule
-@Test fun showsPriceInDollars() {
-    rule.setContent { PriceTag(cents = 1250) }
-    rule.onNodeWithText("$12.50").assertIsDisplayed()
-}`,
-        good: `// test: milliseconds on the JVM
-@Test fun formatsDollars() {
-    assertEquals("$12.50", PriceFormatter(Locale.US).format(1250))
-}`,
-        why: 'The rule has nothing to do with the screen. Test it once at the bottom, and keep UI tests for wiring: this button opens that screen.',
-      },
-      {
-        title: 'UI tests against the real backend',
-        bad: `@HiltAndroidTest
-class CheckoutFlowTest {
-    // uses the real NetworkModule and a staging server
-    @Test fun payOpensReceipt() { /* ... */ }
-}`,
-        good: `@HiltAndroidTest
-@UninstallModules(NetworkModule::class)
-class CheckoutFlowTest {
-    @BindValue @JvmField
-    val api: PaymentApi = FakePaymentApi(result = PaymentResult.Paid)
-
-    @Test fun payOpensReceipt() { /* ... */ }
-}`,
-        why: 'UI tests are already the slowest layer. A real server adds network flakes and data that changes under you. Swap the network layer for a fake through Hilt.',
-      },
-    ],
-  };
-
-  const fakesDepth = {
-    deeper: [
-      {
-        title: 'Fakes survive refactors, call checks do not',
-        body: `<p>A mock test usually pins down <em>how</em> the ViewModel talks to its repository: which function, how many times. A fake test only checks <em>what</em> comes out. Refactor the ViewModel without changing its behavior and the fake test keeps passing, while the call check fails. Worse, a call check can pass while the screen is broken.</p>
-<p>Switch between three versions of <code>load()</code> and run both tests.</p>`,
-        code: `// Mock style (MockK): pins the call
-val repo = mockk<NewsRepository>()
-coEvery { repo.latest() } returns listOf(article)
-NewsViewModel(repo).load()
-coVerify(exactly = 1) { repo.latest() }
-
-// Fake style: checks the result
-val repo = FakeNewsRepository().apply { articles = listOf(article) }
-val vm = NewsViewModel(repo)
-vm.load()
-assertEquals(UiState.Success(listOf(article)), vm.state.value)`,
-        visual(el) {
-          const VERS = {
-            v1: { label: 'v1: original', src: ['fun load() = viewModelScope.launch {', '    _state.value = Success(repo.latest())', '}'],
-              mock: [true, 'latest() was called once'], fake: [true, 'state is Success(1 article)'] },
-            v2: { label: 'v2: cache first (refactor)', src: ['fun load() = viewModelScope.launch {', '    val cached = repo.cached()', '    _state.value = Success(cached.ifEmpty { repo.latest() })', '}'],
-              mock: [false, 'MockKException: no answer found for NewsRepository(#1).cached()'], fake: [true, 'state is Success(1 article). The fake answers cached() with an empty list.'] },
-            v3: { label: 'v3: forgets to set state (bug)', src: ['fun load() = viewModelScope.launch {', '    val list = repo.latest()', '    // _state.value = Success(list)  <- lost in a merge', '}'],
-              mock: [true, 'latest() was called once. Nothing looked at the state.'], fake: [false, 'expected: Success(1 article) but was: Loading'] },
-          };
-          const MOCK = ['coEvery { repo.latest() } returns listOf(a)', 'NewsViewModel(repo).load()', 'coVerify(exactly = 1) { repo.latest() }'];
-          const FAKE = ['val repo = FakeNewsRepository().apply { articles = listOf(a) }', 'val vm = NewsViewModel(repo); vm.load()', 'assertEquals(Success(listOf(a)), vm.state.value)'];
-          let ver = 'v1', busy = false;
-          const vm = h('div', { class: 'tst-script' });
-          const mRows = gwt(MOCK), fRows = gwt(FAKE);
-          const mRes = h('span', { class: 'tst-res' }, 'PASSED'), fRes = h('span', { class: 'tst-res' }, 'PASSED');
-          const o = out();
-          const keys = Object.keys(VERS);
-          const vBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; ver = k; paint(); say(o, `<span class="muted">ViewModel:</span> ${VERS[k].label}. Run both tests.`); } }, VERS[k].label));
-          function paint() {
-            pressed(vBtns, keys, ver);
-            vm.replaceChildren(...gwt(VERS[ver].src));
-            [mRes, fRes].forEach(r => { r.textContent = 'not run'; r.className = 'tst-res'; });
-            mark(mRows, -1); mark(fRows, -1);
-          }
-          async function runOne(rows, res, [ok, msg]) {
-            for (let i = 0; i < rows.length; i++) { mark(rows, i, 'tst-on'); await sleep(320); if (!el.isConnected) return false; }
-            mark(rows, rows.length - 1, ok ? 'tst-pass' : 'tst-fail');
-            res.textContent = ok ? 'PASSED' : 'FAILED'; res.className = 'tst-res drop-in' + (ok ? '' : ' tst-bad');
-            o.append(h('div', { class: 'line drop-in', html: `${ok ? '<span class="good">pass</span>' : '<span class="bad">fail</span>'} ${msg}` }));
-            return true;
-          }
-          async function run() {
-            if (busy) return; busy = true;
-            try {
-              paint(); say(o, `<span class="muted">$</span> ./gradlew test <span class="muted">// ${VERS[ver].label}</span>`);
-              if (!(await runOne(mRows, mRes, VERS[ver].mock))) return;
-              if (!(await runOne(fRows, fRes, VERS[ver].fake))) return;
-              o.append(h('div', { class: 'line drop-in', html: ver === 'v2' ? 'Behavior is the same, yet the mock test broke.' : ver === 'v3' ? '<span class="bad">The screen is broken and the mock test is green.</span>' : 'Both pass on the original code.' }));
-            } finally { busy = false; }
-          }
-          pressed(vBtns, keys, ver); vm.replaceChildren(...gwt(VERS.v1.src));
-          mark(mRows, 2, 'tst-pass'); mark(fRows, 2, 'tst-pass');
-          o.innerHTML = 'Both tests pass on v1. Try the refactor, then the bug.';
-          el.append(
-            h('div', { class: 'controls' }, vBtns),
-            h('div', { class: 'tst-sub' }, h('span', { class: 'tst-label' }, 'NewsViewModel.load()'), vm),
-            h('div', { class: 'tst-cols' },
-              h('div', { class: 'tst-sub' }, h('div', { class: 'tst-d2-head' }, h('span', { class: 'tst-label' }, 'mock test'), mRes), h('div', { class: 'tst-script' }, mRows)),
-              h('div', { class: 'tst-sub' }, h('div', { class: 'tst-d2-head' }, h('span', { class: 'tst-label' }, 'fake test'), fRes), h('div', { class: 'tst-script' }, fRows))),
-            h('div', { class: 'controls' }, cmd('./gradlew test', run)),
-            o);
-        },
-      },
-      {
-        title: 'One shared fake, checked against the real thing',
-        body: `<p>Write each fake once and share it, for example from a <code>:core:testing</code> module, so every feature's tests use the same one. The risk is drift: the real repository changes its behavior and the fake does not, so tests stay green while the app breaks.</p>
-<p>A contract test guards against that. Write the expectations once in an abstract test class, then run it against the fake and against the real implementation backed by an in-memory database.</p>`,
-        code: `abstract class NewsRepositoryContract {
-    abstract fun repo(): NewsRepository
-
-    @Test fun latestIsNewestFirst() = runTest {
-        val repo = repo()
-        repo.save(article(id = 1, publishedAt = 100))
-        repo.save(article(id = 2, publishedAt = 200))
-        assertEquals(listOf(2, 1), repo.latest().map { it.id })
-    }
-}
-
-class FakeNewsRepositoryTest : NewsRepositoryContract() {
-    override fun repo() = FakeNewsRepository()
-}
-
-@RunWith(AndroidJUnit4::class)   // Robolectric or a device: Room needs SQLite
-class RoomNewsRepositoryTest : NewsRepositoryContract() {
-    override fun repo() = RoomNewsRepository(
-        Room.inMemoryDatabaseBuilder(context, NewsDb::class.java).build().newsDao()
-    )
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>A fake is ordinary code, so nothing is hidden. Mocks are built at runtime. Kotlin classes and functions are final by default, so a mocking library can't simply subclass them. Mockito 5 uses its inline mock maker by default, and MockK works in a similar way: both attach a Java agent and rewrite the bytecode of the mocked class while the test runs, so every call goes to the library's recorder.</p>
-<p>That is why the first mock in a run is slow, and why a mock only answers calls you stubbed. A MockK mock throws <code>MockKException</code> for any other call unless you create it with <code>relaxed = true</code>.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Mocking a data class you could just build',
-        bad: `val article = mockk<Article>()
-every { article.title } returns "Kotlin 2.3 is out"
-every { article.id } returns 7`,
-        good: `val article = Article(id = 7, title = "Kotlin 2.3 is out")`,
-        why: 'Data classes are plain values. A real one is shorter, can be compared with <code>assertEquals</code>, and can’t return something its constructor would never allow.',
-      },
-      {
-        title: 'A fake shared as a singleton object',
-        bad: `object FakeNewsRepository : NewsRepository {
-    var articles = emptyList<Article>()
-    override suspend fun latest() = articles
-}`,
-        good: `class FakeNewsRepository : NewsRepository {
-    var articles = emptyList<Article>()
-    override suspend fun latest() = articles
-}
-// a new instance in every test`,
-        why: 'An <code>object</code> keeps its state for the whole test JVM. One test leaves articles behind, and the next one passes or fails depending on run order.',
-      },
-    ],
-  };
-
-  const flowsDepth = {
-    deeper: [
-      {
-        title: 'StateFlow conflates, so assert the value',
-        body: `<p>A <code>StateFlow</code> keeps only its latest value. If the ViewModel sets <code>Loading</code> and then <code>Success</code> without suspending in between, a collector that runs later only finds <code>Success</code>. Which values a test sees depends on the collector's dispatcher, not on your code.</p>
-<p>A collector on <code>UnconfinedTestDispatcher</code> resumes at once on every change and records each one. On <code>StandardTestDispatcher</code> it is queued, runs when the test yields, and reads only the newest value. For state, assert on <code>value</code>. Collect only when the sequence itself is what you test.</p>`,
-        code: `@Test fun refreshEndsInSuccess() = runTest {
-    vm.refresh()
-    assertEquals(UiState.Success(articles), vm.state.value)   // state: check the value
-}
-
-@Test fun refreshShowsLoadingFirst() = runTest {
-    val seen = mutableListOf<UiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.toList(seen) }
-    vm.refresh()
-    assertEquals(listOf(Idle, Loading, Success(articles)), seen)   // the order matters here
-}`,
-        visual(el) {
-          let busy = false, pending = false, value = 'Idle', std = [], unc = [];
-          const valSlot = h('span', {}, h('span', { class: 'tst-ev' }, 'Idle'));
-          const stdEl = h('div', { class: 'tst-evs' }), uncEl = h('div', { class: 'tst-evs' });
-          const queue = h('div', { class: 'tst-queue', 'aria-label': 'Test scheduler queue' });
-          const o = out();
-          const chip = (v, cls = '') => h('span', { class: `tst-ev drop-in ${cls}` }, v);
-          const setVal = v => { value = v; valSlot.replaceChildren(chip(v)); };
-          function paintQueue() { queue.replaceChildren(...(pending ? [h('span', { class: 'tst-task drop-in' }, 'resume standard collector')] : [])); }
-          function reset() {
-            pending = false; std = ['Idle']; unc = ['Idle']; setVal('Idle');
-            stdEl.replaceChildren(chip('Idle')); uncEl.replaceChildren(chip('Idle')); paintQueue();
-          }
-          async function refresh() {
-            if (busy) return; busy = true;
-            try {
-              say(o, `${hl('vm.refresh()')} <span class="muted">// sets Loading, then Success, no suspension between</span>`);
-              for (const v of ['Loading', 'Success(3)']) {
-                setVal(v); unc.push(v); uncEl.append(chip(v));
-                if (!pending) { pending = true; paintQueue(); }
-                await sleep(450); if (!el.isConnected) return;
-              }
-              o.append(h('div', { class: 'line drop-in' }, 'Unconfined recorded both. The standard collector is still waiting in the queue.'));
-            } finally { busy = false; }
-          }
-          function runCurrent() {
-            if (busy) return;
-            if (!pending) { replay(queue, 'shake'); say(o, `${hl('runCurrent()')} <span class="muted">// nothing queued</span>`); return; }
-            pending = false; paintQueue();
-            std.push(value); stdEl.append(chip(value));
-            say(o, `${hl('runCurrent()')} <span class="muted">// the standard collector wakes up and reads the current value: ${value}. Loading is gone.</span>`);
-          }
-          function check() {
-            if (busy) return;
-            const want = ['Idle', 'Loading', 'Success(3)'];
-            const okU = unc.join() === want.join(), okS = std.join() === want.join();
-            say(o, `${hl('assertEquals(listOf(Idle, Loading, Success(3)), seen)')}`);
-            o.append(h('div', { class: 'line drop-in', html: `unconfined: ${okU ? '<span class="good">pass</span>' : `<span class="bad">fail</span>, seen [${unc.join(', ')}]`}` }));
-            o.append(h('div', { class: 'line drop-in', html: `standard: ${okS ? '<span class="good">pass</span>' : `<span class="bad">fail</span>, seen [${std.join(', ')}]`}` }));
-            o.append(h('div', { class: 'line drop-in', html: `${hl('assertEquals(Success(3), vm.state.value)')} ${value === 'Success(3)' ? '<span class="good">pass either way</span>' : '<span class="muted">refresh first</span>'}` }));
-          }
-          reset();
-          o.innerHTML = 'Both collectors started and got the initial Idle. Call vm.refresh().';
-          el.append(
-            h('div', { class: 'tst-clocks' }, h('span', { class: 'tst-state' }, 'vm.state.value ', valSlot)),
-            h('div', { class: 'tst-cols' },
-              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'collector on StandardTestDispatcher'), stdEl),
-              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'collector on UnconfinedTestDispatcher'), uncEl)),
-            queue,
-            h('div', { class: 'controls' }, cmd('vm.refresh()', refresh), cmd('runCurrent()', runCurrent), cmd('assertEquals(...)', check),
-              h('button', { class: 'btn small', onclick() { if (busy) return; reset(); say(o, 'Fresh test: both collectors hold Idle.'); } }, 'New test')),
-            o);
-        },
-      },
-      {
-        title: 'stateIn with WhileSubscribed needs a collector',
-        body: `<p>ViewModels often build state with <code>stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Loading)</code>. That flow only collects its upstream while someone collects it. A test that just reads <code>.value</code> has no subscriber, so the upstream never starts and the value stays <code>Loading</code> forever.</p>
-<p>Start an empty collector in <code>backgroundScope</code> first, even if you only assert on <code>value</code>. Turn it on and off below.</p>`,
-        code: `@Test fun showsArticles() = runTest {
-    val repo = HotFakeNewsRepository()          // MutableSharedFlow inside
-    val vm = NewsViewModel(repo)                 // uiState = repo.articles.map(...).stateIn(...)
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
-
-    repo.emit(listOf(article))
-    assertEquals(UiState.Success(listOf(article)), vm.uiState.value)
-}`,
-        visual(el) {
-          let sub = false, value = 'Loading', busy = false;
-          const valSlot = h('span', {}, h('span', { class: 'tst-ev' }, 'Loading'));
-          const upTag = h('span', { class: 'tst-res tst-bad' }, 'upstream idle');
-          const subTag = h('b', {}, '0');
-          const repoEl = h('div', { class: 'tst-evs' });
-          const o = out();
-          const sw = h('input', { type: 'checkbox', id: 'tst-d2-sub', onchange() {
-            if (busy) { sw.checked = sub; return; }
-            sub = sw.checked; paint();
-            say(o, sub ? `${hl('backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }')} <span class="muted">// one subscriber: WhileSubscribed starts the upstream</span>`
-              : '<span class="muted">collector removed:</span> no subscribers. After the 5 s timeout the upstream stops.');
-          } });
-          function paint() {
-            subTag.textContent = sub ? '1' : '0';
-            upTag.textContent = sub ? 'upstream collecting' : 'upstream idle';
-            upTag.className = 'tst-res drop-in' + (sub ? '' : ' tst-bad');
-          }
-          async function emit() {
-            if (busy) return; busy = true;
-            try {
-              const e = h('span', { class: 'tst-ev drop-in' }, 'listOf(article)');
-              repoEl.replaceChildren(e);
-              await sleep(400); if (!el.isConnected) return;
-              if (sub) {
-                value = 'Success(1)'; valSlot.replaceChildren(h('span', { class: 'tst-ev tst-ok drop-in' }, value));
-                say(o, `${hl('repo.emit(listOf(article))')} <span class="good">// mapped and stored in uiState</span>`);
-              } else {
-                e.classList.add('tst-gone');
-                say(o, `${hl('repo.emit(listOf(article))')} <span class="bad">// nobody collects the upstream, the emission goes nowhere</span>`);
-              }
-            } finally { busy = false; }
-          }
-          function check() {
-            if (busy) return;
-            const ok = value === 'Success(1)';
-            say(o, `${hl('assertEquals(Success(listOf(article)), vm.uiState.value)')} ${ok ? '<span class="good">PASSED</span>' : `<span class="bad">FAILED</span> <span class="muted">// was ${value}</span>`}`);
-            if (!ok) replay(valSlot, 'shake');
-          }
-          paint();
-          o.innerHTML = 'No collector yet. Emit from the fake, then assert.';
-          el.append(
-            h('label', { class: 'switch', for: 'tst-d2-sub' }, sw, h('span', { html: hl('backgroundScope collector') })),
-            h('div', { class: 'tst-cols' },
-              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'fake repository'), repoEl),
-              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'stateIn(WhileSubscribed)'), upTag, h('span', { class: 'tst-stats' }, h('span', {}, 'subscribers ', subTag))),
-              h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'vm.uiState.value'), valSlot)),
-            h('div', { class: 'controls' }, cmd('repo.emit(listOf(article))', emit), cmd('assertEquals(...)', check),
-              h('button', { class: 'btn small', onclick() { if (busy) return; value = 'Loading'; valSlot.replaceChildren(h('span', { class: 'tst-ev' }, 'Loading')); repoEl.replaceChildren(); say(o, 'New ViewModel: uiState is Loading again.'); } }, 'New test')),
-            o);
-        },
-      },
-      {
-        title: 'Two flows at once: turbineScope and testIn',
-        body: `<p><code>test { }</code> covers one flow. When an action changes state and also sends a one-off event, collect both. Inside <code>turbineScope</code>, <code>testIn(backgroundScope)</code> returns a Turbine you assert on later, and <code>runTest</code> cancels its collector when the test ends.</p>
-<p><code>skipItems(n)</code> drops items you don't care about, and <code>expectMostRecentItem()</code> takes the newest one and ignores the rest.</p>`,
-        code: `@Test fun saveUpdatesStateAndShowsSnackbar() = runTest {
-    turbineScope {
-        val states = vm.state.testIn(backgroundScope)
-        val events = vm.events.testIn(backgroundScope)
-        states.skipItems(1)                      // the current value
-
-        vm.save()
-
-        assertEquals(Event.Saved, events.awaitItem())
-        assertEquals(UiState.Saved, states.expectMostRecentItem())
-    }
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p><code>test { }</code> launches a coroutine that collects your flow and sends every item into a channel. Turbine guarantees the flow runs up to its first suspension point before your block's first line, so an initial value is already queued. <code>awaitItem()</code> receives from that channel. When the block ends, Turbine cancels the collector and fails if events are still waiting.</p>
-<p>The 3 second timeout is wall clock time, not <code>runTest</code>'s virtual time. Delays in your code are skipped as usual, while a missing emission still fails after 3 real seconds.</p>`,
-    },
-    mistakes: [
-      {
-        title: 'Triggering an event before collecting it',
-        bad: `@Test fun saveShowsSnackbar() = runTest {
-    vm.save()                         // emits Event.Saved on a SharedFlow
-    vm.events.test {
-        assertEquals(Event.Saved, awaitItem())   // No value produced in 3s
-    }
-}`,
-        good: `@Test fun saveShowsSnackbar() = runTest {
-    vm.events.test {
-        vm.save()                     // collector is already running
-        assertEquals(Event.Saved, awaitItem())
-    }
-}`,
-        why: 'A <code>SharedFlow</code> without replay drops values nobody is collecting. Start <code>test { }</code> first and trigger the action inside it.',
-      },
-      {
-        title: 'Using first() to wait for a later state',
-        bad: `vm.refresh()                                   // launches in viewModelScope
-assertEquals(UiState.Success(articles), vm.state.first())`,
-        good: `vm.refresh()
-assertEquals(
-    UiState.Success(articles),
-    vm.state.first { it is UiState.Success },
-)`,
-        why: 'A <code>StateFlow</code> always has a value, so <code>first()</code> returns the current one at once, often still <code>Loading</code>. Wait for the state you mean with a predicate, or advance the scheduler and read <code>value</code>.',
-      },
-      {
-        title: 'Forgetting the StateFlow’s current value in Turbine',
-        bad: `vm.state.test {
-    vm.refresh()
-    assertEquals(UiState.Success(articles), awaitItem())   // got Idle
-}`,
-        good: `vm.state.test {
-    assertEquals(UiState.Idle, awaitItem())   // the current value comes first
-    vm.refresh()
-    assertEquals(UiState.Success(articles), expectMostRecentItem())
-}`,
-        why: 'Turbine receives the StateFlow’s current value as soon as it starts collecting. Take it first, or skip it with <code>skipItems(1)</code>.',
-      },
-    ],
-  };
-
-  const baselineDepth = {
-    deeper: [
-      {
-        title: 'Startup Profiles also lay out the DEX files',
-        body: `<p>A Baseline Profile decides which code gets compiled. A <em>Startup Profile</em>, a subset of it, also decides where that code sits. With R8 on, AGP puts the startup classes together at the front of <code>classes.dex</code>, so a launch reads one compact block of the file instead of pieces spread over several DEX files. Google reports startup usually 15% to 30% faster than with a Baseline Profile alone.</p>
-<p>It needs AGP 8.2 or newer and <code>isMinifyEnabled = true</code>. Mark startup journeys with <code>includeInStartupProfile = true</code>, and keep them small enough to fit in the first DEX file.</p>`,
-        code: `@Test fun startup() = baselineProfileRule.collect(
-    packageName = "com.example.news",
-    includeInStartupProfile = true,   // also writes startup-prof.txt
-) {
-    pressHome()
-    startActivityAndWait()
-}
-// Output: src/<variant>/generated/baselineProfiles/startup-prof.txt, read by AGP`,
-        visual(el) {
-          const FILES = ['classes.dex', 'classes2.dex', 'classes3.dex'], PER = 30;
-          const SPREAD = [2, 7, 12, 19, 26, 33, 41, 48, 55, 63, 70, 77, 84, 88];
-          const PACKED = [0, 1, 2, 3, 4];
-          let packed = false, busy = false;
-          const cells = [];
-          const files = FILES.map((name, f) => h('div', { class: 'tst-d2-dex' }, h('span', { class: 'tst-d2-file' }, name),
-            h('div', { class: 'tst-d2-pages' }, Array.from({ length: PER }, (_, i) => (cells[f * PER + i] = h('span', { class: 'tst-d2-pg' }))))));
-          const stat = h('span', { class: 'tst-stats' });
-          const o = out();
-          const startup = () => (packed ? PACKED : SPREAD);
-          function paint() {
-            cells.forEach(c => { c.className = 'tst-d2-pg'; });
-            startup().forEach(i => cells[i].classList.add('tst-d2-start'));
-            stat.innerHTML = 'pages with startup code: <b>—</b> · files opened: <b>—</b>';
-          }
-          const sw = h('input', { type: 'checkbox', id: 'tst-d2-dexlayout', onchange() {
-            if (busy) { sw.checked = packed; return; }
-            packed = sw.checked; paint();
-            say(o, packed ? 'Rebuilt with a Startup Profile: the startup classes moved to the front of classes.dex.' : 'No Startup Profile: startup classes sit wherever the build happened to put them.');
-          } });
-          async function launch() {
-            if (busy) return; busy = true;
-            try {
-              paint();
-              say(o, `${hl('startActivityAndWait()')} <span class="muted">// cold start, reading startup code</span>`);
-              const list = startup(), seenFiles = new Set();
-              for (const i of list) {
-                cells[i].classList.add('tst-d2-hit'); replay(cells[i], 'pop');
-                seenFiles.add(Math.floor(i / PER));
-                stat.innerHTML = `pages with startup code: <b>${list.indexOf(i) + 1}</b> · files opened: <b>${seenFiles.size}</b>`;
-                await sleep(packed ? 220 : 160); if (!el.isConnected) return;
-              }
-              o.append(h('div', { class: 'line drop-in', html: packed ? '<span class="good">5 pages, 1 file.</span> Less to read and keep in memory before the first frame.' : '<span class="bad">14 pages in 3 files.</span> Each page also holds code startup never needs.' }));
-            } finally { busy = false; }
-          }
-          paint();
-          o.innerHTML = 'Each square is a page of a DEX file. Orange pages hold startup code. Run a cold start.';
-          el.append(
-            h('label', { class: 'switch', for: 'tst-d2-dexlayout' }, sw, h('span', { html: hl('includeInStartupProfile = true') })),
-            h('div', { class: 'tst-sub' }, files),
-            h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: launch }, 'Cold start'), stat),
-            h('p', { class: 'tip' }, 'A simplified picture. Real gains depend on the app and the device.'),
-            o);
-        },
-      },
-      {
-        title: 'How the profile reaches a phone',
-        body: `<p>The profile ships in the APK as <code>assets/dexopt/baseline.prof</code>. Play passes it to the device at install, so ART compiles the listed methods before the first launch. Play also aggregates profiles from real users into Cloud Profiles, but those take hours to days after each release. Your Baseline Profile covers that gap.</p>
-<p>Other install paths may not use the profile at install. Then <code>androidx.profileinstaller</code> writes it on the first run, and the benefit arrives when the background dexopt job runs, likely overnight. Since AGP 8.4, installing a non-debuggable build from Studio or Gradle also installs the profile, so local release builds behave like Play installs.</p>`,
-        visual(el) {
-          const PATHS = { play: 'Google Play', side: 'Other store or sideload', local: 'Studio / Gradle (AGP 8.4+)' };
-          let path = 'play', compiled = true, written = false, launches = [], busy = false;
-          const lanes = h('div', { class: 'timeline' });
-          const state = h('span', { class: 'tst-res' });
-          const o = out();
-          const keys = Object.keys(PATHS);
-          const pBtns = keys.map(k => h('button', { class: 'cmd', onclick() { if (busy) return; path = k; install(); } }, PATHS[k]));
-          function paintState() {
-            state.textContent = compiled ? 'startup code: AOT compiled' : written ? 'profile written, not compiled yet' : 'no profile on device';
-            state.className = 'tst-res drop-in' + (compiled ? '' : ' tst-bad');
-          }
-          function paintLanes() {
-            lanes.replaceChildren(...(launches.length ? launches.map((l, i) => h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, `launch ${l.n}`),
-              h('div', { class: 'lane-track' }, h('span', { class: `bar ${l.aot ? 'tst-aotbar' : 'tst-interp'}` + (i === launches.length - 1 ? ' drop-in' : ''), style: `left:0;width:${(l.ms / 1400) * 100}%` }),
-                h('span', { class: 'tst-d2-ms' }, `${l.ms} ms`)))) : [h('p', { class: 'tip' }, 'No launches yet.')]));
-          }
-          let count = 0;
-          function install() {
-            pressed(pBtns, keys, path);
-            compiled = path !== 'side'; written = compiled; launches = []; count = 0;
-            paintState(); paintLanes();
-            say(o, path === 'side' ? 'Installed without install-time compilation. Launch it.' : `Installed from ${PATHS[path]}: dex2oat compiled the profile during install.`);
-          }
-          async function launch() {
-            if (busy) return; busy = true;
-            try {
-              await sleep(250); if (!el.isConnected) return;
-              const ms = compiled ? 680 + (count % 3) * 9 : 1020 - Math.min(count, 2) * 18;
-              launches.push({ n: ++count, ms, aot: compiled }); if (launches.length > 5) launches.shift();
-              paintLanes();
-              say(o, `cold start ${count}: first frame at ${compiled ? `<span class="good">${ms} ms</span>` : `<span class="bad">${ms} ms</span>`}`);
-              if (!written) { written = true; paintState(); o.append(h('div', { class: 'line drop-in' }, 'ProfileInstaller: wrote the baseline profile. ART compiles it at the next background dexopt.')); }
-              else if (!compiled) o.append(h('div', { class: 'line drop-in' }, 'Still interpreted and JIT compiled. The profile waits for the idle job.'));
-            } finally { busy = false; }
-          }
-          function night() {
-            if (busy) return;
-            if (compiled) { say(o, 'Background dexopt ran. Startup code was already compiled, nothing changes.'); return; }
-            if (!written) { say(o, 'Background dexopt ran, but no profile was written yet. Launch the app once first.'); return; }
-            compiled = true; paintState(); replay(state, 'pop');
-            say(o, '<span class="good">Overnight, idle and charging:</span> background dexopt compiled the profile with speed-profile.');
-          }
-          install();
-          launches = [{ n: 1, ms: 680, aot: true }]; count = 1; paintLanes();
-          o.innerHTML = 'Installed from Play and launched once: 680 ms. Pick another install path.';
-          el.append(
-            h('div', { class: 'controls' }, h('span', { class: 'tst-label' }, 'install from'), pBtns),
-            h('div', { class: 'controls' }, h('button', { class: 'btn primary small', onclick: launch }, 'Launch app'), h('button', { class: 'btn small', onclick: night }, 'Leave it overnight'), state),
-            lanes,
-            h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar tst-aotbar' }), 'AOT from the profile'), h('span', {}, h('i', { class: 'bar tst-interp' }), 'interpreted + JIT')),
-            o);
-        },
-      },
-    ],
-    underHood: {
-      body: `<p>The generated rules are plain text. Each line names a class, or a method with flags: <code>H</code> for hot, <code>S</code> for used during startup, <code>P</code> for used after startup. AGP merges your rules with the ones libraries ship, rewrites the names to match R8's output, and compiles everything into the binary <code>baseline.prof</code> in <code>assets/dexopt/</code>. ART uses it only while it stays under 1.5 MB.</p>
-<p>At install, <code>dex2oat</code> runs with the <code>speed-profile</code> filter. It compiles exactly the methods in the profile to machine code and leaves the rest to the interpreter and the JIT. While the app runs, ART records which other methods get hot, and the background dexopt job later compiles those as well.</p>`,
-      code: `# baseline-prof.txt (excerpt)
-Lcom/example/news/MainActivity;
-HSPLcom/example/news/MainActivity;->onCreate(Landroid/os/Bundle;)V
-HSPLcom/example/news/feed/FeedViewModel;-><init>(Lcom/example/news/data/NewsRepository;)V
-PLcom/example/news/feed/FeedScreenKt;->FeedRow(Lcom/example/news/Article;Landroidx/compose/runtime/Composer;I)V`,
-    },
-    mistakes: [
-      {
-        title: 'No profileinstaller in the app',
-        bad: `dependencies {
-    implementation(platform(libs.compose.bom))
-    "baselineProfile"(project(":baselineprofile"))
-    // the profile is generated, but nothing installs it off Play
-}`,
-        good: `dependencies {
-    implementation(platform(libs.compose.bom))
-    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
-    "baselineProfile"(project(":baselineprofile"))
-}`,
-        why: 'Installs that skip install-time compilation, and older devices, get the profile only through <code>profileinstaller</code>. Macrobenchmark also uses it to install the profile for <code>CompilationMode.Partial()</code>.',
-      },
-      {
-        title: 'A profile generated once and never again',
-        bad: `// baseline-prof.txt committed a year ago.
-// Since then: new home screen, renamed ViewModels, a new DI setup.`,
-        good: `// CI, before every release build:
-// ./gradlew :app:generateReleaseBaselineProfile
-// then commit the regenerated src/release/generated/baselineProfiles/`,
-        why: 'Rules for methods that were renamed or removed match nothing, and new startup code is missing. Regenerate the profile as part of each release.',
-      },
-      {
-        title: 'Benchmarking with CompilationMode.Full()',
-        bad: `@Test fun startupWithProfile() = startup(CompilationMode.Full())`,
-        good: `@Test fun startupWithProfile() = startup(CompilationMode.Partial())`,
-        why: '<code>Full()</code> compiles the whole app ahead of time, which no user’s device does. It hides how good or bad your profile is. <code>Partial()</code> installs your Baseline Profile, like a real install.',
-      },
-    ],
-  };
-
-  // ─── Promoted and gap lessons ─────────────────────────────────────────
-  const robolectricLesson = {
-    id: 'robolectric',
-    title: 'Robolectric: Android on the JVM',
-    tagline: 'Run tests that need Android classes on your computer, with no device.',
-    level: 'intermediate',
-    body: `
-<p>Some logic needs Android classes but no real screen, like code that reads a <code>Uri</code>, a string resource or <code>SharedPreferences</code>. In <code>src/test</code> those calls throw, because the JVM only has a stub of the Android framework. Robolectric runs the same test on the JVM with a simulated framework. Google maintains it, and it supports Android versions back to API 21.</p>
-<p>It needs no device, but it boots a sandbox first, so the first test in a run takes a few seconds. After that each test is fast. It is not a full emulator: some things, like <code>WebView</code> or system UI such as edge-to-edge, still need a device test.</p>
-<p>Below, one test runs three ways, then 50 tests show how the setup cost spreads out.</p>`,
-    code: `// app/build.gradle.kts
-android {
-    testOptions { unitTests { isIncludeAndroidResources = true } }
-}
-dependencies {
-    testImplementation("org.robolectric:robolectric:<version>")
-    testImplementation("androidx.test.ext:junit:<version>")
-}
-
-// app/src/test/java/.../LinkParserTest.kt
-@RunWith(AndroidJUnit4::class)   // in src/test this runs on Robolectric
-class LinkParserTest {
-    private val context = ApplicationProvider.getApplicationContext<Context>()
-
-    @Test fun extractsArticleId() {
-        val uri = Uri.parse("https://example.com/news/42")
-        assertEquals("42", LinkParser.articleId(uri))
-    }
-
-    @Test fun readsTheBreakingLabel() {
-        assertEquals("Eilmeldung", context.getString(R.string.breaking))
-    }
-}`,
-    remember: 'Need Android classes but not a device? Robolectric runs them on the JVM. You pay the sandbox boot once per run.',
-    deeper: [
-      {
-        title: 'The main looper is paused',
-        body: `<p>Since Robolectric 4.4 the default looper mode is <code>PAUSED</code>. It works like a real phone: a <code>Runnable</code> posted to the main looper does not run inline. It waits in the queue until the test lets the looper run with <code>shadowOf(getMainLooper()).idle()</code>.</p>
-<p>The clock is frozen too. <code>idle()</code> runs only what is due now. <code>idleFor(...)</code> moves the clock forward and runs what became due on the way. Post a few things, assert, then idle.</p>`,
-        code: `@Test fun showsBannerAfterPost() {
-    banner.showLater()                          // posts to the main looper
-    assertFalse(banner.isShown)                 // nothing ran yet
-    shadowOf(getMainLooper()).idle()            // run what is due now
-    assertTrue(banner.isShown)
-}
-
-@Test fun hidesAfterThreeSeconds() {
-    banner.show()                               // posts hide() with a 3 s delay
-    shadowOf(getMainLooper()).idleFor(Duration.ofSeconds(3))
-    assertFalse(banner.isShown)
-}`,
-        visual(el) {
-          let now = 0, shown = false, busy = false;
-          const queue = [];
-          const qBox = h('div', { class: 'tst-rb-box', 'aria-label': 'Main looper queue' });
-          const ranBox = h('div', { class: 'tst-rb-box', 'aria-label': 'Ran' });
-          const clock = h('span', { class: 'clock' });
-          const state = h('span', { class: 'tst-res' });
-          const o = out();
-          function paint() {
-            clock.textContent = `clock ${fmt(now)}`;
-            state.textContent = `banner.isShown = ${shown}`;
-            state.className = 'tst-res' + (shown ? '' : ' tst-bad');
-            qBox.replaceChildren(h('span', { class: 'tst-label' }, 'queued'),
-              ...queue.slice().sort((a, b) => a.due - b.due).map(m => h('span', { class: 'tst-rb-msg drop-in' }, `${m.name}  due ${fmt(m.due)}`)));
-          }
-          const post = (name, delay, fn) => { queue.push({ name, due: now + delay, fn }); paint(); };
-          async function runUntil(t, label) {
-            if (busy) return; busy = true;
-            say(o, `<span class="muted">$</span> ${label}`);
-            qBox.classList.add('tst-rb-hot');
-            for (;;) {
-              const due = queue.filter(m => m.due <= t).sort((a, b) => a.due - b.due)[0];
-              if (!due) break;
-              await sleep(350); if (!el.isConnected) return;
-              queue.splice(queue.indexOf(due), 1);
-              now = Math.max(now, due.due); due.fn();
-              ranBox.append(h('span', { class: 'tst-rb-msg tst-rb-ran drop-in' }, `${due.name} at ${fmt(now)}`));
-              while (ranBox.children.length > 5) ranBox.children[1].remove();
-              paint();
-            }
-            now = Math.max(now, t); paint();
-            qBox.classList.remove('tst-rb-hot');
-            const left = queue.length;
-            o.append(h('div', { class: 'line drop-in' }, left ? `${left} message${left > 1 ? 's' : ''} still waiting: not due yet.` : 'Queue empty.'));
-            busy = false;
-          }
-          function check(expect) {
-            if (busy) return;
-            const ok = shown === expect;
-            say(o, ok ? `<span class="good">PASSED</span> banner.isShown is ${shown}` : `<span class="bad">AssertionError:</span> expected ${expect}, was ${shown}.${queue.length ? ' The post is still in the queue.' : ''}`);
-          }
-          ranBox.append(h('span', { class: 'tst-label' }, 'ran'));
-          paint();
-          o.innerHTML = 'Post the banner, then assert before and after idle().';
-          el.append(
-            h('div', { class: 'controls tst-wrap' },
-              cmd('banner.showLater()', () => { if (!busy) { post('show()', 0, () => { shown = true; }); say(o, 'Posted show(). It waits in the queue.'); } }),
-              cmd('postDelayed(hide, 3_000)', () => { if (!busy) { post('hide()', 3000, () => { shown = false; }); say(o, 'Posted hide() for 3 s from now.'); } })),
-            h('div', { class: 'controls tst-wrap' },
-              cmd('assertTrue(banner.isShown)', () => check(true)),
-              cmd('assertFalse(banner.isShown)', () => check(false))),
-            h('div', { class: 'controls tst-wrap' },
-              cmd('shadowOf(getMainLooper()).idle()', () => runUntil(now, 'idle()')),
-              cmd('idleFor(Duration.ofSeconds(3))', () => runUntil(now + 3000, 'idleFor(3 s)')),
-              h('button', { class: 'btn small', onclick() { if (busy) return; queue.length = 0; now = 0; shown = false; ranBox.replaceChildren(h('span', { class: 'tst-label' }, 'ran')); paint(); say(o, 'New test.'); } }, 'New test'),
-              clock),
-            h('div', { class: 'tst-rb-loop' }, qBox, h('span', { class: 'tst-rb-arrow', 'aria-hidden': 'true' }, '→'), ranBox),
-            h('div', { class: 'controls tst-wrap' }, state),
-            o);
-        },
-      },
-      {
-        title: 'Pick the API level and resources with @Config',
-        body: `<p>By default Robolectric runs your tests at the <code>targetSdk</code> of the app. Put <code>@Config(sdk = [...])</code> on a class or a test to choose levels yourself. With several levels listed, the test runs once per level, which is a cheap way to check code that branches on <code>Build.VERSION.SDK_INT</code>.</p>
-<p><code>@Config(qualifiers = "...")</code> sets resource qualifiers like language, night mode or screen size, so you can check that German strings or dark colors are picked up.</p>`,
-        code: `@RunWith(AndroidJUnit4::class)
-@Config(sdk = [26, 35])                    // every test runs twice
-class NotificationFactoryTest {
-    @Test fun usesAChannelOnOreoAndLater() { /* ... */ }
-}
-
-@Test
-@Config(qualifiers = "de-rDE-night")
-fun picksGermanDarkResources() {
-    assertEquals("Eilmeldung", context.getString(R.string.breaking))
-}`,
-      },
-      {
-        title: 'Compose UI tests without a device',
-        body: `<p>Robolectric can run Espresso and Compose UI tests too. The same <code>createComposeRule()</code> test can live in <code>src/test</code> with <code>@RunWith(AndroidJUnit4::class)</code> and run in seconds on the JVM. That is a good home for most behavior tests of a single screen: tap this, see that.</p>
-<p>Keep a few tests on a device for what Robolectric does not simulate well, like system UI, <code>WebView</code> or real hardware.</p>`,
-        code: `// app/src/test/... runs on Robolectric
-// debugImplementation("androidx.compose.ui:ui-test-manifest") provides the host activity
-@RunWith(AndroidJUnit4::class)
-class LikeButtonTest {
-    @get:Rule val rule = createComposeRule()
-
-    @Test fun tapTogglesLike() {
-        rule.setContent { LikeButton() }
-        rule.onNodeWithContentDescription("Like").performClick()
-        rule.onNodeWithContentDescription("Liked").assertExists()
-    }
-}`,
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Asserting before the looper runs',
-        bad: `banner.showLater()
-Thread.sleep(500)                 // the paused looper never runs on its own
-assertTrue(banner.isShown)`,
-        good: `banner.showLater()
-shadowOf(getMainLooper()).idle()
-assertTrue(banner.isShown)`,
-        why: 'In paused looper mode posted work only runs when the test idles the looper. Sleeping the test thread just wastes time.',
-      },
-      {
-        title: 'Resources not included',
-        bad: `android {
-    // no testOptions: Robolectric can't see the merged resources
-}`,
-        good: `android {
-    testOptions { unitTests { isIncludeAndroidResources = true } }
-}`,
-        why: 'Robolectric reads your app’s merged resources and manifest. Without this flag Gradle does not hand them to the test, and resource lookups fail.',
-      },
-      {
-        title: 'Robolectric for things it cannot simulate',
-        bad: `// src/test
-@Test fun articleWebViewLoadsPage() { /* WebView on Robolectric */ }`,
-        good: `// src/androidTest: a real WebView on a device
-@Test fun articleWebViewLoadsPage() { /* ... */ }`,
-        why: 'Robolectric covers most of the framework, not all of it. WebView, system UI and hardware behavior need a device or emulator.',
-      },
-    ],
-    terms: [
-      { term: 'Robolectric', def: 'A Google-maintained framework that runs Android tests on the JVM with a simulated Android framework.' },
-      { term: 'Shadow', def: 'A Robolectric class that stands in for part of a framework class, such as ShadowLooper for Looper.' },
-      { term: 'Paused looper mode', def: 'Robolectric’s default since 4.4: posted work waits in the main looper until the test idles it.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Run this test on Robolectric and let the posted work run.', code: '@RunWith([[AndroidJUnit4]]::class)\nclass BannerTest {\n    @Test fun shows() {\n        banner.showLater()\n        shadowOf(getMainLooper()).[[idle]]()\n        assertTrue(banner.isShown)\n    }\n}', why: '<code>AndroidJUnit4</code> picks Robolectric in <code>src/test</code>. <code>idle()</code> runs everything the main looper has due.' },
-      { type: 'bug', prompt: 'This Robolectric test fails with “expected true”. Tap the line that should let the post run.', code: '@Test fun showsSavedMessage() {\n    val vm = SaveViewModel(context)\n    vm.save()                     // posts the message to the main looper\n    Thread.sleep(500)\n    assertTrue(vm.savedMessageShown)\n}', bug: 3, fix: '    shadowOf(getMainLooper()).idle()', why: 'The main looper is paused. Only idle() or idleFor() runs what is queued; sleeping does not.' },
-    ],
-    quiz: [
-      { q: 'Where do Robolectric tests live and run?', options: ['<code>src/androidTest</code>, on a device', '<code>src/test</code>, on the JVM', 'Only on a CI emulator'], a: 1, why: 'Robolectric is a local test runner. No device, no APK install.' },
-      { q: 'Why does the first Robolectric test in a run take seconds?', options: ['It boots the simulated Android sandbox', 'It installs an APK', 'It waits for an emulator'], a: 0, why: 'The sandbox loads the framework once. The tests after it are fast.' },
-      { q: 'In paused looper mode, a Runnable posted to the main looper…', options: ['runs right away', 'never runs', 'waits until the test calls idle() or idleFor()'], a: 2, why: 'Like on a real device, posting only queues the work. The test decides when the looper runs.' },
-      { q: 'In paused looper mode, code under test posts a Runnable to the main looper. Which test order is right?', options: ['Trigger the code → shadowOf(getMainLooper()).idle() → assert', 'Trigger the code → assert → idle()', 'Trigger the code → Thread.sleep(500) → assert'], a: 0, why: 'Posted work waits in the queue until the test runs the looper. Asserting first sees nothing, and sleeping does not run the queue.' },
-      { q: 'A test is marked <code>@Config(sdk = [28, 34])</code>. How does it run?', options: ['Once, at API 34', 'Twice, once per listed level', 'Once, at the app’s targetSdk'], a: 1, why: 'With several levels listed, Robolectric runs the test once for each. It is a cheap way to cover code that branches on SDK_INT.' },
-    ],
-    visual(el) {
-          Lab.ui.timeline(el, {
-            lanes: ['plain JVM', 'Robo&shy;lectric', 'device'],
-            span: 6,
-            unit: 's',
-            predict: {
-              q: 'One Robolectric test takes about 3.3 s. Roughly how long do 50 of them take in one run?',
-              options: ['About 50 × 3.3 s, close to three minutes', 'About 5.5 s: the sandbox boots once, then each test is fast', 'The same as 50 tests on a device'],
-              a: 1,
-              why: 'Most of the first test’s time is booting the simulated framework. Later tests in the same run reuse it and take tens of milliseconds.',
-            },
-            frames: [
-              { now: 0, say: '<code>LinkParserTest</code> calls <code>Uri.parse</code>. Run it three ways and watch the clock from the moment you start. Times are typical, not exact.' },
-              { bars: [{ lane: 0, from: 0, to: 0.15, tone: 'err', label: '✗' }], say: 'Plain JVM: <code>android.jar</code> holds only stubs, so <code>Uri.parse</code> throws “Method parse in android.net.Uri not mocked”. It fails in milliseconds.' },
-              { bars: [{ lane: 1, from: 0, to: 3.2, tone: 'muted', label: 'boot sandbox' }], say: 'Robolectric first boots a simulated Android framework inside the JVM. That takes a few seconds.' },
-              { bars: [{ lane: 1, from: 3.2, to: 3.3, tone: 'ok' }], say: 'Then the test runs real Android code, <code>Uri</code> and resources included, in about 50 ms. It passes.' },
-              { bars: [{ lane: 2, from: 0, to: 6, tone: 'warm', label: 'build + install 2 APKs, ~38 s →' }], say: 'On a device, Gradle first builds and installs the app and the test APK. The first test starts after half a minute or more.' },
-              { bars: [{ lane: 1, from: 3.3, to: 5.5, tone: 'ok', label: '+49 tests' }], say: 'Now run 50 Robolectric tests. The sandbox boots once, and the other 49 take about 45 ms each.' },
-              { now: 5.5, say: 'Robolectric: Android APIs at near-JVM speed, no device. It is still not a full device: <code>WebView</code> or system UI need a real one.' },
-            ],
-          });
-        },
-  };
-
-  const mockkLesson = {
-    id: 'mockk',
-    title: 'Mocks with MockK',
-    tagline: 'Script an answer, then check the one call that matters.',
-    level: 'intermediate',
-    body: `
-<p>A fake is the default choice (see <em>Unit tests with fakes</em>). Sometimes the thing you want to check is the call itself: did the ViewModel log an analytics event, send a message, delete a file? Those functions often return <code>Unit</code>, so there is no state to read back. A mock records every call, so the test can check it.</p>
-<p>MockK is a mocking library for Kotlin. <code>mockk&lt;T&gt;()</code> creates a mock. <code>every { ... } returns x</code> scripts an answer, and <code>just Runs</code> scripts a <code>Unit</code> function. <code>verify { ... }</code> checks that a call happened with the arguments you expect. A plain mock is strict: any call you did not script throws <code>MockKException</code>.</p>
-<p>Keep mocks for side effects you can’t observe another way. Verifying every call ties the test to how the code works instead of what it does.</p>`,
-    code: `interface Analytics {
-    fun log(event: String, articleId: Int)
-}
-
-class ArticleViewModelTest {
-    private val analytics = mockk<Analytics>()
-
-    @Test fun openingAnArticleLogsOnce() {
-        every { analytics.log(any(), any()) } just Runs
-        val vm = ArticleViewModel(analytics)
-
-        vm.open(articleId = 7)
-
-        verify(exactly = 1) { analytics.log("article_open", 7) }
-        confirmVerified(analytics)            // and nothing else was called
-    }
-}
-
-// testImplementation("io.mockk:mockk:<version>")`,
-    remember: 'Fakes for state, mocks for side effects. Verify the call that matters, not every call.',
-    deeper: [
-      {
-        title: 'Suspend functions: coEvery and coVerify',
-        body: `<p>Inside <code>every { }</code> you can’t call a suspend function, because that block is not a coroutine. MockK has coroutine versions: <code>coEvery</code> to script and <code>coVerify</code> to check. They take the same matchers, and <code>throws</code> works for error paths.</p>`,
-        code: `val repo = mockk<NewsRepository>()
-coEvery { repo.latest() } returns listOf(article)
-// or the error path
-coEvery { repo.latest() } throws IOException("offline")
-
-vm.load()
-coVerify(exactly = 1) { repo.latest() }`,
-      },
-      {
-        title: 'Capture an argument with slot',
-        body: `<p>Sometimes the code builds the argument itself, like an event with a timestamp. Matching it exactly is hard. Capture it instead: create a <code>slot</code>, pass <code>capture(slot)</code> as the matcher, then assert on the fields you care about.</p>`,
-        code: `val sent = slot<ChatMessage>()
-coEvery { chatApi.send(capture(sent)) } just Runs
-
-vm.send("Hello")
-
-assertEquals("Hello", sent.captured.text)
-assertEquals(UserId(42), sent.captured.from)`,
-      },
-      {
-        title: 'Strict, relaxed and relaxUnitFun',
-        body: `<p>A strict mock fails loudly on any call you did not script. <code>mockk(relaxed = true)</code> answers every call with a default instead: 0, an empty string, an empty list, or another relaxed mock. That is convenient and hides bugs, because a wrong call quietly returns something.</p>
-<p><code>relaxUnitFun = true</code> is the middle ground. Only functions that return <code>Unit</code> are relaxed. Anything that returns data must still be scripted.</p>`,
-        code: `val analytics = mockk<Analytics>(relaxUnitFun = true)   // log() just runs
-val repo = mockk<NewsRepository>()                       // latest() must be scripted
-
-val careless = mockk<NewsRepository>(relaxed = true)
-careless.latest()   // returns an empty list without complaint`,
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Verifying the query instead of the result',
-        bad: `coEvery { repo.latest() } returns listOf(article)
-vm.load()
-coVerify { repo.latest() }   // the screen could still be broken`,
-        good: `coEvery { repo.latest() } returns listOf(article)
-vm.load()
-assertEquals(UiState.Success(listOf(article)), vm.state.value)`,
-        why: 'The user sees the state, not the call. Check the output when there is one, and keep verify for side effects.',
-      },
-      {
-        title: 'A relaxed repository',
-        bad: `val repo = mockk<NewsRepository>(relaxed = true)
-vm.load()
-assertEquals(UiState.Empty, vm.state.value)   // passes for the wrong reason`,
-        good: `coEvery { repo.latest() } returns emptyList()
-vm.load()
-assertEquals(UiState.Empty, vm.state.value)`,
-        why: 'A relaxed mock returns an empty list for anything. The test passes even if load() calls the wrong function.',
-      },
-      {
-        title: 'Mocking types you don’t own',
-        bad: `val context = mockk<Context>()
-every { context.getString(R.string.breaking) } returns "Eilmeldung"`,
-        good: `interface Strings { fun breaking(): String }
-class FakeStrings : Strings { override fun breaking() = "Eilmeldung" }`,
-        why: 'You don’t know every call a framework class makes inside. Wrap it behind your own small interface, or use the real thing on Robolectric.',
-      },
-    ],
-    terms: [
-      { term: 'Mock', def: 'A test double that you program per call and that records its calls so the test can verify them.' },
-      { term: 'Stub', def: 'A scripted answer for a call, such as every { repo.latest() } returns list.' },
-      { term: 'Verification', def: 'A check that a call happened with certain arguments and a certain number of times, such as verify(exactly = 1).' },
-      { term: 'Relaxed mock', def: 'A MockK mock that returns default values for calls you did not script instead of throwing.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Create a mock whose Unit functions just run, then check the event was logged once.', code: 'val analytics = [[mockk]]<Analytics>(relaxUnitFun = true)\nArticleViewModel(analytics).open(articleId = 7)\n[[verify]](exactly = 1) { analytics.log("article_open", 7) }', why: '<code>relaxUnitFun</code> lets <code>log()</code> run without a script. <code>verify</code> checks the call and its arguments.' },
-      { type: 'bug', prompt: 'This test does not compile: “Suspend function can be called only from a coroutine”. Tap the line.', code: '@Test fun showsArticles() = runTest {\n    val repo = mockk<NewsRepository>()\n    every { repo.latest() } returns listOf(article)\n    val vm = NewsViewModel(repo)\n    vm.load()\n    assertEquals(UiState.Success(listOf(article)), vm.state.value)\n}', bug: 2, fix: '    coEvery { repo.latest() } returns listOf(article)', why: '<code>latest()</code> is a suspend function. Script it with <code>coEvery</code>, whose block is a coroutine.' },
-    ],
-    quiz: [
-      { q: 'When is a mock a better fit than a fake?', options: ['To give a ViewModel data to show', 'To check a side effect with no state to read back, like an analytics event', 'In every unit test'], a: 1, why: 'A fake covers state. A mock shines when the call itself is the behavior.' },
-      { q: 'A plain <code>mockk&lt;Analytics&gt;()</code> gets a call you never scripted. What happens?', options: ['It returns a default value', 'The call is ignored', 'It throws MockKException'], a: 2, why: 'Plain mocks are strict. Use relaxed or relaxUnitFun to change that, knowingly.' },
-      { q: 'Which pair scripts and checks suspend functions?', options: ['coEvery and coVerify', 'every and verify', 'suspendEvery and suspendVerify'], a: 0, why: 'The co versions run their block as a coroutine, so suspend calls are allowed.' },
-      { q: '<code>every { repo.load() } returns articles</code>, where load() is a suspend function. What happens?', options: ['It works like any other function', 'It does not compile, because every { } is not a coroutine; use coEvery', 'It returns articles only on the main thread'], a: 1, why: 'A suspend call needs a coroutine. coEvery and coVerify are the coroutine versions with the same matchers.' },
-      { q: 'An Analytics mock has many Unit functions you don’t care about, plus <code>sessionId(): String</code>. You want unscripted Unit calls to pass but data calls to fail loudly. Which mock?', options: ['mockk&lt;Analytics&gt;()', 'mockk&lt;Analytics&gt;(relaxed = true)', 'mockk&lt;Analytics&gt;(relaxUnitFun = true)'], a: 2, why: 'relaxUnitFun relaxes only Unit functions. A relaxed mock would quietly return an empty sessionId, and a strict one fails on every unscripted log call.' },
-    ],
-    visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'val analytics = mockk<Analytics>()\n\n@Test fun openingAnArticleLogsOnce() {\n  every {\n    analytics.log(any(), any())\n  } just Runs\n  val vm = ArticleViewModel(analytics)\n  vm.open(articleId = 7)\n  verify(exactly = 1) {\n    analytics.log("article_open", 7)\n  }\n  confirmVerified(analytics)\n}',
-            varsTitle: 'Inside the mock',
-            outTitle: 'Test result',
-            predict: {
-              q: 'Say <code>open()</code> had a bug and logged the event twice. Which line would fail?',
-              options: ['<code>vm.open(7)</code>: the second call throws', '<code>verify(exactly = 1)</code>', '<code>confirmVerified</code>', 'None: the test passes'],
-              a: 1,
-              why: 'The scripted answer accepts any number of calls and records them all. <code>verify(exactly = 1)</code> counts the matching calls in that record and finds two.',
-            },
-            frames: [
-              { say: 'A mock records every call made on it. Step through the test and watch the record.' },
-              { line: 1, vars: { answers: 'none', recorded: 'none' }, say: '<code>mockk&lt;Analytics&gt;()</code> makes a strict mock: no answers yet, so any call would throw <code>MockKException</code>.' },
-              { line: [4, 5, 6], vars: { answers: 'log(any(), any()) → Unit' }, say: '<code>every { … } just Runs</code> scripts <code>log()</code> for any arguments. It returns <code>Unit</code>.' },
-              { line: 7, vars: { vm: 'ArticleViewModel(mock)' }, say: 'The ViewModel gets the mock through its constructor, like a fake.' },
-              { line: 8, stack: ['vm.open(7)', 'analytics.log("article_open", 7)'], vars: { recorded: 'log("article_open", 7)' }, say: '<code>open()</code> calls <code>log()</code>. The mock finds the scripted answer, returns, and records the call with its arguments.' },
-              { line: [9, 10, 11], stack: [], out: 'verify: 1 matching call ✓', say: '<code>verify</code> searches the record for <code>log("article_open", 7)</code> and finds exactly one.' },
-              { line: 12, out: 'confirmVerified: no unverified calls ✓\nPASSED', say: '<code>confirmVerified</code> checks that no other call was recorded. The test passes.' },
-              { line: 8, vars: { recorded: 'log("article_open", 7) × 2' }, out: '— with the bug: open() logs twice —', say: 'Now imagine the bug. Both calls match the script, so <code>open()</code> runs fine and the record holds two calls.' },
-              { line: [9, 10, 11], out: 'verify(exactly = 1): found 2 calls ✗\nFAILED', say: 'The <code>verify</code> check fails. The mock caught a side effect that left no state to read back.' },
-            ],
-          });
-        },
-  };
-
-  const screenshotsLesson = {
-    id: 'screenshots',
-    title: 'Screenshot tests',
-    tagline: 'Save a picture of the UI and fail when it changes.',
-    level: 'intermediate',
-    body: `
-<p>A behavior test checks that a button exists and does the right thing. It does not notice that the padding shrank, the title now wraps, or the dark theme made text unreadable. A screenshot test renders a composable, saves the image as a <em>reference</em> (also called a golden), and on later runs compares a fresh render to it. One test checks colors, sizes, spacing and fonts at once.</p>
-<p>There are two commands. <b>Record</b> writes reference images, which you commit. <b>Verify</b> renders again and fails if an image differs, with a report that shows the reference, the new image and the difference. A failure is not always a bug. If the change was on purpose, you record again, and the reviewer approves the new image in the pull request.</p>
-<p>Most teams run them on the JVM for speed. Roborazzi renders through Robolectric. Google’s Compose Preview Screenshot Testing renders your previews and is still experimental.</p>`,
-    code: `// module build.gradle.kts: plugins { id("io.github.takahirom.roborazzi") }
-// plus the Roborazzi and Robolectric test dependencies
-
-@RunWith(AndroidJUnit4::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)        // real rendering on Robolectric
-class ArticleCardScreenshotTest {
-    @get:Rule val composeRule = createComposeRule()
-
-    @Test fun articleCard() {
-        composeRule.setContent { AppTheme { ArticleCard(sampleArticle) } }
-        composeRule.onRoot().captureRoboImage("src/test/screenshots/article_card.png")
-    }
-}
-
-// ./gradlew recordRoborazziDebug    write the reference images, then commit them
-// ./gradlew verifyRoborazziDebug    fail when a render differs from its reference`,
-    remember: 'Record a reference, verify against it on the same machine, and read the diff before you record again.',
-    deeper: [
-      {
-        title: 'Pixel-perfect needs one machine',
-        body: `<p>Fonts, the OS, the CPU architecture and library versions all change rendering a little. A reference recorded on a Mac can fail on a Linux CI server with nothing wrong in your code.</p>
-<p>Either record and verify in the same place, usually CI, or allow a small tolerance. Tolerance has a cost: a real change smaller than the threshold passes too. A common CI flow runs verify on every pull request, records new images when it fails, and commits them to the branch so the reviewer sees and approves them.</p>`,
-      },
-      {
-        title: 'Compose Preview Screenshot Testing',
-        body: `<p>Google’s own tool turns previews into tests. Put <code>@PreviewTest</code> on a <code>@Preview</code> in the <code>screenshotTest</code> source set, then run the update and validate tasks. It renders on your computer with Layoutlib, the same engine as the Android Studio preview, so it needs no Robolectric.</p>
-<p>It is experimental and its setup is still changing: the standalone Gradle plugin is being replaced by AGP test suites. Check the current docs before you set it up.</p>`,
-        code: `// app/src/screenshotTest/kotlin/.../ArticleCardScreenshots.kt
-@PreviewTest
-@Preview(showBackground = true)
-@Composable
-fun ArticleCardPreview() {
-    AppTheme { ArticleCard(sampleArticle) }
-}
-
-// ./gradlew updateDebugScreenshotTest     record references
-// ./gradlew validateDebugScreenshotTest   compare and write an HTML report`,
-      },
-      {
-        title: 'Pick a few cases, not every combination',
-        body: `<p>Themes, font sizes, screen widths and languages multiply. Test every combination and you get hundreds of images to review each time a color changes. Pick the cases that can break in a different way: dark theme, the largest font scale, the narrowest width, and the language with the longest words.</p>
-<p>Turn the switches below and watch the count.</p>`,
-        code: `@Preview(name = "light")
-@Preview(name = "dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "large font", fontScale = 2f)
-@Preview(name = "German", locale = "de")
-@Composable
-fun ArticleCardCases() { AppTheme { ArticleCard(sampleArticle) } }`,
-        visual(el) {
-          const AX = [
-            { k: 'theme', label: 'themes', opts: [1, 2] },
-            { k: 'font', label: 'font scales', opts: [1, 3, 5] },
-            { k: 'width', label: 'widths', opts: [1, 3] },
-            { k: 'lang', label: 'languages', opts: [1, 2, 6] },
-          ];
-          const S = { theme: 2, font: 1, width: 1, lang: 1, screens: 12 };
-          const total = h('b');
-          const o = out();
-          const rows = AX.map(a => {
-            const btns = a.opts.map(v => h('button', { class: 'cmd', onclick() { S[a.k] = v; paint(); } }, String(v)));
-            a.btns = btns;
-            return h('div', { class: 'controls tst-wrap' }, h('span', { class: 'tst-label' }, a.label), btns);
-          });
-          function paint() {
-            AX.forEach(a => a.btns.forEach((b, i) => b.setAttribute('aria-pressed', String(a.opts[i] === S[a.k]))));
-            const per = AX.reduce((p, a) => p * S[a.k], 1), n = per * S.screens;
-            total.textContent = String(n);
-            say(o, `${S.screens} screens × ${per} cases = <b>${n}</b> reference images. ${n > 300 ? '<span class="bad">One color change breaks all of them.</span>' : n > 60 ? 'Getting heavy to review.' : '<span class="good">Small enough to review.</span>'}`);
-          }
-          el.append(...rows, h('div', { class: 'tst-stats' }, h('span', {}, 'images to keep: ', total)), o);
-          paint();
-        },
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Recording on a laptop, verifying on CI',
-        bad: `# on your Mac
-./gradlew recordRoborazziDebug && git commit -am "update screenshots"
-# CI on Linux: verifyRoborazziDebug fails on anti-aliasing`,
-        good: `# CI records when verify fails and pushes the images to the branch;
-# the reviewer approves them in the pull request`,
-        why: 'Rendering differs between machines. Keep recording and verifying in one environment.',
-      },
-      {
-        title: 'Recording just to make the build green',
-        bad: `./gradlew verifyRoborazziDebug   # 14 images failed
-./gradlew recordRoborazziDebug   # all green now`,
-        good: `./gradlew verifyRoborazziDebug
-# open build/reports/roborazzi/index.html, check every diff,
-# then record only if each change was intended`,
-        why: 'Recording accepts whatever the code draws now. Without reading the diff, the test catches nothing.',
-      },
-    ],
-    terms: [
-      { term: 'Reference image', def: 'The approved screenshot a test compares against, also called a golden. It is committed with the code.' },
-      { term: 'Diff report', def: 'The output of a failed screenshot test, showing the reference, the new render and the pixels that changed.' },
-      { term: 'Tolerance', def: 'How much difference a screenshot comparison allows before it fails, such as a percentage of changed pixels.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Name the two Roborazzi tasks for the debug variant.', code: '// write new reference images\n./gradlew [[recordRoborazziDebug]]\n// fail when a render differs\n./gradlew [[verifyRoborazziDebug]]', why: 'Record writes references. Verify compares and fails on a difference.' },
-      { type: 'bug', prompt: 'This screenshot test fails on every run, even with no code change. Tap the line.', code: '@Test fun articleCard() {\n    composeRule.setContent {\n        AppTheme { ArticleCard(sampleArticle.copy(publishedAt = Clock.System.now())) }\n    }\n    composeRule.onRoot().captureRoboImage("src/test/screenshots/article_card.png")\n}', bug: 2, fix: '        AppTheme { ArticleCard(sampleArticle.copy(publishedAt = fixedInstant)) }', why: 'The card shows “2 minutes ago”, which changes every run. Screenshot inputs must be fixed: times, random values and network data.' },
-    ],
-    quiz: [
-      { q: 'A screenshot test fails after you made the title bigger on purpose. What next?', options: ['Raise the tolerance until it passes', 'Check the diff, record new references, and let the reviewer approve them', 'Delete the test'], a: 1, why: 'An intended change means a new reference. The diff in the pull request is how the team approves it.' },
-      { q: 'Why record and verify on the same machine?', options: ['Gradle refuses otherwise', 'It is faster', 'Fonts, OS and hardware change rendering slightly'], a: 2, why: 'Small rendering differences make pixel-perfect comparisons fail across machines.' },
-      { q: 'What is the risk of a high tolerance?', options: ['A small real regression can pass', 'Tests run slower', 'More reference images'], a: 0, why: 'Anything under the threshold passes, including a missing icon or a 1 dp shift.' },
-      { q: 'Which change is a screenshot test most likely to catch that assertIsDisplayed() misses?', options: ['A button that opens the wrong screen', 'Padding that shrank and a title that now wraps', 'A ViewModel that never loads'], a: 1, why: 'A screenshot compares the whole picture: colors, sizes, spacing and fonts. Behavior tests check that nodes exist and act right.' },
-      { q: 'You have 3 themes, 4 font scales, 5 widths and 6 languages. Which set of cases fits best?', options: ['All 360 combinations', 'Default theme only', 'A few that break differently: dark theme, largest font scale, narrowest width, longest language'], a: 2, why: 'Each extra case adds images to review on every change. Pick the ones that can fail in their own way.' },
-    ],
-    predict: {
-          q: 'Tolerance is 1%. You remove a small unread dot and run verify. What happens?',
-          options: ['It fails: any change fails', 'It can pass: the dot is less than 1% of the pixels, so a real change slips through', 'Verify records a new reference'],
-          a: 1,
-          why: 'A tolerance accepts a share of changed pixels. A small but real change can stay under it, which is why high tolerances are risky.',
-        },
-    visual(el) {
-      const W = 20, H = 12;
-      const CHANGES = [
-        { k: 'pad', label: 'padding 16 → 8 dp' },
-        { k: 'font', label: 'title font larger' },
-        { k: 'color', label: 'button color' },
-        { k: 'dot', label: 'unread dot removed' },
-        { k: 'machine', label: 'render on another machine' },
-      ];
-      const S = { pad: false, font: false, color: false, dot: false, machine: false, tol: 0, ref: null };
-      function render() {
-        const g = Array(W * H).fill('');
-        const set = (x, y, k) => { if (x >= 0 && x < W && y >= 0 && y < H) g[y * W + x] = k; };
-        for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) set(x, y, 'card');
-        const p = S.pad ? 1 : 2, x0 = 1 + p, y0 = 1 + p;
-        const tw = S.font ? 12 : 9, th = S.font ? 2 : 1;
-        for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) set(x0 + x, y0 + y, 'title');
-        if (!S.dot) set(W - 2 - p, y0, 'btn2');
-        const ty = y0 + th + 1;
-        for (let x = 0; x < 14; x++) set(x0 + x, ty, 'text');
-        for (let x = 0; x < 9; x++) set(x0 + x, ty + 1, 'text');
-        for (let y = 0; y < 2; y++) for (let x = 0; x < 5; x++) set(x0 + x, H - 2 - p - 1 + y, S.color ? 'btn2' : 'btn');
-        if (S.machine) { set(x0 + tw, y0, 'aa'); set(x0 + 14, ty, 'aa'); }
-        return g;
-      }
-      const mk = () => { const cells = Array.from({ length: W * H }, () => h('span', { class: 'tst-ss-px' })); return { cells, el: h('div', { class: 'tst-ss-img', role: 'img' }, cells) }; };
-      const ref = mk(), now = mk(), diff = mk();
-      ref.el.setAttribute('aria-label', 'Reference image'); now.el.setAttribute('aria-label', 'New render'); diff.el.setAttribute('aria-label', 'Difference');
-      diff.el.classList.add('tst-ss-diff');
-      const paintImg = (img, g) => img.cells.forEach((c, i) => { c.className = 'tst-ss-px' + (g && g[i] ? ' k-' + g[i] : ''); });
-      const verdict = h('span', { class: 'tst-res' }, 'not run');
-      const o = out();
-      const boxes = CHANGES.map(c => {
-        const input = h('input', { type: 'checkbox', id: 'tst-ss-' + c.k });
-        input.addEventListener('change', () => { S[c.k] = input.checked; paint(); verdict.textContent = 'not run'; verdict.className = 'tst-res'; diff.cells.forEach(x => x.classList.remove('tst-ss-hit')); });
-        return h('label', { class: 'switch', for: 'tst-ss-' + c.k }, input, h('span', {}, c.label));
-      });
-      const tolBtns = [0, 1].map(v => h('button', { class: 'cmd', onclick() { S.tol = v; tolBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === v))); say(o, v ? 'Tolerance: up to 1% of pixels may differ.' : 'Pixel-perfect: any changed pixel fails.'); } }, v ? '1% tolerance' : 'pixel-perfect'));
-      function paint() { paintImg(now, render()); paintImg(ref, S.ref); ref.el.classList.toggle('tst-ss-empty', !S.ref); }
-      function record() {
-        S.ref = render(); paint();
-        diff.cells.forEach(x => x.classList.remove('tst-ss-hit'));
-        verdict.textContent = 'recorded'; verdict.className = 'tst-res drop-in';
-        say(o, '<span class="muted">$</span> ./gradlew recordRoborazziDebug  <span class="good">1 reference written</span>');
-      }
-      async function verify() {
-        if (!S.ref) { say(o, '<span class="bad">No reference image.</span> Record first.'); return; }
-        const g = render();
-        let n = 0;
-        diff.cells.forEach(x => x.classList.remove('tst-ss-hit'));
-        say(o, '<span class="muted">$</span> ./gradlew verifyRoborazziDebug');
-        for (let i = 0; i < g.length; i++) if (g[i] !== S.ref[i]) { n++; diff.cells[i].classList.add('tst-ss-hit'); }
-        await sleep(200); if (!el.isConnected) return;
-        const pct = (n / g.length) * 100, pass = pct <= S.tol;
-        verdict.textContent = pass ? 'PASSED' : 'FAILED'; verdict.className = 'tst-res drop-in' + (pass ? '' : ' tst-bad');
-        const real = S.pad || S.font || S.color || S.dot;
-        let note = '';
-        if (pass && n && real) note = ' <span class="bad">A real change slipped under the threshold.</span>';
-        else if (!pass && !real) note = ' Nothing changed in the code: only the machine.';
-        o.append(h('div', { class: 'line drop-in', html: `${n} of ${g.length} pixels differ (${pct.toFixed(1)}%).${note}` }));
-      }
-      tolBtns[0].setAttribute('aria-pressed', 'true');
-      record();
-      o.innerHTML = 'A reference is recorded. Change something, then verify.';
-      el.append(
-        h('div', { class: 'controls tst-wrap' }, boxes),
-        h('div', { class: 'tst-ss-wrap' },
-          h('div', { class: 'tst-ss-pane' }, h('span', { class: 'tst-label' }, 'reference'), ref.el),
-          h('div', { class: 'tst-ss-pane' }, h('span', { class: 'tst-label' }, 'new render'), now.el),
-          h('div', { class: 'tst-ss-pane' }, h('span', { class: 'tst-label' }, 'diff'), diff.el)),
-        h('div', { class: 'controls tst-wrap' }, tolBtns),
-        h('div', { class: 'controls tst-wrap' }, cmd('./gradlew recordRoborazziDebug', record), cmd('./gradlew verifyRoborazziDebug', verify), verdict),
-        o);
-    },
-  };
-
-  const hiltTestingLesson = {
-    id: 'hilt-testing',
-    title: 'Hilt in tests',
-    tagline: 'Swap a real binding for a fake in the graph the test app uses.',
-    level: 'advanced',
-    body: `
-<p>A unit test builds a ViewModel by hand and passes fakes to its constructor. A UI test starts a real Activity, and Hilt builds that Activity’s dependencies. To get fakes in there, you change the Hilt graph for the test.</p>
-<p>Mark the test class with <code>@HiltAndroidTest</code> and add a <code>HiltAndroidRule</code>. Hilt then generates components for the test and runs it in <code>HiltTestApplication</code> instead of your app class. To replace a module for every test in the source set, write a test module with <code>@TestInstallIn(components = ..., replaces = ...)</code>. To replace it for one test class only, use <code>@UninstallModules</code> with <code>@BindValue</code> or a nested module.</p>
-<p>Prefer <code>@TestInstallIn</code>. Each class with <code>@UninstallModules</code> gets its own generated components, which can slow test builds a lot.</p>`,
-    code: `// app/src/androidTest/java/.../FakeNetworkModule.kt   (every test in androidTest)
-@Module
-@TestInstallIn(components = [SingletonComponent::class], replaces = [NetworkModule::class])
-abstract class FakeNetworkModule {
-    @Singleton @Binds
-    abstract fun bindApi(fake: FakeNewsApi): NewsApi
-}
-
-@Singleton
-class FakeNewsApi @Inject constructor() : NewsApi {
-    var articles = listOf(Article("Kotlin 2.3 released"))
-    var error: Exception? = null
-    var calls = 0
-    override suspend fun latest(): List<Article> { calls++; error?.let { throw it }; return articles }
-}
-
-@HiltAndroidTest
-class NewsScreenTest {
-    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-    @get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()
-
-    @Inject lateinit var api: FakeNewsApi
-
-    @Before fun setUp() { hiltRule.inject() }
-
-    @Test fun showsHeadlinesFromTheFake() {
-        composeRule.onNodeWithText("Kotlin 2.3 released").assertIsDisplayed()
-        assertEquals(1, api.calls)
-    }
-}
-
-// androidTestImplementation("com.google.dagger:hilt-android-testing:<version>")
-// kspAndroidTest("com.google.dagger:hilt-android-compiler:<version>")`,
-    remember: '@HiltAndroidTest plus HiltAndroidRule first. Replace modules with @TestInstallIn; use @UninstallModules only when one class needs something different.',
-    deeper: [
-      {
-        title: 'A test runner that swaps the Application',
-        body: `<p>Hilt tests must run in <code>HiltTestApplication</code>, not your <code>@HiltAndroidApp</code> class. For instrumented tests, write a small runner that creates it, and point <code>testInstrumentationRunner</code> at it. For Robolectric, set the application with <code>@Config</code> on the class, or once for all tests in <code>robolectric.properties</code>.</p>`,
-        code: `class HiltTestRunner : AndroidJUnitRunner() {
-    override fun newApplication(cl: ClassLoader?, name: String?, context: Context?): Application =
-        super.newApplication(cl, HiltTestApplication::class.java.name, context)
-}
-// android { defaultConfig { testInstrumentationRunner = "com.example.HiltTestRunner" } }
-
-// Robolectric
-@HiltAndroidTest
-@Config(application = HiltTestApplication::class)
-class SettingsScreenTest { /* ... */ }`,
-      },
-      {
-        title: 'Rule order: Hilt first',
-        body: `<p>The Compose rule launches the Activity, and the Activity asks Hilt for its dependencies. So <code>HiltAndroidRule</code> must run before every other rule. Give it <code>order = 0</code> and the others higher numbers, or wrap them in a <code>RuleChain</code> with the Hilt rule outside.</p>`,
-        code: `@get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-@get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()
-@get:Rule(order = 2) val screenshotRule = SomeOtherRule()`,
-      },
-      {
-        title: '@BindValue for one test class',
-        body: `<p>When one class needs a different binding, uninstall the production module there and bind a field with <code>@BindValue</code>. Hilt binds the field under its declared type. You can only uninstall modules marked <code>@InstallIn</code>, not other <code>@TestInstallIn</code> modules, and each class that does this costs extra build time.</p>
-<p>Often a configurable shared fake is simpler: inject <code>FakeNewsApi</code> and set its error field in the test.</p>`,
-        code: `@UninstallModules(NetworkModule::class)
-@HiltAndroidTest
-class OfflineScreenTest {
-    @BindValue @JvmField
-    val api: NewsApi = FakeNewsApi().apply { error = IOException("offline") }
-
-    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
-    // ...
-}`,
-      },
-    ],
-    mistakes: [
-      {
-        title: 'Forgetting hiltRule.inject()',
-        bad: `@Inject lateinit var api: FakeNewsApi
-
-@Test fun showsHeadlines() {
-    api.articles = emptyList()   // lateinit property api has not been initialized
-}`,
-        good: `@Inject lateinit var api: FakeNewsApi
-
-@Before fun setUp() { hiltRule.inject() }`,
-        why: 'Hilt fills <code>@Inject</code> fields in the test only when you call <code>inject()</code>.',
-      },
-      {
-        title: 'Uninstalling a @TestInstallIn module',
-        bad: `@UninstallModules(FakeNetworkModule::class)   // a @TestInstallIn module
-@HiltAndroidTest
-class CheckoutErrorTest { /* ... */ }`,
-        good: `@HiltAndroidTest
-class CheckoutErrorTest {
-    @Inject lateinit var api: FakeNewsApi
-    @Before fun setUp() { hiltRule.inject(); api.error = IOException("offline") }
-}`,
-        why: '<code>@UninstallModules</code> only accepts <code>@InstallIn</code> modules, so this does not compile. Make the shared fake configurable instead.',
-      },
-      {
-        title: '@UninstallModules in every class',
-        bad: `@UninstallModules(NetworkModule::class) @HiltAndroidTest class NewsScreenTest { /* nested fake module */ }
-@UninstallModules(NetworkModule::class) @HiltAndroidTest class SettingsScreenTest { /* the same again */ }`,
-        good: `@TestInstallIn(components = [SingletonComponent::class], replaces = [NetworkModule::class])
-@Module abstract class FakeNetworkModule { /* once, for all tests */ }`,
-        why: 'Hilt generates a separate set of components for each class that uninstalls modules. The same fake everywhere belongs in one @TestInstallIn module.',
-      },
-    ],
-    terms: [
-      { term: '@HiltAndroidTest', def: 'Marks a test class that uses Hilt, so Hilt generates components for it.' },
-      { term: 'HiltAndroidRule', def: 'The JUnit rule that sets up the Hilt components for each test and injects the test’s @Inject fields.' },
-      { term: '@TestInstallIn', def: 'Marks a test module that replaces a production module for every test in the source set.' },
-      { term: '@BindValue', def: 'Binds a field of the test class into the Hilt graph under its declared type.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Replace NetworkModule with a fake for every test in this source set.', code: '@Module\n@[[TestInstallIn]](\n    components = [SingletonComponent::class],\n    [[replaces]] = [NetworkModule::class],\n)\nabstract class FakeNetworkModule {\n    @Singleton @Binds\n    abstract fun bindApi(fake: FakeNewsApi): NewsApi\n}', why: '<code>@TestInstallIn</code> installs this module and removes the one named in <code>replaces</code>, for all tests in the folder.' },
-      { type: 'bug', prompt: 'The Activity starts before Hilt has set up the test components. Tap the line to change.', code: '@HiltAndroidTest\nclass NewsScreenTest {\n    @get:Rule(order = 0) val composeRule = createAndroidComposeRule<MainActivity>()\n    @get:Rule(order = 1) val hiltRule = HiltAndroidRule(this)\n\n    @Test fun showsHeadlines() { /* ... */ }\n}', bug: 2, fix: '    @get:Rule(order = 2) val composeRule = createAndroidComposeRule<MainActivity>()', why: 'Rules run from the lowest order. The Hilt rule must come first, so the Compose rule needs a higher number.' },
-    ],
-    quiz: [
-      { q: 'Every test in <code>androidTest</code> should use <code>FakeNewsApi</code>. What do you write?', options: ['@UninstallModules in each test class', 'One module with @TestInstallIn(replaces = [NetworkModule::class])', 'A @BindValue field in each class'], a: 1, why: 'One test module replaces the binding everywhere, with no extra components per class.' },
-      { q: 'Why prefer @TestInstallIn over @UninstallModules?', options: ['Hilt generates new components for each class that uses @UninstallModules, which slows builds', '@UninstallModules is deprecated', '@TestInstallIn tests run faster on the device'], a: 0, why: 'The Hilt docs warn about the build time cost and recommend @TestInstallIn whenever possible.' },
-      { q: 'What does <code>hiltRule.inject()</code> do?', options: ['Launches the Activity', 'Replaces the production modules', 'Fills the @Inject fields of the test class'], a: 2, why: 'Module replacement happens at compile time. inject() populates the test’s own fields.' },
-      { q: '<pre style="white-space:pre-wrap;overflow-wrap:anywhere">@get:Rule(order = 0) val compose = createAndroidComposeRule&lt;MainActivity&gt;()\n@get:Rule(order = 1) val hilt = HiltAndroidRule(this)</pre>What is wrong?', options: ['Nothing', 'The Activity launches before Hilt is set up; the Hilt rule needs order = 0', 'Rules cannot have an order'], a: 1, why: 'The Compose rule starts the Activity, which asks Hilt for its dependencies. HiltAndroidRule must run before every other rule.' },
-      { q: 'An instrumented @HiltAndroidTest crashes because the app runs your @HiltAndroidApp class. What fixes it?', options: ['A custom test runner that creates HiltTestApplication, set as testInstrumentationRunner', 'Add @AndroidEntryPoint to the test', 'Call hiltRule.inject() earlier'], a: 0, why: 'Hilt tests must run in HiltTestApplication. For instrumented tests a small runner creates it; for Robolectric you set it with @Config.' },
-    ],
-    visual(el) {
-          Lab.ui.graph(el, {
-            height: 310,
-            nodes: [
-              { id: 'test', label: 'NewsScreenTest<small>@HiltAndroidTest</small>', x: 25, y: 10, hidden: true, tone: 'warm' },
-              { id: 'app', label: 'HiltTestApplication', x: 72, y: 10, hidden: true, tone: 'warm' },
-              { id: 'act', label: 'MainActivity', x: 25, y: 50 },
-              { id: 'comp', label: 'SingletonComponent', x: 72, y: 50, tone: 'muted' },
-              { id: 'net', label: 'NetworkModule<small>real NewsApi</small>', x: 25, y: 90 },
-              { id: 'fake', label: 'FakeNetworkModule<small>FakeNewsApi</small>', x: 72, y: 90, hidden: true, tone: 'ok' },
-            ],
-            predict: {
-              q: 'The test has <code>@Inject lateinit var api: FakeNewsApi</code>, and the Activity gets a <code>NewsApi</code>. Are they the same object?',
-              options: ['Yes: both come from the test’s SingletonComponent, and the binding is <code>@Singleton</code>', 'No: the test always gets its own copy', 'Only if the test builds the Activity by hand'],
-              a: 0,
-              why: 'Hilt builds one graph for the test. A <code>@Singleton</code> binding hands the same instance to the Activity and to <code>hiltRule.inject()</code>, so the test can set it up and read it back.',
-            },
-            frames: [
-              { add: [['act', 'comp', 'NewsApi'], ['comp', 'net', 'installs']], say: 'In the app, <code>MainActivity</code> gets its <code>NewsApi</code> from <code>SingletonComponent</code>, which installs <code>NetworkModule</code>: the real server.' },
-              { show: ['test'], add: [['test', 'act', 'launches']], say: 'A UI test launches <code>MainActivity</code>. Left like this, it would call the real server.' },
-              { show: ['app'], add: [['app', 'comp', 'builds', 'warm']], say: '<code>@HiltAndroidTest</code> and <code>HiltAndroidRule</code>: the test runs in <code>HiltTestApplication</code>, and Hilt generates components just for tests.' },
-              { show: ['fake'], gone: ['net'], remove: [['comp', 'net']], add: [['comp', 'fake', 'installs instead', 'ok']], say: '<code>@TestInstallIn(replaces = [NetworkModule::class])</code> swaps the module for every test in <code>androidTest</code>.' },
-              { hl: ['test', 'comp'], add: [['comp', 'test', 'inject()', 'accent']], say: '<code>hiltRule.inject()</code> fills the test’s <code>@Inject</code> fields from the same graph: the same <code>FakeNewsApi</code> the Activity uses.' },
-              { hl: ['act', 'fake'], add: [['act', 'comp', 'fake', 'ok']], say: 'The screen shows “Kotlin 2.3 released” from the fake, and the test checks <code>api.calls == 1</code>. No network involved.' },
-            ],
-          });
-        },
-  };
+  const css = ``;
 
   Lab.addTrack({
     id: 'testing',
-    title: 'Testing and quality',
-    description: 'Fast, trustworthy tests from ViewModels to Compose screens, plus measuring how fast the app starts.',
+    title: 'Testing',
+    description: 'Check the Recipes app with code: unit tests with JUnit, fakes and MockK, coroutines and flows, Robolectric, Compose UI and screenshot tests, Hilt in tests, and measuring startup with baseline profiles.',
     group: 'Going deeper', requires: ['arch'],
     css,
     lessons: [
-      // 1 ─────────────────────────────────────────────
+      {
+        id: 'why-test',
+        title: 'Why we test',
+        tagline: 'Let code check the app after every change, so you can change it without fear.',
+        goals: ['Explain how a regression slips past checking by hand', 'Say what an automated test is and when it runs', 'Pick which rules of an app deserve a test first'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Sam tidies <code>GetQuickRecipesUseCase</code>. The filter <code>it.minutes &lt;= limit</code> becomes <code>it.minutes &lt; limit</code>, which looks like the same thing. The app builds, starts, and the Tonight screen shows recipes. Two weeks later Lin asks where her Lemon pasta went. It takes exactly 20 minutes, and “less than 20” leaves it out. A <em>regression</em>, like the one in the budget tracker project: something that used to work broke, and nobody noticed.</p>
+<p>Checking by hand means opening the app and looking at every screen after every change. That is <em>manual testing</em>, and it grows badly: with five screens, nobody checks them all each time, and an edge like “exactly 20 minutes” is easy to forget. An <em>automated test</em> is code that runs your code with an input you chose and compares the answer with the expected value. Hundreds run in seconds, the same way every time: in Android Studio after each change, and in CI on every pull request, next to lint.</p>
+<p>To test the rule on its own, Sam first moves it into a plain function, <code>quickRecipes(recipes, limit)</code>, and the use case calls it. Changing how code is written without changing what it does is called a <em>refactor</em>. The function needs no Room, no screen and no phone: give it a list, check the list it gives back.</p>
+<p>That is what tests buy you: confidence. You can refactor, or update a library, and know within seconds that the rules still hold. A test only checks what someone thought to check, so start with the rules that would hurt most if they broke: the Quick filter, the offline note, stars that survive a refresh.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `data class Recipe(val id: Int, val title: String, val minutes: Int, val favorite: Boolean)
+
+fun quickRecipes(recipes: List<Recipe>, limit: Int): List<Recipe> =
+    recipes.filter { it.minutes < limit }      // Sam's tidy version
+
+fun main() {
+    val soup = Recipe(1, "Tomato soup", 15, false)
+    val pasta = Recipe(2, "Lemon pasta", 20, false)
+    val stew = Recipe(3, "Bean stew", 45, false)
+    val quick = quickRecipes(listOf(soup, pasta, stew), 20)
+    if (quick == listOf(soup, pasta)) {
+        println("PASS keeps a recipe of exactly 20 minutes")
+    } else {
+        println("FAIL keeps a recipe of exactly 20 minutes")
+    }
+}`,
+            predict: {
+              q: 'This hand-made check runs Sam’s version, with <code>&lt;</code>. What does it print?',
+              options: ['<code>FAIL keeps a recipe of exactly 20 minutes</code>', '<code>PASS keeps a recipe of exactly 20 minutes</code>', 'Nothing: the code doesn’t compile'],
+              a: 0,
+              why: '<code>20 &lt; 20</code> is <code>false</code>, so Lemon pasta is left out, and the list differs from the expected one.',
+            },
+            frames: [
+              { line: [3, 4], say: 'Sam’s tidied rule: <code>&lt;</code> instead of <code>&lt;=</code>. It compiles, and the app starts.' },
+              { line: [7, 8, 9], vars: { soup: '15 min', pasta: '20 min', stew: '45 min' }, say: 'The check makes its own input: three recipes. Lemon pasta takes exactly 20 minutes, the edge of the rule.' },
+              { line: 10, vars: { quick: '[Tomato soup]' }, say: 'For Lemon pasta, <code>20 &lt; 20</code> is <code>false</code>, so it is left out.' },
+              { line: 11, say: 'The check compares the answer with the expected value, written by hand: soup and pasta. The two lists differ.' },
+              { line: 14, out: 'FAIL keeps a recipe of exactly 20 minutes', say: 'FAIL, in a fraction of a second, without opening the app. Lin found the same bug two weeks later.' },
+              { line: 4, say: 'Put <code>&lt;=</code> back and the same check prints PASS. Run it after every change, and this bug never reaches Lin.' },
+            ],
+          });
+        },
+        code: `// domain/QuickRecipes.kt: the rule on its own, easy to check
+fun quickRecipes(recipes: List<Recipe>, limit: Int): List<Recipe> =
+    recipes.filter { it.minutes <= limit }       // 20 minutes counts as quick
+
+// domain/GetQuickRecipesUseCase.kt: does the same as before, through the function
+class GetQuickRecipesUseCase @Inject constructor(
+    private val repository: RecipeRepository,
+    private val quickLimit: QuickLimit,
+) {
+    operator fun invoke(): Flow<List<Recipe>> {
+        val limit = quickLimit.minutes
+        return repository.recipes.map { list -> quickRecipes(list, limit) }
+    }
+}
+
+// What a test of the rule checks, in words:
+// quickRecipes([Tomato soup 15, Lemon pasta 20, Bean stew 45], 20)
+// should give [Tomato soup, Lemon pasta]`,
+        play: `data class Recipe(val id: Int, val title: String, val minutes: Int, val favorite: Boolean)
+
+// The rule: 20 minutes or less counts as quick.
+fun quickRecipes(recipes: List<Recipe>, limit: Int): List<Recipe> =
+    recipes.filter { it.minutes <= limit }
+
+fun test(name: String, passed: Boolean) {
+    if (passed) {
+        println("PASS $name")
+    } else {
+        println("FAIL $name")
+    }
+}
+
+fun main() {
+    val soup = Recipe(1, "Tomato soup", 15, false)
+    val pasta = Recipe(2, "Lemon pasta", 20, false)
+    val stew = Recipe(3, "Bean stew", 45, false)
+
+    test("keeps a recipe of exactly 20 minutes", quickRecipes(listOf(soup, pasta, stew), 20) == listOf(soup, pasta))
+    test("leaves out long recipes", quickRecipes(listOf(stew), 20).isEmpty())
+    test("a limit of 45 keeps all three", quickRecipes(listOf(soup, pasta, stew), 45) == listOf(soup, pasta, stew))
+    // Change <= to < in quickRecipes and run again: which checks fail?
+}`,
+        remember: 'A test is code that checks a rule with an input you chose. Run the tests after every change, and a regression shows up in seconds, not weeks.',
+        mistakes: [
+          { title: 'Skipping the edge', bad: `// passes with <= and with <, so it can't catch Sam's change
+test("keeps quick recipes", quickRecipes(listOf(soup, stew), 20) == listOf(soup))`, good: `// Lemon pasta takes exactly 20 minutes: here <= and < give different answers
+test("keeps a recipe of exactly 20 minutes", quickRecipes(listOf(soup, pasta, stew), 20) == listOf(soup, pasta))`, why: 'Bugs hide at the edges of a rule. 15 and 45 minutes give the same answer with <code>&lt;</code> and <code>&lt;=</code>; only 20 tells them apart.' },
+        ],
+        terms: [
+          { term: 'manual testing', def: 'Checking an app by hand: opening it and looking at each screen. Slow, and easy to skip a step.' },
+          { term: 'automated test', def: 'Code that runs your code with a chosen input and compares the answer with the expected value, the same way every time.' },
+          { term: 'refactor', def: 'Changing how code is written without changing what it does, like moving the Quick rule into <code>quickRecipes</code>.' },
+          { term: 'edge case', def: 'An input at the border of a rule, like a recipe of exactly 20 minutes. Bugs like to hide there.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish the check at the edge of the rule: Lemon pasta takes exactly 20 minutes.', code: `val quick = quickRecipes(listOf(soup, pasta, stew), [[20]])
+if (quick == listOf(soup, [[pasta]])) {
+    println("PASS keeps a recipe of exactly 20 minutes")
+} else {
+    println("FAIL keeps a recipe of exactly 20 minutes")
+}`, why: 'The limit is 20, and a recipe of exactly 20 minutes must stay in the list, next to the soup.' },
+          { type: 'bug', prompt: 'Recipes of 20 minutes or less count as quick, but the check prints FAIL. Tap the wrong line.', code: `fun quickRecipes(recipes: List<Recipe>, limit: Int): List<Recipe> =
+    recipes.filter { it.minutes < limit }`, bug: 1, fix: '    recipes.filter { it.minutes <= limit }', why: '“20 minutes or less” is <code>&lt;=</code>. With <code>&lt;</code>, a recipe of exactly 20 minutes is left out.' },
+        ],
+        quiz: [
+          { q: 'What is a regression?', options: ['A bug in something that used to work', 'A test that fails', 'An app that got slower'], a: 0, why: 'Lemon pasta used to show on Tonight. After Sam’s change it didn’t: the app went back, “regressed”.' },
+          { q: 'Why do automated tests catch what checking by hand misses?', options: ['They run every check, the same way, in seconds, after every change', 'They find bugs nobody wrote a check for', 'They make the app run faster'], a: 0, why: 'A test checks only what it was written to check, but it never gets tired or skips a step.' },
+          { q: 'Which rule of the Recipes app deserves a test first?', options: ['The Quick filter: 20 minutes still counts as quick', 'The colour of the Refresh button', 'The order of the import lines'], a: 0, why: 'Start with the rules users depend on, the ones that would hurt most if they broke quietly.' },
+        ],
+        docs: [['Fundamentals of testing Android apps', 'https://developer.android.com/training/testing/fundamentals']],
+      },
+
+      {
+        id: 'unit',
+        title: 'Unit tests',
+        tagline: 'Write real tests with JUnit, and let Android Studio or Gradle run them all.',
+        goals: ['Write a test class with <code>@Test</code> functions in <code>src/test</code>', 'Check results with <code>assertEquals</code> and <code>assertTrue</code>', 'Run the tests and read a failure'],
+        level: 'beginner', introduces: ['assertEquals', 'assertTrue', 'testImplementation'],
+        body: `
+<p>The hand-made check printed PASS or FAIL, but someone still had to run it and read every line. Android projects come with <em>JUnit</em>, the usual test library for Kotlin and Java: it finds every test, runs each one, and reports which failed and why. A <em>unit test</em> checks one small piece on its own, like the function <code>quickRecipes</code>.</p>
+<p>Tests live in their own folder, <code>app/src/test/java/com/example/recipes/</code>. Code there runs on your computer, not on a phone, and never goes into the app people install. The library comes from one line in <code>app/build.gradle.kts</code>: <code>testImplementation("junit:junit:4.13.2")</code>. A new project already has it. <code>testImplementation</code> works like <code>implementation</code>, but only for the code in the test folder. Each Gradle module has its own <code>src/test</code> and its own <code>testImplementation</code> lines. To keep paths short, this track writes <code>app/</code>; a test of <code>RecipesViewModel</code> really goes in <code>feature/recipes/src/test/...</code>, and one of <code>OfflineRecipeRepository</code> in <code>core/data/src/test/...</code>.</p>
+<p>A test class is a plain class named after what it tests: <code>QuickRecipesTest</code>. Each function marked <code>@Test</code> is one test. Its name may be a whole sentence between backticks, like <code>fun \`keeps a recipe of exactly 20 minutes\`()</code>: Kotlin accepts spaces in a name written between backticks, and the report reads like a list of rules. A test has three steps: <em>arrange</em> the input, <em>act</em> by calling the code, <em>assert</em> that the result is right. <code>assertEquals(expected, actual)</code> fails the test when the two differ, and the expected value goes first. <code>assertTrue(x)</code> fails when <code>x</code> is <code>false</code>. Both are imported from <code>org.junit.Assert</code>.</p>
+<p>To run them, click the green triangle next to the class in Android Studio, or type <code>./gradlew test</code> in the terminal, the same command CI can run. When everything passes, Gradle only says the build was successful. A failure names the test and the line, and the report says what was expected and what came instead.</p>`,
+        visual(el) {
+          Lab.ui.terminal(el, {
+            panelTitle: 'QuickRecipesTest',
+            predict: {
+              q: 'Sam changes <code>&lt;=</code> to <code>&lt;</code> again and runs <code>./gradlew test</code>. Which of the two tests fails?',
+              options: ['<code>keeps a recipe of exactly 20 minutes</code>', '<code>leaves out long recipes</code>', 'Both'],
+              a: 0,
+              why: 'Bean stew takes 45 minutes, so it stays out with <code>&lt;</code> too. Only the 20-minute Lemon pasta changes.',
+            },
+            frames: [
+              { cmd: './gradlew test', out: 'BUILD SUCCESSFUL in 4s', panel: 'passed: keeps a recipe of exactly 20 minutes<br>passed: leaves out long recipes', say: 'Both tests pass. Gradle prints nothing about them, only that the build worked. Android Studio’s run window lists each one.' },
+              { say: 'Sam changes <code>it.minutes &lt;= limit</code> to <code>it.minutes &lt; limit</code> and runs the tests again before he commits.' },
+              { cmd: './gradlew test', out: '&gt; Task :app:testDebugUnitTest FAILED\n\nQuickRecipesTest &gt; keeps a recipe of exactly 20 minutes FAILED\n    java.lang.AssertionError at QuickRecipesTest.kt:15\n\n2 tests completed, 1 failed', panel: 'failed: keeps a recipe of exactly 20 minutes<br>passed: leaves out long recipes', say: 'The failing test’s name says which rule broke, and <code>QuickRecipesTest.kt:15</code> is the <code>assertEquals</code> line.' },
+              { out: '* What went wrong:\nExecution failed for task \':app:testDebugUnitTest\'.\n&gt; There were failing tests. See the report at: file:///home/sam/Recipes/app/build/reports/tests/testDebugUnitTest/index.html', say: 'The build fails, so CI would show a red cross. The report, a page in the build folder, has the details.' },
+              { panel: 'java.lang.AssertionError: expected:&lt;[Recipe(id=1, title=Tomato soup, minutes=15, favorite=false), Recipe(id=2, title=Lemon pasta, minutes=20, favorite=false)]&gt; but was:&lt;[Recipe(id=1, title=Tomato soup, minutes=15, favorite=false)]&gt;', say: 'In the report: expected soup and pasta, but was only soup. Lemon pasta is missing. Recipe is a data class, so it prints its values.' },
+              { cmd: './gradlew test', out: 'BUILD SUCCESSFUL in 3s', panel: 'passed: keeps a recipe of exactly 20 minutes<br>passed: leaves out long recipes', say: 'Sam puts <code>&lt;=</code> back, runs again, and both pass. The bug never left his computer.' },
+            ],
+          });
+        },
+        code: `package com.example.recipes
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class QuickRecipesTest {
+    private val soup = Recipe(1, "Tomato soup", 15, false)
+    private val pasta = Recipe(2, "Lemon pasta", 20, false)
+    private val stew = Recipe(3, "Bean stew", 45, false)
+
+    @Test
+    fun \`keeps a recipe of exactly 20 minutes\`() {
+        val result = quickRecipes(listOf(soup, pasta, stew), 20)   // arrange and act
+        assertEquals(listOf(soup, pasta), result)                  // assert: expected first
+    }
+
+    @Test
+    fun \`leaves out long recipes\`() {
+        val result = quickRecipes(listOf(stew), 20)
+        assertTrue(result.isEmpty())
+    }
+}
+// File: app/src/test/java/com/example/recipes/QuickRecipesTest.kt
+// Run: the green triangle next to the class, or ./gradlew test
+// The line in app/build.gradle.kts (a new project has it):
+//     testImplementation("junit:junit:4.13.2")`,
+        remember: 'Tests go in src/test; each @Test function is one test; assertEquals(expected, actual) fails when they differ; run them with ./gradlew test.',
+        mistakes: [
+          { title: 'Expected and actual swapped', bad: `assertEquals(result, listOf(soup, pasta))
+// java.lang.AssertionError: expected:<[Recipe(id=1, title=Tomato soup, minutes=15, favorite=false)]>
+//   but was:<[Recipe(id=1, title=Tomato soup, minutes=15, favorite=false), Recipe(id=2, title=Lemon pasta, minutes=20, favorite=false)]>`, good: `assertEquals(listOf(soup, pasta), result)
+// java.lang.AssertionError: expected:<[Recipe(id=1, title=Tomato soup, minutes=15, favorite=false), Recipe(id=2, title=Lemon pasta, minutes=20, favorite=false)]>
+//   but was:<[Recipe(id=1, title=Tomato soup, minutes=15, favorite=false)]>`, why: 'The test still fails, but the message says the opposite of the truth, and you go looking for a bug in the wrong place. The expected value always goes first.' },
+        ],
+        terms: [
+          { term: 'unit test', def: 'A test of one small piece of code on its own, like one function or one class.' },
+          { term: 'JUnit', def: 'The test library Android projects use. It runs every function marked <code>@Test</code> and reports which ones failed.' },
+          { term: 'assertion', def: 'A line that checks a result and fails the test when it is wrong, like <code>assertEquals(expected, actual)</code>.' },
+          { term: 'arrange, act, assert', def: 'The three steps of a test: make the input, call the code, check the result.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make this a test, and check that the answer is soup and pasta.', code: `class QuickRecipesTest {
+    @[[Test]]
+    fun \`keeps a recipe of exactly 20 minutes\`() {
+        val result = quickRecipes(listOf(soup, pasta, stew), 20)
+        [[assertEquals]](listOf(soup, pasta), result)
+    }
+}`, why: '<code>@Test</code> tells JUnit to run the function. <code>assertEquals</code> takes the expected value first, then the result.' },
+          { type: 'bug', prompt: 'The class has two tests, but Android Studio’s run window lists only one. Tap the line to change.', code: `@Test
+fun \`keeps a recipe of exactly 20 minutes\`() {
+    assertEquals(listOf(soup, pasta), quickRecipes(listOf(soup, pasta, stew), 20))
+}
+
+fun \`leaves out long recipes\`() {
+    assertTrue(quickRecipes(listOf(stew), 20).isEmpty())
+}`, bug: 5, fix: '@Test\nfun `leaves out long recipes`() {', why: 'JUnit only runs functions marked <code>@Test</code>. Without it, the second function is never called, and it can never fail.' },
+        ],
+        quiz: [
+          { q: 'Where does <code>QuickRecipesTest.kt</code> go?', options: ['<code>app/src/test/java/com/example/recipes/</code>', '<code>app/src/main/java/com/example/recipes/</code>', '<code>app/src/main/res/</code>'], a: 0, why: 'The <code>test</code> folder holds tests that run on your computer. Nothing in it goes into the app.' },
+          { q: '<code>assertEquals(listOf(soup, pasta), result)</code> fails with <code>expected:&lt;[soup, pasta]&gt; but was:&lt;[soup]&gt;</code> (shortened). What did <code>quickRecipes</code> return?', options: ['Only the soup', 'Soup and pasta', 'An empty list'], a: 0, why: '“but was” is the actual value, the one the code gave back.' },
+          { q: 'What does <code>testImplementation("junit:junit:4.13.2")</code> do?', options: ['Adds JUnit for the test code only; it is not in the app people install', 'Adds JUnit to the app', 'Runs the tests when the app starts'], a: 0, why: 'It works like <code>implementation</code>, but only for <code>src/test</code>.' },
+        ],
+        docs: [['Build local unit tests', 'https://developer.android.com/training/testing/local-tests']],
+      },
+
       {
         id: 'pyramid',
         title: 'The testing pyramid',
-        tagline: 'Many fast tests at the bottom, a few slow ones on top.',
-        level: 'beginner',
+        tagline: 'Many small, fast tests at the base; a few big, slow ones on top.',
+        goals: ['Tell unit, integration and UI tests apart by how much of the app they use', 'Say where each kind runs: on your computer or on a phone', 'Choose a sensible mix of tests for the Recipes app'],
+        level: 'beginner', introduces: ['androidTest', 'connectedAndroidTest', 'androidTestImplementation'],
         body: `
-<p>Android has two test folders. <code>src/test</code> holds <em>local unit tests</em>. They run on the JVM on your computer in milliseconds, with no device. <code>src/androidTest</code> holds <em>instrumented tests</em>. They run on a phone or emulator, so they can use real Android classes like Room and <code>Context</code>, and UI tests that drive whole screens.</p>
-<p>Each step up the pyramid buys more confidence that the real app works, and costs more time, more setup and more flakiness. A UI test can take seconds. A unit test takes a few milliseconds.</p>
-<p>So keep most tests at the bottom, where you run them on every change. Use the top layers for the few flows that must never break, like login or checkout. Run each layer below and compare the bars.</p>`,
-        code: `// app/src/test/java/.../PriceFormatterTest.kt   (JVM, no device)
-class PriceFormatterTest {
-    @Test fun formatsDollars() {
-        assertEquals("$12.50", PriceFormatter(Locale.US).format(1250))
-    }
+<p><code>QuickRecipesTest</code> proves the rule, but not that Lin sees Lemon pasta on the Tonight screen. The rule can be right while the DAO’s query returns the wrong rows, or the screen never draws the list. Different tests answer different questions, and they cost different amounts of time.</p>
+<p>A <em>unit test</em> checks one function or class on its own, in milliseconds. An <em>integration test</em> checks several real parts together, like <code>RecipeDao</code> with a real Room database: does the query really return the recipes sorted by minutes? A <em>UI test</em> uses the whole app the way a person does: open the Recipes screen, see “Lemon pasta”. Bigger tests are closer to what users do, but they are slower, and they can fail for reasons that have nothing to do with your code, like a list that is still animating. A test that passes and fails with the same code is <em>flaky</em>.</p>
+<p>Where they run matters. <code>src/test</code> runs on your computer: <code>./gradlew test</code>. The folder <code>src/androidTest</code> holds <em>instrumented tests</em>: Gradle builds the app plus a small test app, installs both on a phone or emulator, and the test app drives yours. <code>./gradlew connectedAndroidTest</code> runs them on the connected phone or emulator, and their libraries are added with <code>androidTestImplementation</code>. The Room test and the UI test go there, because they need Android.</p>
+<p>The <em>testing pyramid</em> is the shape to aim for: many unit tests at the base, fewer integration tests, and a few UI tests on top for the paths that must never break, like opening the list. A bug caught by a unit test is found in seconds, and the test’s name points at the broken function.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['unit<small>src/test</small>', 'integration<small>androidTest</small>', 'UI<small>androidTest</small>'],
+            span: 120, unit: 's',
+            predict: {
+              q: 'Sam’s <code>&lt;</code> bug hides Lemon pasta. A unit test and a UI test both fail. Which one tells him where to look?',
+              options: ['<code>QuickRecipesTest</code>: it checks one function', 'The UI test: it sees what Lin sees', 'Neither: he has to open the app'],
+              a: 0,
+              why: 'The unit test names the rule and the line. The UI test only knows that “Lemon pasta” is missing from the screen, which could have many causes.',
+            },
+            frames: [
+              { say: 'One run of every test in the Recipes app, drawn on a timeline in seconds. The times are rough; yours will differ.' },
+              { bars: [{ lane: 0, from: 0, to: 4, label: '120 tests', tone: 'ok' }], say: '<code>./gradlew test</code>: 120 unit tests on your computer, about 4 seconds in all. Each takes a few milliseconds.' },
+              { bars: [{ lane: 1, from: 4, to: 34, label: 'install, 8 DAO tests', tone: 'warm' }], say: '<code>./gradlew connectedAndroidTest</code> builds and installs the app and the test app first. Then 8 tests run <code>RecipeDao</code> against a real Room database.' },
+              { bars: [{ lane: 2, from: 34, to: 110, label: '5 screen tests', tone: 'accent' }], say: 'Five UI tests open the Recipes screen, tap, and wait for the list. Each one takes seconds.' },
+              { marks: [{ at: 80, label: 'flaky', tone: 'err' }], say: 'One UI test fails, then passes when run again with the same code: the list was still animating. A flaky test.' },
+              { marks: [{ at: 2, label: 'FAIL', tone: 'err' }], say: 'Sam’s <code>&lt;</code> bug: <code>QuickRecipesTest</code> fails in the first seconds, and its name points at <code>quickRecipes</code>.' },
+              { say: 'So: many unit tests at the base, fewer integration tests, a few UI tests on top for the paths that must never break. That shape is the testing pyramid.' },
+            ],
+          });
+        },
+        code: `app/src/main/java/com/example/recipes/            // the app
+app/src/test/java/com/example/recipes/            // local tests: on your computer
+    QuickRecipesTest.kt                           //   unit: one function, milliseconds
+app/src/androidTest/java/com/example/recipes/     // instrumented tests: on a phone or emulator
+    RecipeDaoTest.kt                              //   integration: the DAO with a real Room database
+    RecipesScreenTest.kt                          //   UI: open the list, see "Lemon pasta"
+
+// app/build.gradle.kts
+dependencies {
+    testImplementation("junit:junit:4.13.2")      // libraries for src/test
+    // androidTestImplementation(...)              // libraries for src/androidTest
 }
 
-// app/src/androidTest/java/.../CheckoutFlowTest.kt   (device or emulator)
-@RunWith(AndroidJUnit4::class)
-class CheckoutFlowTest {
-    @get:Rule val rule = createAndroidComposeRule<MainActivity>()
-
-    @Test fun payButtonOpensReceipt() {
-        rule.onNodeWithText("Pay").performClick()
-        rule.onNodeWithText("Receipt").assertIsDisplayed()
-    }
-}
-
-// ./gradlew test                    runs src/test
-// ./gradlew connectedAndroidTest    runs src/androidTest on a device`,
-        remember: 'Most tests at the bottom: fast JVM unit tests. A few UI tests on top for the flows that must not break.',
+// In the terminal
+./gradlew test                     # runs src/test
+./gradlew connectedAndroidTest     # runs src/androidTest on the connected phone or emulator`,
+        remember: 'Many fast unit tests in src/test, fewer integration tests, a few UI tests in src/androidTest for the paths that must never break.',
         terms: [
-          { term: 'Local unit test', def: 'A test in src/test that runs on the JVM on your computer, with no device or emulator.' },
-          { term: 'Instrumented test', def: 'A test in src/androidTest that runs on a device or emulator and can use real Android framework classes.' },
-          { term: 'Testing pyramid', def: 'A guideline to write many fast, small tests and fewer slow, broad ones such as end-to-end UI tests.' },
+          { term: 'integration test', def: 'A test of several real parts working together, like the DAO with a real Room database.' },
+          { term: 'instrumented test', def: 'A test in <code>src/androidTest</code> that runs on a phone or emulator, next to the app, so it can use Android.' },
+          { term: 'flaky test', def: 'A test that sometimes passes and sometimes fails with the same code, often because of timing.' },
+          { term: 'testing pyramid', def: 'The mix to aim for: many small, fast tests at the base and a few big, slow ones on top.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Name the Gradle tasks that run each folder.', code: './gradlew [[test|testDebugUnitTest]]                 // src/test on the JVM\n./gradlew [[connectedAndroidTest|connectedDebugAndroidTest]]   // src/androidTest on a device', why: '<code>test</code> runs local unit tests. <code>connectedAndroidTest</code> installs the app and the test APK on a connected device.' },
-          { type: 'bug', prompt: 'This local unit test fails with “Method parse in android.net.Uri not mocked”. Tap the line that causes it.', code: '// app/src/test/java/.../LinkParserTest.kt\nclass LinkParserTest {\n    @Test fun extractsArticleId() {\n        val uri = Uri.parse("https://example.com/news/42")\n        assertEquals("42", LinkParser.articleId(uri))\n    }\n}', bug: 3, fix: '        val uri = URI("https://example.com/news/42")   // java.net.URI runs on the JVM', why: 'Local tests run against a stub android.jar where every Android method throws. Keep logic in plain Kotlin or Java types, move the test to androidTest, or use Robolectric.' },
+          { type: 'blank', prompt: 'Put each test in its folder.', code: `app/src/[[test]]/java/com/example/recipes/QuickRecipesTest.kt          // on your computer
+app/src/[[androidTest]]/java/com/example/recipes/RecipesScreenTest.kt   // on a phone or emulator`, why: '<code>test</code> runs on your computer. <code>androidTest</code> is installed and run on a phone or emulator.' },
+          { type: 'bug', prompt: 'Sam wants to run the UI tests on the emulator, but only the unit tests run. Tap the wrong line.', code: `./gradlew test              # the unit tests in src/test
+./gradlew test              # the UI tests in src/androidTest, on the emulator`, bug: 1, fix: './gradlew connectedAndroidTest   # the UI tests in src/androidTest, on the emulator', why: '<code>test</code> only runs <code>src/test</code>. <code>connectedAndroidTest</code> installs the app and runs <code>src/androidTest</code> on the connected phone or emulator.' },
         ],
         quiz: [
-          { q: 'Which tests run on your computer without a device?', options: ['<code>src/test</code>', '<code>src/androidTest</code>', 'Both'], a: 0, why: 'Local unit tests in <code>src/test</code> run on the JVM. <code>androidTest</code> needs a device or emulator.' },
-          { q: 'Why should most of your tests be local unit tests?', options: ['They give the most confidence that the real screen works', 'They are fast and stable enough to run on every change', 'Instrumented tests cannot use assertions'], a: 1, why: 'Milliseconds per test means you get feedback right away. The slower layers stay few.' },
-          { q: 'Which layer tells you most directly that a real user can finish checkout?', options: ['A local unit test of the price formatter', 'A UI test that taps through the checkout screen'], a: 1, why: 'The UI test exercises the real screens together. That confidence is why you keep a few, even though they are slow.' },
-          { q: 'A DAO query returns the wrong rows in production. What is the lowest layer that can catch this bug?', options: ['A local unit test with a fake repository', 'An integration test with an in-memory Room database', 'A UI test that taps through the screen'], a: 1, why: 'The bug lives in the SQL, so the test needs a real SQLite engine. A fake would skip the query entirely, and a UI test would be slower than needed.' },
+          { q: 'Which test is likely the fastest?', options: ['<code>QuickRecipesTest</code>', '<code>RecipeDaoTest</code>', '<code>RecipesScreenTest</code>'], a: 0, why: 'It runs one function on your computer: no install, no database, no screen.' },
+          { q: 'A test fails, you run it again with no change, and it passes. What is it?', options: ['A flaky test', 'A unit test', 'A passing test'], a: 0, why: 'Same code, different results: usually timing. Flaky tests teach people to ignore red, so fix them.' },
+          { q: 'Why keep most tests at the base of the pyramid?', options: ['They are fast and point at the exact piece that broke', 'UI tests can’t find bugs', 'Gradle can only run unit tests'], a: 0, why: 'UI tests are worth having for the main paths, but they are slow and say less about where the problem is.' },
         ],
-        deeper: pyramidDepth.deeper,
-        underHood: pyramidDepth.underHood,
-        mistakes: pyramidDepth.mistakes,
-        predict: {
-          q: 'You run all 226 tests: 200 unit, 20 instrumented and 6 UI tests. Which group takes most of the time?',
-          options: ['The 200 unit tests, because there are the most of them', 'The 6 UI tests', 'All three take about the same'],
-          a: 1,
-          why: 'A unit test takes milliseconds on the JVM. A UI test drives a real screen on a device and takes seconds, plus the build and install before it.',
-        },
-        visual(el) {
-          const layers = [
-            { id: 'ui', name: 'UI tests', w: '46%', n: 6, ms: 4000, where: 'Device. Drives whole screens.', speed: 1, cost: 3, conf: 3 },
-            { id: 'inst', name: 'Instrumented', w: '72%', n: 20, ms: 600, where: 'Device. Real Room, Context, files.', speed: 2, cost: 2, conf: 2 },
-            { id: 'unit', name: 'Local unit', w: '100%', n: 200, ms: 8, where: 'JVM on your computer. No device.', speed: 3, cost: 1, conf: 1 },
-          ];
-          const total = Math.max(...layers.map(l => l.n * l.ms));
-          let sel = layers[2], busy = false;
-          const dots = n => h('span', { class: 'tst-dots', 'aria-label': `${n} of 3` }, [1, 2, 3].map(i => h('i', { class: i <= n ? 'on' : null })));
-          const info = h('div', { class: 'tst-info' });
-          const btns = layers.map(l => h('button', { class: `tst-layer tst-${l.id}`, style: `--tst-w:${l.w}`, onclick: () => pick(l) }, l.name, h('small', {}, `${l.n} tests`)));
-          function pick(l) {
-            sel = l;
-            btns.forEach((b, i) => b.setAttribute('aria-pressed', layers[i] === l));
-            info.replaceChildren(
-              h('span', { class: 'tst-label' }, 'Runs on'), h('span', {}, l.where),
-              h('span', { class: 'tst-label' }, 'Speed'), dots(l.speed),
-              h('span', { class: 'tst-label' }, 'Cost to keep'), dots(l.cost),
-              h('span', { class: 'tst-label' }, 'Confidence'), dots(l.conf));
-            replay(info, 'pop-soft');
-          }
-          const bars = {}, stats = {};
-          const tl = h('div', { class: 'timeline' }, layers.map(l => {
-            bars[l.id] = h('span', { class: `bar tst-c-${l.id}`, style: 'left:0;width:0' });
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, l.name), h('div', { class: 'lane-track' }, bars[l.id]));
-          }));
-          const statRow = h('div', { class: 'tst-stats' }, layers.map(l => (stats[l.id] = h('span'))));
-          const clock = h('span', { class: 'clock' }, '0 s');
-          const o = out();
-          const draw = (l, t) => {
-            const elapsed = Math.min(t, l.n * l.ms);
-            bars[l.id].style.width = (elapsed / total) * 100 + '%';
-            stats[l.id].innerHTML = `${l.name}: <b>${Math.floor(elapsed / l.ms)}/${l.n}</b> in <b>${fmt(elapsed)}</b>`;
-          };
-          function run(ids, label) {
-            if (busy) return; busy = true;
-            const sel = layers.filter(l => ids.includes(l.id));
-            const end = Math.max(...sel.map(l => l.n * l.ms));
-            layers.forEach(l => draw(l, 0));
-            say(o, `<span class="muted">$</span> ${label}`);
-            const t0 = performance.now();
-            const tick = now => {
-              if (!el.isConnected) return;
-              const t = Math.min((now - t0) * 8, end); // 8x fast forward
-              sel.forEach(l => draw(l, t));
-              clock.textContent = fmt(t);
-              if (t < end) { requestAnimationFrame(tick); return; }
-              const slow = sel.reduce((a, b) => (a.n * a.ms > b.n * b.ms ? a : b));
-              o.append(h('div', { class: 'line drop-in', html: `<span class="good">BUILD SUCCESSFUL</span> in ${fmt(end)}. Slowest: ${slow.name}, ${fmt(slow.ms)} per test.` }));
-              busy = false;
-            };
-            requestAnimationFrame(tick);
-          }
-          pick(sel);
-          layers.forEach(l => draw(l, l.n * l.ms));
-          clock.textContent = fmt(total);
-          o.innerHTML = 'Last run: 226 tests. 200 unit tests took 1.6 s. 6 UI tests took 24 s.';
-          el.append(
-            h('div', { class: 'tst-cols' }, h('div', { class: 'tst-pyr' }, btns), h('div', { class: 'tst-sub' }, h('span', { class: 'tst-label' }, 'Tap a layer'), info)),
-            h('div', { class: 'controls' },
-              cmd('./gradlew test', () => run(['unit'], './gradlew test')),
-              cmd('./gradlew connectedAndroidTest', () => run(['inst', 'ui'], './gradlew connectedAndroidTest')),
-              h('button', { class: 'btn primary small', onclick: () => run(['unit', 'inst', 'ui'], 'run every layer') }, 'Run everything'),
-              clock),
-            tl, statRow,
-            h('p', { class: 'tip' }, 'Shown at 8x speed. Device layers also pay for building and installing two APKs before the first test runs.'),
-            o);
-        },
+        docs: [['Testing strategies', 'https://developer.android.com/training/testing/fundamentals/strategies'], ['Test from the command line', 'https://developer.android.com/studio/test/command-line']],
       },
 
-      robolectricLesson,
-
-      // 2 ─────────────────────────────────────────────
       {
         id: 'fakes',
-        title: 'Unit tests with fakes',
-        tagline: 'Swap the network for a small in-memory class.',
-        level: 'beginner',
+        title: 'Test doubles',
+        tagline: 'Stand in for the database and the server, so a test is fast and gives the same answer every time.',
+        goals: ['Explain why a test replaces Room and the server with a stand-in', 'Write a fake that implements <code>RecipeRepository</code> with a list in memory', 'Tell a fake, a stub and a mock apart'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A ViewModel usually depends on a repository that talks to the network or a database. Use the real one in a unit test and the test gets slow, needs a connection, and fails whenever the server data changes.</p>
-<p>The fix is a <em>fake</em>: a small, working implementation of the same interface that keeps data in memory. The ViewModel takes the interface in its constructor, so the test can hand it the fake. A fake behaves like the real thing, which makes it easier to read and less brittle than a mock that scripts every call.</p>
-<p>Write each test in three parts. <b>Given</b> sets up the fake. <b>When</b> does one thing. <b>Then</b> checks the result. Step through below: first the real repository, then the fake.</p>`,
-        code: `interface NewsRepository {
-    suspend fun latest(): List<Article>
-}
+<p>Next, Sam wants to test <code>GetQuickRecipesUseCase</code> itself: does it give only quick recipes from the repository? In the app it gets <code>OfflineRecipeRepository</code>, which needs Room, the server and DataStore. A test through it would need a phone, a network, and whatever recipes the server has today: slow, and a different answer tomorrow.</p>
+<p>A <em>test double</em> stands in for a real dependency during a test, like a stunt double in a film. Since the clean architecture lesson, the use case asks for the interface <code>RecipeRepository</code>, not for <code>OfflineRecipeRepository</code>. So any class that keeps the interface’s promise can be passed in. That is dependency inversion paying off.</p>
+<p>A <em>fake</em> is a working, lighter version. <code>FakeRecipeRepository</code> keeps its “table” in a <code>MutableStateFlow</code> in memory: <code>toggleFavorite</code> really flips the star, and <code>refresh</code> counts its calls and can fail on purpose, like a phone with no signal. It lives in <code>src/test</code>, so it never ships. A <em>stub</em> only gives back fixed answers. A <em>mock</em> is made by a library: you tell it what to answer, and afterwards check which calls it got. Android’s guide prefers fakes: no library, easy to read, and one fake serves many tests.</p>
+<p>The test builds the use case with the fake and a <code>QuickLimit()</code>, calls <code>getQuickRecipes()</code> and takes the first list with <code>first()</code>. <code>first()</code> is a suspend function and a test function is not, so the body runs inside <code>runBlocking { }</code>, from the coroutines track, which waits until the coroutine inside is done.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 300,
+            predict: {
+              q: 'In the test, the use case gets <code>FakeRecipeRepository</code> instead of <code>OfflineRecipeRepository</code>. What must change in <code>GetQuickRecipesUseCase</code>?',
+              options: ['Nothing: it only knows the interface', 'The type in its constructor', 'It needs a test-only copy'],
+              a: 0,
+              why: 'It asks for a <code>RecipeRepository</code>. Both classes implement it, so either one fits.',
+            },
+            nodes: [
+              { id: 'uc', label: 'GetQuickRecipesUseCase', x: 40, y: 10 },
+              { id: 'test', label: 'GetQuickRecipesUseCaseTest', x: 80, y: 30, tone: 'warm', hidden: true },
+              { id: 'iface', label: 'RecipeRepository<small>interface</small>', x: 40, y: 44, tone: 'muted' },
+              { id: 'real', label: 'OfflineRecipeRepository', x: 22, y: 70 },
+              { id: 'fake', label: 'FakeRecipeRepository<small>list in memory</small>', x: 76, y: 70, tone: 'ok', hidden: true },
+              { id: 'room', label: 'Room', x: 10, y: 92, tone: 'muted' },
+              { id: 'server', label: 'server', x: 36, y: 92, tone: 'muted' },
+            ],
+            frames: [
+              { add: [['uc', 'iface', 'needs'], ['real', 'iface', 'implements'], ['real', 'room'], ['real', 'server']], say: 'In the app, the use case asks for the interface, and Hilt hands it <code>OfflineRecipeRepository</code>, which reads Room and calls the server.' },
+              { hl: ['room', 'server'], say: 'A test through it needs a phone for Room, a network, and the server’s recipes of today. Slow, and the answer can change.' },
+              { show: ['fake', 'test'], gone: ['real', 'room', 'server'], remove: [['real', 'iface'], ['real', 'room'], ['real', 'server']], add: [['fake', 'iface', 'implements', 'ok'], ['test', 'fake', 'builds']], hl: ['fake'], say: 'In the test, a fake implements the same interface. Its table is a <code>MutableStateFlow</code> holding three recipes.' },
+              { add: [['test', 'uc', 'calls']], hl: ['test', 'uc'], say: 'The test builds the use case with the fake and calls <code>getQuickRecipes()</code>. The use case runs exactly the same code as in the app.' },
+              { hl: ['uc'], say: 'It filters the fake’s list and gives back Tomato soup and Lemon pasta. <code>assertEquals</code> agrees.' },
+              { hl: ['fake'], say: 'No phone, no network: the test takes milliseconds and gives the same answer on every run, on any computer, in CI too.' },
+            ],
+          });
+        },
+        code: `// app/src/test/java/com/example/recipes/FakeRecipeRepository.kt
+class FakeRecipeRepository(saved: List<Recipe> = listOf()) : RecipeRepository {
+    val table = MutableStateFlow(saved)          // the "Room table", in memory
+    override val recipes: Flow<List<Recipe>> = table
 
-class FakeNewsRepository : NewsRepository {
-    var articles = emptyList<Article>()
-    var error: Exception? = null
+    var refreshCalls = 0
+    var failRefresh = false                      // true: act like a phone with no signal
 
-    override suspend fun latest(): List<Article> {
-        error?.let { throw it }
-        return articles
+    override suspend fun refresh(force: Boolean) {
+        refreshCalls += 1
+        if (failRefresh) {
+            throw IOException("offline")
+        }
+    }
+
+    override suspend fun toggleFavorite(recipe: Recipe) {
+        table.value = table.value.map { if (it.id == recipe.id) { it.copy(favorite = !it.favorite) } else { it } }
     }
 }
 
-class NewsViewModelTest {
-    @get:Rule val mainRule = MainDispatcherRule()   // see the next lesson
+// app/src/test/java/com/example/recipes/GetQuickRecipesUseCaseTest.kt
+class GetQuickRecipesUseCaseTest {
+    private val soup = Recipe(1, "Tomato soup", 15, false)
+    private val pasta = Recipe(2, "Lemon pasta", 20, false)
+    private val stew = Recipe(3, "Bean stew", 45, false)
 
-    @Test fun loadShowsArticles() = runTest {
-        // Given
-        val repo = FakeNewsRepository().apply { articles = listOf(Article("Kotlin 2.3 is out")) }
-        val vm = NewsViewModel(repo)
-        // When
-        vm.load()
-        // Then
-        assertEquals(UiState.Success(repo.articles), vm.state.value)
+    @Test
+    fun \`gives only quick recipes\`() = runBlocking {
+        val repository = FakeRecipeRepository(listOf(soup, pasta, stew))
+        val getQuickRecipes = GetQuickRecipesUseCase(repository, QuickLimit())
+        assertEquals(listOf(soup, pasta), getQuickRecipes().first())
     }
 
-    @Test fun loadShowsErrorWhenOffline() = runTest {
-        val repo = FakeNewsRepository().apply { error = IOException("offline") }
-        val vm = NewsViewModel(repo)
-        vm.load()
-        assertEquals(UiState.Error("offline"), vm.state.value)
+    @Test
+    fun \`a longer limit gives more\`() = runBlocking {
+        val repository = FakeRecipeRepository(listOf(soup, pasta, stew))
+        val quickLimit = QuickLimit()
+        quickLimit.minutes = 45
+        val getQuickRecipes = GetQuickRecipesUseCase(repository, quickLimit)
+        assertEquals(listOf(soup, pasta, stew), getQuickRecipes().first())
     }
 }`,
-        remember: 'Depend on an interface, test with a fake. Given, When, Then.',
+        play: `import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
+
+data class Recipe(val id: Int, val title: String, val minutes: Int, val favorite: Boolean)
+
+interface RecipeRepository {
+    val recipes: Flow<List<Recipe>>
+    suspend fun toggleFavorite(recipe: Recipe)
+}
+
+class FakeRecipeRepository(saved: List<Recipe> = listOf()) : RecipeRepository {
+    val table = MutableStateFlow(saved)
+    override val recipes: Flow<List<Recipe>> = table
+
+    override suspend fun toggleFavorite(recipe: Recipe) {
+        table.value = table.value.map { if (it.id == recipe.id) { it.copy(favorite = !it.favorite) } else { it } }
+    }
+}
+
+class QuickLimit {
+    var minutes = 20
+}
+
+class GetQuickRecipesUseCase(private val repository: RecipeRepository, private val quickLimit: QuickLimit) {
+    operator fun invoke(): Flow<List<Recipe>> {
+        val limit = quickLimit.minutes
+        return repository.recipes.map { list -> list.filter { it.minutes <= limit } }
+    }
+}
+
+fun main() = runBlocking {
+    val soup = Recipe(1, "Tomato soup", 15, false)
+    val pasta = Recipe(2, "Lemon pasta", 20, false)
+    val stew = Recipe(3, "Bean stew", 45, false)
+    val repository = FakeRecipeRepository(listOf(soup, pasta, stew))
+    val getQuickRecipes = GetQuickRecipesUseCase(repository, QuickLimit())
+
+    val quick = getQuickRecipes().first()
+    println(quick.map { it.title })
+    println(quick == listOf(soup, pasta))
+
+    repository.toggleFavorite(soup)
+    println(repository.recipes.first().map { it.favorite })
+    // Try: set the fake's table to listOf(stew) with repository.table.value = ..., then ask again.
+}`,
+        remember: 'A fake is a light, working version of a dependency, kept in src/test. It works because the code under test asks for an interface.',
+        mistakes: [
+          { title: 'One fake shared by every test', bad: `object FakeRecipeRepository : RecipeRepository {
+    val table = MutableStateFlow(listOf(soup, pasta, stew))
+    // ...
+}
+// one test stars Tomato soup; another expects it unstarred, and fails only sometimes`, good: `@Test
+fun \`gives only quick recipes\`() = runBlocking {
+    val repository = FakeRecipeRepository(listOf(soup, pasta, stew))   // a new fake in every test
+    // ...
+}`, why: 'An <code>object</code> is one for the whole test run, so a star from one test is still there in the next. JUnit doesn’t promise an order, so the test passes or fails depending on which test ran before it: add a test, or run one on its own, and the result flips. Build a new fake inside each test.' },
+        ],
         terms: [
-          { term: 'Test double', def: 'Any object that stands in for a real dependency during a test, such as a fake, stub or mock.' },
-          { term: 'Fake', def: 'A simple working implementation of an interface, often in memory, used in tests instead of the real one.' },
-          { term: 'Given / When / Then', def: 'A test layout: set up the state, perform one action, then assert on the outcome.' },
+          { term: 'test double', def: 'Anything that stands in for a real dependency during a test.' },
+          { term: 'fake', def: 'A test double with a working, simpler implementation, like a repository that keeps its recipes in memory.' },
+          { term: 'stub', def: 'A test double that only gives back fixed answers.' },
+          { term: 'mock', def: 'A test double made by a library: you set its answers, and afterwards check which calls it received.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Complete the fake so the ViewModel can use it.', code: 'class FakeNewsRepository : [[NewsRepository]] {\n    var articles = emptyList<Article>()\n    [[override]] suspend fun latest(): List<Article> = articles\n}', why: 'The fake implements the same interface the ViewModel depends on, and overrides its function with an in-memory answer.' },
-          { type: 'bug', prompt: 'This test passes on your machine and fails on CI at random. Tap the line that makes it flaky.', code: '@Test fun loadShowsArticles() = runTest {\n    val article = Article("Kotlin 2.3 is out")\n    val repo = NewsRepositoryImpl(RetrofitClient.api)\n    val vm = NewsViewModel(repo)\n    vm.load()\n    assertEquals(UiState.Success(listOf(article)), vm.state.value)\n}', bug: 2, fix: '    val repo = FakeNewsRepository().apply { articles = listOf(article) }', why: 'The real repository calls the live server. The test then depends on the network and on whatever the server returns today.' },
+          { type: 'blank', prompt: 'Make the fake keep the repository’s promise.', code: `class FakeRecipeRepository(saved: List<Recipe> = listOf()) : [[RecipeRepository]] {
+    val table = MutableStateFlow(saved)
+    [[override]] val recipes: Flow<List<Recipe>> = table
+    // refresh and toggleFavorite as before
+}`, why: 'The fake implements the interface, so it can go wherever a <code>RecipeRepository</code> is asked for. Each promised member is marked <code>override</code>.' },
+          { type: 'bug', prompt: 'A test stars Tomato soup with the fake, but the soup stays unstarred. Tap the wrong line.', code: `override suspend fun toggleFavorite(recipe: Recipe) {
+    table.value.map { if (it.id == recipe.id) { it.copy(favorite = !it.favorite) } else { it } }
+}`, bug: 1, fix: '    table.value = table.value.map { if (it.id == recipe.id) { it.copy(favorite = !it.favorite) } else { it } }', why: '<code>map</code> makes a new list and leaves the old one alone. Store the new list in <code>table.value</code>, so the flow sends it.' },
         ],
         quiz: [
-          { q: 'What makes a fake different from a mock?', options: ['A fake is a small working implementation; a mock is scripted per call', 'A fake can only be used in UI tests', 'There is no difference'], a: 0, why: 'A fake really stores and returns data. A mock answers only the calls you told it to expect.' },
-          { q: 'What has to be true about <code>NewsViewModel</code> so a test can pass it a fake?', options: ['It creates its repository inside init', 'It takes a NewsRepository interface in its constructor', 'It is an object'], a: 1, why: 'Constructor injection of an interface lets the test choose the implementation.' },
-          { q: 'In Given / When / Then, where does <code>vm.load()</code> go?', options: ['Given', 'When', 'Then'], a: 1, why: 'When is the one action under test. Given sets up the fake, Then asserts.' },
-          { q: 'A FakeNewsRepository is declared as an <code>object</code> and shared by all tests. A test passes alone but fails in the full suite. Why?', options: ['Fakes cannot be objects', 'An object keeps its state for the whole test JVM, so another test left articles behind', 'The test needs Robolectric'], a: 1, why: 'Shared state makes results depend on run order. Create a new fake instance in each test.' },
+          { q: 'Why can <code>GetQuickRecipesUseCase</code> take a <code>FakeRecipeRepository</code>?', options: ['It asks for the interface <code>RecipeRepository</code>, and the fake implements it', 'Hilt swaps the classes in tests', 'The fake extends <code>OfflineRecipeRepository</code>'], a: 0, why: 'Code that depends on an interface works with any class that implements it.' },
+          { q: 'Which of these is a fake?', options: ['A class with a working, in-memory version of the repository', 'An object from a library whose calls you check afterwards', 'A value passed in but never used'], a: 0, why: 'A fake really works, just in a simpler way. The second one is a mock.' },
+          { q: 'Why does the test body run inside <code>runBlocking</code>?', options: ['<code>first()</code> is a suspend function, and a test function is not', 'So the test runs on the main thread', 'It makes the test faster'], a: 0, why: 'A suspend function can only be called from a coroutine. <code>runBlocking</code> starts one and waits for it.' },
         ],
-        deeper: fakesDepth.deeper,
-        underHood: fakesDepth.underHood,
-        mistakes: fakesDepth.mistakes,
+        docs: [['Use test doubles in Android', 'https://developer.android.com/training/testing/fundamentals/test-doubles']],
+      },
+
+      {
+        id: 'mockk',
+        title: 'MockK',
+        tagline: 'Make a stand-in in one line, tell it what to answer, then check what it was asked.',
+        goals: ['Create a mock with <code>mockk</code> and give it answers with <code>every</code>', 'Check that a call happened with <code>coVerify</code>', 'Choose between a fake and a mock'],
+        level: 'intermediate', introduces: ['mockk', 'returns', 'coEvery', 'coVerify', 'relaxed'],
+        body: `
+<p>Now Sam tests <code>OfflineRecipeRepository</code> itself. When Lin stars Tomato soup, it must write the row with <code>favorite = true</code> to the DAO. A fake <code>RecipeDao</code> would have to implement every DAO function (<code>getAll</code>, <code>insert</code>, <code>update</code>, <code>upsertAll</code>, <code>getWithSteps</code>), and the repository needs a Session and a DataStore too. And the result to check is a call: was <code>dao.update</code> called with the right row?</p>
+<p><em>MockK</em> is a mocking library for Kotlin, added with <code>testImplementation("io.mockk:mockk:1.14.11")</code>. <code>mockk&lt;RecipeDao&gt;()</code> makes a mock: an object that pretends to be a <code>RecipeDao</code> and records every call it gets. You choose its answers: <code>every { dao.getAll() } returns MutableStateFlow(listOf(row))</code>. For a suspend function, write <code>coEvery</code> (co for coroutine). A mock is strict: a call it has no answer for throws a <code>MockKException</code> that starts with “no answer found for”. <code>mockk&lt;RecipeDao&gt;(relaxed = true)</code> answers every call with a simple default instead, and does nothing for functions like <code>update</code> that return <code>Unit</code>.</p>
+<p>After the code has run, <code>coVerify { dao.update(RecipeEntity(1, "Tomato soup", 15, true)) }</code> fails the test unless that call happened, with an equal row. Use <code>verify</code> for a normal function. <code>coVerify(exactly = 1) { ... }</code> also checks how many times, and <code>exactly = 0</code> checks that something never happened.</p>
+<p>Fake or mock? A fake is easier to read and keeps working when the code changes how it calls things, so <code>FakeRecipeRepository</code> stays. A mock is quicker for a big interface, like a DAO, or when the call itself is the result, like a write. Don’t verify every call, though: a test that checks how the code works, instead of what it gives, breaks with every refactor.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            varsTitle: 'Calls the mock saw',
+            code: `@Test
+fun \`starring writes the row with favorite on\`() = runBlocking {
+    val dao = mockk<RecipeDao>(relaxed = true)
+    val repository = OfflineRecipeRepository(dao, mockk(), mockk())
+    repository.toggleFavorite(Recipe(1, "Tomato soup", 15, false))
+    coVerify { dao.update(RecipeEntity(1, "Tomato soup", 15, true)) }
+}`,
+            predict: {
+              q: 'Someone removes the <code>!</code> in <code>toggleFavorite</code>, so the repository writes <code>favorite = false</code>. What happens to this test?',
+              options: ['<code>coVerify</code> fails: no call with that row', 'Line 5 throws an exception', 'It still passes: <code>update</code> was called'],
+              a: 0,
+              why: '<code>coVerify</code> compares the row with <code>==</code>. <code>RecipeEntity</code> is a data class, so a row with <code>favorite = false</code> is not equal.',
+            },
+            frames: [
+              { line: 3, say: 'A relaxed mock: a <code>RecipeDao</code> with no real code inside. It answers every call with a simple default and remembers each one.' },
+              { line: 4, vars: { 'call 1': 'getAll()' }, say: 'Building the repository already calls <code>dao.getAll()</code>, because <code>recipes</code> is made from it. The two <code>mockk()</code> are the Session and the DataStore: strict, and never called here.' },
+              { line: 5, vars: { 'call 2': 'update(RecipeEntity(1, "Tomato soup", 15, true))' }, say: '<code>toggleFavorite</code> flips the star and writes the row. The mock records the call and its argument.' },
+              { line: 6, say: '<code>coVerify</code> looks through the recorded calls for <code>update</code> with an equal row. Call 2 matches, so the test passes.' },
+              { line: 6, say: 'If the repository had written <code>favorite = false</code>, call 2 would hold a different row, and <code>coVerify</code> would fail the test.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts
+//     testImplementation("io.mockk:mockk:1.14.11")
+
+class OfflineRecipeRepositoryTest {
+    @Test
+    fun \`turns Room rows into recipes\`() = runBlocking {
+        val dao = mockk<RecipeDao>()
+        every { dao.getAll() } returns MutableStateFlow(listOf(RecipeEntity(1, "Tomato soup", 15, false)))
+        val repository = OfflineRecipeRepository(dao, mockk(), mockk())   // after every: recipes reads getAll() right away
+        assertEquals(listOf(Recipe(1, "Tomato soup", 15, false)), repository.recipes.first())
+    }
+
+    @Test
+    fun \`starring writes the row with favorite on\`() = runBlocking {
+        val dao = mockk<RecipeDao>(relaxed = true)                          // update returns Unit: nothing to set up
+        val repository = OfflineRecipeRepository(dao, mockk(), mockk())   // Session and DataStore: not used here
+        repository.toggleFavorite(Recipe(1, "Tomato soup", 15, false))
+        coVerify(exactly = 1) { dao.update(RecipeEntity(1, "Tomato soup", 15, true)) }
+    }
+}`,
+        remember: 'mockk<T>() makes a mock; every / coEvery give it answers; verify / coVerify check the calls. Prefer a fake for your own small interfaces.',
+        mistakes: [
+          { title: 'Building before giving the answer', bad: `val dao = mockk<RecipeDao>()
+val repository = OfflineRecipeRepository(dao, mockk(), mockk())
+// MockKException: no answer found for …
+every { dao.getAll() } returns MutableStateFlow(listOf(row))`, good: `val dao = mockk<RecipeDao>()
+every { dao.getAll() } returns MutableStateFlow(listOf(row))
+val repository = OfflineRecipeRepository(dao, mockk(), mockk())`, why: 'The repository calls <code>getAll()</code> while it is being built. A strict mock with no answer yet throws, so set up the answers first.' },
+        ],
+        terms: [
+          { term: 'MockK', def: 'A Kotlin library that makes mocks: <code>mockk</code> creates one, <code>every</code> sets answers, <code>verify</code> checks calls.' },
+          { term: 'relaxed mock', def: 'A mock made with <code>relaxed = true</code>: it answers every call with a simple default instead of throwing.' },
+          { term: 'verify', def: 'Checking afterwards that a mock received a call, with <code>verify { }</code>, or <code>coVerify { }</code> for a suspend function.' },
+          { term: 'over-specified test', def: 'A test that checks how the code works, call by call, instead of what it gives, so it breaks with every refactor.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give the strict mock its answer for <code>getAll()</code>.', code: `val dao = mockk<RecipeDao>()
+[[every]] { dao.getAll() } [[returns]] MutableStateFlow(listOf(RecipeEntity(1, "Tomato soup", 15, false)))
+val repository = OfflineRecipeRepository(dao, mockk(), mockk())
+assertEquals(listOf(Recipe(1, "Tomato soup", 15, false)), repository.recipes.first())`, why: '<code>getAll()</code> is a normal function that returns a Flow, so <code>every { } returns</code> sets its answer.' },
+          { type: 'bug', prompt: 'The test doesn’t compile: <code>Suspend function \'suspend fun update(recipe: RecipeEntity): Unit\' can only be called from a coroutine or another suspend function.</code> Tap the wrong line.', code: `val dao = mockk<RecipeDao>(relaxed = true)
+val repository = OfflineRecipeRepository(dao, mockk(), mockk())
+repository.toggleFavorite(Recipe(1, "Tomato soup", 15, false))
+verify { dao.update(RecipeEntity(1, "Tomato soup", 15, true)) }`, bug: 3, fix: 'coVerify { dao.update(RecipeEntity(1, "Tomato soup", 15, true)) }', why: '<code>update</code> is a suspend function. <code>verify</code> takes normal code only; <code>coVerify</code> can check suspend calls.' },
+        ],
+        quiz: [
+          { q: 'A test uses <code>mockk&lt;RecipeDao&gt;()</code> with no <code>every</code>, and the code calls <code>dao.getAll()</code>. What happens?', options: ['It throws a <code>MockKException</code>: no answer found', 'It returns an empty list', 'It returns <code>null</code>'], a: 0, why: 'Mocks are strict unless you make them relaxed. Every call needs an answer.' },
+          { q: 'Which line checks that the suspend function <code>dao.update</code> was called once?', options: ['<code>coVerify(exactly = 1) { dao.update(row) }</code>', '<code>verify { dao.update(row) }</code>', '<code>coEvery { dao.update(row) }</code>'], a: 0, why: '<code>co</code> is for suspend functions, <code>verify</code> checks, and <code>exactly</code> counts.' },
+          { q: '<code>RecipeRepository</code> has three functions and is used by many tests. Which stand-in fits best?', options: ['A fake, written once and reused', 'A new mock with <code>every</code> lines in each test', 'The real <code>OfflineRecipeRepository</code>'], a: 0, why: 'A small interface you own is quick to fake, and the fake reads well in every test.' },
+        ],
+        docs: [['MockK', 'https://mockk.io/']],
+      },
+
+      {
+        id: 'coroutines',
+        title: 'Testing coroutines',
+        tagline: 'Test a ViewModel with runTest, a test Main dispatcher, and a clock that skips delays.',
+        goals: ['Replace the Main dispatcher in tests with <code>Dispatchers.setMain</code>', 'Write a test with <code>runTest</code> and run queued coroutines with <code>advanceUntilIdle</code>', 'Explain why <code>delay</code> takes no time inside <code>runTest</code>'],
+        level: 'intermediate', introduces: ['runTest', 'setMain', 'resetMain', 'StandardTestDispatcher', 'advanceUntilIdle', 'currentTime'],
+        body: `
+<p>An important rule of the Recipes screen lives in <code>RecipesViewModel</code>: when the refresh fails, keep the list and show “Offline: showing saved recipes”. Sam builds the ViewModel with a <code>FakeRecipeRepository</code> whose refresh fails, and the test crashes at once: <code>java.lang.IllegalStateException: Module with the Main dispatcher had failed to initialize. For tests Dispatchers.setMain from kotlinx-coroutines-test module can be used</code>. <code>viewModelScope</code> runs on <code>Dispatchers.Main</code>, a phone’s main thread, and a test in <code>src/test</code> runs on your computer, where there is none.</p>
+<p>The library <code>kotlinx-coroutines-test</code> fixes it: <code>testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")</code>. Before each test, <code>Dispatchers.setMain(StandardTestDispatcher())</code> puts a <em>test dispatcher</em> where Main was; after it, <code>Dispatchers.resetMain()</code> puts Main back. A function marked <code>@Before</code> runs before every test of the class, and one marked <code>@After</code> runs after every test. <code>setMain</code> is experimental, so the class gets <code>@OptIn(ExperimentalCoroutinesApi::class)</code>, as for <code>flatMapLatest</code>.</p>
+<p>The test body goes inside <code>runTest { }</code> instead of <code>runBlocking</code>. A <code>StandardTestDispatcher</code> doesn’t run a launched coroutine right away: it puts it in a queue, and nothing runs until the test lets it. So just after the ViewModel is built, its state is still the starting one, with <code>isLoading = true</code>. <code>advanceUntilIdle()</code> runs everything in the queue until nothing is left; then the state has the list and the note. You decide when the coroutines run, so every run happens in the same order.</p>
+<p><code>runTest</code> also keeps <em>virtual time</em>: a clock of its own. <code>delay(5000)</code> inside it moves that clock 5 seconds forward and returns at once, while <code>runBlocking</code> really waits. A retry that waits 3 seconds in the app takes milliseconds in a test, and <code>currentTime</code> tells you how much virtual time has passed.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            varsTitle: 'uiState and queue',
+            code: `@OptIn(ExperimentalCoroutinesApi::class)
+class RecipesViewModelTest {
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(StandardTestDispatcher())
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun \`offline refresh keeps the list and shows a note\`() = runTest {
+        val soup = Recipe(1, "Tomato soup", 15, false)
+        val repository = FakeRecipeRepository(listOf(soup))
+        repository.failRefresh = true
+        val quickLimit = QuickLimit()
+        val viewModel = RecipesViewModel(repository, GetQuickRecipesUseCase(repository, quickLimit), quickLimit)
+        assertTrue(viewModel.uiState.value.isLoading)    // queued: nothing ran yet
+        advanceUntilIdle()                               // run everything in the queue
+        val state = viewModel.uiState.value
+        assertEquals(listOf(soup), state.recipes)
+        assertEquals("Offline: showing saved recipes", state.note)
+        assertEquals(1, repository.refreshCalls)
+    }
+}`,
+            predict: {
+              q: 'Line 20 runs right after the ViewModel is built. Is <code>isLoading</code> still <code>true</code> there?',
+              options: ['Yes: the coroutines from <code>init</code> are queued until the test lets them run', 'No: <code>init</code> already loaded the list', 'The test crashes on line 19'],
+              a: 0,
+              why: 'With a <code>StandardTestDispatcher</code>, <code>launch</code> only queues the coroutine. <code>advanceUntilIdle()</code> on line 21 runs it.',
+            },
+            frames: [
+              { line: 5, vars: { Main: 'StandardTestDispatcher' }, say: '<code>@Before</code> runs first. <code>setMain</code> puts a test dispatcher where Main was, so <code>viewModelScope</code> has somewhere to run.' },
+              { line: [15, 16, 17], say: 'The fake holds Tomato soup, and its refresh will fail like a phone with no signal.' },
+              { line: 19, vars: { queue: 'collect recipes, refresh', isLoading: 'true', recipes: '[]', note: '""' }, say: '<code>init</code> launches two coroutines in <code>viewModelScope</code>: one collects the recipes, one refreshes. Both wait in the queue.' },
+              { line: 20, say: 'Nothing has run, so the state is still the start: <code>isLoading</code> is <code>true</code>. The check passes.' },
+              { line: 21, vars: { queue: 'refresh', isLoading: 'false', recipes: '[Tomato soup]' }, say: '<code>advanceUntilIdle()</code> runs the queue. First the collect: the fake’s table sends <code>[Tomato soup]</code>.' },
+              { line: 21, vars: { queue: '(empty)', note: '"Offline: showing saved recipes"' }, say: 'Then the refresh: the fake throws <code>IOException</code>, and the <code>catch</code> writes the note. The collect waits for the next list. Nothing left to run.' },
+              { line: [23, 24, 25], say: 'All three checks pass: the list stayed, the note is there, and the ViewModel refreshed once. The test took milliseconds.' },
+              { line: 10, vars: { Main: 'Main' }, say: '<code>@After</code> runs <code>resetMain()</code>, so the next test starts clean.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts
+//     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+
+// the new imports (the others as in earlier tests)
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Before
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class RecipesViewModelTest {
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(StandardTestDispatcher())
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun \`offline refresh keeps the list and shows a note\`() = runTest {
+        val soup = Recipe(1, "Tomato soup", 15, false)
+        val repository = FakeRecipeRepository(listOf(soup))
+        repository.failRefresh = true
+        val quickLimit = QuickLimit()
+        val viewModel = RecipesViewModel(repository, GetQuickRecipesUseCase(repository, quickLimit), quickLimit)
+        advanceUntilIdle()
+        assertEquals("Offline: showing saved recipes", viewModel.uiState.value.note)
+    }
+
+    @Test
+    fun \`runTest skips delays\`() = runTest {
+        delay(5000)                          // returns at once
+        assertEquals(5000L, currentTime)     // 5 seconds of virtual time have passed
+    }
+}`,
+        remember: 'setMain(StandardTestDispatcher()) in @Before, resetMain() in @After, the body in runTest; advanceUntilIdle() runs what was queued, and delay costs no real time.',
+        mistakes: [
+          { title: 'Checking before the queue has run', bad: `val viewModel = RecipesViewModel(repository, GetQuickRecipesUseCase(repository, quickLimit), quickLimit)
+assertEquals("Offline: showing saved recipes", viewModel.uiState.value.note)
+// org.junit.ComparisonFailure: expected:<[Offline: showing saved recipes]> but was:<[]>`, good: `val viewModel = RecipesViewModel(repository, GetQuickRecipesUseCase(repository, quickLimit), quickLimit)
+advanceUntilIdle()
+assertEquals("Offline: showing saved recipes", viewModel.uiState.value.note)`, why: 'The refresh is still waiting in the queue, so the note is empty. Let the queued coroutines run first.' },
+        ],
+        terms: [
+          { term: 'runTest', def: 'Runs a test’s body as a coroutine, with a test dispatcher and virtual time, so <code>delay</code> returns at once.' },
+          { term: 'test dispatcher', def: 'A dispatcher for tests, like <code>StandardTestDispatcher</code>: it queues coroutines until the test runs them, for example with <code>advanceUntilIdle()</code>.' },
+          { term: 'virtual time', def: 'The clock of <code>runTest</code>. <code>delay</code> moves it forward without waiting; <code>currentTime</code> reads it.' },
+          { term: '@Before / @After', def: 'Mark functions JUnit runs before and after every test of the class, for setting up and cleaning up.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give the ViewModel a test Main dispatcher, and let its coroutines run before the check.', code: `@Before
+fun setUp() {
+    Dispatchers.[[setMain]](StandardTestDispatcher())
+}
+
+@Test
+fun \`offline refresh shows a note\`() = [[runTest]] {
+    // the fake with failRefresh = true, and the ViewModel, as before
+    [[advanceUntilIdle]]()
+    assertEquals("Offline: showing saved recipes", viewModel.uiState.value.note)
+}`, why: '<code>setMain</code> replaces Main, <code>runTest</code> runs the body, and <code>advanceUntilIdle()</code> lets the queued refresh finish.' },
+          { type: 'bug', prompt: 'The test doesn’t compile: <code>Unresolved reference \'advanceUntilIdle\'.</code> Tap the wrong line.', code: `@Test
+fun \`offline refresh shows a note\`() = runBlocking {
+    val repository = FakeRecipeRepository(listOf(soup))
+    repository.failRefresh = true
+    val quickLimit = QuickLimit()
+    val viewModel = RecipesViewModel(repository, GetQuickRecipesUseCase(repository, quickLimit), quickLimit)
+    advanceUntilIdle()
+    assertEquals("Offline: showing saved recipes", viewModel.uiState.value.note)
+}`, bug: 1, fix: 'fun `offline refresh shows a note`() = runTest {', why: '<code>advanceUntilIdle()</code> belongs to the test scope that <code>runTest</code> gives its body. <code>runBlocking</code> has no queue to advance.' },
+        ],
+        quiz: [
+          { q: 'Why does building <code>RecipesViewModel</code> in a plain local test crash?', options: ['<code>viewModelScope</code> runs on <code>Dispatchers.Main</code>, and there is no Android main thread on your computer', 'The fake has no recipes', '<code>@Test</code> functions can’t create classes'], a: 0, why: 'The message says it too: for tests, use <code>Dispatchers.setMain</code> from kotlinx-coroutines-test.' },
+          { q: 'With a <code>StandardTestDispatcher</code>, when does a coroutine started with <code>launch</code> run?', options: ['When the test lets it, for example with <code>advanceUntilIdle()</code>', 'At once, before <code>launch</code> returns', 'Never, in a test'], a: 0, why: 'It waits in a queue. That gives the test control over the order things happen in.' },
+          { q: 'What happens to <code>delay(5000)</code> inside <code>runTest</code>?', options: ['It returns at once, and the virtual clock moves 5 seconds', 'The test waits 5 real seconds', 'It throws an exception'], a: 0, why: '<code>runTest</code> skips delays on its own clock, so tests of retries and timeouts stay fast.' },
+        ],
+        docs: [['Testing Kotlin coroutines on Android', 'https://developer.android.com/kotlin/coroutines/test']],
+      },
+
+      {
+        id: 'flows',
+        title: 'Testing flows',
+        tagline: 'Read every value a flow sends, one at a time, with Turbine.',
+        goals: ['Collect a flow in a test with Turbine’s <code>test { }</code>', 'Check each value in order with <code>awaitItem()</code>', 'Explain why a value left unread fails the test'],
+        level: 'intermediate', introduces: ['awaitItem', 'cancelAndIgnoreRemainingEvents'],
+        body: `
+<p>In the fakes lesson, <code>GetQuickRecipesUseCaseTest</code> read the Tonight list with <code>.first()</code>: it took the first list and stopped listening. But the use case’s Flow keeps going. When Lin saves a new recipe, the table changes and Tonight should get a new list. <code>.first()</code> can’t check that second list, and <code>collect</code> never ends, so a test that calls it never finishes.</p>
+<p><em>Turbine</em> is a small testing library for exactly this. <code>flow.test { }</code> starts collecting the flow and puts every value that arrives in a <em>queue</em>: a waiting line, first in, first out. Inside the block, <code>awaitItem()</code> takes the next value from the queue, so you can check the values one by one with <code>assertEquals</code>. If the queue is empty, <code>awaitItem()</code> waits for the next value. After 3 seconds with nothing, the test fails with <code>No value produced in 3s</code>.</p>
+<p>When the block ends, Turbine stops collecting and checks that you read everything. A value still waiting in the queue fails the test with <code>Unconsumed events found</code> (Turbine calls the values <em>events</em>), so a surprise extra value can’t slip by. If you only care about the first values, end the block with <code>cancelAndIgnoreRemainingEvents()</code>. Write <code>test { }</code> inside <code>runTest</code>, as in the coroutines lesson. The Gradle line is at the top of the code below.</p>
+<p>Until now each test class wrote its own <code>soup</code>, <code>pasta</code> and <code>stew</code>. From this lesson on, the tests share them: one file, <code>TestRecipes.kt</code>, in the test folder declares the three at the top level, outside any class, so every test in <code>src/test</code> can use them. The earlier classes can drop their own copies.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            varsTitle: 'Values',
+            outTitle: 'Checks',
+            code: `@Test
+fun \`Tonight follows the table\`() = runTest {
+    val repository = FakeRecipeRepository(listOf(soup, stew))
+    val getQuickRecipes = GetQuickRecipesUseCase(repository, QuickLimit())
+
+    getQuickRecipes().test {
+        assertEquals(listOf(soup), awaitItem())
+        repository.table.value = listOf(soup, pasta, stew)
+        assertEquals(listOf(soup, pasta), awaitItem())
+    }
+}`,
+            predict: {
+              q: 'Suppose the second <code>awaitItem()</code> line were missing. The list with Lemon pasta is still in the queue when the block ends. What happens?',
+              options: ['The test passes: nothing was wrong', 'The test fails: <code>Unconsumed events found</code>', 'The test waits forever'],
+              a: 1,
+              why: 'Turbine checks the queue when the block ends. A value nobody read means the flow sent something the test didn’t expect.',
+            },
+            frames: [
+              { line: 3, vars: { table: '[Tomato soup, Bean stew]' }, say: 'The fake’s table starts with Tomato soup (15 min) and Bean stew (45 min).' },
+              { line: 6, vars: { queue: '1 list: [Tomato soup]' }, say: '<code>test { }</code> starts collecting. The flow sends the quick list for the table right now, and it lands in the queue. Bean stew is too long for Tonight.' },
+              { line: 7, vars: { queue: '(empty)' }, out: '✓ [Tomato soup]', say: '<code>awaitItem()</code> takes that list out of the queue, and <code>assertEquals</code> checks it.' },
+              { line: 8, vars: { table: '[Tomato soup, Lemon pasta, Bean stew]', queue: '1 list: [Tomato soup, Lemon pasta]' }, say: 'Lin saves Lemon pasta. The table changes, the use case sends a new list, and Turbine puts it in the queue.' },
+              { line: 9, vars: { queue: '(empty)' }, out: '✓ [Tomato soup, Lemon pasta]', say: 'The second <code>awaitItem()</code> takes the new list. Lemon pasta, exactly 20 minutes, made it in.' },
+              { line: 10, out: 'Test passed', say: 'The block ends. The queue is empty, so Turbine stops collecting and the test passes.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts
+dependencies {
+    testImplementation("app.cash.turbine:turbine:1.2.1")
+}
+
+// app/src/test/java/com/example/recipes/TestRecipes.kt: shared by the tests from here on
+val soup = Recipe(1, "Tomato soup", 15, false)
+val pasta = Recipe(2, "Lemon pasta", 20, false)     // exactly 20: the edge of the rule
+val stew = Recipe(3, "Bean stew", 45, false)
+
+// app/src/test/java/com/example/recipes/GetQuickRecipesUseCaseTest.kt
+import app.cash.turbine.test          // the test { } function for flows
+
+class GetQuickRecipesUseCaseTest {
+    @Test
+    fun \`Tonight follows the table\`() = runTest {
+        val repository = FakeRecipeRepository(listOf(soup, stew))
+        val getQuickRecipes = GetQuickRecipesUseCase(repository, QuickLimit())
+
+        getQuickRecipes().test {
+            assertEquals(listOf(soup), awaitItem())              // the list right now
+            repository.table.value = listOf(soup, pasta, stew)   // Lin saves Lemon pasta
+            assertEquals(listOf(soup, pasta), awaitItem())       // the new list
+        }                                                        // queue empty: passes
+    }
+}`,
+        remember: 'flow.test { } puts every value in a queue; awaitItem() takes the next one; a value left unread fails the test.',
+        mistakes: [
+          { title: 'Forgetting the value that is already there', bad: `getQuickRecipes().test {
+    repository.table.value = listOf(soup, pasta, stew)
+    assertEquals(listOf(soup, pasta), awaitItem())
+}
+// fails: the first item is the list from before the change, [Tomato soup]`, good: `getQuickRecipes().test {
+    assertEquals(listOf(soup), awaitItem())      // the list right now comes first
+    repository.table.value = listOf(soup, pasta, stew)
+    assertEquals(listOf(soup, pasta), awaitItem())
+}`, why: 'The table is a <code>MutableStateFlow</code>, which hands its current value to every new collector. So the first item in the queue is the list from before your change. Read it first.' },
+        ],
+        terms: [
+          { term: 'Turbine', def: 'A small testing library that collects a Flow into a queue, so a test can check each value it sends, in order.' },
+          { term: 'test { }', def: 'Turbine’s function on a Flow: <code>flow.test { }</code> collects the flow while the block runs, and fails if a value is left unread at the end.' },
+          { term: 'awaitItem()', def: 'Takes the next value from Turbine’s queue, waiting for one if it is empty. Fails after 3 seconds with <code>No value produced in 3s</code>.' },
+          { term: 'queue', def: 'A waiting line: values come out in the order they went in.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Collect the Tonight list with Turbine and check the first value.', code: `getQuickRecipes().[[test]] {
+    assertEquals(listOf(soup), [[awaitItem]]())
+}`, why: '<code>test { }</code> starts collecting into a queue, and <code>awaitItem()</code> takes the next value from it.' },
+          { type: 'bug', prompt: 'This test fails with <code>No value produced in 3s</code>. Tap the line that’s wrong.', code: `@Test
+fun \`Tonight follows the table\`() = runTest {
+    val repository = FakeRecipeRepository(listOf(soup, stew))
+    val getQuickRecipes = GetQuickRecipesUseCase(repository, QuickLimit())
+    getQuickRecipes().test {
+        assertEquals(listOf(soup), awaitItem())
+        repository.table.value = listOf(soup, stew)
+        assertEquals(listOf(soup, pasta), awaitItem())
+    }
+}`, bug: 6, fix: '        repository.table.value = listOf(soup, pasta, stew)', why: 'The new list is equal to the old one, and a <code>StateFlow</code> hands out nothing when the value stays the same. So no new value arrives, and the second <code>awaitItem()</code> gives up after 3 seconds. The test meant to add Lemon pasta.' },
+        ],
+        quiz: [
+          { q: 'Inside <code>test { }</code>, you call <code>awaitItem()</code> and the flow sends nothing. What happens?', options: ['It returns <code>null</code>', 'After 3 seconds the test fails with <code>No value produced in 3s</code>', 'It waits forever'], a: 1, why: '<code>awaitItem()</code> waits, but not forever: after 3 seconds Turbine fails the test.' },
+          { q: 'The block ends while one value is still in the queue. What happens?', options: ['The test passes', 'The test fails with <code>Unconsumed events found</code>', 'Turbine reads it for you'], a: 1, why: 'A value nobody read is a surprise. Read it, or end the block with <code>cancelAndIgnoreRemainingEvents()</code> if the rest doesn’t matter.' },
+          { q: 'The fake’s table is a <code>MutableStateFlow</code> holding Tomato soup. What is the first item in the queue after <code>test {</code> starts?', options: ['The quick list for the table right now: <code>[Tomato soup]</code>', 'Nothing, until the table changes', 'An empty list'], a: 0, why: 'A <code>StateFlow</code> hands its current value to every new collector, so the first list arrives at once.' },
+        ],
+        docs: [['Turbine', 'https://github.com/cashapp/turbine']],
+      },
+
+      {
+        id: 'robolectric',
+        title: 'Robolectric',
+        tagline: 'Run tests that need Android on your computer, with no phone.',
+        goals: ['Explain why a local test can’t call Android code like <code>Uri.parse</code>', 'Run a test on a simulated Android with <code>@RunWith(RobolectricTestRunner::class)</code>', 'Read your app’s resources in a local test'],
+        level: 'intermediate', introduces: ['RunWith', 'RobolectricTestRunner', 'RuntimeEnvironment', 'getApplication', 'testOptions', 'unitTests', 'isIncludeAndroidResources', 'lastPathSegment'],
+        body: `
+<p>Ada adds share links to the Recipes app: <code>https://example.com/recipes/2</code> opens Lemon pasta. The function that reads the id uses <code>Uri.parse</code>, from the intents lesson, and <code>lastPathSegment</code>, the part after the last <code>/</code>. Sam writes a local test for it in <code>src/test</code>, and it fails at once with <code>Method parse in android.net.Uri not mocked.</code> On the computer, a local test only gets an empty copy of Android. Every class and function is there, so the code compiles, but their insides were taken out, and calling one throws.</p>
+<p><em>Robolectric</em> is a library that fills that copy in. It runs a simulated Android inside your local test, with a real <code>Uri</code>, resources, <code>Context</code> and Activities, still on the computer and with no phone. Mark the test class with <code>@RunWith(RobolectricTestRunner::class)</code>. <code>@RunWith</code> tells JUnit who runs the tests in the class, and <code>RobolectricTestRunner</code> starts the simulated Android first. <code>RuntimeEnvironment.getApplication()</code> gives a test the app’s <code>Context</code>, so <code>getString</code> and <code>getQuantityString</code> work too. One Gradle line, <code>isIncludeAndroidResources = true</code>, hands your app’s resources to the tests.</p>
+<p>Starting the simulated Android takes a few seconds, once per run. The tests after it are fast. It is still not a real phone: how fast the app really runs, the system’s own screens and other apps need a test on a device. Use Robolectric for code that needs Android classes, and keep plain local tests for code that doesn’t: they start at once.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['Plain', 'Robo&shy;lectric', 'Phone'],
+            span: 8,
+            unit: 's',
+            predict: {
+              q: 'One Robolectric test takes about 3 seconds, most of it starting the simulated Android. About how long do 50 of them take in one run?',
+              options: ['About 6 seconds', 'About 150 seconds (50 × 3)', 'As long as 50 tests on a phone'],
+              a: 0,
+              why: 'The simulated Android starts once per run. The other 49 tests reuse it and take a fraction of a second each.',
+            },
+            frames: [
+              { now: 0, say: '<code>ShareLinksTest</code> calls <code>Uri.parse</code>. Run it three ways and watch the clock from the moment you start. The times are typical, not exact.' },
+              { bars: [{ lane: 0, from: 0, to: 0.4, tone: 'err', label: '' }], say: 'As a plain local test it fails in a fraction of a second: <code>Method parse in android.net.Uri not mocked.</code> The empty copy of Android has nothing inside <code>parse</code>.' },
+              { bars: [{ lane: 1, from: 0, to: 3, tone: 'warm', label: 'start Android' }], say: 'With <code>RobolectricTestRunner</code>, the run first starts a simulated Android inside the test. That takes a few seconds.' },
+              { bars: [{ lane: 1, from: 3, to: 3.1, tone: 'ok', label: '' }], say: 'Then the test itself runs, with a real <code>Uri</code>, in a tenth of a second. It passes.' },
+              { bars: [{ lane: 2, from: 0, to: 8, tone: 'warm', label: 'build, install: 30 s or more…' }], say: 'In <code>androidTest</code> on a phone, Gradle first builds and installs the app and its tests. The test starts after half a minute or more: far off the end of this chart.' },
+              { bars: [{ lane: 1, from: 3.1, to: 6, tone: 'ok', label: '49 more' }], say: 'Now 50 Robolectric tests in one run: Android starts once, and the other 49 take a fraction of a second each.' },
+              { say: 'Robolectric: Android classes in local tests, near local speed, no phone. For how the app behaves on real hardware, you still need the phone.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts
+android {
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true      // tests can read your strings
+        }
+    }
+}
+dependencies {
+    testImplementation("org.robolectric:robolectric:4.17")
+}
+
+// app/src/main/java/com/example/recipes/ShareLinks.kt
+fun recipeIdFrom(link: String): String? = Uri.parse(link).lastPathSegment
+
+// app/src/test/java/com/example/recipes/ShareLinksTest.kt
+@RunWith(RobolectricTestRunner::class)            // run on a simulated Android
+class ShareLinksTest {
+    @Test
+    fun \`reads the id from a share link\`() {
+        assertEquals("2", recipeIdFrom("https://example.com/recipes/2"))     // passes
+    }
+
+    @Test
+    fun \`counts quick recipes in words\`() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        val title = context.resources.getQuantityString(R.plurals.quick_recipes, 3, 3)
+        assertEquals("3 quick recipes", title)                                 // passes
+    }
+}
+// res/values/strings.xml:
+// <plurals name="quick_recipes">
+//     <item quantity="one">%d quick recipe</item>
+//     <item quantity="other">%d quick recipes</item>
+// </plurals>`,
+        remember: 'Code that needs Android classes but no phone: @RunWith(RobolectricTestRunner::class) in src/test. Android starts once per run.',
+        mistakes: [
+          { title: 'Forgetting @RunWith', bad: `class ShareLinksTest {
+    @Test
+    fun \`reads the id from a share link\`() {
+        assertEquals("2", recipeIdFrom("https://example.com/recipes/2"))
+    }
+}
+// fails: Method parse in android.net.Uri not mocked.`, good: `@RunWith(RobolectricTestRunner::class)
+class ShareLinksTest {
+    @Test
+    fun \`reads the id from a share link\`() {
+        assertEquals("2", recipeIdFrom("https://example.com/recipes/2"))
+    }
+}`, why: 'Without <code>@RunWith</code>, JUnit runs the class as a plain local test, with the empty copy of Android. Robolectric only starts when its runner is named.' },
+        ],
+        terms: [
+          { term: 'Robolectric', def: 'A library that runs a simulated Android inside local tests, so code that needs Android classes can be tested on the computer.' },
+          { term: '@RunWith', def: 'Names who runs the tests in a class. <code>@RunWith(RobolectricTestRunner::class)</code> starts the simulated Android first.' },
+          { term: 'RuntimeEnvironment.getApplication()', def: 'Gives a Robolectric test the app’s <code>Context</code>, for resources and other Android calls.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Run this test on Robolectric and get the app’s Context.', code: `@[[RunWith]](RobolectricTestRunner::class)
+class ShareLinksTest {
+    @Test
+    fun \`counts quick recipes in words\`() {
+        val context: Context = RuntimeEnvironment.[[getApplication]]()
+        assertEquals("3 quick recipes", context.resources.getQuantityString(R.plurals.quick_recipes, 3, 3))
+    }
+}`, why: '<code>@RunWith</code> names Robolectric’s runner, and <code>RuntimeEnvironment.getApplication()</code> hands the test the app’s <code>Context</code>.' },
+          { type: 'bug', prompt: 'The share-link test passes, but the plurals test fails with <code>Resources$NotFoundException</code>: Robolectric can’t see the app’s resources. Tap the line that’s wrong.', code: `android {
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = false
+        }
+    }
+}`, bug: 3, fix: '            isIncludeAndroidResources = true', why: 'Robolectric reads your app’s resources only if Gradle hands them to the tests, and this line is what does that.' },
+        ],
+        quiz: [
+          { q: 'Why does a plain local test fail on <code>Uri.parse</code>?', options: ['The copy of Android in local tests has every function, but with nothing inside', 'Uri only works with an internet connection', 'Kotlin can’t compile Android code on a computer'], a: 0, why: 'The code compiles against that copy, but calling a function throws <code>not mocked</code>. Robolectric fills the copy in.' },
+          { q: 'Why is the first Robolectric test in a run slower than the rest?', options: ['It starts the simulated Android, once per run', 'It installs the app on a phone', 'It downloads Android'], a: 0, why: 'Starting Android takes a few seconds. The tests after it reuse it.' },
+          { q: 'Which of these still needs a test on a real phone?', options: ['How fast the app really starts', 'Reading a string resource', 'Parsing a share link with <code>Uri</code>'], a: 0, why: 'Robolectric simulates Android’s classes, not the phone’s real hardware and speed.' },
+        ],
+        docs: [['Robolectric: getting started', 'https://robolectric.org/getting-started/'], ['Build local unit tests', 'https://developer.android.com/training/testing/local-tests']],
+      },
+
+      {
+        id: 'compose-ui',
+        title: 'Compose UI tests',
+        tagline: 'Find things on the screen by what they show, tap them, and check the result.',
+        goals: ['Show a composable in a test with <code>createComposeRule()</code> and <code>setContent</code>', 'Find a node with <code>onNodeWithText</code> and tap it with <code>performClick()</code>', 'Check the screen with <code>assertIsDisplayed()</code>'],
+        level: 'intermediate', introduces: ['Rule', 'createComposeRule', 'onNodeWithText', 'performClick', 'assertIsDisplayed', 'debugImplementation'],
+        body: `
+<p>Sam tidies up <code>RecipesContent</code> and, in the error look, writes <code>Button(onClick = {})</code> for Try again: the button does nothing. Every ViewModel test still passes, because none of them touches the screen. A <em>Compose UI test</em> shows a composable, taps it as a user would, and checks what it shows.</p>
+<p>The test doesn’t look at pixels. Next to what it draws, Compose keeps a description of the screen: which texts are shown and which parts can be tapped. This is the <em>semantics tree</em> (a tree, because parts sit inside other parts, like a Button inside a Column), and apps that read the screen aloud use it too. Each part in it is a <em>node</em>. <code>onNodeWithText("Try again")</code> finds the one node that shows that text. A Button takes in the text inside it, so this finds the button itself. <code>performClick()</code> taps it, and <code>assertIsDisplayed()</code> checks that a node is on the screen.</p>
+<p>The test gets a place to show composables from a <em>rule</em>: a helper that JUnit sets up before each test and cleans up after it. <code>@get:Rule val composeRule = createComposeRule()</code> makes one (<code>get:</code> puts the mark where JUnit looks for it). Import it from <code>junit4.v2</code>, the current version; the older one is deprecated. In <code>composeRule.setContent { }</code>, call <code>RecipesContent</code> with any state you like: no ViewModel, no database. The rule waits for the screen to settle before each step, so there is no waiting to write. The test runs on Robolectric in <code>src/test</code>, and the same code also runs on a phone in <code>androidTest</code>.</p>
+<p>The Gradle lines are at the top of the code below. One of them is new: <code>debugImplementation</code> adds a library to the debug build only, the one tests and Run use; the release build that users get leaves it out. <code>ui-test-manifest</code> gives <code>setContent</code> an empty Activity to draw in.</p>`,
+        visual(el) {
+          const bar = '<div class="ui-m-bar">Recipes</div>';
+          const mark = 'style="outline:2px solid var(--warm);outline-offset:2px;border-radius:6px"';
+          const list = (m) => `${bar}<div class="ui-m-body"><span class="ui-m-btn">Refresh</span><div class="ui-m-row" ${m === 1 ? mark : ''}><div>Tomato soup · 15 min</div><span>☆</span></div><div class="ui-m-row"><div>Lemon pasta · 20 min</div><span>☆</span></div></div>`;
+          const error = (m) => `${bar}<div class="ui-m-center"><span>Can’t load recipes. Check your connection.</span><span class="ui-m-btn try" ${m ? mark : ''}>Try again</span></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'Test',
+            predict: {
+              q: 'Both recipes on the screen show a ☆. What does <code>onNodeWithText("☆").performClick()</code> do?',
+              options: ['Taps the first star', 'Taps both stars', 'Fails: a finder must find exactly one node, and it found two'],
+              a: 2,
+              why: 'An <code>onNodeWith…</code> finder expects exactly one match. None or two fails the test, so it never taps the wrong thing by luck.',
+            },
+            frames: [
+              { screen: list(0), log: 'setContent { RecipesContent(…soup, pasta…) }', say: '<code>setContent</code> shows <code>RecipesContent</code> with a state the test picked: two recipes, not loading.' },
+              { screen: list(1), log: 'onNodeWithText("Tomato soup · 15 min")', say: 'The finder looks through the semantics tree and finds exactly one node with that text.' },
+              { log: '.assertIsDisplayed()  ✓', say: 'The node is on the screen, so the check passes.' },
+              { screen: error(false), log: 'setContent { …note = "Offline: …" }', say: 'A second test starts fresh, with no recipes and a note: the error look.' },
+              { screen: error(true), tap: '.try', log: 'onNodeWithText("Try again").performClick()', say: 'The Button took in its text, so the finder found the button itself. <code>performClick()</code> taps it.' },
+              { log: 'assertEquals(1, refreshes)  ✓', say: 'The tap called <code>onRefresh</code> once. With Sam’s <code>onClick = {}</code>, <code>refreshes</code> would stay 0 and this test would fail.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts
+dependencies {
+    testImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")   // a host for setContent
+}
+
+// app/src/test/java/com/example/recipes/RecipesContentTest.kt
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+
+@RunWith(RobolectricTestRunner::class)
+class RecipesContentTest {
+    @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun \`shows each recipe with its minutes\`() {
+        composeRule.setContent {
+            RecipesContent(RecipesUiState(isLoading = false, recipes = listOf(soup, pasta)), onRefresh = {}, onFavorite = {})
+        }
+        composeRule.onNodeWithText("Tomato soup · 15 min").assertIsDisplayed()
+        composeRule.onNodeWithText("Lemon pasta · 20 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun \`Try again asks for a refresh\`() {
+        var refreshes = 0
+        composeRule.setContent {
+            RecipesContent(RecipesUiState(isLoading = false, note = "Offline: showing saved recipes"), onRefresh = { refreshes += 1 }, onFavorite = {})
+        }
+        composeRule.onNodeWithText("Try again").performClick()
+        assertEquals(1, refreshes)
+    }
+}`,
+        remember: 'setContent shows it, onNodeWithText finds exactly one node, performClick taps it, assertIsDisplayed checks it.',
+        mistakes: [
+          { title: 'A finder that matches two nodes', bad: `var starred: Recipe? = null
+composeRule.setContent {
+    RecipesContent(RecipesUiState(isLoading = false, recipes = listOf(soup, pasta)), onRefresh = {}, onFavorite = { starred = it })
+}
+composeRule.onNodeWithText("☆").performClick()   // fails: two nodes show ☆`, good: `var starred: Recipe? = null
+composeRule.setContent {
+    RecipesContent(RecipesUiState(isLoading = false, recipes = listOf(soup)), onRefresh = {}, onFavorite = { starred = it })
+}
+composeRule.onNodeWithText("☆").performClick()   // one recipe, one star
+assertEquals(soup, starred)`, why: 'A finder must find exactly one node, or the test fails and says how many it found. Pick a state where what you look for appears once.' },
+        ],
+        terms: [
+          { term: 'semantics tree', def: 'Compose’s description of the screen: what each part shows and what can be tapped. Tests and screen readers read it.' },
+          { term: 'node', def: 'One part in the semantics tree, like a Text or a Button. A finder such as <code>onNodeWithText</code> must find exactly one.' },
+          { term: 'debugImplementation', def: 'Adds a library to the debug build only, inside <code>dependencies { }</code>. The release build, the one users get, leaves it out.' },
+          { term: 'rule', def: 'A helper JUnit sets up before each test and cleans up after, marked <code>@get:Rule</code>. <code>createComposeRule()</code> gives a place to show composables.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Tap Try again and check that it asked for a refresh.', code: `composeRule.[[onNodeWithText]]("Try again").[[performClick]]()
+assertEquals(1, refreshes)`, why: '<code>onNodeWithText</code> finds the button by its text, and <code>performClick()</code> taps it.' },
+          { type: 'bug', prompt: '<code>RecipesContentTest</code> fails with <code>expected:&lt;1&gt; but was:&lt;0&gt;</code>. The test is right. Tap the line in the screen that’s wrong.', code: `if (state.recipes.isEmpty() && state.note != "") {
+    Column {
+        Text("Can’t load recipes. Check your connection.")
+        Button(onClick = {}) { Text("Try again") }
+    }
+}`, bug: 3, fix: '        Button(onClick = onRefresh) { Text("Try again") }', why: 'The button was tapped, but its <code>onClick</code> did nothing. Passing <code>onRefresh</code> sends the tap up to the ViewModel again.' },
+        ],
+        quiz: [
+          { q: 'What does a Compose UI test read to find a node?', options: ['The semantics tree: what each part shows and what can be tapped', 'The pixels on the screen', 'Your Kotlin source code'], a: 0, why: 'Compose keeps a description of the screen next to what it draws. Finders search that description.' },
+          { q: 'No node shows the text “Pancakes”. What does <code>onNodeWithText("Pancakes").assertIsDisplayed()</code> do?', options: ['Fails: the finder found no node', 'Passes, because nothing is wrong', 'Waits until Pancakes appears'], a: 0, why: 'A finder must find exactly one node. None fails the test.' },
+          { q: 'Why does <code>onNodeWithText("Try again")</code> find something you can tap?', options: ['The Button takes in the text inside it, so the node found is the button', 'Every Text can be tapped in tests', 'performClick taps whatever is nearest'], a: 0, why: 'In the semantics tree, the Button and its Text are one node, which can be tapped.' },
+        ],
+        docs: [['Test your Compose layout', 'https://developer.android.com/develop/ui/compose/testing'], ['Migrate to v2 testing APIs', 'https://developer.android.com/develop/ui/compose/testing/migrate-v2']],
+      },
+
+      {
+        id: 'screenshots',
+        title: 'Screenshot tests',
+        tagline: 'Save a picture of the screen, and fail when it changes.',
+        goals: ['Explain what a reference image is and why it goes into Git', 'Draw and save a composable with Roborazzi’s <code>captureRoboImage()</code>', 'Record and verify with Gradle, and decide what a failure means'],
+        level: 'intermediate', introduces: ['GraphicsMode', 'NATIVE', 'onRoot', 'captureRoboImage', 'roborazzi', 'outputDir', 'recordRoborazziDebug', 'verifyRoborazziDebug'],
+        body: `
+<p>Lin makes the recipe titles bigger. Every test still passes: “Tomato soup · 15 min” is still on the screen, and Try again still asks for a refresh. But on a phone, the long titles now push the star out of the row. The tests from the last lesson check what is there and what it does, not how it looks.</p>
+<p>A <em>screenshot test</em> draws a composable into a picture and compares it with a saved one, the <em>reference image</em>. There are two commands. <em>Record</em> draws every screenshot test and saves the pictures as references; you commit them with Git, next to the code. <em>Verify</em> draws them again and fails if a picture changed. It also saves a comparison image that shows the reference, the new picture and where they differ.</p>
+<p><em>Roborazzi</em> is a library that does this on Robolectric, so it needs no phone. <code>@GraphicsMode(GraphicsMode.Mode.NATIVE)</code> on the class makes Robolectric really draw the pixels. In the test, <code>composeRule.onRoot()</code> is the whole content you set, and <code>captureRoboImage()</code> saves it when recording and compares it when verifying. The <code>roborazzi { }</code> block in Gradle puts the references in <code>src/screenshots</code>, because the <code>build</code> folder, where they would go otherwise, is never committed.</p>
+<p>A failing screenshot test is not always a bug. If the change was on purpose, record again and commit the new pictures; whoever reviews the pull request sees the old and the new image. If it wasn’t, fix the code and verify again. Draw with fixed data, like <code>soup</code> and <code>pasta</code>, so the picture is the same on every run.</p>`,
+        visual(el) {
+          const bar = '<div class="ui-m-bar">Recipes</div>';
+          const red = 'style="outline:2px solid var(--err);outline-offset:2px;border-radius:6px"';
+          const row = (t, big, diff) => big
+            ? `<div class="ui-m-row" ${diff ? red : ''}><div style="white-space:normal;font-size:1.15rem;font-weight:700">${t}</div></div>`
+            : `<div class="ui-m-row"><div>${t}</div><span>☆</span></div>`;
+          const shot = (big, diff) => `${bar}<div class="ui-m-body"><span class="ui-m-btn">Refresh</span>${row('Tomato soup · 15 min', big, diff)}${row('Lemon pasta · 20 min', big, diff)}${row('Bean stew · 45 min', big, diff)}</div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'What happens',
+            predict: {
+              q: 'Lin only changes the star’s color, from gold to grey. Which test notices?',
+              options: ['<code>RecipesContentTest</code>, from the last lesson', 'The screenshot test', 'Neither'],
+              a: 1,
+              why: 'The star still shows ☆ and can still be tapped, so the behavior tests pass. Only a picture shows the new color.',
+            },
+            frames: [
+              { screen: shot(false, false), log: '$ ./gradlew recordRoborazziDebug', say: 'Record: Roborazzi draws <code>RecipesContent</code> with soup, pasta and stew, and saves the picture in <code>src/screenshots</code>.' },
+              { log: 'git commit: the reference image, with the code', say: 'The reference goes into Git, so everyone on the team compares against the same picture.' },
+              { screen: shot(true, false), log: 'Lin: bigger titles', say: 'Lin makes the titles bigger. The stars are pushed out of the rows, and every behavior test still passes.' },
+              { log: '$ ./gradlew verifyRoborazziDebug  ✗ failed', say: 'Verify draws the screen again and compares it with the reference. They differ, so the test fails.' },
+              { screen: shot(true, true), log: 'comparison image: the rows changed', say: 'The comparison image shows where the pictures differ: every row.' },
+              { screen: shot(false, false), log: 'not on purpose: fix the row, verify  ✓', say: 'The stars were meant to stay, so Lin fixes the row and verifies again. Had it been on purpose, she would record again and commit the new picture.' },
+            ],
+          });
+        },
+        code: `// build.gradle.kts of the project
+plugins {
+    id("io.github.takahirom.roborazzi") version "1.74.0" apply false
+}
+// app/build.gradle.kts
+plugins {
+    id("io.github.takahirom.roborazzi")
+}
+roborazzi {
+    outputDir.set(file("src/screenshots"))          // reference images live here, in Git
+}
+dependencies {
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.74.0")
+}
+
+// app/src/test/java/com/example/recipes/RecipesScreenshotTest.kt
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)              // really draw the pixels
+class RecipesScreenshotTest {
+    @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun \`recipes list\`() {
+        composeRule.setContent {
+            MaterialTheme {
+                RecipesContent(RecipesUiState(isLoading = false, recipes = listOf(soup, pasta, stew)), onRefresh = {}, onFavorite = {})
+            }
+        }
+        composeRule.onRoot().captureRoboImage()
+    }
+}
+
+// ./gradlew recordRoborazziDebug     draws and saves the references: commit them
+// ./gradlew verifyRoborazziDebug     draws again and fails if a picture changed`,
+        remember: 'Record saves reference images to commit; verify fails when a picture changes. On purpose: record again. Not: fix the code.',
+        mistakes: [
+          { title: 'Recording over a real bug', bad: `./gradlew verifyRoborazziDebug     # fails
+./gradlew recordRoborazziDebug     # "fixed": the new picture is the reference now`, good: `./gradlew verifyRoborazziDebug     # fails
+# open the comparison image first:
+# a change you meant: record again, and commit the new picture
+# a change you didn't mean: fix the code, and verify again`, why: 'Recording makes whatever is drawn now the new truth. Look at the comparison image before you record, or a broken screen becomes the reference.' },
+        ],
+        terms: [
+          { term: 'screenshot test', def: 'A test that draws a screen into a picture and fails when it differs from a saved one.' },
+          { term: 'reference image', def: 'The saved picture a screenshot test compares against, committed with the code.' },
+          { term: 'Roborazzi', def: 'A library for screenshot tests on Robolectric: <code>captureRoboImage()</code>, plus the Gradle tasks <code>recordRoborazziDebug</code> and <code>verifyRoborazziDebug</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make Robolectric really draw, and save the whole content as a picture.', code: `@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.[[NATIVE]])
+class RecipesScreenshotTest {
+    @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun \`recipes list\`() {
+        composeRule.setContent { RecipesContent(RecipesUiState(isLoading = false, recipes = listOf(soup)), onRefresh = {}, onFavorite = {}) }
+        composeRule.onRoot().[[captureRoboImage]]()
+    }
+}`, why: '<code>NATIVE</code> makes Robolectric draw real pixels, and <code>captureRoboImage()</code> saves or compares the picture.' },
+          { type: 'bug', prompt: 'Sam recorded and committed, but on Lin’s computer verify has nothing to compare with: the references never reached Git. Tap the line that’s wrong.', code: `roborazzi {
+    outputDir.set(file("build/screenshots"))
+}`, bug: 1, fix: '    outputDir.set(file("src/screenshots"))', why: 'The <code>build</code> folder is in <code>.gitignore</code>, so nothing saved there is committed. References belong next to the code.' },
+        ],
+        quiz: [
+          { q: 'What does <code>./gradlew recordRoborazziDebug</code> do?', options: ['Draws every screenshot test and saves the pictures as references', 'Compares the screen with the references', 'Takes a picture of your real phone'], a: 0, why: 'Record writes the references. Verify is the one that compares.' },
+          { q: 'Verify fails after a change you made on purpose. What next?', options: ['Record again and commit the new pictures', 'Delete the test', 'Run verify until it passes'], a: 0, why: 'The new picture becomes the reference, and reviewers see the change in the pull request.' },
+          { q: 'Why does the class need <code>@GraphicsMode(GraphicsMode.Mode.NATIVE)</code>?', options: ['So Robolectric really draws the pixels', 'So the test runs on a phone', 'So the images go into Git'], a: 0, why: 'Without it, Robolectric doesn’t draw for real, and there is no true picture to compare.' },
+        ],
+        docs: [['Roborazzi', 'https://github.com/takahirom/roborazzi']],
+      },
+
+      {
+        id: 'hilt-testing',
+        title: 'Hilt in tests',
+        tagline: 'Open the whole app in a test, with a fake where the real data would be.',
+        goals: ['Swap a Hilt module for tests with <code>@TestInstallIn</code>', 'Open <code>MainActivity</code> in a test with <code>@HiltAndroidTest</code> and <code>HiltAndroidRule</code>', 'Order rules so Hilt is ready before the Activity starts'],
+        level: 'intermediate', introduces: ['TestInstallIn', 'HiltAndroidTest', 'HiltAndroidRule', 'createAndroidComposeRule', 'Config', 'HiltTestApplication', 'kspTest'],
+        body: `
+<p>So far the tests built the ViewModel by hand, or showed <code>RecipesContent</code> with a made-up state. Ada wants one test that opens the whole app, <code>MainActivity</code>, as a user would. Hilt would then build the ViewModel, the use case and the screen, exactly as in the app. But it would also build <code>OfflineRecipeRepository</code>, with the real Room database and the real server: slow, and failing whenever the network does.</p>
+<p>Hilt can swap one module just for tests. A test module marked <code>@TestInstallIn(components = [SingletonComponent::class], replaces = [RepositoryModule::class])</code> says: in every test in <code>src/test</code>, leave <code>RepositoryModule</code> out and use this one instead. Inside an annotation, <code>[ ]</code> writes a list. Its <code>@Provides</code> function hands out a <code>FakeRecipeRepository</code> holding Tomato soup and Lemon pasta (<code>soup</code> and <code>pasta</code> from <code>TestRecipes.kt</code>), and <code>@Singleton</code> keeps one for the whole test. Everything else is the app’s real code.</p>
+<p>Mark the test class <code>@HiltAndroidTest</code>, so Hilt builds its components for the test, and give it <code>HiltAndroidRule(this)</code>. Then <code>createAndroidComposeRule&lt;MainActivity&gt;()</code> opens the real <code>MainActivity</code>. Hilt has to be ready before the Activity asks for its ViewModel, so number the rules: <code>@get:Rule(order = 0)</code> for Hilt, <code>order = 1</code> for Compose. On Robolectric, <code>@Config(application = HiltTestApplication::class)</code> runs the test in Hilt’s own test Application instead of <code>RecipesApp</code>. The Gradle lines are at the top of the code below.</p>`,
         visual(el) {
           Lab.ui.graph(el, {
             height: 300,
             nodes: [
-              { id: 'test', label: 'NewsViewModelTest', x: 72, y: 50, hidden: true, tone: 'warm' },
-              { id: 'vm', label: 'NewsViewModel', x: 25, y: 10 },
-              { id: 'repo', label: 'NewsRepository<small>interface</small>', x: 25, y: 50, tone: 'muted' },
-              { id: 'real', label: 'Real repository<small>network</small>', x: 25, y: 90 },
-              { id: 'fake', label: 'FakeNewsRepository<small>a list in memory</small>', x: 70, y: 90, hidden: true, tone: 'ok' },
+              { id: 'test', label: 'MainActivityTest<small>@HiltAndroidTest</small>', x: 75, y: 10, hidden: true, tone: 'warm' },
+              { id: 'act', label: 'MainActivity', x: 25, y: 10 },
+              { id: 'vm', label: 'RecipesViewModel', x: 25, y: 40 },
+              { id: 'mod', label: 'RepositoryModule<small>@Binds</small>', x: 25, y: 65, tone: 'muted' },
+              { id: 'real', label: 'Offline&shy;Recipe&shy;Repository<small>Room + server</small>', x: 25, y: 90 },
+              { id: 'tmod', label: 'FakeRepositoryModule<small>@TestInstallIn</small>', x: 75, y: 65, hidden: true, tone: 'ok' },
+              { id: 'fake', label: 'FakeRecipeRepository<small>soup, pasta</small>', x: 75, y: 90, hidden: true, tone: 'ok' },
             ],
             predict: {
-              q: 'The test uses <code>FakeNewsRepository</code>. You run it 100 times in a row. What changes between runs?',
-              options: ['Nothing: same input, same result, a few milliseconds each', 'The timing, and now and then the result', 'It fails from the second run on'],
+              q: 'Without a test module, the test opens <code>MainActivity</code>. Which repository does <code>RecipesViewModel</code> get?',
+              options: ['<code>OfflineRecipeRepository</code>, with the real Room and server', 'A fake, because it is a test', 'None: Hilt doesn’t work in tests'],
               a: 0,
-              why: 'Each test builds a new fake that holds its data in memory. No network, no shared server data, so every run is the same.',
+              why: 'Hilt builds what the modules say, test or not. To get a fake in, the test has to swap the module.',
             },
             frames: [
-              { add: [['vm', 'repo', 'latest()'], ['repo', 'real', 'implements']], say: 'In the app, <code>NewsViewModel</code> only knows the <code>NewsRepository</code> interface. The real implementation calls the server.' },
-              { show: ['test'], hl: ['real'], add: [['test', 'vm', 'passes real'], ['repo', 'real', 'slow, flaky', 'err']], say: 'A test with the real one waits for the network, and fails when the server is down or its data changes.' },
-              { show: ['fake'], gone: ['real'], remove: [['repo', 'real']], add: [['repo', 'fake', '', 'ok'], ['test', 'vm', 'passes fake', 'ok']], say: 'Pass a fake instead. It has the same interface, so the ViewModel can’t tell the difference.' },
-              { hl: ['test', 'fake'], add: [['test', 'fake', 'articles = …', 'accent']], say: '<b>Given</b>: the test puts one article into the fake.' },
-              { hl: ['vm', 'fake'], add: [['vm', 'repo', 'latest()', 'ok']], say: '<b>When</b>: <code>vm.load()</code> calls <code>latest()</code>. The fake returns its list from memory at once.' },
-              { hl: ['test', 'vm'], say: '<b>Then</b>: <code>assertEquals(UiState.Success(repo.articles), vm.state.value)</code>. The test checks the result, not how the ViewModel got it.' },
-              { hl: ['fake'], add: [['test', 'fake', 'error = …', 'err']], say: 'The offline test sets <code>error</code> instead. The fake throws, and the ViewModel must show <code>UiState.Error("offline")</code>. No need to pull a cable.' },
+              { add: [['act', 'vm', 'hiltViewModel()'], ['vm', 'mod', 'RecipeRepository'], ['mod', 'real']], say: 'In the app: <code>MainActivity</code> asks for the ViewModel, which asks for a <code>RecipeRepository</code>. <code>RepositoryModule</code> hands over <code>OfflineRecipeRepository</code>.' },
+              { show: ['test'], add: [['test', 'act', '', 'warm']], hl: ['real'], say: 'A test opens <code>MainActivity</code>. Left like this, it would read the real database and call the real server.' },
+              { hl: ['test'], say: '<code>@HiltAndroidTest</code> and <code>HiltAndroidRule</code>: Hilt builds its components for the test, in <code>HiltTestApplication</code>.' },
+              { show: ['tmod'], gone: ['mod', 'real'], remove: [['vm', 'mod'], ['mod', 'real']], add: [['vm', 'tmod', 'RecipeRepository', 'ok']], say: '<code>@TestInstallIn(replaces = [RepositoryModule::class])</code>: in tests, Hilt leaves <code>RepositoryModule</code> out and reads <code>FakeRepositoryModule</code> instead.' },
+              { show: ['fake'], add: [['tmod', 'fake', '', 'ok']], hl: ['fake'], say: 'Its <code>@Provides</code> function hands out a <code>FakeRecipeRepository</code> with Tomato soup and Lemon pasta.' },
+              { hl: ['act', 'vm'], say: 'The screen shows “Tomato soup · 15 min” from the fake. The Activity, the ViewModel, the use case and the screen are all the app’s real code.' },
             ],
           });
         },
-      },
-
-      mockkLesson,
-
-      // 3 ─────────────────────────────────────────────
-      {
-        id: 'coroutines',
-        title: 'Testing coroutines',
-        tagline: 'runTest skips delays with a virtual clock.',
-        level: 'intermediate',
-        body: `
-<p>Wrap coroutine tests in <code>runTest</code>. It runs on a test scheduler with a <em>virtual clock</em>: <code>delay(2_000)</code> moves that clock forward by two seconds and returns at once. A retry with backoff that waits three seconds for real finishes in a few milliseconds.</p>
-<p>Code in <code>viewModelScope</code> runs on <code>Dispatchers.Main</code>, which does not exist on the JVM. Swap it with <code>Dispatchers.setMain</code>, usually inside a small JUnit rule. With a <code>StandardTestDispatcher</code>, a launched coroutine waits in the queue until you call <code>advanceUntilIdle()</code> or <code>runCurrent()</code>. An <code>UnconfinedTestDispatcher</code> starts it right away and runs it up to its first suspension.</p>
-<p>Inject other dispatchers too, and create them as <code>StandardTestDispatcher(testScheduler)</code> so every coroutine shares one clock.</p>`,
-        code: `class MainDispatcherRule(
-    val testDispatcher: TestDispatcher = UnconfinedTestDispatcher(),
-) : TestWatcher() {
-    override fun starting(description: Description) = Dispatchers.setMain(testDispatcher)
-    override fun finished(description: Description) = Dispatchers.resetMain()
+        code: `// app/build.gradle.kts
+dependencies {
+    testImplementation("com.google.dagger:hilt-android-testing:2.60.1")
+    kspTest("com.google.dagger:hilt-compiler:2.60.1")
 }
 
-// In SyncViewModel:
-fun sync() = viewModelScope.launch {
-    _state.value = SyncState.Syncing
-    repeat(3) { attempt ->
-        if (repo.trySync()) { _state.value = SyncState.Done; return@launch }
-        delay(1_000L * (attempt + 1))      // 1 s, then 2 s
-    }
-    _state.value = SyncState.Failed
+// app/src/test/java/com/example/recipes/FakeRepositoryModule.kt
+@Module
+@TestInstallIn(components = [SingletonComponent::class], replaces = [RepositoryModule::class])
+object FakeRepositoryModule {
+    @Provides
+    @Singleton
+    fun provideRepository(): RecipeRepository = FakeRecipeRepository(listOf(soup, pasta))
 }
 
-class SyncViewModelTest {
-    @get:Rule val mainRule = MainDispatcherRule(StandardTestDispatcher())
+// app/src/test/java/com/example/recipes/MainActivityTest.kt
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 
-    @Test fun retriesThenSucceeds() = runTest {
-        val vm = SyncViewModel(FakeSyncRepository(failuresBeforeSuccess = 2))
-        vm.sync()
-        assertEquals(SyncState.Idle, vm.state.value)   // queued, not run yet
-        advanceUntilIdle()                              // runs it and skips both delays
-        assertEquals(SyncState.Done, vm.state.value)
-        assertEquals(3_000L, currentTime)               // virtual milliseconds
+@HiltAndroidTest
+@RunWith(RobolectricTestRunner::class)
+@Config(application = HiltTestApplication::class)
+class MainActivityTest {
+    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)                       // Hilt first
+    @get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()  // then the Activity
+
+    @Test
+    fun \`opens with the recipes from the repository\`() {
+        composeRule.onNodeWithText("Tomato soup · 15 min").assertIsDisplayed()
+        composeRule.onNodeWithText("Lemon pasta · 20 min").assertIsDisplayed()
     }
 }`,
-        remember: 'runTest skips delay() on a virtual clock. Standard queues until you advance; Unconfined runs at once.',
+        remember: '@TestInstallIn swaps a module in every test; @HiltAndroidTest with HiltAndroidRule at order = 0 opens the real app around the fake.',
+        mistakes: [
+          { title: 'Rules without an order', bad: `@get:Rule val hiltRule = HiltAndroidRule(this)
+@get:Rule val composeRule = createAndroidComposeRule<MainActivity>()`, good: `@get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
+@get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()`, why: 'Without <code>order</code>, JUnit may start the Compose rule first. It opens <code>MainActivity</code>, which asks Hilt for its ViewModel before Hilt is set up, and the test fails before it starts.' },
+        ],
         terms: [
-          { term: 'runTest', def: 'A coroutine test builder that runs the body on a test scheduler whose virtual clock skips delays.' },
-          { term: 'StandardTestDispatcher', def: 'A test dispatcher that queues new coroutines until the test advances the scheduler.' },
-          { term: 'UnconfinedTestDispatcher', def: 'A test dispatcher that starts new coroutines immediately and runs them until their first suspension.' },
-          { term: 'MainDispatcherRule', def: 'A common JUnit rule that calls Dispatchers.setMain with a test dispatcher before each test and resetMain after.' },
+          { term: '@TestInstallIn', def: 'Marks a test module that replaces an app module in every test of that folder: <code>replaces = [RepositoryModule::class]</code>.' },
+          { term: '@HiltAndroidTest', def: 'Marks a test class that uses Hilt, so Hilt builds its components for that test.' },
+          { term: 'HiltAndroidRule', def: 'The rule that sets Hilt up for each test. It must run before any rule that opens an Activity.' },
+          { term: 'HiltTestApplication', def: 'Hilt’s own Application for tests, used instead of the app’s <code>@HiltAndroidApp</code> class.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Run the test on virtual time and let the queued coroutine finish.', code: '@Test fun showsDoneAfterSync() = [[runTest]] {\n    vm.sync()\n    [[advanceUntilIdle]]()\n    assertEquals(SyncState.Done, vm.state.value)\n}', why: '<code>runTest</code> gives you the virtual clock. <code>advanceUntilIdle()</code> runs every queued task and skips their delays.' },
-          { type: 'bug', prompt: 'In a test class without a Main dispatcher rule, the state can stay <code>Syncing</code> after <code>advanceUntilIdle()</code>. Tap the fragile line.', code: '@Test fun syncFinishes() = runTest {\n    val repo = FakeSyncRepository()\n    val vm = SyncViewModel(repo, ioDispatcher = StandardTestDispatcher())\n    vm.sync()\n    advanceUntilIdle()\n    assertEquals(SyncState.Done, vm.state.value)\n}', bug: 2, fix: '    val vm = SyncViewModel(repo, ioDispatcher = StandardTestDispatcher(testScheduler))', why: 'Without an argument, <code>StandardTestDispatcher()</code> borrows the scheduler of a test Main dispatcher if one is installed, and otherwise creates its own. Then advancing the test’s scheduler never runs its tasks. Pass <code>testScheduler</code> so every dispatcher shares one clock.' },
+          { type: 'blank', prompt: 'Replace the app’s repository module in every test.', code: `@Module
+@[[TestInstallIn]](components = [SingletonComponent::class], [[replaces]] = [RepositoryModule::class])
+object FakeRepositoryModule {
+    @Provides
+    @Singleton
+    fun provideRepository(): RecipeRepository = FakeRecipeRepository(listOf(soup, pasta))
+}`, why: '<code>@TestInstallIn</code> marks a module for tests, and <code>replaces</code> names the app module it takes the place of.' },
+          { type: 'bug', prompt: 'Hilt refuses to build this test class. Tap the wrong line.', code: `@AndroidEntryPoint
+@RunWith(RobolectricTestRunner::class)
+@Config(application = HiltTestApplication::class)
+class MainActivityTest {
+    @get:Rule(order = 0) val hiltRule = HiltAndroidRule(this)
+    @get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()
+}`, bug: 0, fix: '@HiltAndroidTest', why: '<code>@AndroidEntryPoint</code> is for Android classes like an Activity. A test class that uses Hilt is marked <code>@HiltAndroidTest</code>.' },
         ],
         quiz: [
-          { q: 'Inside <code>runTest</code>, how long does <code>delay(10_000)</code> take on the wall clock?', options: ['About 10 seconds', 'Almost no time; the virtual clock jumps ahead', 'It throws'], a: 1, why: 'The test scheduler advances virtual time instead of waiting.' },
-          { q: 'Main is a <code>StandardTestDispatcher</code>. Right after <code>vm.sync()</code>, has the launched coroutine run?', options: ['Yes, up to its first delay', 'No, it waits in the queue until you advance'], a: 1, why: 'Standard queues new coroutines. Unconfined would start it right away.' },
-          { q: 'Why does a ViewModel test need <code>Dispatchers.setMain</code>?', options: ['viewModelScope uses Dispatchers.Main, which the JVM does not have', 'It makes tests run in parallel', 'runTest requires it'], a: 0, why: 'Without a replacement, launching in viewModelScope fails because there is no Android main looper.' },
-          { q: 'A search runs 300 ms after the last keystroke. In the test you type, then call <code>advanceTimeBy(300)</code>. Has the search run?', options: ['Yes', 'No, a task due exactly at the new time has not run yet; call runCurrent()', 'Only with UnconfinedTestDispatcher'], a: 1, why: 'advanceTimeBy runs tasks scheduled before the new time. runCurrent() then runs what is due right now.' },
-          { q: 'Inside runTest you write <code>launch { vm.state.collect { states += it } }</code>. What happens when the test body ends?', options: ['The test passes', 'runTest waits for the collector, which never finishes, and fails on its timeout', 'The collector is cancelled automatically'], a: 1, why: 'runTest waits for every coroutine in its scope, and a StateFlow collector never completes. Launch it in backgroundScope, which runTest cancels at the end.' },
+          { q: 'What does <code>@TestInstallIn(…, replaces = [RepositoryModule::class])</code> do?', options: ['In tests, Hilt uses this module instead of RepositoryModule', 'It deletes RepositoryModule from the app', 'It adds a second repository next to the real one'], a: 0, why: 'The app keeps its module. Only the tests in that folder get the replacement.' },
+          { q: 'Why is <code>HiltAndroidRule</code> given <code>order = 0</code>?', options: ['Hilt must be ready before the Compose rule opens the Activity', 'Rules with a lower number run faster', 'Hilt only allows one rule'], a: 0, why: 'The Activity asks Hilt for its ViewModel as it opens, so Hilt has to be set up first.' },
+          { q: 'In <code>MainActivityTest</code>, which part is not the app’s real code?', options: ['The repository', 'The ViewModel', 'The screen'], a: 0, why: 'Only the module, and with it the repository, was swapped. Everything above it is real, which is what makes this test worth having.' },
         ],
-        deeper: coroutinesDepth.deeper,
-        underHood: coroutinesDepth.underHood,
-        mistakes: coroutinesDepth.mistakes,
-        predict: {
-          q: 'Main is an <code>UnconfinedTestDispatcher</code>. You call <code>vm.sync()</code>, which launches a coroutine. When does that coroutine start?',
-          options: ['Right away, inside <code>sync()</code>, up to its first suspension', 'Only after <code>advanceUntilIdle()</code>', 'After a real delay'],
-          a: 0,
-          why: 'Unconfined starts a launched coroutine eagerly. A <code>StandardTestDispatcher</code> queues it until you advance the scheduler.',
-        },
-        visual(el) {
-          // Part A: real vs virtual time
-          const steps = [[0, 'attempt 1 failed'], [1000, 'attempt 2 failed'], [3000, 'attempt 3 ok: Done']];
-          const END = 3000;
-          let busyA = false;
-          const real = h('span', { class: 'bar wait', style: 'left:0;width:0' });
-          const virt = h('span', { class: 'bar run', style: 'left:0;width:0' });
-          const ticks = t => steps.map(([at]) => h('span', { class: 'tst-tick', style: `left:${(at / END) * 100}%`, hidden: t < at }));
-          let realTicks = ticks(END), virtTicks = ticks(END);
-          const realTrack = h('div', { class: 'lane-track' }, real, realTicks);
-          const virtTrack = h('div', { class: 'lane-track' }, virt, virtTicks);
-          const vClock = h('b', { class: 'tst-vt' }, '3000 ms'), wClock = h('b', {}, '4 ms');
-          const oa = out();
-          const resetA = () => { real.style.width = '0'; virt.style.width = '0'; [...realTicks, ...virtTicks].forEach(x => { x.hidden = true; }); };
-          async function realRun() {
-            if (busyA) return; busyA = true; resetA();
-            say(oa, hl('runBlocking { vm.sync() }') + ' <span class="muted">// real delays, plays at real speed</span>');
-            const t0 = performance.now();
-            await new Promise(done => {
-              const tick = now => {
-                if (!el.isConnected) return done();
-                const t = Math.min(now - t0, END);
-                real.style.width = (t / END) * 100 + '%';
-                realTicks.forEach((x, i) => { x.hidden = t < steps[i][0]; });
-                vClock.textContent = Math.round(t) + ' ms'; wClock.textContent = Math.round(t) + ' ms';
-                if (t < END) requestAnimationFrame(tick); else done();
-              };
-              requestAnimationFrame(tick);
-            });
-            oa.append(h('div', { class: 'line drop-in' }, 'Done after 3 s of waiting. Every run of this test costs 3 s.'));
-            busyA = false;
-          }
-          async function virtRun() {
-            if (busyA) return; busyA = true; resetA();
-            say(oa, hl('runTest { vm.sync(); advanceUntilIdle() }'));
-            for (let i = 0; i < steps.length; i++) {
-              const [at, msg] = steps[i];
-              virt.style.transition = 'width 0.12s'; virt.style.width = (at / END) * 100 + '%';
-              virtTicks[i].hidden = false;
-              vClock.textContent = at + ' ms'; replay(vClock, 'pop');
-              wClock.textContent = (i + 1) * 2 + ' ms';
-              oa.append(h('div', { class: 'line drop-in' }, `virtual ${at} ms: ${msg}`));
-              await sleep(260);
-              if (!el.isConnected) return;
-            }
-            virt.style.transition = '';
-            oa.append(h('div', { class: 'line drop-in', html: '<span class="good">PASSED</span> in about 6 ms of wall time' }));
-            busyA = false;
-          }
-          real.style.width = '100%'; virt.style.width = '100%';
-          oa.innerHTML = 'Both runs finished. Same code, same 3000 ms of delays. Only the real one waited.';
-
-          // Part B: Standard vs Unconfined
-          let mode = 'standard', vt = 0, state = 'Idle', queue = [], started = false, busyB = false;
-          const queueEl = h('div', { class: 'tst-queue', 'aria-label': 'Scheduler queue' });
-          const stateSlot = h('span', {}, h('span', { class: 'chip' }, 'Idle'));
-          const vtEl = h('b', { class: 'tst-vt' }, '0 ms');
-          const ob = out();
-          const modeBtns = [['standard', 'StandardTestDispatcher()'], ['unconfined', 'UnconfinedTestDispatcher()']].map(([k, src]) => cmd(src, () => { if (busyB) return; mode = k; resetB(); }));
-          const setState = s => { state = s; stateSlot.replaceChildren(h('span', { class: 'chip drop-in' }, s)); };
-          const paintQ = () => queueEl.replaceChildren(...queue.map(q => h('span', { class: 'tst-task drop-in' }, q.label)));
-          function phase(p) {
-            if (p === 0) { setState('Syncing'); queue.push({ p: 1, at: vt + 1000, label: `resume at ${vt + 1000} ms` }); return 'attempt 1 failed, delay(1000)'; }
-            if (p === 1) { queue.push({ p: 2, at: vt + 2000, label: `resume at ${vt + 2000} ms` }); return 'attempt 2 failed, delay(2000)'; }
-            setState('Done'); return 'attempt 3 ok';
-          }
-          function resetB() {
-            vt = 0; queue = []; started = false; setState('Idle'); paintQ(); vtEl.textContent = '0 ms';
-            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', ['standard', 'unconfined'][i] === mode));
-            say(ob, `Main is ${mode === 'standard' ? 'Standard' : 'Unconfined'}. Call ${hl('vm.sync()')}.`);
-          }
-          function sync() {
-            if (busyB) return;
-            if (started) { say(ob, 'sync() already launched. Advance, or pick a dispatcher to start over.'); return; }
-            started = true;
-            if (mode === 'standard') {
-              queue.push({ p: 0, at: vt, label: 'launch { sync body }' }); paintQ();
-              say(ob, `${hl('vm.sync()')} <span class="muted">// queued. state is still</span> Idle`);
-            } else {
-              const msg = phase(0); paintQ();
-              say(ob, `${hl('vm.sync()')} <span class="muted">// ran at once:</span> ${msg}`);
-            }
-          }
-          async function advance() {
-            if (busyB) return;
-            if (!queue.length) { say(ob, `${hl('advanceUntilIdle()')} <span class="muted">// nothing queued</span>`); return; }
-            busyB = true; say(ob, hl('advanceUntilIdle()'));
-            while (queue.length && el.isConnected) {
-              queue.sort((a, b) => a.at - b.at);
-              const q = queue.shift(); paintQ();
-              if (q.at > vt) { vt = q.at; vtEl.textContent = vt + ' ms'; replay(vtEl, 'pop'); }
-              await sleep(380);
-              ob.append(h('div', { class: 'line drop-in' }, `${vt} ms: ${phase(q.p)}`)); paintQ();
-              await sleep(380);
-            }
-            busyB = false;
-          }
-          resetB();
-
-          el.append(
-            h('div', { class: 'tst-sub' },
-              h('span', { class: 'tst-label' }, 'Same retry, two clocks'),
-              h('div', { class: 'controls' }, cmd('runBlocking { … }', realRun), cmd('runTest { … }', virtRun)),
-              h('div', { class: 'tst-clocks' }, h('span', {}, 'virtual time ', vClock), h('span', {}, 'wall time ', wClock)),
-              h('div', { class: 'timeline' },
-                h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'real clock'), realTrack),
-                h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'virtual clock'), virtTrack)),
-              oa),
-            h('div', { class: 'tst-sub' },
-              h('span', { class: 'tst-label' }, 'Who runs the launched coroutine, and when'),
-              h('div', { class: 'controls' }, modeBtns),
-              h('div', { class: 'controls' }, cmd('vm.sync()', sync), cmd('advanceUntilIdle()', advance)),
-              h('div', { class: 'tst-clocks' }, h('span', { class: 'tst-state' }, 'vm.state ', stateSlot), h('span', {}, 'currentTime ', vtEl)),
-              queueEl, ob));
-          wClock.textContent = '6 ms'; vClock.textContent = '3000 ms';
-        },
+        docs: [['Hilt testing guide', 'https://developer.android.com/training/dependency-injection/hilt-testing']],
       },
 
-      // 4 ─────────────────────────────────────────────
-      {
-        id: 'flows',
-        title: 'Testing Flows',
-        tagline: 'Collect emissions into a queue, then assert one at a time.',
-        level: 'intermediate',
-        body: `
-<p>A <code>StateFlow</code> never completes, so calling <code>collect</code> in a test body hangs. You need a collector that runs alongside the test and records what arrives.</p>
-<p><b>Turbine</b> does this for you. Inside <code>flow.test { }</code> every emission lands in a queue. <code>awaitItem()</code> takes the next one, or fails if nothing arrives within 3 seconds. When the block ends, any item you did not consume fails the test, so surprise emissions can’t hide. Call <code>cancelAndIgnoreRemainingEvents()</code> when you only care about the first few.</p>
-<p>Without Turbine, launch a collector in <code>backgroundScope</code> with an <code>UnconfinedTestDispatcher</code> and append to a list. <code>runTest</code> cancels that scope when the test ends. Step through the test below, and try the extra buttons to see each failure.</p>`,
-        code: `@Test fun showsArticlesAfterRefresh() = runTest {
-    val repo = FakeNewsRepository()     // backed by a MutableStateFlow
-    val vm = NewsViewModel(repo)
-
-    vm.uiState.test {
-        assertEquals(UiState.Loading, awaitItem())
-        repo.emit(listOf(article))
-        assertEquals(UiState.Success(listOf(article)), awaitItem())
-        cancelAndIgnoreRemainingEvents()
-    }
-}
-
-// Without Turbine
-@Test fun collectsIntoList() = runTest {
-    val repo = FakeNewsRepository()
-    val vm = NewsViewModel(repo)
-    val values = mutableListOf<UiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-        vm.uiState.toList(values)
-    }
-    repo.emit(listOf(article))
-    assertEquals(UiState.Success(listOf(article)), values.last())
-}`,
-        remember: 'Turbine queues every emission. awaitItem() takes one; leftovers fail the test.',
-        terms: [
-          { term: 'Turbine', def: 'A small testing library by Cash App that collects a Flow into a queue so a test can await and assert each event.' },
-          { term: 'awaitItem()', def: 'A Turbine call that suspends until the next emission arrives and returns it, failing after a timeout.' },
-          { term: 'backgroundScope', def: 'A scope inside runTest for coroutines that should run alongside the test and be cancelled when it ends.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Collect with Turbine and take the first emission.', code: 'vm.uiState.[[test]] {\n    assertEquals(UiState.Loading, [[awaitItem]]())\n    repo.emit(listOf(article))\n    assertEquals(UiState.Success(listOf(article)), awaitItem())\n}', why: '<code>test { }</code> starts collecting into a queue. <code>awaitItem()</code> takes the next event from it.' },
-          { type: 'bug', prompt: 'This test never finishes. Tap the line that hangs.', code: '@Test fun emitsSuccess() = runTest {\n    val values = mutableListOf<UiState>()\n    vm.uiState.collect { values += it }\n    repo.emit(listOf(article))\n    assertEquals(UiState.Success(listOf(article)), values.last())\n}', bug: 2, fix: '    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.toList(values) }', why: 'A StateFlow never completes, so <code>collect</code> suspends forever and the lines after it never run. Collect in <code>backgroundScope</code> instead.' },
-        ],
-        quiz: [
-          { q: 'Inside Turbine’s <code>test { }</code>, you call <code>awaitItem()</code> and nothing is emitted. What happens?', options: ['It returns null', 'It fails after the timeout, 3 seconds by default', 'It waits forever'], a: 1, why: 'Turbine fails with “No value produced” once the timeout passes.' },
-          { q: 'The block ends with one emission still in the queue. Result?', options: ['The test passes', 'The test fails with unconsumed events'], a: 1, why: 'Turbine checks the queue is empty at the end. Use <code>cancelAndIgnoreRemainingEvents()</code> if leftovers are fine.' },
-          { q: 'What is the first item a <code>StateFlow</code> gives a new collector?', options: ['Its current value, right away', 'Nothing until the next change'], a: 0, why: 'StateFlow always has a value and replays it to every new collector.' },
-          { q: 'The ViewModel builds state with <code>stateIn(viewModelScope, WhileSubscribed(5_000), Loading)</code>. The test calls vm.load() and reads <code>vm.state.value</code> with no collector. What does it see?', options: ['Success', 'Loading, forever', 'It throws'], a: 1, why: 'WhileSubscribed only runs the upstream while someone collects. Start an empty collector in backgroundScope first.' },
-          { q: 'The ViewModel sets Loading, then Success, with no suspension in between. The test collector runs on StandardTestDispatcher. What does it record?', options: ['Loading, then Success', 'Only Success', 'Only Loading'], a: 1, why: 'StateFlow conflates. A queued collector runs later and reads only the newest value. Assert on the final state, not on every step.' },
-        ],
-        deeper: flowsDepth.deeper,
-        underHood: flowsDepth.underHood,
-        mistakes: flowsDepth.mistakes,
-        predict: {
-          q: 'The repository emits a list equal to the current state. How many new items reach Turbine’s queue?',
-          options: ['One, like every emission', 'None: a StateFlow skips a value equal to its current one', 'Two: the old and the new value'],
-          a: 1,
-          why: '<code>StateFlow</code> compares with <code>equals</code> and only emits real changes, so the collector never sees the repeat.',
-        },
-        visual(el) {
-          const script = [
-            { src: 'vm.uiState.test {', kind: 'start' },
-            { src: '    assertEquals(Loading, awaitItem())', kind: 'await', want: 'Loading' },
-            { src: '    repo.emit(listOf(article))', kind: 'emit', ev: 'Success(1 article)' },
-            { src: '    assertEquals(Success(1 article), awaitItem())', kind: 'await', want: 'Success(1 article)' },
-            { src: '    cancelAndIgnoreRemainingEvents()', kind: 'cancel' },
-            { src: '}', kind: 'end' },
-          ];
-          let pc, queue, live, done, cur, busy = false;
-          const rows = script.map(s => h('div', { class: 'tst-gwt-line', html: hl(s.src) }));
-          const flowVal = h('span', {});
-          const flowLane = h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'vm.uiState'), h('div', { class: 'tst-evs' }, flowVal));
-          const qEl = h('div', { class: 'tst-evs', 'aria-label': 'Turbine queue' });
-          const qLane = h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'Turbine queue'), qEl);
-          const aEl = h('div', { class: 'tst-evs' });
-          const aLane = h('div', { class: 'tst-lane' }, h('span', { class: 'tst-label' }, 'Asserted'), aEl);
-          const timer = h('span', { class: 'tst-timer' });
-          const cancelBox = h('input', { type: 'checkbox', id: 'tst-cancel-toggle', checked: true });
-          const o = out();
-          const setFlow = v => { cur = v; flowVal.replaceChildren(h('span', { class: 'tst-ev drop-in' }, v)); };
-          const pushQ = v => { const e = h('span', { class: 'tst-ev drop-in' }, v); queue.push({ v, el: e }); qEl.append(e); };
-          function reset() {
-            pc = 0; queue = []; live = false; done = false;
-            qEl.replaceChildren(); aEl.replaceChildren(); setFlow('Loading'); timer.textContent = '';
-            qLane.classList.remove('tst-live');
-            paintRows();
-            say(o, 'Press Step to run the test one line at a time.');
-          }
-          function paintRows() {
-            rows.forEach((r, i) => {
-              r.className = 'tst-gwt-line' + (i < pc ? ' tst-pass' : '') + (i === pc && !done ? ' tst-on' : '');
-              if (script[i].kind === 'cancel' && !cancelBox.checked) r.classList.add('tst-skip');
-            });
-          }
-          function fail(msg) {
-            done = true; live = false; qLane.classList.remove('tst-live');
-            paintRows(); rows[Math.min(pc, rows.length - 1)].className = 'tst-gwt-line tst-fail';
-            say(o, `<span class="bad">FAILED</span> ${msg}`); replay(o, 'shake');
-          }
-          async function take(want) {
-            if (!queue.length) {
-              for (let s = 3; s > 0; s--) { timer.textContent = `awaitItem() waiting… ${s} s`; await sleep(1000); if (!el.isConnected) return false; }
-              timer.textContent = '';
-              fail('No value produced in 3s');
-              return false;
-            }
-            const q = queue.shift();
-            q.el.classList.add('leave'); await sleep(380); q.el.remove();
-            const ok = want == null || q.v === want;
-            aEl.append(h('span', { class: `tst-ev drop-in ${ok ? 'tst-ok' : 'tst-no'}` }, q.v));
-            if (!ok) { fail(`expected: ${want} but was: ${q.v}`); return false; }
-            return true;
-          }
-          async function step() {
-            if (busy) return;
-            if (done) { reset(); return; }
-            busy = true;
-            const s = script[pc];
-            if (s.kind === 'start') {
-              live = true; qLane.classList.add('tst-live');
-              await sleep(200); pushQ('Loading');
-              say(o, 'Collecting. A StateFlow sends its current value first.');
-            } else if (s.kind === 'await') {
-              if (!(await take(s.want))) { busy = false; return; }
-              say(o, `<span class="good">ok</span> awaitItem() returned ${s.want}`);
-            } else if (s.kind === 'emit') {
-              setFlow(s.ev); await sleep(300); pushQ(s.ev);
-              say(o, 'The fake emits, the ViewModel maps it, the item lands in the queue.');
-            } else if (s.kind === 'cancel') {
-              if (cancelBox.checked) {
-                queue.forEach(q => q.el.classList.add('tst-gone')); queue = [];
-                live = false; qLane.classList.remove('tst-live');
-                say(o, 'Collection cancelled. Leftover items are ignored.');
-              } else say(o, '<span class="muted">// line removed</span>');
-            } else {
-              if (queue.length) { fail(`Unconsumed events found: ${queue.map(q => q.v).join(', ')}`); busy = false; return; }
-              live = false; qLane.classList.remove('tst-live'); done = true;
-              say(o, '<span class="good">PASSED</span> Every emission was accounted for.');
-            }
-            pc++; paintRows(); busy = false;
-            if (done) rows.forEach(r => r.classList.remove('tst-on'));
-          }
-          async function extraEmit() {
-            if (busy) return;
-            if (!live) { say(o, 'Nobody is collecting yet, or collection already stopped.'); return; }
-            if (cur === 'Success(0 articles)') { say(o, 'StateFlow skips a value equal to its current one. Nothing new reaches the queue.'); replay(flowLane, 'shake'); return; }
-            setFlow('Success(0 articles)'); await sleep(250); pushQ('Success(0 articles)');
-            say(o, 'An extra emission joined the queue. Keep stepping and see what it breaks.');
-          }
-          async function extraAwait() {
-            if (busy || done) return;
-            if (!live) { say(o, 'Call awaitItem() inside the test block. Step into it first.'); return; }
-            busy = true;
-            if (await take(null)) say(o, 'awaitItem() consumed one item without asserting on it.');
-            busy = false;
-          }
-          cancelBox.addEventListener('change', () => { if (!busy) { paintRows(); } });
-          reset();
-          el.append(
-            h('div', { class: 'tst-cols' }, flowLane, qLane, aLane),
-            h('div', { class: 'tst-script' }, rows),
-            h('div', { class: 'controls' },
-              h('button', { class: 'btn primary small', onclick: step }, 'Step'),
-              cmd('repo.emit(emptyList())', extraEmit),
-              cmd('awaitItem()', extraAwait),
-              timer),
-            h('label', { class: 'switch', for: 'tst-cancel-toggle' }, cancelBox, 'Keep cancelAndIgnoreRemainingEvents()'),
-            o);
-        },
-      },
-
-      // 5 ─────────────────────────────────────────────
-      {
-        id: 'compose-ui',
-        title: 'Compose UI tests',
-        tagline: 'Find nodes in the semantics tree, act, assert.',
-        level: 'intermediate',
-        body: `
-<p>Compose tests don’t look at pixels. They read the <em>semantics tree</em>, a parallel description of the UI that accessibility services also use: text, content descriptions, roles, test tags and available actions.</p>
-<p><code>createComposeRule()</code> gives you a host to <code>setContent</code> on. A <em>finder</em> like <code>onNodeWithText</code> or <code>onNodeWithTag</code> must match exactly one node. Then you act with <code>performClick()</code> and check with <code>assertIsDisplayed()</code> or <code>assertTextEquals()</code>. The rule waits for the UI to be idle between steps, so you don’t need sleeps.</p>
-<p>By default finders search the <em>merged</em> tree: a <code>Button</code> absorbs its child <code>Text</code>, so <code>onNodeWithText("Refresh")</code> finds the clickable button itself. Pick a finder below and watch which node it matches.</p>`,
-        code: `@Composable
-fun InboxScreen(viewModel: InboxViewModel = viewModel()) {
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
-    Column {
-        Text("Inbox", style = MaterialTheme.typography.headlineSmall)
-        Text("\${messages.size} messages")
-        LazyColumn(Modifier.testTag("inbox_list")) {
-            items(messages, key = { it.id }) { Text(it.subject) }
-        }
-        Button(onClick = viewModel::refresh) { Text("Refresh") }
-    }
-}
-
-class InboxScreenTest {
-    @get:Rule val rule = createComposeRule()
-
-    @Test fun refreshAddsMessage() {
-        rule.setContent { InboxScreen(InboxViewModel(FakeInboxRepository(count = 3))) }
-        rule.onNodeWithText("3 messages").assertIsDisplayed()
-        rule.onNodeWithText("Refresh").performClick()
-        rule.onNodeWithText("4 messages").assertIsDisplayed()
-        rule.onNodeWithTag("inbox_list").onChildren().assertCountEquals(4)
-    }
-}`,
-        remember: 'Find one node in the semantics tree, perform an action, assert. Tags for things without text.',
-        terms: [
-          { term: 'Semantics tree', def: 'The tree of meaning Compose builds alongside the UI, read by tests and accessibility services.' },
-          { term: 'createComposeRule', def: 'A JUnit rule that hosts composable content in a test and synchronizes with Compose before each check.' },
-          { term: 'Modifier.testTag', def: 'A modifier that puts a string tag in the semantics tree so tests can find the node with onNodeWithTag.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Create the rule, tap Refresh, then check the new count is visible.', code: '@get:Rule val rule = [[createComposeRule]]()\n\n@Test fun refreshAddsMessage() {\n    rule.setContent { InboxScreen() }\n    rule.onNodeWithText("Refresh").[[performClick]]()\n    rule.onNodeWithText("4 messages").[[assertIsDisplayed]]()\n}', why: 'Rule, finder, action, assertion: that is the whole shape of a Compose UI test.' },
-          { type: 'bug', prompt: 'This fails with “Expected exactly \'1\' node but found \'3\' nodes”. Tap the line.', code: '@Test fun deletesFirstMessage() {\n    rule.setContent { InboxScreen(messages = sampleMessages) }   // 3 rows, each with a Delete button\n    rule.onNodeWithText("Delete").performClick()\n    rule.onNodeWithText("2 messages").assertIsDisplayed()\n}', bug: 2, fix: '    rule.onAllNodesWithText("Delete").onFirst().performClick()', why: 'Single-node finders demand exactly one match. Use <code>onAllNodes…</code> and pick one, or give each row a unique test tag.' },
-        ],
-        quiz: [
-          { q: 'What does a Compose UI test read to find nodes?', options: ['The rendered pixels', 'The semantics tree', 'The Kotlin source code'], a: 1, why: 'Finders match semantics properties like text, tags and content descriptions.' },
-          { q: '<code>Button { Text("Refresh") }</code>. What does <code>onNodeWithText("Refresh")</code> match by default?', options: ['The Button, because it merges its child Text', 'Only the inner Text node', 'Nothing'], a: 0, why: 'Finders use the merged tree. Pass <code>useUnmergedTree = true</code> to reach the inner Text.' },
-          { q: 'When is <code>Modifier.testTag</code> the right finder hook?', options: ['For a node with no stable text, such as a list or an image', 'For every node, always', 'Never in production code'], a: 0, why: 'Prefer what the user sees, like text or content descriptions. Use tags when there is nothing user-visible to match.' },
-          { q: 'The ViewModel loads on a real Dispatchers.IO thread. <code>onNodeWithText("Kotlin").assertIsDisplayed()</code> fails sometimes. Why?', options: ['The rule only waits for Compose and idling resources, not your IO thread', 'Text finders are flaky', 'The semantics tree is not merged'], a: 0, why: 'The assertion can run before the data arrives. Use a fake repository that answers at once, or waitUntil the node exists.' },
-          { q: 'You want to check a card halfway through its expand animation. What do you do?', options: ['Thread.sleep(150) after the click', 'Set rule.mainClock.autoAdvance = false, click, then advanceTimeBy(150)', 'Call waitForIdle() after the click'], a: 1, why: 'With autoAdvance on, the rule waits until animations end. Stopping the test clock lets you move time yourself and assert in the middle.' },
-        ],
-        deeper: composeUiDepth.deeper,
-        underHood: composeUiDepth.underHood,
-        mistakes: composeUiDepth.mistakes,
-        predict: {
-          q: 'No node on the screen shows the text “Archive”. What does <code>onNodeWithText("Archive").assertIsDisplayed()</code> do?',
-          options: ['Passes: there is nothing to check', 'Fails: a finder must match exactly one node, and it found none', 'Waits until a node with that text appears'],
-          a: 1,
-          why: 'An <code>onNodeWith…</code> finder expects exactly one match. Zero or two matches fail with an AssertionError that prints the matcher.',
-        },
-        visual(el) {
-          let msgs = ['Standup at 10', 'Invoice #2041', 'Lunch Friday?'], sel = null, toastT;
-          const subjects = ['Release notes', 'Design review', 'Weekly digest', 'Build passed'];
-          const ui = {}, tree = {};
-          const phone = h('div', { class: 'phone tst-phone', role: 'img', 'aria-label': 'Inbox screen preview' });
-          const treeEl = h('div', { class: 'tst-tree', 'aria-label': 'Semantics tree' });
-          const o = out();
-          const node = (id, depth, label, props) => (tree[id] = h('div', { class: 'tst-node', html: `${'  '.repeat(depth)}${depth ? '├ ' : ''}${label}${props ? ` <span class="tst-prop">${props}</span>` : ''}` }));
-          function render() {
-            ui.title = h('div', { class: 'tst-ph-title' }, 'Inbox');
-            ui.count = h('div', { class: 'tst-ph-count' }, `${msgs.length} messages`);
-            ui.list = h('div', { class: 'tst-ph-list' }, msgs.map((m, i) => h('div', { class: 'tst-ph-row' + (i === msgs.length - 1 && msgs.length > 3 ? ' drop-in' : '') }, m)));
-            ui.btn = h('div', { class: 'tst-ph-btn' }, 'Refresh');
-            ui.fab = h('div', { class: 'tst-ph-fab', 'aria-hidden': 'true' }, '+');
-            phone.replaceChildren(ui.title, ui.count, ui.list, ui.btn, ui.fab);
-            treeEl.replaceChildren(
-              node('root', 0, 'Root'),
-              node('title', 1, 'Text "Inbox"', 'Heading'),
-              node('count', 1, `Text "${msgs.length} messages"`),
-              node('list', 1, 'LazyColumn', 'TestTag="inbox_list" ScrollBy'),
-              ...msgs.map((m, i) => node('row' + i, 2, `Text "${m}"`)),
-              node('btn', 1, 'Button', 'Role=Button OnClick Text="Refresh"'),
-              node('fab', 1, 'FloatingActionButton', 'ContentDescription="Compose new" OnClick'));
-            if (sel) mark(sel, false);
-          }
-          function mark(id, anim = true) {
-            Object.values(tree).forEach(n => n.classList.remove('tst-match'));
-            Object.values(ui).forEach(n => n.classList.remove('tst-hit'));
-            if (!id) return;
-            tree[id].classList.add('tst-match'); ui[id].classList.add('tst-hit');
-            if (anim) { replay(tree[id], 'pop-soft'); replay(ui[id], 'pop'); }
-          }
-          const finders = [
-            { src: 'onNodeWithText("Refresh")', id: 'btn', note: 'matched the Button. Its Text child is merged into it.' },
-            { src: 'onNodeWithTag("inbox_list")', id: 'list', note: 'matched the LazyColumn by its test tag.' },
-            { src: 'onNodeWithContentDescription("Compose new")', id: 'fab', note: 'matched the icon-only button by its content description.' },
-            { src: 'onNodeWithText("Archive")', id: null },
-          ];
-          function find(f) {
-            sel = f.id; mark(f.id);
-            if (!f.id) {
-              say(o, `<span class="bad">AssertionError:</span> Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains 'Archive' (ignoreCase: false))`);
-              replay(treeEl, 'shake'); return;
-            }
-            say(o, `${hl('rule.' + f.src)} <span class="muted">// ${f.note}</span>`);
-          }
-          const need = act => { if (!sel) { say(o, `<span class="bad">No node selected.</span> Pick a finder first, then call ${hl(act)}.`); return true; } return false; };
-          function click() {
-            if (need('.performClick()')) return;
-            if (sel === 'btn') {
-              msgs = [...msgs, subjects[(msgs.length - 3) % subjects.length]]; render();
-              say(o, `${hl('.performClick()')} <span class="muted">// refresh ran. Compose recomposed, and the tree now has</span> Text "${msgs.length} messages"`);
-              replay(tree.count, 'pop-soft');
-            } else if (sel === 'fab') {
-              clearTimeout(toastT);
-              const t = h('div', { class: 'tst-ph-toast drop-in' }, 'New message'); phone.append(t);
-              toastT = setTimeout(() => t.remove(), 1400);
-              say(o, `${hl('.performClick()')} <span class="muted">// OnClick ran</span>`);
-            } else say(o, `${hl('.performClick()')} <span class="muted">// a tap is injected at its center. No row handles clicks, so nothing changes.</span>`);
-          }
-          function displayed() {
-            if (need('.assertIsDisplayed()')) return;
-            replay(ui[sel], 'pop');
-            say(o, `${hl('.assertIsDisplayed()')} <span class="good">passed</span> <span class="muted">// the node is on screen with a non-zero size</span>`);
-          }
-          render();
-          find(finders[0]);
-          el.append(
-            h('div', { class: 'controls tst-row' }, finders.map(f => cmd(f.src, () => find(f)))),
-            h('div', { class: 'tst-split' }, phone, treeEl),
-            h('div', { class: 'controls' },
-              cmd('.performClick()', click), cmd('.assertIsDisplayed()', displayed),
-              h('button', { class: 'btn small', onclick() { msgs = msgs.slice(0, 3); render(); say(o, 'Back to 3 messages.'); } }, 'Reset messages')),
-            o);
-        },
-      },
-
-      screenshotsLesson, hiltTestingLesson,
-
-      // 6 ─────────────────────────────────────────────
       {
         id: 'baseline',
-        title: 'Baseline Profiles and Macrobenchmark',
-        tagline: 'Compile the startup path ahead of time, then measure it.',
-        level: 'advanced',
+        title: 'Baseline Profiles',
+        tagline: 'Make the first start fast, and measure it.',
+        goals: ['Explain why an app starts slower right after it is installed', 'Generate a Baseline Profile with <code>BaselineProfileRule</code>', 'Measure startup with Macrobenchmark, with and without the profile'],
+        level: 'intermediate', introduces: ['BaselineProfileRule', 'packageName', 'pressHome', 'startActivityAndWait', 'generateBaselineProfile', 'MacrobenchmarkRule', 'measureRepeated', 'metrics', 'StartupTimingMetric', 'iterations', 'startupMode', 'StartupMode', 'COLD', 'compilationMode', 'CompilationMode', 'None', 'Partial'],
         body: `
-<p>Android’s runtime starts an app’s code in an interpreter and compiles hot methods with the JIT as they run. Ahead-of-time (AOT) compilation into machine code usually waits for idle background passes, so a fresh install starts slower than it needs to.</p>
-<p>A <em>Baseline Profile</em> is a list of the classes and methods your startup and key journeys use. It ships inside the app, and the system compiles those methods ahead of time at install. A cold start then runs machine code from the first frame. Google reports around 30% faster first launches from this alone.</p>
-<p>You generate the profile with <code>BaselineProfileRule</code> and check the gain with <em>Macrobenchmark</em>, which launches your release build repeatedly and reports <code>timeToInitialDisplayMs</code>. Compare <code>CompilationMode.None()</code> with <code>CompilationMode.Partial()</code> below.</p>`,
-        code: `// :baselineprofile module, generates baseline-prof.txt
-@RunWith(AndroidJUnit4::class)
+<p>Ada installs the Recipes app and opens it. The first start feels slow. A few days later, on the same phone, it opens noticeably faster, and nothing in the code changed. What changed is how the phone runs it.</p>
+<p>The build turns your Kotlin into code for Android, and the phone still has to translate that into <em>machine code</em>: the instructions its own processor runs. Right after an install, most of the app is translated while it runs, which costs time. Later, while the phone is idle and charging, Android translates the parts used most, ahead of time. A <em>Baseline Profile</em> is a list of the code your start and first screens use, shipped inside the app. Android translates that code when it installs the app, so the first start is already fast. Google reports code running about 30% faster from the first launch.</p>
+<p>You don’t write the list by hand. In Android Studio, File > New > New Module > Baseline Profile Generator adds a module with a test that uses <code>BaselineProfileRule</code>. Inside <code>collect</code>, <code>pressHome()</code> and <code>startActivityAndWait()</code> start the app, and you add what users do right after. <code>./gradlew :app:generateBaselineProfile</code> runs it on an emulator, or on a phone with Android 13 or newer, records which code ran, and saves the list in <code>app/src/release/generated/baselineProfiles/baseline-prof.txt</code>. Android uses it only in the release build, the version you publish, not in the debug one that Run installs.</p>
+<p>To see the gain, the same module has a <em>Macrobenchmark</em>: a test that starts your app many times and times each start. <code>StartupMode.COLD</code> means the app wasn’t running at all, a <em>cold start</em>. <code>CompilationMode.None()</code> translates nothing ahead, <code>CompilationMode.Partial()</code> uses the profile. Compare the median of <code>timeToInitialDisplayMs</code>, the time until the first frame, on a real phone: emulator numbers don’t match what users get, and Macrobenchmark refuses to measure one.</p>`,
+        visual(el) {
+          Lab.ui.timeline(el, {
+            lanes: ['No profile', 'With profile'],
+            span: 600,
+            unit: 'ms',
+            predict: {
+              q: 'The app ships a Baseline Profile. When does Android translate the code on that list?',
+              options: ['When it installs the app', 'Each time the app starts', 'Only after a few days, while charging'],
+              a: 0,
+              why: 'That is the point of the list: the code the first start needs is translated before the first start.',
+            },
+            frames: [
+              { now: 0, say: 'Ada’s first cold start after installing, twice: once without a profile, once with one. The times are typical, not exact.' },
+              { bars: [{ lane: 0, from: 0, to: 120, tone: 'muted', label: '' }], say: 'Android starts the app’s process. This part is the same either way.' },
+              { bars: [{ lane: 0, from: 120, to: 560, tone: 'warm', label: 'translating' }], marks: [{ at: 560, label: '560', tone: 'warm' }], say: 'Without a profile, the start code is translated while it runs. The first frame appears at about 560 ms.' },
+              { bars: [{ lane: 1, from: 0, to: 120, tone: 'muted', label: '' }, { lane: 1, from: 120, to: 420, tone: 'ok', label: 'machine code' }], marks: [{ at: 420, label: '420', tone: 'ok' }], say: 'With a profile, that code was translated at install, so it runs as machine code at once. The first frame appears at about 420 ms.' },
+              { say: 'Macrobenchmark measures exactly this, ten cold starts each way, and reports the median <code>timeToInitialDisplayMs</code> for each.' },
+              { say: 'Days later the first lane catches up, once Android has translated the busy code while charging. The profile gives every new user, and everyone after an update, that speed from the first start.' },
+            ],
+          });
+        },
+        code: `// The Baseline Profile Generator module adds this test and the Gradle lines
+// (androidx.benchmark:benchmark-macro-junit4:1.5.0 in the module,
+//  androidx.profileinstaller:profileinstaller:1.4.1 in the app).
 class BaselineProfileGenerator {
     @get:Rule val rule = BaselineProfileRule()
 
-    @Test fun generate() = rule.collect(packageName = "com.example.news") {
+    @Test
+    fun generate() = rule.collect(packageName = "com.example.recipes") {
         pressHome()
-        startActivityAndWait()
-        // also walk the journeys users take right after launch
+        startActivityAndWait()           // a start, up to the first frame
+        // then what users do next, like scrolling the list
     }
 }
+// ./gradlew :app:generateBaselineProfile
+// saves app/src/release/generated/baselineProfiles/baseline-prof.txt
 
-// Same module, measures the result on a real device
-@RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
     @get:Rule val rule = MacrobenchmarkRule()
 
-    @Test fun startupNoCompilation() = startup(CompilationMode.None())
-    @Test fun startupBaselineProfile() = startup(CompilationMode.Partial())
+    @Test
+    fun startupWithoutProfile() = startup(CompilationMode.None())
+
+    @Test
+    fun startupWithProfile() = startup(CompilationMode.Partial())
 
     private fun startup(mode: CompilationMode) = rule.measureRepeated(
-        packageName = "com.example.news",
+        packageName = "com.example.recipes",
         metrics = listOf(StartupTimingMetric()),
+        iterations = 10,                       // ten starts each
+        startupMode = StartupMode.COLD,        // the app wasn't running
         compilationMode = mode,
-        startupMode = StartupMode.COLD,
-        iterations = 10,
     ) {
         pressHome()
         startActivityAndWait()
     }
-}`,
-        remember: 'A Baseline Profile turns the startup path into AOT machine code at install. Prove it with Macrobenchmark on a release build.',
+}
+// Run it on a real phone. Studio shows min, median and max for each test.
+// Compare the two medians of timeToInitialDisplayMs.`,
+        remember: 'A Baseline Profile lists the start code so Android translates it at install; check the gain with a Macrobenchmark on a real phone.',
+        mistakes: [
+          { title: 'Timing the debug app by hand', bad: `// Press Run in Android Studio and count how long the start feels`, good: `// A Macrobenchmark on a real phone: 10 cold starts,
+// CompilationMode.None() against CompilationMode.Partial(),
+// then compare the two medians of timeToInitialDisplayMs`, why: 'Run installs a debug build, which runs slower and never uses the profile, and one start by feel says little. Many measured starts of a build like the one you publish do.' },
+        ],
         terms: [
-          { term: 'Baseline Profile', def: 'A list of classes and methods shipped with the app that the system compiles ahead of time at install.' },
-          { term: 'Macrobenchmark', def: 'A Jetpack library that measures real app behavior such as startup and scrolling by driving a release build on a device.' },
-          { term: 'Cold start', def: 'A launch where the app process does not exist yet, so the system must create it before drawing the first frame.' },
-          { term: 'JIT vs AOT', def: 'JIT compiles methods while the app runs; AOT compiles them to machine code before the app runs.' },
+          { term: 'machine code', def: 'The instructions a phone’s processor runs. Android translates the app’s code into it, while running or ahead of time.' },
+          { term: 'Baseline Profile', def: 'A list, shipped in the app, of the code its start and key screens use. Android translates that code at install.' },
+          { term: 'Macrobenchmark', def: 'A test that runs your app many times on a phone and measures it, for example with <code>StartupTimingMetric</code>.' },
+          { term: 'cold start', def: 'Opening an app that wasn’t running at all: <code>StartupMode.COLD</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Measure cold startup time with Macrobenchmark.', code: '@get:Rule val rule = [[MacrobenchmarkRule]]()\n\n@Test fun coldStartup() = rule.measureRepeated(\n    packageName = "com.example.news",\n    metrics = listOf([[StartupTimingMetric]]()),\n    compilationMode = CompilationMode.Partial(),\n    startupMode = StartupMode.[[COLD]],\n    iterations = 10,\n) {\n    pressHome()\n    startActivityAndWait()\n}', why: '<code>StartupTimingMetric</code> reports time to initial display. <code>COLD</code> kills the process before each iteration.' },
-          { type: 'bug', prompt: 'Startup numbers from this benchmark build type are far slower than what users see. Tap the line.', code: '// app/build.gradle.kts\nandroid {\n    buildTypes {\n        create("benchmark") {\n            initWith(getByName("release"))\n            signingConfig = signingConfigs.getByName("debug")\n            matchingFallbacks += listOf("release")\n            isDebuggable = true\n        }\n    }\n}', bug: 7, fix: '            isDebuggable = false', why: 'A debuggable app runs with many runtime optimizations turned off, so it measures something users never run. Macrobenchmark stops with a DEBUGGABLE error for that reason, unless you suppress it.' },
+          { type: 'blank', prompt: 'Record which code a start uses.', code: `@Test
+fun generate() = rule.[[collect]](packageName = "com.example.recipes") {
+    pressHome()
+    [[startActivityAndWait]]()
+}`, why: '<code>collect</code> records the code that runs inside its block, and <code>startActivityAndWait()</code> starts the app up to its first frame.' },
+          { type: 'bug', prompt: 'Both benchmarks report about the same median, even though the app ships a profile. Tap the wrong line.', code: `class StartupBenchmark {
+    @get:Rule val rule = MacrobenchmarkRule()
+
+    @Test
+    fun startupWithoutProfile() = startup(CompilationMode.None())
+
+    @Test
+    fun startupWithProfile() = startup(CompilationMode.None())
+}`, bug: 7, fix: '    fun startupWithProfile() = startup(CompilationMode.Partial())', why: '<code>None()</code> translates nothing ahead, so both tests measured the same thing. <code>Partial()</code> installs the profile first.' },
         ],
         quiz: [
-          { q: 'What does a Baseline Profile contain?', options: ['Machine code for the whole app', 'A list of classes and methods to compile ahead of time', 'Recorded frame timings'], a: 1, why: 'It is a rule list. The device compiles the listed code to machine code at install.' },
-          { q: 'What does <code>CompilationMode.None()</code> measure?', options: ['Startup with no AOT compilation, the worst case', 'Startup with the Baseline Profile', 'Startup with everything compiled'], a: 0, why: 'It resets compilation, so code runs interpreted and JIT-compiled. Compare it with <code>Partial()</code> to see the profile’s gain.' },
-          { q: 'Why benchmark a non-debuggable release build?', options: ['Debuggable builds skip optimizations, so the numbers are not real', 'Macrobenchmark only installs from Play'], a: 0, why: 'Users run release builds. Debuggable builds run slower in ways that hide or invent problems.' },
-          { q: 'The app is installed outside Play, so the profile is not applied at install. What still gets the Baseline Profile onto the device?', options: ['Cloud Profiles', 'androidx.profileinstaller, which writes it on the first run', 'Nothing, the profile is lost'], a: 1, why: 'profileinstaller covers installs that skip install-time compilation, and Macrobenchmark uses it too. Keep it in the app.' },
-          { q: 'Why not use CompilationMode.Full() as the “with profile” side of a startup benchmark?', options: ['Full() is slower than None()', 'Full() compiles the whole app, which no user’s device does, so it hides how good your profile is', 'Full() needs a debuggable build'], a: 1, why: 'Partial() installs your Baseline Profile like a real install would, so comparing it with None() shows what the profile gains.' },
+          { q: 'What is in a Baseline Profile?', options: ['A list of the code the app’s start and key screens use', 'Pictures of the first screen', 'The user’s settings'], a: 0, why: 'It lists code, so Android knows what to translate into machine code at install.' },
+          { q: 'Why does an app start faster a few days after it was installed, even without a profile?', options: ['Android translated the busy code ahead of time, while the phone was idle', 'The app downloaded an update', 'The phone got a faster processor'], a: 0, why: 'In the background Android translates the parts used most. A profile does that at install instead.' },
+          { q: 'Where should you run the startup benchmark?', options: ['On a real phone', 'On an emulator', 'In Robolectric'], a: 0, why: 'Emulator numbers don’t match what users get, and Macrobenchmark refuses to measure one.' },
         ],
-        deeper: baselineDepth.deeper,
-        underHood: baselineDepth.underHood,
-        mistakes: baselineDepth.mistakes,
-        predict: {
-          q: 'The app ships a Baseline Profile and is installed from Play. How do the startup methods run on the first launch?',
-          options: ['Interpreted, then JIT compiled as they get hot', 'As machine code from the start: they were compiled ahead of time at install', 'They are compiled during the first frame'],
-          a: 1,
-          why: 'The profile lists the startup methods, so the system compiles them at install. Without it they start in the interpreter.',
-        },
-        visual(el) {
-          const TOTAL = 1100;
-          const modes = {
-            none: { label: 'CompilationMode.None()', name: 'no profile', frame: 1020, segs: [[0, 120, 'tst-sys'], [120, 340, 'tst-interp'], [340, 1020, 'tst-interp']], runs: [1088, 1004, 1032, 979, 1020] },
-            partial: { label: 'CompilationMode.Partial()', name: 'Baseline Profile', frame: 680, segs: [[0, 120, 'tst-sys'], [120, 260, 'tst-aotbar'], [260, 680, 'tst-aotbar']], runs: [702, 668, 691, 655, 680] },
-          };
-          let mode = 'partial', busy = false;
-          const STARTUP = 40, N = 64;
-          const squares = Array.from({ length: N }, (_, i) => h('span', { class: 'tst-m' + (i >= STARTUP ? ' tst-cold' : '') }));
-          const lanes = {}, frames = {};
-          const tl = h('div', { class: 'timeline' }, Object.entries(modes).map(([k, m]) => {
-            const track = h('div', { class: 'lane-track' });
-            lanes[k] = m.segs.map(([s, e, c]) => { const b = h('span', { class: `bar ${c}`, style: `left:${(s / TOTAL) * 100}%;width:0` }); track.append(b); return { b, s, e }; });
-            frames[k] = h('span', { class: 'tst-frame', style: `left:${(m.frame / TOTAL) * 100}%`, hidden: true });
-            track.append(frames[k]);
-            return h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, m.name), track);
-          }));
-          const clock = h('span', { class: 'clock' }, '0 ms');
-          const o = out();
-          const modeBtns = Object.entries(modes).map(([k, m]) => cmd(m.label, () => { if (busy) return; mode = k; paintMode(); }));
-          const drawLane = (k, t) => { lanes[k].forEach(({ b, s, e }) => { b.style.width = (Math.max(0, Math.min(t, e) - s) / TOTAL) * 100 + '%'; }); frames[k].hidden = t < modes[k].frame; };
-          const setSquares = k => squares.forEach((q, i) => { q.className = 'tst-m' + (i >= STARTUP ? ' tst-cold' : '') + (k === 'partial' && i < STARTUP ? ' tst-aot' : ''); });
-          function paintMode() {
-            modeBtns.forEach((b, i) => b.setAttribute('aria-pressed', Object.keys(modes)[i] === mode));
-            setSquares(mode);
-            say(o, mode === 'partial'
-              ? 'The startup methods are already AOT compiled from the profile. Press Cold start.'
-              : 'Compilation reset. Every method starts interpreted. Press Cold start.');
-          }
-          function coldStart() {
-            if (busy) return; busy = true;
-            const m = modes[mode];
-            drawLane(mode, 0); setSquares(mode);
-            say(o, `${hl('startActivityAndWait()')} <span class="muted">// ${m.name}, cold</span>`);
-            const t0 = performance.now();
-            let jitted = 0;
-            const tick = now => {
-              if (!el.isConnected) return;
-              const t = Math.min((now - t0) / 2.2, m.frame + 40); // 2.2x slow motion
-              drawLane(mode, t);
-              clock.textContent = Math.round(Math.min(t, m.frame)) + ' ms';
-              if (mode === 'none') {
-                const want = Math.floor(Math.max(0, t - 300) / 18);
-                while (jitted < Math.min(want, STARTUP)) squares[jitted++].classList.add('tst-jit');
-              }
-              if (t < m.frame + 40) { requestAnimationFrame(tick); return; }
-              o.append(h('div', { class: 'line drop-in', html: `first frame at <span class="good">${m.frame} ms</span>${mode === 'none' ? '. Hot methods were JIT compiled during the launch.' : '. 33% faster than no profile.'}` }));
-              busy = false;
-            };
-            requestAnimationFrame(tick);
-          }
-          async function measure() {
-            if (busy) return; busy = true;
-            const m = modes[mode];
-            say(o, `${hl('measureRepeated(iterations = 5)')} <span class="muted">// ${m.name}</span>`);
-            for (const r of m.runs) {
-              await sleep(260); if (!el.isConnected) return;
-              o.append(h('div', { class: 'line drop-in' }, `timeToInitialDisplayMs ${r}`));
-            }
-            const sorted = [...m.runs].sort((a, b) => a - b);
-            o.append(h('div', { class: 'line drop-in', html: `<span class="good">median ${sorted[2]} ms</span>  min ${sorted[0]}  max ${sorted[4]}` }));
-            busy = false;
-          }
-          Object.keys(modes).forEach(k => drawLane(k, TOTAL));
-          clock.textContent = '680 ms';
-          paintMode();
-          o.innerHTML = 'Both cold starts done: first frame at 1020 ms without a profile, 680 ms with one.';
-          el.append(
-            h('div', { class: 'controls' }, modeBtns),
-            h('div', { class: 'controls' },
-              h('button', { class: 'btn primary small', onclick: coldStart }, 'Cold start'),
-              h('button', { class: 'btn small', onclick: measure }, 'Run Macrobenchmark'),
-              clock),
-            tl,
-            h('div', { class: 'tst-sub' },
-              h('span', { class: 'tst-label' }, 'App methods. The first 40 run during startup.'),
-              h('div', { class: 'tst-methods', 'aria-hidden': 'true' }, squares),
-              h('div', { class: 'legend' },
-                h('span', {}, h('i', { class: 'tst-sq tst-m' }), 'interpreted'),
-                h('span', {}, h('i', { class: 'tst-sq tst-m tst-jit' }), 'JIT compiled while running'),
-                h('span', {}, h('i', { class: 'tst-sq tst-m tst-aot' }), 'AOT from the profile'),
-                h('span', {}, h('i', { class: 'bar tst-sys' }), 'process start'),
-                h('span', {}, h('i', { class: 'tst-sq', style: 'background:var(--ok);width:4px' }), 'first frame'))),
-            o);
-        },
+        docs: [['Baseline Profiles overview', 'https://developer.android.com/topic/performance/baselineprofiles/overview'], ['Write a Macrobenchmark', 'https://developer.android.com/topic/performance/benchmarking/macrobenchmark-overview']],
       },
     ],
   });
