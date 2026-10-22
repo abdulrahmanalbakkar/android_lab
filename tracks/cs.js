@@ -1,68 +1,17 @@
 /* Data structures and algorithms track. Same shape as tracks/kotlin.js.
-   Big-O, core data structures and classic algorithm patterns, all in Kotlin.
-   Most demos are step players: a lesson builds a list of frames (snapshots of the algorithm),
-   and player() gives Step / Run / Reset over them. Every class is prefixed dsa- (cs- is taken by tracks/cap-ship.js). */
+   Big O, the core data structures and classic algorithm patterns, all in Kotlin.
+   Demos use Lab.ui (codeStepper, flow, player with a custom stage built from the helpers below).
+   Every class is prefixed dsa- (cs- is taken by tracks/cap-ship.js). */
 (() => {
-  const { h, sleep, hl, replay } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
+  const { h } = Lab;
   const pill = (text, cls = '') => h('span', { class: `dsa-pill ${cls}` }, String(text));
-  const code = s => `<code>${String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>`;
   const label = text => h('span', { class: 'dsa-label' }, text);
-  function stats(names) {
-    const vals = {};
-    const root = h('div', { class: 'dsa-stats' }, names.map(n => { const b = h('b', {}, '-'); vals[n] = b; return h('span', { class: 'dsa-stat' }, `${n} `, b); }));
-    root.set = (n, v) => { if (vals[n].textContent !== String(v)) { vals[n].textContent = String(v); replay(vals[n], 'pop-soft'); } };
-    return root;
-  }
   // A row of array cells. cells: [{ v, i?, tag?, cls? }]
   const cellRow = (cells, extra = '') => h('div', { class: `dsa-arr ${extra}`, style: `--n:${cells.length}` },
     cells.map((c, k) => h('div', { class: `dsa-cell ${c.cls || ''}` },
       h('span', { class: 'dsa-i' }, c.i === undefined ? String(k) : c.i),
       h('span', { class: 'dsa-v' }, c.v === undefined || c.v === null ? '' : String(c.v)),
       h('span', { class: 'dsa-tag' }, c.tag || ''))));
-  // Picker: a label plus pressed-state buttons. items: [{ src, ... }]
-  function picker(name, items, onPick) {
-    const btns = items.map((it, k) => cmd(it.src, () => { press(btns, btns[k]); onPick(it, k); }));
-    press(btns, btns[0]);
-    return h('div', { class: 'controls' }, label(name), btns);
-  }
-
-  // Step player. o.build() returns frames (frame 0 is the start state), o.paint(frame) draws one.
-  function player(el, o) {
-    let frames = [], i = 0, tok = 0;
-    const msg = out('');
-    const count = h('span', { class: 'dsa-stat' });
-    const runB = act('Run', run, { 'aria-pressed': 'false' });
-    const stepB = act('Step', () => { tok++; runB.setAttribute('aria-pressed', 'false'); go(i + 1); });
-    const resetB = act('Reset', reset);
-    function go(n) {
-      if (n >= frames.length) return;
-      i = n;
-      const f = frames[i];
-      o.paint(f, i, frames);
-      if (f.msg != null) say(msg, f.msg);
-      count.textContent = `step ${i} of ${frames.length - 1}`;
-      stepB.disabled = runB.disabled = i >= frames.length - 1;
-    }
-    async function run() {
-      const t = ++tok;
-      runB.setAttribute('aria-pressed', 'true');
-      while (i < frames.length - 1) {
-        go(i + 1);
-        await sleep(o.speed || 600);
-        if (t !== tok || !el.isConnected) return;
-      }
-      runB.setAttribute('aria-pressed', 'false');
-    }
-    function reset() { tok++; runB.setAttribute('aria-pressed', 'false'); frames = o.build(); i = 0; go(0); }
-    el.append(...[].concat(o.top || []), h('div', { class: 'dsa-stage' }, o.view), h('div', { class: 'controls dsa-ctl' }, stepB, runB, resetB, count), msg);
-    reset();
-    return { reset };
-  }
 
   // Nodes and edges as inline SVG. nodes: [{ id, x, y, text?, label? }], edges: [[a, b]]
   let svgN = 0;
@@ -191,2106 +140,9 @@
 @media (max-width: 520px) { .dsa-split { grid-template-columns: minmax(0, 1fr); } .dsa-stack { width: auto; min-height: 0; flex-direction: row; flex-wrap: wrap; border: 2px solid var(--line); border-left: none; border-radius: 0 10px 10px 0; } }
 `;
 
-  // ---------- shared data for demos ----------
-  const javaHash = s => { let x = 0; for (let k = 0; k < s.length; k++) x = (Math.imul(31, x) + s.charCodeAt(k)) | 0; return x; };
-  const bucketOf = (x, cap) => (x ^ (x >>> 16)) & (cap - 1);
-
-  const lessons = [];
-
-  // 1 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'big-o',
-    title: 'Big-O: how cost grows',
-    tagline: 'Count how the work grows with the input, not the milliseconds.',
-    level: 'beginner',
-    body: `
-<p>Big-O describes how the work an algorithm does grows as the input gets bigger. It ignores the exact milliseconds, which depend on the phone, and keeps only the shape of the growth. If doubling <code>n</code> doubles the work, it is O(n). If doubling <code>n</code> makes four times the work, it is O(n²).</p>
-<p>To find it, count the steps that repeat. One loop over the list is O(n). A loop inside a loop over the same list is O(n²). Cutting the problem in half on every step, like binary search, is O(log n). Drop constants and smaller terms: 3n + 5 is still O(n).</p>
-<p><em>Space complexity</em> is the same idea for memory: how much extra memory you allocate as n grows. Step through the demo and watch n² pull away from the rest as n doubles.</p>`,
-    code: `// O(1): one step, whatever the size
-fun first(items: List<Int>): Int? = items.firstOrNull()
-
-// O(n): touches every item once
-fun total(items: List<Int>): Int {
-    var sum = 0
-    for (x in items) sum += x
-    return sum
-}
-
-// O(n²) time: compares every pair
-fun hasDuplicateSlow(items: List<Int>): Boolean {
-    for (i in items.indices)
-        for (j in i + 1 until items.size)
-            if (items[i] == items[j]) return true
-    return false
-}
-
-// O(n) time, O(n) extra space: trade memory for speed
-fun hasDuplicate(items: List<Int>): Boolean {
-    val seen = HashSet<Int>()
-    for (x in items) if (!seen.add(x)) return true
-    return false
-}`,
-    remember: 'Count the loops that depend on n. Nested loops multiply, loops in a row add, and halving gives log n.',
-    visual(el) {
-      const CL = [
-        ['O(1)', () => 1, ''],
-        ['O(log n)', n => Math.max(1, Math.log2(n)), ''],
-        ['O(n)', n => n, ''],
-        ['O(n log n)', n => n * Math.max(1, Math.log2(n)), 'dsa-f-warm'],
-        ['O(n²)', n => n * n, 'dsa-f-err'],
-      ];
-      const rows = CL.map(([name, , cls]) => { const fill = h('div', { class: `dsa-fill ${cls}` }); const num = h('span', { class: 'dsa-num' }, '1'); return { fill, num, els: [h('span', {}, name), h('div', { class: 'dsa-track' }, fill), num] }; });
-      const nLabel = h('b', {}, '1');
-      const fmt = v => Math.round(v).toLocaleString('en-US');
-      player(el, {
-        view: [h('div', { class: 'dsa-row' }, label('input size'), h('span', { class: 'dsa-stat' }, 'n = ', nLabel)), h('div', { class: 'dsa-meter' }, rows.map(r => r.els)), h('span', { class: 'dsa-stat' }, 'Bar length: steps, relative to the biggest one at this n.')],
-        speed: 900,
-        build: () => [1, 2, 4, 8, 16, 32, 64, 128].map((n, k) => ({
-          n,
-          msg: k === 0 ? 'n = 1: every class costs about one step. Press Step to double n.'
-            : n === 128 ? `n = 128: n² is <span class="bad">${fmt(n * n)}</span> steps, n log n is ${fmt(n * 7)}, n is 128, log n is 7. At n = 100,000 and 1 µs per step, n² takes about 3 hours; n log n takes under 2 seconds.`
-              : `n doubled to ${n}: O(n) doubled, O(n²) went ×4 to ${fmt(n * n)}, O(log n) only went up by 1.`,
-        })),
-        paint(f) {
-          nLabel.textContent = String(f.n);
-          const vals = CL.map(([, fn]) => fn(f.n));
-          const max = Math.max(...vals);
-          rows.forEach((r, k) => { r.fill.style.width = `${(vals[k] / max) * 100}%`; r.num.textContent = fmt(vals[k]); });
-        },
-      });
-    },
-        predict: {
-          q: 'n doubles from 64 to 128. What happens to the number of O(n²) steps?',
-          options: ['It doubles', 'It goes ×4', 'It goes up by one'],
-          a: 1,
-          why: '(2n)² = 4n². Doubling the input makes four times the work, while O(log n) adds only one step.',
-        },
-        play: `fun main() {
-    for (n in listOf(10, 100, 1_000, 10_000)) {
-        var log = 0
-        var range = n
-        while (range > 1) { range /= 2; log++ }               // O(log n): halve each step
-        var linear = 0
-        for (i in 0 until n) linear++                          // O(n): once per item
-        var quadratic = 0L
-        for (i in 0 until n) for (j in 0 until n) quadratic++  // O(n²): every pair
-        println("n=$n  log n≈$log  n=$linear  n²=$quadratic")
-    }
-    // Add 20_000 to the list: n doubled, so how many times bigger is n²?
-}`,
-    deeper: [
-      {
-        title: 'Count the pairs',
-        body: `<p>The nested loop in <code>hasDuplicateSlow</code> compares every pair once: n(n − 1) / 2 comparisons. For 6 items that is 15, for 1,000 items about 500,000. Big-O drops the ½ and the −n and keeps n².</p>
-<p>The <code>HashSet</code> version looks at each item once: 6 checks for 6 items. Step through the worst case, a list with no duplicates, where nothing stops the loops early.</p>`,
-        visual(el) {
-          const items = [5, 2, 9, 4, 7, 1], n = items.length;
-          const sq = [];
-          const grid = h('div', { class: 'dsa-grid', style: `--c:${n + 1}` },
-            h('div', { class: 'dsa-sq dsa-head' }, ''), items.map(v => h('div', { class: 'dsa-sq dsa-head' }, String(v))),
-            items.map((v, i) => [h('div', { class: 'dsa-sq dsa-head' }, String(v)), items.map((w, j) => { const s = h('div', { class: `dsa-sq ${j <= i ? 'dsa-off' : ''}` }); sq.push({ s, i, j }); return s; })]));
-          const st = stats(['comparisons', 'with a HashSet']);
-          player(el, {
-            view: [grid, st], speed: 350,
-            build() {
-              const fr = [{ c: -1, msg: 'Each white square is one pair (i, j) with i &lt; j. The loops visit them row by row.' }];
-              let c = 0;
-              for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) { c++; fr.push({ i, j, c, msg: `items[${i}] = ${items[i]} vs items[${j}] = ${items[j]}: different. ${c} comparisons so far.` }); }
-              fr.push({ i: -1, j: -1, c, end: true, msg: `Done: ${c} comparisons = 6 × 5 / 2. A HashSet does it in 6 add() calls. Double the list to 12 and the pairs grow to 66, the set calls to 12.` });
-              return fr;
-            },
-            paint(f) {
-              sq.forEach(({ s, i, j }) => {
-                if (j <= i) return;
-                const idx = i * n + j, cur = f.i * n + f.j;
-                s.className = `dsa-sq ${f.end ? 'dsa-ok' : idx === cur ? 'dsa-hot' : f.i >= 0 && (i < f.i || (i === f.i && j < f.j)) ? 'dsa-on' : ''}`;
-                s.textContent = f.i === i && f.j === j ? '?' : '';
-              });
-              st.set('comparisons', Math.max(0, f.c ?? 0));
-              st.set('with a HashSet', f.end ? 6 : '-');
-            },
-          });
-        },
-      },
-      {
-        title: 'Hidden loops in one line',
-        body: `<p>Many Kotlin calls loop for you: <code>contains</code>, <code>indexOf</code>, <code>filter</code>, <code>count</code>, <code>sorted</code>. On a <code>List</code>, <code>x in list</code> scans the list. Put it inside another loop and you have O(n × m), even though you only wrote one loop.</p>
-<p>The fix is usually to build a <code>HashSet</code> once, in O(m), so each lookup is O(1) on average.</p>`,
-        code: `// Looks like one loop. It is O(n × m), because \`in\` on a List scans it.
-fun common(a: List<String>, b: List<String>): List<String> =
-    a.filter { it in b }
-
-// O(n + m): build a set once, then each lookup is O(1) on average
-fun commonFast(a: List<String>, b: List<String>): List<String> {
-    val inB = b.toHashSet()
-    return a.filter { it in inB }
-}`,
-      },
-      {
-        title: 'Space complexity',
-        body: `<p>Count the extra memory the function allocates as n grows. <code>reversed()</code> builds a new list: O(n) extra space. <code>reverse()</code> on a mutable list swaps items in place: O(1) extra.</p>
-<p>Recursion also uses memory. Every call that has not returned yet keeps a frame on the call stack, so recursion n levels deep is O(n) space, and very deep recursion ends in <code>StackOverflowError</code>.</p>`,
-        code: `val copy = list.reversed()        // O(n) extra memory: a new list
-mutableList.reverse()             // O(1) extra memory: swaps in place
-
-fun sumTo(n: Int): Long = if (n == 0) 0 else n + sumTo(n - 1)   // O(n) stack frames
-fun sumToLoop(n: Int): Long { var s = 0L; for (i in 1..n) s += i; return s }   // O(1)`,
-      },
-      {
-        title: 'Measure when it matters',
-        body: `<p>Big-O tells you the shape, not the real time. For small inputs a simple O(n²) loop can beat a clever O(n log n) one, because constants and memory layout matter. When speed matters, measure. <code>measureTime</code> from the standard library gives a quick rough number; a single run like this is a sanity check, not a benchmark.</p>`,
-        code: `import kotlin.time.measureTime
-
-val big = List(100_000) { it }
-val slow = measureTime { hasDuplicateSlow(big.take(5_000)) }
-val fast = measureTime { hasDuplicate(big) }
-println("slow: $slow, fast: $fast")`,
-      },
-    ],
-    mistakes: [
-      { title: 'contains() on a List inside a loop', bad: 'val blocked: List<Long> = loadBlocked()\nval visible = messages.filter { it.senderId !in blocked }   // O(n × m)', good: 'val blocked: Set<Long> = loadBlocked().toHashSet()\nval visible = messages.filter { it.senderId !in blocked }   // O(n + m)', why: 'The line looks cheap, but <code>in</code> on a <code>List</code> walks it from the start. A <code>HashSet</code> answers in O(1) on average.' },
-      { title: 'Counting constants in Big-O', bad: '// "Two passes, so this is O(2n)"\nval low = prices.min()\nval high = prices.max()', good: '// Two passes still grow like one: O(n)\nval low = prices.min()\nval high = prices.max()', why: 'Big-O describes growth. 2n and n both double when n doubles, so both are O(n). Constants matter for real speed, not for the class.' },
-    ],
-    terms: [
-      { term: 'Big-O', def: 'A description of how an algorithm’s work grows with input size, keeping only the fastest-growing term.' },
-      { term: 'Time complexity', def: 'How the number of steps grows as the input grows, for example O(n) or O(n²).' },
-      { term: 'Space complexity', def: 'How much extra memory an algorithm needs as the input grows, including the call stack.' },
-      { term: 'O(log n)', def: 'Growth where doubling the input adds only one more step, typical of halving the problem each time.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Fill in the Big-O of each function. Use n for the list size.', code: 'fun first(list: List<Int>) = list[0]          // O([[1]])\nfun sum(list: List<Int>) = list.sum()          // O([[n]])\nfun pairs(list: List<Int>) =\n    list.flatMap { a -> list.map { b -> a to b } }   // O([[n²|n^2|n*n]])', why: 'Indexing is one step. <code>sum()</code> visits each item. <code>flatMap</code> over the list with a <code>map</code> over the list inside makes n × n pairs.' },
-      { type: 'bug', prompt: 'With 50,000 users this takes seconds. Tap the line that makes it O(n²).', code: 'fun newUsers(all: List<User>, known: List<User>): List<User> {\n    val result = mutableListOf<User>()\n    for (u in all) {\n        if (u !in known) result += u\n    }\n    return result\n}', bug: 3, fix: '        if (u !in knownSet) result += u   // val knownSet = known.toHashSet()', why: '<code>u !in known</code> scans the whole <code>known</code> list for every user. Build a <code>HashSet</code> once before the loop and each check is O(1) on average.' },
-    ],
-    quiz: [
-      { q: 'A function loops over a list, and inside that loop it loops over the same list again. What is its time complexity?', options: ['O(n)', 'O(2n)', 'O(n²)'], a: 2, why: 'For each of the n items it does n more steps: n × n.' },
-      { q: 'Binary search halves the range on every step. About how many steps for 1,000,000 sorted items?', options: ['About 20', 'About 1,000', 'About 500,000'], a: 0, why: '2²⁰ is about 1,048,576, so 20 halvings get from a million down to one.' },
-      { q: '<code>val copy = list.sorted()</code>. How much extra space does it use?', options: ['O(1)', 'O(n), because it returns a new list'], a: 1, why: '<code>sorted()</code> leaves the original alone and builds a new list of n items. <code>sort()</code> on a mutable list sorts in place.' },
-      { q: 'a and b are Lists with n and m items. What is the cost of <code>a.filter { it in b }</code>?', options: ['O(n), one loop', 'O(n × m), because <code>in</code> on a List scans it', 'O(n + m)'], a: 1, why: 'The filter runs n times and each <code>in</code> walks b. Build <code>b.toHashSet()</code> once to make it O(n + m).' },
-      { q: '<code>fun sumTo(n: Int): Long = if (n == 0) 0 else n + sumTo(n - 1)</code>. How much extra memory does it use?', options: ['O(1)', 'O(log n)', 'O(n), one stack frame per call that has not returned yet'], a: 2, why: 'Each call waits for the next one, so n frames sit on the call stack at once. The loop version uses O(1).' },
-    ],
-  });
-
-  // 2 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'arrays-lists',
-    title: 'Arrays and lists',
-    tagline: 'Reading by index is instant. Inserting at the front moves everything.',
-    level: 'beginner',
-    body: `
-<p>An array is one block of memory with slots side by side. Reading <code>a[i]</code> jumps straight to slot <code>i</code>, so it is O(1). Its size is fixed when you create it.</p>
-<p><code>ArrayList</code>, the default <code>MutableList</code> in Kotlin, wraps an array that is usually bigger than the list. Adding at the end fills a free slot. When the array is full, the list allocates a bigger one and copies everything over. That copy is O(n), but it happens rarely, so <code>add</code> is O(1) <em>amortized</em>: averaged over many adds, the cost per add stays constant.</p>
-<p>Inserting or removing at the front is different. Every element has to shift one slot, so <code>add(0, x)</code> is O(n). Step through the demo and watch the copy counter: copies per add stay small even as the list grows.</p>`,
-    code: `val scores = IntArray(5)                 // fixed size, primitive ints, no boxing
-scores[2] = 90                           // O(1)
-
-val names = mutableListOf("Ada", "Omar") // an ArrayList under the hood
-names += "Lena"                          // O(1) amortized: append
-names[0]                                 // O(1): index into the array
-names.add(0, "Maya")                     // O(n): shifts every element right
-names.removeAt(0)                        // O(n): shifts every element left
-
-// Know the size up front? Allocate once.
-val ids = ArrayList<Long>(10_000)
-val squares = List(1_000) { it * it }`,
-    remember: 'Index and append are cheap. Insert or remove at the front shifts everything: O(n).',
-    visual(el) {
-      const slots = h('div', {});
-      const st = stats(['size', 'capacity', 'copies', 'copies per add']);
-      player(el, {
-        view: [label('backing array'), slots, st], speed: 500,
-        build() {
-          let cap = 4, copies = 0;
-          const arr = [];
-          const fr = [{ cap, arr: [], copies, adds: 0, msg: 'An empty list with room for 4. (Real ArrayLists start at 10; the demo starts small.)' }];
-          for (let k = 1; k <= 20; k++) {
-            if (arr.length === cap) {
-              const old = cap;
-              cap = cap + (cap >> 1);
-              copies += arr.length;
-              fr.push({ cap, arr: [...arr], copies, adds: k - 1, copied: true, msg: `<span class="bad">Full at ${old}.</span> Allocate ${cap} slots (about 1.5×) and copy all ${arr.length} items: O(n), this time only.` });
-            }
-            arr.push(k);
-            fr.push({ cap, arr: [...arr], copies, adds: k, at: arr.length - 1, msg: `add(${k}) → slot ${arr.length - 1}. A free slot was waiting: no copy.` });
-          }
-          const last = fr[fr.length - 1];
-          last.msg = `20 adds cost ${copies} copies in total, about ${(copies / 20).toFixed(1)} per add. Because the array grows by a factor, that average stays bounded no matter how long the list gets: amortized O(1).`;
-          return fr;
-        },
-        paint(f) {
-          const cells = [];
-          for (let k = 0; k < f.cap; k++) {
-            const has = k < f.arr.length;
-            cells.push({ v: has ? f.arr[k] : '', cls: !has ? 'dsa-empty' : f.copied ? 'dsa-hot dsa-flash' : k === f.at ? 'dsa-on dsa-flash' : '' });
-          }
-          slots.replaceChildren(cellRow(cells, 'dsa-wrap'));
-          st.set('size', f.arr.length); st.set('capacity', f.cap); st.set('copies', f.copies);
-          st.set('copies per add', f.adds ? (f.copies / f.adds).toFixed(2) : '-');
-        },
-      });
-    },
-        predict: {
-          q: 'The demo list starts with room for 4 and grows about 1.5× when full. After 20 adds, about how many element copies did the resizes cost per add?',
-          options: ['About 2.5', 'About 10', 'About 20'],
-          a: 0,
-          why: 'Each resize copies everything, but the array grows by a factor, so resizes get rarer as the list grows. The cost per add stays bounded: amortized O(1).',
-        },
-        play: `fun main() {
-    var capacity = 4
-    var size = 0
-    var copies = 0
-    val adds = 20
-    repeat(adds) {
-        if (size == capacity) {
-            copies += size                     // copy every item into a bigger array
-            capacity += capacity shr 1         // grow by about 1.5x, like java.util.ArrayList
-            println("full at $size: grow to $capacity, copies so far $copies")
-        }
-        size++
-    }
-    println("$adds adds, $copies copies, \${"%.2f".format(copies.toDouble() / adds)} per add")
-
-    val names = mutableListOf("Ada", "Omar", "Lena")
-    names.add(0, "Maya")                       // O(n): every element shifts one slot right
-    println(names)
-    // Change adds to 2000: copies per add stays small
-}`,
-    deeper: [
-      {
-        title: 'Insert at the front, one shift at a time',
-        body: `<p><code>add(0, x)</code> has to open a gap at slot 0. The list moves the last item right, then the one before it, and so on down to slot 0. With n items that is n moves. <code>add(x)</code> at the end moves nothing.</p>
-<p>Building a long list by inserting at the front is O(n²) in total. Append and reverse once at the end, or use <code>ArrayDeque</code>, which has a cheap <code>addFirst</code>.</p>`,
-        visual(el) {
-          let mode = 'front';
-          const row = h('div', {});
-          const st = stats(['moves']);
-          const p = player(el, {
-            top: picker('call', [{ src: 'list.add(0, "X")', m: 'front' }, { src: 'list.add("X")', m: 'end' }], it => { mode = it.m; p.reset(); }),
-            view: [row, st], speed: 650,
-            build() {
-              const a = ['A', 'B', 'C', 'D', 'E', null, null, null];
-              const fr = [{ a: [...a], moves: 0, msg: `list = [A, B, C, D, E], capacity 8. Calling ${mode === 'front' ? 'add(0, "X")' : 'add("X")'}.` }];
-              if (mode === 'end') { a[5] = 'X'; fr.push({ a: [...a], at: 5, moves: 0, msg: 'Slot 5 is free. Write X there. Zero moves: O(1).' }); return fr; }
-              let moves = 0;
-              for (let k = 4; k >= 0; k--) { a[k + 1] = a[k]; moves++; fr.push({ a: [...a], at: k + 1, from: k, moves, msg: `Move ${a[k]} from slot ${k} to slot ${k + 1}.` }); }
-              a[0] = 'X';
-              fr.push({ a: [...a], at: 0, moves, done: true, msg: `Write X into slot 0. ${moves} moves for 5 items: O(n). A list of 100,000 would move 100,000 items.` });
-              return fr;
-            },
-            paint(f) {
-              row.replaceChildren(cellRow(f.a.map((v, k) => ({ v: v ?? '', cls: v == null ? 'dsa-empty' : k === f.at ? 'dsa-on dsa-flash' : k === f.from ? 'dsa-dim' : '' }))));
-              st.set('moves', f.moves);
-            },
-          });
-        },
-      },
-      {
-        title: 'LinkedList: cheap links, slow walks',
-        body: `<p><code>java.util.LinkedList</code> keeps each element in its own node with pointers to the previous and next node. Adding or removing at either end is O(1). But <code>get(i)</code> has to walk node by node from an end, so it is O(n). The nodes are scattered in memory, so even a full walk is slower than walking an array.</p>
-<p>In practice, Kotlin’s <code>ArrayDeque</code> gives O(1) at both ends on top of an array, and is the better default for queues and stacks.</p>`,
-        code: `val linked = java.util.LinkedList<Int>()
-linked.addFirst(1)       // O(1)
-linked[5_000]            // O(n): walks node by node
-
-val deque = ArrayDeque<Int>()
-deque.addFirst(1)        // O(1) amortized, backed by an array
-deque.addLast(2)
-deque[0]                 // O(1)`,
-      },
-      {
-        title: 'Remove many items in one pass',
-        body: `<p>Calling <code>removeAt</code> in a loop shifts the tail on every call: O(n²) in the worst case. <code>removeAll { }</code> on a mutable list, or <code>filter</code> into a new list, does the job in one pass.</p>`,
-        code: `// O(n²): every removeAt shifts the rest of the list
-var i = 0
-while (i < list.size) { if (list[i] < 0) list.removeAt(i) else i++ }
-
-// O(n): one pass
-list.removeAll { it < 0 }
-val positives = list.filter { it >= 0 }`,
-      },
-    ],
-    underHood: {
-      body: `<p>On the JVM, an <code>ArrayList</code> keeps an <code>Object[]</code>. An <code>Int</code> in a <code>List&lt;Int&gt;</code> is stored as a boxed <code>Integer</code> object; an <code>IntArray</code> stores raw ints with no boxing. In OpenJDK, a new <code>ArrayList()</code> starts with an empty shared array and allocates 10 slots on the first add. When it is full, the new capacity is the old one plus half, and the items are copied with <code>Arrays.copyOf</code>.</p>`,
-      code: `// Roughly what ArrayList.add does (OpenJDK, simplified)
-fun add(e: Any?) {
-    if (size == elementData.size) {
-        val newCap = elementData.size + (elementData.size shr 1)   // about 1.5×
-        elementData = elementData.copyOf(newCap)                     // O(n) copy
-    }
-    elementData[size++] = e
-}`,
-    },
-    mistakes: [
-      { title: 'Building a list by inserting at the front', bad: 'val feed = mutableListOf<Post>()\nfor (post in incoming) feed.add(0, post)   // O(n²) overall', good: 'val feed = incoming.asReversed().toMutableList()   // O(n)\n// or: val feed = ArrayDeque<Post>(); feed.addFirst(post)', why: 'Each <code>add(0, …)</code> shifts every item already in the list. Reverse once, or use <code>ArrayDeque</code> when you really need the front.' },
-      { title: 'Reaching for LinkedList by habit', bad: 'val queue = java.util.LinkedList<Job>()', good: 'val queue = ArrayDeque<Job>()', why: '<code>ArrayDeque</code> is also O(1) at both ends, uses less memory per element, and is faster to walk because its items sit in one array.' },
-    ],
-    terms: [
-      { term: 'Amortized O(1)', def: 'An operation that is sometimes slow but cheap on average over many calls, like ArrayList.add.' },
-      { term: 'Capacity', def: 'How many slots a list’s backing array has, which can be more than the number of items in it.' },
-      { term: 'Boxing', def: 'Wrapping a primitive like an Int in an object so it can live in a generic collection.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Use an array of primitive ints, and give the list its final capacity up front.', code: 'val expected = rows.size\nval counts = [[IntArray]](26)\nval users = [[ArrayList]]<User>(expected)', why: '<code>IntArray</code> stores raw ints with no boxing. <code>ArrayList(capacity)</code> allocates once, so no copies happen while you add.' },
-      { type: 'bug', prompt: 'This crashes with <code>IndexOutOfBoundsException</code>. Tap the broken line.', code: 'fun average(scores: List<Int>): Double {\n    var total = 0\n    for (i in 0..scores.size) {\n        total += scores[i]\n    }\n    return total.toDouble() / scores.size\n}', bug: 2, fix: '    for (i in scores.indices) {', why: '<code>0..size</code> includes <code>size</code>, one past the last index. <code>indices</code> (or <code>0 until size</code>) stops at <code>size - 1</code>.' },
-    ],
-    quiz: [
-      { q: 'Why is <code>add()</code> at the end of an ArrayList called O(1) amortized?', options: ['It never copies', 'It copies rarely, so the average cost per add stays constant', 'The JVM caches it'], a: 1, why: 'A full array is copied into a bigger one, but the growth is by a factor, so total copies stay proportional to the number of adds.' },
-      { q: 'Which call is O(n) on an ArrayList of n items?', options: ['list[n / 2]', 'list.add(x)', 'list.add(0, x)'], a: 2, why: 'Inserting at index 0 shifts every item one slot right.' },
-      { q: 'You need cheap adds and removes at both ends. Which type?', options: ['ArrayList', 'ArrayDeque', 'IntArray'], a: 1, why: '<code>ArrayDeque</code> is a ring buffer: both ends are O(1) amortized.' },
-      { q: '<pre>var i = 0\nwhile (i &lt; list.size) {\n  if (list[i] &lt; 0)\n    list.removeAt(i)\n  else i++\n}</pre>What is the worst-case cost, and what does it in one pass?', options: ['O(n²); <code>list.removeAll { it &lt; 0 }</code>', 'O(n); it is already fine', 'O(n log n); sort the list first'], a: 0, why: 'Every removeAt shifts the rest of the list, so many removals cost O(n²). removeAll does the job in one pass.' },
-      { q: 'You read <code>linked[5_000]</code> on a java.util.LinkedList of 10,000 items. What does it cost?', options: ['O(1), like an array', 'O(n), it walks node by node from one end', 'O(log n)'], a: 1, why: 'A linked list has no index math. It follows pointers from the nearer end, and the scattered nodes make the walk slow too.' },
-    ],
-  });
-
-  // 3 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'hashing',
-    title: 'Hash maps and sets',
-    tagline: 'Turn a key into a bucket number, and lookups stop depending on size.',
-    level: 'intermediate',
-    body: `
-<p>A hash map keeps an array of <em>buckets</em>. To store a key, it calls <code>hashCode()</code>, mixes the bits, and turns the number into a bucket index. To find the key later, it does the same math and looks in that one bucket. That is why <code>get</code>, <code>put</code> and <code>contains</code> are O(1) on average.</p>
-<p>Two keys can land in the same bucket. That is a <em>collision</em>. The map keeps both and uses <code>equals()</code> to tell them apart. When the map gets too full (on the JVM, more entries than 75% of the bucket count by default), it doubles the buckets and moves every key. A <code>HashSet</code> is the same structure with keys only.</p>
-<p>The demo uses the real JVM <code>String.hashCode()</code> and the same bucket math as <code>java.util.HashMap</code>. Watch for collisions, and for the resize when the 7th key goes in.</p>`,
-    code: `val stock = hashMapOf("apple" to 12, "pear" to 4)
-stock["cherry"] = 30           // put: O(1) on average
-stock["apple"]                 // get: hash, jump to one bucket, compare with equals()
-"plum" in stock                // containsKey: O(1) on average
-
-val seen = HashSet<String>()
-for (word in words) {
-    if (!seen.add(word)) println("repeat: $word")   // add() returns false if it was there
-}
-
-// Counting things: the most common pattern
-val counts: Map<String, Int> = words.groupingBy { it }.eachCount()`,
-    remember: 'equals and hashCode go together. Equal objects must have equal hash codes, or the map looks in the wrong bucket.',
-    visual(el) {
-      const KEYS = ['apple', 'pear', 'cherry', 'banana', 'fig', 'kiwi', 'quince', 'plum', 'grape', 'lemon'];
-      const box = h('div', {});
-      const st = stats(['size', 'buckets', 'resize after']);
-      player(el, {
-        view: [box, st], speed: 750,
-        build() {
-          let cap = 8, b = Array.from({ length: cap }, () => []), size = 0;
-          const snap = o => ({ cap, b: b.map(x => [...x]), size, ...o });
-          const fr = [snap({ msg: 'An empty HashMap with 8 buckets. Press Step to put the first key.' })];
-          for (const k of KEYS) {
-            const x = javaHash(k), i = bucketOf(x, cap);
-            fr.push(snap({ hot: i, key: k, msg: `${code(`"${k}".hashCode()`)} = ${x}. Mix the bits and keep the low ${Math.log2(cap)}: bucket <b>${i}</b>.` }));
-            const had = b[i].length;
-            b[i].push(k); size++;
-            fr.push(snap({ hot: i, key: k, col: had > 0, msg: had ? `<span class="bad">Collision:</span> bucket ${i} already holds ${b[i].slice(0, -1).map(s => `"${s}"`).join(', ')}. Both stay; ${code('equals()')} tells them apart on lookup.` : `<span class="good">put:</span> "${k}" goes into empty bucket ${i}.` }));
-            if (size > cap * 0.75) {
-              const thr = cap * 0.75;
-              cap *= 2;
-              const nb = Array.from({ length: cap }, () => []);
-              for (const list of b) for (const s of list) nb[bucketOf(javaHash(s), cap)].push(s);
-              b = nb;
-              fr.push(snap({ resized: true, msg: `size ${size} &gt; ${thr} (8 × 0.75). <span class="bad">Resize:</span> ${cap} buckets, and every key moves to its new bucket. O(n) once, then lookups stay short.` }));
-            }
-          }
-          const k = 'fig', x = javaHash(k), i = bucketOf(x, cap);
-          fr.push(snap({ hot: i, key: k, find: true, msg: `${code('map["fig"]')}: hash → bucket ${i}, compare ${b[i].length} key${b[i].length > 1 ? 's' : ''} with equals(). The other ${cap - 1} buckets are never touched.` }));
-          return fr;
-        },
-        paint(f) {
-          box.replaceChildren(h('div', { class: 'dsa-buckets' }, f.b.map((list, i) => h('div', { class: `dsa-bucket ${i === f.hot ? (f.col ? 'dsa-hot' : f.find ? 'dsa-ok' : 'dsa-on') : ''}` },
-            h('span', { class: 'dsa-bi' }, String(i)),
-            list.map(s => pill(s, `dsa-sm ${s === f.key && i === f.hot ? (f.find ? 'dsa-ok' : 'dsa-acc dsa-flash') : ''} ${f.resized ? 'dsa-flash' : ''}`))))));
-          st.set('size', f.size); st.set('buckets', f.cap); st.set('resize after', f.cap * 0.75);
-        },
-      });
-    },
-        predict: {
-          q: 'The map grows from 8 to 16 buckets. Does each key keep its old bucket number?',
-          options: ['Yes, always', 'Not necessarily: the index now uses one more bit of the hash, so some keys move', 'No: every key moves to a new bucket'],
-          a: 1,
-          why: 'The bucket index is the mixed hash masked to the bucket count. With 16 buckets one more bit counts, so each key stays at index i or moves to i + 8.',
-        },
-        play: `fun main() {
-    val buckets = 8
-    for (key in listOf("apple", "pear", "cherry", "banana", "fig")) {
-        val h = key.hashCode()
-        val mixed = h xor (h ushr 16)          // the bit mixing java.util.HashMap does
-        println("$key hashCode=$h bucket=\${mixed and (buckets - 1)}")
-    }
-    val stock = hashMapOf("apple" to 12, "pear" to 4)
-    stock["cherry"] = 30
-    println("apple -> \${stock["apple"]}, plum in stock: \${"plum" in stock}")
-
-    val words = "the cat and the hat and the bat".split(" ")
-    val seen = HashSet<String>()
-    for (w in words) if (!seen.add(w)) println("repeat: $w")
-    println(words.groupingBy { it }.eachCount())
-    // Change buckets to 16 and see which keys move
-}`,
-    deeper: [
-      {
-        title: 'The equals and hashCode contract',
-        body: `<p>A hash map first picks the bucket with <code>hashCode()</code>, then compares keys in it with <code>equals()</code>. A plain class inherits identity versions of both, so two <code>Point(1, 2)</code> objects are different keys. A <code>data class</code> generates both from the properties in its primary constructor, so equal points get equal hash codes.</p>
-<p>The rule: if two objects are equal, their hash codes must be equal. Override one, override both. Add the same point twice under each declaration and see what the set does.</p>`,
-        visual(el) {
-          let data = false, set = [], ids = 0;
-          const ID = [0x1b6d3586, 0x4554617c, 0x74a14482, 0x1540e19d, 0x677327b6, 0x14ae5a5];
-          const decl = h('div', { class: 'kt' });
-          const box = h('div', {});
-          const o = out('');
-          const hashOf = () => (data ? 31 * 1 + 2 : ID[ids++ % ID.length]);
-          const hex = x => (data ? String(x) : `0x${x.toString(16)}`);
-          function paint(hot) {
-            decl.innerHTML = hl(`${data ? 'data ' : ''}class Point(val x: Int, val y: Int)`);
-            box.replaceChildren(h('div', { class: 'dsa-buckets' }, [0, 1, 2, 3].map(i => h('div', { class: `dsa-bucket ${i === hot ? 'dsa-on' : ''}` }, h('span', { class: 'dsa-bi' }, String(i)),
-              set.filter(p => (p.hash & 3) === i).map(p => pill(`Point(1, 2) #${hex(p.hash)}`, 'dsa-sm'))))));
-          }
-          function add() {
-            const hash = hashOf(), i = hash & 3;
-            const same = set.find(p => (p.hash & 3) === i && (data || false));
-            if (same) { paint(i); say(o, `${hl('set.add(Point(1, 2))')} <span class="muted">→ hash ${hex(hash)}, bucket ${i}, equals() true →</span> <span class="good">false</span> <span class="muted">(already there, size ${set.length})</span>`); return; }
-            set.push({ hash }); paint(i);
-            say(o, `${hl('set.add(Point(1, 2))')} <span class="muted">→ hash ${hex(hash)}, bucket ${i} →</span> <span class="${set.length > 1 ? 'bad' : 'good'}">true</span> <span class="muted">(size ${set.length})</span>`);
-          }
-          function has() {
-            const hash = hashOf(), i = hash & 3;
-            const hit = data && set.some(p => (p.hash & 3) === i);
-            paint(i);
-            say(o, `${hl('Point(1, 2) in set')} <span class="muted">→ hash ${hex(hash)}, look in bucket ${i} →</span> <span class="${hit ? 'good' : 'bad'}">${hit}</span>${!data && set.length ? ' <span class="muted">(identity hash: a new object, so a new hash)</span>' : ''}`);
-          }
-          const decls = [cmd('class Point', () => pick(false)), cmd('data class Point', () => pick(true))];
-          function pick(d) { data = d; set = []; ids = 0; press(decls, decls[d ? 1 : 0]); paint(-1); say(o, d ? 'data class: hashCode() = 31 × x + y = 33, equals() compares x and y.' : 'Plain class: hashCode() and equals() use object identity.'); }
-          el.append(h('div', { class: 'controls' }, label('declare'), decls), decl,
-            h('div', { class: 'dsa-stage' }, label('hashSetOf<Point>(), 4 buckets'), box),
-            h('div', { class: 'controls' }, cmd('set.add(Point(1, 2))', add), cmd('Point(1, 2) in set', has)), o);
-          pick(false);
-        },
-      },
-      {
-        title: 'Iteration order: HashMap vs LinkedHashMap',
-        body: `<p><code>mapOf()</code>, <code>mutableMapOf()</code>, <code>setOf()</code> and <code>mutableSetOf()</code> give you a <code>LinkedHashMap</code> or <code>LinkedHashSet</code>. They keep a linked list through the entries, so iteration follows insertion order. <code>hashMapOf()</code> and <code>HashSet()</code> promise no order and use a little less memory.</p>
-<p>If you need keys sorted, <code>sortedMapOf()</code> gives a <code>TreeMap</code>, where operations are O(log n).</p>`,
-        code: `val linked = mutableMapOf("c" to 3, "a" to 1, "b" to 2)   // LinkedHashMap
-println(linked.keys)    // [c, a, b]: insertion order
-
-val plain = hashMapOf("c" to 3, "a" to 1, "b" to 2)       // HashMap
-println(plain.keys)     // bucket order, not insertion order. Don't rely on it.
-
-val sorted = sortedMapOf("c" to 3, "a" to 1, "b" to 2)    // TreeMap, O(log n)
-println(sorted.keys)    // [a, b, c]`,
-      },
-      {
-        title: 'Never change a key while it is in a map',
-        body: `<p>The map files an entry under the hash the key had when you put it in. If you then change a field that <code>hashCode()</code> uses, the entry sits in the old bucket while lookups go to the new one. The entry is lost. Keys should be immutable: use <code>val</code> properties.</p>`,
-        code: `data class Tag(var name: String)
-
-val tags = hashSetOf(Tag("kotlin"))
-val t = tags.first()
-t.name = "android"                // its hashCode changes; the entry stays where it was
-println(Tag("android") in tags)   // false
-println(t in tags)                // false, even though t is in the set`,
-      },
-    ],
-    underHood: {
-      body: `<p>On the JVM, <code>HashMap</code> keeps a table whose size is a power of two, 16 by default. The bucket index is <code>(h xor (h ushr 16)) and (size - 1)</code>: mixing in the high bits helps keys whose hash codes differ only in high bits. Each bucket is a chain of nodes. When one bucket reaches 8 nodes and the table has at least 64 buckets, that bucket turns into a small red-black tree, so even a bad hash degrades to O(log n) in that bucket instead of O(n).</p>`,
-      code: `// java.util.HashMap, simplified
-fun indexFor(key: Any?, tableSize: Int): Int {
-    val h = key?.hashCode() ?: 0
-    val spread = h xor (h ushr 16)        // mix high bits into low bits
-    return spread and (tableSize - 1)     // tableSize is a power of two
-}`,
-    },
-    mistakes: [
-      { title: 'Overriding equals without hashCode', bad: 'class Email(val value: String) {\n    override fun equals(other: Any?) =\n        other is Email && other.value.equals(value, ignoreCase = true)\n}', good: 'class Email(val value: String) {\n    override fun equals(other: Any?) =\n        other is Email && other.value.equals(value, ignoreCase = true)\n    override fun hashCode() = value.lowercase().hashCode()\n}', why: 'Two equal emails would get different identity hash codes and land in different buckets, so a set keeps both. The hash must use the same rule as <code>equals</code>.' },
-      { title: 'Counting with containsKey and !!', bad: 'val counts = mutableMapOf<String, Int>()\nfor (w in words) {\n    if (counts.containsKey(w)) counts[w] = counts[w]!! + 1\n    else counts[w] = 1\n}', good: 'val counts = words.groupingBy { it }.eachCount()\n// or, in a loop: counts[w] = (counts[w] ?: 0) + 1', why: 'The first version hashes the key up to three times and needs <code>!!</code>. <code>groupingBy { }.eachCount()</code> says what you mean in one line.' },
-    ],
-    terms: [
-      { term: 'Hash code', def: 'An Int computed from an object, used by hash maps and sets to pick a bucket.' },
-      { term: 'Bucket', def: 'One slot in a hash table’s array, holding every entry whose hash maps to that index.' },
-      { term: 'Collision', def: 'Two different keys landing in the same bucket; equals() is used to tell them apart.' },
-      { term: 'Load factor', def: 'How full a hash table may get before it grows; the JVM HashMap default is 0.75.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Count every word in one line, then detect a repeat with a set in O(1).', code: 'val counts = words.[[groupingBy]] { it }.[[eachCount]]()\nval seen = HashSet<String>()\nif (!seen.[[add]](word)) println("repeat")', why: '<code>groupingBy { it }.eachCount()</code> builds a <code>Map&lt;String, Int&gt;</code>. <code>add</code> returns <code>false</code> when the element was already in the set.' },
-      { type: 'bug', prompt: 'Two <code>Money(100, "USD")</code> objects are equal, but the set keeps both. Tap the line to change.', code: 'class Money(val amount: Long, val currency: String) {\n    override fun equals(other: Any?) =\n        other is Money && amount == other.amount && currency == other.currency\n}\nval set = hashSetOf(Money(100, "USD"), Money(100, "USD"))\nprintln(set.size)   // 2', bug: 0, fix: 'data class Money(val amount: Long, val currency: String) {', why: '<code>equals</code> is overridden but <code>hashCode</code> is not, so the two objects get different identity hashes. A <code>data class</code> generates a matching <code>hashCode</code> (or you write one by hand).' },
-    ],
-    quiz: [
-      { q: 'Two keys land in the same bucket. What does HashMap use to tell them apart?', options: ['hashCode()', 'equals()', 'toString()'], a: 1, why: 'The hash code only picks the bucket. Inside it, keys are compared with <code>equals()</code>.' },
-      { q: 'Which of these keeps insertion order when you iterate?', options: ['hashMapOf()', 'mutableMapOf()', 'HashSet()'], a: 1, why: '<code>mutableMapOf()</code> returns a <code>LinkedHashMap</code>.' },
-      { q: 'Why is HashMap.get O(1) only on average?', options: ['Because of garbage collection', 'If many keys collide in one bucket, the map has to search that bucket', 'Because Strings are immutable'], a: 1, why: 'With a good hash, buckets hold one or two keys. With a bad one, many keys pile into one bucket.' },
-      { q: '<pre>data class Tag(var name: String)\nval tags = hashSetOf(Tag("a"))\nval t = tags.first()\nt.name = "b"\nprintln(t in tags)</pre>What does it print?', options: ['true', 'false', 'It throws ConcurrentModificationException'], a: 1, why: 't is filed under the hash it had with name "a". The lookup uses the new hash and searches another bucket, so the entry is lost. Keys should be immutable.' },
-      { q: '<pre>class P(val x: Int, val y: Int)\nval s = HashSet&lt;P&gt;()\ns.add(P(1, 2))\ns.add(P(1, 2))\nprintln(s.size)</pre>What does it print?', options: ['2', '1', 'It does not compile'], a: 0, why: 'A plain class inherits identity equals and hashCode, so the two points are different keys. A data class would print 1.' },
-    ],
-  });
-
-  // 4 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'stacks-queues',
-    title: 'Stacks and queues',
-    tagline: 'Last in, first out for undo and brackets. First in, first out for BFS and jobs.',
-    level: 'beginner',
-    body: `
-<p>A <em>stack</em> gives back the last thing you put in (LIFO). Think of an app’s back stack: the screen you opened last closes first. A <em>queue</em> gives back the oldest thing (FIFO), like jobs waiting in line.</p>
-<p>In Kotlin, use <code>ArrayDeque</code> for both. It is a ring buffer over an array, so adding and removing at either end is O(1) amortized. As a stack: <code>addLast</code> and <code>removeLast</code>. As a queue: <code>addLast</code> and <code>removeFirst</code>.</p>
-<p>A classic stack problem: are the brackets balanced? Push every opener. On a closer, pop and check that it matches. At the end the stack must be empty. Step through one input below.</p>`,
-    code: `fun isBalanced(s: String): Boolean {
-    val pairs = mapOf(')' to '(', ']' to '[', '}' to '{')
-    val stack = ArrayDeque<Char>()
-    for (c in s) {
-        when (c) {
-            '(', '[', '{' -> stack.addLast(c)
-            ')', ']', '}' -> if (stack.removeLastOrNull() != pairs[c]) return false
-        }
-    }
-    return stack.isEmpty()
-}
-
-// Queue: first in, first out
-val jobs = ArrayDeque<String>()
-jobs.addLast("upload")
-jobs.addLast("sync")
-jobs.removeFirst()   // "upload"`,
-    remember: 'ArrayDeque for both: addLast + removeLast is a stack, addLast + removeFirst is a queue.',
-    visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'val pairs = mapOf(\')\' to \'(\',\n    \']\' to \'[\', \'}\' to \'{\')\nfun isBalanced(s: String): Boolean {\n    val stack = ArrayDeque<Char>()\n    for (c in s) when (c) {\n        \'(\', \'[\', \'{\' -> stack.addLast(c)\n        \')\', \']\', \'}\' -> {\n            val top = stack.removeLastOrNull()\n            if (top != pairs[c]) return false\n        }\n    }\n    return stack.isEmpty()\n}\nisBalanced("{[]()}")',
-            varsTitle: 'Variables (stack: bottom → top)',
-            predict: {
-              q: 'Right after the 4th character, <code>(</code>, is pushed, what is on the stack, bottom to top?',
-              options: ['<code>{ (</code>', '<code>{ [ (</code>', '<code>(</code>', 'Nothing'],
-              a: 0,
-              why: 'The <code>]</code> before it popped the <code>[</code> it matched. Only the outer <code>{</code> is still open, with <code>(</code> on top.',
-            },
-            frames: [
-              { say: 'Check <code>"{[]()}"</code>. Openers go on the stack. Each closer must match the top.' },
-              { line: 4, stack: ['main()', 'isBalanced("{[]()}")'], vars: { stack: '(empty)' }, say: 'An empty <code>ArrayDeque</code> used as a stack: add and remove at the end.' },
-              { line: 6, vars: { c: "'{'", stack: '{' }, say: '<code>{</code> is an opener: push it.' },
-              { line: 6, vars: { c: "'['", stack: '{ [' }, say: '<code>[</code> is an opener too. It is now on top.' },
-              { line: [8, 9], vars: { c: "']'", top: "'['", stack: '{' }, say: '<code>]</code> is a closer: pop the top. It is <code>[</code>, the match, so keep going.' },
-              { line: 6, vars: { c: "'('", top: null, stack: '{ (' }, say: '<code>(</code>: push. The last opener in is the first one that must close.' },
-              { line: [8, 9], vars: { c: "')'", top: "'('", stack: '{' }, say: '<code>)</code> pops <code>(</code>: a match.' },
-              { line: [8, 9], vars: { c: "'}'", top: "'{'", stack: '(empty)' }, say: '<code>}</code> pops <code>{</code>: a match, and the stack is empty.' },
-              { line: 12, stack: ['main()'], out: 'true', say: 'The input is done and nothing is left open, so it returns true.' },
-            ],
-          });
-        },
-        play: `fun isBalanced(s: String): Boolean {
-    val pairs = mapOf(')' to '(', ']' to '[', '}' to '{')
-    val stack = ArrayDeque<Char>()
-    for (c in s) {
-        when (c) {
-            '(', '[', '{' -> stack.addLast(c)
-            ')', ']', '}' -> if (stack.removeLastOrNull() != pairs[c]) return false
-        }
-    }
-    return stack.isEmpty()
-}
-
-fun main() {
-    for (s in listOf("{[]()}", "((", "")) println("\\"$s\\" -> \${isBalanced(s)}")
-    val jobs = ArrayDeque<String>()
-    jobs.addLast("upload"); jobs.addLast("sync"); jobs.addLast("backup")
-    println("as a queue, first out: \${jobs.removeFirst()}")
-    println("as a stack, first out: \${jobs.removeLast()}")
-    // Add your own strings to the list, like "{[(])}" or "]"
-}`,
-    deeper: [
-      {
-        title: 'ArrayDeque is a ring',
-        body: `<p>Inside, <code>ArrayDeque</code> keeps an array and the index of the first element, <code>head</code>. <code>addFirst</code> steps <code>head</code> back by one and wraps around to the end of the array. <code>addLast</code> writes after the last element, also wrapping. Nothing ever shifts, so both ends are O(1). When the array fills up, it grows and copies once, like <code>ArrayList</code>.</p>
-<p>Try the calls and watch the indexes wrap. (Simplified: this ring has a fixed 8 slots and refuses to grow.)</p>`,
-        visual(el) {
-          const CAP = 8;
-          let buf = Array(CAP).fill(null), head = 0, size = 0, n = 0;
-          const ring = h('div', {});
-          const logical = h('div', { class: 'kt' });
-          const o = out('');
-          function paint(at) {
-            const tail = (head + size - 1 + CAP) % CAP;
-            ring.replaceChildren(cellRow(buf.map((v, k) => ({ v: v ?? '', cls: v == null ? 'dsa-empty' : k === at ? 'dsa-on dsa-flash' : '', tag: size && k === head && k === tail ? 'head/last' : size && k === head ? 'head' : size && k === tail ? 'last' : '' }))));
-            const items = []; for (let k = 0; k < size; k++) items.push(buf[(head + k) % CAP]);
-            logical.innerHTML = hl(`deque = [${items.join(', ')}]`);
-          }
-          const full = c => { say(o, `${hl(c)} <span class="muted">→</span> <span class="bad">full</span> <span class="muted">(a real ArrayDeque would grow and copy here)</span>`); };
-          const empty = c => { say(o, `${hl(c)} <span class="muted">→</span> <span class="bad">NoSuchElementException</span> <span class="muted">(empty; removeFirstOrNull() returns null instead)</span>`); };
-          el.append(h('div', { class: 'dsa-stage' }, label('backing array, 8 slots'), ring, logical),
-            h('div', { class: 'controls' },
-              cmd('addLast(n)', () => { if (size === CAP) return full('addLast(n)'); const k = (head + size) % CAP; buf[k] = ++n; size++; paint(k); say(o, `${hl(`addLast(${n})`)} <span class="muted">→ slot ${k}</span>`); }),
-              cmd('addFirst(n)', () => { if (size === CAP) return full('addFirst(n)'); head = (head - 1 + CAP) % CAP; buf[head] = ++n; size++; paint(head); say(o, `${hl(`addFirst(${n})`)} <span class="muted">→ head moves back to slot ${head}${head === CAP - 1 ? ', wrapping around' : ''}</span>`); }),
-              cmd('removeFirst()', () => { if (!size) return empty('removeFirst()'); const v = buf[head]; buf[head] = null; head = (head + 1) % CAP; size--; if (!size) head = 0; paint(-1); say(o, `${hl('removeFirst()')} <span class="muted">→</span> ${v}`); }),
-              cmd('removeLast()', () => { if (!size) return empty('removeLast()'); const k = (head + size - 1) % CAP; const v = buf[k]; buf[k] = null; size--; if (!size) head = 0; paint(-1); say(o, `${hl('removeLast()')} <span class="muted">→</span> ${v}`); })),
-            o);
-          paint(-1); say(o, 'Add from both ends. addFirst on an empty ring wraps straight to slot 7.');
-        },
-      },
-      {
-        title: 'A queue drives BFS',
-        body: `<p>Breadth-first search (BFS) visits things in rings of distance: everything 1 step away, then everything 2 steps away, and so on. The queue makes that happen. Take from the front, add new neighbours to the back, and the order sorts itself out. In a grid maze, the first time BFS reaches a cell is along a shortest path.</p>`,
-        visual(el) {
-          const MAP = ['S..#..', '.#.#.#', '.#....', '...##.', '##...G'];
-          const R = MAP.length, C = MAP[0].length;
-          const sq = [];
-          const grid = h('div', { class: 'dsa-grid', style: `--c:${C}` }, MAP.map((row, r) => [...row].map((ch, c) => { const s = h('div', { class: `dsa-sq ${ch === '#' ? 'dsa-wall' : ''}` }); sq.push(s); return s; })));
-          const queue = h('div', { class: 'dsa-queue' });
-          player(el, {
-            view: [grid, label('queue (front → back)'), queue], speed: 550,
-            build() {
-              const dist = {}, par = {}, key = (r, c) => `${r},${c}`;
-              const q = [[0, 0]];
-              dist[key(0, 0)] = 0;
-              const snap = o => ({ dist: { ...dist }, q: q.map(x => key(...x)), ...o });
-              const fr = [snap({ msg: 'Start S has distance 0 and is the only cell in the queue.' })];
-              while (q.length) {
-                const [r, c] = q.shift();
-                const d = dist[key(r, c)];
-                if (MAP[r][c] === 'G') {
-                  const path = []; let k = key(r, c); while (k) { path.push(k); k = par[k]; }
-                  fr.push(snap({ cur: key(r, c), path, msg: `Took G from the queue at distance <b>${d}</b>. Following the parents back gives a shortest path.` }));
-                  return fr;
-                }
-                const added = [];
-                for (const [dr, dc] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-                  const nr = r + dr, nc = c + dc;
-                  if (nr < 0 || nc < 0 || nr >= R || nc >= C || MAP[nr][nc] === '#' || dist[key(nr, nc)] !== undefined) continue;
-                  dist[key(nr, nc)] = d + 1; par[key(nr, nc)] = key(r, c); q.push([nr, nc]); added.push(key(nr, nc));
-                }
-                fr.push(snap({ cur: key(r, c), added, msg: `removeFirst() → (${r},${c}), distance ${d}. ${added.length ? `addLast ${added.map(a => `(${a})`).join(' ')} at distance ${d + 1}.` : 'No new neighbours.'}` }));
-              }
-              return fr;
-            },
-            paint(f) {
-              let k = 0;
-              for (let r = 0; r < R; r++) for (let c = 0; c < C; c++, k++) {
-                if (MAP[r][c] === '#') continue;
-                const id = `${r},${c}`, d = f.dist[id];
-                const cls = f.path && f.path.includes(id) ? 'dsa-ok' : id === f.cur ? 'dsa-hot' : f.q.includes(id) ? 'dsa-on' : d !== undefined ? 'dsa-dim' : '';
-                sq[k].className = `dsa-sq ${cls}`;
-                sq[k].textContent = MAP[r][c] === 'G' && d === undefined ? 'G' : d !== undefined ? String(d) : '';
-              }
-              queue.replaceChildren(...(f.q.length ? f.q.map(id => pill(`(${id})`, `dsa-sm ${f.added && f.added.includes(id) ? 'dsa-acc dsa-flash' : ''}`)) : [pill('empty', 'dsa-sm dsa-ghost')]));
-            },
-          });
-        },
-        code: `fun stepsTo(grid: List<String>, start: Pair<Int, Int>, goal: Pair<Int, Int>): Int {
-    val dist = mutableMapOf(start to 0)
-    val queue = ArrayDeque(listOf(start))
-    while (queue.isNotEmpty()) {
-        val cell = queue.removeFirst()
-        if (cell == goal) return dist.getValue(cell)
-        val (r, c) = cell
-        for ((dr, dc) in listOf(0 to 1, 1 to 0, 0 to -1, -1 to 0)) {
-            val next = r + dr to c + dc
-            val open = grid.getOrNull(next.first)?.getOrNull(next.second)?.let { it != '#' } == true
-            if (open && next !in dist) {
-                dist[next] = dist.getValue(cell) + 1
-                queue.addLast(next)
-            }
-        }
-    }
-    return -1
-}`,
-      },
-      {
-        title: 'Monotonic stack: the next warmer day',
-        body: `<p>A classic pattern keeps a stack whose values only go one way, here decreasing from bottom to top. For each day, pop every colder day still waiting on the stack: today is their answer. Every index is pushed once and popped at most once, so the whole thing is O(n) even with a loop inside a loop.</p>`,
-        code: `// For each day, how many days until a warmer one? 0 if never.
-fun daysUntilWarmer(temps: IntArray): IntArray {
-    val answer = IntArray(temps.size)
-    val waiting = ArrayDeque<Int>()          // indexes; their temps decrease bottom to top
-    for (i in temps.indices) {
-        while (waiting.isNotEmpty() && temps[waiting.last()] < temps[i]) {
-            val j = waiting.removeLast()
-            answer[j] = i - j
-        }
-        waiting.addLast(i)
-    }
-    return answer
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'list.removeLast() with compileSdk 35', bad: 'val history = mutableListOf<Screen>()\n// compileSdk = 35, minSdk = 24\nhistory.removeLast()   // NoSuchMethodError on Android 14 and lower', good: 'history.removeAt(history.lastIndex)\n// or keep the history in an ArrayDeque<Screen>() and call its removeLast()', why: 'Android 15 added <code>List.removeFirst()</code> and <code>removeLast()</code> to Java’s <code>List</code>. With <code>compileSdk</code> 35, Kotlin resolves the call to that new Java method, which older devices don’t have. Lint’s <code>NewApi</code> check flags it.' },
-      { title: 'Using java.util.Stack', bad: 'val stack = java.util.Stack<Int>()\nstack.push(1)\nstack.pop()', good: 'val stack = ArrayDeque<Int>()\nstack.addLast(1)\nstack.removeLast()', why: '<code>Stack</code> extends the old <code>Vector</code> class, and every method is synchronized. Its own Javadoc points to the <code>Deque</code> interface instead.' },
-      { title: 'removeFirst() on an empty queue', bad: 'val next = queue.removeFirst()   // throws if empty', good: 'val next = queue.removeFirstOrNull() ?: return', why: '<code>removeFirst()</code> throws <code>NoSuchElementException</code> on an empty deque. The <code>OrNull</code> versions let you handle the empty case with <code>?:</code>.' },
-    ],
-    terms: [
-      { term: 'Stack (LIFO)', def: 'A collection where the last element added is the first one removed.' },
-      { term: 'Queue (FIFO)', def: 'A collection where the first element added is the first one removed.' },
-      { term: 'Deque', def: 'A double-ended queue that supports adding and removing at both ends.' },
-      { term: 'Ring buffer', def: 'An array used in a circle: indexes wrap around from the end to the start, so nothing has to shift.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Use the ArrayDeque as a queue: add at the back, take from the front.', code: 'val queue = ArrayDeque<Int>()\nqueue.[[addLast]](1)\nqueue.addLast(2)\nval first = queue.[[removeFirst|removeFirstOrNull]]()   // 1', why: 'A queue adds at one end and removes at the other. With <code>addLast</code>, the oldest item is at the front.' },
-      { type: 'bug', prompt: '<code>isBalanced("((")</code> returns true. Tap the broken line.', code: 'fun isBalanced(s: String): Boolean {\n    val stack = ArrayDeque<Char>()\n    for (c in s) {\n        if (c == \'(\') stack.addLast(c)\n        else if (stack.removeLastOrNull() != \'(\') return false\n    }\n    return true\n}', bug: 6, fix: '    return stack.isEmpty()', why: 'Openers that were never closed are still on the stack. The string is balanced only if the stack is empty at the end.' },
-    ],
-    quiz: [
-      { q: 'You push A, then B, then C onto a stack and pop once. What comes out?', options: ['A', 'B', 'C'], a: 2, why: 'Last in, first out: C was pushed last.' },
-      { q: 'Which structure does BFS use to pick the next node?', options: ['A stack', 'A queue', 'A hash map'], a: 1, why: 'A queue hands out nodes in the order they were found, which is the order of their distance.' },
-      { q: 'Why prefer ArrayDeque over LinkedList for a queue?', options: ['It is thread-safe', 'Its elements sit in one array: less memory, faster walks, still O(1) at both ends', 'It keeps elements sorted'], a: 1, why: 'Neither is thread-safe. <code>ArrayDeque</code> avoids one node object per element.' },
-      { q: 'The bracket checker pushes openers and pops on closers. What does it return for <code>([)]</code>?', options: ['true, every opener has a closer', 'false, at the end, because the stack is not empty', 'false, at <code>)</code>, because the top of the stack is <code>[</code>'], a: 2, why: 'On a closer the checker pops and compares. <code>)</code> pops <code>[</code>, which does not match, so it stops right there.' },
-      { q: 'With <code>compileSdk = 35</code> and <code>minSdk = 24</code>, you call <code>history.removeLast()</code> on a MutableList. What happens on an Android 14 phone?', options: ['It works, Kotlin provides removeLast()', 'It returns null', 'NoSuchMethodError, because the call resolved to the Java method Android 15 added'], a: 2, why: 'With compileSdk 35, Kotlin picks the new Java List.removeLast(), which older devices lack. Use removeLastOrNull() or removeAt(lastIndex); lint’s NewApi flags it.' },
-    ],
-  });
-
-  // 5 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'two-pointers',
-    title: 'Two pointers and sliding window',
-    tagline: 'Move two indexes instead of trying every pair, and O(n²) becomes O(n).',
-    level: 'intermediate',
-    body: `
-<p>Many array problems ask about pairs or ranges. Trying every pair is O(n²). Often you can keep two indexes instead and move them by a rule, so each index walks the array at most once: O(n).</p>
-<p><em>Two pointers from both ends</em>: in a sorted array, to find two numbers that add up to a target, start with <code>left</code> at the first item and <code>right</code> at the last. Sum too small? Move <code>left</code> right to get a bigger number. Too big? Move <code>right</code> left. Each move throws away every pair that the dropped item could be part of.</p>
-<p><em>Sliding window</em>: both pointers move the same way and the range between them is the window. Grow the right edge, shrink the left edge when a rule breaks, and update the answer as you go. Go deeper below for both kinds of window.</p>`,
-    code: `// nums is sorted. Returns the indexes of two numbers that add up to target, or null.
-fun pairWithSum(nums: IntArray, target: Int): Pair<Int, Int>? {
-    var left = 0
-    var right = nums.lastIndex
-    while (left < right) {
-        val sum = nums[left] + nums[right]
-        when {
-            sum == target -> return left to right
-            sum < target -> left++      // need a bigger number
-            else -> right--             // need a smaller number
-        }
-    }
-    return null
-}`,
-    remember: 'Each pointer only moves in one direction, so the whole scan is O(n).',
-    visual(el) {
-      const A = [1, 3, 4, 6, 8, 11, 14, 17];
-      let target = 14;
-      const row = h('div', {});
-      const st = stats(['steps', 'pairs a brute force checks']);
-      const p = player(el, {
-        top: picker('target', [{ src: '14', t: 14 }, { src: '25', t: 25 }, { src: '16', t: 16 }], it => { target = it.t; p.reset(); }),
-        view: [label('nums (sorted)'), row, st], speed: 750,
-        build() {
-          let l = 0, r = A.length - 1, steps = 0;
-          const fr = [{ l, r, steps, msg: `pairWithSum(nums, ${target}). left starts at index 0, right at index ${r}.` }];
-          while (l < r) {
-            const s = A[l] + A[r];
-            steps++;
-            if (s === target) { fr.push({ l, r, steps, found: true, msg: `${A[l]} + ${A[r]} = ${s}. <span class="good">Found: return ${l} to ${r}</span>` }); return fr; }
-            if (s < target) { fr.push({ l, r, steps, msg: `${A[l]} + ${A[r]} = ${s} &lt; ${target}: too small. ${A[l]} can’t reach ${target} with anything, so left++.` }); l++; }
-            else { fr.push({ l, r, steps, msg: `${A[l]} + ${A[r]} = ${s} &gt; ${target}: too big. ${A[r]} is too big with anything left, so right--.` }); r--; }
-            fr.push({ l, r, steps, msg: null });
-          }
-          fr.push({ l, r, steps, none: true, msg: `left met right. <span class="bad">No pair adds up to ${target}: return null.</span> ${steps} sums checked instead of 28.` });
-          return fr;
-        },
-        paint(f) {
-          row.replaceChildren(cellRow(A.map((v, k) => ({ v, cls: k < f.l || k > f.r ? 'dsa-dim' : f.found && (k === f.l || k === f.r) ? 'dsa-ok dsa-flash' : k === f.l || k === f.r ? 'dsa-on' : '', tag: [k === f.l && 'L', k === f.r && 'R'].filter(Boolean).join(' ') }))));
-          st.set('steps', f.steps); st.set('pairs a brute force checks', 28);
-        },
-      });
-    },
-        predict: {
-          q: 'Target 14 in <code>[1, 3, 4, 6, 8, 11, 14, 17]</code>. A brute force checks 28 pairs. How many sums does the two-pointer scan check?',
-          options: ['4', '8', '28'],
-          a: 0,
-          why: 'Every sum either finds the pair or rules out one item for good. 18 and 15 drop 17 and 14, 12 drops 1, and the fourth sum, 3 + 11, is 14.',
-        },
-        play: `fun pairWithSum(nums: IntArray, target: Int): Pair<Int, Int>? {
-    var left = 0
-    var right = nums.lastIndex
-    var steps = 0
-    while (left < right) {
-        steps++
-        val sum = nums[left] + nums[right]
-        when {
-            sum == target -> { println("  found after $steps sums"); return left to right }
-            sum < target -> left++      // need a bigger number
-            else -> right--             // need a smaller number
-        }
-    }
-    println("  gave up after $steps sums")
-    return null
-}
-
-fun maxSumOfK(a: IntArray, k: Int): Int {
-    var window = a.take(k).sum()
-    var best = window
-    for (i in k until a.size) { window += a[i] - a[i - k]; best = maxOf(best, window) }
-    return best
-}
-
-fun main() {
-    val nums = intArrayOf(1, 3, 4, 6, 8, 11, 14, 17)
-    println(pairWithSum(nums, 14))
-    println(pairWithSum(nums, 16))
-    println(maxSumOfK(intArrayOf(4, 2, 7, 1, 8, 3), 2))
-    // Try a target with no pair, like 2
-}`,
-    deeper: [
-      {
-        title: 'Fixed window: best sum of k in a row',
-        body: `<p>The best total of 3 days in a row: recomputing each window’s sum is O(n × k). Instead, slide: add the item that enters on the right, subtract the one that leaves on the left. Each step is O(1), so the scan is O(n).</p>`,
-        visual(el) {
-          const A = [2, 1, 5, 1, 3, 2, 9, 1], K = 3;
-          const row = h('div', {});
-          const st = stats(['window sum', 'best']);
-          player(el, {
-            view: [label('nums, k = 3'), row, st], speed: 750,
-            build() {
-              let w = A[0] + A[1] + A[2], best = w;
-              const fr = [{ l: 0, r: 2, w, best, msg: `First window: 2 + 1 + 5 = ${w}. best = ${w}.` }];
-              for (let r = K; r < A.length; r++) {
-                const l = r - K + 1;
-                w += A[r] - A[r - K];
-                const better = w > best; best = Math.max(best, w);
-                fr.push({ l, r, w, best, better, out: r - K, msg: `+${A[r]} enters, −${A[r - K]} leaves: sum ${w}.${better ? ` <span class="good">New best: ${best}</span>` : ''}` });
-              }
-              fr[fr.length - 1].msg += ` Done after ${A.length - K + 1} windows, one add and one subtract each.`;
-              return fr;
-            },
-            paint(f) {
-              row.replaceChildren(cellRow(A.map((v, k) => ({ v, cls: k >= f.l && k <= f.r ? (f.better ? 'dsa-ok' : 'dsa-on') : k === f.out ? 'dsa-hot' : '', tag: k === f.r ? 'in' : k === f.out ? 'out' : '' }))));
-              st.set('window sum', f.w); st.set('best', f.best);
-            },
-          });
-        },
-        code: `fun maxSumOfK(nums: IntArray, k: Int): Int {
-    var window = nums.take(k).sum()
-    var best = window
-    for (right in k until nums.size) {
-        window += nums[right] - nums[right - k]   // add the new one, drop the old one
-        best = maxOf(best, window)
-    }
-    return best
-}
-
-// Short version with the stdlib. O(n × k), fine for small k.
-val best = nums.toList().windowed(3) { it.sum() }.max()`,
-      },
-      {
-        title: 'Growing and shrinking: longest run without repeats',
-        body: `<p>When the window size isn’t fixed, grow the right edge one step at a time. If the new item breaks the rule (here: a repeated letter), shrink from the left until the rule holds again. A set remembers what is inside the window.</p>
-<p>The inner <code>while</code> loop looks like O(n²), but <code>left</code> only moves forward. Each letter enters the window once and leaves at most once: O(n) in total.</p>`,
-        visual(el) {
-          const S = 'dvdfabca';
-          const row = h('div', {});
-          const set = h('div', { class: 'dsa-queue' });
-          const st = stats(['window', 'best']);
-          player(el, {
-            view: [label(`s = "${S}"`), row, label('inWindow set'), set, st], speed: 650,
-            build() {
-              const inW = new Set(), fr = [{ l: 0, r: -1, set: [], best: 0, msg: 'Empty window. Grow right one letter at a time.' }];
-              let l = 0, best = 0;
-              for (let r = 0; r < S.length; r++) {
-                while (inW.has(S[r])) { fr.push({ l, r, set: [...inW], best, dup: true, msg: `'${S[r]}' is already in the window. Remove '${S[l]}' and move left.` }); inW.delete(S[l]); l++; }
-                inW.add(S[r]);
-                const better = r - l + 1 > best; best = Math.max(best, r - l + 1);
-                fr.push({ l, r, set: [...inW], best, better, msg: `Add '${S[r]}': window "${S.slice(l, r + 1)}", length ${r - l + 1}.${better ? ` <span class="good">best = ${best}</span>` : ''}` });
-              }
-              fr.push({ l, r: S.length - 1, set: [...inW], best, msg: `Done: the longest run without repeats has <b>${best}</b> letters ("vdfabc").` });
-              return fr;
-            },
-            paint(f) {
-              row.replaceChildren(cellRow([...S].map((c, k) => ({ v: c, cls: k === f.r && f.dup ? 'dsa-bad' : k >= f.l && k <= f.r ? (f.better ? 'dsa-ok' : 'dsa-on') : '', tag: [k === f.l && 'L', k === f.r && 'R'].filter(Boolean).join(' ') }))));
-              set.replaceChildren(...(f.set.length ? f.set.map(c => pill(`'${c}'`, 'dsa-sm')) : [pill('empty', 'dsa-sm dsa-ghost')]));
-              st.set('window', Math.max(0, f.r - f.l + 1)); st.set('best', f.best);
-            },
-          });
-        },
-        code: `fun longestUnique(s: String): Int {
-    val inWindow = HashSet<Char>()
-    var left = 0
-    var best = 0
-    for (right in s.indices) {
-        while (s[right] in inWindow) {      // shrink until the repeat is gone
-            inWindow.remove(s[left])
-            left++
-        }
-        inWindow.add(s[right])
-        best = maxOf(best, right - left + 1)
-    }
-    return best
-}`,
-      },
-      {
-        title: 'Same direction: slow and fast pointers',
-        body: `<p>Another shape: <code>fast</code> reads every item, <code>slow</code> marks where the next item to keep goes. This edits an array in place with O(1) extra space. Removing duplicates from a sorted array is the classic example.</p>`,
-        code: `// nums is sorted. Keeps one copy of each value at the front, returns how many.
-fun dedupe(nums: IntArray): Int {
-    if (nums.isEmpty()) return 0
-    var slow = 0
-    for (fast in 1 until nums.size) {
-        if (nums[fast] != nums[slow]) {
-            slow++
-            nums[slow] = nums[fast]
-        }
-    }
-    return slow + 1
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'Two pointers on unsorted data', bad: 'pairWithSum(intArrayOf(3, 8, 1, 6), 7)   // null, but 1 + 6 = 7', good: 'fun pairWithSum(nums: IntArray, target: Int): Pair<Int, Int>? {\n    val seen = HashMap<Int, Int>()          // value -> index\n    for ((i, x) in nums.withIndex()) {\n        seen[target - x]?.let { return it to i }\n        seen[x] = i\n    }\n    return null\n}', why: 'The pointer rule only works because the array is sorted. For unsorted input, a hash map of “what I need” finds the pair in one pass and keeps the original indexes.' },
-      { title: 'Recomputing every window', bad: 'for (i in 0..nums.size - k) {\n    best = maxOf(best, nums.slice(i until i + k).sum())   // O(n × k)\n}', good: 'var window = nums.take(k).sum()\nfor (right in k until nums.size) {\n    window += nums[right] - nums[right - k]               // O(1) per step\n    best = maxOf(best, window)\n}', why: 'Neighbouring windows share k − 1 items. Update the sum with what enters and what leaves instead of adding everything again.' },
-    ],
-    terms: [
-      { term: 'Two pointers', def: 'A technique that moves two indexes through an array by a rule, instead of checking every pair.' },
-      { term: 'Sliding window', def: 'A range [left, right] that moves through an array, growing on the right and shrinking on the left.' },
-      { term: 'Complement', def: 'The value still needed to reach a target, target − x, often looked up in a hash map.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Finish the pointer moves for a sorted array.', code: 'while (left < right) {\n    val sum = nums[left] + nums[right]\n    when {\n        sum == target -> return left to right\n        sum < target -> [[left++|left += 1]]\n        else -> [[right--|right -= 1]]\n    }\n}', why: 'A small sum needs a bigger left number, so <code>left</code> moves right. A big sum needs a smaller right number, so <code>right</code> moves left.' },
-      { type: 'bug', prompt: '<code>maxSumOfK(intArrayOf(1, 2, 3, 4), 2)</code> should be 7 but returns 5. Tap the broken line.', code: 'fun maxSumOfK(nums: IntArray, k: Int): Int {\n    var window = nums.take(k).sum()\n    var best = window\n    for (right in k until nums.size) {\n        window += nums[right] - nums[right - 1]\n        best = maxOf(best, window)\n    }\n    return best\n}', bug: 4, fix: '        window += nums[right] - nums[right - k]', why: 'The item leaving the window is <code>k</code> places behind the one entering, not 1.' },
-    ],
-    quiz: [
-      { q: 'Two pointers from both ends rely on what?', options: ['The array is sorted', 'The array has no duplicates', 'The array size is even'], a: 0, why: 'Sorting is what tells you which pointer to move when the sum is too small or too big.' },
-      { q: 'Why is a sliding window O(n) even with a while loop inside the for loop?', options: ['The while loop runs at most once', 'Each item enters the window once and leaves at most once', 'Kotlin optimizes the loop'], a: 1, why: '<code>left</code> never moves back, so all the inner loop runs add up to at most n steps.' },
-      { q: 'Sorted array, pointers at both ends, the sum is too small. What moves?', options: ['left moves right', 'right moves left', 'both move'], a: 0, why: 'Only a bigger left value can raise the sum.' },
-      { q: '<code>maxSumOfK(intArrayOf(2, 1, 5, 1, 3, 2), k = 3)</code>. What does it return?', options: ['8', '9', '11'], a: 1, why: 'The windows sum to 8, 7, 9 and 6. Each step adds the item entering and subtracts the one leaving, and the best is 9 (5 + 1 + 3).' },
-      { q: 'An unsorted array, and you need the original indexes of two numbers that add up to a target. Which tool fits?', options: ['Two pointers from both ends', 'Sort first, then two pointers', 'One pass with a hash map from each value you need to its index'], a: 2, why: 'The two-pointer rule needs sorted data, and sorting loses the original indexes. A map of what you have seen finds the pair in O(n).' },
-    ],
-  });
-
-  // 6 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'binary-search',
-    title: 'Binary search',
-    tagline: 'Halve a sorted range on every check: a million items take about 20.',
-    level: 'intermediate',
-    body: `
-<p>Binary search finds a value in a <em>sorted</em> list by checking the middle. If the middle is too small, the answer can only be on the right, so drop the left half. Too big, drop the right half. Each check halves the range, so it is O(log n).</p>
-<p>The idea is simple; the details cause bugs. Decide what <code>lo</code> and <code>hi</code> mean and keep that true on every step. Below, both ends are inclusive: if the target exists, it is somewhere in <code>lo..hi</code>. So the loop runs <code>while (lo &lt;= hi)</code> and moves to <code>mid + 1</code> or <code>mid - 1</code>, never to <code>mid</code> itself.</p>
-<p>Kotlin already has it: <code>list.binarySearch(x)</code> returns the index, or <code>-(insertion point) - 1</code> when the value is missing. The demo below searches for 40 to show that number.</p>`,
-    code: `fun indexOf(sorted: IntArray, target: Int): Int {
-    var lo = 0
-    var hi = sorted.lastIndex             // inclusive: the target is in lo..hi
-    while (lo <= hi) {
-        val mid = (lo + hi) ushr 1        // no overflow, even near Int.MAX_VALUE
-        when {
-            sorted[mid] == target -> return mid
-            sorted[mid] < target -> lo = mid + 1
-            else -> hi = mid - 1
-        }
-    }
-    return -(lo + 1)                      // same convention as the stdlib
-}
-
-val prices = listOf(5, 12, 23, 45, 72)
-prices.binarySearch(23)                   // 2
-prices.binarySearch(40)                   // -4: it would go at index 3
-val users = listOf(User(id = 1), User(id = 4), User(id = 9))   // sorted by id
-users.binarySearchBy(4) { it.id }         // 1`,
-    remember: 'Pick what lo and hi mean, keep it true on every step, and make sure every branch shrinks the range.',
-    visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'fun indexOf(a: IntArray, t: Int): Int {\n    var lo = 0\n    var hi = a.lastIndex\n    while (lo <= hi) {\n        val mid = (lo + hi) ushr 1\n        when {\n            a[mid] == t -> return mid\n            a[mid] < t -> lo = mid + 1\n            else -> hi = mid - 1\n        }\n    }\n    return -(lo + 1)\n}\nval prices = intArrayOf(5, 12, 23, 45, 72)\nindexOf(prices, 40)',
-            predict: {
-              q: 'Searching for 40, how many times does the loop look at a middle element before it stops?',
-              options: ['1', '2', '3', '5'],
-              a: 1,
-              why: 'Each check throws away half of what is left: 5 items, then 2, then none. Two checks, and the range is empty.',
-            },
-            frames: [
-              { say: 'Five sorted prices, and a search for 40. Watch the range <code>lo..hi</code> shrink.' },
-              { line: [15, 2, 3], stack: ['main()', 'indexOf(prices, 40)'], vars: { lo: 0, hi: 4, 'values in lo..hi': '5 12 23 45 72' }, say: 'Both ends are inclusive: if 40 is anywhere, it is in <code>lo..hi</code>.' },
-              { line: 5, vars: { mid: 2 }, say: '<code>mid = (0 + 4) ushr 1 = 2</code>. <code>a[2]</code> is 23.' },
-              { line: 8, vars: { lo: 3, 'values in lo..hi': '45 72' }, say: '23 &lt; 40, so 40 can only be to the right. <code>lo = mid + 1</code> drops 5, 12 and 23 in one step.' },
-              { line: 5, vars: { mid: 3 }, say: '<code>mid = (3 + 4) ushr 1 = 3</code>. <code>a[3]</code> is 45.' },
-              { line: 9, vars: { hi: 2, 'values in lo..hi': '(empty)' }, say: '45 &gt; 40: <code>hi = mid - 1 = 2</code>. Now <code>lo</code> is past <code>hi</code>.' },
-              { line: 4, say: '<code>lo &lt;= hi</code> is false, so 40 is not in the array. Two checks were enough.' },
-              { line: 12, stack: ['main()'], out: '-4', say: '<code>lo</code> = 3 is where 40 would go. <code>-(3 + 1) = -4</code> means “missing, insert at 3”, the same convention as the stdlib.' },
-            ],
-          });
-        },
-        play: `fun indexOf(sorted: IntArray, target: Int): Int {
-    var lo = 0
-    var hi = sorted.lastIndex                // inclusive: the target is in lo..hi
-    while (lo <= hi) {
-        val mid = (lo + hi) ushr 1
-        println("  lo=$lo hi=$hi mid=$mid -> \${sorted[mid]}")
-        when {
-            sorted[mid] == target -> return mid
-            sorted[mid] < target -> lo = mid + 1
-            else -> hi = mid - 1
-        }
-    }
-    return -(lo + 1)                         // same convention as the stdlib
-}
-
-fun main() {
-    val prices = intArrayOf(5, 12, 23, 45, 72, 81, 90, 99)
-    for (t in listOf(72, 40)) println("indexOf($t) = \${indexOf(prices, t)}")
-    println("stdlib says \${prices.toList().binarySearch(40)}")
-    // Search for 100, then for 1: where would each one go?
-}`,
-    deeper: [
-      {
-        title: 'Off-by-one traps',
-        body: `<p>There are two consistent ways to write the bounds. Mixing them causes infinite loops or skipped items.</p>
-<p><b>Inclusive</b> <code>lo..hi</code>: start <code>hi = lastIndex</code>, loop <code>while (lo &lt;= hi)</code>, update with <code>mid ± 1</code>. <b>Half-open</b> <code>lo until hi</code>: start <code>hi = size</code>, loop <code>while (lo &lt; hi)</code>, update with <code>hi = mid</code> and <code>lo = mid + 1</code>. Check one thing on every branch: does the range get smaller?</p>`,
-        code: `// Inclusive bounds: the target is in lo..hi
-var lo = 0
-var hi = a.lastIndex
-while (lo <= hi) { /* lo = mid + 1  or  hi = mid - 1 */ }
-
-// Half-open bounds: the answer is in lo until hi
-var lo = 0
-var hi = a.size
-while (lo < hi) { /* lo = mid + 1  or  hi = mid */ }
-
-// Mixed up: hi = mid with lo <= hi.
-// When lo == hi == mid and a[mid] > target, hi stays the same: an infinite loop.`,
-      },
-      {
-        title: 'Find the first match',
-        body: `<p>With duplicates, <code>binarySearch</code> may return any of the matching indexes. To get the <em>first</em> one, keep searching left after a match. This “lower bound” returns the first index whose value is at least the target, which is also where you would insert it.</p>`,
-        visual(el) {
-          const A = [1, 2, 2, 2, 2, 3, 5, 8];
-          const row = h('div', {});
-          player(el, {
-            view: [label('lowerBound(a, 2), half-open lo until hi'), row], speed: 800,
-            build() {
-              let lo = 0, hi = A.length;
-              const fr = [{ lo, hi, msg: 'lo = 0, hi = 8 (one past the end). The answer is in lo until hi.' }];
-              while (lo < hi) {
-                const mid = (lo + hi) >>> 1;
-                const less = A[mid] < 2;
-                fr.push({ lo, hi, mid, msg: `mid = ${mid}, a[mid] = ${A[mid]}. ${less ? `Less than 2: lo = mid + 1 = ${mid + 1}.` : `At least 2: this could be the first one, but there may be an earlier 2. hi = mid = ${mid}.`}` });
-                if (less) lo = mid + 1; else hi = mid;
-                fr.push({ lo, hi, msg: null });
-              }
-              fr.push({ lo, hi, done: true, msg: `lo == hi == ${lo}. The first 2 is at index <b>${lo}</b>.` });
-              return fr;
-            },
-            paint(f) {
-              row.replaceChildren(cellRow(A.map((v, k) => ({ v, cls: f.done && k === f.lo ? 'dsa-ok dsa-flash' : k === f.mid ? 'dsa-hot' : k < f.lo || k >= f.hi ? 'dsa-dim' : 'dsa-on', tag: [k === f.lo && 'lo', k === f.mid && 'mid', k === f.hi && 'hi'].filter(Boolean).join(' ') }))));
-            },
-          });
-        },
-        code: `// First index whose value is >= target. Returns a.size if there is none.
-fun lowerBound(a: IntArray, target: Int): Int {
-    var lo = 0
-    var hi = a.size
-    while (lo < hi) {
-        val mid = (lo + hi) ushr 1
-        if (a[mid] < target) lo = mid + 1 else hi = mid
-    }
-    return lo
-}`,
-      },
-      {
-        title: 'Search the answer, not the array',
-        body: `<p>Binary search works on any yes/no question that flips once. “Can a truck with capacity <em>c</em> ship all parcels in 5 days?” is no for small <em>c</em> and yes from some point on. Binary search over <em>c</em> finds that point in O(log(range)) checks, each check O(n). It is a very useful twist.</p>`,
-        code: `// Smallest daily capacity that ships every parcel, in order, within \`days\` days.
-fun minCapacity(weights: IntArray, days: Int): Int {
-    var lo = weights.max()        // must fit the heaviest parcel
-    var hi = weights.sum()        // everything in one day
-    while (lo < hi) {
-        val cap = (lo + hi) ushr 1
-        if (daysNeeded(weights, cap) <= days) hi = cap else lo = cap + 1
-    }
-    return lo
-}
-
-fun daysNeeded(weights: IntArray, cap: Int): Int {
-    var days = 1
-    var load = 0
-    for (w in weights) {
-        if (load + w > cap) { days++; load = 0 }
-        load += w
-    }
-    return days
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'Binary search on unsorted data', bad: 'listOf(9, 2, 7, 4).binarySearch(7)   // undefined result', good: 'listOf(9, 2, 7, 4).indexOf(7)          // one lookup: O(n)\nval sorted = list.sorted()            // many lookups: sort once,\nsorted.binarySearch(7)                // then O(log n) each', why: 'The Kotlin docs say the result is undefined if the list is not sorted. Sorting costs O(n log n), so it only pays off when you search many times.' },
-      { title: 'Treating every miss as -1', bad: 'if (list.binarySearch(x) == -1) list.add(x)', good: 'val i = list.binarySearch(x)\nif (i < 0) list.add(-(i + 1), x)   // insert and keep the list sorted', why: 'A miss returns <code>-(insertion point) - 1</code>, which is −1 only when the insertion point is 0. Check for any negative value, and use it to insert in the right place.' },
-      { title: 'Overflow in the middle index', bad: 'val mid = (lo + hi) / 2', good: 'val mid = (lo + hi) ushr 1   // or lo + (hi - lo) / 2', why: 'When <code>lo + hi</code> is bigger than <code>Int.MAX_VALUE</code> it wraps to a negative number. That happens when you search a huge numeric range, as in “search the answer”.' },
-    ],
-    terms: [
-      { term: 'Binary search', def: 'Finding a value in sorted data by checking the middle and dropping half of the range each time.' },
-      { term: 'Insertion point', def: 'The index where a missing value would go to keep a list sorted.' },
-      { term: 'Lower bound', def: 'The first index whose value is greater than or equal to the target.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Insert <code>x</code> into a sorted list and keep it sorted.', code: 'val i = list.binarySearch(x)\nval at = if (i >= 0) i else [[-(i + 1)|-i - 1|-(i+1)|-i-1]]\nlist.add(at, x)', why: 'A miss returns <code>-(insertionPoint) - 1</code>. Solving for the insertion point gives <code>-(i + 1)</code>.' },
-      { type: 'bug', prompt: 'This hangs forever for some targets. Tap the broken line.', code: 'fun indexOf(a: IntArray, target: Int): Int {\n    var lo = 0\n    var hi = a.lastIndex\n    while (lo <= hi) {\n        val mid = (lo + hi) ushr 1\n        if (a[mid] == target) return mid\n        if (a[mid] < target) lo = mid + 1 else hi = mid\n    }\n    return -1\n}', bug: 6, fix: '        if (a[mid] < target) lo = mid + 1 else hi = mid - 1', why: 'With inclusive bounds, <code>hi = mid</code> can leave the range unchanged when <code>lo == hi</code>. <code>mid</code> was already checked, so drop it: <code>hi = mid - 1</code>.' },
-    ],
-    quiz: [
-      { q: '<code>listOf(10, 20, 30).binarySearch(25)</code> returns?', options: ['-1', '-3', '2'], a: 1, why: '25 would go at index 2, so the result is −2 − 1 = −3.' },
-      { q: 'What does binary search need from the data?', options: ['Sorted in the same order you search with', 'Stored in a HashMap', 'No duplicates'], a: 0, why: 'Duplicates are fine. Without sorting, dropping half the range is not safe.' },
-      { q: 'Inclusive bounds <code>lo..hi</code>, and <code>a[mid] &gt; target</code>. Which update is right?', options: ['hi = mid', 'hi = mid - 1', 'lo = mid'], a: 1, why: '<code>mid</code> is already ruled out and everything right of it is bigger still.' },
-      { q: '<pre>var lo = 0\nvar hi = a.lastIndex\nwhile (lo &lt;= hi) {\n  val mid = (lo + hi) ushr 1\n  if (a[mid] == t) return mid\n  if (a[mid] &lt; t) lo = mid + 1\n  else hi = mid\n}</pre>Which line is the bug?', options: ['<code>var hi = a.lastIndex</code>', '<code>while (lo &lt;= hi)</code>', '<code>else hi = mid</code>'], a: 2, why: 'With inclusive bounds, <code>hi = mid</code> can leave the range the same size when lo == hi, so the loop never ends. Use <code>hi = mid - 1</code>.' },
-      { q: '<code>lowerBound(intArrayOf(10, 20, 20, 30), 20)</code>. What does it return?', options: ['1', '2', '3'], a: 0, why: 'lowerBound returns the first index whose value is at least the target. The first 20 is at index 1.' },
-      { q: 'Why can binary search find the smallest truck capacity that ships every parcel in 5 days?', options: ['The weights are sorted', 'The answer to "can capacity c do it?" is no up to some point and yes from there on', 'There are fewer than 1,000 parcels'], a: 1, why: 'Binary search works on any yes/no question that flips once. Each check is O(n), and the search takes O(log(range)) checks.' },
-    ],
-  });
-
-  // 7 ─────────────────────────────────────────────
-  lessons.push({
-    id: 'sorting',
-    title: 'Sorting',
-    tagline: 'Use the stdlib sort, know that it is stable, and build comparators that read well.',
-    level: 'intermediate',
-    body: `
-<p>You will rarely write a sort at work. <code>sorted()</code>, <code>sortedBy { }</code> and <code>sortedWith(comparator)</code> return a new sorted list; <code>sort()</code> and <code>sortBy { }</code> sort a mutable list in place. They are O(n log n). The Kotlin API docs promise that sorting objects is <em>stable</em>: items that compare equal keep their original order.</p>
-<p>On the JVM and Android, these calls end up in Java’s object sort, which is TimSort: a merge sort that also spots stretches that are already in order, so nearly sorted data sorts fast. <code>IntArray.sort()</code> uses a quicksort variant instead; stability does not matter there, because two equal ints are identical.</p>
-<p>It still pays to know how sorts work. Merge sort splits the list, sorts the halves and merges them by comparing their fronts. Step through the merges below.</p>`,
-    code: `import java.text.Collator
-import java.util.Locale
-
-data class Song(val title: String, val artist: String, val plays: Int)
-
-val byPlays = songs.sortedByDescending { it.plays }
-val byArtistThenTitle = songs.sortedWith(compareBy<Song>({ it.artist }, { it.title }))
-
-// Alphabetical order for the user's language: accented letters sort next to their base letter
-val collator = Collator.getInstance(Locale.getDefault())
-val byTitleLocal = songs.sortedWith(compareBy(collator) { it.title })
-
-val scores = intArrayOf(40, 7, 19)
-scores.sort()                       // in place, primitive sort
-val top3 = songs.sortedByDescending { it.plays }.take(3)`,
-    remember: 'sorted* is O(n log n) and stable for objects. Build comparators with compareBy and thenBy, not by hand.',
-    visual(el) {
-      const START = [38, 27, 43, 3, 9, 82, 10, 50];
-      const max = Math.max(...START);
-      const bars = h('div', { class: 'dsa-bars' });
-      const ptr = h('div', { class: 'dsa-ptr', style: `--n:${START.length}` });
-      const buf = h('div', {});
-      player(el, {
-        view: [bars, ptr, label('merged run'), buf], speed: 550,
-        build() {
-          const a = [...START], fr = [];
-          const snap = o => fr.push({ a: [...a], ...o });
-          snap({ msg: 'Bottom-up merge sort. Runs of 1 item are already sorted. Merge neighbours into runs of 2, then 4, then 8.' });
-          for (let w = 1; w < a.length; w *= 2) {
-            for (let lo = 0; lo < a.length - w; lo += 2 * w) {
-              const mid = lo + w, hi = Math.min(lo + 2 * w, a.length);
-              let i = lo, j = mid;
-              const out = [];
-              snap({ lo, mid, hi, i, j, buf: [], msg: `Merge [${a.slice(lo, mid).join(', ')}] with [${a.slice(mid, hi).join(', ')}].` });
-              while (i < mid || j < hi) {
-                const left = j >= hi || (i < mid && a[i] <= a[j]);
-                const m = j >= hi ? `Right run is empty: take ${a[i]}.` : i >= mid ? `Left run is empty: take ${a[j]}.` : left ? `${a[i]} ≤ ${a[j]}: take ${a[i]} from the left${a[i] === a[j] ? ' (ties go left: that keeps it stable)' : ''}.` : `${a[j]} &lt; ${a[i]}: take ${a[j]} from the right.`;
-                out.push(left ? a[i++] : a[j++]);
-                snap({ lo, mid, hi, i, j, buf: [...out], msg: m });
-              }
-              for (let k = 0; k < out.length; k++) a[lo + k] = out[k];
-              snap({ lo, hi, done: true, buf: [...out], msg: `Copy back: [${out.join(', ')}] is now one sorted run.` });
-            }
-          }
-          snap({ all: true, msg: 'Sorted. 3 rounds of merging (log₂ 8), each round touches all 8 items: O(n log n).' });
-          return fr;
-        },
-        paint(f) {
-          bars.replaceChildren(...f.a.map((v, k) => {
-            const inL = f.mid !== undefined && k >= f.lo && k < f.mid, inR = f.mid !== undefined && k >= f.mid && k < f.hi;
-            const used = (inL && k < f.i) || (inR && k < f.j);
-            const cls = f.all || (f.done && k >= f.lo && k < f.hi) ? 'dsa-ok' : used ? 'dsa-dim' : inL ? 'dsa-on' : inR ? 'dsa-hot' : '';
-            return h('div', { class: `dsa-bar ${cls}`, style: `height:${18 + (v / max) * 82}%` }, String(v));
-          }));
-          ptr.replaceChildren(...f.a.map((_, k) => h('span', {}, [k === f.i && f.i < f.mid && 'i', k === f.j && f.j < f.hi && 'j'].filter(Boolean).join(' '))));
-          const len = f.hi !== undefined ? f.hi - f.lo : 0;
-          buf.replaceChildren(len ? cellRow(Array.from({ length: len }, (_, k) => ({ v: f.buf[k] ?? '', i: '', cls: k < f.buf.length ? (k === f.buf.length - 1 && !f.done ? 'dsa-on dsa-flash' : f.done ? 'dsa-ok' : '') : 'dsa-empty' })), 'dsa-wide') : pill('waiting for a merge', 'dsa-sm dsa-ghost'));
-        },
-      });
-    },
-        predict: {
-          q: 'Merge sort merges <code>[27, 38]</code> with <code>[3, 43]</code>. Which number goes into the merged run first?',
-          options: ['27', '3', '38'],
-          a: 1,
-          why: 'A merge compares only the fronts of the two runs. 3 is smaller than 27, so it goes first, then 27, 38 and 43.',
-        },
-        play: `fun mergeSort(a: List<Int>): List<Int> {
-    if (a.size <= 1) return a
-    val left = mergeSort(a.subList(0, a.size / 2))
-    val right = mergeSort(a.subList(a.size / 2, a.size))
-    val out = ArrayList<Int>(a.size)
-    var i = 0
-    var j = 0
-    while (i < left.size || j < right.size) {
-        if (j >= right.size || (i < left.size && left[i] <= right[j])) out += left[i++] else out += right[j++]
-    }
-    println("merge $left + $right -> $out")
-    return out
-}
-
-data class Song(val title: String, val plays: Int)
-
-fun main() {
-    println(mergeSort(listOf(38, 27, 43, 3, 9, 82, 10, 50)))
-    val songs = listOf(Song("Blue", 2), Song("Red", 1), Song("Gold", 2))
-    println(songs.sortedByDescending { it.plays }.map { it.title })   // stable: Blue stays before Gold
-    // Change <= to < in the merge: which of two equal items comes first now?
-}`,
-    deeper: [
-      {
-        title: 'Stable means ties keep their order',
-        body: `<p>Sort five people by score. Lena and Maya both have 1; Omar and Ken both have 3. A stable sort promises Lena stays before Maya and Omar before Ken, as in the input. This lets you sort by one key after another: sort by name, then stably by score, and people with equal scores stay in name order.</p>
-<p>The demo uses insertion sort, which is also stable: it only moves an item past others that are <em>strictly</em> bigger.</p>`,
-        visual(el) {
-          const P = [['Omar', 3], ['Lena', 1], ['Ken', 3], ['Maya', 1], ['Sam', 2]];
-          const row = h('div', {});
-          player(el, {
-            view: [label('people.sortedBy { it.score }'), row], speed: 700,
-            build() {
-              const a = P.map(x => [...x]), fr = [{ a: a.map(x => [...x]), msg: 'Grow a sorted prefix from the left, one person at a time.' }];
-              for (let i = 1; i < a.length; i++) {
-                const key = a[i];
-                let j = i - 1;
-                fr.push({ a: a.map(x => [...x]), cur: i, msg: `Take ${key[0]} (${key[1]}). Move left past anyone with a bigger score.` });
-                while (j >= 0 && a[j][1] > key[1]) { a[j + 1] = a[j]; a[j] = key; fr.push({ a: a.map(x => [...x]), cur: j, msg: `${a[j + 1][0]} (${a[j + 1][1]}) &gt; ${key[1]}: swap.` }); j--; }
-                if (j >= 0) fr.push({ a: a.map(x => [...x]), cur: j + 1, stop: j, msg: `${a[j][0]} has ${a[j][1]}, not bigger than ${key[1]}: stop.${a[j][1] === key[1] ? ' Equal scores never swap, so the earlier person stays first.' : ''}` });
-              }
-              fr.push({ a: a.map(x => [...x]), end: true, msg: 'Result: Lena, Maya, Sam, Omar, Ken. Lena is still before Maya, and Omar before Ken: stable.' });
-              return fr;
-            },
-            paint(f) {
-              row.replaceChildren(cellRow(f.a.map(([n, s], k) => ({ v: n, tag: `score ${s}`, cls: f.end ? (s !== 2 ? 'dsa-ok' : '') : k === f.cur ? 'dsa-hot' : k === f.stop ? 'dsa-on' : '' })), 'dsa-wide'));
-            },
-          });
-        },
-        code: `val people = listOf("Omar" to 3, "Lena" to 1, "Ken" to 3, "Maya" to 1, "Sam" to 2)
-people.sortedBy { it.second }
-// [(Lena, 1), (Maya, 1), (Sam, 2), (Omar, 3), (Ken, 3)]`,
-      },
-      {
-        title: 'Comparators that read well',
-        body: `<p><code>compareBy</code> builds a comparator from one or more selectors; <code>thenBy</code> and <code>thenByDescending</code> add tie-breakers. <code>nullsLast()</code> decides where nulls go. They are clearer and safer than a hand-written <code>compare</code> that subtracts numbers.</p>`,
-        code: `val inbox = messages.sortedWith(
-    compareByDescending<Message> { it.pinned }
-        .thenByDescending { it.sentAt }
-        .thenBy { it.id }
-)
-
-// Messages never read go last
-val byRead = messages.sortedWith(compareBy(nullsLast<Long>()) { it.readAt })`,
-      },
-      {
-        title: 'Quick sort: partition around a pivot',
-        body: `<p>Quick sort picks a pivot, moves smaller items to its left and the rest to its right, then sorts each side the same way. It sorts in place and is fast in practice, O(n log n) on average. But it is not stable, and if the pivot is the smallest or biggest item every time, it degrades to O(n²).</p>
-<p>Merge sort is always O(n log n) and stable, but needs O(n) extra memory for merging. Step through one partition with the last item as pivot.</p>`,
-        visual(el) {
-          const START = [7, 2, 9, 4, 3, 8, 5];
-          const row = h('div', {});
-          player(el, {
-            view: [label('partition(a, 0, 6), pivot = a[6]'), row], speed: 750,
-            build() {
-              const a = [...START], hi = a.length - 1, pivot = a[hi];
-              let i = 0;
-              const fr = [{ a: [...a], i, msg: `pivot = ${pivot}. i marks where the next item smaller than ${pivot} goes.` }];
-              for (let j = 0; j < hi; j++) {
-                if (a[j] < pivot) {
-                  const m = `${a[j]} &lt; ${pivot}: swap it into slot i = ${i}, then i++.`;
-                  [a[i], a[j]] = [a[j], a[i]];
-                  fr.push({ a: [...a], i, j, sw: true, msg: m });
-                  i++;
-                } else fr.push({ a: [...a], i, j, msg: `${a[j]} ≥ ${pivot}: leave it on the right side.` });
-              }
-              [a[i], a[hi]] = [a[hi], a[i]];
-              fr.push({ a: [...a], i, done: true, msg: `Swap the pivot into slot ${i}. Left of it: all smaller. Right: all bigger. ${pivot} is in its final place; now sort each side.` });
-              return fr;
-            },
-            paint(f) {
-              row.replaceChildren(cellRow(f.a.map((v, k) => ({ v, cls: f.done ? (k === f.i ? 'dsa-ok dsa-flash' : k < f.i ? 'dsa-on' : 'dsa-hot') : k === START.length - 1 ? 'dsa-ok' : k === f.j ? (f.sw ? 'dsa-on dsa-flash' : 'dsa-hot') : k < f.i ? 'dsa-on' : '', tag: [k === f.i && 'i', k === f.j && 'j', !f.done && k === START.length - 1 && 'pivot'].filter(Boolean).join(' ') }))));
-            },
-          });
-        },
-        code: `fun quickSort(a: IntArray, lo: Int = 0, hi: Int = a.lastIndex) {
-    if (lo >= hi) return
-    val p = partition(a, lo, hi)
-    quickSort(a, lo, p - 1)
-    quickSort(a, p + 1, hi)
-}
-
-fun partition(a: IntArray, lo: Int, hi: Int): Int {
-    val pivot = a[hi]
-    var i = lo                                    // a[lo until i] are all < pivot
-    for (j in lo until hi) {
-        if (a[j] < pivot) { a[i] = a[j].also { a[j] = a[i] }; i++ }
-    }
-    a[hi] = a[i].also { a[i] = a[hi] }            // pivot to its final place
-    return i
-}`,
-      },
-    ],
-    underHood: {
-      body: `<p>On the JVM, <code>Iterable.sorted()</code> copies the items into an array, calls <code>java.util.Arrays.sort</code> on it and wraps the array as a list. For object arrays that sort is TimSort, used in OpenJDK since Java 7 and in Android’s core library. For primitive arrays like <code>IntArray</code>, <code>Arrays.sort</code> is a Dual-Pivot Quicksort.</p>`,
-      code: `// kotlin-stdlib on the JVM, simplified
-fun <T : Comparable<T>> Iterable<T>.sorted(): List<T> {
-    if (this is Collection) {
-        if (size <= 1) return toList()
-        return (toTypedArray<Comparable<T>>() as Array<T>).apply { sort() }.asList()
-    }
-    return toMutableList().apply { sort() }
-}
-// Array<T>.sort() calls java.util.Arrays.sort(this)`,
-    },
-    mistakes: [
-      { title: 'Sorting to get one item', bad: 'val top = songs.sortedByDescending { it.plays }.first()   // O(n log n)', good: 'val top = songs.maxBy { it.plays }                        // O(n)', why: 'You only need the biggest one. <code>maxBy</code> (or <code>maxByOrNull</code> for a list that can be empty) looks at each item once.' },
-      { title: 'A comparator that subtracts', bad: 'messages.sortedWith { a, b -> (a.sentAt - b.sentAt).toInt() }', good: 'messages.sortedBy { it.sentAt }', why: 'Two timestamps can differ by more than <code>Int.MAX_VALUE</code>; <code>toInt()</code> then flips the sign and the order breaks. Let <code>compareBy</code>/<code>sortedBy</code> compare.' },
-      { title: 'Calling sorted() and ignoring the result', bad: 'posts.sortedBy { it.createdAt }\nshow(posts)                     // unchanged', good: 'val ordered = posts.sortedBy { it.createdAt }\nshow(ordered)\n// or, on a MutableList: posts.sortBy { it.createdAt }', why: 'Functions ending in <code>-ed</code> return a new list. The in-place versions are <code>sort</code>, <code>sortBy</code> and <code>sortWith</code>.' },
-    ],
-    terms: [
-      { term: 'Stable sort', def: 'A sort that keeps items with equal keys in their original relative order.' },
-      { term: 'Comparator', def: 'An object that decides the order of two items, built in Kotlin with compareBy and thenBy.' },
-      { term: 'TimSort', def: 'The merge-sort-based, stable sort the JVM uses for objects; it is fast on data that is already partly sorted.' },
-      { term: 'Partition', def: 'The quick sort step that puts smaller items left of a pivot and bigger items right of it.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Sort by artist, then by plays from high to low.', code: 'songs.sortedWith(\n    [[compareBy]]<Song> { it.artist }\n        .[[thenByDescending]] { it.plays }\n)', why: '<code>compareBy</code> sets the first key. <code>thenByDescending</code> breaks ties with the second, in reverse order.' },
-      { type: 'bug', prompt: 'The feed should show the newest posts first, but its order never changes. Tap the broken line.', code: 'fun showFeed(posts: MutableList<Post>) {\n    posts.sortedByDescending { it.createdAt }\n    adapter.submitList(posts)\n}', bug: 1, fix: '    posts.sortByDescending { it.createdAt }', why: '<code>sortedByDescending</code> returns a new list that is thrown away. <code>sortByDescending</code> sorts the mutable list in place.' },
-    ],
-    quiz: [
-      { q: 'What does “stable” mean for <code>sortedBy</code>?', options: ['It never throws', 'Items with equal keys keep their original order', 'It runs in O(n)'], a: 1, why: 'Stability is about ties: equal items do not swap places.' },
-      { q: 'Which sort is O(n log n) in the worst case and stable?', options: ['Quick sort', 'Merge sort', 'Selection sort'], a: 1, why: 'Merge sort always splits in half and merges with ties going left. Quick sort can hit O(n²) and is not stable.' },
-      { q: 'You only need the biggest number in a list. Best call?', options: ['sortedDescending().first()', 'maxOrNull()', 'sorted().last()'], a: 1, why: 'One pass, O(n), and no new list.' },
-      { q: '<code>listOf("Ken" to 2, "Omar" to 1, "Lena" to 2).sortedBy { it.second }</code>. What is the order of names?', options: ['Omar, Ken, Lena', 'Omar, Lena, Ken', 'Ken, Lena, Omar'], a: 0, why: 'sortedBy is stable. Ken and Lena both have 2, so they keep their input order: Ken before Lena.' },
-      { q: 'The quick sort from the lesson always picks the last item as the pivot. You give it an array that is already sorted. What happens?', options: ['It finishes in O(n), since nothing moves', 'It stays O(n log n)', 'It degrades to O(n²), because every partition splits off only one item'], a: 2, why: 'The pivot is the biggest item every time, so each partition leaves one side empty. That is n levels of O(n) work.' },
-    ],
-  });
-
-  // 8 ─────────────────────────────────────────────
-  const TREE = { 8: [4, 12], 4: [2, 6], 12: [10, 14], 2: [], 6: [], 10: [], 14: [] };
+  // A small binary search tree (8; 4, 12; 2, 6, 10, 14), drawn with graphSvg.
   const TREE_POS = [[8, 160, 26], [4, 85, 90], [12, 235, 90], [2, 40, 158], [6, 130, 158], [10, 190, 158], [14, 280, 158]];
   const treeSvg = name => graphSvg(TREE_POS.map(([id, x, y]) => ({ id, x, y, text: id })), [[8, 4], [8, 12], [4, 2], [4, 6], [12, 10], [12, 14]], { w: 320, ht: 182, r: 17, name });
-  const PARENT = { 4: 8, 12: 8, 2: 4, 6: 4, 10: 12, 14: 12 };
-
-  lessons.push({
-    id: 'trees',
-    title: 'Recursion and trees',
-    tagline: 'A tree is a node plus smaller trees, so recursive code follows its shape.',
-    level: 'intermediate',
-    body: `
-<p>A binary tree node holds a value and up to two children, and each child is a tree itself. So most tree code is recursive: handle the empty tree, call yourself on <code>left</code> and <code>right</code>, and combine the results.</p>
-<p>A recursive function needs a <em>base case</em> that stops it and a step that makes the problem smaller. Each call waits on the call stack until the calls it made return. That is depth-first search (DFS): go all the way down one branch before trying the next. Where you record the node gives the three orders: pre-order (before the children), in-order (between them) and post-order (after them).</p>
-<p>Breadth-first search (BFS) visits the tree level by level with a queue instead. Step through in-order on a small search tree below and watch the call stack. Because it is a binary search tree, in-order gives the values sorted.</p>`,
-    code: `class Node(val value: Int, val left: Node? = null, val right: Node? = null)
-
-fun inOrder(node: Node?, out: MutableList<Int>) {
-    if (node == null) return                 // base case
-    inOrder(node.left, out)
-    out += node.value                        // in-order: between the children
-    inOrder(node.right, out)
-}
-
-fun height(node: Node?): Int =
-    if (node == null) 0 else 1 + maxOf(height(node.left), height(node.right))
-
-fun levelOrder(root: Node?): List<Int> {
-    val out = mutableListOf<Int>()
-    val queue = ArrayDeque<Node>()
-    root?.let(queue::addLast)
-    while (queue.isNotEmpty()) {
-        val node = queue.removeFirst()
-        out += node.value
-        node.left?.let(queue::addLast)
-        node.right?.let(queue::addLast)
-    }
-    return out
-}`,
-    remember: 'Base case first, then recurse on smaller pieces. DFS uses the call stack; BFS uses a queue.',
-    visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'class Node(\n    val value: Int,\n    val left: Node? = null,\n    val right: Node? = null,\n)\nval out = mutableListOf<Int>()\nfun inOrder(node: Node?) {\n    if (node == null) return\n    inOrder(node.left)\n    out += node.value\n    inOrder(node.right)\n}\nval root = Node(2, Node(1), Node(3))\ninOrder(root)',
-            predict: {
-              q: 'At the moment 1 is added to <code>out</code>, how many <code>inOrder</code> calls are on the call stack?',
-              options: ['1', '2', '3'],
-              a: 1,
-              why: '<code>inOrder(2)</code> is still waiting for its left call to return, and <code>inOrder(1)</code> is running. The <code>inOrder(null)</code> call below it has already returned.',
-            },
-            frames: [
-              { say: 'A search tree of three nodes: 2 at the root, 1 on the left, 3 on the right. Watch the call stack go down and come back.' },
-              { line: [8, 14], stack: ['main()', 'inOrder(2)'], vars: { out: '[]' }, say: '<code>inOrder(root)</code> starts with node 2. It is not null, so the base case does not stop it.' },
-              { line: 9, stack: ['main()', 'inOrder(2)', 'inOrder(1)'], say: 'Before recording 2, it calls itself on the left child. <code>inOrder(2)</code> waits on the stack.' },
-              { line: 8, stack: ['main()', 'inOrder(2)', 'inOrder(1)', 'inOrder(null)'], say: 'Node 1 has no left child. <code>inOrder(null)</code> hits the base case and returns at once.' },
-              { line: 10, stack: ['main()', 'inOrder(2)', 'inOrder(1)'], vars: { out: '[1]' }, say: 'Back in <code>inOrder(1)</code>: record 1. In-order means between the two children.' },
-              { line: 11, stack: ['main()', 'inOrder(2)', 'inOrder(1)', 'inOrder(null)'], say: 'Its right child is null too: another base case. Then <code>inOrder(1)</code> is done and pops off.' },
-              { line: 10, stack: ['main()', 'inOrder(2)'], vars: { out: '[1, 2]' }, say: '<code>inOrder(2)</code> resumes right where it waited, and records 2.' },
-              { line: 11, stack: ['main()', 'inOrder(2)', 'inOrder(3)'], vars: { out: '[1, 2, 3]' }, say: 'The right child goes through the same steps: null on the left, record 3, null on the right.' },
-              { line: 14, stack: ['main()'], say: 'Every call has returned. <code>out</code> is <code>[1, 2, 3]</code>: in-order on a search tree gives the values sorted.' },
-            ],
-          });
-        },
-        play: `class Node(val value: Int, val left: Node? = null, val right: Node? = null)
-
-fun inOrder(node: Node?, out: MutableList<Int>) {
-    if (node == null) return                 // base case
-    inOrder(node.left, out)
-    out += node.value                        // between the children
-    inOrder(node.right, out)
-}
-
-fun preOrder(node: Node?): List<Int> =
-    if (node == null) emptyList() else listOf(node.value) + preOrder(node.left) + preOrder(node.right)
-
-fun height(node: Node?, depth: Int = 0): Int {
-    println("  ".repeat(depth) + "height(\${node?.value})")
-    return if (node == null) 0 else 1 + maxOf(height(node.left, depth + 1), height(node.right, depth + 1))
-}
-
-fun main() {
-    val root = Node(4, Node(2, Node(1), Node(3)), Node(6, right = Node(7)))
-    val sorted = mutableListOf<Int>().also { inOrder(root, it) }
-    println("in-order  $sorted")
-    println("pre-order \${preOrder(root)}")
-    println("height = \${height(root)}")
-    // In inOrder, move \`out += node.value\` above the left call: which order do you get?
-}`,
-    deeper: [
-      {
-        title: 'Search a binary search tree',
-        body: `<p>In a binary search tree, everything left of a node is smaller and everything right is bigger. Searching compares with the node and goes one way, dropping the whole other subtree, like binary search on an array. That is O(height): O(log n) if the tree is balanced, but O(n) if it has turned into a line, which happens when you insert values that are already sorted.</p>`,
-        visual(el) {
-          let target = 6;
-          const t = treeSvg('Search path in a binary search tree');
-          const p = player(el, {
-            top: picker('find', [{ src: '6', v: 6 }, { src: '14', v: 14 }, { src: '11', v: 11 }], it => { target = it.v; p.reset(); }),
-            view: t.root, speed: 800,
-            build() {
-              const fr = [{ path: [], msg: `contains(root, ${target})` }];
-              let n = 8;
-              const path = [];
-              while (n) {
-                path.push(n);
-                if (n === target) { fr.push({ path: [...path], found: n, msg: `${target} == ${n}. <span class="good">true</span> after ${path.length} comparisons.` }); return fr; }
-                const goLeft = target < n, next = TREE[n][goLeft ? 0 : 1];
-                fr.push({ path: [...path], msg: `${target} ${goLeft ? '&lt;' : '&gt;'} ${n}: go ${goLeft ? 'left' : 'right'}. The ${goLeft ? 'right' : 'left'} subtree is skipped.` });
-                n = next;
-              }
-              fr.push({ path: [...path], miss: true, msg: `${target} would be a child of ${path[path.length - 1]}, but that child is null. <span class="bad">false</span>` });
-              return fr;
-            },
-            paint(f) {
-              t.clear();
-              f.path.forEach((n, k) => {
-                const last = k === f.path.length - 1;
-                t.node(n, last ? (f.found ? 'dsa-ok' : f.miss ? 'dsa-bad' : 'dsa-hot') : 'dsa-on');
-                if (k) t.edge(f.path[k - 1], n, 'dsa-on');
-              });
-            },
-          });
-        },
-        code: `fun contains(node: Node?, target: Int): Boolean = when {
-    node == null -> false
-    target == node.value -> true
-    target < node.value -> contains(node.left, target)
-    else -> contains(node.right, target)
-}`,
-      },
-      {
-        title: 'Deep recursion and the stack',
-        body: `<p>Every call takes a frame on the thread’s stack. A tree shaped like a long line, say 100,000 nodes deep, makes the recursive version throw <code>StackOverflowError</code>. Three ways out: keep your own stack in an <code>ArrayDeque</code>; use <code>tailrec</code> when the recursive call is the very last thing the function does (not possible with two children); or wrap the function in the stdlib’s <code>DeepRecursiveFunction</code>, which keeps its stack on the heap.</p>`,
-        code: `// Pre-order with your own stack: no StackOverflowError
-fun preOrder(root: Node?): List<Int> {
-    val out = mutableListOf<Int>()
-    val stack = ArrayDeque<Node>()
-    root?.let(stack::addLast)
-    while (stack.isNotEmpty()) {
-        val node = stack.removeLast()
-        out += node.value
-        node.right?.let(stack::addLast)    // push right first so left comes out first
-        node.left?.let(stack::addLast)
-    }
-    return out
-}
-
-// Or keep the recursive shape and let the stdlib move the stack to the heap
-val depth = DeepRecursiveFunction<Node?, Int> { node ->
-    if (node == null) 0 else 1 + maxOf(callRecursive(node.left), callRecursive(node.right))
-}`,
-      },
-      {
-        title: 'Trees you already use',
-        body: `<p>An Android view hierarchy is a tree: a <code>ViewGroup</code> holds children, which may be groups too. Compose builds a tree of layout nodes. JSON, a file system and a navigation graph’s nested graphs are trees as well. Counting views is the same recursion as counting tree nodes.</p>`,
-        code: `import androidx.core.view.children
-
-fun countViews(view: View): Int =
-    if (view is ViewGroup) 1 + view.children.sumOf { countViews(it) } else 1`,
-      },
-    ],
-    mistakes: [
-      { title: 'No base case', bad: 'fun size(node: Node?): Int =\n    1 + size(node?.left) + size(node?.right)', good: 'fun size(node: Node?): Int =\n    if (node == null) 0 else 1 + size(node.left) + size(node.right)', why: 'Without a case that stops, the function calls itself with <code>null</code> forever and ends in <code>StackOverflowError</code>.' },
-      { title: 'Recursing on huge, unbalanced input', bad: 'fun depth(node: Node?): Int =\n    if (node == null) 0 else 1 + maxOf(depth(node.left), depth(node.right))\n// a 100,000-deep chain: StackOverflowError', good: 'val depth = DeepRecursiveFunction<Node?, Int> { node ->\n    if (node == null) 0\n    else 1 + maxOf(callRecursive(node.left), callRecursive(node.right))\n}', why: 'Recursion depth equals tree height. If the input can be deep, use an explicit stack or <code>DeepRecursiveFunction</code>.' },
-    ],
-    terms: [
-      { term: 'Recursion', def: 'A function that solves a problem by calling itself on smaller versions of it.' },
-      { term: 'Base case', def: 'The input a recursive function answers directly, without calling itself, so the recursion stops.' },
-      { term: 'DFS', def: 'Depth-first search: follow one branch to the bottom before backing up, using recursion or a stack.' },
-      { term: 'Binary search tree', def: 'A binary tree where every node’s left subtree holds smaller values and its right subtree bigger ones.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Count the nodes in a tree.', code: 'fun size(node: Node?): Int =\n    if (node == [[null]]) 0\n    else 1 + size(node.[[left]]) + size(node.right)', why: 'The empty tree has 0 nodes. Otherwise it is this node plus the size of each subtree.' },
-      { type: 'bug', prompt: '<code>levelOrder</code> should list the tree level by level, but the order is wrong. Tap the broken line.', code: 'fun levelOrder(root: Node?): List<Int> {\n    val out = mutableListOf<Int>()\n    val queue = ArrayDeque<Node>()\n    root?.let(queue::addLast)\n    while (queue.isNotEmpty()) {\n        val node = queue.removeLast()\n        out += node.value\n        node.left?.let(queue::addLast)\n        node.right?.let(queue::addLast)\n    }\n    return out\n}', bug: 5, fix: '        val node = queue.removeFirst()', why: 'Adding at the back and removing at the back is a stack, which gives a depth-first order. BFS needs a queue: take from the front.' },
-    ],
-    quiz: [
-      { q: 'In-order traversal of a binary search tree gives?', options: ['The values sorted ascending', 'The values level by level', 'The root last'], a: 0, why: 'Left subtree (smaller), then the node, then right subtree (bigger), at every level.' },
-      { q: 'What does every recursive function need?', options: ['A loop', 'A base case that stops it', 'A global variable'], a: 1, why: 'Without one it never stops calling itself.' },
-      { q: 'Which order records the root first?', options: ['Pre-order', 'In-order', 'Post-order'], a: 0, why: 'Pre-order records each node before its children, and the root is visited first.' },
-      { q: 'You build a binary search tree by inserting 1, 2, 3, 4, 5 in that order. What does <code>contains(5)</code> cost?', options: ['O(n), because the tree has become a line', 'O(log n), because it is a binary search tree', 'O(1)'], a: 0, why: 'Search costs O(height). Sorted inserts make every node a right child, so the height is n.' },
-      { q: 'A tree can be 100,000 levels deep and each node has two children. Which fix does NOT avoid the StackOverflowError?', options: ['Keep your own stack in an ArrayDeque', 'Mark the function <code>tailrec</code>', 'Wrap it in DeepRecursiveFunction'], a: 1, why: 'tailrec only works when the recursive call is the very last thing the function does. With two children, one call always has to come back first.' },
-    ],
-  });
-
-  // 9 ─────────────────────────────────────────────
-  const CITY = [
-    { id: 'ist', label: 'City A', x: 60, y: 26 }, { id: 'bur', label: 'City B', x: 62, y: 104 }, { id: 'izm', label: 'City C', x: 34, y: 186 },
-    { id: 'esk', label: 'City D', x: 160, y: 96 }, { id: 'ank', label: 'City E', x: 282, y: 40 }, { id: 'kon', label: 'City F', x: 258, y: 150 }, { id: 'ant', label: 'City G', x: 150, y: 196 },
-  ];
-  const ROADS = [['ist', 'bur'], ['ist', 'ank'], ['bur', 'izm'], ['bur', 'esk'], ['esk', 'ank'], ['esk', 'kon'], ['ank', 'kon'], ['izm', 'ant'], ['kon', 'ant']];
-  const NAME = Object.fromEntries(CITY.map(c => [c.id, c.label]));
-
-  lessons.push({
-    id: 'graphs',
-    title: 'Graphs',
-    tagline: 'Nodes and edges. Store them as an adjacency list, then walk them with BFS or DFS.',
-    level: 'advanced',
-    body: `
-<p>A graph is a set of nodes connected by edges: cities and roads, users and follows, Gradle modules and their dependencies. Unlike a tree, a graph can have cycles and many paths between two nodes, so you must remember which nodes you have already seen.</p>
-<p>The usual way to store one is an <em>adjacency list</em>: a map from each node to its neighbours. It takes O(V + E) memory, where V is the number of nodes and E the number of edges, and BFS or DFS over it is O(V + E) time.</p>
-<p>When every edge costs the same, BFS finds the shortest path: it reaches every node at distance 1 before any node at distance 2. Record each node’s <code>parent</code> when you first see it, then follow the parents back from the goal. Step through BFS from City A to City G on a made-up road map.</p>`,
-    code: `typealias Graph = Map<String, List<String>>
-
-fun graphOf(vararg roads: Pair<String, String>): Graph {
-    val adj = mutableMapOf<String, MutableList<String>>()
-    for ((a, b) in roads) {                          // undirected: add both ways
-        adj.getOrPut(a) { mutableListOf() }.add(b)
-        adj.getOrPut(b) { mutableListOf() }.add(a)
-    }
-    return adj
-}
-
-fun shortestPath(g: Graph, from: String, to: String): List<String>? {
-    val parent = mutableMapOf<String, String?>(from to null)
-    val queue = ArrayDeque(listOf(from))
-    while (queue.isNotEmpty()) {
-        val node = queue.removeFirst()
-        if (node == to) return generateSequence(to) { parent[it] }.toList().asReversed()
-        for (next in g[node].orEmpty()) {
-            if (next !in parent) {                   // first time seen
-                parent[next] = node
-                queue.addLast(next)
-            }
-        }
-    }
-    return null
-}`,
-    remember: 'Graphs have cycles, so keep a visited set. BFS gives shortest paths when every edge costs the same.',
-    visual(el) {
-      const g = graphSvg(CITY.map(c => ({ ...c, text: '' })), ROADS, { w: 320, ht: 215, r: 15, name: 'Road map of seven cities' });
-      const adj = {};
-      for (const [a, b] of ROADS) { (adj[a] = adj[a] || []).push(b); (adj[b] = adj[b] || []).push(a); }
-      const queue = h('div', { class: 'dsa-queue' });
-      player(el, {
-        view: [g.root, label('queue (front → back)'), queue, h('span', { class: 'dsa-stat' }, 'Numbers in the circles: distance from City A.')], speed: 700,
-        build() {
-          const dist = { ist: 0 }, par = {}, q = ['ist'];
-          const snap = o => ({ dist: { ...dist }, par: { ...par }, q: [...q], ...o });
-          const fr = [snap({ msg: 'Start: City A has distance 0 and is the only node in the queue.' })];
-          while (q.length) {
-            const n = q.shift();
-            if (n === 'ant') {
-              const path = []; let k = n; while (k) { path.push(k); k = par[k]; }
-              fr.push(snap({ cur: n, path, msg: `City G comes out of the queue at distance ${dist[n]}. Follow parents back: <b>${path.reverse().map(x => NAME[x]).join(' → ')}</b>.` }));
-              return fr;
-            }
-            fr.push(snap({ cur: n, msg: `removeFirst() → ${NAME[n]} (distance ${dist[n]}). Check its neighbours: ${adj[n].map(x => NAME[x]).join(', ')}.` }));
-            for (const m of adj[n]) {
-              if (dist[m] !== undefined) { fr.push(snap({ cur: n, look: m, seen: true, msg: `${NAME[m]} was already seen. Skip it: a shorter or equal path got there first.` })); continue; }
-              dist[m] = dist[n] + 1; par[m] = n; q.push(m);
-              fr.push(snap({ cur: n, look: m, msg: `${NAME[m]} is new: distance ${dist[m]}, parent ${NAME[n]}. addLast.` }));
-            }
-          }
-          return fr;
-        },
-        paint(f) {
-          g.clear();
-          for (const c of CITY) {
-            const cls = f.path ? (f.path.includes(c.id) ? 'dsa-ok' : 'dsa-dim') : c.id === f.cur ? 'dsa-hot' : c.id === f.look ? (f.seen ? 'dsa-bad' : 'dsa-on') : f.q.includes(c.id) ? 'dsa-on' : f.dist[c.id] !== undefined ? 'dsa-ok' : '';
-            g.node(c.id, cls);
-            g.text(c.id, f.dist[c.id] ?? '');
-            if (f.par[c.id] && !f.path) g.edge(f.par[c.id], c.id, 'dsa-on');
-          }
-          if (f.path) for (let k = 1; k < f.path.length; k++) g.edge(f.path[k - 1], f.path[k], 'dsa-ok');
-          if (f.look && !f.path) g.edge(f.cur, f.look, f.seen ? 'dsa-bad' : 'dsa-hot');
-          queue.replaceChildren(...(f.q.length ? f.q.map(x => pill(NAME[x], `dsa-sm ${x === f.look && !f.seen ? 'dsa-acc dsa-flash' : ''}`)) : [pill('empty', 'dsa-sm dsa-ghost')]));
-        },
-      });
-    },
-        predict: {
-          q: 'BFS looks at a neighbour it has already seen. What does it do?',
-          options: ['Adds it to the queue again', 'Skips it: an equal or shorter path got there first', 'Changes its parent to the current node'],
-          a: 1,
-          why: 'BFS sees nodes in order of distance, so the first time it reaches a node is along a shortest path. Later visits can only be as long or longer.',
-        },
-        play: `fun shortestPath(g: Map<String, List<String>>, from: String, to: String): List<String>? {
-    val parent = mutableMapOf<String, String?>(from to null)
-    val queue = ArrayDeque(listOf(from))
-    while (queue.isNotEmpty()) {
-        val node = queue.removeFirst()
-        if (node == to) return generateSequence(to) { parent[it] }.toList().asReversed()
-        for (next in g[node].orEmpty()) {
-            if (next !in parent) { parent[next] = node; queue.addLast(next) }   // first time seen
-        }
-    }
-    return null
-}
-
-fun main() {
-    val roads = listOf("A" to "B", "A" to "C", "B" to "D", "C" to "D", "D" to "E", "C" to "F", "F" to "G", "E" to "G")
-    val g = mutableMapOf<String, MutableList<String>>()
-    for ((a, b) in roads) {                  // undirected: add both ways
-        g.getOrPut(a) { mutableListOf() }.add(b)
-        g.getOrPut(b) { mutableListOf() }.add(a)
-    }
-    println(g)
-    println(shortestPath(g, "A", "G"))
-    // Remove "F" to "G" from the roads and run again
-}`,
-    deeper: [
-      {
-        title: 'Adjacency list or matrix',
-        body: `<p>An adjacency matrix is a V × V grid of booleans: <code>matrix[a][b]</code> says whether an edge exists. Checking one edge is O(1), but it always takes O(V²) memory, and listing a node’s neighbours is O(V). Most real graphs are sparse (each node has few neighbours), so the list wins. Use a matrix for small, dense graphs.</p>`,
-        code: `// Matrix: small, dense graphs
-val n = 4
-val matrix = Array(n) { BooleanArray(n) }
-matrix[0][1] = true
-matrix[1][0] = true
-
-// List: big, sparse graphs (most real ones)
-val adj = List(n) { mutableListOf<Int>() }
-adj[0].add(1)
-adj[1].add(0)`,
-      },
-      {
-        title: 'Cycle detection: modules that depend on each other',
-        body: `<p>Gradle refuses module dependencies that form a cycle. To detect one in a directed graph, run DFS and give each node a colour: <em>white</em> (not visited), <em>gray</em> (on the current DFS path), <em>black</em> (finished). Reaching a gray node means you walked in a circle back onto your own path: a cycle. Reaching a black node is fine; it was fully explored before.</p>`,
-        visual(el) {
-          const MODS = [
-            { id: 'app', label: ':app', x: 160, y: 22 }, { id: 'news', label: ':feature:news', x: 75, y: 90 }, { id: 'search', label: ':feature:search', x: 245, y: 90 },
-            { id: 'data', label: ':core:data', x: 75, y: 160 }, { id: 'ui', label: ':core:ui', x: 245, y: 160 }, { id: 'net', label: ':core:network', x: 160, y: 214 },
-          ];
-          const BASE = [['app', 'news'], ['app', 'search'], ['news', 'data'], ['news', 'ui'], ['search', 'data'], ['search', 'ui'], ['data', 'net']];
-          const LABEL = Object.fromEntries(MODS.map(m => [m.id, m.label]));
-          let withCycle = false;
-          const holder = h('div', {});
-          const path = h('div', { class: 'dsa-queue' });
-          let g;
-          const p = player(el, {
-            top: picker('graph', [{ src: 'no cycle', c: false }, { src: ':core:network -> :feature:news', c: true }], it => { withCycle = it.c; p.reset(); }),
-            view: [holder, label('current DFS path (gray)'), path], speed: 650,
-            build() {
-              const edges = withCycle ? [...BASE, ['net', 'news']] : BASE;
-              g = graphSvg(MODS.map(m => ({ ...m, text: '' })), edges, { w: 320, ht: 240, r: 13, directed: true, name: 'Module dependency graph' });
-              holder.replaceChildren(g.root);
-              const adj = {}; for (const [a, b] of edges) (adj[a] = adj[a] || []).push(b);
-              const color = {}, stack = [], fr = [];
-              const snap = o => fr.push({ color: { ...color }, stack: [...stack], ...o });
-              snap({ msg: 'Every module starts white. Start DFS at :app.' });
-              let found = null;
-              const visit = n => {
-                color[n] = 'gray'; stack.push(n);
-                snap({ cur: n, msg: `${LABEL[n]} turns gray: it is on the current path.` });
-                for (const m of adj[n] || []) {
-                  const c = color[m] || 'white';
-                  if (c === 'gray') { found = [n, m]; snap({ cur: n, edge: [n, m], bad: true, msg: `${LABEL[n]} → ${LABEL[m]}, and ${LABEL[m]} is gray. <span class="bad">Cycle:</span> ${stack.slice(stack.indexOf(m)).map(x => LABEL[x]).join(' → ')} → ${LABEL[m]}.` }); return true; }
-                  if (c === 'black') { snap({ cur: n, edge: [n, m], msg: `${LABEL[n]} → ${LABEL[m]}: already black (finished). No cycle through it, skip.` }); continue; }
-                  snap({ cur: n, edge: [n, m], msg: `${LABEL[n]} → ${LABEL[m]}: white, go deeper.` });
-                  if (visit(m)) return true;
-                }
-                color[n] = 'black'; stack.pop();
-                snap({ cur: n, msg: `${LABEL[n]} is finished: black.` });
-                return false;
-              };
-              if (!visit('app')) snap({ msg: '<span class="good">No gray node was ever reached again: no cycle.</span> Gradle can build these modules in order.' });
-              return fr;
-            },
-            paint(f) {
-              g.clear();
-              const cyc = f.bad ? f.stack.slice(f.stack.indexOf(f.edge[1])) : [];
-              for (const m of MODS) {
-                const c = f.color[m.id];
-                g.node(m.id, cyc.includes(m.id) ? 'dsa-bad' : m.id === f.cur ? 'dsa-hot' : c === 'gray' ? 'dsa-on' : c === 'black' ? 'dsa-ok' : '');
-              }
-              for (let k = 1; k < f.stack.length; k++) g.edge(f.stack[k - 1], f.stack[k], f.bad && cyc.includes(f.stack[k]) && cyc.includes(f.stack[k - 1]) ? 'dsa-bad' : 'dsa-on');
-              if (f.edge) g.edge(f.edge[0], f.edge[1], f.bad ? 'dsa-bad' : 'dsa-hot');
-              path.replaceChildren(...(f.stack.length ? f.stack.map(x => pill(LABEL[x], `dsa-sm ${cyc.includes(x) ? 'dsa-err' : 'dsa-acc'}`)) : [pill('empty', 'dsa-sm dsa-ghost')]));
-            },
-          });
-        },
-        code: `enum class Mark { WHITE, GRAY, BLACK }
-
-fun hasCycle(g: Map<String, List<String>>): Boolean {
-    val mark = mutableMapOf<String, Mark>().withDefault { Mark.WHITE }
-    fun visit(n: String): Boolean {
-        mark[n] = Mark.GRAY                          // on the current path
-        for (m in g[n].orEmpty()) {
-            when (mark.getValue(m)) {
-                Mark.GRAY -> return true             // back onto our own path: a cycle
-                Mark.WHITE -> if (visit(m)) return true
-                Mark.BLACK -> {}                     // finished earlier, nothing new
-            }
-        }
-        mark[n] = Mark.BLACK
-        return false
-    }
-    return g.keys.any { mark.getValue(it) == Mark.WHITE && visit(it) }
-}`,
-      },
-      {
-        title: 'Weighted edges need Dijkstra',
-        body: `<p>When edges have different costs, like minutes of driving, BFS is not enough: a path with more edges can still be cheaper. Dijkstra’s algorithm always expands the cheapest node found so far, using a priority queue. With <code>java.util.PriorityQueue</code> it runs in O((V + E) log V). It needs costs that are zero or positive.</p>`,
-        code: `fun cheapest(g: Map<String, List<Pair<String, Int>>>, from: String): Map<String, Int> {
-    val best = mutableMapOf(from to 0)
-    val queue = java.util.PriorityQueue<Pair<String, Int>>(compareBy { it.second })
-    queue.add(from to 0)
-    while (queue.isNotEmpty()) {
-        val (node, cost) = queue.poll()
-        if (cost > best.getValue(node)) continue          // an outdated entry
-        for ((next, w) in g[node].orEmpty()) {
-            val c = cost + w
-            if (c < (best[next] ?: Int.MAX_VALUE)) {
-                best[next] = c
-                queue.add(next to c)
-            }
-        }
-    }
-    return best
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'No visited set', bad: 'while (queue.isNotEmpty()) {\n    val node = queue.removeFirst()\n    for (next in g[node].orEmpty()) queue.addLast(next)\n}', good: 'val seen = mutableSetOf(start)\nwhile (queue.isNotEmpty()) {\n    val node = queue.removeFirst()\n    for (next in g[node].orEmpty()) if (seen.add(next)) queue.addLast(next)\n}', why: 'In an undirected graph, A lists B and B lists A, so without a visited set they add each other forever.' },
-      { title: 'Marking visited when you take a node out', bad: 'val node = queue.removeFirst()\nif (!seen.add(node)) continue\nfor (next in g[node].orEmpty()) queue.addLast(next)', good: 'val node = queue.removeFirst()\nfor (next in g[node].orEmpty()) {\n    if (seen.add(next)) queue.addLast(next)   // mark when you add\n}', why: 'Marking late lets the same node sit in the queue many times, which wastes time and memory. Mark it the moment you add it.' },
-    ],
-    terms: [
-      { term: 'Adjacency list', def: 'A graph stored as a map from each node to the list of its neighbours.' },
-      { term: 'Visited set', def: 'The nodes a search has already seen, kept so cycles don’t make it loop forever.' },
-      { term: 'Unweighted shortest path', def: 'The path with the fewest edges; BFS finds it because it explores in order of distance.' },
-      { term: 'Back edge', def: 'In a DFS, an edge to a node that is still on the current path; in a directed graph it means a cycle.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Add a node to the queue only the first time you see it.', code: 'for (next in g[node].orEmpty()) {\n    if (seen.[[add]](next)) queue.[[addLast]](next)\n}', why: '<code>add</code> returns <code>true</code> only if the node was not in the set yet, so the check and the marking happen in one call.' },
-      { type: 'bug', prompt: 'Every reachable city comes back with distance 1. Tap the broken line.', code: 'fun distances(g: Map<String, List<String>>, from: String): Map<String, Int> {\n    val dist = mutableMapOf(from to 0)\n    val queue = ArrayDeque(listOf(from))\n    while (queue.isNotEmpty()) {\n        val node = queue.removeFirst()\n        for (next in g[node].orEmpty()) {\n            if (next !in dist) {\n                dist[next] = dist.getValue(from) + 1\n                queue.addLast(next)\n            }\n        }\n    }\n    return dist\n}', bug: 7, fix: '                dist[next] = dist.getValue(node) + 1', why: 'A neighbour is one step further than the node you reached it from, not one step from the start.' },
-    ],
-    quiz: [
-      { q: 'Why does BFS find the shortest path in an unweighted graph?', options: ['It visits nodes in order of their distance from the start', 'It tries every possible path', 'It uses recursion'], a: 0, why: 'The queue hands out all distance-1 nodes before any distance-2 node, so the first time it reaches a node is along a shortest path.' },
-      { q: 'How much memory does an adjacency list need for V nodes and E edges?', options: ['O(V²)', 'O(V + E)', 'O(E²)'], a: 1, why: 'One entry per node plus one list item per edge (two for undirected edges).' },
-      { q: 'In DFS cycle detection, you reach a node that is still gray. What does it mean?', options: ['There is a cycle', 'It is a dead end', 'It is the shortest path'], a: 0, why: 'Gray nodes are on the current path, so you have walked back onto your own path.' },
-      { q: 'Each road has a driving time in minutes. You need the fastest route. Which algorithm fits?', options: ['BFS, it finds shortest paths', 'Dijkstra with a priority queue', 'DFS with a visited set'], a: 1, why: 'BFS counts edges, but a route with more roads can still take fewer minutes. Dijkstra always expands the cheapest node found so far.' },
-      { q: '<pre>val node = queue.removeFirst()\nif (!seen.add(node)) continue\nfor (n in g[node].orEmpty())\n  queue.addLast(n)</pre>The results are right, but it is slow on a dense graph. Why?', options: ['It should use a stack', 'removeFirst() is O(n)', 'Nodes are marked when taken out, so the same node can sit in the queue many times'], a: 2, why: 'Mark a node the moment you add it to the queue. Then each node is queued once.' },
-      { q: 'A social graph has 1,000,000 users who follow about 200 accounts each. How do you store it?', options: ['An adjacency list: O(V + E) memory', 'An adjacency matrix: O(1) edge checks are worth it', 'A list of all edges, scanned each time'], a: 0, why: 'A matrix would need 10¹² cells for a graph that has about 200 million edges. Sparse graphs fit an adjacency list.' },
-    ],
-  });
-
-  // 10 ────────────────────────────────────────────
-  lessons.push({
-    id: 'dp',
-    title: 'Dynamic programming',
-    tagline: 'Solve each small problem once, store the answer, and build the big one from it.',
-    level: 'advanced',
-    body: `
-<p>Dynamic programming (DP) works when a problem breaks into smaller versions of itself and those smaller versions repeat. Plain recursion solves the same subproblem again and again, which can take exponential time. DP solves each one once and stores the answer.</p>
-<p>There are two styles. <em>Memoization</em> is top-down: write the recursion, and cache results in a map so a repeated call returns at once. <em>Tabulation</em> is bottom-up: fill an array from the smallest case upward, so every value you need is already there when you need it.</p>
-<p>The demo fills a table for coin change: the fewest coins that make each amount, with coins 1, 3 and 4. For each amount, look back by each coin and take the best result plus one. Greedy (biggest coin first) gives 4 + 1 + 1 for 6; the table finds 3 + 3.</p>`,
-    code: `// Fewest coins that add up to amount, or -1.
-// Tabulation: O(amount × coins) time, O(amount) space.
-fun minCoins(coins: IntArray, amount: Int): Int {
-    val inf = Int.MAX_VALUE
-    val dp = IntArray(amount + 1) { inf }    // dp[a] = fewest coins for amount a
-    dp[0] = 0                                // base case: 0 coins make 0
-    for (a in 1..amount) {
-        for (c in coins) {
-            if (c <= a && dp[a - c] != inf) dp[a] = minOf(dp[a], dp[a - c] + 1)
-        }
-    }
-    return if (dp[amount] == inf) -1 else dp[amount]
-}`,
-    remember: 'Say what dp[i] means in one sentence, find how it builds from smaller i, set the base case, then fill in order.',
-    visual(el) {
-          Lab.ui.codeStepper(el, {
-            code: 'const val INF = Int.MAX_VALUE\nfun minCoins(cs: IntArray, n: Int): Int {\n    val dp = IntArray(n + 1) { INF }\n    dp[0] = 0\n    for (a in 1..n) for (c in cs) {\n        if (c > a || dp[a - c] == INF)\n            continue\n        dp[a] = minOf(dp[a], dp[a - c] + 1)\n    }\n    return dp[n]\n}\nminCoins(intArrayOf(1, 3, 4), 6)',
-            predict: {
-              q: 'When the loop reaches <code>a = 6</code>, which earlier cell gives the best answer?',
-              options: ['<code>dp[5]</code>, using coin 1', '<code>dp[3]</code>, using coin 3', '<code>dp[2]</code>, using coin 4'],
-              a: 1,
-              why: '<code>dp[3]</code> is 1 (a single 3), so 3 + 3 takes 2 coins. Going through <code>dp[5]</code> or <code>dp[2]</code> takes 3.',
-            },
-            frames: [
-              { say: 'Coins 1, 3 and 4, amount 6. <code>dp[a]</code> will hold the fewest coins that make amount <code>a</code>.' },
-              { line: [3, 4], stack: ['main()', 'minCoins(coins, 6)'], vars: { dp: '[0, ∞, ∞, ∞, ∞, ∞, ∞]' }, say: 'Every cell starts as ∞, meaning “no way found yet”. <code>dp[0] = 0</code>: zero coins make zero.' },
-              { line: 8, vars: { a: 1, dp: '[0, 1, ∞, ∞, ∞, ∞, ∞]' }, say: '<code>a = 1</code>: only coin 1 fits. <code>dp[0] + 1 = 1</code>.' },
-              { line: 8, vars: { a: 2, dp: '[0, 1, 2, ∞, ∞, ∞, ∞]' }, say: '<code>a = 2</code>: coin 1 again, <code>dp[1] + 1 = 2</code>.' },
-              { line: 8, vars: { a: 3, dp: '[0, 1, 2, 1, ∞, ∞, ∞]' }, say: '<code>a = 3</code>: coin 1 gives <code>dp[2] + 1 = 3</code>, coin 3 gives <code>dp[0] + 1 = 1</code>. Keep the smaller.' },
-              { line: 8, vars: { a: 4, dp: '[0, 1, 2, 1, 1, ∞, ∞]' }, say: '<code>a = 4</code>: coin 4 lands on <code>dp[0]</code>, so one coin.' },
-              { line: 8, vars: { a: 5, dp: '[0, 1, 2, 1, 1, 2, ∞]' }, say: '<code>a = 5</code>: coin 1 gives <code>dp[4] + 1 = 2</code>, coin 3 gives 3, coin 4 gives <code>dp[1] + 1 = 2</code>. Best is 2.' },
-              { line: 8, vars: { a: 6, dp: '[0, 1, 2, 1, 1, 2, 2]' }, say: '<code>a = 6</code>: coin 1 gives 3, coin 3 gives <code>dp[3] + 1 = 2</code>, coin 4 gives 3. Best is 2: 3 + 3.' },
-              { line: 10, stack: ['main()'], vars: { a: null }, out: '2', say: 'Each cell was solved once, from cells already filled. Greedy grabs 4 first and needs 3 coins.' },
-            ],
-          });
-        },
-        play: `fun minCoins(coins: IntArray, amount: Int): Int {
-    val inf = Int.MAX_VALUE
-    val dp = IntArray(amount + 1) { inf }    // dp[a] = fewest coins for amount a
-    dp[0] = 0
-    for (a in 1..amount) {
-        for (c in coins) if (c <= a && dp[a - c] != inf) dp[a] = minOf(dp[a], dp[a - c] + 1)
-    }
-    println("dp = \${dp.map { if (it == inf) "∞" else "$it" }}")
-    return if (dp[amount] == inf) -1 else dp[amount]
-}
-
-var calls = 0
-fun waysSlow(n: Int): Long { calls++; return if (n <= 1) 1 else waysSlow(n - 1) + waysSlow(n - 2) }
-
-val memo = HashMap<Int, Long>()
-fun waysMemo(n: Int): Long = if (n <= 1) 1 else memo.getOrPut(n) { waysMemo(n - 1) + waysMemo(n - 2) }
-
-fun main() {
-    println("fewest coins for 10: \${minCoins(intArrayOf(1, 3, 4), 10)}")
-    println("ways(30) = \${waysSlow(30)} after $calls calls")
-    println("memo ways(30) = \${waysMemo(30)} with \${memo.size} stored answers")
-    // Change the coins to intArrayOf(5, 10): which amounts become impossible?
-}`,
-    deeper: [
-      {
-        title: 'Memoization: climbing stairs',
-        body: `<p>How many ways can you climb <em>n</em> steps taking 1 or 2 at a time? The last move was either 1 step or 2, so <code>ways(n) = ways(n − 1) + ways(n − 2)</code>. Plain recursion asks for the same <code>ways(3)</code> over and over: 25 calls for n = 6, and the count grows exponentially. With a memo map, each value is computed once: 11 calls. Switch between the two and compare.</p>`,
-        visual(el) {
-          let memoOn = false;
-          const calls = h('div', { class: 'dsa-queue' });
-          const memo = h('div', { class: 'dsa-queue' });
-          const st = stats(['calls', 'memo hits']);
-          const p = player(el, {
-            top: picker('version', [{ src: 'waysPlain(6)', m: false }, { src: 'ways(6, memo)', m: true }], it => { memoOn = it.m; p.reset(); }),
-            view: [label('calls in order'), calls, label('memo'), memo, st], speed: 380,
-            build() {
-              const fr = [], list = [], m = {};
-              let hits = 0;
-              const snap = msg => fr.push({ list: list.map(x => ({ ...x })), m: { ...m }, hits, msg });
-              snap(`${memoOn ? 'ways(6, memo)' : 'waysPlain(6)'}: each chip below is one function call.`);
-              const ways = n => {
-                if (n <= 1) { list.push({ n, kind: 'base' }); snap(`ways(${n}) = 1: base case.`); return 1; }
-                if (memoOn && m[n] !== undefined) { hits++; list.push({ n, kind: 'hit' }); snap(`ways(${n}) is in the memo: ${m[n]}, no work.`); return m[n]; }
-                list.push({ n, kind: 'call' });
-                snap(`ways(${n}) = ways(${n - 1}) + ways(${n - 2})`);
-                const v = ways(n - 1) + ways(n - 2);
-                if (memoOn) { m[n] = v; snap(`Store ways(${n}) = ${v} in the memo.`); }
-                return v;
-              };
-              const v = ways(6);
-              snap(`ways(6) = ${v} after <b>${list.length} calls</b>.${memoOn ? ' Each value computed once: O(n).' : ' ways(2) alone ran 5 times. This is O(2ⁿ)-ish growth.'}`);
-              return fr;
-            },
-            paint(f) {
-              calls.replaceChildren(...(f.list.length ? f.list.map((c, k) => pill(c.n, `dsa-sm ${c.kind === 'hit' ? 'dsa-ok' : c.kind === 'base' ? 'dsa-ghost' : 'dsa-acc'} ${k === f.list.length - 1 ? 'dsa-flash' : ''}`)) : [pill('no calls yet', 'dsa-sm dsa-ghost')]));
-              const keys = Object.keys(f.m);
-              memo.replaceChildren(...(memoOn ? (keys.length ? keys.map(k => pill(`${k} → ${f.m[k]}`, 'dsa-sm dsa-ok')) : [pill('empty', 'dsa-sm dsa-ghost')]) : [pill('no memo in this version', 'dsa-sm dsa-ghost')]));
-              st.set('calls', f.list.length); st.set('memo hits', f.hits);
-            },
-          });
-        },
-        code: `// ways(n): how many ways to climb n steps taking 1 or 2 at a time
-fun waysPlain(n: Int): Long =
-    if (n <= 1) 1 else waysPlain(n - 1) + waysPlain(n - 2)               // exponential
-
-fun ways(n: Int, memo: MutableMap<Int, Long> = HashMap()): Long {
-    if (n <= 1) return 1
-    return memo.getOrPut(n) { ways(n - 1, memo) + ways(n - 2, memo) }  // O(n)
-}`,
-      },
-      {
-        title: 'Keep only what you need',
-        body: `<p>A tabulated DP often only reads the last row or the last few cells. Climbing stairs only needs the previous two values, so two variables replace the whole array: O(n) time, O(1) space. It is a common next step.</p>`,
-        code: `fun ways(n: Int): Long {
-    var prev = 1L   // ways(i - 2)
-    var cur = 1L    // ways(i - 1)
-    repeat(n - 1) {
-        val next = prev + cur
-        prev = cur
-        cur = next
-    }
-    return cur
-}`,
-      },
-      {
-        title: 'Spotting a DP problem',
-        body: `<p>Clues: “how many ways”, “fewest”, “most”, “can you reach”, a choice at each step, and a greedy idea that fails on a small example. Then work in four steps: define the <b>state</b> (what <code>dp[i]</code> or <code>dp[r][c]</code> means), the <b>transition</b> (how it builds from smaller states), the <b>base case</b>, and the <b>order</b> to fill. Grids are the classic 2D case.</p>`,
-        code: `// Paths from the top-left to the bottom-right cell, moving only right or down
-fun gridPaths(rows: Int, cols: Int): Long {
-    val dp = Array(rows) { LongArray(cols) { 1L } }    // first row and column: 1 way
-    for (r in 1 until rows) for (c in 1 until cols) {
-        dp[r][c] = dp[r - 1][c] + dp[r][c - 1]         // from above + from the left
-    }
-    return dp[rows - 1][cols - 1]
-}`,
-      },
-    ],
-    mistakes: [
-      { title: 'Greedy where DP is needed', bad: '// Take the biggest coin that fits, repeat\nfun greedyCoins(coins: IntArray, amount: Int): Int {\n    var left = amount\n    var count = 0\n    for (c in coins.sortedDescending()) { count += left / c; left %= c }\n    return if (left == 0) count else -1\n}\ngreedyCoins(intArrayOf(1, 3, 4), 6)   // 3 (4 + 1 + 1)', good: 'minCoins(intArrayOf(1, 3, 4), 6)      // 2 (3 + 3)', why: 'Greedy happens to work for some coin systems, but not for every set of coins. Test your greedy idea on a small example; if it fails, it is a DP problem.' },
-      { title: 'A memo that is created on every call', bad: 'fun ways(n: Int): Long {\n    val memo = HashMap<Int, Long>()   // new and empty each time\n    if (n <= 1) return 1\n    return memo.getOrPut(n) { ways(n - 1) + ways(n - 2) }\n}', good: 'fun ways(n: Int, memo: MutableMap<Int, Long> = HashMap()): Long {\n    if (n <= 1) return 1\n    return memo.getOrPut(n) { ways(n - 1, memo) + ways(n - 2, memo) }\n}', why: 'Each call gets its own empty map, so nothing is ever found in it and the run is as slow as plain recursion. Share one memo across all calls.' },
-    ],
-    terms: [
-      { term: 'Dynamic programming', def: 'Solving a problem by combining stored answers to smaller, overlapping subproblems.' },
-      { term: 'Memoization', def: 'Top-down DP: recursion plus a cache, so each subproblem is computed once.' },
-      { term: 'Tabulation', def: 'Bottom-up DP: filling a table from the base case upward in a loop.' },
-      { term: 'Overlapping subproblems', def: 'The same smaller problem showing up many times inside a recursion, which is what makes DP pay off.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Cache each result with <code>getOrPut</code>.', code: 'fun ways(n: Int, memo: MutableMap<Int, Long>): Long {\n    if (n <= 1) return [[1|1L]]\n    return memo.[[getOrPut]](n) { ways(n - 1, memo) + ways(n - 2, memo) }\n}', why: 'There is one way to climb 0 or 1 steps. <code>getOrPut</code> returns the stored value, or runs the lambda once and stores its result.' },
-      { type: 'bug', prompt: '<code>minCoins(intArrayOf(2), 3)</code> should return -1, but returns a huge negative number. Tap the broken line.', code: 'fun minCoins(coins: IntArray, amount: Int): Int {\n    val dp = IntArray(amount + 1) { Int.MAX_VALUE }\n    dp[0] = 0\n    for (a in 1..amount) {\n        for (c in coins) {\n            if (c <= a) dp[a] = minOf(dp[a], dp[a - c] + 1)\n        }\n    }\n    return if (dp[amount] == Int.MAX_VALUE) -1 else dp[amount]\n}', bug: 5, fix: '            if (c <= a && dp[a - c] != Int.MAX_VALUE) dp[a] = minOf(dp[a], dp[a - c] + 1)', why: '<code>dp[1]</code> is unreachable, so it stays <code>Int.MAX_VALUE</code>, and <code>+ 1</code> wraps it to <code>Int.MIN_VALUE</code>. Skip cells that are not reachable.' },
-    ],
-    quiz: [
-      { q: 'Memoization vs tabulation?', options: ['Memoization is top-down recursion with a cache; tabulation fills a table bottom-up', 'They are the same thing', 'Tabulation always uses recursion'], a: 0, why: 'Both store subproblem answers. They differ in direction and in whether recursion drives the order.' },
-      { q: 'Why is the plain recursive <code>ways(n)</code> slow?', options: ['Recursion is slow on Android', 'It solves the same subproblems many times', 'It uses Long'], a: 1, why: 'The number of calls grows exponentially because <code>ways(k)</code> is recomputed for every path that reaches it.' },
-      { q: 'Coins 1, 3 and 4. Fewest coins for 6?', options: ['2', '3', '6'], a: 0, why: '3 + 3. Greedy picks 4 + 1 + 1, which is 3 coins.' },
-      { q: '<pre>fun ways(n: Int): Long {\n  val memo = HashMap&lt;Int,Long&gt;()\n  if (n &lt;= 1) return 1\n  return memo.getOrPut(n) {\n    ways(n - 1) + ways(n - 2)\n  }\n}</pre>What is wrong?', options: ['It returns the wrong answer', 'Each call makes a new empty memo, so it is as slow as plain recursion', 'getOrPut cannot be called recursively'], a: 1, why: 'The answers are right, but nothing is ever found in a fresh map. Pass one shared memo through all calls.' },
-      { q: 'Which order does the lesson give for solving a DP problem?', options: ['Write the code, then find the base case, then name the state', 'Fill the table, then define the transition, then the state', 'Define the state, then the transition, then the base case, then the fill order'], a: 2, why: 'Say what dp[i] means first. The transition and base case follow from it, and the fill order makes sure every value you read is already there.' },
-      { q: '<code>gridPaths(3, 3)</code>: paths from the top-left to the bottom-right of a 3 × 3 grid, moving only right or down. What does it return?', options: ['6', '4', '9'], a: 0, why: 'The first row and column are 1. Then dp[1][1] = 2, dp[1][2] = 3, dp[2][1] = 3, and dp[2][2] = 3 + 3 = 6.' },
-    ],
-  });
-
-  // 11 ────────────────────────────────────────────
-  lessons.push({
-    id: 'interview',
-    title: 'Solving a problem step by step',
-    tagline: 'Clarify, try examples, start simple, improve, then test out loud.',
-    level: 'beginner',
-    body: `
-<p>How you get to the code matters as much as the code. A fixed routine keeps you from getting stuck, or from racing into the wrong solution. Five steps work for most problems.</p>
-<p><b>Clarify</b> the input and output: sizes, empty input, duplicates, character set. <b>Examples</b>: work one normal case by hand, plus an edge case. <b>Brute force</b>: say the simple solution and its Big-O, even if it is slow. <b>Optimize</b>: find the repeated work and remove it with a set, a map, two pointers, sorting or DP. <b>Test</b>: run your code on the examples line by line and fix bugs before anyone else finds them.</p>
-<p>Step through the five phases on a real question: <em>return the first character that appears only once in a string</em>.</p>`,
-    code: `// First character that appears exactly once, or null.
-// O(n) time, O(k) extra space for k distinct characters.
-fun firstUnique(s: String): Char? {
-    val counts = s.groupingBy { it }.eachCount()
-    return s.firstOrNull { counts.getValue(it) == 1 }
-}
-
-// The tests you say out loud
-check(firstUnique("swiss") == 'w')
-check(firstUnique("aabb") == null)
-check(firstUnique("") == null)
-check(firstUnique("éèé") == 'è')`,
-    remember: 'Clarify, examples, brute force, optimize, test. Say each step out loud before you code it.',
-    visual(el) {
-      const PH = ['Clarify', 'Examples', 'Brute force', 'Optimize', 'Test'];
-      const phases = PH.map(n => pill(n, 'dsa-ghost'));
-      const card = h('div', { class: 'dsa-card' });
-      const S = 'swiss';
-      player(el, {
-        view: [h('div', { class: 'dsa-row' }, phases), card], speed: 1600,
-        build() {
-          const fr = [
-            { p: -1, title: 'The question', html: '<p>“Given a string, return the first character that appears only once.”</p><p>Don’t start typing yet. Press Step.</p>', msg: 'Start every problem the same way.' },
-            { p: 0, title: 'Ask before you code', html: '<ul><li>What if no character is unique? <b>Return null.</b></li><li>Empty string? <b>Also null.</b></li><li>Only a–z, or any Unicode? <b>Any character.</b></li><li>How long can it be? <b>Up to 10⁵.</b></li></ul>', msg: 'Each answer changes the code: a nullable return type, and a map instead of an IntArray(26).' },
-            { p: 1, title: 'Work examples by hand', html: '<ul><li>"swiss" → s appears 3 times, <b>w once</b> → \'w\'</li><li>"aabb" → nothing unique → null</li><li>"" → null</li></ul>', msg: 'Writing examples first gives you test cases for later.' },
-            { p: 2, title: 'Say the simple version', html: '<p>For each character, count it in the whole string. First count of 1 wins.</p>', code: 'fun firstUnique(s: String): Char? =\n    s.firstOrNull { c -> s.count { it == c } == 1 }   // O(n²)', msg: 'Correct but O(n²): 10⁵ characters means up to 10¹⁰ steps. Say that out loud, then improve.' },
-            { p: 3, title: 'Remove the repeated work', html: '<p>The inner <code>count</code> scans the string again for every character. Count everything once in a map, then scan once.</p>', code: 'val counts = s.groupingBy { it }.eachCount()     // O(n)\nreturn s.firstOrNull { counts.getValue(it) == 1 }  // O(n)', msg: 'Two passes: O(n) time, O(k) space for k distinct characters.' },
-          ];
-          const counts = {};
-          for (let k = 0; k < S.length; k++) {
-            counts[S[k]] = (counts[S[k]] || 0) + 1;
-            fr.push({ p: 4, title: 'Trace "swiss": count pass', cells: { at: k, counts: { ...counts } }, html: '', msg: `counts['${S[k]}'] = ${counts[S[k]]}` });
-          }
-          for (let k = 0; k < S.length; k++) {
-            const one = counts[S[k]] === 1;
-            fr.push({ p: 4, title: 'Trace "swiss": scan pass', cells: { at: k, counts: { ...counts }, scan: true, hit: one }, html: '', msg: one ? `counts['${S[k]}'] == 1. <span class="good">return '${S[k]}'</span>, matching the example.` : `counts['${S[k]}'] == ${counts[S[k]]}, keep going.` });
-            if (one) break;
-          }
-          fr.push({ p: 5, title: 'Wrap up', html: '<ul><li>Run "aabb" and "": both null.</li><li>State the final cost: O(n) time, O(k) space.</li><li>Mention a trade-off: for only a–z, an <code>IntArray(26)</code> is faster than a map.</li></ul>', msg: 'Done. Every decision was made on purpose.' });
-          return fr;
-        },
-        paint(f) {
-          phases.forEach((ph, k) => { ph.className = `dsa-pill ${k < f.p ? 'dsa-ok' : k === f.p ? 'dsa-acc' : 'dsa-ghost'}`; });
-          const kids = [h('h4', {}, f.title)];
-          if (f.html) kids.push(h('div', { html: f.html }));
-          if (f.code) kids.push(h('div', { class: 'kt dsa-wrapk', html: hl(f.code) }));
-          if (f.cells) {
-            const c = f.cells;
-            kids.push(cellRow([...S].map((ch, k) => ({ v: ch, cls: k === c.at ? (c.scan ? (c.hit ? 'dsa-ok dsa-flash' : 'dsa-hot') : 'dsa-on') : k < c.at ? 'dsa-dim' : '' }))));
-            kids.push(h('div', { class: 'dsa-queue' }, Object.entries(c.counts).map(([ch, n]) => pill(`'${ch}' → ${n}`, `dsa-sm ${n === 1 ? 'dsa-ok' : ''}`))));
-          }
-          card.replaceChildren(...kids);
-        },
-      });
-    },
-        predict: {
-          q: 'The simple version calls <code>s.count { it == c }</code> once for every character. For a string of n characters, what does that cost?',
-          options: ['O(n)', 'O(n log n)', 'O(n²)'],
-          a: 2,
-          why: '<code>count</code> scans the whole string, and it runs once per character: n scans of n characters. Counting once into a map removes the repeated scan.',
-        },
-        play: `fun firstUniqueSlow(s: String): Char? = s.firstOrNull { c -> s.count { it == c } == 1 }   // O(n²)
-
-fun firstUnique(s: String): Char? {                                                        // O(n)
-    val counts = s.groupingBy { it }.eachCount()
-    return s.firstOrNull { counts.getValue(it) == 1 }
-}
-
-fun main() {
-    val tests = listOf("swiss" to 'w', "aabb" to null, "" to null, "abcab" to 'c')
-    for ((input, expected) in tests) {
-        val got = firstUnique(input)
-        val ok = got == expected && firstUniqueSlow(input) == expected
-        println("\\"$input\\" -> $got \${if (ok) "ok" else "WRONG"}")
-    }
-    val long = "ab".repeat(20_000) + "z"
-    println("long input -> \${firstUnique(long)}")
-    // Add a test of your own, like "aAa" to 'A': is 'a' the same character as 'A'?
-}`,
-    deeper: [
-      {
-        title: 'Questions worth asking',
-        body: `<p>Clarifying questions show care, and they often hide the trick of the problem. A short list to run through:</p>
-<ul><li><b>Size</b>: how big can the input get? That tells you whether O(n²) is acceptable.</li><li><b>Empty and tiny inputs</b>: what should happen with zero or one item?</li><li><b>Duplicates and order</b>: can values repeat? Is the input sorted?</li><li><b>Range</b>: negative numbers? Overflow? Only a–z or any Unicode?</li><li><b>Output</b>: return a value, an index, or all answers? What if there is no answer: <code>null</code>, <code>-1</code>, or an exception?</li></ul>`,
-      },
-      {
-        title: 'From brute force to better: clues to tools',
-        body: `<p>Most optimizations come from a handful of patterns. Match the clue in the problem to the tool. Pick a clue below.</p>`,
-        visual(el) {
-          const CLUES = [
-            { src: '"have I seen this before?"', t: 'HashSet / HashMap', why: 'Turns a scan inside a loop into an O(1) lookup.', l: 'hashing' },
-            { src: '"sorted array, find a pair"', t: 'Two pointers', why: 'Move left or right by comparing the sum to the target: O(n).', l: 'two-pointers' },
-            { src: '"best range of k items"', t: 'Sliding window', why: 'Update the window as it moves instead of recomputing it.', l: 'two-pointers' },
-            { src: '"sorted, find a value fast"', t: 'Binary search', why: 'Halve the range each check: O(log n).', l: 'binary-search' },
-            { src: '"fewest steps / moves"', t: 'BFS', why: 'Explores in order of distance, so the first hit is the shortest.', l: 'graphs' },
-            { src: '"matching brackets, undo, nearest bigger"', t: 'Stack', why: 'The most recent open item is the one that matters.', l: 'stacks-queues' },
-            { src: '"how many ways / fewest coins"', t: 'Dynamic programming', why: 'Overlapping subproblems: store each answer once.', l: 'dp' },
-          ];
-          const o = out('Pick a clue.');
-          const btns = CLUES.map((c, k) => cmd(c.src, () => { press(btns, btns[k]); say(o, `<span class="good">${c.t}</span> <span class="muted">→</span> ${c.why} <a href="#cs.${c.l}">Review the lesson</a>`); }));
-          el.append(h('div', { class: 'controls' }, btns), o);
-        },
-      },
-      {
-        title: 'Test like a debugger',
-        body: `<p>After writing the code, don’t say “I think it works”. Walk through it with a small example, tracking each variable as you go. Then try the edge cases you collected: empty input, one item, all items equal, the biggest size, negative numbers. Finding your own bug now is much cheaper than finding it later.</p>`,
-        code: `// Say the trace out loud for "aab":
-// counts = {a=2, b=1}
-// scan: 'a' -> 2, skip; 'a' -> 2, skip; 'b' -> 1, return 'b'
-check(firstUnique("aab") == 'b')
-check(firstUnique("a") == 'a')            // one item
-check(firstUnique("zzzz") == null)        // all the same`,
-      },
-    ],
-    mistakes: [
-      { title: 'Coding before clarifying', bad: '// Heard "first unique character" and started typing\nfun firstUnique(s: String): Char =\n    s.first { c -> s.count { it == c } == 1 }   // throws on "aabb"', good: '// Asked: what if nothing is unique? -> return null\nfun firstUnique(s: String): Char? =\n    s.firstOrNull { c -> s.count { it == c } == 1 }', why: 'One question about the no-answer case changes the return type and avoids a crash. It also gets you used to thinking about edge cases.' },
-      { title: 'Forgetting the small edge cases', bad: 'fun maxGap(a: IntArray): Int =\n    (1 until a.size).maxOf { a[it] - a[it - 1] }   // throws for size < 2', good: 'fun maxGap(a: IntArray): Int? =\n    (1 until a.size).maxOfOrNull { a[it] - a[it - 1] }', why: '<code>maxOf</code> throws <code>NoSuchElementException</code> on an empty range. Empty and one-item inputs are the first tests to try.' },
-    ],
-    terms: [
-      { term: 'Brute force', def: 'The simplest correct solution, usually trying every option, used as a starting point.' },
-      { term: 'Edge case', def: 'An input at the boundary, like empty, one item, or the maximum size, where bugs tend to hide.' },
-      { term: 'Trade-off', def: 'Gaining one thing, like speed, by giving up another, like memory or simplicity.' },
-    ],
-    challenges: [
-      { type: 'blank', prompt: 'Finish the O(n) solution: count once, then scan once.', code: 'fun firstUnique(s: String): Char? {\n    val counts = s.[[groupingBy]] { it }.eachCount()\n    return s.[[firstOrNull]] { counts.getValue(it) == 1 }\n}', why: '<code>groupingBy { it }.eachCount()</code> counts in one pass. <code>firstOrNull</code> returns <code>null</code> when no character matches.' },
-      { type: 'bug', prompt: '<code>firstUnique("aabb")</code> should return null, but it crashes. Tap the broken line.', code: 'fun firstUnique(s: String): Char? {\n    val counts = HashMap<Char, Int>()\n    for (c in s) counts[c] = (counts[c] ?: 0) + 1\n    return s.first { counts[it] == 1 }\n}', bug: 3, fix: '    return s.firstOrNull { counts[it] == 1 }', why: '<code>first</code> throws <code>NoSuchElementException</code> when nothing matches. The function promises <code>Char?</code>, so use <code>firstOrNull</code>.' },
-    ],
-    quiz: [
-      { q: 'What should you do first when you get a problem?', options: ['Write the optimal code', 'Clarify the inputs, outputs and edge cases', 'Pick the fastest language'], a: 1, why: 'Questions about size, empty input and the no-answer case shape everything after.' },
-      { q: 'Why say the brute force solution out loud?', options: ['It gives a correct baseline and a Big-O to improve on', 'Slow code is the goal', 'It is always the final answer'], a: 0, why: 'A working baseline shows you can solve it, and its cost points at the repeated work to remove.' },
-      { q: 'The input is sorted and you need a pair with a given sum. Which tool fits?', options: ['Two pointers', 'Dynamic programming', 'A stack'], a: 0, why: 'Sorted input lets you move one pointer or the other based on the sum, in O(n).' },
-      { q: 'Which order is the five-step routine?', options: ['Brute force, clarify, optimize, examples, test', 'Clarify, examples, brute force, optimize, test', 'Examples, optimize, clarify, test, brute force'], a: 1, why: 'Clarifying first can change the problem, examples check your understanding, and the brute force gives a baseline to improve before you test.' },
-      { q: '<code>fun maxGap(a: IntArray) = (1 until a.size).maxOf { a[it] - a[it - 1] }</code>. What does <code>maxGap(intArrayOf(5))</code> do?', options: ['Returns 0', 'Returns 5', 'Throws NoSuchElementException'], a: 2, why: 'With one item the range 1 until 1 is empty, and maxOf throws on an empty range. One-item and empty inputs are the first tests to try.' },
-    ],
-  });
 
   Lab.addTrack({
     id: 'cs',
@@ -2298,6 +150,1495 @@ check(firstUnique("zzzz") == null)        // all the same`,
     description: 'Big-O, the core data structures and the classic algorithm patterns, in Kotlin, to write faster code and solve problems with confidence.',
     requires: ['kotlin'],
     css,
-    lessons,
+    lessons: [
+      {
+        id: 'big-o',
+        title: 'How fast is it?',
+        tagline: 'Count how the steps grow when the list grows.',
+        goals: ['Count the steps a piece of code takes as its list grows', 'Tell O(1), O(n) and O(n²) apart', 'Spot the loop inside a loop that makes code slow'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>A search in a notes app feels instant with 20 notes. Will the same code still feel instant with 20,000? Seconds don’t help much here, because they change from phone to phone. So programmers count <em>steps</em> instead: how many times the code looks at an item.</p>
+<p><em>Big O</em> is a short way to say how the number of steps grows when the list grows. The letter n stands for how many items there are. O(1), read “O of 1”, means the same number of steps however long the list is: <code>guests[0]</code> goes straight to the first item. O(n) means one step per item: a <code>for</code> loop looking for a name may have to check every guest, so twice the guests means twice the steps.</p>
+<p>Put a loop inside a loop over the same list and you get O(n²), “n squared”: for each of the n items, the inner loop takes n steps, n × n in total. Twice the items, four times the steps. With 10 items you won’t notice. With 100,000, this is the code that makes an app freeze.</p>
+<p>Big O keeps only the big picture. Two loops one after the other take 2n steps, and that is still O(n): it still grows in a straight line. Only a loop <em>inside</em> a loop multiplies.</p>`,
+        visual(el) {
+          const rows = [['O(1)', () => 1, ''], ['O(n)', n => n, 'dsa-f-warm'], ['O(n²)', n => n * n, 'dsa-f-err']];
+          const fills = [], nums = [];
+          const nLabel = h('b', {}, '10');
+          const meter = h('div', { class: 'dsa-meter' }, rows.map(([name, , cls], k) => {
+            fills[k] = h('div', { class: `dsa-fill ${cls}` });
+            nums[k] = h('span', { class: 'dsa-num' }, '');
+            return [h('span', {}, name), h('div', { class: 'dsa-track' }, fills[k]), nums[k]];
+          }));
+          const view = h('div', { class: 'dsa-stage' },
+            h('div', { class: 'dsa-row' }, label('names in the list'), h('span', { class: 'dsa-stat' }, 'n = ', nLabel)),
+            meter,
+            h('span', { class: 'dsa-stat' }, 'Steps for: reading guests[0], searching for the last name, a loop inside a loop.'));
+          const fmt = v => v.toLocaleString('en-US');
+          Lab.ui.player(el, {
+            stage: h('div', { class: 'ui-stage' }, view),
+            predict: {
+              q: 'At n = 40, the loop inside a loop takes 1,600 steps. How many at n = 80?',
+              options: ['3,200', '6,400', '1,680'],
+              a: 1,
+              why: 'Twice the items means n × n gets four times bigger: 80 × 80 = 6,400.',
+            },
+            frames: [
+              { n: 10, say: '10 names. Reading the first one: 1 step. Searching for the last one: 10 steps. A loop inside a loop: 10 × 10 = 100 steps.' },
+              { n: 20, say: 'Twice the names. The search takes twice the steps, 20. The loop inside a loop takes four times as many, 400.' },
+              { n: 40, say: 'Doubled again: 40 and 1,600. Reading <code>guests[0]</code> still takes 1 step. That is O(1).' },
+              { n: 80, say: '80 names: the search grows in a straight line, O(n). The loop inside a loop shoots up to 6,400, O(n²). With 80,000 names it would be 6,400,000,000 steps.' },
+            ],
+            draw(f) {
+              nLabel.textContent = String(f.n);
+              rows.forEach(([, fn], k) => { const v = fn(f.n); fills[k].style.width = `${(v / 6400) * 100}%`; nums[k].textContent = fmt(v); });
+            },
+          });
+        },
+        code: `fun main() {
+    val guests = listOf("Ada", "Sam", "Lin", "Noor")
+    println(guests[0])            // Ada. O(1): one step, however long the list
+
+    var steps = 0
+    for (guest in guests) {       // O(n): one step per guest
+        steps++
+    }
+    println(steps)                // 4
+
+    var pairSteps = 0
+    for (a in guests) {           // O(n²): for each guest...
+        for (b in guests) {       // ...look at every guest again
+            pairSteps++
+        }
+    }
+    println(pairSteps)            // 16
+}`,
+        play: `fun makeList(n: Int): List<Int> {
+    val items = mutableListOf<Int>()
+    for (i in 1..n) {
+        items.add(i)
+    }
+    return items
+}
+
+fun stepsToFind(items: List<Int>, target: Int): Int {
+    var steps = 0
+    for (x in items) {
+        steps++
+        if (x == target) {
+            return steps
+        }
+    }
+    return steps
+}
+
+fun stepsForPairs(items: List<Int>): Int {
+    var steps = 0
+    for (a in items) {
+        for (b in items) {
+            steps++
+        }
+    }
+    return steps
+}
+
+fun main() {
+    for (n in listOf(10, 20, 40, 80)) {
+        val items = makeList(n)
+        val search = stepsToFind(items, n)
+        val pairs = stepsForPairs(items)
+        println("n = $n: search $search steps, pairs $pairs steps")
+    }
+    // Add 160 to the list. Before you run it, guess both numbers.
+}`,
+        remember: 'Count the steps as the list grows. No loop: O(1). One loop: O(n). A loop inside a loop: O(n²).',
+        mistakes: [
+          { title: 'Calling two loops in a row O(n²)', bad: 'for (p in prices) {\n    total += p\n}\nfor (p in prices) {\n    count++\n}\n// "Two loops, so O(n²)"', good: 'for (p in prices) {\n    total += p\n}\nfor (p in prices) {\n    count++\n}\n// n + n = 2n steps: still O(n)\n\nfor (a in prices) {\n    for (b in prices) {\n        count++\n    }\n}\n// n × n steps: this one is O(n²)', why: 'The first code is fine; only the reading was wrong. Loops one after the other add up: n + n. Only a loop inside a loop multiplies: n × n.' },
+        ],
+        terms: [
+          { term: 'Big O', def: 'A short way to say how the number of steps grows as the number of items, n, grows.' },
+          { term: 'O(1)', def: 'The same number of steps however many items there are, like reading <code>list[0]</code>.' },
+          { term: 'O(n)', def: 'One step per item: twice the items, twice the steps. One loop over the list.' },
+          { term: 'O(n²)', def: 'n × n steps: twice the items, four times the steps. A loop inside a loop over the same list.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Write the Big O of each part in its comment. Use n for the number of names.', code: 'println(names[0])        // O([[1]])\nfor (name in names) {    // O([[n]])\n    println(name)\n}', why: 'Reading one index is one step, whatever the size. The loop runs once per name.' },
+          { type: 'bug', prompt: 'This should count one step per song and print 4. It prints 1. Tap the wrong line.', code: 'val songs = listOf("Intro", "Rain", "Night Bus", "Outro")\nvar steps = 0\nfor (song in songs) {\n    steps = 1\n}\nprintln(steps)', bug: 3, fix: '    steps++', why: '<code>steps = 1</code> puts 1 in the box every round. <code>steps++</code> adds one each round: 4 rounds, 4 steps.' },
+        ],
+        quiz: [
+          { q: 'An O(n) search takes 1,000 steps on 1,000 names. About how many on 2,000 names?', options: ['2,000', '4,000', '1,001'], a: 0, why: 'O(n) grows in a straight line: twice the items, twice the steps.' },
+          { q: 'A loop inside a loop goes over the same 10 items. How many times does the inner part run?', options: ['10', '20', '100'], a: 2, why: 'For each of the 10 items, the inner loop runs 10 times: 10 × 10 = 100. That is O(n²).' },
+          { q: 'Which takes the same number of steps for 5 items and for 5 million?', options: ['<code>list[0]</code>', 'A <code>for</code> loop that prints every item'], a: 0, why: 'Reading one index is one step: O(1). The loop runs once per item: O(n).' },
+        ],
+        docs: [['Collections overview', 'https://kotlinlang.org/docs/collections-overview.html']],
+      },
+
+      {
+        id: 'arrays-lists',
+        title: 'Arrays and lists',
+        tagline: 'Why reading item 5,000 is instant, but adding at the front is not.',
+        goals: ['Make a fixed-size array with <code>IntArray</code> and <code>intArrayOf</code>', 'Explain why <code>list[i]</code> is O(1)', 'Explain why <code>add(0, x)</code> and <code>removeAt(0)</code> are O(n)'],
+        level: 'beginner', introduces: ['IntArray', 'intArrayOf', 'ArrayList', 'removeAt'],
+        body: `
+<p>A playlist has 100,000 songs. Jumping to song 50,000 is instant, but putting a new song at the very top makes the phone do 100,000 moves. Both come from how a list is stored.</p>
+<p>Underneath is an <em>array</em>: a row of slots side by side in memory, made once with a fixed number of slots. <code>IntArray(5)</code> makes 5 slots for <code>Int</code> values, all starting at 0, and <code>intArrayOf(90, 75, 82)</code> makes one holding those values. You read and write slots like list items: <code>scores[2] = 82</code>. Because the slots sit side by side, the computer can work out where slot 2 is and go straight there: O(1). An array’s size never changes, so it has no <code>add</code>.</p>
+<p>A <code>mutableListOf</code> list is an <code>ArrayList</code>: a list that keeps its items in an array with spare slots at the end. <code>add(x)</code> fills the next free slot, so nothing moves. (When the spare slots run out, it makes a bigger array and copies everything over. That happens rarely, so adding at the end stays cheap.)</p>
+<p>The front is different. <code>add(0, x)</code> puts <code>x</code> at index 0, so every item must first move one slot to the right. <code>removeAt(0)</code> removes the item at index 0, and every item after it moves one slot left. With n items, that is n moves: O(n).</p>`,
+        visual(el) {
+          const row = h('div', {});
+          const view = h('div', { class: 'dsa-stage' }, label('the array inside shopping'), row);
+          Lab.ui.player(el, {
+            stage: h('div', { class: 'ui-stage' }, view),
+            predict: {
+              q: '<code>shopping.add(0, "bread")</code> needs slot 0 to be free. How many items have to move?',
+              options: ['None', 'One', 'All four'],
+              a: 2,
+              why: 'Every item shifts one slot to the right to open a gap at the front.',
+            },
+            frames: [
+              { a: ['milk', 'eggs', 'rice', 'tea', null], say: '<code>shopping</code> holds 4 items in an array with a free slot at the end. Now: <code>shopping.add(0, "bread")</code>.' },
+              { a: ['milk', 'eggs', 'rice', 'tea', 'tea'], to: 4, from: 3, say: 'Start at the end: tea is copied from slot 3 to slot 4.' },
+              { a: ['milk', 'eggs', 'rice', 'rice', 'tea'], to: 3, from: 2, say: 'rice moves from slot 2 to slot 3, over the old copy of tea.' },
+              { a: ['milk', 'eggs', 'eggs', 'rice', 'tea'], to: 2, from: 1, say: 'eggs moves from slot 1 to slot 2.' },
+              { a: ['milk', 'milk', 'eggs', 'rice', 'tea'], to: 1, from: 0, say: 'milk moves from slot 0 to slot 1. Slot 0 can be overwritten now.' },
+              { a: ['bread', 'milk', 'eggs', 'rice', 'tea'], to: 0, done: true, say: 'bread goes into slot 0. 4 moves for 4 items: O(n). <code>shopping.add("bread")</code> at the end would have moved nothing.' },
+            ],
+            draw(f) {
+              row.replaceChildren(cellRow(f.a.map((v, k) => ({
+                v: v ?? '',
+                cls: v == null ? 'dsa-empty' : k === f.to ? (f.done ? 'dsa-ok dsa-flash' : 'dsa-hot dsa-flash') : k === f.from ? 'dsa-dim' : '',
+                tag: k === f.to ? (f.done ? 'new' : 'moved') : '',
+              }))));
+            },
+          });
+        },
+        code: `fun main() {
+    val temps = IntArray(3)             // 3 slots, all 0
+    temps[0] = 12
+    temps[2] = 9
+    println(temps[1])                   // 0
+    println(temps.size)                 // 3
+
+    val scores = intArrayOf(90, 75, 82) // an array with values in it
+    println(scores[2])                  // 82. O(1): straight to slot 2
+
+    val queue = mutableListOf("Ada", "Sam", "Lin")   // an ArrayList
+    queue.add("Noor")                   // [Ada, Sam, Lin, Noor]. At the end: nothing moves
+    queue.add(0, "Ben")                 // [Ben, Ada, Sam, Lin, Noor]. O(n): 4 items move right
+    queue.removeAt(0)                   // [Ada, Sam, Lin, Noor]. O(n): 4 items move left
+    println(queue)                      // [Ada, Sam, Lin, Noor]
+}`,
+        play: `fun movesToAddAtFront(size: Int): Int {
+    val slots = IntArray(size + 1)   // size items, plus one free slot at the end
+    var moves = 0
+    for (i in size downTo 1) {
+        slots[i] = slots[i - 1]      // move one item a slot to the right
+        moves++
+    }
+    slots[0] = 99                    // the front slot is free now
+    return moves
+}
+
+fun main() {
+    val shopping = mutableListOf("milk", "eggs", "rice")
+    shopping.add("tea")              // at the end: nothing moves
+    shopping.add(0, "bread")         // at the front: every item moves one slot
+    println(shopping)
+
+    for (n in listOf(10, 100, 1000)) {
+        println("Add at the front of $n items: \${movesToAddAtFront(n)} moves")
+    }
+    // Try 10000. How many moves do you expect?
+}`,
+        remember: 'Reading by index is O(1). Adding at the end moves nothing. Adding or removing at the front moves every item: O(n).',
+        mistakes: [
+          { title: 'Trying to add to an array', bad: 'val scores = intArrayOf(90, 75)\nscores.add(82)   // Unresolved reference \'add\'.', good: 'val scores = mutableListOf(90, 75)\nscores.add(82)   // [90, 75, 82]', why: 'An array has a fixed number of slots. When the number of items changes, use a list.' },
+        ],
+        terms: [
+          { term: 'array', def: 'A fixed number of slots side by side in memory. Reading any slot by index is O(1).' },
+          { term: 'IntArray', def: 'An array of <code>Int</code>s. <code>IntArray(5)</code> makes 5 slots holding 0; <code>intArrayOf(1, 2)</code> makes one with those values.' },
+          { term: 'ArrayList', def: 'The list <code>mutableListOf</code> gives you: an array with spare slots that grows when it is full.' },
+          { term: 'removeAt()', def: '<code>list.removeAt(i)</code> removes the item at index <code>i</code>; the items after it move one slot left.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make an array with one slot per day of the week, and set Monday’s temperature.', code: 'val temps = [[IntArray]](7)\ntemps[0] = 12\nprintln(temps.[[size]])   // 7', why: '<code>IntArray(7)</code> makes 7 slots, all 0. <code>size</code> works on arrays like on lists.' },
+          { type: 'bug', prompt: 'This should print 247, but it crashes with an out-of-bounds error. Tap the wrong line.', code: 'fun main() {\n    val scores = intArrayOf(90, 75, 82)\n    var total = 0\n    for (i in 0..scores.size) {\n        total += scores[i]\n    }\n    println(total)\n}', bug: 3, fix: '    for (i in scores.indices) {', why: '<code>0..scores.size</code> includes 3, one past the last slot. <code>indices</code> is <code>0..2</code> here.' },
+        ],
+        quiz: [
+          { q: 'A list holds 1,000 items. How many items move when you call <code>add(0, x)</code>?', options: ['0', '1', '1,000'], a: 2, why: 'Every item shifts one slot right to make room at index 0. That is O(n).' },
+          { q: 'What does <code>IntArray(4)</code> hold?', options: ['Four slots, all 0', 'Nothing: its size is 0', 'One slot holding 4'], a: 0, why: 'The number is how many slots to make. Each <code>Int</code> slot starts at 0.' },
+          { q: 'Which one is O(1) on a list of n items?', options: ['<code>list[500]</code>', '<code>list.removeAt(0)</code>'], a: 0, why: 'Reading an index goes straight to the slot. Removing at the front moves every item after it.' },
+        ],
+        docs: [['Arrays', 'https://kotlinlang.org/docs/arrays.html'], ['List-specific operations', 'https://kotlinlang.org/docs/list-operations.html']],
+      },
+
+      {
+        id: 'hashing',
+        title: 'Hash maps',
+        tagline: 'How a map finds a key without looking through them all.',
+        goals: ['Explain how a hash code picks a bucket', 'Say what a collision is and why lookups stay fast', 'Use <code>HashMap</code>, and know that <code>mapOf</code> works the same way'],
+        level: 'beginner', introduces: ['hashCode', 'HashMap'],
+        body: `
+<p>A phone book app holds a million names. <code>ages["Ada"]</code> comes back instantly, yet a loop through a million names would take a million steps. A map doesn’t search. It works out where Ada must be.</p>
+<p>The trick is <em>hashing</em>. Every key can turn itself into a number, its <em>hash code</em>: <code>"Ada".hashCode()</code> is 65662, and it is the same every time. The map keeps an array of <em>buckets</em>. With 8 buckets, the remainder <code>65662 % 8</code> is 6, so Ada’s pair goes into bucket 6. To find Ada later, the map does the same calculation and goes straight to bucket 6: no searching, O(1).</p>
+<p>Two keys can land in the same bucket. That is a <em>collision</em>: <code>"Sam"</code> and <code>"Omar"</code> both land in bucket 7. The bucket keeps both pairs, and a lookup checks the few keys in it with <code>==</code>. The map adds more buckets as it fills up, so buckets stay short and lookups stay O(1) on average.</p>
+<p>Kotlin’s <code>HashMap&lt;String, Int&gt;()</code> is exactly this. The maps you have made with <code>mapOf</code> and <code>mutableMapOf</code> are a <code>LinkedHashMap</code>: a hash map that also remembers the order you added keys. (A real hash map mixes the hash code a little more before picking a bucket, but the idea is the same.)</p>`,
+        visual(el) {
+          const B = 8;
+          const calc = h('div', { class: 'dsa-cmp' });
+          const grid = h('div', {});
+          const view = h('div', { class: 'dsa-stage' }, calc, label('8 buckets'), grid);
+          const ada = ['Ada', 6], sam = ['Sam', 7], lin = ['Lin', 1], noor = ['Noor', 4], omar = ['Omar', 7];
+          Lab.ui.player(el, {
+            stage: h('div', { class: 'ui-stage' }, view),
+            predict: {
+              q: 'Omar’s bucket is 7, and Sam is already in bucket 7. What happens?',
+              options: ['Omar replaces Sam', 'Both stay in bucket 7', 'The program crashes'],
+              a: 1,
+              why: 'A bucket can hold more than one pair. Only the same key replaces a value.',
+            },
+            frames: [
+              { keys: [], calc: 'ages = HashMap&lt;String, Int&gt;()', say: 'An empty hash map with 8 buckets, numbered 0 to 7.' },
+              { keys: [ada], at: 6, calc: '"Ada".hashCode() = 65662, 65662 % 8 = 6', say: 'Ada’s hash code is 65662. The remainder after dividing by 8 is 6, so Ada goes into bucket 6.' },
+              { keys: [ada, sam], at: 7, calc: '"Sam".hashCode() = 82879, 82879 % 8 = 7', say: 'Sam lands in bucket 7.' },
+              { keys: [ada, sam, lin, noor], at: 4, calc: 'Lin: 76401 % 8 = 1   Noor: 2433924 % 8 = 4', say: 'Lin goes into bucket 1 and Noor into bucket 4. Each one took a single calculation, however full the map is.' },
+              { keys: [ada, sam, lin, noor, omar], at: 7, hot: true, calc: '"Omar".hashCode() = 2461359, 2461359 % 8 = 7', say: 'Omar also lands in bucket 7: a collision. The bucket now holds two pairs.' },
+              { keys: [ada, sam, lin, noor, omar], at: 7, find: 'Sam', calc: 'ages["Omar"]: 2461359 % 8 = 7', say: 'Looking up Omar: the same calculation points to bucket 7. The first key there is Sam. Not equal.' },
+              { keys: [ada, sam, lin, noor, omar], at: 7, find: 'Omar', ok: true, calc: 'ages["Omar"]: found in bucket 7', say: 'The next key is Omar: found. Two checks in one short bucket, not a search through every name.' },
+            ],
+            draw(f) {
+              calc.innerHTML = f.calc;
+              grid.replaceChildren(h('div', { class: 'dsa-buckets' }, Array.from({ length: B }, (_, k) => {
+                const inB = f.keys.filter(([, b]) => b === k);
+                const cls = k !== f.at ? '' : f.ok ? 'dsa-ok' : f.hot ? 'dsa-hot' : 'dsa-on';
+                return h('div', { class: `dsa-bucket ${cls}` }, h('span', { class: 'dsa-bi' }, String(k)),
+                  inB.map(([name]) => pill(name, f.find === name ? (f.ok ? 'dsa-ok' : 'dsa-warm') : '')));
+              })));
+            },
+          });
+        },
+        code: `fun main() {
+    println("Ada".hashCode())         // 65662, every time
+    println("Ada".hashCode() % 8)     // 6: Ada's bucket out of 8
+
+    val stock = HashMap<String, Int>()
+    stock["pears"] = 4                // O(1) on average
+    stock["plums"] = 9
+    println(stock["pears"])           // 4
+    println(stock["figs"])            // null: no "figs" in its bucket
+
+    val prices = mutableMapOf("tea" to 3)   // a hash map too
+    println(prices["tea"])            // 3
+}`,
+        play: `fun main() {
+    val names = listOf("Ada", "Sam", "Lin", "Noor", "Omar")
+    for (name in names) {
+        val code = name.hashCode()
+        println("$name: hash code $code, bucket \${code % 8}")
+    }
+
+    val ages = HashMap<String, Int>()
+    ages["Ada"] = 36
+    ages["Omar"] = 41
+    println(ages["Omar"])
+    // Add a short name of your own to the list. Which bucket does it land in?
+    // Long names can give a negative hash code, and then a negative remainder.
+    // A real map removes the minus sign before picking a bucket.
+}`,
+        remember: 'A map turns each key into a hash code, and the hash code picks a bucket. No searching: O(1) on average.',
+        terms: [
+          { term: 'hash code', def: 'A number a value makes from itself, always the same for the same value: <code>"Ada".hashCode()</code>.' },
+          { term: 'bucket', def: 'One slot in a hash map’s array. The hash code decides which bucket a key goes in.' },
+          { term: 'collision', def: 'Two different keys landing in the same bucket. The bucket keeps both.' },
+          { term: 'HashMap', def: 'Kotlin’s hash map: <code>HashMap&lt;String, Int&gt;()</code>. <code>mapOf</code> and <code>mutableMapOf</code> work the same way and also keep the order.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make an empty hash map from fruit names to amounts, then store 4 pears.', code: 'val stock = [[HashMap]]<String, Int>()\nstock["pears"] = 4\nprintln(stock["pears"])   // 4', why: '<code>HashMap&lt;String, Int&gt;()</code> makes an empty map with <code>String</code> keys and <code>Int</code> values.' },
+          { type: 'bug', prompt: 'This should count each word and print <code>{red=2, blue=1}</code>. It prints <code>{red=1, blue=1}</code>. Tap the wrong line.', code: 'fun main() {\n    val words = listOf("red", "blue", "red")\n    val counts = mutableMapOf<String, Int>()\n    for (word in words) {\n        counts[word] = 1\n    }\n    println(counts)\n}', bug: 4, fix: '        counts[word] = counts.getOrDefault(word, 0) + 1', why: 'Each word should add one to its count so far. <code>getOrDefault</code> gives 0 the first time a word appears.' },
+        ],
+        quiz: [
+          { q: 'Why is <code>ages["Ada"]</code> fast in a map with a million names?', options: ['Ada’s hash code says which bucket to look in', 'The map checks every name very quickly', 'The map keeps its names in alphabetical order'], a: 0, why: 'The map does one calculation to find the bucket, then checks the few keys in it.' },
+          { q: 'What is a collision?', options: ['Two keys landing in the same bucket', 'Adding the same key twice', 'A crash when the map is full'], a: 0, why: 'Different keys can share a bucket. The bucket holds both, and lookups compare keys with <code>==</code>.' },
+          { q: '<code>"Lin".hashCode()</code> is 76401. With 8 buckets, which bucket does Lin go in?', options: ['1', '7', '0'], a: 0, why: '76400 is 8 × 9550, so <code>76401 % 8</code> leaves 1.' },
+        ],
+        docs: [['HashMap', 'https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-hash-map/'], ['Collections overview', 'https://kotlinlang.org/docs/collections-overview.html']],
+      },
+
+      {
+        id: 'sets',
+        title: 'Sets',
+        tagline: 'Have I seen this before? Ask a set, not a list.',
+        goals: ['Check whether a value is there in O(1) with a set', 'Collect values without duplicates using <code>mutableSetOf</code>', 'Turn a list into a set with <code>toSet()</code>'],
+        level: 'beginner', introduces: ['mutableSetOf', 'HashSet', 'toSet'],
+        body: `
+<p>A music app shouldn’t suggest a song you have already heard today. With a list of heard songs, <code>song in heard</code> checks the list item by item: O(n), and it runs again for every new song. A set answers the same question in about one step.</p>
+<p>A set works like a hash map with keys and no values. Each value goes into the bucket its hash code picks, so <code>"Rain" in heard</code> looks in one bucket: O(1) on average. That is also why a set keeps each value once: a second <code>"Rain"</code> lands in the same bucket, finds the first one there, and isn’t added.</p>
+<p>For a set that changes, use <code>mutableSetOf()</code>. Its <code>add(x)</code> gives back <code>true</code> if <code>x</code> was new and <code>false</code> if it was already there, so one call both stores the value and tells you whether you had seen it. <code>toSet()</code> turns a list into a set, dropping the duplicates.</p>
+<p>Kotlin’s plain hash set is <code>HashSet</code>. <code>setOf</code> and <code>mutableSetOf</code> give a <code>LinkedHashSet</code>, a hash set that also keeps the order values were first added.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: 'fun main() {\n    val words = listOf("red", "blue", "red", "green", "blue")\n    val seen = mutableSetOf<String>()\n    for (word in words) {\n        if (!seen.add(word)) {\n            println("Seen before: $word")\n        }\n    }\n    println(seen)\n}',
+            predict: {
+              q: 'What does this program print first?',
+              options: ['<code>Seen before: red</code>', '<code>Seen before: blue</code>', '<code>[red, blue, green]</code>'],
+              a: 0,
+              why: 'red is the first word that comes a second time, at position 2.',
+            },
+            frames: [
+              { line: 2, vars: { words: '[red, blue, red, green, blue]' }, say: 'Five words, and two of them come twice.' },
+              { line: 3, vars: { seen: '[]' }, say: 'An empty set that can change.' },
+              { line: [4, 5], vars: { word: 'red', seen: '[red]' }, say: '<code>seen.add("red")</code>: red is new, so it goes in and <code>add</code> gives <code>true</code>. <code>!true</code> is <code>false</code>, so nothing is printed.' },
+              { line: [4, 5], vars: { word: 'blue', seen: '[red, blue]' }, say: 'blue is new too: added, nothing printed.' },
+              { line: [5, 6], vars: { word: 'red' }, out: 'Seen before: red', say: 'red again. Its bucket already holds red, so nothing is added and <code>add</code> gives <code>false</code>. <code>!false</code> is <code>true</code>: print.' },
+              { line: [4, 5], vars: { word: 'green', seen: '[red, blue, green]' }, say: 'green is new: added.' },
+              { line: [5, 6], vars: { word: 'blue' }, out: 'Seen before: blue', say: 'blue is already there: <code>add</code> gives <code>false</code>, so it is printed.' },
+              { line: 9, vars: { word: null }, out: '[red, blue, green]', say: 'Each word once, in the order it first came. Every <code>add</code> looked in one bucket, O(1) on average, so the whole loop is O(n).' },
+            ],
+          });
+        },
+        code: `fun main() {
+    val tags = mutableSetOf("kotlin")
+    println(tags.add("android"))    // true: it was new
+    println(tags.add("kotlin"))     // false: already there, nothing added
+    println("android" in tags)      // true. O(1) on average, like a map key
+
+    val colors = listOf("red", "blue", "red")
+    println(colors.toSet())         // [red, blue]
+
+    val ids = HashSet<Int>()
+    ids.add(7)
+    println(ids.size)               // 1
+}`,
+        play: `fun main() {
+    val visitors = listOf("Ada", "Sam", "Ada", "Lin", "Sam", "Ada")
+    val unique = visitors.toSet()
+    println(unique)
+    println("\${visitors.size} visits, \${unique.size} people")
+
+    val guests = HashSet<String>()
+    println(guests.add("Noor"))
+    println(guests.add("Noor"))
+    println("Noor" in guests)
+    println("Ben" in guests)
+    // Add "Lin" to visitors twice more. Does the number of people change?
+}`,
+        remember: 'To ask “is it in here?”, use a set: O(1) on average, and each value is kept once.',
+        mistakes: [
+          { title: 'Checking a growing list inside a loop', bad: 'val seen = mutableListOf<String>()\nfor (word in words) {\n    if (word in seen) {    // O(n) every time\n        println(word)\n    }\n    seen.add(word)\n}', good: 'val seen = mutableSetOf<String>()\nfor (word in words) {\n    if (!seen.add(word)) {    // O(1) on average\n        println(word)\n    }\n}', why: '<code>in</code> on a list looks at the items one by one, so the whole loop is O(n²). With a set it is O(n).' },
+        ],
+        terms: [
+          { term: 'membership', def: 'Whether a value is in a collection. <code>x in s</code> asks it.' },
+          { term: 'mutableSetOf', def: 'Makes a set you can add to. <code>add(x)</code> gives <code>false</code> if <code>x</code> was already there.' },
+          { term: 'HashSet', def: 'Kotlin’s hash set: values go into buckets picked by their hash codes, so checking membership is O(1) on average.' },
+          { term: 'toSet()', def: 'Gives a set with the list’s values, each one once.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Count how many different people visited.', code: 'val visits = listOf("Ada", "Sam", "Ada")\nval people = visits.[[toSet]]()\nprintln(people.[[size]])   // 2', why: '<code>toSet()</code> drops the second Ada, so 2 people are left.' },
+          { type: 'bug', prompt: 'This doesn’t compile: <code>Unresolved reference \'add\'.</code> Tap the wrong line.', code: 'fun main() {\n    val seen = setOf<String>()\n    seen.add("red")\n    println(seen)\n}', bug: 1, fix: '    val seen = mutableSetOf<String>()', why: 'A <code>setOf</code> set can’t change. <code>mutableSetOf</code> makes one with <code>add</code>.' },
+        ],
+        quiz: [
+          { q: '<code>val s = mutableSetOf("a")</code>. What does <code>s.add("a")</code> give?', options: ['<code>false</code>', '<code>true</code>', 'An error'], a: 0, why: '"a" is already there, so nothing is added and <code>add</code> says <code>false</code>.' },
+          { q: 'Why is <code>x in set</code> faster than <code>x in list</code> when there are many items?', options: ['The set looks in the one bucket that x’s hash code picks', 'A set holds fewer items', 'A list must be sorted first'], a: 0, why: 'A list is checked item by item, O(n). A set goes to one bucket, O(1) on average.' },
+          { q: 'What does <code>println(listOf(3, 1, 3, 2).toSet())</code> print?', options: ['<code>[3, 1, 2]</code>', '<code>[1, 2, 3]</code>', '<code>[3, 1, 3, 2]</code>'], a: 0, why: 'The second 3 is dropped, and the set keeps the order values first came in.' },
+        ],
+        docs: [['HashSet', 'https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-hash-set/'], ['Set-specific operations', 'https://kotlinlang.org/docs/set-operations.html']],
+      },
+
+      {
+        id: 'stacks-queues',
+        title: 'Stacks and queues',
+        tagline: 'Last in, first out. First in, first out.',
+        goals: ['Use a stack for “the latest one first”', 'Use a queue for “first come, first served”', 'Do both with <code>ArrayDeque</code> in O(1)'],
+        level: 'beginner', introduces: ['ArrayDeque', 'addLast', 'removeLast', 'removeFirst', 'isEmpty', 'isNotEmpty'],
+        body: `
+<p>Press undo in a notes app and the latest change is undone first. Wait in line at a bakery and the person who came first is served first. These two orders turn up all over programs, and each has a name.</p>
+<p>A <em>stack</em> works like a pile of plates: you add on top and take from the top. The last item in is the first out, called <em>LIFO</em>. A <em>queue</em> works like a line of people: you join at the back and leave from the front. The first in is the first out: <em>FIFO</em>.</p>
+<p>Kotlin’s <code>ArrayDeque</code> (say “array deck”) does both. <code>addLast(x)</code> adds at the end. For a stack, take items back with <code>removeLast()</code>; for a queue, with <code>removeFirst()</code>. Both give you the item they removed. <code>isEmpty()</code> and <code>isNotEmpty()</code> tell you whether anything is left, which makes a handy <code>while</code> condition.</p>
+<p>Why not a <code>mutableListOf</code> list? Its <code>removeAt(0)</code> moves every item: O(n). An <code>ArrayDeque</code> keeps track of where its front is, so taking from either end moves nothing: O(1).</p>`,
+        visual(el) {
+          const stackBox = h('div', { class: 'dsa-stack' });
+          const queueBox = h('div', { class: 'dsa-queue' });
+          const calls = h('div', { class: 'dsa-cmp' });
+          const view = h('div', { class: 'dsa-stage' }, calls,
+            h('div', { class: 'dsa-split' },
+              h('div', { class: 'dsa-col' }, label('queue (front highlighted)'), queueBox),
+              h('div', { class: 'dsa-col' }, label('stack (top highlighted)'), stackBox)));
+          Lab.ui.player(el, {
+            stage: h('div', { class: 'ui-stage' }, view),
+            predict: {
+              q: 'Ada, Sam and Lin are added to both, in that order. What do <code>stack.removeLast()</code> and <code>queue.removeFirst()</code> give back first?',
+              options: ['Stack: Lin. Queue: Ada.', 'Stack: Ada. Queue: Ada.', 'Stack: Lin. Queue: Lin.'],
+              a: 0,
+              why: 'The stack gives back the last one in. The queue gives back the first one in.',
+            },
+            frames: [
+              { s: [], q: [], calls: 'val stack = ArrayDeque&lt;String&gt;()<br>val queue = ArrayDeque&lt;String&gt;()', say: 'Two empty <code>ArrayDeque</code>s. One is used as a stack, the other as a queue.' },
+              { s: ['Ada'], q: ['Ada'], calls: 'stack.addLast("Ada")<br>queue.addLast("Ada")', say: 'Ada goes into both.' },
+              { s: ['Ada', 'Sam'], q: ['Ada', 'Sam'], calls: 'stack.addLast("Sam")<br>queue.addLast("Sam")', say: 'Sam goes on top of the stack, and to the back of the queue.' },
+              { s: ['Ada', 'Sam', 'Lin'], q: ['Ada', 'Sam', 'Lin'], calls: 'stack.addLast("Lin")<br>queue.addLast("Lin")', say: 'Lin goes on top of the stack and to the back of the queue. Same three names, same order, in both.' },
+              { s: ['Ada', 'Sam'], q: ['Sam', 'Lin'], out: ['Lin', 'Ada'], calls: 'stack.removeLast()  → Lin<br>queue.removeFirst() → Ada', say: 'The stack gives back Lin, the last one in: LIFO. The queue gives back Ada, the first one in: FIFO.' },
+              { s: ['Ada'], q: ['Lin'], out: ['Sam', 'Sam'], calls: 'stack.removeLast()  → Sam<br>queue.removeFirst() → Sam', say: 'Both give back Sam this time. Ada is left on the stack, Lin in the queue. Nothing had to move: O(1).' },
+            ],
+            draw(f) {
+              calls.innerHTML = f.calls;
+              stackBox.replaceChildren(...f.s.map((v, k) => pill(v, k === f.s.length - 1 ? 'dsa-acc' : '')));
+              queueBox.replaceChildren(...f.q.map((v, k) => pill(v, k === 0 ? 'dsa-acc' : '')));
+            },
+          });
+        },
+        code: `fun main() {
+    val stack = ArrayDeque<Int>()
+    stack.addLast(1)
+    stack.addLast(2)
+    stack.addLast(3)
+    println(stack.removeLast())     // 3: last in, first out
+    println(stack)                  // [1, 2]
+
+    val queue = ArrayDeque<Int>()
+    queue.addLast(1)
+    queue.addLast(2)
+    queue.addLast(3)
+    println(queue.removeFirst())    // 1: first in, first out
+    println(queue)                  // [2, 3]
+    println(queue.isEmpty())        // false
+}`,
+        play: `fun main() {
+    // A queue: the first one in line is served first
+    val line = ArrayDeque<String>()
+    line.addLast("Ada")
+    line.addLast("Sam")
+    line.addLast("Lin")
+    while (line.isNotEmpty()) {
+        val next = line.removeFirst()
+        println("Serving $next, still waiting: $line")
+    }
+
+    // A stack: the last page you opened is the first you go back from
+    val pages = ArrayDeque<String>()
+    pages.addLast("Home")
+    pages.addLast("Recipes")
+    pages.addLast("Soup")
+    println("Back from \${pages.removeLast()}")
+    println("Now on \${pages.last()}")
+    println(pages.isEmpty())
+    // Swap removeFirst() and removeLast() in the two parts. What changes?
+}`,
+        remember: 'Stack: addLast + removeLast, the latest first. Queue: addLast + removeFirst, the oldest first. ArrayDeque does both in O(1).',
+        mistakes: [
+          { title: 'Taking from an empty deque', bad: 'val jobs = ArrayDeque<String>()\nprintln(jobs.removeFirst())\n// NoSuchElementException: ArrayDeque is empty.', good: 'val jobs = ArrayDeque<String>()\nif (jobs.isNotEmpty()) {\n    println(jobs.removeFirst())\n}', why: 'There is nothing to give back, so the program crashes. Check with <code>isNotEmpty()</code> first.' },
+        ],
+        terms: [
+          { term: 'stack', def: 'Add and take at the same end. The last item in is the first out (LIFO).' },
+          { term: 'queue', def: 'Add at the back, take from the front. The first item in is the first out (FIFO).' },
+          { term: 'LIFO / FIFO', def: 'Last in, first out (a stack) / first in, first out (a queue).' },
+          { term: 'ArrayDeque', def: 'Kotlin’s list that is cheap at both ends: <code>addLast</code>, <code>removeLast</code> and <code>removeFirst</code> are O(1).' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Undo the latest change first.', code: 'val changes = ArrayDeque<String>()\nchanges.[[addLast]]("bold")\nchanges.addLast("italic")\nprintln(changes.[[removeLast]]())   // italic', why: 'Undo is a stack: the change added last comes back first.' },
+          { type: 'bug', prompt: 'Customers should be served in the order they came, Ada first. This serves Sam. Tap the wrong line.', code: 'fun main() {\n    val line = ArrayDeque<String>()\n    line.addLast("Ada")\n    line.addLast("Sam")\n    println(line.removeLast())\n}', bug: 4, fix: '    println(line.removeFirst())', why: 'A line of customers is a queue: take from the front with <code>removeFirst()</code>.' },
+        ],
+        quiz: [
+          { q: 'Which one gives back the item added last?', options: ['A stack', 'A queue'], a: 0, why: 'A stack is last in, first out. A queue is first in, first out.' },
+          { q: 'A printer prints documents in the order they were sent. Which fits?', options: ['A queue', 'A stack'], a: 0, why: 'The first document sent is printed first: FIFO.' },
+          { q: 'Why use <code>ArrayDeque</code> for a queue instead of a list with <code>removeAt(0)</code>?', options: ['<code>removeFirst()</code> is O(1), while <code>removeAt(0)</code> moves every item: O(n)', 'Lists can’t hold Strings', 'There is no difference'], a: 0, why: 'A list shifts all its items left. An <code>ArrayDeque</code> only moves its front marker.' },
+        ],
+        docs: [['ArrayDeque', 'https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-array-deque/']],
+      },
+
+      {
+        id: 'recursion',
+        title: 'Recursion',
+        tagline: 'A function that calls itself on a smaller problem.',
+        goals: ['Write a function that calls itself', 'Give it a base case so it stops', 'Follow the waiting calls on the call stack'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>Adding up 1 + 2 + 3 and so on up to 100 by hand takes a while. But if someone tells you the sum up to 99, you need one more step: add 100. Some problems are easiest to solve like that, as one small step plus a smaller copy of the same problem.</p>
+<p>A function that calls itself is called <em>recursion</em>. <code>sumTo(n)</code> returns <code>n + sumTo(n - 1)</code>: to work out <code>sumTo(3)</code>, it asks for <code>sumTo(2)</code>, which asks for <code>sumTo(1)</code>. Each call gets its own <code>n</code>, like a separate box.</p>
+<p>It has to stop somewhere. The <em>base case</em> is the input you can answer without calling again: <code>sumTo(1)</code> is 1. Then the answers travel back: <code>sumTo(2)</code> is 2 + 1, and <code>sumTo(3)</code> is 3 + 3. The calls that are waiting sit on the <em>call stack</em>, a stack like in the last lesson: the latest call finishes first.</p>
+<p>Forget the base case and the calls never end. The call stack fills up and the program crashes with <code>StackOverflowError</code>. <code>sumTo(n)</code> makes n calls, so it is O(n), the same as a loop.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: 'fun sumTo(n: Int): Int {\n    if (n == 1) {\n        return 1\n    }\n    return n + sumTo(n - 1)\n}\n\nfun main() {\n    println(sumTo(3))\n}',
+            predict: {
+              q: 'What does <code>println(sumTo(3))</code> print?',
+              options: ['6', '3', 'Nothing: it never stops'],
+              a: 0,
+              why: '3 + 2 + 1 = 6. The calls stop at the base case, <code>n == 1</code>.',
+            },
+            frames: [
+              { line: 9, stack: ['main()'], say: '<code>main</code> asks for <code>sumTo(3)</code>.' },
+              { line: 2, stack: ['main()', 'sumTo(3)'], vars: { n: '3' }, say: 'A call starts with its own <code>n</code>, here 3. It isn’t 1, so the <code>if</code> is skipped.' },
+              { line: 2, stack: ['main()', 'sumTo(3)', 'sumTo(2)'], vars: { n: '2' }, say: '<code>sumTo(3)</code> reaches line 5, <code>3 + sumTo(2)</code>: to finish, it needs <code>sumTo(2)</code>. It waits on the stack while a new call starts with its own <code>n</code> = 2. It isn’t 1, so the <code>if</code> is skipped.' },
+              { line: 2, stack: ['main()', 'sumTo(3)', 'sumTo(2)', 'sumTo(1)'], vars: { n: '1' }, say: 'The same again: <code>sumTo(2)</code> waits for <code>sumTo(1)</code>. This time <code>n</code> is 1, so the <code>if</code> is true.' },
+              { line: 3, stack: ['main()', 'sumTo(3)', 'sumTo(2)', 'sumTo(1)'], vars: { n: '1' }, say: 'Base case: <code>n</code> is 1, so it returns 1 without calling again.' },
+              { line: 5, stack: ['main()', 'sumTo(3)', 'sumTo(2)'], vars: { n: '2' }, say: '<code>sumTo(1)</code> is done and leaves the stack. <code>sumTo(2)</code> can finish now: 2 + 1 = 3.' },
+              { line: 5, stack: ['main()', 'sumTo(3)'], vars: { n: '3' }, say: 'Back in <code>sumTo(3)</code>, with its own <code>n</code> still 3: 3 + 3 = 6.' },
+              { line: 9, stack: ['main()'], vars: { n: null }, out: '6', say: 'The latest call finished first, the first call finished last. Three calls for n = 3: O(n).' },
+            ],
+          });
+        },
+        code: `fun factorial(n: Int): Int {
+    if (n == 1) {                   // base case: the answer is known, stop here
+        return 1
+    }
+    return n * factorial(n - 1)     // a smaller copy of the same problem
+}
+
+fun main() {
+    println(factorial(4))           // 24, which is 4 * 3 * 2 * 1
+    println(factorial(1))           // 1, straight from the base case
+}`,
+        play: `fun countdown(n: Int) {
+    if (n == 0) {
+        println("Liftoff!")
+        return
+    }
+    println(n)
+    countdown(n - 1)
+}
+
+fun sumTo(n: Int): Int {
+    if (n == 1) {
+        return 1
+    }
+    return n + sumTo(n - 1)
+}
+
+fun main() {
+    countdown(3)
+    println(sumTo(4))
+    println(sumTo(100))
+    // Remove the if block in sumTo and run it. What happens?
+}`,
+        remember: 'A recursive function calls itself on a smaller input, and its base case answers without calling again.',
+        mistakes: [
+          { title: 'No base case', bad: 'fun sumTo(n: Int): Int {\n    return n + sumTo(n - 1)\n}\n// Exception in thread "main" java.lang.StackOverflowError', good: 'fun sumTo(n: Int): Int {\n    if (n == 1) {\n        return 1\n    }\n    return n + sumTo(n - 1)\n}', why: 'Without a base case, every call makes another call. The call stack fills up and the program crashes.' },
+        ],
+        terms: [
+          { term: 'recursion', def: 'A function calling itself, each time on a smaller version of the problem.' },
+          { term: 'base case', def: 'The input a recursive function answers straight away, without calling itself. It makes the calls stop.' },
+          { term: 'call stack', def: 'Where the calls that haven’t finished yet wait. The latest call is on top and finishes first.' },
+          { term: 'StackOverflowError', def: 'The crash you get when too many calls are waiting, usually because the base case is missing.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish the factorial: <code>factorial(4)</code> is 4 * 3 * 2 * 1.', code: 'fun factorial(n: Int): Int {\n    if (n == [[1]]) {\n        return 1\n    }\n    return n * [[factorial]](n - 1)\n}', why: 'The base case is 1. Every other call multiplies <code>n</code> by the factorial of one less.' },
+          { type: 'bug', prompt: 'This should print 6, but it crashes with <code>StackOverflowError</code>. Tap the wrong line.', code: 'fun sumTo(n: Int): Int {\n    if (n == 1) {\n        return 1\n    }\n    return n + sumTo(n)\n}\n\nfun main() {\n    println(sumTo(3))\n}', bug: 4, fix: '    return n + sumTo(n - 1)', why: '<code>sumTo(n)</code> calls itself with the same <code>n</code>, so it never gets smaller and never reaches 1.' },
+        ],
+        quiz: [
+          { q: 'What is a base case?', options: ['The input a recursive function answers without calling itself', 'The first line of every function', 'The biggest input a function accepts'], a: 0, why: 'It is where the calls stop and the answers start travelling back.' },
+          { q: 'How many calls of <code>sumTo</code> does <code>sumTo(4)</code> make, counting itself?', options: ['4', '1', '10'], a: 0, why: '<code>sumTo(4)</code>, <code>sumTo(3)</code>, <code>sumTo(2)</code> and <code>sumTo(1)</code>: one call per number, O(n). 10 is the answer it returns.' },
+          { q: 'What happens when a recursive function has no base case?', options: ['It keeps calling itself until the call stack is full: <code>StackOverflowError</code>', 'It returns 0', 'Kotlin refuses to compile it'], a: 0, why: 'It compiles, but every call starts another one until the program crashes.' },
+        ],
+        docs: [['Functions', 'https://kotlinlang.org/docs/functions.html']],
+      },
+
+      {
+        id: 'two-pointers',
+        title: 'Two pointers',
+        tagline: 'Walk in from both ends instead of trying every pair.',
+        goals: ['Find a pair in a sorted list by walking in from both ends', 'Decide which pointer to move after each comparison', 'See why this takes O(n) steps instead of O(n²)'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>You have a gift card worth 12 and a list of prices, smallest first: 2, 4, 5, 8, 11, 15. Which two items use up the card exactly? Trying every pair with a loop inside a loop works, but that is O(n²): for 1,000 prices, up to 499,500 tries.</p>
+<p>Use two <em>pointers</em> instead: two <code>var</code>s that hold indexes. <code>left</code> starts at the first price, <code>right</code> at the last. Add the two prices. Too big? Move <code>right</code> one slot left, to a smaller price. Too small? Move <code>left</code> one slot right, to a bigger one. Equal? Found.</p>
+<p>This only works because the list is <em>sorted</em>, in order from smallest to largest. When 2 + 15 is too big, 15 is too big with every other price as well, since they are all at least 2. So each step rules out one price for good, and the pointers meet after at most n steps: O(n).</p>
+<p>If your list isn’t in order yet, <code>sortedBy { it }</code> gives you a sorted copy first.</p>`,
+        visual(el) {
+          const P = [2, 4, 5, 8, 11, 15];
+          const row = h('div', {});
+          const sum = h('div', { class: 'dsa-cmp' });
+          const view = h('div', { class: 'dsa-stage' }, label('prices, target 12'), row, sum);
+          Lab.ui.player(el, {
+            stage: h('div', { class: 'ui-stage' }, view),
+            predict: {
+              q: 'The first sum is 2 + 15 = 17, more than 12. Which pointer should move?',
+              options: ['<code>right</code>, one slot left', '<code>left</code>, one slot right'],
+              a: 0,
+              why: 'The sum is too big, and only a smaller right price can make it smaller.',
+            },
+            frames: [
+              { l: 0, r: 5, out: [], text: 'step 1: 2 + 15 = 17, too big', say: '<code>left</code> starts at the first price, <code>right</code> at the last. 2 + 15 = 17: more than 12.' },
+              { l: 0, r: 4, out: [5], text: 'step 2: 2 + 11 = 13, too big', say: '<code>right</code> moves left. 15 is ruled out: even with the smallest price it is too big. 2 + 11 = 13: still too big.' },
+              { l: 0, r: 3, out: [4, 5], text: 'step 3: 2 + 8 = 10, too small', say: '<code>right</code> moves again. 2 + 8 = 10: now too small.' },
+              { l: 1, r: 3, out: [0, 4, 5], text: 'step 4: 4 + 8 = 12, found', say: 'Too small, so <code>left</code> moves right, to a bigger price. 2 is ruled out. 4 + 8 = 12.' },
+              { l: 1, r: 3, out: [0, 4, 5], done: true, text: 'found 4 + 8 in 4 steps', say: 'Found in 4 steps. A loop inside a loop could try up to 15 pairs for 6 prices.' },
+            ],
+            draw(f) {
+              row.replaceChildren(cellRow(P.map((v, k) => ({
+                v,
+                cls: f.out.includes(k) ? 'dsa-dim' : (k === f.l || k === f.r) ? (f.done ? 'dsa-ok' : 'dsa-on') : '',
+                tag: k === f.l ? 'left' : k === f.r ? 'right' : '',
+              }))));
+              sum.textContent = f.text;
+            },
+          });
+        },
+        code: `fun findPair(prices: List<Int>, target: Int): String {
+    var left = 0
+    var right = prices.size - 1
+    while (left < right) {
+        val sum = prices[left] + prices[right]
+        if (sum == target) {
+            return "\${prices[left]} + \${prices[right]}"
+        } else if (sum < target) {
+            left++
+        } else {
+            right -= 1
+        }
+    }
+    return "no pair"
+}
+
+fun main() {
+    val prices = listOf(2, 4, 5, 8, 11, 15)
+    println(findPair(prices, 12))   // 4 + 8
+    println(findPair(prices, 30))   // no pair
+}`,
+        play: `fun stepsWithTwoPointers(prices: List<Int>, target: Int): Int {
+    var steps = 0
+    var left = 0
+    var right = prices.size - 1
+    while (left < right) {
+        steps++
+        val sum = prices[left] + prices[right]
+        if (sum == target) {
+            return steps
+        } else if (sum < target) {
+            left++
+        } else {
+            right -= 1
+        }
+    }
+    return steps
+}
+
+fun stepsWithTwoLoops(prices: List<Int>, target: Int): Int {
+    var steps = 0
+    for (i in prices.indices) {
+        for (j in i + 1 until prices.size) {
+            steps++
+            if (prices[i] + prices[j] == target) {
+                return steps
+            }
+        }
+    }
+    return steps
+}
+
+fun main() {
+    for (n in listOf(10, 100, 1000)) {
+        val prices = mutableListOf<Int>()
+        for (i in 1..n) {
+            prices.add(i * 2)       // 2, 4, 6, ... already in order
+        }
+        val target = 1              // no two even prices add up to 1: the worst case
+        val fast = stepsWithTwoPointers(prices, target)
+        val slow = stepsWithTwoLoops(prices, target)
+        println("n = $n: two pointers $fast steps, two loops $slow steps")
+    }
+    // Change the target to 6 (2 + 4). Which way wins now, and why?
+}`,
+        remember: 'On a sorted list, start one pointer at each end. Too big: move right in. Too small: move left in. O(n).',
+        mistakes: [
+          { title: 'Using two pointers on a list that isn’t sorted', bad: 'val prices = listOf(15, 4, 2, 8, 11, 5)\nprintln(findPair(prices, 12))   // no pair', good: 'val prices = listOf(15, 4, 2, 8, 11, 5)\nprintln(findPair(prices.sortedBy { it }, 12))   // 4 + 8', why: 'Moving a pointer only makes the sum smaller or bigger when the prices are in order. Sort first.' },
+        ],
+        terms: [
+          { term: 'pointer', def: 'Here: a <code>var</code> that holds an index and moves along the list, like <code>left</code> and <code>right</code>.' },
+          { term: 'two pointers', def: 'Two indexes that walk through a list, often from both ends toward each other, ruling out an item each step.' },
+          { term: 'sorted', def: 'In order, smallest first. <code>sortedBy { it }</code> gives a sorted copy of a list of numbers.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Start the two pointers at both ends of the list.', code: 'var left = [[0]]\nvar right = prices.[[size]] - 1', why: 'The first index is 0 and the last is <code>size - 1</code>.' },
+          { type: 'bug', prompt: 'With prices 2, 4, 5, 8, 11, 15 and target 12, this should find 4 + 8, but it says no pair. Tap the wrong line.', code: 'fun findPair(prices: List<Int>, target: Int): String {\n    var left = 0\n    var right = prices.size - 1\n    while (left < right) {\n        val sum = prices[left] + prices[right]\n        if (sum == target) {\n            return "\${prices[left]} + \${prices[right]}"\n        } else if (sum < target) {\n            right -= 1\n        } else {\n            right -= 1\n        }\n    }\n    return "no pair"\n}', bug: 8, fix: '            left++', why: 'When the sum is too small it needs a bigger price, so <code>left</code> must move right. Moving <code>right</code> makes the sum even smaller.' },
+        ],
+        quiz: [
+          { q: 'Sorted prices 1, 3, 6, 9 and target 9. The first sum is 1 + 9 = 10. What happens next?', options: ['<code>right</code> moves left: the sum must get smaller', '<code>left</code> moves right', 'Both pointers move'], a: 0, why: '10 is too big, so the biggest price goes. Then 1 + 6 = 7 is too small, <code>left</code> moves, and 3 + 6 = 9.' },
+          { q: 'Why must the list be sorted?', options: ['So moving a pointer makes the sum bigger or smaller in a way you know', 'So the loop has fewer lines', 'Kotlin can’t read unsorted lists'], a: 0, why: 'In a sorted list, moving <code>left</code> right always gives a bigger price and moving <code>right</code> left a smaller one.' },
+          { q: 'For 1,000 sorted prices, at most how many steps do two pointers take?', options: ['About 1,000', 'About 500,000', 'About 10'], a: 0, why: 'Each step rules out one price, so it is O(n). The play program counts 999.' },
+        ],
+        docs: [['Conditions and loops', 'https://kotlinlang.org/docs/control-flow.html']],
+      },
+
+      {
+        id: 'binary-search',
+        title: 'Binary search',
+        tagline: 'Halve a sorted list on every check.',
+        goals: ['Find a value in a sorted list by checking the middle', 'Explain why a million items need only about 20 steps', 'Use Kotlin’s <code>binarySearch</code>'],
+        level: 'beginner', introduces: ['binarySearch', 'toList'],
+        body: `
+<p>Looking for a word in a paper dictionary, you don’t read it page by page. You open it in the middle, see whether your word comes before or after that page, and forget about the other half. Searching a list item by item is O(n): one step per item. When the list is <em>sorted</em>, you can use the dictionary trick instead. It is called <em>binary search</em>.</p>
+<p>Keep two indexes, <code>low</code> and <code>high</code>: the part of the list where the value can still be. Look at the middle one, <code>mid = (low + high) / 2</code> (dividing whole numbers drops the decimals, so <code>mid</code> is always a whole index). Equal? Found. Is the middle value smaller than the one you want? Then everything left of it is smaller too, so move <code>low</code> to <code>mid + 1</code>. Bigger? Move <code>high</code> to <code>mid - 1</code>. When <code>low</code> passes <code>high</code>, nothing is left to check: the value isn’t there.</p>
+<p>Every step throws away half of what is left. In a list of 1,000,000 numbers, the program below needed 20 steps. Doubling the items adds only one step. That is O(log n), read “O of log n”: the number of times you can halve n before one item is left. The catch: the list must be sorted, or the half you throw away might hold the answer.</p>
+<p>Kotlin has it built in: <code>prices.binarySearch(11)</code> gives the index, 4. When the value is missing, it gives a negative number. To try it on a big list, <code>(1..1000000).toList()</code> turns a range into a real list.</p>`,
+        visual(el) {
+          const prices = [2, 4, 5, 8, 11, 15];
+          const row = h('div', {});
+          const info = h('div', { class: 'dsa-cmp' });
+          const stage = h('div', { class: 'ui-stage dsa-col' }, h('div', { class: 'dsa-cmp' }, 'find(prices, 4)'), row, info);
+          const frames = [
+            { low: 0, high: 5, say: 'Looking for 4. At the start it could be anywhere from index 0 (<code>low</code>) to index 5 (<code>high</code>).' },
+            { low: 0, high: 5, mid: 2, say: '<code>mid = (0 + 5) / 2</code>, which is 2. The middle value is 5, bigger than 4.' },
+            { low: 0, high: 1, say: 'So 4 can only be on the left: <code>high = mid - 1</code>, which is 1. One step, and half the list is gone.' },
+            { low: 0, high: 1, mid: 0, say: '<code>mid = (0 + 1) / 2</code>, which is 0 (the .5 is dropped). The value 2 is smaller than 4.' },
+            { low: 1, high: 1, say: '<code>low = mid + 1</code>, which is 1. Only index 1 is left.' },
+            { low: 1, high: 1, mid: 1, found: true, say: '<code>mid = (1 + 1) / 2</code>, which is 1. The value is 4: found at index 1, after 3 steps.' },
+          ];
+          Lab.ui.player(el, {
+            frames, stage,
+            predict: { q: 'The middle value is 5, and you are looking for 4. Where can 4 still be?', options: ['Left of the middle', 'Right of the middle', 'Anywhere in the list'], a: 0, why: 'The list is sorted, so everything right of 5 is bigger than 5.' },
+            draw(f) {
+              row.replaceChildren(cellRow(prices.map((v, k) => {
+                const tags = [k === f.low ? 'low' : '', k === f.mid ? 'mid' : '', k === f.high ? 'high' : ''].filter(Boolean).join(' ');
+                const cls = k < f.low || k > f.high ? 'dsa-dim' : k === f.mid ? (f.found ? 'dsa-ok' : 'dsa-hot') : 'dsa-on';
+                return { v, tag: tags, cls };
+              })));
+              info.textContent = `low = ${f.low}, high = ${f.high}` + (f.mid === undefined ? '' : `, mid = ${f.mid}`);
+            },
+          });
+        },
+        code: `fun find(sorted: List<Int>, target: Int): Int {
+    var low = 0
+    var high = sorted.size - 1
+    while (low <= high) {
+        val mid = (low + high) / 2
+        if (sorted[mid] == target) {
+            return mid
+        } else if (sorted[mid] < target) {
+            low = mid + 1     // target is right of mid
+        } else {
+            high = mid - 1    // target is left of mid
+        }
+    }
+    return -1                 // nothing left to check: not there
+}
+
+fun main() {
+    val prices = listOf(2, 4, 5, 8, 11, 15)
+    println(find(prices, 11))            // 4
+    println(find(prices, 9))             // -1
+    println(prices.binarySearch(11))     // 4
+    println(prices.binarySearch(9))      // -5: negative means not found
+}`,
+        play: `fun find(sorted: List<Int>, target: Int): Int {
+    var low = 0
+    var high = sorted.size - 1
+    var steps = 0
+    while (low <= high) {
+        val mid = (low + high) / 2
+        steps++
+        if (sorted[mid] == target) {
+            println("Found \$target after \$steps steps")
+            return mid
+        } else if (sorted[mid] < target) {
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+    println("Not found: \$target, after \$steps steps")
+    return -1
+}
+
+fun main() {
+    val prices = listOf(2, 4, 5, 8, 11, 15)
+    println(find(prices, 4))
+    println(find(prices, 9))
+
+    val big = (1..1000000).toList()   // the numbers 1 to 1,000,000
+    println(find(big, 765432))
+    println(find(big, 0))
+    // Try other numbers. Can you make it take more than 20 steps?
+}`,
+        remember: 'Binary search checks the middle and drops half each step: O(log n), but only on a sorted list.',
+        mistakes: [
+          { title: 'Searching a list that isn’t sorted', bad: 'println(listOf(8, 2, 15, 4).binarySearch(8))   // -3: "not found", but 8 is there', good: 'println(listOf(2, 4, 8, 15).binarySearch(8))   // 2', why: 'Binary search trusts the order to decide which half to drop. On an unsorted list it can drop the half that holds the answer.' },
+        ],
+        terms: [
+          { term: 'binary search', def: 'Finding a value in a sorted list by checking the middle and dropping half of what is left each step.' },
+          { term: 'O(log n)', def: 'Steps grow by one each time the number of items doubles. A million items take about 20.' },
+          { term: 'binarySearch', def: 'Kotlin’s built-in binary search on a sorted list: <code>list.binarySearch(x)</code> gives the index, or a negative number when <code>x</code> is missing.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Fill in the loop condition and the middle index.', code: 'while (low [[<=]] high) {\n    val mid = ([[low]] + [[high]]) / 2', why: 'Keep going while there is something left (<code>low &lt;= high</code>), and check the middle of what is left.' },
+          { type: 'bug', prompt: '<code>find(listOf(2, 4), 4)</code> never finishes. Tap the wrong line.', code: 'fun find(sorted: List<Int>, target: Int): Int {\n    var low = 0\n    var high = sorted.size - 1\n    while (low <= high) {\n        val mid = (low + high) / 2\n        if (sorted[mid] == target) {\n            return mid\n        } else if (sorted[mid] < target) {\n            low = mid\n        } else {\n            high = mid - 1\n        }\n    }\n    return -1\n}', bug: 8, fix: '            low = mid + 1', why: 'With <code>low = 0</code> and <code>high = 1</code>, <code>mid</code> is 0 every time, so <code>low = mid</code> changes nothing. <code>mid</code> is already checked: move past it with <code>mid + 1</code>.' },
+        ],
+        quiz: [
+          { q: 'What does binary search need from the list?', options: ['It must be sorted', 'It must be short', 'It must have no repeated values'], a: 0, why: 'Dropping half is only safe when the order tells you which side the value is on.' },
+          { q: 'A sorted list grows from 1,000 to 2,000 items. How many more steps does binary search need, at most?', options: ['About 1 more', 'About 1,000 more', 'Twice as many'], a: 0, why: 'The first step halves 2,000 back to 1,000. Doubling adds one step: O(log n).' },
+          { q: 'What is <code>listOf(2, 4, 5, 8, 11, 15).binarySearch(8)</code>?', options: ['<code>3</code>', '<code>4</code>', '<code>8</code>'], a: 0, why: 'It gives the index, not the value. 8 is at index 3.' },
+        ],
+        docs: [['Binary search in sorted lists', 'https://kotlinlang.org/docs/list-operations.html#binary-search-in-sorted-lists']],
+      },
+
+      {
+        id: 'sorting',
+        title: 'Sorting',
+        tagline: 'Put items in order, and see how a sort does it.',
+        goals: ['Sort a list with <code>sorted()</code>, <code>sortedDescending()</code> and <code>sortedBy { }</code>', 'Follow how selection sort puts a list in order', 'Explain why Kotlin’s sort is O(n log n) and selection sort is O(n²)'],
+        level: 'beginner', introduces: ['sorted', 'sortedDescending'],
+        body: `
+<p>A scoreboard shows the best score first, a contact list goes from A to Z, and binary search from the last lesson only works on a sorted list. Kotlin sorts for you. <code>sorted()</code> gives a new list, smallest first, and <code>sortedDescending()</code> gives biggest first. Text is sorted alphabetically. <code>sortedBy { }</code>, from the Kotlin track, sorts by whatever the lambda picks: with <code>it.length</code>, the number of letters in each word, short words come first. Like <code>filter</code>, these give a new list and leave the original as it was.</p>
+<p>How does a sort work inside? A simple way, <em>selection sort</em>, is how many people sort cards in their hand: find the smallest card and put it first. Then find the smallest of the rest and put it second, and so on. “Put it first” means a <em>swap</em>: two items trade places. A swap needs a spare box, <code>val saved = items[start]</code>, or the first value is overwritten before you can move it.</p>
+<p>Selection sort looks at every remaining item in every round: a loop inside a loop, O(n²). On 1,000 numbers it makes 499,500 steps. If you only need the smallest item, one loop is enough; sorting costs more than one pass over the list.</p>
+<p>Kotlin’s <code>sorted()</code> uses a smarter method based on <em>merge sort</em>: split the list into halves, sort each half, then merge the two sorted halves by comparing their fronts. That is O(n log n), far fewer steps than O(n²) on a long list. So in your own code, call <code>sorted()</code>.</p>`,
+        visual(el) {
+          const row = h('div', {});
+          const stage = h('div', { class: 'ui-stage dsa-col' }, h('div', { class: 'dsa-cmp' }, 'selectionSort(cards)'), row);
+          const frames = [
+            { v: [7, 3, 9, 1], done: 0, say: 'Four cards. Each round finds the smallest item in the unsorted part and swaps it to the front of that part.' },
+            { v: [7, 3, 9, 1], done: 0, start: 0, smallest: 3, say: 'Round 1 compares 7 with 3, 9 and 1: 3 steps. The smallest is 1, at index 3.' },
+            { v: [1, 3, 9, 7], done: 1, say: 'Swap: 1 and 7 trade places. Index 0 is done for good.' },
+            { v: [1, 3, 9, 7], done: 1, start: 1, smallest: 1, say: 'Round 2 compares 3 with 9 and 7: 2 steps. 3 is already the smallest, so the swap changes nothing.' },
+            { v: [1, 3, 9, 7], done: 2, start: 2, smallest: 3, say: 'Round 3 compares 9 with 7: 1 step. 7 is smaller.' },
+            { v: [1, 3, 7, 9], done: 3, say: 'Swap 9 and 7.' },
+            { v: [1, 3, 7, 9], done: 4, say: 'The last item is in place on its own. 3 + 2 + 1 = 6 steps for 4 items. Every round is a loop inside the round loop: O(n²).' },
+          ];
+          Lab.ui.player(el, {
+            frames, stage,
+            predict: { q: 'Start: <code>[7, 3, 9, 1]</code>. After round 1, which number is at index 0?', options: ['<code>1</code>', '<code>3</code>', '<code>7</code>'], a: 0, why: 'Round 1 finds the smallest of all four, 1, and swaps it to the front.' },
+            draw(f) {
+              row.replaceChildren(cellRow(f.v.map((v, k) => {
+                let cls = k < f.done ? 'dsa-ok' : '', tag = '';
+                if (f.start !== undefined && k >= f.start) cls = 'dsa-on';
+                if (k === f.smallest) { cls = 'dsa-hot'; tag = 'smallest'; }
+                if (k === f.start) tag = k === f.smallest ? 'start smallest' : 'start';
+                return { v, tag, cls };
+              })));
+            },
+          });
+        },
+        code: `// MutableList<Int>: the type of a list made with mutableListOf, so the function can change it
+fun selectionSort(items: MutableList<Int>) {
+    for (start in 0 until items.size) {
+        var smallest = start
+        for (i in start + 1 until items.size) {
+            if (items[i] < items[smallest]) {
+                smallest = i
+            }
+        }
+        val saved = items[start]          // swap, keeping one value safe
+        items[start] = items[smallest]
+        items[smallest] = saved
+    }
+}
+
+fun main() {
+    val cards = mutableListOf(7, 3, 9, 1)
+    selectionSort(cards)
+    println(cards)                                    // [1, 3, 7, 9]
+    println(listOf(7, 3, 9, 1).sortedDescending())    // [9, 7, 3, 1]
+    println(listOf("tea", "milk", "rice").sorted())   // [milk, rice, tea]
+    println(listOf("bread", "tea", "milk").sortedBy { it.length })  // [tea, milk, bread]
+}`,
+        play: `fun selectionSort(items: MutableList<Int>): Int {
+    var steps = 0
+    for (start in 0 until items.size) {
+        var smallest = start
+        for (i in start + 1 until items.size) {
+            steps++
+            if (items[i] < items[smallest]) {
+                smallest = i
+            }
+        }
+        val saved = items[start]
+        items[start] = items[smallest]
+        items[smallest] = saved
+    }
+    return steps
+}
+
+fun main() {
+    val cards = mutableListOf(7, 3, 9, 1)
+    println("\${selectionSort(cards)} steps: \$cards")
+
+    val scores = mutableListOf(5, 2, 8, 1, 9, 3, 7, 4, 6, 10)
+    println("\${selectionSort(scores)} steps: \$scores")
+
+    val names = listOf("Noor", "Ada", "Sam", "Lin")
+    println(names.sorted())
+    println(names.sortedDescending())
+    // Add 10 more numbers to scores. How many steps now?
+}`,
+        remember: 'Call sorted() or sortedBy { }: O(n log n). Simple sorts like selection sort are O(n²).',
+        mistakes: [
+          { title: 'Swapping without a spare box', bad: 'items[start] = items[smallest]\nitems[smallest] = items[start]   // both now hold the same value', good: 'val saved = items[start]\nitems[start] = items[smallest]\nitems[smallest] = saved', why: 'After the first line the old value at <code>start</code> is gone. Keep it in <code>saved</code> first. With <code>[7, 3, 9, 1]</code>, after the first round the list is <code>[1, 3, 9, 1]</code>: the 7 is lost. By the end it is <code>[1, 1, 1, 1]</code>.' },
+        ],
+        terms: [
+          { term: 'selection sort', def: 'A simple sort: find the smallest of the rest, swap it to the front, repeat. O(n²).' },
+          { term: 'swap', def: 'Two items trade places. Needs a spare box so neither value is lost.' },
+          { term: 'merge sort', def: 'Split in halves, sort each half, merge them by comparing their fronts. O(n log n). Kotlin’s <code>sorted()</code> uses a method based on it.' },
+          { term: 'O(n log n)', def: 'About log n steps per item: n × the number of halvings. For 1,000 items, roughly 10 steps each. Much less than n². The cost of a good sort.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Print the names A to Z, then Z to A.', code: 'val names = listOf("Noor", "Ada", "Sam")\nprintln(names.[[sorted]]())\nprintln(names.[[sortedDescending]]())', why: '<code>sorted()</code> is smallest first, alphabetical for text; <code>sortedDescending()</code> is the other way round.' },
+          { type: 'bug', prompt: 'This should sort smallest first, but <code>[7, 3, 9, 1]</code> comes out as <code>[9, 7, 3, 1]</code>. Tap the wrong line.', code: 'fun selectionSort(items: MutableList<Int>) {\n    for (start in 0 until items.size) {\n        var smallest = start\n        for (i in start + 1 until items.size) {\n            if (items[i] > items[smallest]) {\n                smallest = i\n            }\n        }\n        val saved = items[start]\n        items[start] = items[smallest]\n        items[smallest] = saved\n    }\n}', bug: 4, fix: '            if (items[i] < items[smallest]) {', why: 'With <code>&gt;</code> each round picks the biggest, so the list ends up biggest first.' },
+        ],
+        quiz: [
+          { q: 'What is <code>listOf(5, 1, 4).sorted()</code>?', options: ['<code>[1, 4, 5]</code>', '<code>[5, 4, 1]</code>', '<code>[5, 1, 4]</code>'], a: 0, why: '<code>sorted()</code> puts the smallest first.' },
+          { q: '<code>val a = listOf(3, 1, 2)</code> then <code>val b = a.sorted()</code>. What does <code>println(a)</code> print?', options: ['<code>[3, 1, 2]</code>', '<code>[1, 2, 3]</code>'], a: 0, why: '<code>sorted()</code> gives a new list in <code>b</code>. The original stays as it was.' },
+          { q: 'Why is selection sort O(n²)?', options: ['Each of its n rounds looks through the rest of the list: a loop inside a loop', 'It swaps items', 'It makes a new list'], a: 0, why: 'n rounds, each looking at up to n items. 4 items took 6 steps, 1,000 items took 499,500.' },
+        ],
+        docs: [['Ordering', 'https://kotlinlang.org/docs/collection-ordering.html']],
+      },
+
+      {
+        id: 'trees',
+        title: 'Trees',
+        tagline: 'Items that branch out, like folders inside folders.',
+        goals: ['Build a small binary tree out of nodes', 'Visit every node with a recursive function', 'Explain why a binary search tree prints its values in order'],
+        level: 'beginner', introduces: ['sortedSetOf'],
+        body: `
+<p>Folders on a computer hold files and more folders, which hold more folders. A family tree and a tournament bracket have the same shape. A list is a line; a <em>tree</em> branches. Each box in a tree is a <em>node</em>. The node at the top is the <em>root</em>, and a node with nothing below it is a <em>leaf</em>.</p>
+<p>In a <em>binary tree</em>, each node has at most two children: a left one and a right one. In Kotlin a node is a small class: <code>class Node(val value: Int, val left: Node? = null, val right: Node? = null)</code>. A child can be missing, so its type is <code>Node?</code>, and the defaults let you write a leaf as <code>Node(2)</code>. Each child is a whole smaller tree of its own.</p>
+<p>That is why recursion, from the recursion lesson, fits trees so well. To visit every node: if the node is null, stop (the base case). Otherwise visit the left subtree, then the node itself, then the right subtree. Going through every node like this is a <em>traversal</em>; this order, left, node, right, is called in-order.</p>
+<p>The tree in the demo is a <em>binary search tree</em>: everything left of a node is smaller, everything right is bigger. So in-order prints the values sorted. Kotlin’s <code>sortedSetOf(8, 4, 12)</code> keeps its items in a tree like this, which is why it always gives them back in order: <code>[4, 8, 12]</code>.</p>`,
+        visual(el) {
+          const t = treeSvg('Binary search tree with root 8');
+          const out = h('div', { class: 'dsa-cmp' });
+          const stage = h('div', { class: 'ui-stage dsa-col' }, t.root, out);
+          const frames = [
+            { path: [], printed: [], say: '<code>printInOrder(root)</code> starts at 8. Before printing anything, it goes left.' },
+            { path: [8, 4], cur: 2, printed: [2], say: 'From 8 go left to 4, then left to 2. The left child of 2 is null: that call stops at once (base case). Print 2.' },
+            { path: [8], cur: 4, printed: [2, 4], say: 'Back in the call for 4: its left side is done, so print 4.' },
+            { path: [8, 4], cur: 6, printed: [2, 4, 6], say: 'Now the right subtree of 4: node 6. No children, so print 6. All of 4’s subtree is done.' },
+            { path: [], cur: 8, printed: [2, 4, 6, 8], say: 'Back up to the root: its left side is done, print 8.' },
+            { path: [8, 12], cur: 10, printed: [2, 4, 6, 8, 10], say: 'The right subtree of 8: go to 12, then left to 10. Print 10.' },
+            { path: [8], cur: 12, printed: [2, 4, 6, 8, 10, 12], say: 'Back at 12: print it, then go right.' },
+            { path: [8, 12], cur: 14, printed: [2, 4, 6, 8, 10, 12, 14], say: 'Print 14. Every node printed once, smallest first, because left is always smaller.' },
+          ];
+          Lab.ui.player(el, {
+            frames, stage,
+            predict: { q: 'Which value does <code>printInOrder</code> print first?', options: ['<code>8</code>, the root', '<code>2</code>', '<code>14</code>'], a: 1, why: 'It goes left before printing, as far as it can. The leftmost node is 2.' },
+            draw(f) {
+              t.clear();
+              f.printed.forEach(v => t.node(v, 'dsa-ok'));
+              f.path.forEach(v => { if (!f.printed.includes(v)) t.node(v, 'dsa-on'); });
+              if (f.cur !== undefined) t.node(f.cur, 'dsa-hot');
+              out.textContent = 'Printed: ' + (f.printed.join(' ') || '(nothing yet)');
+            },
+          });
+        },
+        code: `class Node(val value: Int, val left: Node? = null, val right: Node? = null)
+
+fun printInOrder(node: Node?) {
+    if (node == null) {
+        return                     // base case: an empty tree
+    }
+    printInOrder(node.left)        // everything smaller first
+    println(node.value)
+    printInOrder(node.right)       // then everything bigger
+}
+
+fun countNodes(node: Node?): Int {
+    if (node == null) {
+        return 0
+    }
+    return 1 + countNodes(node.left) + countNodes(node.right)
+}
+
+fun main() {
+    val root = Node(8, Node(4, Node(2), Node(6)), Node(12, Node(10), Node(14)))
+    printInOrder(root)             // 2 4 6 8 10 12 14, one per line
+    println(countNodes(root))      // 7
+    println(sortedSetOf(8, 4, 12, 2))   // [2, 4, 8, 12]
+}`,
+        play: `class Node(val value: Int, val left: Node? = null, val right: Node? = null)
+
+fun printInOrder(node: Node?) {
+    if (node == null) {
+        return
+    }
+    printInOrder(node.left)
+    println(node.value)
+    printInOrder(node.right)
+}
+
+fun countNodes(node: Node?): Int {
+    if (node == null) {
+        return 0
+    }
+    return 1 + countNodes(node.left) + countNodes(node.right)
+}
+
+fun main() {
+    //        5
+    //      /   \\
+    //     3     9
+    //    /     /
+    //   1     7
+    val root = Node(5, Node(3, Node(1)), Node(9, Node(7)))
+    printInOrder(root)
+    println("\${countNodes(root)} nodes")
+    // Give 9 a right child, Node(11). Where does 11 appear in the output?
+}`,
+        remember: 'A tree node holds a value and smaller trees. Tree code is recursive: stop at null, handle left, the node, right.',
+        mistakes: [
+          { title: 'Forgetting the null check', bad: 'fun printInOrder(node: Node?) {\n    printInOrder(node.left)   // Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type \'Node?\'.\n    println(node.value)\n    printInOrder(node.right)\n}', good: 'fun printInOrder(node: Node?) {\n    if (node == null) {\n        return\n    }\n    printInOrder(node.left)\n    println(node.value)\n    printInOrder(node.right)\n}', why: 'Every leaf has null children, so the function is always called with null in the end. The check is the base case, and after it Kotlin knows <code>node</code> is not null.' },
+        ],
+        terms: [
+          { term: 'tree', def: 'Nodes that branch out from one top node, the root. Each node’s children are smaller trees.' },
+          { term: 'node', def: 'One box in a tree: a value plus links to its children. A node with no children is a leaf.' },
+          { term: 'traversal', def: 'Visiting every node of a tree once. In-order means left subtree, then the node, then the right subtree.' },
+          { term: 'binary search tree', def: 'A binary tree where everything left of a node is smaller and everything right is bigger.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish <code>countNodes</code>: an empty tree has no nodes; otherwise count this node plus both sides.', code: 'fun countNodes(node: Node?): Int {\n    if (node == [[null]]) {\n        return [[0]]\n    }\n    return 1 + countNodes(node.[[left]]) + countNodes(node.right)\n}', why: 'The base case answers the empty tree. Each call adds 1 for its own node.' },
+          { type: 'bug', prompt: 'On the demo tree this should print 2 4 6 8 10 12 14, but it prints 2 4 2 8 2 4 2. Tap the wrong line.', code: 'fun printInOrder(node: Node?) {\n    if (node == null) {\n        return\n    }\n    printInOrder(node.left)\n    println(node.value)\n    printInOrder(node.left)\n}', bug: 6, fix: '    printInOrder(node.right)', why: 'The second call must go to the right subtree. Going left twice prints the left side twice and never reaches 10, 12 and 14.' },
+        ],
+        quiz: [
+          { q: 'In <code>Node(8, Node(4), Node(12))</code>, which node is the root?', options: ['<code>8</code>', '<code>4</code>', '<code>12</code>'], a: 0, why: 'The outer node is the top of the tree. 4 and 12 are its children.' },
+          { q: 'What is a node with no children called?', options: ['A leaf', 'A root', 'A base case'], a: 0, why: 'Leaves are at the ends of the branches.' },
+          { q: 'In a binary search tree with root 8, where is 5?', options: ['Somewhere in the left subtree', 'Somewhere in the right subtree', 'It could be anywhere'], a: 0, why: 'Everything smaller than a node is on its left.' },
+        ],
+        docs: [['sortedSetOf', 'https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/sorted-set-of.html']],
+      },
+
+      {
+        id: 'heaps',
+        title: 'Heaps and priority queues',
+        tagline: 'Always get the smallest item next, fast.',
+        goals: ['Take out the smallest item first with <code>PriorityQueue</code>', 'Picture a heap as a tree where each parent is smaller than its children', 'Explain why adding and taking out cost O(log n)'],
+        level: 'beginner', introduces: ['import', 'PriorityQueue', 'peek', 'poll'],
+        body: `
+<p>A to-do app: tasks keep arriving, each with the number of days until it is due, and you always want the most urgent one next. A queue from the stacks and queues lesson serves tasks in the order they arrived. Sorting the whole list after every new task works, but it is slow. A <em>priority queue</em> always hands out the smallest item first, whatever order the items came in.</p>
+<p>Kotlin borrows Java’s <code>PriorityQueue</code>. It lives in a named group of code called <code>java.util</code>, so the file needs one extra line at the very top: <code>import java.util.PriorityQueue</code>. An <code>import</code> line lets the rest of the file use that type.</p>
+<p><code>val daysLeft = PriorityQueue&lt;Int&gt;()</code> makes an empty one; <code>&lt;Int&gt;</code> says what it holds, as in <code>List&lt;Int&gt;</code>. <code>add(5)</code> puts an item in, <code>peek()</code> shows the smallest without taking it out, and <code>poll()</code> takes the smallest out and gives it back.</p>
+<p>Inside is a <em>heap</em>: a binary tree, as in the trees lesson, where every parent is smaller than or equal to its children, so the smallest item is always at the root. The tree is stored in a plain list, row by row, which is why printing the queue shows heap order, not sorted order. <code>add</code> and <code>poll()</code> move an item up or down the tree with swaps, one row at a time. A tree of n items has about log n rows, so both are O(log n). <code>peek()</code> is O(1): the smallest is always on top.</p>`,
+        visual(el) {
+          const P = [[0, 160, 24], [1, 85, 84], [2, 235, 84], [3, 45, 144], [4, 125, 144], [5, 195, 144], [6, 275, 144]];
+          const g = graphSvg(P.map(([id, x, y]) => ({ id, x, y, text: '' })), [[0, 1], [0, 2], [1, 3], [1, 4], [2, 5], [2, 6]], { w: 320, ht: 166, r: 17, name: 'Heap as a tree' });
+          const row = h('div', {});
+          const stage = h('div', { class: 'ui-stage dsa-col' }, g.root, label('Stored as a list'), row);
+          const frames = [
+            { v: [], say: 'An empty <code>PriorityQueue</code>. Spots fill row by row, left to right.' },
+            { v: [5], hot: [0], say: '<code>add(5)</code>: the first item becomes the root.' },
+            { v: [2, 5], hot: [0, 1], say: '<code>add(2)</code> goes into the next free spot, under 5. 2 is smaller than its parent 5, so they swap.' },
+            { v: [2, 5, 8], hot: [2], say: '<code>add(8)</code>: 8 is bigger than its parent 2, so it stays where it is.' },
+            { v: [2, 5, 8, 1], hot: [3], say: '<code>add(1)</code> lands under 5. 1 is smaller than 5: swap.' },
+            { v: [2, 1, 8, 5], hot: [1], say: 'Now 1 sits under 2. Still smaller: swap again.' },
+            { v: [1, 2, 8, 5], hot: [0], say: '1 is at the root: two swaps, one per row. <code>println(queue)</code> prints the list: <code>[1, 2, 8, 5]</code>. Not sorted, but the smallest is first.' },
+            { v: [2, 5, 8], hot: [0, 1], say: '<code>poll()</code> gives back 1. The last item, 5, moves to the root, then swaps down with its smaller child, 2. The next smallest is on top again.' },
+          ];
+          Lab.ui.player(el, {
+            frames, stage,
+            predict: { q: 'After <code>add(5)</code>, <code>add(2)</code>, <code>add(8)</code>, <code>add(1)</code>, what does <code>println(queue)</code> print?', options: ['<code>[1, 2, 5, 8]</code>', '<code>[1, 2, 8, 5]</code>', '<code>[5, 2, 8, 1]</code>'], a: 1, why: 'It prints the heap’s list, row by row. Only the first item is sure to be the smallest.' },
+            draw(f) {
+              g.clear();
+              P.forEach(([id]) => {
+                g.text(id, f.v[id] === undefined ? '' : String(f.v[id]));
+                g.node(id, f.v[id] === undefined ? 'dsa-dim' : (f.hot || []).includes(id) ? 'dsa-hot' : 'dsa-on');
+              });
+              row.replaceChildren(f.v.length ? cellRow(f.v.map((v, k) => ({ v, cls: (f.hot || []).includes(k) ? 'dsa-hot' : '' })), 'dsa-wide') : h('span', { class: 'dsa-stat' }, '[ ]'));
+            },
+          });
+        },
+        code: `import java.util.PriorityQueue
+
+fun main() {
+    val daysLeft = PriorityQueue<Int>()   // days until each task is due
+    daysLeft.add(5)
+    daysLeft.add(2)
+    daysLeft.add(8)
+    daysLeft.add(1)
+    println(daysLeft)           // [1, 2, 8, 5]: heap order, not sorted
+    println(daysLeft.peek())    // 1, still in the queue
+    println(daysLeft.poll())    // 1, now taken out
+    println(daysLeft.poll())    // 2
+    println(daysLeft)           // [5, 8]
+}`,
+        play: `import java.util.PriorityQueue
+
+fun main() {
+    val queue = PriorityQueue<Int>()
+    for (days in listOf(7, 4, 9, 2, 6)) {
+        queue.add(days)
+    }
+    println("Inside: \$queue")
+    println("Most urgent: \${queue.peek()}")
+
+    while (queue.isNotEmpty()) {
+        println("Next: \${queue.poll()}")
+    }
+
+    val words = PriorityQueue<String>()
+    words.add("tea")
+    words.add("bread")
+    words.add("milk")
+    println(words.poll())
+    // Add a task with 0 days left. When does it come out?
+}`,
+        remember: 'PriorityQueue: add and poll are O(log n), peek is O(1), and the smallest always comes out first.',
+        mistakes: [
+          { title: 'Expecting the printed queue to be sorted', bad: 'println(daysLeft)   // [1, 2, 8, 5]', good: 'while (daysLeft.isNotEmpty()) {\n    println(daysLeft.poll())   // 1, 2, 5, 8\n}', why: 'Printing shows the heap’s list, where only the first item is sure to be the smallest. Taking items out with <code>poll()</code> gives them in order.' },
+        ],
+        terms: [
+          { term: 'priority queue', def: 'A collection that always gives back its smallest item first. In Kotlin: <code>PriorityQueue</code>.' },
+          { term: 'heap', def: 'A binary tree where every parent is smaller than or equal to its children, stored in a list row by row.' },
+          { term: 'import', def: 'A line at the top of a file that lets you use a type from a named group of code, like <code>import java.util.PriorityQueue</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make the queue usable, then take out the smallest item.', code: 'import java.util.[[PriorityQueue]]\n\nfun main() {\n    val queue = PriorityQueue<Int>()\n    queue.add(9)\n    queue.add(4)\n    println(queue.[[poll]]())   // 4\n}', why: 'The import names the type. <code>poll()</code> takes out and gives back the smallest.' },
+          { type: 'bug', prompt: 'This should print 1 and then 3, but it never stops printing 1. Tap the wrong line.', code: 'import java.util.PriorityQueue\n\nfun main() {\n    val queue = PriorityQueue<Int>()\n    queue.add(3)\n    queue.add(1)\n    while (queue.isNotEmpty()) {\n        println(queue.peek())\n    }\n}', bug: 7, fix: '        println(queue.poll())', why: '<code>peek()</code> only looks, so the queue never gets empty. <code>poll()</code> takes the item out.' },
+        ],
+        quiz: [
+          { q: 'Which call takes the smallest item out of a <code>PriorityQueue</code>?', options: ['<code>poll()</code>', '<code>peek()</code>', '<code>add()</code>'], a: 0, why: '<code>peek()</code> only shows it; <code>poll()</code> removes it and gives it back.' },
+          { q: 'You add 9, 4 and 6. What does the first <code>poll()</code> give?', options: ['<code>4</code>', '<code>9</code>', '<code>6</code>'], a: 0, why: 'Smallest first, whatever order the items were added in.' },
+          { q: 'Why is <code>add</code> O(log n)?', options: ['The new item swaps up at most one row at a time, and there are about log n rows', 'It sorts the whole list', 'It looks at every item'], a: 0, why: 'Each row holds twice as many spots as the one above, so n items fit in about log n rows.' },
+        ],
+        docs: [['PriorityQueue', 'https://developer.android.com/reference/java/util/PriorityQueue']],
+      },
+
+      {
+        id: 'graphs',
+        title: 'Graphs',
+        tagline: 'Places joined by paths, and how to find your way.',
+        goals: ['Store a map of connections as a <code>Map</code> of lists', 'Find the fewest stops between two places with breadth-first search', 'Tell breadth-first and depth-first search apart'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>A bus map: stops, and lines between the ones a bus drives straight between. How many stops is it from Home to the Pool, at the fewest? Friends of friends, roads between towns and links between web pages have the same shape. It is called a <em>graph</em>: places (nodes) joined by connections (edges). A tree is a graph too, but a graph can have loops: from Home you can ride round and come back to Home.</p>
+<p>Kotlin has no graph type. The usual way is a map from each place to the list of its neighbours, called an <em>adjacency list</em>: <code>"Home" to listOf("Park", "School")</code>. A bus goes both ways, so Park lists Home as well. Its type, <code>Map&lt;String, List&lt;String&gt;&gt;</code>, reads “a map from String to a list of Strings”.</p>
+<p><em>Breadth-first search</em> (BFS) finds the fewest stops. Start with Home in an <code>ArrayDeque</code> used as a queue. Take the first stop out, and give every neighbour not reached yet a distance one bigger, then add it to the back of the queue. First in, first out means all places 1 stop away come out before any place 2 stops away: BFS spreads in rings. The <code>distance</code> map also remembers who is already reached, so loops don’t send it round forever.</p>
+<p><em>Depth-first search</em> (DFS) goes as far as it can down one path before it backs up, like walking a maze with one hand on the wall. With recursion it is short: visit a place, then call yourself for each neighbour you haven’t seen (the Run it program has one; its <code>MutableSet&lt;String&gt;</code> is the type of a set made with <code>mutableSetOf</code>). DFS answers “can I get there at all?”, but it doesn’t find the fewest stops.</p>`,
+        visual(el) {
+          const S = [['Home', 36, 100], ['Park', 125, 40], ['School', 125, 160], ['Market', 215, 70], ['Library', 215, 170], ['Pool', 295, 120]];
+          const E = [['Home', 'Park'], ['Home', 'School'], ['Park', 'Market'], ['School', 'Market'], ['School', 'Library'], ['Market', 'Pool'], ['Library', 'Pool']];
+          const g = graphSvg(S.map(([id, x, y]) => ({ id, x, y, text: '', label: id })), E, { w: 330, ht: 205, r: 16, name: 'Bus map' });
+          const q = h('div', {});
+          const stage = h('div', { class: 'ui-stage dsa-col' }, g.root, label('queue'), q);
+          const frames = [
+            { d: { Home: 0 }, queue: ['Home'], say: 'Start at Home, 0 stops away. The queue holds Home. The number in a circle is its distance.' },
+            { d: { Home: 0, Park: 1, School: 1 }, cur: 'Home', lines: [['Home', 'Park'], ['Home', 'School']], queue: ['Park', 'School'], say: 'Take Home out. Its neighbours Park and School are new: 0 + 1 = 1 stop. They go to the back of the queue.' },
+            { d: { Home: 0, Park: 1, School: 1, Market: 2 }, cur: 'Park', lines: [['Park', 'Market']], queue: ['School', 'Market'], say: 'Take Park out. Home is already reached, so skip it. Market is new: 2 stops.' },
+            { d: { Home: 0, Park: 1, School: 1, Market: 2, Library: 2 }, cur: 'School', lines: [['School', 'Library']], queue: ['Market', 'Library'], say: 'Take School out. Home and Market are already reached. Library is new: 2 stops.' },
+            { d: { Home: 0, Park: 1, School: 1, Market: 2, Library: 2, Pool: 3 }, cur: 'Market', lines: [['Market', 'Pool']], queue: ['Library', 'Pool'], say: 'Take Market out. Pool is new: 3 stops.' },
+            { d: { Home: 0, Park: 1, School: 1, Market: 2, Library: 2, Pool: 3 }, cur: 'Library', queue: ['Pool'], say: 'Take Library out. School and Pool are both reached already. Pool keeps 3: the first time BFS reaches a place is always by the fewest stops.' },
+            { d: { Home: 0, Park: 1, School: 1, Market: 2, Library: 2, Pool: 3 }, cur: 'Pool', queue: [], done: true, say: 'Take Pool out: nothing new. The queue is empty, so BFS is done. Pool is 3 stops from Home.' },
+          ];
+          Lab.ui.player(el, {
+            frames, stage,
+            predict: { q: 'How many stops is Pool from Home, at the fewest?', options: ['2', '3', '4'], a: 1, why: 'Home, Park, Market, Pool: 3 rides. No route has fewer.' },
+            draw(f) {
+              g.clear();
+              S.forEach(([id]) => {
+                const has = f.d[id] !== undefined;
+                g.text(id, has ? String(f.d[id]) : '');
+                g.node(id, id === f.cur ? 'dsa-hot' : has ? (f.done ? 'dsa-ok' : 'dsa-on') : '');
+              });
+              (f.lines || []).forEach(([a, b]) => g.edge(a, b, 'dsa-on'));
+              q.replaceChildren(h('div', { class: 'dsa-queue' }, f.queue.length ? f.queue.map(s => pill(s)) : pill('empty', 'dsa-ghost')));
+            },
+          });
+        },
+        code: `fun stopsFrom(bus: Map<String, List<String>>, start: String): Map<String, Int> {
+    val distance = mutableMapOf(start to 0)
+    val queue = ArrayDeque<String>()
+    queue.addLast(start)
+    while (queue.isNotEmpty()) {
+        val stop = queue.removeFirst()
+        for (next in bus.getOrDefault(stop, listOf())) {
+            if (distance[next] == null) {      // not reached yet
+                distance[next] = distance.getOrDefault(stop, 0) + 1
+                queue.addLast(next)
+            }
+        }
+    }
+    return distance
+}
+
+fun main() {
+    val bus = mapOf(
+        "Home" to listOf("Park", "School"),
+        "Park" to listOf("Home", "Market"),
+        "School" to listOf("Home", "Market", "Library"),
+        "Market" to listOf("Park", "School", "Pool"),
+        "Library" to listOf("School", "Pool"),
+        "Pool" to listOf("Market", "Library")
+    )
+    println(stopsFrom(bus, "Home"))
+    // {Home=0, Park=1, School=1, Market=2, Library=2, Pool=3}
+    println(stopsFrom(bus, "Home")["Pool"])   // 3
+}`,
+        play: `fun stopsFrom(bus: Map<String, List<String>>, start: String): Map<String, Int> {
+    val distance = mutableMapOf(start to 0)
+    val queue = ArrayDeque<String>()
+    queue.addLast(start)
+    while (queue.isNotEmpty()) {
+        val stop = queue.removeFirst()
+        for (next in bus.getOrDefault(stop, listOf())) {
+            if (distance[next] == null) {
+                distance[next] = distance.getOrDefault(stop, 0) + 1
+                queue.addLast(next)
+            }
+        }
+    }
+    return distance
+}
+
+fun visit(bus: Map<String, List<String>>, stop: String, seen: MutableSet<String>) {
+    if (!seen.add(stop)) {
+        return
+    }
+    println("DFS visits \$stop")
+    for (next in bus.getOrDefault(stop, listOf())) {
+        visit(bus, next, seen)
+    }
+}
+
+fun main() {
+    val bus = mapOf(
+        "Home" to listOf("Park", "School"),
+        "Park" to listOf("Home", "Market"),
+        "School" to listOf("Home", "Market", "Library"),
+        "Market" to listOf("Park", "School", "Pool"),
+        "Library" to listOf("School", "Pool"),
+        "Pool" to listOf("Market", "Library")
+    )
+    println("BFS: \${stopsFrom(bus, "Home")}")
+    println("From Pool: \${stopsFrom(bus, "Pool")}")
+    visit(bus, "Home", mutableSetOf())
+    // Add a new stop "Zoo" next to Pool (remember both directions). How far is it from Home?
+}`,
+        remember: 'A graph is a map from each place to its neighbours. BFS with a queue finds the fewest steps; DFS goes deep first.',
+        terms: [
+          { term: 'graph', def: 'Places (nodes) joined by connections (edges). Unlike a tree, it can have loops.' },
+          { term: 'adjacency list', def: 'A graph stored as a map from each node to the list of its neighbours.' },
+          { term: 'BFS', def: 'Breadth-first search: visit in rings, nearest first, using a queue. Finds the fewest steps.' },
+          { term: 'DFS', def: 'Depth-first search: follow one path as far as it goes, then back up. Often written with recursion.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'BFS adds to the back of the queue and takes from the front.', code: 'queue.[[addLast]](start)\nwhile (queue.isNotEmpty()) {\n    val stop = queue.[[removeFirst]]()', why: 'First in, first out: places are handled in the order they were reached, nearest first.' },
+          { type: 'bug', prompt: 'Every stop comes out as 0 stops away: <code>{Home=0, Park=0, School=0, ...}</code>. Tap the wrong line.', code: 'while (queue.isNotEmpty()) {\n    val stop = queue.removeFirst()\n    for (next in bus.getOrDefault(stop, listOf())) {\n        if (distance[next] == null) {\n            distance[next] = distance.getOrDefault(stop, 0)\n            queue.addLast(next)\n        }\n    }\n}', bug: 4, fix: '            distance[next] = distance.getOrDefault(stop, 0) + 1', why: 'A neighbour is one ride further than the stop you came from, so add 1.' },
+        ],
+        quiz: [
+          { q: 'Which search finds the fewest stops from Home to Pool?', options: ['Breadth-first search (BFS)', 'Depth-first search (DFS)'], a: 0, why: 'BFS reaches every place 1 stop away before any place 2 stops away, so the first time it reaches a place is by the shortest route.' },
+          { q: 'What does BFS keep its waiting places in?', options: ['A queue: first in, first out', 'A stack: last in, first out', 'A sorted list'], a: 0, why: 'Taking from the front keeps the nearest places first.' },
+          { q: 'Why does the code check <code>distance[next] == null</code>?', options: ['So loops like Home, Park, Home don’t make it go round forever', 'To skip stops that are far away', 'Because the map might be empty'], a: 0, why: 'A place already reached is skipped, so each place goes into the queue once.' },
+        ],
+        docs: [['ArrayDeque', 'https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-array-deque/'], ['Map-specific operations', 'https://kotlinlang.org/docs/map-operations.html']],
+      },
+
+      {
+        id: 'dp',
+        title: 'Dynamic programming',
+        tagline: 'Remember answers so you never work them out twice.',
+        goals: ['Spot a recursive function that solves the same small problem again and again', 'Save answers in a map so each one is worked out once', 'Build answers up from the smallest one in a list'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>A puzzle: you climb a staircase taking 1 or 2 stairs at a time. In how many different ways can you climb 4 stairs? Your last move was either 1 stair or 2, so <code>ways(4) = ways(3) + ways(2)</code>. With 0 or 1 stairs there is exactly 1 way. That is a short recursive function, and it is right. But for 40 stairs it makes 331,160,281 calls (counted in a real run).</p>
+<p>Why so many? <code>ways(5)</code> calls <code>ways(4)</code> and <code>ways(3)</code>; <code>ways(4)</code> calls <code>ways(3)</code> again, and so on down. The same small questions are worked out again and again. The fix is to remember answers. Keep a map, <code>val saved = mutableMapOf&lt;Int, Int&gt;()</code>, made outside any function so every call can use it. Before working out <code>ways(n)</code>, look in the map; after working it out, save it. Now each n is worked out once, and 40 stairs takes 79 calls.</p>
+<p>That is <em>dynamic programming</em>: split a problem into smaller ones that repeat, solve each once and reuse the answers. (The name is old and doesn’t mean much; think “remembering answers”.) Saving the answers of a recursive function like this is called <em>memoization</em>, from “memo”, a note to yourself.</p>
+<p>You can also start from the bottom. Make a list where <code>table[0]</code> and <code>table[1]</code> are 1, then fill <code>table[n] = table[n - 1] + table[n - 2]</code> for 2, 3, 4 and up with a <code>for</code> loop. No recursion at all, and it is O(n): one step per stair.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: 'val saved = mutableMapOf<Int, Int>()\n\nfun ways(stairs: Int): Int {\n    if (stairs <= 1) {\n        return 1\n    }\n    val known = saved[stairs]\n    if (known != null) {\n        return known\n    }\n    val answer = ways(stairs - 1) + ways(stairs - 2)\n    saved[stairs] = answer\n    return answer\n}\n\nfun main() {\n    println(ways(4))\n}',
+            predict: {
+              q: '<code>ways(4)</code> needs <code>ways(2)</code> twice. With <code>saved</code>, what happens the second time?',
+              options: ['It works it out again', 'It reads the saved answer'],
+              a: 1,
+              why: 'The first time, the answer goes into <code>saved</code>. The second time, line 7 finds it.',
+            },
+            frames: [
+              { line: 11, stack: ['main()', 'ways(4)', 'ways(3)', 'ways(2)'], vars: { saved: '{}' }, say: '<code>ways(4)</code> asks for <code>ways(3)</code>, which asks for <code>ways(2)</code>. Nothing is saved yet, so each has to work it out.' },
+              { line: 5, stack: ['main()', 'ways(4)', 'ways(3)', 'ways(2)', 'ways(1)'], say: '<code>ways(2)</code> asks for <code>ways(1)</code> and then <code>ways(0)</code>. Both are base cases: 1 each.' },
+              { line: 12, stack: ['main()', 'ways(4)', 'ways(3)', 'ways(2)'], vars: { saved: '{2=2}' }, say: '<code>ways(2)</code> is 1 + 1 = 2. Save it: <code>saved[2] = 2</code>.' },
+              { line: 12, stack: ['main()', 'ways(4)', 'ways(3)'], vars: { saved: '{2=2, 3=3}' }, say: '<code>ways(3)</code> also needs <code>ways(1)</code>, which is 1. So <code>ways(3)</code> is 2 + 1 = 3. Saved.' },
+              { line: 9, stack: ['main()', 'ways(4)', 'ways(2)'], say: 'Back in <code>ways(4)</code>, the second half asks for <code>ways(2)</code> again. This time it is saved: return 2 straight away, no more calls.' },
+              { line: 12, stack: ['main()', 'ways(4)'], vars: { saved: '{2=2, 3=3, 4=5}' }, say: '<code>ways(4)</code> is 3 + 2 = 5. Saved too.' },
+              { line: 17, stack: ['main()'], out: '5', say: 'It prints 5. That took 7 calls; without <code>saved</code> it takes 9. For 40 stairs: 79 calls instead of 331,160,281.' },
+            ],
+          });
+        },
+        code: `val saved = mutableMapOf<Int, Int>()   // stairs -> number of ways
+
+fun ways(stairs: Int): Int {
+    if (stairs <= 1) {
+        return 1
+    }
+    val known = saved[stairs]
+    if (known != null) {
+        return known                   // worked out before: reuse it
+    }
+    val answer = ways(stairs - 1) + ways(stairs - 2)
+    saved[stairs] = answer
+    return answer
+}
+
+fun tableWays(stairs: Int): Int {
+    val table = mutableListOf(1, 1)    // 0 stairs and 1 stair: 1 way each
+    for (n in 2..stairs) {
+        table.add(table[n - 1] + table[n - 2])
+    }
+    return table[stairs]
+}
+
+fun main() {
+    println(ways(4))           // 5
+    println(ways(30))          // 1346269
+    println(tableWays(30))     // 1346269
+}`,
+        play: `var calls = 0
+val saved = mutableMapOf<Int, Int>()
+
+fun slowWays(stairs: Int): Int {
+    calls++
+    if (stairs <= 1) {
+        return 1
+    }
+    return slowWays(stairs - 1) + slowWays(stairs - 2)
+}
+
+fun ways(stairs: Int): Int {
+    calls++
+    if (stairs <= 1) {
+        return 1
+    }
+    val known = saved[stairs]
+    if (known != null) {
+        return known
+    }
+    val answer = ways(stairs - 1) + ways(stairs - 2)
+    saved[stairs] = answer
+    return answer
+}
+
+fun main() {
+    println("Slow: \${slowWays(30)} ways, \$calls calls")
+    calls = 0
+    println("Saved: \${ways(30)} ways, \$calls calls")
+    // Try 40 stairs in both: the slow one makes over 300 million calls.
+}`,
+        remember: 'When the same smaller problem comes up again and again, save its answer the first time and reuse it.',
+        terms: [
+          { term: 'dynamic programming', def: 'Solving a problem from smaller problems that repeat, working each one out only once.' },
+          { term: 'memoization', def: 'Saving a function’s answers, for example in a map, so a repeated call can return the saved answer at once.' },
+          { term: 'subproblem', def: 'A smaller version of the problem, like <code>ways(3)</code> inside <code>ways(4)</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Reuse a saved answer, and save a new one.', code: 'val known = saved[stairs]\nif (known [[!=]] null) {\n    return known\n}\nval answer = ways(stairs - 1) + ways(stairs - 2)\nsaved[stairs] = [[answer]]\nreturn answer', why: 'A saved answer is not null. A new answer is saved before it is returned.' },
+          { type: 'bug', prompt: '<code>tableWays(4)</code> should be 5, but it gives 8. Tap the wrong line.', code: 'fun tableWays(stairs: Int): Int {\n    val table = mutableListOf(1, 1)\n    for (n in 2..stairs) {\n        table.add(table[n - 1] + table[n - 1])\n    }\n    return table[stairs]\n}', bug: 3, fix: '        table.add(table[n - 1] + table[n - 2])', why: 'The ways to n stairs are the ways to n - 1 (last move 1 stair) plus the ways to n - 2 (last move 2 stairs). Adding n - 1 twice just doubles.' },
+        ],
+        quiz: [
+          { q: 'Why does the plain recursive <code>ways(40)</code> make hundreds of millions of calls?', options: ['It works out the same smaller answers again and again', 'The answer is a big number', 'Recursion is always slow'], a: 0, why: 'Saving each answer once brings it down to 79 calls, with the same result.' },
+          { q: 'The table starts <code>[1, 1]</code> and each new entry is the sum of the two before it. What is <code>table[3]</code>?', options: ['<code>3</code>', '<code>2</code>', '<code>5</code>'], a: 0, why: '<code>table[2]</code> is 1 + 1 = 2, and <code>table[3]</code> is 2 + 1 = 3.' },
+          { q: 'When does dynamic programming help?', options: ['When the same smaller problems come up more than once', 'Whenever a list is sorted', 'Only when there is no recursion'], a: 0, why: 'Remembering answers only pays off if you would otherwise work them out again.' },
+        ],
+        docs: [['Map-specific operations', 'https://kotlinlang.org/docs/map-operations.html']],
+      },
+
+      {
+        id: 'method',
+        title: 'Solving a problem step by step',
+        tagline: 'A routine for when you don’t know where to start.',
+        goals: ['Work through small examples by hand before writing code', 'Write a simple, correct version first, then make it faster', 'Test the edge cases: empty, one item, no answer'],
+        level: 'beginner', introduces: [],
+        body: `
+<p>A new problem can feel like a blank page. Here is one: a visitor log lists names in the order people came in. Who is the first person to come back a second time? A routine helps more than a flash of genius, and it is the same routine every time.</p>
+<p><b>1. Understand it.</b> Say it in your own words. What goes in, what comes out? Here a <code>List&lt;String&gt;</code> goes in and a <code>String?</code> comes out: null when nobody came back. <b>2. Work examples by hand.</b> <code>Ada, Sam, Lin, Sam, Ada</code> gives Sam, because Sam’s second visit comes before Ada’s. Also try the odd ones, the <em>edge cases</em>: an empty log, one name, nobody coming back.</p>
+<p><b>3. Write a simple version first.</b> For each visit, look back at every earlier one. A loop inside a loop is O(n²), but it is easy to get right, and a correct slow answer beats a fast wrong one. This straightforward try-everything version is called <em>brute force</em>. <b>4. Make it faster.</b> What work repeats? Looking back through earlier names. Which tool from this track answers “have I seen this?” in one step? A set: <code>seen.add(name)</code> gives false when the name is already there. One pass, O(n).</p>
+<p><b>5. Test.</b> Run every example from step 2 through both versions and check they agree. The simple version is now your answer key.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'understand', label: 'Understand', sub: 'in, out' },
+              { id: 'examples', label: 'Examples', sub: 'by hand' },
+              { id: 'simple', label: 'Simple first', sub: 'correct' },
+              { id: 'faster', label: 'Faster', sub: 'what repeats?' },
+              { id: 'test', label: 'Test', sub: 'edge cases' },
+            ],
+            predict: { q: 'Which version should you write first?', options: ['The fastest one you can think of', 'A simple one you are sure is right'], a: 1, why: 'A correct simple version gives you something that works, and an answer key to test the faster one against.' },
+            frames: [
+              { say: 'Problem: in a visitor log, who is the first person to come back?' },
+              { at: 'understand', packet: 'log', say: 'In: a list of names. Out: one name, or null if nobody came back. That is <code>String?</code>.' },
+              { at: 'examples', packet: 'Sam', mark: { understand: 'ok' }, say: '<code>Ada, Sam, Lin, Sam, Ada</code>: Sam. <code>Ada, Sam</code>: null. An empty log: null.' },
+              { at: 'simple', packet: 'O(n²)', mark: { examples: 'ok' }, say: 'For each visit, compare it with every earlier visit. A loop inside a loop: slow but clearly right.' },
+              { at: 'faster', packet: 'O(n)', tone: 'ok', mark: { simple: 'ok' }, say: 'The repeated work is looking back. A set remembers who has been seen, so each name takes one step.' },
+              { at: 'test', packet: '✓', tone: 'ok', mark: { faster: 'ok' }, say: 'Run every example through both versions. They agree, including the empty log.' },
+              { mark: { test: 'ok' }, say: 'Next time you are stuck, start again at step 1. It works for small exercises and big features alike.' },
+            ],
+          });
+        },
+        code: `// Simple first: for each visit, look back at every earlier one. O(n²)
+fun firstReturnSimple(visits: List<String>): String? {
+    for (i in visits.indices) {
+        for (j in 0 until i) {
+            if (visits[j] == visits[i]) {
+                return visits[i]
+            }
+        }
+    }
+    return null
+}
+
+// Faster: remember who you've seen in a set. O(n)
+fun firstReturn(visits: List<String>): String? {
+    val seen = mutableSetOf<String>()
+    for (name in visits) {
+        if (!seen.add(name)) {      // add gives false: seen before
+            return name
+        }
+    }
+    return null
+}
+
+fun main() {
+    val log = listOf("Ada", "Sam", "Lin", "Sam", "Ada")
+    println(firstReturnSimple(log))           // Sam
+    println(firstReturn(log))                 // Sam
+    println(firstReturn(listOf("Ada", "Sam"))) // null: nobody came back
+    println(firstReturn(listOf()))            // null: empty log
+}`,
+        play: `fun firstReturnSimple(visits: List<String>): String? {
+    for (i in visits.indices) {
+        for (j in 0 until i) {
+            if (visits[j] == visits[i]) {
+                return visits[i]
+            }
+        }
+    }
+    return null
+}
+
+fun firstReturn(visits: List<String>): String? {
+    val seen = mutableSetOf<String>()
+    for (name in visits) {
+        if (!seen.add(name)) {
+            return name
+        }
+    }
+    return null
+}
+
+fun check(visits: List<String>) {
+    val simple = firstReturnSimple(visits)
+    val fast = firstReturn(visits)
+    println("\$visits -> \$fast, same as simple: \${simple == fast}")
+}
+
+fun main() {
+    check(listOf("Ada", "Sam", "Lin", "Sam", "Ada"))
+    check(listOf("Mia", "Mia"))
+    check(listOf("Ada", "Sam"))
+    check(listOf("Ben"))
+    check(listOf())
+    // Add your own example. Can you find one where the two disagree?
+}`,
+        remember: 'Understand, work examples, write it simply, make it faster, test the edge cases.',
+        terms: [
+          { term: 'edge case', def: 'An unusual input at the edge of what is allowed: an empty list, one item, no answer.' },
+          { term: 'brute force', def: 'The straightforward solution that tries everything. Often slow, but a good correct first version.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Finish the fast version.', code: 'fun firstReturn(visits: List<String>): String? {\n    val seen = mutableSetOf<String>()\n    for (name in visits) {\n        if (!seen.[[add]](name)) {\n            return name\n        }\n    }\n    return [[null]]\n}', why: '<code>add</code> gives false for a name already in the set. If the loop ends, nobody came back: null.' },
+          { type: 'bug', prompt: 'On <code>Ada, Sam, Lin, Sam, Ada</code> this gives Ada instead of Sam. Tap the wrong line.', code: 'fun firstReturnSimple(visits: List<String>): String? {\n    for (i in visits.indices) {\n        for (j in 0..i) {\n            if (visits[j] == visits[i]) {\n                return visits[i]\n            }\n        }\n    }\n    return null\n}', bug: 2, fix: '        for (j in 0 until i) {', why: '<code>0..i</code> includes <code>i</code> itself, so the very first name matches itself. Only earlier visits count: <code>0 until i</code>.' },
+        ],
+        quiz: [
+          { q: 'What is an edge case?', options: ['An unusual input like an empty list or a single item', 'The last line of a function', 'A bug that crashes the program'], a: 0, why: 'Edge cases are where code most often breaks, so test them on purpose.' },
+          { q: 'Your fast version and your simple version give different answers for one example. What now?', options: ['Work that example by hand to see which one is wrong', 'Trust the fast one', 'Delete the simple one'], a: 0, why: 'The example and your hand-worked answer decide. Often the fast version missed something.' },
+          { q: 'Step 4 asks “what work repeats?”. In the visitor log, what repeats in the simple version?', options: ['Looking back through earlier names', 'Printing the answer', 'Making the list'], a: 0, why: 'A set remembers the earlier names, so nothing needs looking back at.' },
+        ],
+        docs: [['Collections overview', 'https://kotlinlang.org/docs/collections-overview.html']],
+      },
+    ],
   });
 })();

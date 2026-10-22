@@ -1,1152 +1,412 @@
-/* Security and privacy track. Same shape as tracks/kotlin.js.
-   Demo styles live in the css string below; every class is prefixed sec-.
-   Signing keys and upload keys live in the build track; runtime permissions basics live in the android track. */
+/* Security and privacy track.
+   Same shape as tracks/kotlin.js. Demos use the visual kit (Lab.ui); any track CSS goes in the css string, every class
+   starting with sec-. Signing keys live in the build track; runtime permission basics live in the android track. */
 (() => {
-  const { h, sleep, hl, replay } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const line = (o, html, cls = '') => { const d = h('div', { class: `line drop-in ${cls}`, html }); o.append(d); return d; };
-  const trim = (o, n) => { while (o.querySelectorAll('.line').length > n) o.querySelector('.line').remove(); };
-  const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
-  const toggle = (id, label, checked, onchange) => {
-    const input = h('input', { type: 'checkbox', id, checked: checked || null, onchange() { onchange(input.checked); } });
-    return { input, el: h('label', { class: 'switch', for: id }, input, h('span', { html: label })) };
-  };
-  // visual() runs before the page is attached, so loops wait for the node to appear and stop once it leaves.
-  const alive = node => { let seen = false; const t0 = Date.now(); return () => { if (node.isConnected) { seen = true; return true; } return !seen && Date.now() - t0 < 5000; }; };
-  const hex = n => Array.from({ length: n }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join('');
-
-  const css = `
-.sec-label { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
-.sec-row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; min-width: 0; }
-.sec-stat { font: 600 0.85rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.sec-stat b { color: var(--ink); }
-.sec-stat .sec-badnum { color: var(--err); }
-.sec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 8px; min-width: 0; }
-.sec-card { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); transition: border-color 0.25s, background 0.25s; }
-.sec-card b { font: 600 0.82rem var(--mono); overflow-wrap: anywhere; }
-.sec-card small { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
-.sec-state { justify-self: start; font: 600 0.66rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
-.sec-card.sec-bad { border-color: var(--err); background: var(--err-soft); }
-.sec-card.sec-bad .sec-state { background: var(--err); color: var(--surface); }
-.sec-card.sec-warn { border-color: var(--warm); background: var(--warm-soft); }
-.sec-card.sec-warn .sec-state { background: var(--warm); color: var(--surface); }
-.sec-card.sec-safe { border-color: var(--ok); }
-.sec-card.sec-safe .sec-state { background: var(--ok-soft); color: var(--ok); }
-
-/* two or three zones side by side */
-.sec-zones { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; min-width: 0; }
-.sec-zone { flex: 1 1 180px; min-width: 0; display: grid; gap: 10px; align-content: start; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); transition: border-color 0.25s, background 0.25s; }
-.sec-zone.sec-hw { background: var(--code-bg); border-color: transparent; color: var(--code-ink); }
-.sec-zone.sec-hw .sec-label { color: var(--t-c); }
-.sec-zone.on { border-color: var(--accent); }
-.sec-zone.sec-hw.on { box-shadow: 0 0 0 2px var(--hi); }
-.sec-zone.sec-evil { border-color: var(--err); background: var(--err-soft); }
-.sec-pile { display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; align-items: center; min-width: 0; }
-.sec-pill { display: inline-block; max-width: 100%; font: 600 0.8rem var(--mono); padding: 6px 10px; border-radius: 9px; background: var(--surface); border: 2px solid var(--ink); color: var(--ink); overflow-wrap: anywhere; }
-.sec-pill.sec-plain { border-color: var(--warm); color: var(--warm); }
-.sec-pill.sec-cipher { border-color: var(--ok); color: var(--ok); }
-.sec-pill.sec-leak { border-color: var(--err); background: var(--err-soft); color: var(--err); }
-.sec-key { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1.5px dashed var(--t-k); font: 600 0.8rem var(--mono); color: var(--t-k); min-width: 0; }
-.sec-key.sec-locked { border-color: var(--t-s); color: var(--t-s); }
-.sec-lock { flex: none; position: relative; width: 14px; height: 11px; margin-top: 6px; border-radius: 2px; background: currentColor; }
-.sec-lock::before { content: ""; position: absolute; left: 2px; top: -7px; width: 10px; height: 9px; border: 2px solid currentColor; border-bottom: 0; border-radius: 6px 6px 0 0; box-sizing: border-box; }
-.sec-empty { color: var(--muted); font-size: 0.85rem; }
-.sec-hw .sec-empty { color: var(--t-c); }
-.sec-tag { font: 600 0.66rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); }
-
-/* 3 at rest: ciphertext bytes */
-.sec-file { display: grid; gap: 4px; min-width: 0; padding: 8px 10px; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); font: 500 0.78rem/1.5 var(--mono); }
-.sec-file > span:first-child { color: var(--t-c); overflow-wrap: anywhere; }
-.sec-bytes { overflow-wrap: anywhere; word-break: break-all; }
-.sec-hx-p { color: var(--t-f); } .sec-hx-n { color: var(--t-t); } .sec-hx-c { color: var(--code-ink); } .sec-hx-t { color: var(--t-k); }
-.sec-hx-x { background: rgba(255, 138, 155, 0.35); color: var(--t-e); border-radius: 3px; }
-.sec-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 0.74rem var(--mono); color: var(--muted); }
-.sec-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--code-bg); border: 1px solid var(--line); }
-
-/* 4 network path */
-.sec-path { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-width: 0; }
-.sec-node { position: relative; display: grid; gap: 8px; justify-items: center; align-content: start; min-width: 0; padding: 10px 8px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); text-align: center; transition: border-color 0.25s, background 0.25s; }
-.sec-node:not(:last-child)::after { content: "→"; position: absolute; right: -10px; top: 14px; transform: translateX(50%); color: var(--muted); font-weight: 700; }
-.sec-node b { font: 600 0.78rem var(--mono); overflow-wrap: anywhere; }
-.sec-node small { font-size: 0.76rem; color: var(--muted); line-height: 1.3; overflow-wrap: anywhere; }
-.sec-node.on { border-color: var(--accent); }
-.sec-node.sec-evil { border-color: var(--err); background: var(--err-soft); }
-.sec-node.sec-ok { border-color: var(--ok); background: var(--ok-soft); }
-.sec-well { min-height: 34px; display: grid; place-items: center; max-width: 100%; }
-.sec-packet { font: 600 0.72rem var(--mono); padding: 4px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); max-width: 100%; overflow-wrap: anywhere; }
-.sec-packet.sec-open { background: var(--err); color: var(--surface); }
-.sec-packet.sec-dead { background: var(--sunk); color: var(--muted); text-decoration: line-through; }
-
-/* 5 terminal */
-.sec-term { font: 500 0.8rem/1.6 var(--mono); background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 14px; min-height: 9.5em; overflow-x: auto; }
-.sec-term .line { white-space: pre; }
-.sec-term .line::before { content: ""; }
-.sec-term .sec-hit { background: rgba(255, 138, 155, 0.22); color: var(--t-e); border-radius: 4px; padding: 0 2px; }
-.sec-flag { font: 600 0.74rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 3px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
-.sec-flag.sec-bad { background: var(--err-soft); color: var(--err); }
-
-/* 6 biometric phone */
-.sec-bio { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; min-width: 0; }
-.sec-bio .phone { position: relative; justify-content: center; gap: 8px; text-align: center; }
-.sec-ph-title { font: 700 1rem var(--display); }
-.sec-ph-sub { font-size: 0.82rem; color: var(--muted); }
-.sec-ph-big { font: 800 1.4rem var(--display); color: var(--accent); }
-.sec-sheet { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 10px 14px; border-radius: 16px 16px 0 0; background: var(--sunk); display: grid; gap: 6px; justify-items: center; box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.18); animation: drop-in 0.35s ease-out both; }
-.sec-sheet b { font: 700 0.86rem var(--display); }
-.sec-sheet small { font-size: 0.74rem; color: var(--muted); }
-.sec-sheet .cmd { font-size: 0.74rem; padding: 5px 9px; width: 100%; }
-.sec-fp { width: 34px; height: 34px; border-radius: 50%; border: 3px double var(--accent); }
-.sec-fp.sec-no { border-color: var(--err); }
-.sec-bio .out { min-height: 6.5em; }
-
-/* 7 privacy */
-.sec-feat { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--warm); background: var(--surface); min-width: 0; transition: border-color 0.25s; }
-.sec-feat.sec-lean { border-color: var(--ok); }
-.sec-feat > div { display: grid; gap: 2px; min-width: 0; }
-.sec-feat b { font: 700 0.92rem var(--body); }
-.sec-feat small { color: var(--muted); font-size: 0.8rem; line-height: 1.35; overflow-wrap: anywhere; }
-.sec-feat .cmd { justify-self: end; }
-.sec-feats { display: grid; gap: 8px; min-width: 0; }
-.sec-manifest { display: grid; gap: 2px; min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--code-bg); color: var(--code-ink); font: 500 0.76rem/1.6 var(--mono); overflow-x: auto; }
-.sec-manifest span { white-space: pre; }
-.sec-manifest .sec-gone { color: var(--t-c); text-decoration: line-through; }
-.sec-ds { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.sec-ds span { font: 600 0.76rem var(--mono); padding: 3px 9px; border-radius: 999px; background: var(--warm-soft); color: var(--warm); }
-.sec-ds span.sec-lite { background: var(--ok-soft); color: var(--ok); }
-.sec-meter { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
-.sec-meter span { display: block; height: 100%; background: var(--warm); border-radius: 99px; transition: width 0.5s, background 0.5s; }
-.sec-meter span.sec-low { background: var(--ok); }
-/* depth demos */
-.sec-chks { display: grid; gap: 6px; min-width: 0; }
-.sec-chk { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; align-items: center; padding: 6px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); font-size: 0.86rem; min-width: 0; transition: border-color 0.25s, background 0.25s; }
-.sec-chk.sec-now { border-color: var(--accent); }
-.sec-chk.sec-pass { border-color: var(--ok); }
-.sec-chk.sec-pass .sec-state { background: var(--ok-soft); color: var(--ok); }
-.sec-chk.sec-fail { border-color: var(--err); background: var(--err-soft); }
-.sec-chk.sec-fail .sec-state { background: var(--err); color: var(--surface); }
-.sec-recs { display: grid; gap: 6px; min-width: 0; }
-.sec-rec { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 10px; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); font: 500 0.78rem var(--mono); min-width: 0; transition: box-shadow 0.25s; }
-.sec-rec > span { overflow-wrap: anywhere; min-width: 0; }
-.sec-rec.sec-fail { box-shadow: inset 4px 0 0 var(--t-e); }
-.sec-rs { margin-left: auto; font-weight: 600; }
-.sec-rs.sec-y { color: var(--hi); }
-.sec-rs.sec-n { color: var(--t-e); }
-.sec-key.sec-prim { border-style: solid; }
-.sec-key.sec-off { opacity: 0.45; text-decoration: line-through; }
-@media (max-width: 520px) {
-  .sec-path { grid-template-columns: minmax(0, 1fr); }
-  .sec-node:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -18px; }
-  .sec-bio { grid-template-columns: minmax(0, 1fr); }
-  .sec-feat { grid-template-columns: minmax(0, 1fr); }
-  .sec-feat .cmd { justify-self: start; }
-}
-/* depth pass 2 */
-.sec-chk.sec-d2-warn { border-color: var(--warm); background: var(--warm-soft); }
-.sec-chk.sec-d2-warn .sec-state { background: var(--warm); color: var(--surface); }
-.sec-d2-mono { font: 600 0.8rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
-.sec-state.sec-d2-ok { background: var(--ok-soft); color: var(--ok); }
-.sec-d2-ui { justify-items: start; }
-.sec-d2-sheet { justify-items: center; text-align: center; width: 100%; max-width: 340px; justify-self: center; }
-.sec-d2-sheet .sec-meter { width: 100%; }
-.sec-d2-map { position: relative; aspect-ratio: 2 / 1; min-height: 100px; border-radius: 10px; background-color: var(--surface); background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 25% 50%; overflow: hidden; }
-.sec-d2-area { position: absolute; left: 50%; top: 0; width: 25%; height: 50%; box-sizing: border-box; background: var(--accent-soft); border: 2px solid var(--accent); opacity: 0; transition: opacity 0.3s; }
-.sec-d2-dot { position: absolute; left: 61%; top: 33%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); opacity: 0; transition: opacity 0.3s; }
-.sec-d2-map.sec-d2-fine .sec-d2-dot, .sec-d2-map.sec-d2-coarse .sec-d2-area { opacity: 1; }
-/* credential manager */
-.sec-cm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; min-width: 0; }
-.sec-cm-phone { position: relative; justify-content: flex-start; padding-top: 28px; text-align: center; }
-.sec-cm-sheet { gap: 5px; }
-.sec-cm-sheet .cmd { white-space: normal; overflow-wrap: anywhere; }
-.sec-cm-store { display: grid; gap: 4px; min-width: 0; }
-.sec-cm-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.sec-cm-chip { font: 600 0.74rem var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); overflow-wrap: anywhere; transition: background 0.25s, color 0.25s, border-color 0.25s; }
-.sec-cm-chip.sec-cm-on { border-style: solid; border-color: var(--ok); background: var(--ok-soft); color: var(--ink); }
-@media (max-width: 640px) { .sec-cm { grid-template-columns: minmax(0, 1fr); } .sec-cm-phone { order: -1; } }
-`;
+  const css = ``;
 
   Lab.addTrack({
     id: 'security',
     title: 'Security and privacy',
-    description: 'Protect keys, data and traffic on devices you do not control, and collect only what you need.',
+    description: 'Protect the Recipes app on phones you don’t control: encrypt the saved tokens with a Keystore key, keep traffic on HTTPS and secrets on the server, sign in with passkeys, lock with a fingerprint, and collect only what you need.',
     group: 'Shipping',
     requires: ['android'],
     css,
     lessons: [
-      // 1 ─────────────────────────────────────────────
       {
         id: 'threats',
-        title: 'Threat model for mobile apps',
-        tagline: 'Your app runs on the attacker’s phone. Plan for that.',
-        level: 'intermediate',
+        title: 'Threats',
+        tagline: 'Before you protect anything, list what attackers want and what they can reach.',
+        goals: ['List what in the Recipes app is worth stealing', 'Name four kinds of attacker and what each can reach', 'Explain why decisions that matter belong on the server'],
+        level: 'intermediate', introduces: [],
         body: `
-<p>A threat model is a short list: what you protect, who wants it, and what they can do. For a mobile app, assume three attackers. Anyone can download your APK and decompile it with free tools. Some users root their own phone, which lets them read your private files and change what your functions return at runtime. And anyone on the same Wi-Fi can try to read or alter your traffic.</p>
-<p>Some things you can protect well. Keys in the Android Keystore stay in secure hardware. HTTPS keeps traffic private. Data in your app’s private storage is sandboxed from other apps. Other things you can’t protect at all. A string in your APK is public. A check in your code, like <code>if (user.isPremium)</code>, can be patched out. On a rooted phone, the owner can make your app do anything it is able to do.</p>
-<p>So put every decision that matters on your server. The app shows UI and asks. The server checks the session, the subscription and the input, and says yes or no. Client-side checks are still worth having for user experience, just never as the only line.</p>`,
-        code: `// Anyone can patch this out of the APK or flip it with Frida.
-fun canDownload(user: User): Boolean = user.isPremium
-
-// The server decides. The app only shows what it gets back.
-interface TracksApi {
-    @GET("v1/tracks/{id}/download")
-    suspend fun downloadUrl(@Path("id") id: String): DownloadUrl   // 403 unless the server sees a subscription
-}
-
-class TracksRepository(private val api: TracksApi) {
-    suspend fun download(id: String): Result<DownloadUrl> =
-        runCatching { api.downloadUrl(id) }   // the session token rides in an OkHttp interceptor
-}
-
-// A one-screen threat model for a feature:
-// Asset:    paid audio files
-// Attacker: user with a rooted phone, anyone with the APK
-// Can do:   read the APK, patch checks, replay requests
-// Defense:  server checks the subscription on every download URL, URLs expire in 5 minutes`,
-        remember: 'The APK is public and the phone may belong to the attacker. Decisions that matter run on the server.',
-        terms: [
-          { term: 'Threat model', def: 'A short list of what you protect, who might attack it, what they can do, and which defenses address each risk.' },
-          { term: 'Rooted device', def: 'A phone where the owner has gained superuser access, so they can read any app’s files and change running code.' },
-          { term: 'Frida', def: 'A dynamic instrumentation toolkit that injects scripts into a running app to read or replace what its functions do.' },
-          { term: 'Decompiler', def: 'A tool such as jadx that turns the dex bytecode in an APK back into readable Java or Kotlin-like source.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'On the server (Ktor), refuse a request with no valid session, then refuse a user without a subscription.', code: 'post("/v1/redeem") {\n    val user = call.principal<UserPrincipal>()\n        ?: return@post call.respond(HttpStatusCode.[[Unauthorized]])\n    if (!subscriptions.isActive(user.id)) {\n        return@post call.respond(HttpStatusCode.[[Forbidden|PaymentRequired]])\n    }\n    call.respond(rewards.grant(user.id))\n}', why: '401 means “I don’t know who you are”. 403 means “I know you, and the answer is no”. Both checks live where the user can’t edit them.' },
-          { type: 'bug', prompt: 'This screen leaks admin data to anyone with a rooted phone. Tap the line that trusts the wrong source.', code: 'suspend fun loadAdmin(api: Api, tokens: TokenStore, prefs: SharedPreferences): AdminData? {\n    val token = tokens.read() ?: return null\n    val role = prefs.getString("role", "user")\n    return if (role == "admin") api.adminData(token) else null\n}', bug: 2, fix: '    val role = api.me(token).role   // ask the server, and adminData() checks the role again', why: 'A rooted user can edit <code>shared_prefs/*.xml</code> and set <code>role</code> to <code>admin</code>. Ask the server who the user is, and make the admin endpoint enforce the role too.' },
-        ],
-        quiz: [
-          { q: 'Where should the check “is this user allowed to download this file?” live?', options: ['In the app, behind R8 obfuscation', 'On the server, for every request', 'In EncryptedSharedPreferences'], a: 1, why: 'Code on the device can be patched or hooked. Only the server sees a request it can trust its own answer about.' },
-          { q: 'What can the owner of a rooted phone do to your app?', options: ['Only read public files', 'Read your private files and change what your functions return', 'Nothing, because of the app sandbox'], a: 1, why: 'Root removes the sandbox for that user. Tools like Frida can hook any method while the app runs.' },
-          { q: 'Which of these stays protected even on a rooted phone?', options: ['A string constant in your APK', 'Private key material in a hardware-backed Keystore', 'A boolean in DataStore'], a: 1, why: 'Hardware-backed keys can’t be copied out. The attacker can still ask your app to use the key while it runs, which is why server checks still matter.' },
-        ],
-        deeper: [
-          {
-            title: 'Signed in is not the same as allowed',
-            body: `<p>Nobody needs root to send your server strange requests. A user can call your API with curl and their own valid session token, or replay a captured request with new values. So the server checks every field, not just the session: is this order theirs, does this price match the catalog, is this quantity positive.</p>
-<p>The classic bug is an ID swap. <code>GET /v1/orders/1043</code> returns someone else’s order because the server checked that the caller is signed in, but not that they own order 1043. OWASP ranks this, broken object level authorization, as the top API security risk.</p>`,
-            code: `// Ktor: authorize the object, and never take a price from the client
-get("/v1/orders/{id}") {
-    val user = call.principal<UserPrincipal>()!!
-    val order = orders.find(call.parameters["id"]!!.toLong())
-    if (order == null || order.ownerId != user.id) return@get call.respond(HttpStatusCode.NotFound)
-    call.respond(order)
-}
-
-post("/v1/checkout") {
-    val req = call.receive<CheckoutRequest>()            // { sku }, any price field is ignored
-    val price = catalog.priceOf(req.sku) ?: return@post call.respond(HttpStatusCode.BadRequest)
-    call.respond(payments.charge(call.principal<UserPrincipal>()!!.id, price))
-}`,
-            visual(el) {
-              let oid = 1042, price = '49.99', busy = false;
-              const term = h('div', { class: 'sec-term', 'aria-live': 'polite' });
-              const flag = h('span', { class: 'sec-flag' }, 'nothing leaked');
-              const srv = toggle('sec-d2-thr-srv', 'server checks owner and price', false, v => { term.replaceChildren(); tl(`<span class="muted"># server redeployed: ${v ? 'checks owner and price' : 'checks the session only'}</span>`); });
-              const tl = (html, cls) => { line(term, html, cls); trim(term, 6); };
-              const mark = (bad, msg) => { flag.textContent = msg; flag.classList.toggle('sec-bad', bad); replay(flag, 'pop'); };
-              const idBtns = [1042, 1043].map((n, i) => act(n === 1042 ? '1042 (yours)' : '1043 (Ada’s)', () => { oid = n; press(idBtns, idBtns[i]); }));
-              const prBtns = ['49.99', '0.01'].map((p, i) => act(`"price": ${p}`, () => { price = p; press(prBtns, prBtns[i]); }));
-              press(idBtns, idBtns[0]); press(prBtns, prBtns[0]);
-              const send = async (req, answer) => {
-                if (busy) return; busy = true;
-                tl(`$ curl -H "Authorization: Bearer eyJ…" ${req}`);
-                await sleep(450); if (!term.isConnected) return;
-                answer(); busy = false;
-              };
-              const getOrder = () => send(`https://api.shop.example/v1/orders/${oid}`, () => {
-                if (oid === 1042) { tl('<span class="good">200 OK</span> {"id":1042,"owner":"you","address":"…"}'); mark(false, 'your own data'); }
-                else if (srv.input.checked) { tl('<span class="good">404 Not Found</span> <span class="muted">// not yours, so it doesn’t exist for you</span>'); mark(false, 'nothing leaked'); }
-                else { tl('<span class="bad">200 OK</span> {"id":1043,"owner":"ada","address":"<span class="sec-hit">12 Elm St</span>"}'); mark(true, 'leaked Ada’s address'); }
-              });
-              const checkout = () => send(`-d '{"sku":"pro_year","price":${price}}' …/v1/checkout`, () => {
-                if (price === '49.99') { tl('<span class="good">200 OK</span> {"charged":49.99}'); mark(false, 'fair price'); }
-                else if (srv.input.checked) { tl('<span class="good">200 OK</span> {"charged":49.99} <span class="muted">// price read from the catalog</span>'); mark(false, 'price field ignored'); }
-                else { tl('<span class="bad">200 OK</span> {"charged":<span class="sec-hit">0.01</span>}'); mark(true, 'a year of Pro for 1 cent'); }
-              });
-              tl('<span class="muted"># a valid session token, copied from the app. No root needed.</span>');
-              el.append(
-                h('div', { class: 'controls' }, srv.el, flag),
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Order id'), idBtns, cmd('GET /v1/orders/{id}', getOrder)),
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Body'), prBtns, cmd('POST /v1/checkout', checkout)),
-                term);
-            },
-          },
-          {
-            title: 'The fourth attacker: another app on the phone',
-            body: `<p>Other apps can’t read your files, but they can talk to anything you export. An exported Activity, Service, BroadcastReceiver or ContentProvider accepts Intents from every app on the phone. Since Android 12, a component with an intent filter must declare <code>android:exported</code> explicitly, so make it a decision.</p>
-<p>A deep link Activity has to be exported, or links from the browser and email can’t reach it. So treat every extra and every URL as untrusted input. Check the scheme and host before you load anything, and keep components that only your app uses unexported.</p>`,
-            code: `class WebActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val uri = intent.data
-        if (uri == null || uri.scheme != "https" || uri.host != "news.example.com") {
-            finish()                     // not ours: refuse
-            return
-        }
-        setContent { ArticleWebView(uri.toString()) }
-    }
-}`,
-            visual(el) {
-              let busy = false;
-              const P = (t, d) => { const well = h('div', { class: 'sec-well' }); const s = h('small', {}, d); return Object.assign(h('div', { class: 'sec-node' }, h('b', {}, t), s, well), { well, s }); };
-              const from = P('Sender', 'pick one below'), sys = P('Android', 'routes the Intent'), act0 = P('WebActivity', 'shows a web page');
-              const o = out('Pick a sender.');
-              const exp = toggle('sec-d2-thr-exp', 'android:exported="true"', true, () => o.replaceChildren('Manifest changed. Send again.'));
-              const val = toggle('sec-d2-thr-val', 'check scheme and host', false, () => o.replaceChildren('Code changed. Send again.'));
-              const reset = () => [from, sys, act0].forEach(n => { n.classList.remove('on', 'sec-evil', 'sec-ok'); n.well.replaceChildren(); });
-              const pk = (t, c = '') => h('span', { class: `sec-packet pop ${c}` }, t);
-              async function send(evil) {
-                if (busy) return; busy = true; reset();
-                from.s.textContent = evil ? 'com.evil.flashlight' : 'Gmail';
-                from.classList.add('on', ...(evil ? ['sec-evil'] : [])); from.well.append(pk(evil ? 'evil.example/login' : 'news.example.com/a/42', evil ? 'sec-open' : ''));
-                await sleep(500); if (!el.isConnected) return;
-                sys.classList.add('on'); sys.well.append(pk('Intent'));
-                await sleep(500); if (!el.isConnected) return;
-                if (!exp.input.checked) {
-                  sys.classList.add('sec-ok'); act0.well.append(pk('blocked', 'sec-dead'));
-                  say(o, evil ? '<span class="good">SecurityException:</span> Permission Denial: WebActivity not exported. <span class="muted">But your real links are dead too. Try Gmail.</span>'
-                    : '<span class="bad">No app matches.</span> Unexported components can’t be reached from other apps, so the link opens in the browser instead.');
-                } else if (evil && !val.input.checked) {
-                  act0.classList.add('sec-evil'); act0.well.append(pk('loads evil.example', 'sec-open')); replay(act0, 'shake');
-                  say(o, '<span class="bad">Phishing inside your app.</span> A fake login page loads in your WebView, with your app’s name on top.');
-                } else if (evil) {
-                  act0.classList.add('sec-ok'); act0.well.append(pk('finish()', 'sec-dead'));
-                  say(o, '<span class="good">Refused.</span> The host is not news.example.com, so WebActivity closes.');
-                } else {
-                  act0.classList.add('sec-ok'); act0.well.append(pk('article 42'));
-                  say(o, '<span class="good">Opened.</span> A real link from an email reaches your article.');
-                }
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'controls' }, exp.el, val.el),
-                h('div', { class: 'sec-path' }, from, sys, act0),
-                h('div', { class: 'controls' }, act('Tap a link in an email', () => send(false)), act('Malicious app sends an Intent', () => send(true))),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>On a rooted phone, <code>frida-server</code> runs as root and attaches to your app’s process. It loads an agent library into the process and runs JavaScript inside it. Through the ART runtime, that script can find any class and replace a method’s implementation, so <code>isPremium()</code> returns whatever the script says. Without root, an attacker can repackage your APK with the Frida gadget library, re-sign it, and get the same power inside their copy.</p>
-<p>Decompiling needs no tricks at all. An APK is a zip file. jadx reads <code>classes.dex</code> and rebuilds Java-like source. R8 shortens names but keeps the logic and the strings.</p>`,
-          code: `// hook.js, run with: frida -U -f com.shop -l hook.js
-Java.perform(() => {
-  const User = Java.use("com.shop.User");
-  User.isPremium.implementation = function () {
-    return true;
-  };
-});`,
-        },
-        mistakes: [
-          {
-            title: 'Root detection as the defense',
-            bad: `override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    if (isRooted()) { finish(); return }   // the only protection
-    showPremiumContent()
-}`,
-            good: `override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    lifecycleScope.launch {
-        // The server checks the session, the subscription and an integrity verdict.
-        api.premiumContent(integrityToken())
-            .onSuccess(::show)
-            .onFailure { showPaywall() }
-    }
-}`,
-            why: '<code>isRooted()</code> is a function in your APK, and one Frida line makes it return false. A root check can raise the cost a little. The server decides what the user gets.',
-          },
-          {
-            title: 'Shipping the dev menu in release builds',
-            bad: `if (BuildConfig.DEBUG || prefs.getBoolean("dev_menu", false)) {
-    showDevMenu()   // switch backend, skip paywall, fake purchases
-}`,
-            good: `// src/debug/kotlin/com/shop/DevMenu.kt holds the real menu.
-// src/release/kotlin/com/shop/DevMenu.kt is empty:
-object DevMenu {
-    fun install(activity: Activity) = Unit
-}`,
-            why: 'A rooted user can set <code>dev_menu</code> in the prefs file, and the menu code is in the APK for anyone to call. Keep debug tools in the debug source set, so release builds don’t contain them.',
-          },
-        ],
-        predict: {
-          q: "Someone only downloads your APK from the store and decompiles it. Which of these do they get?",
-          options: ["The API key in <code>BuildConfig</code>", "The token sealed by a Keystore key", "The contents of your <code>https://</code> traffic"],
-          a: 0,
-          why: "Every string in an APK is readable with free tools. The Keystore key stays in the phone’s hardware, and HTTPS traffic never sits in the APK.",
-        },
+<p>The Recipes app now keeps Ada’s tokens on her phone, and the server keeps her recipes. Before you add any protection, ask three questions: what is worth stealing, who wants it, and what can they reach? That short list is a <em>threat model</em>. It tells you which defenses matter, so you don’t lock the window and leave the door open.</p>
+<p>For Recipes, the prize is the tokens: whoever has them can act as Ada until they run out. Think of four attackers. Another app on the same phone can’t open Recipes’ own storage, because Android keeps every app in its own <em>sandbox</em>. Someone on the same café Wi-Fi can see every request that isn’t protected. Anyone can download the APK, read every word in it with free tools, change it and install the changed copy. And someone holding Ada’s phone gets the open app; if the phone is <em>rooted</em>, its owner can read every app’s files too.</p>
+<p>The APK leads to the main rule: a check in the app protects nothing on its own. Hiding the Delete button on recipes that aren’t Ada’s makes a friendly screen, but a changed copy can show it again. So the server decides: it checks the token on every request and answers 403, “not allowed”, when the answer is no. The other attackers get their own answers in this track: encrypted tokens, HTTPS, secrets kept on the server, better sign-in, an app lock, and asking for less.</p>`,
         visual(el) {
-          const assets = [
-            { id: 'key', name: 'API key in BuildConfig', where: 'string in classes.dex' },
-            { id: 'check', name: 'if (user.isPremium)', where: 'check in app code' },
-            { id: 'prefs', name: 'Token in plain prefs', where: 'shared_prefs/session.xml' },
-            { id: 'ks', name: 'Token sealed by a Keystore key', where: 'key in secure hardware' },
-            { id: 'http', name: 'http:// request', where: 'on the network' },
-            { id: 'https', name: 'https:// request', where: 'on the network' },
-            { id: 'server', name: 'Check on your server', where: 'your backend' },
-          ];
-          const attacks = [
-            { id: 'apk', label: 'Download your APK', src: '$ jadx app-release.apk', hits: { key: ['bad', 'read straight from the dex'], check: ['bad', 'patched out, app re-signed'] },
-              say: 'An APK is a zip anyone can download. jadx turns it back into source. Strings, endpoints and logic are all readable, and a patched copy can skip any check.' },
-            { id: 'root', label: 'Root a phone', src: '$ frida -U -f com.shop -l hook.js', hits: { prefs: ['bad', 'file copied out'], check: ['bad', 'hooked to return true'], ks: ['warn', 'usable while the app runs, never copied'] },
-              say: 'Root opens every private file and lets Frida rewrite what functions return. The Keystore key stays in hardware, but the attacker can make your app use it.' },
-            { id: 'wifi', label: 'Own the Wi-Fi', src: '$ mitmproxy --mode transparent', hits: { http: ['bad', 'read and changed in transit'], https: ['safe', 'sees only the host name'] },
-              say: 'On a hostile network, plain HTTP is open to read and edit. HTTPS holds: the attacker sees which host you talk to, not what you send.' },
-          ];
-          const cards = {};
-          const grid = h('div', { class: 'sec-grid' }, assets.map(a => {
-            const state = h('span', { class: 'sec-state' }, 'untouched');
-            const note = h('small', {}, a.where);
-            const c = h('div', { class: 'sec-card' }, state, h('b', {}, a.name), note);
-            cards[a.id] = { c, state, note, level: '' };
-            return c;
-          }));
-          const stat = h('span', { class: 'sec-stat' });
-          const o = out('Pick what the attacker can do. Watch which assets fall.');
-          const used = new Set();
-          let busy = false;
-          const paintStat = () => {
-            const bad = Object.values(cards).filter(x => x.level === 'bad').length;
-            stat.innerHTML = `exposed: <span class="${bad ? 'sec-badnum' : ''}">${bad}</span> of ${assets.length} · attacks used: <b>${used.size}</b> of 3`;
-          };
-          const rank = { '': 0, safe: 1, warn: 2, bad: 3 };
-          const btns = attacks.map(a => act(a.label, async function () {
-            if (busy) return;
-            busy = true; used.add(a.id); this.setAttribute('aria-pressed', 'true');
-            say(o, `<span class="muted">${a.src}</span><br>${a.say}`);
-            for (const [id, [lvl, why]] of Object.entries(a.hits)) {
-              const x = cards[id];
-              if (rank[lvl] >= rank[x.level]) {
-                x.level = lvl;
-                x.c.classList.remove('sec-bad', 'sec-warn', 'sec-safe');
-                x.c.classList.add('sec-' + lvl);
-                x.state.textContent = lvl === 'bad' ? 'exposed' : lvl === 'warn' ? 'weakened' : 'holds';
-              }
-              x.note.textContent = why;
-              replay(x.c, lvl === 'bad' ? 'shake' : 'pop');
-              paintStat();
-              await sleep(320);
-            }
-            const s = cards.server;
-            s.level = 'safe'; s.c.classList.add('sec-safe'); s.state.textContent = 'holds';
-            s.note.textContent = `still decides after ${used.size} attack${used.size > 1 ? 's' : ''}`;
-            replay(s.c, 'pop');
-            if (used.size === 3) line(o, '<span class="good">Survives all three:</span> the check on your server. Put every decision that matters there.');
-            paintStat();
-            busy = false;
-          }));
-          paintStat();
-          el.append(
-            h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Attacker'), btns),
-            grid,
-            h('div', { class: 'sec-row' }, stat),
-            o);
+          Lab.ui.graph(el, {
+            height: 290,
+            nodes: [
+              { id: 'app', label: 'Recipes app<br><small>tokens in its storage</small>', x: 24, y: 22 },
+              { id: 'server', label: 'Server', x: 24, y: 84, tone: 'ok' },
+              { id: 'other', label: 'Another app', x: 78, y: 10, tone: 'muted', hidden: true },
+              { id: 'wifi', label: 'Same Wi-Fi', x: 78, y: 37, tone: 'err', hidden: true },
+              { id: 'apk', label: 'A copy of the APK', x: 78, y: 63, tone: 'err', hidden: true },
+              { id: 'hand', label: 'Ada’s phone in hand', x: 78, y: 90, tone: 'warm', hidden: true },
+            ],
+            predict: {
+              q: 'Which attacker can read a word written in the app’s code, such as a key?',
+              options: ['Anyone with a copy of the APK', 'Only someone on the same Wi-Fi', 'Nobody: the code is compiled'],
+              a: 0,
+              why: 'The APK is a file anyone can download and take apart. Compiling doesn’t hide the words inside.',
+            },
+            frames: [
+              { add: [['app', 'server', 'requests + token', 'accent']], say: 'Recipes on Ada’s phone talks to the server. The tokens sit in the app’s own storage. Who might want them?' },
+              { show: ['other'], add: [['other', 'app', 'blocked: sandbox', 'ok']], say: 'Another app on the phone. Android keeps every app in its own sandbox, so it can’t open Recipes’ files. Already safe.' },
+              { show: ['wifi'], add: [['wifi', 'app', 'reads plain requests', 'err']], say: 'Someone on the same café Wi-Fi sees every request that isn’t protected, the token included.' },
+              { show: ['apk'], add: [['apk', 'app', 'reads and changes code', 'err']], say: 'Anyone can download the APK, read every word in it, and install a changed copy. A secret or a check in the code isn’t safe there.' },
+              { show: ['hand'], add: [['hand', 'app', 'the open app; files if rooted', 'warm']], say: 'Someone holding Ada’s unlocked phone gets the open app. On a rooted phone, its owner can read the files too.' },
+              { hl: ['server'], add: [['server', 'app', 'checks every request', 'ok']], say: 'The server is the one place no attacker controls. It checks the token on every request and makes the decisions that matter.' },
+            ],
+          });
         },
-      },
+        code: `data class Threat(val who: String, val canReach: String, val defense: String)
 
-      // 2 ─────────────────────────────────────────────
-      {
-        id: 'keystore',
-        title: 'Android Keystore',
-        tagline: 'Keys that your app can use but never read.',
-        level: 'advanced',
-        body: `
-<p>The Android Keystore holds cryptographic keys outside your app’s process. On almost every modern phone the keys live in a Trusted Execution Environment (TEE), a separate secure world on the main chip. Many phones also have StrongBox, a dedicated security chip; ask for it with <code>setIsStrongBoxBacked(true)</code> and fall back when it throws <code>StrongBoxUnavailableException</code>. Either way, your app gets a handle. It passes data in, gets results out, and never sees the key bytes. Even root can’t export them.</p>
-<p>You create a key once with <code>KeyGenParameterSpec</code>, which fixes what it may do: encrypt and decrypt with AES-GCM, or sign with an EC key for a server to verify. Then you use it through the normal <code>Cipher</code> and <code>Signature</code> classes with the <code>"AndroidKeyStore"</code> provider. The Keystore picks a fresh random IV for each encryption, so you read it back from <code>cipher.iv</code> and store it next to the ciphertext.</p>
-<p>A key can also require the user. With <code>setUserAuthenticationRequired(true)</code> and <code>setUserAuthenticationParameters(30, ...)</code>, the key works only for 30 seconds after the user unlocks with a strong biometric or their PIN. With a timeout of 0, each single use needs a BiometricPrompt. Keys disappear when the app is uninstalled, and an auth-bound key is invalidated if the user removes their screen lock.</p>`,
-        code: `private const val ALIAS = "session_key"
+// The Recipes threat model: one line per attacker
+val threats = listOf(
+    Threat("Another app on the phone", "nothing in Recipes' own storage", "the sandbox, already on"),
+    Threat("Someone on the same Wi-Fi", "every request on the network", "HTTPS"),
+    Threat("Anyone with the APK", "every word and check in the code", "secrets and decisions on the server"),
+    Threat("Someone holding Ada's phone", "the open app, and on a rooted phone its files", "encrypted tokens, an app lock"),
+)
 
-fun getOrCreateKey(): SecretKey {
-    val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+for (threat in threats) {
+    println("\${threat.who}: \${threat.defense}")
+}
+// Another app on the phone: the sandbox, already on
+// Someone on the same Wi-Fi: HTTPS
+// Anyone with the APK: secrets and decisions on the server
+// Someone holding Ada's phone: encrypted tokens, an app lock`,
+        play: `data class Threat(val who: String, val canReach: String, val defense: String)
 
-    val spec = KeyGenParameterSpec.Builder(
-        ALIAS,
-        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+fun main() {
+    val threats = listOf(
+        Threat("Another app on the phone", "nothing in Recipes' own storage", "the sandbox, already on"),
+        Threat("Someone on the same Wi-Fi", "every request on the network", "HTTPS"),
+        Threat("Anyone with the APK", "every word and check in the code", "secrets and decisions on the server"),
+        Threat("Someone holding Ada's phone", "the open app, and on a rooted phone its files", "encrypted tokens, an app lock"),
     )
-        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-        .setKeySize(256)
-        .setUserAuthenticationRequired(true)
-        .setUserAuthenticationParameters(        // API 30+
-            30,
-            KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
-        )
-        .build()
-
-    return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        .apply { init(spec) }
-        .generateKey()
-}
-
-fun encrypt(plain: ByteArray): Pair<ByteArray, ByteArray> {
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())     // Keystore picks the IV
-    return cipher.iv to cipher.doFinal(plain)              // store both
-}
-
-fun decrypt(iv: ByteArray, data: ByteArray): ByteArray {
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-    return cipher.doFinal(data)
+    for (threat in threats) {
+        println("\${threat.who}: \${threat.defense}")
+    }
 }`,
-        remember: 'Keystore keys never leave secure hardware. Your app sends data in and gets results out.',
+        remember: 'The APK is public and the phone may not be on your side: list what each attacker can reach, and let the server make the decisions that matter.',
         terms: [
-          { term: 'Android Keystore', def: 'The system service that generates and stores cryptographic keys outside the app process and performs operations with them on the app’s behalf.' },
-          { term: 'TEE', def: 'Trusted Execution Environment: an isolated secure area of the main processor where Keystore keys are stored and used.' },
-          { term: 'StrongBox', def: 'A Keystore backed by a separate tamper-resistant security chip, available on many devices since Android 9.' },
-          { term: 'Auth-bound key', def: 'A Keystore key that only works after the user authenticates, either per use or for a set number of seconds.' },
+          { term: 'threat model', def: 'A short list: what you protect, who wants it, what they can reach, and which defense answers each one.' },
+          { term: 'sandbox', def: 'Android keeps each app apart: one app can’t open another app’s own storage.' },
+          { term: 'rooted phone', def: 'A phone whose owner gave themselves full control of it. They can read every app’s files and change what apps do.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Load the Keystore and generate an AES key for GCM inside it.', code: 'val ks = KeyStore.getInstance("[[AndroidKeyStore]]").apply { load(null) }\nval spec = KeyGenParameterSpec.Builder("k", PURPOSE_ENCRYPT or PURPOSE_DECRYPT)\n    .setBlockModes(KeyProperties.BLOCK_MODE_[[GCM]])\n    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)\n    .build()', why: 'The provider name <code>"AndroidKeyStore"</code> is case sensitive. GCM gives encryption and an integrity check in one mode, and needs no padding.' },
-          { type: 'bug', prompt: 'This throws on encrypt, and the idea behind it would break GCM anyway. Tap the line.', code: 'fun encrypt(plain: ByteArray): Pair<ByteArray, ByteArray> {\n    val cipher = Cipher.getInstance("AES/GCM/NoPadding")\n    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, ByteArray(12)))\n    return cipher.iv to cipher.doFinal(plain)\n}', bug: 2, fix: '    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())   // let the Keystore pick a random IV', why: 'Keystore keys require randomized encryption by default, so a caller-provided IV is rejected. A fixed IV with GCM is a real break: two messages under the same key and IV leak their XOR and let an attacker forge tags.' },
+          { type: 'blank', prompt: 'Add the café attacker to the threat model, with the defense that answers it.', code: `data class Threat(val who: String, val canReach: String, val defense: String)
+
+val wifi = [[Threat]]("Someone on the same Wi-Fi", "every request on the network", "[[HTTPS]]")`, why: 'A threat model line names the attacker, what they can reach, and the defense. On a shared network, HTTPS is the answer.' },
+          { type: 'bug', prompt: 'One defense in this threat model doesn’t protect anything. Tap the line.', code: `val threats = listOf(
+    Threat("Another app on the phone", "nothing in Recipes' own storage", "the sandbox, already on"),
+    Threat("Someone on the same Wi-Fi", "every request on the network", "HTTPS"),
+    Threat("Anyone with the APK", "every word and check in the code", "hide the check better in the code"),
+)`, bug: 3, fix: '    Threat("Anyone with the APK", "every word and check in the code", "secrets and decisions on the server"),', why: 'Whoever has the APK can read and change any check in it, however well hidden. Only the server is out of their reach.' },
         ],
         quiz: [
-          { q: 'What does <code>secretKey.encoded</code> return for a Keystore key?', options: ['The 32 key bytes', '<code>null</code>', 'A base64 string'], a: 1, why: 'The key material is not exportable. Your app holds a reference, and the operation runs inside the TEE or StrongBox.' },
-          { q: 'Where does the IV come from when you encrypt with a Keystore AES-GCM key?', options: ['You pass a fixed one', 'The Keystore generates a random one; read it from <code>cipher.iv</code>', 'GCM does not use an IV'], a: 1, why: 'Randomized encryption is required by default. Store the IV with the ciphertext; it is not secret.' },
-          { q: 'A key was made with <code>setUserAuthenticationParameters(30, AUTH_BIOMETRIC_STRONG)</code>. The user unlocked a minute ago. What happens on <code>cipher.init</code>?', options: ['It works', 'It throws <code>UserNotAuthenticatedException</code>', 'The key is deleted'], a: 1, why: 'The 30 second window has passed. Show a BiometricPrompt, then try again.' },
-          { q: 'Version 2 of your app adds a 30 second auth timeout to the KeyGenParameterSpec. <code>getOrCreateKey()</code> looks the alias up first. What do existing users get?', options: ['The new rules apply on the next use', 'The old key with its old rules, until you delete it and make a new one', 'A crash on cipher.init because the spec changed'], a: 1, why: 'The rules are sealed into the key and checked by secure hardware. To change them, delete the key and create a new one, losing what it sealed.' },
-          { q: 'A key needs a biometric for every use and was built with default settings. The user enrolls a new fingerprint. What happens on the next cipher.init?', options: ['It works as before', 'KeyPermanentlyInvalidatedException; delete the alias, make a new key and get the data again', 'UserNotAuthenticatedException; just show the prompt again'], a: 1, why: 'By default a new enrollment invalidates per-use biometric keys, so a finger added by someone else can’t open your data. There is no repair.' },
-          { q: 'This runs on every app launch. What goes wrong?<pre class="code mini">val g = KeyGenerator.getInstance(\n  "AES", "AndroidKeyStore")\ng.init(spec("token"))\nval key = g.generateKey()</pre>', options: ['AndroidKeyStore does not support AES', 'It replaces the key under the alias each launch, so earlier data can’t be decrypted', 'generateKey() returns null for Keystore keys'], a: 1, why: 'Generating under an existing alias replaces the key. Look the alias up first and generate only when it is missing.' },
+          { q: 'Where should “may Ada delete this recipe?” be decided?', options: ['On the server, for every request', 'In the app, by hiding the button', 'In DataStore'], a: 0, why: 'A changed copy of the app can skip any check in it. The server sees every request and can answer 403.' },
+          { q: 'What does the sandbox protect Recipes’ files from?', options: ['Other apps on the same phone', 'Someone on the same Wi-Fi', 'The owner of a rooted phone'], a: 0, why: 'The sandbox keeps apps apart. Network traffic and a rooted phone need other defenses.' },
+          { q: 'What is a threat model?', options: ['A short list of what you protect, who wants it and what they can reach', 'A tool that finds bugs', 'A kind of encryption'], a: 0, why: 'It is a plan, not a tool. It shows which defenses matter for your app.' },
         ],
-        deeper: [
-          {
-            title: 'The rules are sealed into the key',
-            body: `<p>Everything you set on <code>KeyGenParameterSpec</code> becomes part of the key: purposes, block modes, paddings and the auth timeout. The secure hardware checks those rules on every operation. Ask for something the key was not made for and the Keystore refuses, even when your code compiles fine.</p>
-<p>The rules can’t change later. Edit the spec and ship an update, and <code>getOrCreateKey()</code> still finds the old key under the same alias. To change the rules you delete the key and make a new one, and data sealed with the old key is gone with it.</p>`,
-            visual(el) {
-              const NAMES = { ENCRYPT: 'PURPOSE_ENCRYPT', DECRYPT: 'PURPOSE_DECRYPT', GCM: 'BLOCK_MODE_GCM', CBC: 'BLOCK_MODE_CBC' };
-              const spec = { ENCRYPT: true, DECRYPT: true, GCM: true, CBC: false };
-              let key = null, busy = false;
-              const o = out('session_key exists with the rules shown. Try each operation, then edit the spec.');
-              const rules = h('div', { class: 'sec-pile' });
-              const hw = h('div', { class: 'sec-zone sec-hw' }, h('span', { class: 'sec-label' }, 'Keystore · rules inside session_key'), rules);
-              const paint = anim => rules.replaceChildren(...(key
-                ? Object.keys(key).filter(k => key[k]).map((k, i) => h('span', { class: 'sec-tag' + (anim ? ' drop-in' : ''), style: anim ? `animation-delay:${i * 80}ms` : null }, NAMES[k]))
-                : [h('span', { class: 'sec-empty' }, 'no key with this alias')]));
-              const specBtns = Object.keys(spec).map(k => act(NAMES[k], function () {
-                if (busy) return;
-                spec[k] = !spec[k]; this.setAttribute('aria-pressed', String(spec[k]));
-                say(o, key ? 'Spec edited in your code. <span class="muted">The key in the Keystore still has its old rules.</span>' : 'Spec edited. Generate the key to use it.');
-              }, { 'aria-pressed': String(spec[k]) }));
-              const create = cmd('getOrCreateKey()', () => {
-                if (busy) return;
-                if (key) { replay(hw, 'pop'); say(o, 'Alias session_key already exists, so it comes back as is. <span class="muted">Your edited spec was never used.</span>'); return; }
-                if (!(spec.ENCRYPT || spec.DECRYPT) || !(spec.GCM || spec.CBC)) { replay(hw, 'shake'); say(o, 'Pick at least one purpose and one block mode first.'); return; }
-                key = { ...spec }; paint(true);
-                say(o, '<span class="good">generated:</span> these rules are now part of the key. They can’t be edited.');
-              });
-              const del = cmd('ks.deleteEntry("session_key")', () => {
-                if (busy) return;
-                if (!key) { say(o, 'Nothing to delete.'); return; }
-                key = null; paint(); replay(hw, 'shake');
-                say(o, 'Deleted. <span class="bad">Anything sealed with it can never be decrypted again.</span>');
-              });
-              const use = (label, purpose, mode) => cmd(label, async () => {
-                if (busy) return;
-                if (!key) { replay(hw, 'shake'); say(o, '<span class="bad">error:</span> no key with alias session_key. Call getOrCreateKey().'); return; }
-                busy = true; hw.classList.add('on');
-                say(o, 'asking secure hardware…');
-                await sleep(420);
-                hw.classList.remove('on'); busy = false;
-                const miss = !key[purpose] ? NAMES[purpose] : !key[mode] ? NAMES[mode] : null;
-                if (miss) { replay(hw, 'shake'); say(o, `<span class="bad">InvalidKeyException:</span> Keystore operation failed. The key was not made with ${miss}.`); }
-                else say(o, '<span class="good">ok:</span> the hardware checked the key’s rules and allowed it.');
-              });
-              key = { ...spec }; paint(false);
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Spec in code'), specBtns),
-                hw,
-                h('div', { class: 'controls' }, create, del),
-                h('div', { class: 'controls' },
-                  use('cipher.init(ENCRYPT_MODE, key) // GCM', 'ENCRYPT', 'GCM'),
-                  use('cipher.init(DECRYPT_MODE, key, gcm) // GCM', 'DECRYPT', 'GCM'),
-                  use('cipher.init(ENCRYPT_MODE, key) // CBC', 'ENCRYPT', 'CBC')),
-                o);
-            },
-          },
-          {
-            title: 'Auth-bound keys can die',
-            body: `<p>A key that needs the user is tied to the device’s lock screen. Remove the screen lock and every auth-bound key is invalidated for good. A key that needs a biometric for every use also dies when the user enrolls a new fingerprint or face, unless you build it with <code>setInvalidatedBy<wbr>BiometricEnrollment(false)</code>. The default exists so a finger added by someone else can’t open your data.</p>
-<p>An invalid key throws <code>KeyPermanentlyInvalidatedException</code> on <code>cipher.init</code>. There is no repair. Catch it, delete the alias, make a new key once a lock screen is back, and get the data again, usually by signing the user in.</p>`,
-            code: `fun unlockCipher(iv: ByteArray): Cipher? = try {
-    Cipher.getInstance("AES/GCM/NoPadding").apply {
-        init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-    }
-} catch (e: KeyPermanentlyInvalidatedException) {
-    KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(ALIAS)
-    tokenStore.clear()   // the old ciphertext can never be opened again
-    null                 // the caller shows the password sign-in
-}`,
-            visual(el) {
-              let valid = true, lock = true, fps = 1, keep = false, token = true;
-              const kState = h('span', { class: 'sec-state' }), tState = h('span', { class: 'sec-state' });
-              const kCard = h('div', { class: 'sec-card' }, kState, h('b', {}, 'wallet_key'), h('small', {}, 'every use needs BIOMETRIC_STRONG'));
-              const tCard = h('div', { class: 'sec-card' }, tState, h('b', {}, 'sealed token'), h('small', {}, 'iv + ciphertext in DataStore'));
-              const dev = h('span', { class: 'sec-stat' });
-              const o = out('The key works. Change the phone’s security settings and see what survives.');
-              const paint = () => {
-                kCard.className = 'sec-card ' + (valid ? 'sec-safe' : 'sec-bad');
-                kState.textContent = valid ? 'valid' : 'permanently invalid';
-                tCard.className = 'sec-card ' + (!token ? '' : valid ? 'sec-safe' : 'sec-bad');
-                tState.textContent = !token ? 'empty' : valid ? 'opens after a prompt' : 'unreadable forever';
-                dev.innerHTML = `screen lock: <b>${lock ? 'PIN' : 'none'}</b> · fingerprints: <b>${fps}</b>`;
-              };
-              const kill = why => { if (!valid) return; valid = false; replay(kCard, 'shake'); say(o, `<span class="bad">wallet_key invalidated:</span> ${why}`); };
-              const keepSw = toggle('sec-ks2-keep', 'setInvalidatedBy<wbr>BiometricEnrollment(false)', false, v => {
-                keep = v; valid = true; token = true; paint(); replay(kCard, 'pop');
-                say(o, `The flag is part of the key, so the demo made a new key${v ? ' that survives new fingerprints' : ' with the default'} and sealed the token again.`);
-              });
-              const settings = [
-                act('Add a fingerprint', () => {
-                  if (!lock) { say(o, 'Android asks for a screen lock before it lets you add a fingerprint.'); return; }
-                  fps++; paint();
-                  if (!valid) { say(o, 'Fingerprint added. The key is still dead.'); return; }
-                  if (keep) { replay(kCard, 'pop'); say(o, '<span class="good">key survives:</span> it was made with setInvalidatedByBiometricEnrollment(false).'); }
-                  else { kill('a new biometric was enrolled.'); paint(); }
-                }),
-                act('Remove screen lock', () => {
-                  if (!lock) { say(o, 'There is no screen lock to remove.'); return; }
-                  lock = false; fps = 0;
-                  if (valid) kill('the secure lock screen was turned off. This kills every auth-bound key, whatever the flags.');
-                  else say(o, 'Screen lock and fingerprints removed.');
-                  paint();
-                }),
-                act('Set a PIN', () => {
-                  if (lock) { say(o, 'A PIN is already set.'); return; }
-                  lock = true; paint();
-                  say(o, `PIN set. ${valid ? '' : 'The old key stays dead. A new PIN does not bring it back.'}`);
-                }),
-              ];
-              el.append(
-                h('div', { class: 'sec-grid' }, kCard, tCard),
-                h('div', { class: 'sec-row' }, dev),
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Settings'), settings),
-                h('div', { class: 'controls' }, keepSw.el),
-                h('div', { class: 'controls' },
-                  cmd('unlockWallet()', () => {
-                    if (!token) { say(o, 'Nothing stored. Sign in first.'); return; }
-                    if (!valid) { replay(tCard, 'shake'); say(o, '<span class="bad">KeyPermanentlyInvalidatedException:</span> Key permanently invalidated'); return; }
-                    replay(tCard, 'pop'); say(o, '<span class="good">BiometricPrompt ok:</span> cipher unlocked, token decrypted.');
-                  }),
-                  cmd('recover()', () => {
-                    if (valid) { say(o, 'The key is fine. Nothing to recover.'); return; }
-                    if (!lock) { replay(kCard, 'shake'); say(o, '<span class="bad">InvalidAlgorithmParameterException:</span> Secure lock screen must be enabled to create keys requiring user authentication'); return; }
-                    if (!fps) { replay(kCard, 'shake'); say(o, '<span class="bad">InvalidAlgorithmParameterException:</span> At least one biometric must be enrolled to create keys requiring user authentication for every use'); return; }
-                    valid = true; token = true; paint(); replay(kCard, 'pop'); replay(tCard, 'pop');
-                    say(o, '<span class="good">recovered:</span> deleteEntry, new key, user signed in with the password, new token sealed. <span class="muted">The old ciphertext was thrown away.</span>');
-                  })),
-                o);
-              paint();
-            },
-          },
-          {
-            title: 'Signing keys and attestation',
-            body: `<p>The Keystore also holds key pairs. An EC private key signs inside secure hardware, and the public key is free to leave. Send the public key to your server at sign-in, then sign sensitive requests. A stolen session token alone can no longer approve a payment.</p>
-<p>Add <code>setAttestationChallenge()</code> with a fresh nonce from your server, and the key comes with a certificate chain that leads up to a Google root. The server checks the chain and the nonce, and reads where the key lives: TEE or StrongBox. Treat it like Play Integrity: a strong signal, combined with your other checks.</p>`,
-            code: `val spec = KeyGenParameterSpec.Builder("device_key", KeyProperties.PURPOSE_SIGN)
-    .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-    .setDigests(KeyProperties.DIGEST_SHA256)
-    .setAttestationChallenge(serverNonce)   // ties the chain to this request
-    .build()
-
-KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
-    .apply { initialize(spec) }
-    .generateKeyPair()
-
-val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-val chain = ks.getCertificateChain("device_key")   // send to the server once
-
-val signature = Signature.getInstance("SHA256withECDSA").run {
-    initSign(ks.getKey("device_key", null) as PrivateKey)
-    update(requestBody)
-    sign()                                          // runs in the TEE
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p><code>"AndroidKeyStore"</code> selects a JCA provider that ships with Android. On Android 12 and later, each <code>cipher.init</code>, <code>update</code> and <code>doFinal</code> becomes a Binder call to <code>keystore2</code>, a system daemon. keystore2 forwards the operation to the KeyMint HAL, which runs inside the TEE, or to StrongBox. Older versions use the same design with the keystore daemon and Keymaster.</p>
-<p>The key is saved on disk as a key blob, encrypted by a key that never leaves the secure hardware. A copied blob is useless anywhere else. The authorizations from <code>KeyGenParameterSpec</code> are bound into the blob, and KeyMint checks them on every operation, which is why they can’t change. Every call is a round trip into secure hardware, so keep Keystore work small: wrap a data key, sign a hash, not every record.</p>`,
-          code: `val key = getOrCreateKey()
-val info = SecretKeyFactory.getInstance(key.algorithm, "AndroidKeyStore")
-    .getKeySpec(key, KeyInfo::class.java) as KeyInfo
-
-val where = when (info.securityLevel) {   // API 31+
-    KeyProperties.SECURITY_LEVEL_STRONGBOX -> "StrongBox chip"
-    KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT -> "TEE"
-    else -> "software or unknown"
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Generating a new key on every launch',
-            bad: `// Application.onCreate()
-val key = KeyGenerator.getInstance(KEY_ALGORITHM_AES, "AndroidKeyStore")
-    .apply { init(spec) }
-    .generateKey()   // same alias, replaces the old key`,
-            good: `val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-val key = (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
-    ?: KeyGenerator.getInstance(KEY_ALGORITHM_AES, "AndroidKeyStore")
-        .apply { init(spec) }
-        .generateKey()`,
-            why: 'Generating under an existing alias replaces that key. Everything sealed in earlier sessions becomes unreadable. Look the alias up first.',
-          },
-          {
-            title: 'Requiring StrongBox with no fallback',
-            bad: `val spec = builder
-    .setIsStrongBoxBacked(true)
-    .build()
-generator.init(spec)
-generator.generateKey()   // throws on phones without StrongBox`,
-            good: `val key = try {
-    generate(builder.setIsStrongBoxBacked(true).build())
-} catch (e: StrongBoxUnavailableException) {
-    generate(builder.setIsStrongBoxBacked(false).build())   // TEE is still hardware
-}`,
-            why: 'Many phones have no StrongBox chip. There, key generation throws <code>StrongBoxUnavailableException</code>. Fall back to the TEE.',
-          },
-          {
-            title: 'Encrypting every record with the Keystore',
-            bad: `messages.forEach { msg ->
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, keystoreKey)   // IPC into the TEE
-    dao.insert(msg.id, cipher.iv, cipher.doFinal(msg.bytes))
-}`,
-            good: `// One Keystore key wraps a Tink keyset; Tink encrypts in memory.
-messages.forEach { msg ->
-    dao.insert(msg.id, aead.encrypt(msg.bytes, msg.id.encodeToByteArray()))
-}`,
-            why: 'Every Keystore operation is a round trip into secure hardware, and StrongBox is slower still. Use the Keystore to protect a data key, then encrypt records with that key. The next lesson shows how.',
-          },
-        ],
-        predict: {
-          q: "Your app encrypts a card number with an AES key from the Android Keystore. What does your app hold afterwards?",
-          options: ["The ciphertext and the IV; the key never leaves the Keystore", "The key bytes too, so it can cache them", "Nothing: the Keystore keeps the ciphertext"],
-          a: 0,
-          why: "Data goes in and results come out. The key itself stays in the TEE or StrongBox, even on a rooted phone.",
-        },
-        visual(el) {
-          const root = h('div', { class: 'viz' });
-          const live = alive(root);
-          let key = null, authUntil = 0, n = 0, busy = false, ticking = false;
-          const appPile = h('div', { class: 'sec-pile' }, h('span', { class: 'sec-pill sec-plain' }, '"4111 1111 1111"'));
-          const hwWork = h('div', { class: 'sec-pile' });
-          const keySlot = h('div', { class: 'sec-pile' });
-          const app = h('div', { class: 'sec-zone' }, h('span', { class: 'sec-label' }, 'Your app process'), appPile);
-          const hw = h('div', { class: 'sec-zone sec-hw' }, h('span', { class: 'sec-label' }, 'Keystore · TEE'), keySlot, hwWork);
-          const clock = h('span', { class: 'clock' });
-          const o = out();
-          const authSw = toggle('sec-ks-auth', 'setUserAuthenticationRequired(true), 10 s', false, () => say(o, 'The spec changed. Generate the key again to apply it.'));
-          const paintKey = anim => {
-            keySlot.replaceChildren(key
-              ? h('div', { class: 'sec-key' + (key.auth ? ' sec-locked' : '') + (anim ? ' drop-in' : '') }, h('span', { class: 'sec-lock', 'aria-hidden': 'true' }), 'AES-256 · session_key', key.auth ? h('span', { class: 'sec-tag' }, 'needs user') : null)
-              : h('span', { class: 'sec-empty' }, 'no key yet'));
-          };
-          const tick = () => {
-            if (!live()) { ticking = false; return; }
-            const left = Math.ceil((authUntil - Date.now()) / 1000);
-            clock.textContent = key && key.auth ? (left > 0 ? `unlocked for ${left} s` : 'locked: user must authenticate') : '';
-            if (left > 0) setTimeout(tick, 250); else ticking = false;
-          };
-          const gen = (anim = true) => {
-            key = { auth: authSw.input.checked }; authUntil = 0; paintKey(anim); tick();
-          };
-          const flash = async node => { node.classList.add('on'); await sleep(450); node.classList.remove('on'); };
-          root.append(
-            h('div', { class: 'sec-zones' }, app, hw),
-            h('div', { class: 'controls' }, authSw.el, clock),
-            h('div', { class: 'controls' },
-              cmd('keyGenerator.generateKey()', () => { if (busy) return; gen(); say(o, `<span class="good">ok:</span> key created inside secure hardware${key.auth ? ', bound to the user' : ''}. The app gets an alias, not bytes.`); }),
-              cmd('cipher.doFinal(card)', async () => {
-                if (busy) return;
-                if (!key) { replay(app, 'shake'); say(o, '<span class="bad">error:</span> no key with alias session_key. Generate it first.'); return; }
-                if (key.auth && Date.now() > authUntil) { replay(hw, 'shake'); say(o, '<span class="bad">UserNotAuthenticatedException:</span> User not authenticated'); return; }
-                busy = true;
-                const plain = appPile.querySelector('.sec-plain') || h('span', { class: 'sec-pill sec-plain' }, '"4111 1111 1111"');
-                plain.classList.add('fly-out');
-                say(o, 'plaintext goes in…');
-                await sleep(380); plain.remove();
-                hwWork.replaceChildren(h('span', { class: 'sec-pill sec-plain pop' }, '"4111 1111 1111"'));
-                await flash(hw);
-                hwWork.firstElementChild.classList.add('fly-out');
-                await sleep(380);
-                hwWork.replaceChildren();
-                n++;
-                appPile.replaceChildren(h('span', { class: 'sec-pill sec-cipher drop-in' }, `iv ${hex(4)}… ct ${hex(6)}…`));
-                say(o, `<span class="good">ok:</span> ciphertext #${n} back in the app. The key never moved.`);
-                await sleep(1300);
-                if (root.isConnected) appPile.append(h('span', { class: 'sec-pill sec-plain drop-in' }, '"4111 1111 1111"'));
-                busy = false;
-              }),
-              cmd('secretKey.encoded', () => {
-                if (!key) { say(o, 'No key yet. Generate one first.'); return; }
-                replay(keySlot, 'pop');
-                say(o, '<span class="good">null</span> <span class="muted">// the app holds a handle. The bytes stay in the TEE, even on a rooted phone.</span>');
-              }),
-              act('User authenticates', () => {
-                if (!key || !key.auth) { say(o, 'This key works without the user. Turn on the switch and generate it again.'); return; }
-                authUntil = Date.now() + 10000; replay(keySlot, 'pop');
-                say(o, '<span class="good">BiometricPrompt ok:</span> the key works for the next 10 seconds.');
-                if (!ticking) { ticking = true; tick(); }
-              })),
-            o);
-          gen(false);
-          o.textContent = 'A key already exists. Encrypt something, then try to read the key.';
-          el.append(root);
-        },
+        docs: [['Security checklist', 'https://developer.android.com/privacy-and-security/security-tips'], ['Common security risks', 'https://developer.android.com/privacy-and-security/risks']],
       },
 
-      // 3 ─────────────────────────────────────────────
       {
         id: 'at-rest',
-        title: 'Encrypting data at rest',
-        tagline: 'Tink does the crypto. The Keystore guards Tink’s key.',
-        level: 'advanced',
+        title: 'Data at rest',
+        tagline: 'Encrypt saved data, so a copied file is only noise.',
+        goals: ['Explain what encryption, a key and an IV are', 'Encrypt and decrypt a text with AES-GCM', 'Explain why the key must not sit next to the data'],
+        level: 'intermediate', introduces: ['ByteArray', 'toByteArray', 'decodeToString', 'Base64', 'Cipher', 'doFinal', 'iv', 'KeyGenerator', 'generateKey', 'SecretKey', 'GCMParameterSpec', 'copyOfRange', 'AEADBadTagException'],
         body: `
-<p>Files in your app’s private storage are already sandboxed from other apps, and the whole disk is encrypted while the phone is locked. Add your own encryption for data that would hurt if copied off a rooted phone or a backup: session and refresh tokens, health or financial records, private messages. Don’t bother for cache files or settings.</p>
-<p>The Jetpack <code>security-crypto</code> library, with <code>EncryptedSharedPreferences</code> and <code>EncryptedFile</code>, is deprecated since 2025 and should not be used in new code. Use Tink directly. Tink’s <code>Aead</code> encrypts and authenticates in one call. <code>AndroidKeysetManager</code> keeps Tink’s keyset in a prefs file, wrapped by a master key in the Android Keystore. Store the sealed bytes wherever you like, for example in DataStore as base64.</p>
-<p>AEAD means the ciphertext can’t be changed without detection. Flip one byte and <code>decrypt</code> throws. You can also pass associated data, like the field name. It is not stored inside the ciphertext, but decryption fails unless you pass the same value again, so nobody can move a sealed token into another field.</p>`,
-        code: `// implementation(libs.tink.android)
-class SessionCrypto(context: Context) {
-    private val aead: Aead
+<p>The tokens sit in DataStore, in Recipes’ own storage. The sandbox keeps other apps out, but inside, the file is plain text: on a rooted phone its owner can open it, and a copy of the phone’s storage can be read on a laptop. Data saved on a disk is <em>at rest</em>. To protect it there, save it scrambled: <em>encrypted</em>.</p>
+<p>Encryption takes your text and a <em>key</em>, a long random number, and gives back bytes that look like noise. Only the same key turns them back: that is decrypting. It works on bytes, not text. A <code>ByteArray</code> holds bytes; <code>"access-7f3a9c".toByteArray()</code> turns text into bytes, and <code>decodeToString()</code> turns them back. <code>Base64.encode(bytes)</code> writes bytes as letters and digits, so you can print them or save them as a <code>String</code>, and <code>Base64.decode(text)</code> undoes it.</p>
+<p>Android’s guide recommends AES in GCM mode: <code>Cipher.getInstance("AES/GCM/NoPadding")</code>. <code>KeyGenerator</code> makes a <code>SecretKey</code>, <code>cipher.init(Cipher.ENCRYPT_MODE, key)</code> gets the cipher ready, and <code>doFinal(bytes)</code> does the work. Each time, the cipher picks a fresh random <em>IV</em>, 12 bytes it needs again to decrypt. The IV isn’t secret, so save it in front: <code>cipher.iv + ciphertext</code> joins the two arrays, and <code>copyOfRange(0, 12)</code> takes the first 12 bytes back out. <code>GCMParameterSpec(128, iv)</code> hands the IV over for decrypting. GCM also adds a check: with the wrong key, or one changed byte, <code>doFinal</code> throws <code>AEADBadTagException</code> instead of giving garbage.</p>
+<p>Now the hard part: where does the key live? Saved in the same storage, it is a lock with the key taped to it. Written in the code, everyone with the APK has it. In this lesson’s program the key exists only while the program runs. A real app needs a place where the key can be used but never read.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
+            code: `val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
 
-    init {   // create once, off the main thread: this reads prefs and talks to the Keystore
-        AeadConfig.register()
-        aead = AndroidKeysetManager.Builder()
-            .withSharedPref(context, "session_keyset", "crypto_prefs")
-            .withKeyTemplate(KeyTemplates.get("AES256_GCM"))
-            .withMasterKeyUri("android-keystore://session_master_key")
-            .build()
-            .keysetHandle
-            .getPrimitive(RegistryConfiguration.get(), Aead::class.java)
+val first = encrypt("access-7f3a9c", key)
+val second = encrypt("access-7f3a9c", key)
+println(Base64.encode(first))
+println(Base64.encode(second))
+println(decrypt(first, key))
+
+val otherKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+try {
+    decrypt(first, otherKey)
+} catch (e: AEADBadTagException) {
+    println("Wrong key: \${e.message}")
+}`,
+            predict: {
+              q: 'The same token is encrypted twice with the same key. Do the two results match?',
+              options: ['No: each one gets a new random IV', 'Yes: same text and key, same result', 'Only the first 12 bytes differ'],
+              a: 0,
+              why: 'A fresh IV changes every byte of the result. Nobody can even tell that the two hold the same token.',
+            },
+            frames: [
+              { line: 1, vars: { key: 'SecretKey, 256 bits' }, say: '<code>KeyGenerator</code> makes a 256-bit AES key: 32 random bytes. Whoever has them can decrypt.' },
+              { line: 3, vars: { first: '41 bytes' }, say: '<code>encrypt</code> picks a random IV (12 bytes), scrambles the 13 bytes of the token, and GCM adds a 16-byte check: 41 bytes.' },
+              { line: 4, vars: { second: '41 bytes' }, say: 'The same token with the same key, encrypted again.' },
+              { line: [5, 6], out: 'k8XjrqFotFTkc3ro/rTy9HCe7KZ5nZccf15RNiNtYdU7ZqW3JxQ9Zj0=\ngQUO15u7SWBkgH6aalW9Oxbd6Iw8h5MLiN+b0eX7tYkNiPwx9pYv2s8=', say: 'Printed as Base64, the two look nothing alike, because each got its own IV. Your run prints other letters: the key and the IVs are random.' },
+              { line: 7, out: 'access-7f3a9c', say: '<code>decrypt</code> takes the IV from the first 12 bytes, and the same key turns the rest back into the token.' },
+              { line: 9, vars: { otherKey: 'SecretKey, 256 bits' }, say: 'A second key, as if an attacker guessed one.' },
+              { line: 11, say: 'Decrypting with the wrong key: GCM’s check fails, so <code>doFinal</code> throws instead of returning noise.' },
+              { line: 13, out: 'Wrong key: Tag mismatch', say: 'The <code>catch</code> prints the message. Without the right key, the 41 bytes are worthless.' },
+            ],
+          });
+        },
+        code: `fun encrypt(text: String, key: SecretKey): ByteArray {
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, key)                  // picks a fresh random IV
+    return cipher.iv + cipher.doFinal(text.toByteArray())  // IV first, then the scrambled bytes
+}
+
+fun decrypt(sealed: ByteArray, key: SecretKey): String {
+    val iv = sealed.copyOfRange(0, 12)                     // the first 12 bytes
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+    return cipher.doFinal(sealed.copyOfRange(12, sealed.size)).decodeToString()
+}
+
+// val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+// Base64.encode(encrypt("access-7f3a9c", key))   // k8XjrqFotFTkc3ro/rTy9HCe7KZ5nZcc… (different every time)
+// decrypt(sealed, key)                            // access-7f3a9c
+// decrypt(sealed, otherKey)                       // throws AEADBadTagException: Tag mismatch`,
+        play: `import javax.crypto.AEADBadTagException
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import kotlin.io.encoding.Base64
+
+fun encrypt(text: String, key: SecretKey): ByteArray {
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, key)                  // picks a fresh random IV
+    return cipher.iv + cipher.doFinal(text.toByteArray())  // IV first, then the scrambled bytes
+}
+
+fun decrypt(sealed: ByteArray, key: SecretKey): String {
+    val iv = sealed.copyOfRange(0, 12)                     // the first 12 bytes
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+    return cipher.doFinal(sealed.copyOfRange(12, sealed.size)).decodeToString()
+}
+
+fun main() {
+    val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+
+    val first = encrypt("access-7f3a9c", key)
+    val second = encrypt("access-7f3a9c", key)
+    println(Base64.encode(first))
+    println(Base64.encode(second))
+    println(decrypt(first, key))
+
+    val otherKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+    try {
+        decrypt(first, otherKey)
+    } catch (e: AEADBadTagException) {
+        println("Wrong key: \${e.message}")
     }
-
-    fun seal(plain: ByteArray, field: String): ByteArray = aead.encrypt(plain, field.encodeToByteArray())
-    fun open(sealed: ByteArray, field: String): ByteArray = aead.decrypt(sealed, field.encodeToByteArray())
-}
-
-private val TOKEN = stringPreferencesKey("token")
-
-suspend fun saveToken(store: DataStore<Preferences>, crypto: SessionCrypto, token: String) {
-    val sealed = crypto.seal(token.encodeToByteArray(), "token")
-    store.edit { it[TOKEN] = Base64.encodeToString(sealed, Base64.NO_WRAP) }
-}
-
-fun tokenFlow(store: DataStore<Preferences>, crypto: SessionCrypto): Flow<String?> =
-    store.data.map { prefs ->
-        prefs[TOKEN]?.let { crypto.open(Base64.decode(it, Base64.NO_WRAP), "token").decodeToString() }
-    }`,
-        remember: 'EncryptedSharedPreferences is deprecated. Tink Aead with a Keystore master key, stored in DataStore.',
+}`,
+        remember: 'Encrypt with AES-GCM and a fresh IV saved in front of the ciphertext; the data is only as safe as the place the key lives.',
+        mistakes: [
+          { title: 'Using the same IV every time', bad: `cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, ByteArray(12)))`, good: `cipher.init(Cipher.ENCRYPT_MODE, key)   // a fresh random IV each time`, why: '<code>ByteArray(12)</code> is 12 zero bytes, the same for every token. With the same key and IV twice, GCM loses its protection: comparing two results gives away facts about both texts.' },
+        ],
         terms: [
-          { term: 'Tink', def: 'Google’s open-source crypto library that offers safe, high-level primitives such as Aead and manages keys as keysets.' },
-          { term: 'AEAD', def: 'Authenticated encryption with associated data: encryption that also detects any change to the ciphertext or to the extra data bound to it.' },
-          { term: 'Keyset', def: 'Tink’s container of one or more keys with ids, which lets you rotate keys while still decrypting old data.' },
-          { term: 'Envelope encryption', def: 'Encrypting data with a data key and then encrypting that data key with a master key kept somewhere safer.' },
+          { term: 'data at rest', def: 'Data saved on a disk, such as the DataStore file, as opposed to data travelling over the network.' },
+          { term: 'encryption', def: 'Turning data into bytes that look like noise, with a key. Only the same key turns them back (decrypting).' },
+          { term: 'key', def: 'The secret random number that encrypts and decrypts. Whoever has it can read the data.' },
+          { term: 'IV', def: 'A fresh random value for each encryption, 12 bytes for AES-GCM. Not secret: it is saved next to the ciphertext.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Wrap the keyset with a Keystore master key, then decrypt the sealed token.', code: 'val aead = AndroidKeysetManager.Builder()\n    .withSharedPref(context, "session_keyset", "crypto_prefs")\n    .withKeyTemplate(KeyTemplates.get("AES256_GCM"))\n    .withMasterKeyUri("[[android-keystore]]://session_master_key")\n    .build()\n    .keysetHandle\n    .getPrimitive(RegistryConfiguration.get(), Aead::class.java)\n\nval token = aead.[[decrypt]](sealed, "token".encodeToByteArray())', why: 'The <code>android-keystore://</code> URI tells Tink to wrap the keyset with a Keystore key. Without it, the keyset is written to prefs in plain form.' },
-          { type: 'bug', prompt: 'Saving works, but reading the token back always throws. Tap the line.', code: 'suspend fun saveToken(store: DataStore<Preferences>, crypto: SessionCrypto, token: String) {\n    val sealed = crypto.seal(token.encodeToByteArray(), "token")\n    store.edit { it[TOKEN] = sealed.decodeToString() }\n}', bug: 2, fix: '    store.edit { it[TOKEN] = Base64.encodeToString(sealed, Base64.NO_WRAP) }', why: 'Ciphertext is random bytes, not UTF-8. <code>decodeToString()</code> replaces invalid sequences, so the bytes change and the AEAD check fails on decrypt. Encode binary as base64.' },
+          { type: 'blank', prompt: 'Encrypt with AES in GCM mode, and save the IV in front of the result.', code: `val cipher = Cipher.getInstance("AES/[[GCM]]/NoPadding")
+cipher.init(Cipher.[[ENCRYPT_MODE]], key)
+return cipher.[[iv]] + cipher.doFinal(text.toByteArray())`, why: 'GCM is the mode Android’s guide recommends. <code>ENCRYPT_MODE</code> picks a fresh IV, and <code>cipher.iv</code> reads it so it can go in front of the ciphertext.' },
+          { type: 'bug', prompt: 'Every decrypt throws <code>AEADBadTagException</code>, even with the right key. Tap the wrong line.', code: `fun decrypt(sealed: ByteArray, key: SecretKey): String {
+    val iv = sealed.copyOfRange(0, 16)
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+    return cipher.doFinal(sealed.copyOfRange(12, sealed.size)).decodeToString()
+}`, bug: 1, fix: '    val iv = sealed.copyOfRange(0, 12)', why: 'The IV is the first 12 bytes. Taking 16 adds 4 bytes of ciphertext to it, so GCM’s check fails.' },
         ],
         quiz: [
-          { q: 'What should replace <code>EncryptedSharedPreferences</code> in new code?', options: ['Plain SharedPreferences, the disk is encrypted anyway', 'Tink Aead with a Keystore-wrapped keyset, storing the result in DataStore or a file', 'Base64-encoding the values'], a: 1, why: '<code>security-crypto</code> is deprecated. Tink is the library it used inside, and you can call it directly. Base64 is an encoding, not encryption.' },
-          { q: 'One byte of a sealed value changes on disk. What does <code>aead.decrypt</code> do?', options: ['Returns slightly wrong text', 'Throws <code>GeneralSecurityException</code>', 'Returns the original text'], a: 1, why: 'AEAD checks an authentication tag. Any change, even one bit, fails the check.' },
-          { q: 'Someone copies the app’s files to a laptop. Why can’t they read the token?', options: ['The files are hidden', 'The keyset is wrapped by a master key that stays in this phone’s Keystore', 'Tink deletes them'], a: 1, why: 'The copied keyset is itself ciphertext. The key to unwrap it can’t leave the secure hardware of the original phone.' },
-          { q: 'A token is sealed with associated data <code>"refresh"</code>. An attacker copies the ciphertext into the access token field, which your code decrypts with <code>"access"</code>. What happens?', options: ['It decrypts fine, because the associated data is stored inside', 'decrypt throws, because the associated data does not match', 'It decrypts to random bytes'], a: 1, why: 'Associated data is not stored in the ciphertext, but decryption checks it. That binds each value to where it belongs.' },
-          { q: 'Which order rotates a Tink key safely?', options: ['Add a new key and make it primary, re-encrypt old records, then disable the old key', 'Disable the old key, add a new primary, then re-encrypt old records', 'Add a new key, disable the old key, then make the new key primary'], a: 0, why: 'Each ciphertext names the key that sealed it. The old key must stay enabled until no record points at it.' },
-          { q: 'You need to encrypt a 200 MB video export. Which fits?', options: ['Aead.encrypt on the whole file as one byte array', 'StreamingAead with its own keyset', 'A Keystore Cipher used directly on the file'], a: 1, why: 'StreamingAead encrypts in segments through normal streams and detects a file cut short. Aead needs the whole plaintext in memory.' },
+          { q: 'Why save the IV next to the ciphertext?', options: ['Decrypting needs it, and it isn’t secret', 'It is the key', 'Base64 needs it'], a: 0, why: 'The IV only makes each result different. Without the key it is useless to an attacker.' },
+          { q: 'Recipes encrypts the tokens and saves the key in the same DataStore file. Someone copies the file. What do they get?', options: ['The tokens: the key is right there', 'Noise they can’t read', 'Only the IV'], a: 0, why: 'A key next to the data is a lock with the key taped to it. The key needs a home of its own.' },
+          { q: 'You decrypt with the wrong key. What happens with GCM?', options: ['<code>doFinal</code> throws <code>AEADBadTagException</code>', 'You get random-looking text', 'You get the token anyway'], a: 0, why: 'GCM checks the result. A wrong key or a changed byte fails the check.' },
         ],
-        deeper: [
-          {
-            title: 'Why two layers of keys',
-            body: `<p>The setup above is envelope encryption. The Keystore master key encrypts one thing: Tink’s keyset. The keyset’s AES key encrypts your data. Why not encrypt the data with the Keystore key directly?</p>
-<p>Speed. Each Keystore operation is a call into secure hardware, a few milliseconds in the TEE and far more in StrongBox. Tink unwraps the keyset once, then seals every record in memory in microseconds. The master key still never leaves the hardware, so a copied keyset is still useless.</p>`,
-            visual(el) {
-              const N = 40, COST = { TEE: 5, StrongBox: 40 }, FAST = 0.03;
-              let hw = 'TEE', busy = false;
-              const live = alive(el);
-              const mkLane = name => { const track = h('div', { class: 'lane-track' }); return { track, el: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), track) }; };
-              const A = mkLane('Keystore x40'), B = mkLane('Tink, 1 unwrap');
-              const tA = h('b', {}, '0 ms'), tB = h('b', {}, '0 ms');
-              const o = out('Seal 40 chat messages both ways. Timings are typical, not exact.');
-              const hwBtns = Object.keys(COST).map((k, i) => act(k, () => { if (busy) return; hw = k; press(hwBtns, hwBtns[i]); run(); }));
-              press(hwBtns, hwBtns[0]);
-              const fmt = ms => (ms < 10 ? ms.toFixed(1) : Math.round(ms)) + ' ms';
-              async function run() {
-                if (busy) return;
-                busy = true;
-                const c = COST[hw], total = N * c;
-                A.track.replaceChildren(); B.track.replaceChildren();
-                tA.textContent = tB.textContent = '0 ms';
-                say(o, `sealing 40 messages, master key in the <b>${hw}</b>…`);
-                const pct = ms => (ms / total * 100).toFixed(2);
-                const laneB = (async () => {
-                  B.track.append(h('div', { class: 'bar run drop-in', style: `left:0;width:${pct(c)}%` }));
-                  await sleep(220);
-                  B.track.append(h('div', { class: 'bar wait drop-in', style: `left:${pct(c)}%;width:${Math.max(0.8, N * FAST / total * 100).toFixed(2)}%` }));
-                  tB.textContent = fmt(c + N * FAST);
-                })();
-                for (let i = 0; i < N; i++) {
-                  if (!live()) { busy = false; return; }
-                  A.track.append(h('div', { class: 'bar run', style: `left:${pct(i * c)}%;width:${(c / total * 100 * 0.7).toFixed(2)}%` }));
-                  tA.textContent = fmt((i + 1) * c);
-                  await sleep(35);
-                }
-                await laneB;
-                say(o, `<span class="bad">Keystore each time:</span> ${fmt(total)}. <span class="good">Tink:</span> ${fmt(c + N * FAST)}, one hardware call to unwrap the keyset, then pure memory work.`);
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Master key in'), hwBtns, cmd('seal(messages)', () => run())),
-                h('div', { class: 'timeline' }, A.el, B.el),
-                h('div', { class: 'sec-row' }, h('span', { class: 'sec-stat' }, 'Keystore each: ', tA), h('span', { class: 'sec-stat' }, 'Tink: ', tB)),
-                h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar run' }), 'call into secure hardware'), h('span', {}, h('i', { class: 'bar wait' }), 'AES-GCM in memory')),
-                o);
-              run();
-            },
-          },
-          {
-            title: 'Rotating keys with a keyset',
-            body: `<p>A keyset can hold several keys. One is the primary: new data is sealed with it. Every ciphertext starts with a 5-byte prefix that names the key that sealed it, so Tink knows which key to try on decrypt. Old data keeps working after you add a new primary.</p>
-<p>That makes rotation safe. Add a key and make it primary. Re-encrypt old records in the background. Only then disable the old key. Disable it too early and the records that still point at it fail to open.</p>`,
-            code: `manager.add(KeyTemplates.get("AES256_GCM"))        // new key, not primary yet
-val handle = manager.keysetHandle
-val newId = handle.getAt(handle.size() - 1).id
-manager.setPrimary(newId)                           // new data uses it
-
-// later, after every old record was opened and sealed again:
-manager.disable(oldId)`,
-            visual(el) {
-              const NEXT = ['7be10d44', 'c90f3e12', '19ad77b0'];
-              let keys = [{ id: 'a3f29c01', st: 'primary' }], recs = [], made = 0, busy = false;
-              const keyPile = h('div', { class: 'sec-pile' });
-              const zone = h('div', { class: 'sec-zone sec-hw' }, h('span', { class: 'sec-label' }, 'Keyset · wrapped by the master key'), keyPile);
-              const list = h('div', { class: 'sec-recs' });
-              const o = out('Three notes are sealed with key a3f29c01. Rotate.');
-              const primary = () => keys.find(k => k.st === 'primary');
-              const paintKeys = anim => keyPile.replaceChildren(...keys.map(k => h('span', { class: `sec-key${k.st === 'primary' ? ' sec-prim' : ''}${k.st === 'disabled' ? ' sec-off' : ''}${anim === k.id ? ' drop-in' : ''}` }, k.id, h('span', { class: 'sec-tag' }, k.st))));
-              const row = r => {
-                r.st = h('span', { class: 'sec-rs' }, '');
-                r.pre = h('span', { class: 'sec-hx-p' }, `01 ${r.kid}`);
-                r.el = h('div', { class: 'sec-rec drop-in' }, h('span', {}, r.name), r.pre, h('span', { class: 'sec-hx-n' }, hex(4) + '…'), r.st);
-                return r.el;
-              };
-              const seal = name => { const r = { name, kid: primary().id }; recs.push(r); list.append(row(r)); };
-              const opens = r => { const k = keys.find(x => x.id === r.kid); return k && k.st !== 'disabled'; };
-              const guard = fn => async () => { if (busy) return; busy = true; await fn(); busy = false; };
-              ['note 1', 'note 2', 'note 3'].forEach(seal);
-              paintKeys();
-              el.append(
-                zone,
-                h('div', { class: 'controls' },
-                  cmd('manager.setPrimary(newId)', guard(() => {
-                    if (!NEXT.length) { say(o, 'That is enough keys for one demo. Disable the old ones.'); return; }
-                    primary().st = 'enabled';
-                    const id = NEXT.shift(); keys.push({ id, st: 'primary' }); paintKeys(id);
-                    say(o, `manager.add() made key <span class="good">${id}</span>, and it is the primary now. Old keys stay enabled for decrypt.`);
-                  })),
-                  cmd('crypto.seal(note)', guard(() => {
-                    if (recs.length >= 8) { say(o, 'Plenty of notes. Try opening them.'); return; }
-                    seal(`note ${recs.length + 1}`);
-                    say(o, `sealed with the primary, prefix <span class="t-f">01 ${primary().id}</span>`);
-                  }))),
-                h('div', { class: 'controls' },
-                  cmd('crypto.open(all)', guard(async () => {
-                    let bad = 0;
-                    for (const r of recs) {
-                      if (!el.isConnected) return;
-                      const ok = opens(r); bad += !ok;
-                      r.st.textContent = ok ? 'opens' : 'fails'; r.st.className = 'sec-rs ' + (ok ? 'sec-y' : 'sec-n');
-                      r.el.classList.toggle('sec-fail', !ok); replay(r.el, ok ? 'pop-soft' : 'shake');
-                      await sleep(170);
-                    }
-                    say(o, bad ? `<span class="bad">${bad} record${bad > 1 ? 's' : ''} failed:</span> no enabled key matches the prefix. Re-encrypt before you disable.` : '<span class="good">all open:</span> each prefix found its key.');
-                  })),
-                  act('Re-encrypt old records', guard(async () => {
-                    const p = primary().id; let n = 0;
-                    for (const r of recs) {
-                      if (!el.isConnected) return;
-                      if (r.kid === p || !opens(r)) continue;
-                      r.kid = p; r.pre.textContent = `01 ${p}`; r.st.textContent = 'resealed'; r.st.className = 'sec-rs sec-y';
-                      replay(r.el, 'pop'); n++;
-                      await sleep(200);
-                    }
-                    say(o, n ? `${n} record${n > 1 ? 's' : ''} opened and sealed again with ${p}.` : 'Nothing to re-encrypt that can still be opened.');
-                  })),
-                  cmd('manager.disable(oldestId)', guard(() => {
-                    const k = keys.find(x => x.st === 'enabled');
-                    if (!k) { say(o, keys.length > 1 ? 'Every old key is disabled already.' : '<span class="bad">GeneralSecurityException:</span> cannot disable the primary key. Add a new one first.'); return; }
-                    k.st = 'disabled'; paintKeys();
-                    const left = recs.filter(r => r.kid === k.id).length;
-                    say(o, left ? `<span class="bad">${k.id} disabled</span> while ${left} record${left > 1 ? 's' : ''} still use it. Open all and see.` : `<span class="good">${k.id} disabled</span> and nothing points at it. Safe.`);
-                  }))),
-                list,
-                o);
-            },
-          },
-          {
-            title: 'Large files: streaming AEAD',
-            body: `<p><code>Aead</code> needs the whole plaintext in memory. For photos, audio or database exports, use <code>StreamingAead</code>. It splits the file into segments of a few KB, encrypts each one with its own tag, and lets you read and write through normal streams.</p>
-<p>It still detects tampering, and it also detects a file cut short, because the last segment is marked as last. Keep a separate keyset for streaming, since the key templates differ.</p>`,
-            code: `StreamingAeadConfig.register()
-val streaming = AndroidKeysetManager.Builder()
-    .withSharedPref(context, "files_keyset", "crypto_prefs")
-    .withKeyTemplate(KeyTemplates.get("AES256_GCM_HKDF_4KB"))
-    .withMasterKeyUri("android-keystore://files_master_key")
-    .build()
-    .keysetHandle
-    .getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
-
-val ad = file.name.encodeToByteArray()
-streaming.newEncryptingStream(FileOutputStream(file), ad).use { out ->
-    source.copyTo(out)            // never holds the whole file in memory
-}
-streaming.newDecryptingStream(FileInputStream(file), ad).use { input ->
-    input.copyTo(destination)     // throws IOException if a segment was changed
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>A Tink <code>Aead</code> ciphertext for an <code>AES256_GCM</code> key has a fixed layout. One version byte <code>0x01</code> and the 4-byte key id come first. Then a random 12-byte IV, the encrypted bytes, and a 16-byte GCM tag. That is why a sealed 14-character token takes 47 bytes, and why the demo’s colored bytes come in four groups.</p>
-<p><code>AndroidKeysetManager</code> stores the whole keyset as one encrypted blob, hex-encoded, in the SharedPreferences file you name. On first run it generates the keyset, asks the Keystore for an AES-GCM master key under the alias in the URI, and writes the wrapped keyset. On later runs it reads the blob and unwraps it with one Keystore call. Your primitives then work from memory.</p>`,
-          code: `01 | a3 f2 9c 01 | 12 bytes IV | ciphertext (same length as plaintext) | 16 bytes tag
-^    ^ key id: picks the key in the keyset on decrypt
-version byte for the TINK prefix`,
-        },
-        mistakes: [
-          {
-            title: 'Building the Aead on every read',
-            bad: `fun readToken(prefs: Preferences): String? {
-    val aead = AndroidKeysetManager.Builder()
-        .withSharedPref(context, "session_keyset", "crypto_prefs")
-        .withKeyTemplate(KeyTemplates.get("AES256_GCM"))
-        .withMasterKeyUri("android-keystore://session_master_key")
-        .build().keysetHandle
-        .getPrimitive(RegistryConfiguration.get(), Aead::class.java)
-    return prefs[TOKEN]?.let { open(aead, it) }
-}`,
-            good: `@Singleton
-class SessionCrypto @Inject constructor(@ApplicationContext context: Context) {
-    private val aead: Aead = buildAead(context)   // once, off the main thread
-    fun open(sealed: ByteArray, field: String) =
-        aead.decrypt(sealed, field.encodeToByteArray())
-}`,
-            why: 'Each build reads prefs and calls the Keystore. On first launch, two callers racing can each create a keyset, and the loser’s ciphertext can’t be opened. Build it once and share it.',
-          },
-          {
-            title: 'Sealing everything with no associated data',
-            bad: `fun seal(plain: ByteArray) = aead.encrypt(plain, ByteArray(0))`,
-            good: `fun seal(plain: ByteArray, field: String, userId: String) =
-    aead.encrypt(plain, "$field:$userId".encodeToByteArray())`,
-            why: 'With empty associated data, a sealed value from one field or one user can be copied into another and still decrypts. Bind each value to where it belongs.',
-          },
-          {
-            title: 'Backing up the keyset without its master key',
-            bad: `<!-- res/xml/data_extraction_rules.xml -->
-<cloud-backup>
-    <include domain="sharedpref" path="." />
-</cloud-backup>`,
-            good: `<cloud-backup>
-    <exclude domain="sharedpref" path="crypto_prefs.xml" />
-    <exclude domain="file" path="datastore/session.preferences_pb" />
-</cloud-backup>`,
-            why: 'Backup restores files on a new phone, but Keystore keys never travel. The restored keyset can’t be unwrapped there. Exclude the keyset and the sealed data, and sign the user in again.',
-          },
-        ],
-        predict: {
-          q: "You seal the same token twice with Tink’s <code>Aead</code> and the same key. Are the two ciphertexts the same?",
-          options: ["Yes: same key, same input, same output", "No: each call uses a fresh random nonce", "Only if you pass the same associated data"],
-          a: 1,
-          why: "Each encryption picks a new nonce, so equal inputs never produce equal ciphertexts. The nonce is stored with the result.",
-        },
-        visual(el) {
-          const TOKEN = 'ya29.a0AfB_byC';
-          let sealed = null, tampered = -1, n = 0;
-          const bytes = h('div', { class: 'sec-bytes' }, h('span', { class: 'muted' }, '(empty)'));
-          const dsFile = h('div', { class: 'sec-file' }, h('span', {}, 'files/datastore/session.preferences_pb  token ='), bytes);
-          const ksFile = h('div', { class: 'sec-file' }, h('span', {}, 'shared_prefs/crypto_prefs.xml  session_keyset ='), h('div', { class: 'sec-bytes' }, h('span', { class: 'sec-hx-c' }, `${hex(18)}… (wrapped)`)));
-          const memPile = h('div', { class: 'sec-pile' }, h('span', { class: 'sec-pill sec-plain' }, `"${TOKEN}"`));
-          const mem = h('div', { class: 'sec-zone' }, h('span', { class: 'sec-label' }, 'Memory'), memPile);
-          const disk = h('div', { class: 'sec-zone' }, h('span', { class: 'sec-label' }, 'Disk'), dsFile, ksFile);
-          const ks = h('div', { class: 'sec-zone sec-hw' }, h('span', { class: 'sec-label' }, 'Keystore'), h('div', { class: 'sec-key' }, h('span', { class: 'sec-lock', 'aria-hidden': 'true' }), 'session_master_key'), h('span', { class: 'sec-empty' }, 'wraps the Tink keyset'));
-          const o = out('Seal the token. Each call uses a fresh nonce.');
-          const paint = () => {
-            if (!sealed) { bytes.replaceChildren(h('span', { class: 'muted' }, '(empty)')); return; }
-            const parts = [['p', sealed.p], ['n', sealed.n], ['c', sealed.c], ['t', sealed.t]];
-            let i = 0;
-            bytes.replaceChildren(...parts.map(([k, s]) => h('span', { class: 'sec-hx-' + k }, ...s.match(/../g).map(b => {
-              const node = i === tampered ? h('span', { class: 'sec-hx-x' }, b) : b;
-              i++; return node;
-            }))));
-            replay(bytes, 'pop-soft');
-          };
-          const open = field => {
-            if (!sealed) { replay(disk, 'shake'); say(o, 'Nothing stored yet. Seal the token first.'); return; }
-            if (tampered >= 0) { replay(disk, 'shake'); say(o, '<span class="bad">GeneralSecurityException:</span> decryption failed. The tag no longer matches the bytes.'); return; }
-            if (field !== 'token') { replay(disk, 'shake'); say(o, `<span class="bad">GeneralSecurityException:</span> decryption failed. It was sealed with "token", not "${field}".`); return; }
-            memPile.replaceChildren(h('span', { class: 'sec-pill sec-plain drop-in' }, `"${TOKEN}"`));
-            say(o, '<span class="good">ok:</span> tag verified, token back in memory.');
-          };
-          el.append(
-            h('div', { class: 'sec-zones' }, mem, disk, ks),
-            h('div', { class: 'sec-legend', 'aria-hidden': 'true' },
-              h('span', {}, h('i', { style: 'background:var(--t-f)' }), 'key id'),
-              h('span', {}, h('i', { style: 'background:var(--t-t)' }), 'nonce'),
-              h('span', {}, h('i', { style: 'background:var(--code-ink)' }), 'ciphertext'),
-              h('span', {}, h('i', { style: 'background:var(--t-k)' }), 'tag')),
-            h('div', { class: 'controls' },
-              cmd('crypto.seal(token, "token")', () => {
-                n++; tampered = -1;
-                sealed = { p: '01' + 'a3f29c01', n: hex(12), c: hex(TOKEN.length), t: hex(16) };
-                memPile.replaceChildren();
-                paint();
-                say(o, `<span class="good">sealed #${n}:</span> same token, new nonce, completely different bytes. ${n > 1 ? 'Compare with the last one.' : 'Seal again to compare.'}`);
-              }),
-              cmd('crypto.open(sealed, "token")', () => open('token')),
-              cmd('crypto.open(sealed, "refresh")', () => open('refresh'))),
-            h('div', { class: 'controls' },
-              act('Flip one byte on disk', () => {
-                if (!sealed) { say(o, 'Seal something first.'); return; }
-                tampered = 17 + Math.floor(Math.random() * TOKEN.length);
-                paint(); replay(dsFile, 'shake');
-                say(o, 'One ciphertext byte changed. Try to open it.');
-              }),
-              act('Copy files to a laptop', () => {
-                if (!sealed) { say(o, 'Seal something first, then steal it.'); return; }
-                replay(disk, 'pop');
-                say(o, '<span class="muted">$ tinkey decrypt --keyset crypto_prefs.xml</span><br><span class="bad">error:</span> keyset is encrypted. Its master key never left the phone’s Keystore. <span class="good">The token stays sealed.</span>');
-              })),
-            o);
-        },
+        docs: [['Cryptography', 'https://developer.android.com/privacy-and-security/cryptography']],
       },
 
-      // 4 ─────────────────────────────────────────────
+      {
+        id: 'keystore',
+        title: 'Keystore',
+        tagline: 'A key your app can use but never read, kept in the phone’s secure hardware.',
+        goals: ['Make an AES key inside the Android Keystore', 'Encrypt the session tokens before they go into DataStore', 'Explain what an attacker gets from a copied file'],
+        level: 'intermediate', introduces: ['KeyStore', 'getKey', 'KeyGenParameterSpec', 'KeyProperties', 'setBlockModes', 'setEncryptionPaddings', 'setKeySize'],
+        body: `
+<p>The last lesson’s key lived only while the program ran. Recipes needs the same key tomorrow, to read the tokens it saved today, and the key must not sit next to them. Android has a place built for this: the <em>Android Keystore</em>. It makes the key, keeps it, and does the encrypting itself. Your app gets a handle to the key, never its bytes.</p>
+<p>On most phones the Keystore lives in secure hardware: a separate, locked-off part of the chip that the rest of Android can’t look into, and on some phones a security chip of its own, called StrongBox. So even a rooted phone can’t hand the key out. Someone who copies the DataStore file gets Base64 noise, and the key that opens it never leaves that phone. Uninstalling the app deletes its keys.</p>
+<p>The code is the last lesson’s, with a new home for the key. <code>KeyStore.getInstance("AndroidKeyStore")</code> and <code>load(null)</code> open the store. <code>getKey(KEY_ALIAS, null)</code> looks the key up by its name, the <em>alias</em>; <code>as? SecretKey</code> reads the answer as a key, or gives <code>null</code> if there is none yet. The first time, <code>KeyGenParameterSpec.Builder</code> describes the key: it may encrypt and decrypt (<code>or</code> joins the two), GCM mode, no padding, 256 bits. These rules are sealed into the key and can’t change later. <code>KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")</code> makes the key inside the Keystore.</p>
+<p><code>TokenCipher</code> has an <code>@Inject</code> constructor, so Hilt can hand it to <code>Session</code>. <code>save</code> now stores <code>cipher.encrypt(token)</code>, and reading decrypts. If decrypting fails, for example on a plain token saved before this update, or a backup restored to a new phone, where the key doesn’t exist, treat Ada as signed out: she signs in once more. Older code may use <code>EncryptedSharedPreferences</code> from the security-crypto library. It is deprecated; Android now points you to the Keystore directly.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 320,
+            nodes: [
+              { id: 'app', label: 'Recipes app<br><small>TokenCipher</small>', x: 24, y: 12 },
+              { id: 'ks', label: 'Android Keystore<br><small>secure hardware</small>', x: 74, y: 42, tone: 'ok' },
+              { id: 'file', label: 'DataStore file', x: 24, y: 72 },
+              { id: 'thief', label: 'Copied file<br><small>on a laptop</small>', x: 74, y: 92, tone: 'err', hidden: true },
+            ],
+            predict: {
+              q: 'Someone copies the encrypted DataStore file to a laptop. What can they read?',
+              options: ['Nothing useful: the key stayed in the phone’s hardware', 'The tokens: the key is in the file too', 'The tokens, after taking the APK apart'],
+              a: 0,
+              why: 'The file holds IVs and ciphertext. The only key that opens them never leaves the phone’s Keystore.',
+            },
+            frames: [
+              { say: 'Recipes needs a key that survives restarts and that nobody can copy.' },
+              { add: [['app', 'ks', 'make “session_key”', 'accent']], say: 'The first time, the app asks the Keystore to make an AES key named <code>session_key</code>. The key is made inside and stays there.' },
+              { remove: [['app', 'ks']], add: [['ks', 'app', 'a handle, not the bytes', 'muted']], say: 'The app gets a <code>SecretKey</code> that only points at the key. There are no key bytes in the app to steal.' },
+              { remove: [['ks', 'app']], add: [['app', 'ks', 'token in, IV + ciphertext out', 'accent']], say: 'To encrypt, the token goes in and the IV and ciphertext come out. The work happens inside the Keystore.' },
+              { add: [['app', 'file', 'Base64 noise', 'ok']], say: 'DataStore saves that as Base64 text. The token itself is never in the file.' },
+              { show: ['thief'], add: [['file', 'thief', 'copied', 'err']], say: 'Someone copies the file off a rooted phone.' },
+              { hl: ['ks'], add: [['thief', 'ks', 'no way to the key', 'weak']], say: 'They have the noise, but not the key: it never leaves this phone. On the phone itself the app can still decrypt, so the server keeps checking every request.' },
+            ],
+          });
+        },
+        code: `// data/TokenCipher.kt
+import kotlin.io.encoding.Base64   // Kotlin’s, the same as the last lesson
+
+private const val KEY_ALIAS = "session_key"
+
+class TokenCipher @Inject constructor() {
+    private fun key(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore")
+        keyStore.load(null)
+        val saved = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+        if (saved != null) {
+            return saved                                   // made on an earlier run
+        }
+        val spec = KeyGenParameterSpec.Builder(
+            KEY_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build()
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        generator.init(spec)
+        return generator.generateKey()                     // made and kept inside the Keystore
+    }
+
+    fun encrypt(text: String): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key())            // the Keystore picks the IV
+        return Base64.encode(cipher.iv + cipher.doFinal(text.toByteArray()))
+    }
+
+    fun decrypt(saved: String): String {
+        val sealed = Base64.decode(saved)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, sealed.copyOfRange(0, 12)))
+        return cipher.doFinal(sealed.copyOfRange(12, sealed.size)).decodeToString()
+    }
+}
+
+// Session: the same class, now with a TokenCipher
+class Session(
+    private val api: RecipeApi,
+    private val store: DataStore<Preferences>,
+    private val cipher: TokenCipher,
+) {
+    private suspend fun save(tokens: Tokens) {
+        store.edit { settings ->
+            settings[ACCESS_TOKEN] = cipher.encrypt(tokens.accessToken)
+            settings[REFRESH_TOKEN] = cipher.encrypt(tokens.refreshToken)
+        }
+    }
+
+    private fun read(saved: String?): String? {
+        try {
+            return saved?.let { cipher.decrypt(it) }
+        } catch (e: Exception) {
+            return null                                    // can't decrypt: signed out, sign in again
+        }
+    }
+    // getRecipes uses read(saved[ACCESS_TOKEN]) and read(saved[REFRESH_TOKEN]); the rest is as before
+}
+
+// DataModule: Hilt makes TokenCipher from its @Inject constructor
+@Provides
+fun provideSession(store: DataStore<Preferences>, cipher: TokenCipher): Session =
+    Session(api, store, cipher)`,
+        remember: 'Make the key inside the Android Keystore and look it up by its alias; save only Base64 ciphertext in DataStore.',
+        terms: [
+          { term: 'Android Keystore', def: 'Android’s safe for keys. It makes and keeps them, often in secure hardware, and does the encrypting itself; the app never sees the key bytes.' },
+          { term: 'alias', def: 'The name a key is kept under in the Keystore, such as <code>"session_key"</code>.' },
+          { term: 'secure hardware', def: 'A locked-off part of the phone’s chip, or a separate security chip (StrongBox), that the rest of Android can’t look into.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Make the AES key inside the Keystore, for GCM.', code: `val spec = KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+    .setBlockModes(KeyProperties.BLOCK_MODE_[[GCM]])
+    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+    .setKeySize(256)
+    .build()
+val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "[[AndroidKeyStore]]")`, why: 'GCM matches the cipher <code>"AES/GCM/NoPadding"</code>. The provider name <code>"AndroidKeyStore"</code> makes the key inside the Keystore instead of in the app.' },
+          { type: 'bug', prompt: 'After every restart, the saved tokens can’t be decrypted and Ada has to sign in again. Tap the wrong line.', code: `private fun key(): SecretKey {
+    val keyStore = KeyStore.getInstance("AndroidKeyStore")
+    keyStore.load(null)
+    val saved = keyStore.getKey("session", null) as? SecretKey
+    if (saved != null) {
+        return saved
+    }
+    return makeKey(KEY_ALIAS)   // the KeyGenParameterSpec code from above
+}`, bug: 3, fix: '    val saved = keyStore.getKey(KEY_ALIAS, null) as? SecretKey', why: 'The key is made as <code>"session_key"</code> but looked up as <code>"session"</code>, so the lookup always finds nothing. Each start makes a new key that replaces the old one, and yesterday’s tokens can’t be decrypted.' },
+        ],
+        quiz: [
+          { q: 'Where are the bytes of a Keystore key?', options: ['Inside the Keystore, often in secure hardware; never in your app', 'In the DataStore file', 'In the APK'], a: 0, why: 'Your app holds a handle. The data goes in to the Keystore and the result comes out.' },
+          { q: 'After an update, decrypting a saved token throws. What should <code>Session</code> do?', options: ['Treat Ada as signed out, so she signs in again', 'Crash, so the bug gets noticed', 'Send the encrypted text as the token'], a: 0, why: 'A token that can’t be read is as good as none. One more sign-in fixes it.' },
+          { q: 'Why look the alias up before making a key?', options: ['Making a key under the same alias replaces it, and older tokens can’t be decrypted', 'The Keystore allows only one lookup', 'Looking up is needed to encrypt faster'], a: 0, why: 'Make the key once, then reuse it. A new key can’t open what the old one encrypted.' },
+        ],
+        docs: [['Android Keystore system', 'https://developer.android.com/privacy-and-security/keystore'], ['Security library releases', 'https://developer.android.com/jetpack/androidx/releases/security']],
+      },
+
       {
         id: 'network',
         title: 'Network security',
-        tagline: 'HTTPS only, the right trust anchors, and pinning only if you can maintain it.',
-        level: 'intermediate',
+        tagline: 'HTTPS keeps requests private and proves you reached the real server.',
+        goals: ['Explain what HTTPS protects on a café Wi-Fi', 'Turn plain HTTP off with a network security config', 'Explain what certificate pinning is and why Android advises against it'],
+        level: 'intermediate', introduces: ['networkSecurityConfig', 'cleartextTrafficPermitted', 'base-config', 'debug-overrides'],
         body: `
-<p>Send everything over HTTPS. Apps that target Android 9 (API 28) or higher block cleartext HTTP by default, so a stray <code>http://</code> URL fails with an error instead of leaking. Keep it that way. If one legacy host really needs HTTP, allow it for that domain only in <code>network_security_config.xml</code>.</p>
-<p>Since Android 7, apps trust only system certificate authorities by default. A certificate the user installed, like the one from a debugging proxy, is ignored. That stops the most common man-in-the-middle setup. To inspect your own traffic, trust user CAs inside <code>&lt;debug-overrides&gt;</code>, which applies only to debuggable builds.</p>
-<p>Certificate pinning goes further: the app accepts only certificates whose public key matches a hash you ship. It stops an attacker who got a rogue certificate into the system store. The cost is real. Rotate your server key without updating the pins and every installed copy stops working. Pin to an intermediate or your own key, always ship a backup pin, and set an <code>expiration</code>. On a rooted phone, Frida can still remove pinning, so it protects your users, not your API.</p>`,
+<p>Ada opens Recipes in a café. Her phone talks to the server through the café’s Wi-Fi, and anyone on that network can watch the traffic go by. With plain <code>http://</code>, they read every request, including <code>Authorization: Bearer</code> and the token, and they can even change the answers.</p>
+<p><em>HTTPS</em> is HTTP sent through <em>TLS</em>, which encrypts each request on the way. TLS also proves who is on the other end. The server shows a <em>certificate</em>, a signed card that says “I am recipes.example.com”, signed by a certificate authority: a company the phone already trusts. A fake server on the café network can’t show a valid card for that name, so the connection fails before any token is sent. With a base URL that starts with <code>https://</code>, Retrofit does all of this for you, and a failed check arrives as an <code>IOException</code>, like being offline.</p>
+<p>For apps that target Android 9 or higher, Android blocks plain HTTP by default: the request fails with “CLEARTEXT communication to … not permitted by network security policy”. The <em>network security config</em> is an XML file where you write these rules down, <code>res/xml/network_security_config.xml</code>, named in the manifest with <code>android:networkSecurityConfig</code>. <code>&lt;base-config cleartextTrafficPermitted="false" /&gt;</code> says “HTTPS only” for every address. <code>&lt;debug-overrides&gt;</code> holds rules for the debug build only, such as trusting a certificate you installed yourself, so a debugging tool can show your own traffic.</p>
+<p><em>Certificate pinning</em> goes one step further: the app accepts only the certificate keys it lists in advance. Android’s guide advises against it for apps: when the server moves to another certificate authority, every installed copy stops connecting until it is updated. If you must pin, list backup pins, one of them a key fully in your control, and a short expiration date. And never “fix” a certificate error by trusting every certificate: that hands the café attacker everything.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'app', label: 'Recipes app', sub: 'Ada’s phone' },
+              { id: 'wifi', label: 'Café Wi-Fi', sub: 'anyone can listen' },
+              { id: 'server', label: 'Server', sub: 'recipes.example.com' },
+            ],
+            predict: {
+              q: 'On the café Wi-Fi, a fake server answers instead of recipes.example.com. With HTTPS, what happens?',
+              options: ['The connection fails before the token is sent', 'The fake server gets the token', 'The app warns Ada and goes on'],
+              a: 0,
+              why: 'The fake server has no certificate for recipes.example.com signed by an authority the phone trusts, so TLS stops right there.',
+            },
+            frames: [
+              { at: 'app', packet: 'GET recipes + token', say: 'Ada taps refresh. The request carries her access token.' },
+              { at: 'wifi', packet: 'Bearer 7f3a9c…', tone: 'err', mark: { wifi: 'err' }, say: 'With plain <code>http://</code>, the request crosses the café network as readable text. Anyone listening copies the token.' },
+              { at: 'server', packet: 'TLS: who are you?', tone: 'accent', mark: { wifi: null }, say: 'Now with <code>https://</code>. Before any request, the app starts TLS and asks the server to prove its name.' },
+              { at: 'app', packet: 'certificate ✓', tone: 'ok', mark: { server: 'ok' }, say: 'The server shows its certificate for recipes.example.com, signed by an authority the phone trusts. The check passes.' },
+              { at: 'wifi', packet: 'x9#Lq2…', tone: 'ok', mark: { wifi: 'warm' }, say: 'The request now crosses the Wi-Fi encrypted. The listener sees noise.' },
+              { at: 'wifi', packet: 'fake certificate', tone: 'err', mark: { wifi: 'err', server: null }, say: 'Another day, an attacker on the Wi-Fi pretends to be the server, with a certificate it made itself. No trusted authority signed it.' },
+              { at: 'app', packet: 'check failed', tone: 'err', mark: { app: 'ok' }, say: 'The check fails and the connection stops, before the token leaves the phone. Retrofit throws an <code>IOException</code>, as when offline.' },
+            ],
+          });
+        },
         code: `<!-- res/xml/network_security_config.xml -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
+    <!-- HTTPS only, for every address -->
+    <base-config cleartextTrafficPermitted="false" />
 
-    <domain-config>
-        <domain includeSubdomains="true">api.example.com</domain>
-        <pin-set expiration="2027-06-01">
-            <pin digest="SHA-256">7HIpactkIAq2Y49orFOOQKurWxmmSFZhBCoQYcRhJ3Y=</pin>
-            <!-- backup pin: a key you hold but have not deployed yet -->
-            <pin digest="SHA-256">fwza0LRMXouZHRC8Ei+4PyuldPDcf3UKgO/04cDM1oE=</pin>
-        </pin-set>
-    </domain-config>
-
+    <!-- Debug build only: also trust certificates you installed on the test phone,
+         so a debugging tool can show your own traffic -->
     <debug-overrides>
         <trust-anchors>
             <certificates src="user" />
@@ -1155,1229 +415,463 @@ class SessionCrypto @Inject constructor(@ApplicationContext context: Context) {
 </network-security-config>
 
 <!-- AndroidManifest.xml -->
-<application android:networkSecurityConfig="@xml/network_security_config">`,
-        remember: 'Cleartext is blocked, user CAs are ignored. Pin only with a backup pin and an expiry date.',
+<application
+    android:networkSecurityConfig="@xml/network_security_config"
+    ... >
+
+<!-- Retrofit: the base URL starts with https://
+     .baseUrl("https://recipes.example.com/") -->`,
+        remember: 'HTTPS everywhere, written down in the network security config; debug-only rules go in debug-overrides, and avoid pinning unless you must.',
+        mistakes: [
+          { title: 'Turning cleartext on to make an error go away', bad: `<application android:usesCleartextTraffic="true" ... >`, good: `.baseUrl("https://recipes.example.com/")`, why: 'In an app without a network security config, this allows plain HTTP for every address, in the release build too, and the café attacker reads the tokens again. (With a config, Android ignores it and follows the config.) Use the server’s HTTPS address instead.' },
+        ],
         terms: [
-          { term: 'Network security config', def: 'An XML file referenced from the manifest that sets cleartext rules, trusted CAs and certificate pins per domain.' },
-          { term: 'Man-in-the-middle', def: 'An attack where someone between the app and the server reads or changes traffic, usually by presenting their own certificate.' },
-          { term: 'Certificate pinning', def: 'Accepting a server only if its certificate chain contains a public key whose hash the app already knows.' },
-          { term: 'Trust anchor', def: 'A root certificate authority the app trusts; every server certificate must chain up to one.' },
+          { term: 'HTTPS', def: 'HTTP sent through TLS: requests are encrypted on the way, and the server proves its name with a certificate.' },
+          { term: 'certificate', def: 'A signed card a server shows, saying which name it belongs to. A certificate authority the phone trusts signs it.' },
+          { term: 'network security config', def: 'An XML file, named in the manifest with <code>android:networkSecurityConfig</code>, with the app’s rules for connections.' },
+          { term: 'certificate pinning', def: 'Accepting only certificate keys listed in the app in advance. Android’s guide advises against it, because a server change can lock old app versions out.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Pin api.example.com in OkHttp with a primary and a backup key hash.', code: 'val client = OkHttpClient.Builder()\n    .certificatePinner(\n        CertificatePinner.Builder()\n            .add("api.example.com", "[[sha256]]/7HIpactkIAq2Y49orFOOQKurWxmmSFZhBCoQYcRhJ3Y=")\n            .add("api.example.com", "sha256/fwza0LRMXouZHRC8Ei+4PyuldPDcf3UKgO/04cDM1oE=")\n            .[[build]]()\n    )\n    .build()', why: 'OkHttp pins are written as <code>sha256/</code> plus the base64 hash of the public key. Two pins for one host means either key is accepted, so you can rotate.' },
-          { type: 'bug', prompt: 'A security review says release builds trust a debugging proxy. Tap the line.', code: '<network-security-config>\n    <base-config cleartextTrafficPermitted="false">\n        <trust-anchors>\n            <certificates src="system" />\n            <certificates src="user" />\n        </trust-anchors>\n    </base-config>\n</network-security-config>', bug: 4, fix: '            <!-- remove: trust user CAs only inside <debug-overrides> -->', why: 'In <code>base-config</code>, user CAs apply to release builds too. Anyone who tricks a user into installing a certificate can then read the app’s traffic. Move it to <code>&lt;debug-overrides&gt;</code>.' },
+          { type: 'blank', prompt: 'Allow HTTPS only, and name the config file in the manifest.', code: `<!-- res/xml/network_security_config.xml -->
+<network-security-config>
+    <base-config [[cleartextTrafficPermitted]]="[[false]]" />
+</network-security-config>
+
+<!-- AndroidManifest.xml -->
+<application android:[[networkSecurityConfig]]="@xml/network_security_config">`, why: '<code>cleartextTrafficPermitted="false"</code> refuses plain HTTP everywhere. The manifest attribute tells Android which file holds the rules.' },
+          { type: 'bug', prompt: 'Every request fails with “CLEARTEXT communication to recipes.example.com not permitted by network security policy”. Tap the wrong line.', code: `val api: RecipeApi = Retrofit.Builder()
+    .baseUrl("http://recipes.example.com/")
+    .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+    .build()
+    .create(RecipeApi::class.java)`, bug: 1, fix: '    .baseUrl("https://recipes.example.com/")', why: 'The base URL asks for plain HTTP, which Android refuses. With <code>https://</code> every request goes through TLS.' },
         ],
         quiz: [
-          { q: 'Your app targets API 35 and calls <code>http://api.example.com</code>. What happens by default?', options: ['It works', 'The request fails: cleartext is not permitted', 'Android upgrades it to HTTPS'], a: 1, why: 'Since API 28 the default is <code>cleartextTrafficPermitted="false"</code>. OkHttp throws <code>UnknownServiceException</code>.' },
-          { q: 'A user installs a proxy’s CA certificate in Settings. Does your release app trust it?', options: ['Yes, it’s in the device store', 'No, apps targeting API 24+ trust only system CAs unless you opt in', 'Only for HTTP'], a: 1, why: 'User CAs need an explicit <code>&lt;certificates src="user"/&gt;</code>. Put it in <code>debug-overrides</code> to keep release builds safe.' },
-          { q: 'Why ship a backup pin?', options: ['To make pinning faster', 'So you can rotate the server key without breaking installed apps', 'Android rejects a single pin'], a: 1, why: 'Old app versions stay installed for years. If the only pinned key changes, every one of them fails to connect.' },
-          { q: 'Your app fails with “Trust anchor not found” for api.example.com, but a desktop browser loads the site fine. What is the most likely cause?', options: ['The certificate has expired', 'The server does not send its intermediate certificate', 'The certificate names a different host'], a: 1, why: 'An unknown root usually means a broken chain, often a missing intermediate. An expired certificate and a wrong name fail with different errors.' },
+          { q: 'What does the server’s certificate prove?', options: ['That the server really is recipes.example.com', 'That the app is signed', 'That the token is still fresh'], a: 0, why: 'A trusted authority signed it for that name. A fake server can’t get one.' },
+          { q: 'Why does Android’s guide advise against certificate pinning?', options: ['When the server changes certificate authority, pinned app versions can’t connect until they update', 'It makes requests slower', 'It turns HTTPS off'], a: 0, why: 'The pins are inside every installed copy. Changing them needs an app update.' },
+          { q: 'A test server you run has a certificate the phone doesn’t trust. What is a safe fix?', options: ['Trust your own test certificate in <code>debug-overrides</code>, or fix the server’s certificate', 'Trust every certificate', 'Switch to <code>http://</code>'], a: 0, why: '<code>debug-overrides</code> only applies to the debug build. The other two turn protection off for everyone.' },
         ],
-        deeper: [
-          {
-            title: 'What the handshake actually checks',
-            body: `<p>The server sends a chain: its own leaf certificate, one or more intermediates, ending at a root. The platform trust manager checks that each certificate is signed by the next, that the chain ends at a trust anchor, and that every certificate is inside its validity dates. Then OkHttp checks that the leaf names the host you asked for.</p>
-<p>Each check fails with its own error, and knowing which one saves hours. “Trust anchor not found” means an unknown root, often a missing intermediate on the server. An expired certificate fails chain validation. A wrong name fails only the host check.</p>`,
-            visual(el) {
-              const CASES = [['ok', 'Valid chain'], ['expired', 'Expired leaf'], ['host', 'Wrong host name'], ['root', 'Unknown root']];
-              let cur = 'ok', busy = false;
-              const cert = () => { const well = h('div', { class: 'sec-well' }); const b = h('b', {}), s = h('small', {}); return Object.assign(h('div', { class: 'sec-node' }, b, well, s), { b, s, well }); };
-              const leaf = cert(), mid = cert(), root = cert();
-              const chks = ['Chain ends at a trusted root', 'Every certificate is in date', 'Leaf names api.example.com'].map(t => {
-                const st = h('span', { class: 'sec-state' }, 'not checked');
-                return Object.assign(h('div', { class: 'sec-chk' }, h('span', {}, t), st), { st });
-              });
-              const o = out('Pick a server setup, then make the request.');
-              const paint = () => {
-                leaf.b.textContent = cur === 'host' ? 'CN=cdn.other.net' : 'CN=api.example.com';
-                leaf.s.textContent = cur === 'expired' ? 'valid until 2025-03-01' : 'valid until 2027-01-10';
-                mid.b.textContent = 'Example CA R1'; mid.s.textContent = `issued by ${cur === 'root' ? 'Unknown Root' : 'Example Root'}`;
-                root.b.textContent = cur === 'root' ? 'Unknown Root' : 'Example Root';
-                root.s.textContent = cur === 'root' ? 'not in the trust store' : 'in the system store';
-                [leaf, mid, root].forEach(n => n.classList.remove('sec-evil', 'sec-ok', 'on'));
-                chks.forEach(c => { c.className = 'sec-chk'; c.st.textContent = 'not checked'; });
-              };
-              const caseBtns = CASES.map(([id, label], i) => act(label, () => { if (busy) return; cur = id; press(caseBtns, caseBtns[i]); paint(); say(o, 'Server changed. Make the request.'); }));
-              press(caseBtns, caseBtns[0]);
-              const step = async (i, ok, node) => {
-                const c = chks[i];
-                c.className = 'sec-chk sec-now'; c.st.textContent = 'checking';
-                node.classList.add('on');
-                await sleep(450);
-                node.classList.remove('on');
-                c.className = 'sec-chk ' + (ok ? 'sec-pass' : 'sec-fail'); c.st.textContent = ok ? 'pass' : 'fail';
-                if (!ok) { node.classList.add('sec-evil'); replay(node, 'shake'); }
-                return ok;
-              };
-              const go = async () => {
-                if (busy) return;
-                busy = true; paint();
-                say(o, '<span class="muted">GET https://api.example.com/v1/me</span>');
-                if (!await step(0, cur !== 'root', root)) { say(o, '<span class="bad">SSLHandshakeException:</span> Trust anchor for certification path not found.'); busy = false; return; }
-                if (!await step(1, cur !== 'expired', leaf)) { say(o, '<span class="bad">SSLHandshakeException:</span> Chain validation failed <span class="muted">(CertificateExpiredException)</span>'); busy = false; return; }
-                if (!await step(2, cur !== 'host', leaf)) { say(o, '<span class="bad">SSLPeerUnverifiedException:</span> Hostname api.example.com not verified'); busy = false; return; }
-                [leaf, mid, root].forEach(n => n.classList.add('sec-ok'));
-                say(o, '<span class="good">200 OK:</span> all three checks passed, then the encrypted request went out.');
-                busy = false;
-              };
-              paint();
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Server'), caseBtns),
-                h('div', { class: 'sec-path' }, leaf, mid, root),
-                h('div', { class: 'sec-chks' }, chks),
-                h('div', { class: 'controls' }, cmd('client.newCall(request).execute()', go)),
-                o);
-            },
-          },
-          {
-            title: 'Rotating a pinned key',
-            body: `<p>Pins live in every installed copy of your app, and old copies stay around for years. So plan the server’s next key before you ship the first pin. Each release pins the current key and the next one. When the server switches, every version that knew the new key keeps working.</p>
-<p>The <code>expiration</code> date is the safety net. After it, the platform stops checking that pin-set and falls back to normal CA checks. An app nobody updated still connects, with less protection.</p>`,
-            visual(el) {
-              const V = [{ v: 'v1.0', pins: ['A'], share: 15 }, { v: 'v2.0', pins: ['A', 'B'], share: 35 }, { v: 'v3.0', pins: ['B', 'C'], share: 50 }];
-              let server = 'A', expired = false, busy = false;
-              const cards = V.map(x => {
-                const st = h('span', { class: 'sec-state' }, 'not tried'), note = h('small', {}, `pins ${x.pins.join(' + ')} · ${x.share}% of users`);
-                return Object.assign(h('div', { class: 'sec-card' }, st, h('b', {}, x.v), note), { st, x });
-              });
-              const stat = h('span', { class: 'sec-stat' });
-              const o = out('The server uses key A. Every version pins A. Rotate the server key.');
-              const expSw = toggle('sec-nw2-exp', 'v1.0 pin-set <code>expiration</code> has passed', false, v => { expired = v; run(); });
-              const run = async () => {
-                if (busy) return;
-                busy = true; let reach = 0;
-                for (const c of cards) {
-                  if (!el.isConnected) { busy = false; return; }
-                  const off = expired && c.x.v === 'v1.0';
-                  const ok = off || c.x.pins.includes(server);
-                  c.className = 'sec-card ' + (off ? 'sec-warn' : ok ? 'sec-safe' : 'sec-bad');
-                  c.st.textContent = off ? 'connects, CA check only' : ok ? 'connects' : 'pin mismatch';
-                  replay(c, ok ? 'pop' : 'shake');
-                  if (ok) reach += c.x.share;
-                  await sleep(260);
-                }
-                stat.innerHTML = `users who can connect: <b class="${reach < 100 ? 'sec-badnum' : ''}">${reach}%</b>`;
-                say(o, reach === 100 ? `<span class="good">Everyone connects</span> with server key ${server}.` : `<span class="bad">${100 - reach}% of users are locked out</span> until they update. They can’t even download the update notice from your API.`);
-                busy = false;
-              };
-              const keyBtns = ['A', 'B', 'C'].map((k, i) => act(`Server key ${k}`, () => { if (busy) return; server = k; press(keyBtns, keyBtns[i]); run(); }));
-              press(keyBtns, keyBtns[0]);
-              stat.innerHTML = 'users who can connect: <b>?</b>';
-              el.append(
-                h('div', { class: 'controls' }, keyBtns),
-                h('div', { class: 'sec-grid' }, cards),
-                h('div', { class: 'controls' }, expSw.el, stat),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>When the app starts, the platform reads <code>network_security_config.xml</code> and installs a trust manager built from it as the app’s default. <code>HttpsURLConnection</code> and OkHttp both use that default, so trust anchors and pin-sets apply without extra code. For cleartext, OkHttp asks <code>NetworkSecurityPolicy</code> whether that host allows cleartext before it opens an <code>http://</code> connection.</p>
-<p>Pins are checked inside that trust manager, against the public keys of the chain it built, so a pin on an intermediate matches too. Libraries that bring their own TLS stack and trust store skip the platform trust manager and ignore the file. Check how any networking SDK you add does TLS.</p>`,
-          code: `// The same checks, readable from code
-val policy = NetworkSecurityPolicy.getInstance()
-policy.isCleartextTrafficPermitted("api.example.com")   // false
-policy.isCleartextTrafficPermitted("legacy.example.net") // true if a domain-config allows it`,
-        },
-        mistakes: [
-          {
-            title: 'A trust-all TrustManager to get past a dev certificate',
-            bad: `val trustAll = object : X509TrustManager {
-    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
-    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
-    override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
-}
-OkHttpClient.Builder()
-    .sslSocketFactory(sslContext.socketFactory, trustAll)
-    .hostnameVerifier { _, _ -> true }`,
-            good: `<!-- network_security_config.xml: dev CA, debug builds only -->
-<debug-overrides>
-    <trust-anchors>
-        <certificates src="@raw/dev_ca" />
-    </trust-anchors>
-</debug-overrides>`,
-            why: 'The trust-all version accepts any certificate for any host in every build, release included. Play also flags apps that ship an unsafe TrustManager.',
-          },
-          {
-            title: 'Turning on cleartext for the whole app',
-            bad: `<application
-    android:usesCleartextTraffic="true">`,
-            good: `<domain-config cleartextTrafficPermitted="true">
-    <domain includeSubdomains="false">legacy.example.net</domain>
-</domain-config>`,
-            why: 'The manifest flag opens every host to plain HTTP. On API 24 and up it is also ignored once a network security config exists, which confuses people the other way. Allow one domain in the config.',
-          },
-          {
-            title: 'Pinning the leaf certificate',
-            bad: `CertificatePinner.Builder()
-    .add("api.example.com", "sha256/<leaf key hash>")   // renewed every 90 days
-    .build()`,
-            good: `CertificatePinner.Builder()
-    .add("api.example.com", "sha256/<issuing CA key hash>")
-    .add("api.example.com", "sha256/<backup CA key hash>")
-    .build()`,
-            why: 'Many renewals create a new leaf key, which breaks a leaf pin overnight. Pin a key that changes rarely, such as the issuing CA, and always add a backup from a different CA.',
-          },
-        ],
-        visual(el) {
-          Lab.ui.flow(el, {
-            nodes: [
-              { id: 'app', label: 'Your app', sub: 'release build' },
-              { id: 'wifi', label: 'Café Wi-Fi', sub: 'runs mitmproxy' },
-              { id: 'srv', label: 'api.example.com', sub: 'the real server' },
-            ],
-            predict: {
-              q: 'An attacker managed to put their CA into the phone’s <em>system</em> store, so their fake certificate has a valid chain. What still stops it?',
-              options: ['Nothing: a valid chain is accepted', 'A <code>pin-set</code> with the hash of the server’s public key', 'Blocking cleartext HTTP'], a: 1,
-              why: 'Pinning adds a second check after the chain: the public key itself must match a hash you shipped. A rogue CA can’t produce the server’s real key.',
-            },
-            frames: [
-              { say: 'The app logs in over HTTPS on a hostile café Wi-Fi. The proxy wants to read the request.' },
-              { at: 'app', packet: 'ClientHello', say: 'The app starts a TLS handshake with <code>api.example.com</code>.' },
-              { at: 'wifi', packet: 'ClientHello', mark: { wifi: 'warm' }, say: 'The proxy catches it and pretends to be the server.' },
-              { at: 'app', packet: 'fake cert', tone: 'warm', say: 'It answers with a certificate for <code>api.example.com</code>, signed by its own CA. The user was tricked into installing that CA in Settings.' },
-              { at: 'app', packet: 'rejected', tone: 'err', mark: { app: 'ok' }, say: 'Since Android 7, apps trust only system CAs by default. A user-installed CA is ignored: <code>Trust anchor for certification path not found</code>. Nothing is sent.' },
-              { at: 'wifi', packet: 'ClientHello', mark: { wifi: 'err', app: null }, say: 'Harder case: on a rooted phone the attacker put their CA into the system store.' },
-              { at: 'app', packet: 'fake cert', tone: 'warm', say: 'Now the fake certificate has a valid chain to a trusted CA.' },
-              { at: 'app', packet: 'pin mismatch', tone: 'err', mark: { app: 'ok' }, say: 'With a <code>pin-set</code>, the app also hashes the server’s public key. It does not match your pin, so the handshake fails.' },
-              { at: 'srv', packet: 'POST /login', tone: 'ok', mark: { wifi: null, srv: 'ok' }, say: 'Without an attacker the real key matches the pin. The request reaches the server, encrypted the whole way. The Wi-Fi sees only the host name.' },
-            ],
-          });
-        },
+        docs: [['Network security configuration', 'https://developer.android.com/privacy-and-security/security-config'], ['Security with network protocols', 'https://developer.android.com/privacy-and-security/security-ssl']],
       },
 
-      // 5 ─────────────────────────────────────────────
       {
         id: 'secrets',
-        title: 'Secrets in the app',
-        tagline: 'If it ships in the APK, it is public.',
-        level: 'intermediate',
+        title: 'API keys and secrets',
+        tagline: 'Anything inside the APK is public, so real secrets stay on the server.',
+        goals: ['Explain why a key in the APK can be read by anyone', 'Move a paid service’s key behind your own server', 'Keep a key out of Git with local.properties'],
+        level: 'intermediate', introduces: ['buildConfigField', 'Properties', 'inputStream'],
         body: `
-<p>Every string in your APK can be read. <code>local.properties</code> keeps a key out of Git, and <code>buildConfigField</code> moves it into <code>BuildConfig</code>, but both end as a plain constant in <code>classes.dex</code>. R8 renames classes and methods; it does not encrypt string constants. Keys in <code>strings.xml</code> sit in the resources table. Hiding one in native code or XOR-ing it slows an attacker down for an afternoon, because Frida can read the value when your code decodes it.</p>
-<p>So sort your keys. Some are designed to be public and limited by other means, like a Maps key restricted to your package name and signing certificate in Cloud Console. Those may ship. A key that can spend money, read other users’ data or call a paid API must stay on your server. The app calls your backend with the user’s short-lived session token, and the backend calls the third party with the real key.</p>
-<p>Your backend still wants to know the request comes from your real app on a real device. That is the Play Integrity API. The app asks Google Play for a signed integrity token tied to a hash of the request, and sends it along. Your server decrypts the verdict through Google’s API and checks that the app is genuine, from Play, and on a device that passes integrity checks. Treat the verdict as one signal for risk, not a lock.</p>`,
-        code: `// build.gradle.kts: this does NOT hide anything
+<p>Recipes would like to show the calories of each recipe. A nutrition service sells that data, and each request needs its <em>API key</em>, a password for apps; every request costs a little, billed to the key’s owner. The quick way is a <code>const val</code> in the code. But anyone can download the APK and list every text inside it with free tools in a minute. R8 renames classes and functions, but texts stay as they are. Whoever copies the key sends requests on your bill.</p>
+<p>So nothing in the APK is secret, however you hide it. Split into pieces, encoded or in a resource file, the app must rebuild the key to use it, and so can anyone else. A real <em>secret</em> stays on a computer you control. The app asks your own server, with Ada’s token as always. The server adds its key, calls the nutrition service and passes the answer on. It can also refuse an account after 200 requests a day, and a new key only has to change in one place.</p>
+<p>Some keys are made to ship inside the app, such as a key for a map service. Protect those differently: in the service’s console, if it offers this, limit the key to your app’s application id and signing key, so a copy is useless elsewhere. Keep them out of Git all the same. <code>local.properties</code>, in the project’s top folder, is already in a new project’s <code>.gitignore</code>. In <code>app/build.gradle.kts</code>, <code>Properties</code> reads it (<code>rootProject.file</code> finds a file in the project’s top folder, <code>inputStream()</code> opens the file, <code>getProperty</code> reads one value), and <code>buildConfigField</code> puts the value into <code>BuildConfig</code>. That keeps the key out of Git, not out of the APK.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'app', label: 'Recipes app', x: 16, y: 18 },
+              { id: 'copy', label: 'A copied APK', x: 16, y: 84, tone: 'err', hidden: true },
+              { id: 'server', label: 'Your server', x: 50, y: 50, tone: 'ok', hidden: true },
+              { id: 'nutri', label: 'Nutrition service', x: 84, y: 18 },
+              { id: 'bill', label: 'Your bill', x: 84, y: 84, tone: 'warm', hidden: true },
+            ],
+            predict: {
+              q: 'R8 renames every class and function in the release build. Is <code>const val NUTRI_KEY = "nk_live_51c9e2"</code> hidden now?',
+              options: ['No: R8 leaves texts as they are', 'Yes: renamed code can’t be read', 'Only on rooted phones'],
+              a: 0,
+              why: 'Renaming changes names, not the texts the code uses. The key is still there for anyone who looks.',
+            },
+            frames: [
+              { add: [['app', 'nutri', 'key nk_live_51c9e2', 'warm']], say: 'Version 1 sends the nutrition key straight from the app. It works.' },
+              { show: ['copy'], add: [['app', 'copy', 'download', 'muted']], say: 'Anyone can download the APK and list every text in it. The key is right there.' },
+              { show: ['bill'], add: [['copy', 'nutri', 'the same key', 'err'], ['nutri', 'bill', 'every request', 'err']], say: 'Now their requests carry your key, and every one lands on your bill.' },
+              { show: ['server'], gone: ['bill'], remove: [['app', 'nutri'], ['copy', 'nutri'], ['nutri', 'bill']], add: [['app', 'server', 'Ada’s token', 'accent']], say: 'Version 2: the app asks your own server, with Ada’s token, like every other request.' },
+              { add: [['server', 'nutri', 'the key, only here', 'ok']], say: 'The server adds the key and calls the service. The key never leaves the server.' },
+              { hl: ['server'], add: [['copy', 'server', 'no token: 401', 'weak']], say: 'A copied APK has no key left to steal. Without a valid token the server answers 401, and it can stop any account that asks too often.' },
+            ],
+          });
+        },
+        code: `// Version 1, don't: the secret is in every copy of the APK
+// const val NUTRI_KEY = "nk_live_51c9e2"
+
+// Version 2: the app asks your own server, like for recipes
+@Serializable
+data class Nutrition(val recipeId: Int, val calories: Int)
+
+interface RecipeApi {
+    @GET("recipes/nutrition")          // your server adds the key and calls the service
+    suspend fun getNutrition(@Header("Authorization") auth: String): List<Nutrition>
+}
+
+// A key that has to ship, such as a map key: out of Git, still inside the APK
+// local.properties (already in .gitignore):
+//     MAPS_KEY=mk_4e1b90
+
+// app/build.gradle.kts
+import java.util.Properties            // at the very top of the file
+
+val localProperties = Properties()
+localProperties.load(rootProject.file("local.properties").inputStream())
+
 android {
     defaultConfig {
-        buildConfigField("String", "PAY_KEY", "\\"\${localProps["PAY_KEY"]}\\"")  // a plain string in classes.dex
+        buildConfigField("String", "MAPS_KEY", "\\"\${localProperties.getProperty("MAPS_KEY")}\\"")
+    }
+    buildFeatures {
+        buildConfig = true
     }
 }
-
-// Instead: the secret lives on your server. The app proves who it is.
-class CheckoutRepository(
-    private val integrity: StandardIntegrityManager,
-    private val api: ShopApi,
-    private val cloudProjectNumber: Long,
-) {
-    private var provider: StandardIntegrityTokenProvider? = null
-
-    suspend fun createPayment(cart: Cart): PaymentSession {
-        val p = provider ?: integrity.prepareIntegrityToken(
-            PrepareIntegrityTokenRequest.builder().setCloudProjectNumber(cloudProjectNumber).build()
-        ).await().also { provider = it }
-
-        val body = Json.encodeToString(cart)
-        val token = p.request(
-            StandardIntegrityTokenRequest.builder().setRequestHash(body.sha256Hex()).build()
-        ).await().token()
-
-        // Server: verify the token with Google, then call the payment API with its own secret key.
-        return api.createPayment(body, integrityToken = token)
-    }
-}
-
-private fun String.sha256Hex(): String =
-    MessageDigest.getInstance("SHA-256").digest(encodeToByteArray()).joinToString("") { "%02x".format(it) }`,
-        remember: 'Anything in the APK is public. Secrets stay on the server; the app sends a session token and a Play Integrity token.',
+// In the app: BuildConfig.MAPS_KEY`,
+        remember: 'Everything in the APK is public: real secrets stay on your server, and keys that must ship are limited to your app and kept out of Git.',
+        mistakes: [
+          { title: 'Hiding a key by splitting it', bad: `val key = "nk_live_" + "51c9e2"   // split, so nobody finds it?`, good: `api.getNutrition("Bearer $accessToken")   // the server adds the key`, why: 'The app has to join the pieces to use the key, and anyone reading the APK can join them too. Only a key that isn’t in the app is safe.' },
+        ],
         terms: [
-          { term: 'BuildConfig', def: 'A class generated at build time whose constant fields are compiled into the APK as readable values.' },
-          { term: 'Play Integrity API', def: 'A Google Play service that returns a signed verdict about whether a request comes from your genuine app on a genuine Android device.' },
-          { term: 'Request hash', def: 'A digest of the request you pass when asking for an integrity token, so the server can check the token belongs to that exact request.' },
-          { term: 'Key restriction', def: 'A Cloud Console rule that limits an API key to a package name and signing certificate, or to specific APIs.' },
+          { term: 'API key', def: 'A password for apps that a service gives you. Requests that carry it are allowed, and often billed to you.' },
+          { term: 'secret', def: 'Anything that must not be known outside your team, such as a paid service’s key. It can’t live in the APK.' },
+          { term: 'local.properties', def: 'A file in the project’s top folder for settings of this computer only. A new project’s <code>.gitignore</code> already leaves it out of Git.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Warm up the Play Integrity provider once, then request a token bound to this request.', code: 'val provider = integrityManager.[[prepareIntegrityToken]](\n    PrepareIntegrityTokenRequest.builder()\n        .setCloudProjectNumber(PROJECT_NUMBER)\n        .build()\n).await()\n\nval token = provider.request(\n    StandardIntegrityTokenRequest.builder()\n        .setRequestHash(body.sha256Hex())\n        .build()\n).await().[[token]]()\napi.redeem(body, token)', why: 'Prepare once and keep the provider; each <code>request</code> after that is fast. The token is opaque to the app. Only your server, through Google’s API, can decode the verdict.' },
-          { type: 'bug', prompt: 'Anyone who unzips the APK can now charge cards on your account. Tap the line.', code: 'val client = OkHttpClient.Builder()\n    .addInterceptor { chain ->\n        val req = chain.request().newBuilder()\n            .header("Authorization", "Bearer ${BuildConfig.PAYMENTS_SECRET_KEY}")\n            .build()\n        chain.proceed(req)\n    }\n    .build()', bug: 3, fix: '            .header("Authorization", "Bearer ${session.accessToken}")   // short-lived user token; the secret stays on your server', why: 'A <code>BuildConfig</code> field is a string constant in the dex. Send the user’s session token to your own backend, and let the backend hold the payment provider’s secret.' },
+          { type: 'blank', prompt: 'Put the map key from <code>local.properties</code> into <code>BuildConfig</code>.', code: `android {
+    defaultConfig {
+        [[buildConfigField]]("String", "MAPS_KEY", "\\"\${localProperties.getProperty("MAPS_KEY")}\\"")
+    }
+    buildFeatures {
+        [[buildConfig]] = true
+    }
+}`, why: '<code>buildConfigField</code> adds a field to <code>BuildConfig</code>, and <code>buildConfig = true</code> makes Gradle write that class. The key stays out of Git, but it is still in the APK.' },
+          { type: 'bug', prompt: 'This sends the nutrition service’s key from the app, where anyone can read it. Tap the line.', code: `interface RecipeApi {
+    @GET("recipes/nutrition")
+    suspend fun getNutrition(@Header("Authorization") auth: String): List<Nutrition>
+}
+
+suspend fun loadNutrition(api: RecipeApi, accessToken: String): List<Nutrition> =
+    api.getNutrition("Bearer nk_live_51c9e2")`, bug: 6, fix: '    api.getNutrition("Bearer $accessToken")', why: 'The app should send Ada’s token, which runs out and only works for her. The nutrition key belongs on the server.' },
         ],
         quiz: [
-          { q: 'Does R8 hide a secret stored in <code>BuildConfig</code>?', options: ['Yes, it obfuscates it', 'No, R8 renames code but leaves string constants readable', 'Only in release builds'], a: 1, why: 'Obfuscation changes names like <code>BuildConfig.PAY_KEY</code> to <code>a.b</code>. The value <code>"sk_live_..."</code> is still in the dex for anyone to grep.' },
-          { q: 'Which key is fine to ship in the app?', options: ['A payment provider’s secret key', 'A Maps SDK key restricted to your package name and signing certificate', 'Your database password'], a: 1, why: 'Some keys are designed to be public and are limited by restrictions on the provider’s side. Keys that grant power must stay on a server.' },
-          { q: 'Who decodes a Play Integrity token?', options: ['The app, before sending it', 'Your server, through Google’s API', 'Nobody, it’s just a random value'], a: 1, why: 'The app treats the token as opaque. The server sends it to Google’s decode endpoint and checks the verdict and the request hash.' },
-          { q: 'Your app gets one Play Integrity token at launch and attaches it to every payment request. What is the problem?', options: ['Play rejects a token that is sent twice', 'It is not bound to any request, so a captured one can be replayed with a different body', 'Nothing, as long as it is less than an hour old'], a: 1, why: 'Ask for a fresh token per sensitive action, bound to a hash of that request body. The server then checks requestHash.' },
+          { q: 'Where can a paid service’s key live safely?', options: ['On your server', 'In <code>BuildConfig</code>', 'In <code>local.properties</code>'], a: 0, why: 'Both other places end up in the APK or on a laptop. Only the server keeps it out of reach.' },
+          { q: 'What does <code>local.properties</code> protect a key from?', options: ['Being pushed to Git', 'Being read from the APK', 'Being renamed by R8'], a: 0, why: 'It keeps the key out of the repository. Once it is in <code>BuildConfig</code>, it is inside the APK.' },
+          { q: 'A map key has to ship in the app. What helps most?', options: ['Limit the key to your app’s id and signing key in the service’s console', 'Split it into two texts', 'Encode it with Base64'], a: 0, why: 'A copy of a limited key is useless in another app. Splitting and encoding only slow a reader down for a minute.' },
         ],
-        deeper: [
-          {
-            title: 'How far a key restriction goes',
-            body: `<p>An Android restriction on a Google API key lists package names and signing certificate fingerprints. The SDK in your app sends both with each request, and Google refuses calls whose values don’t match. That stops another app from simply reusing your key.</p>
-<p>The values travel as request headers, <code>X-Android-Package</code> and <code>X-Android-Cert</code>, and both are public: anyone can read them from your APK. A script that copies them passes the check. So also restrict the key to the APIs your app uses, and set quotas so abuse has a ceiling.</p>`,
-            visual(el) {
-              const CALLS = [
-                { who: 'Your app', what: 'Maps SDK for Android', pkg: true, api: 'maps', mine: true },
-                { who: 'Another app, copied key', what: 'Maps SDK for Android', pkg: false, api: 'maps' },
-                { who: 'Script, copied headers', what: 'Maps SDK for Android', pkg: true, api: 'maps' },
-                { who: 'Script, copied headers', what: 'Geocoding API', pkg: true, api: 'geo' },
-              ];
-              let busy = false;
-              const rows = CALLS.map(c => {
-                const st = h('span', { class: 'sec-state' }, 'not sent');
-                const r = h('div', { class: 'sec-chk' }, h('span', {}, h('b', {}, c.who), ` → ${c.what}`), st);
-                return { c, r, st };
-              });
-              const o = out('Turn on restrictions, then send all four requests.');
-              const app = toggle('sec-d2-sec-app', 'Android apps: com.shop + SHA-1', true, () => clear());
-              const api = toggle('sec-d2-sec-api', 'APIs: Maps SDK for Android only', false, () => clear());
-              const quota = toggle('sec-d2-sec-quota', 'Quota: 25,000 requests a day', false, () => clear());
-              const clear = () => rows.forEach(x => { x.r.className = 'sec-chk'; x.st.textContent = 'not sent'; });
-              async function sendAll() {
-                if (busy) return; busy = true; clear();
-                let abuse = 0;
-                for (const x of rows) {
-                  x.r.classList.add('sec-now'); await sleep(420); if (!el.isConnected) return;
-                  x.r.classList.remove('sec-now');
-                  const blocked = (app.input.checked && !x.c.pkg) ? 'blocked: package or cert mismatch' : (api.input.checked && x.c.api !== 'maps') ? 'blocked: API not allowed' : null;
-                  if (blocked) { x.st.textContent = blocked; x.r.classList.add(x.c.mine ? 'sec-fail' : 'sec-pass'); }
-                  else if (x.c.mine) { x.st.textContent = 'served'; x.r.classList.add('sec-pass'); }
-                  else if (quota.input.checked) { x.st.textContent = 'served, up to the quota'; x.r.classList.add('sec-d2-warn'); abuse++; }
-                  else { x.st.textContent = 'served, you pay'; x.r.classList.add('sec-fail'); abuse++; replay(x.r, 'shake'); }
-                }
-                say(o, abuse ? `<span class="bad">${abuse} abusive request${abuse > 1 ? 's' : ''} got through.</span> ${!api.input.checked ? 'Restrict the APIs. ' : ''}${!quota.input.checked ? 'Add a quota. ' : ''}${api.input.checked && quota.input.checked ? 'The copied headers still pass, but the damage now has a ceiling.' : ''}`
-                  : '<span class="good">Only your app got through.</span>');
-                busy = false;
-              }
-              el.append(
-                h('div', { class: 'controls' }, app.el, api.el, quota.el),
-                h('div', { class: 'sec-chks' }, rows.map(x => x.r)),
-                h('div', { class: 'controls' }, cmd('send all four requests', sendAll)),
-                o);
-            },
-          },
-          {
-            title: 'What the server checks in a verdict',
-            body: `<p>The integrity token is encrypted and signed. Your server sends it to Google’s <code>decodeIntegrityToken</code> endpoint and gets JSON back. Check it in order: <code>requestHash</code> matches the body you received, <code>timestampMillis</code> is recent, <code>appRecognitionVerdict</code> is <code>PLAY_RECOGNIZED</code>, and <code>deviceRecognitionVerdict</code> contains <code>MEETS_DEVICE_INTEGRITY</code>.</p>
-<p>Don’t turn every failure into a hard no. Real users on old or custom phones fail device integrity. Use tiers: allow, allow with an extra step such as a password, or refuse the riskiest action.</p>`,
-            visual(el) {
-              const SC = {
-                ok: { label: 'Genuine app, certified phone', hash: true, fresh: true, app: 'PLAY_RECOGNIZED', dev: '["MEETS_DEVICE_INTEGRITY"]' },
-                resign: { label: 'Re-signed APK', hash: true, fresh: true, app: 'UNRECOGNIZED_VERSION', dev: '["MEETS_DEVICE_INTEGRITY"]' },
-                root: { label: 'Rooted phone or emulator', hash: true, fresh: true, app: 'PLAY_RECOGNIZED', dev: '[]' },
-                replay: { label: 'Old token, new cart', hash: false, fresh: false, app: 'PLAY_RECOGNIZED', dev: '["MEETS_DEVICE_INTEGRITY"]' },
-              };
-              let busy = false;
-              const json = h('div', { class: 'sec-term', 'aria-label': 'Decoded verdict' });
-              const CHK = [
-                ['requestHash matches the body', s => s.hash, 'refuse'],
-                ['timestampMillis is recent', s => s.fresh, 'refuse'],
-                ['app is PLAY_RECOGNIZED', s => s.app === 'PLAY_RECOGNIZED', 'refuse'],
-                ['device has MEETS_DEVICE_INTEGRITY', s => s.dev !== '[]', 'step up'],
-              ];
-              const chks = CHK.map(([t]) => { const st = h('span', { class: 'sec-state' }, 'waiting'); return { r: h('div', { class: 'sec-chk' }, h('span', {}, t), st), st }; });
-              const o = out('Pick a request. The server decodes its token and checks it.');
-              const show = s => json.replaceChildren(...[
-                '{', '  "requestDetails": {', '    "requestPackageName": "com.shop",',
-                `    "requestHash": "${s.hash ? '9f2c41…' : '<span class="sec-hit">03be7a…</span>'}",`,
-                `    "timestampMillis": "${s.fresh ? '1792400000123' : '<span class="sec-hit">1792396123004</span>'}"`, '  },',
-                `  "appIntegrity": { "appRecognitionVerdict": "${s.app === 'PLAY_RECOGNIZED' ? s.app : `<span class="sec-hit">${s.app}</span>`}" },`,
-                `  "deviceIntegrity": { "deviceRecognitionVerdict": ${s.dev === '[]' ? '<span class="sec-hit">[]</span>' : s.dev} }`, '}',
-              ].map(t => h('div', { class: 'line', html: t })));
-              const btns = Object.entries(SC).map(([k, s]) => act(s.label, async () => {
-                if (busy) return; busy = true;
-                press(btns, btns[Object.keys(SC).indexOf(k)]);
-                show(s); replay(json, 'pop-soft');
-                chks.forEach(c => { c.r.className = 'sec-chk'; c.st.textContent = 'waiting'; });
-                let verdict = 'allow';
-                for (let i = 0; i < CHK.length; i++) {
-                  const c = chks[i]; c.r.classList.add('sec-now');
-                  await sleep(380); if (!el.isConnected) return;
-                  c.r.classList.remove('sec-now');
-                  const pass = CHK[i][1](s);
-                  c.r.classList.add(pass ? 'sec-pass' : 'sec-fail'); c.st.textContent = pass ? 'pass' : 'fail';
-                  if (!pass) { verdict = CHK[i][2]; if (verdict === 'refuse') break; }
-                }
-                say(o, verdict === 'allow' ? '<span class="good">Allow.</span> Every check passed.'
-                  : verdict === 'step up' ? '<span class="bad">Step up.</span> The app is genuine but the phone fails device integrity. Ask for the password, or cap the amount.'
-                  : `<span class="bad">Refuse.</span> ${s.hash ? 'This is not your app as Play distributes it.' : 'The token belongs to a different request. It was replayed.'}`);
-                busy = false;
-              }));
-              show(SC.ok);
-              el.append(
-                h('div', { class: 'controls' }, btns),
-                json,
-                h('div', { class: 'sec-chks' }, chks.map(c => c.r)),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `<p>A <code>BuildConfig</code> string is a compile-time constant. Kotlin copies its value into every place that reads it, and D8 or R8 writes it once into the dex string table. A <code>const-string</code> instruction loads it. That is why a grep finds it, and why renaming classes hides nothing. R8 can even delete the <code>BuildConfig</code> class and leave the copied value behind.</p>
-<p>Play Integrity works the other way round. <code>prepareIntegrityToken</code> lets Play services do the slow setup early. Each <code>request</code> then returns a token that Google encrypted and signed. By default only Google’s server can decrypt it for you, so the app can neither read nor forge the verdict.</p>`,
-          code: `$ baksmali d classes.dex -o smali && grep -rn "sk_live" smali/
-smali/p0/b.smali:41:    const-string v1, "sk_live_51Hq8zEXAMPLEk3y"`,
-        },
-        mistakes: [
-          {
-            title: 'Encoding the key and calling it hidden',
-            bad: `private val key = String(Base64.decode("c2tfbGl2ZV81MUhx…", Base64.DEFAULT))
-payments.charge(card, apiKey = key)`,
-            good: `// The app asks your backend. The backend holds the key.
-api.createCharge(cartId)   // Authorization: Bearer <user session token>`,
-            why: 'Base64 is an encoding, not encryption. A hook on <code>charge()</code> prints the key the moment your code decodes it.',
-          },
-          {
-            title: 'Judging the token in the app',
-            bad: `val token = provider.request(request).await().token()
-val deviceOk = token.isNotEmpty()        // "we got a token, so the phone is fine"
-api.redeem(code, deviceOk = deviceOk)`,
-            good: `val token = provider.request(request).await().token()
-api.redeem(code, integrityToken = token) // the server decodes it and decides`,
-            why: 'Anything the app computes, a hook can change. Send the raw token. Only the server, through Google, learns what the verdict says.',
-          },
-          {
-            title: 'Reusing one token for every request',
-            bad: `val token = provider.request(StandardIntegrityTokenRequest.builder().build()).await().token()
-cache.save(token)                  // sent with every later call
-api.redeem(code, cache.token())`,
-            good: `val body = Json.encodeToString(RedeemRequest(code))
-val token = provider.request(
-    StandardIntegrityTokenRequest.builder().setRequestHash(body.sha256Hex()).build()
-).await().token()
-api.redeem(body, token)`,
-            why: 'A token without a request hash proves nothing about this request, and a captured one can be replayed with a different body. Ask for a fresh token per sensitive action, bound to that body.',
-          },
-        ],
-        visual(el) {
-          const where = (place, how) => `<p><b>${place}</b></p><p class="muted">${how}</p>`;
-          Lab.ui.terminal(el, {
-            panelTitle: 'Where the key lives',
-            predict: {
-              q: 'The key is XOR-ed inside a native library, so <code>strings</code> finds nothing in the APK. Is the key safe?',
-              options: ['Yes: it never appears as plain text', 'No: your code decodes it at runtime, and a hook can read it then', 'Yes, as long as R8 is on'],
-              a: 1,
-              why: 'Whatever the app can decode, an attacker with the app can decode too. On a rooted phone, Frida reads the value when your function returns it.',
-            },
-            frames: [
-              { panel: where('BuildConfig.API_KEY', 'buildConfigField from local.properties, R8 on'), say: 'You downloaded <code>app-release.apk</code> from the store, like anyone can. The paid API key went in with <code>buildConfigField</code>.' },
-              { cmd: 'unzip -o app-release.apk classes.dex', out: 'Archive:  app-release.apk\n  inflating: classes.dex', say: 'An APK is a zip file. The compiled code is in <code>classes.dex</code>.' },
-              { cmd: 'strings classes.dex | grep sk_live', out: '<span class="bad">sk_live_51Hq8zEXAMPLEk3y</span>', say: 'R8 renamed classes and methods, but string constants stay as they are. One grep finds the key.' },
-              { clear: true, panel: where('lib/arm64-v8a/libkeys.so', 'XOR-ed bytes, decoded at runtime'), cmd: 'unzip -o app-release.apk "lib/*"', out: 'Archive:  app-release.apk\n  inflating: lib/arm64-v8a/libkeys.so', say: 'Next release: the key is XOR-ed and hidden in native code.' },
-              { cmd: 'strings lib/arm64-v8a/libkeys.so | grep sk_live', out: '', say: 'Nothing found. But the app decodes the key every time it calls the API, and on a rooted phone a Frida hook reads it right then.' },
-              { clear: true, panel: where('Your backend', 'the app sends the user’s session token'), cmd: 'strings classes.dex | grep sk_live', out: '', say: 'The fix: the key lives only on your server. The app calls your backend with the user’s short-lived session token, and the backend calls the paid API. There is nothing in the APK to find.' },
-            ],
-          });
-        },
+        docs: [['Hardcoded cryptographic secrets', 'https://developer.android.com/privacy-and-security/risks/hardcoded-cryptographic-secrets']],
       },
 
-      // 5b ────────────────────────────────────────────
       {
         id: 'credential-manager',
-        title: 'Sign-in with Credential Manager and passkeys',
-        tagline: 'One request, one sheet: passkeys, saved passwords and Sign in with Google.',
-        level: 'intermediate',
+        title: 'Signing in',
+        tagline: 'One system sheet for passwords and passkeys, with nothing to phish.',
+        goals: ['Explain what a passkey is and why a fake site can’t use it', 'Ask Credential Manager for a saved password or passkey', 'Send the answer to your server and save the tokens'],
+        level: 'intermediate', introduces: ['CredentialManager', 'GetCredentialRequest', 'GetPasswordOption', 'GetPublicKeyCredentialOption', 'getCredential', 'PublicKeyCredential', 'PasswordCredential', 'authenticationResponseJson', 'GetCredentialException'],
         body: `
-<p>Credential Manager (<code>androidx.credentials</code>) is the Jetpack API for signing users in. You build one <code>GetCredentialRequest</code> with every option your app supports: passkeys, saved passwords and Sign in with Google. <code>getCredential()</code> shows one system bottom sheet with everything the user has saved for your app. You get back one credential and send it to your server.</p>
-<p>A passkey is a key pair. The private key stays in a credential provider such as Google Password Manager and is unlocked with the screen lock. Your server keeps only the public key. To sign in, the server sends a fresh challenge, the phone signs it, and the server checks the signature. Nothing that crosses the network can be replayed, and a database leak gives away no passwords. A passkey belongs to one domain. Digital Asset Links tie that domain to your app’s signing certificate, so a copycat app never gets offered it. Passkeys through Credential Manager work on Android 9 (API 28) and up.</p>
-<p>It replaces the older APIs. Smart Lock for Passwords was deprecated in 2022 and is gone from <code>play-services-auth</code> 21.0.0, so code that uses it no longer builds. The legacy Google Sign-In API is deprecated and will be removed in a future release. One Tap is listed with the legacy APIs too.</p>`,
-        code: `// androidx.credentials:credentials, androidx.credentials:credentials-play-services-auth,
-// com.google.android.libraries.identity.googleid:googleid
-private val credentialManager = CredentialManager.create(context)
-
-suspend fun signIn(activity: Activity) {
-    val passkeyJson = api.passkeySignInOptions()       // your server makes a fresh challenge
-    val request = GetCredentialRequest(
-        listOf(
-            GetPublicKeyCredentialOption(requestJson = passkeyJson),
-            GetPasswordOption(),
-            GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(true)   // accounts that used this app before
-                .setServerClientId(WEB_CLIENT_ID)
-                .setNonce(api.newNonce())
-                .build(),
-        )
-    )
-    try {
-        val result = credentialManager.getCredential(context = activity, request = request)
-        when (val c = result.credential) {
-            is PublicKeyCredential -> api.finishPasskeySignIn(c.authenticationResponseJson)
-            is PasswordCredential -> api.passwordSignIn(c.id, c.password)
-            is CustomCredential ->
-                if (c.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    api.googleSignIn(GoogleIdTokenCredential.createFrom(c.data).idToken)
-                }
-        }
-    } catch (e: NoCredentialException) {
-        showSignInForm()               // nothing saved for this app yet
-    } catch (e: GetCredentialCancellationException) {
-        // the user closed the sheet: don't open it again by yourself
-    } catch (e: GetCredentialException) {
-        showError(e)
-    }
-}`,
-        remember: 'Ask for every credential type in one getCredential() call, and let the server verify what comes back. The phone proves, the server decides.',
-        terms: [
-          { term: 'Credential Manager', def: 'The Jetpack API (androidx.credentials) that gets and saves passkeys, passwords and federated sign-in credentials through one system UI.' },
-          { term: 'Passkey', def: 'A WebAuthn key pair for one account on one domain. The private key stays with the credential provider and signs server challenges; the server stores only the public key.' },
-          { term: 'Relying party ID (rpId)', def: 'The domain a passkey belongs to, such as news.example. The provider only offers the passkey to that domain and to apps the domain vouches for.' },
-          { term: 'Digital Asset Links', def: 'An assetlinks.json file on your domain that lists your app’s package name and signing certificate fingerprint. Required for passkeys.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Offer passkeys and saved passwords in one sheet.', code: 'val request = GetCredentialRequest(\n    listOf(GetPublicKeyCredentialOption(requestJson), [[GetPasswordOption]]())\n)\nval result = credentialManager.[[getCredential]](context = activity, request = request)', why: 'Every option goes in one request, so the user sees one sheet with all their credentials. <code>getCredential</code> is a suspend function that returns the one they picked.' },
-          { type: 'bug', prompt: 'Anyone can sign in as anyone with this code. Tap the line.', code: 'when (val c = result.credential) {\n    is CustomCredential -> if (c.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {\n        val google = GoogleIdTokenCredential.createFrom(c.data)\n        session.signInLocally(email = google.id)\n    }\n}', bug: 3, fix: '        api.signInWithGoogle(idToken = google.idToken)', why: 'The app on a rooted phone can be made to report any email. Send the signed ID token to your server, which checks its signature, audience and nonce before it creates a session.' },
-        ],
-        quiz: [
-          { q: 'What does your server store after a user creates a passkey?', options: ['The private key, encrypted', 'The public key and the credential ID', 'A hash of the user’s screen lock PIN'], a: 1, why: 'The private key never leaves the credential provider. The server only needs the public key to check signatures, so a database leak reveals nothing useful.' },
-          { q: '<code>getCredential()</code> throws <code>NoCredentialException</code> on a new user’s phone. What should the app do?', options: ['Call getCredential() again in a loop', 'Show the normal sign-in or sign-up screen', 'Crash, the phone is misconfigured'], a: 1, why: 'Nothing is saved for this app yet. Show your regular form, and offer to create a passkey after the user is signed in.' },
-          { q: 'Your app still calls Smart Lock for Passwords. What happens when you update to <code>play-services-auth</code> 21.0.0?', options: ['Nothing, it still works the same', 'The build fails: the Smart Lock API was removed, so migrate to Credential Manager', 'Passwords are deleted from users’ phones'], a: 1, why: 'Smart Lock was deprecated in 2022 and removed from the SDK. Versions already in the Play Store keep working, but new builds with 21.0.0 can’t use it.' },
-          { q: 'Which flow fits Sign in with Google through Credential Manager?', options: ['setFilterByAuthorizedAccounts(true) first; on NoCredentialException ask again with false; send the ID token to the server to verify', 'setFilterByAuthorizedAccounts(false) first; then true; verify the ID token on the phone', 'setFilterByAuthorizedAccounts(true); on NoCredentialException show an error; trust the ID token in the app'], a: 0, why: 'The first pass signs in returning users, the second shows every account for sign-up. Only the server can safely verify the token and its nonce.' },
-          { q: 'After the user signs out, the next sign-in sheet auto-selects the previous account. What did sign-out miss?', options: ['clearCredentialState()', 'Deleting the user’s passkey', 'Revoking access through AuthorizationClient'], a: 0, why: 'clearCredentialState() tells every provider to forget the current session, so the next sheet shows all options.' },
-        ],
-        deeper: [
-          {
-            title: 'Creating a passkey',
-            body: `<p>Offer a passkey right after the user signs in with a password or Google. Ask your server for creation options: a fresh challenge, your domain as the relying party, and a user ID. Make the user ID a random value, not an email. Pass the JSON to <code>createCredential()</code>. The user confirms with the screen lock, the provider makes the key pair, and you send <code>registrationResponseJson</code> to the server, which checks the challenge and stores the public key.</p>
-<p>Before this works, host <code>https://your-domain/.well-known/assetlinks.json</code> with your package name and the SHA-256 fingerprint of each signing certificate, debug and release. Tell the user a passkey was made, for example with a snackbar.</p>`,
-            code: `suspend fun offerPasskey(activity: Activity) {
-    val request = CreatePublicKeyCredentialRequest(requestJson = api.passkeyCreationOptions())
-    try {
-        val response = credentialManager.createCredential(activity, request) as CreatePublicKeyCredentialResponse
-        api.finishPasskeyRegistration(response.registrationResponseJson)
-        snackbar("Passkey created. Next time, sign in with your screen lock.")
-    } catch (e: CreateCredentialCancellationException) {
-        // user said no: ask again later, not now
-    } catch (e: CreateCredentialException) {
-        log(e)
-    }
-}`,
-          },
-          {
-            title: 'Sign in with Google, two passes and a button',
-            body: `<p>First ask only for accounts that used your app before: <code>setFilterByAuthorizedAccounts(true)</code>. With <code>setAutoSelectEnabled(true)</code> a returning user with one account is signed in with no tap. If that throws <code>NoCredentialException</code>, ask again with the filter set to <code>false</code> to show every Google account on the phone, which is the sign-up path.</p>
-<p>For an explicit “Sign in with Google” button, use <code>GetSignInWithGoogleOption</code>. Either way you get a <code>CustomCredential</code> holding an ID token. The app does not trust it. The server verifies the token and checks that its nonce matches the one it issued.</p>`,
-            code: `// Pass 2, after NoCredentialException from pass 1
-val signUp = GetGoogleIdOption.Builder()
-    .setFilterByAuthorizedAccounts(false)
-    .setServerClientId(WEB_CLIENT_ID)
-    .setNonce(api.newNonce())
-    .build()
-
-// Behind your own "Sign in with Google" button
-val button = GetSignInWithGoogleOption.Builder(serverClientId = WEB_CLIENT_ID)
-    .setNonce(api.newNonce())
-    .build()`,
-          },
-          {
-            title: 'Signing out, and access to Google APIs',
-            body: `<p>On sign-out, call <code>clearCredentialState()</code>. It tells every credential provider to forget the current session for your app, so the next sheet shows all options instead of auto-selecting the last account. Clear your own tokens too.</p>
-<p>The legacy Google Sign-In mixed two jobs. Now they are split: Credential Manager signs the user in (authentication), and <code>AuthorizationClient</code> asks for access to things like the user’s Google Drive (authorization), at the moment the feature needs it.</p>`,
-            code: `suspend fun signOut() {
-    credentialManager.clearCredentialState(ClearCredentialStateRequest())
-    tokenStore.clear()
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>Passkeys are WebAuthn credentials. The sign-in options from your server hold a random <code>challenge</code> and the <code>rpId</code>. The provider finds a passkey for that rpId, but only if the domain’s <code>assetlinks.json</code> lists the calling app’s package and certificate. After the screen lock, it signs the authenticator data together with <code>clientDataJSON</code>, which contains the challenge and the origin.</p>
-<p>For an Android app the origin is <code>android:apk-key-hash:</code> plus the base64url SHA-256 hash of your signing certificate. The server checks four things: the challenge is the one it issued and not used before, the origin is on its allow list, the rpId hash matches, and the signature verifies with the stored public key.</p>`,
-          code: `// authenticationResponseJson, shortened
-{
-  "id": "KEDetxZcUfinhVi6Za5nZQ",
-  "type": "public-key",
-  "response": {
-    "clientDataJSON": "...",     // type, challenge, origin: android:apk-key-hash:...
-    "authenticatorData": "...",  // rpId hash, flags, sign counter
-    "signature": "...",          // made with the private key
-    "userHandle": "..."          // the random user ID from registration
-  }
-}`,
-        },
-        mistakes: [
-          {
-            title: 'Trusting the Google ID token on the phone',
-            bad: `val google = GoogleIdTokenCredential.createFrom(c.data)
-prefs.edit { putString("user", google.id) }   // "signed in"`,
-            good: `val google = GoogleIdTokenCredential.createFrom(c.data)
-val session = api.googleSignIn(google.idToken)  // server verifies signature, audience, nonce
-tokenStore.save(session)`,
-            why: 'Anything the app decides on its own can be patched or hooked. The ID token is signed by Google, but only your server can check it safely and turn it into your own session.',
-          },
-          {
-            title: 'Calling getCredential with the application context',
-            bad: `credentialManager.getCredential(context = applicationContext, request = request)`,
-            good: `credentialManager.getCredential(context = activity, request = request)`,
-            why: 'The call shows system UI on top of your screen. The docs ask for an activity-based context; with another context, how the UI launches is undefined.',
-          },
-          {
-            title: 'Leaving out the Play services module',
-            bad: `implementation("androidx.credentials:credentials:1.6.0")`,
-            good: `implementation("androidx.credentials:credentials:1.6.0")
-implementation("androidx.credentials:credentials-play-services-auth:1.6.0")`,
-            why: '<code>credentials-play-services-auth</code> connects Credential Manager to the provider in Google Play services. Without it, calls fail with a <code>ProviderConfigurationException</code>.',
-          },
-        ],
-        predict: {
-          q: "Alice signs in with her passkey. What does her phone send to your server?",
-          options: ["Her password", "The passkey’s private key", "A signature over the server’s fresh challenge"],
-          a: 2,
-          why: "The private key never leaves the credential provider. The server checks the signature with the public key it stored, and the challenge is never reused.",
-        },
+<p>Recipes signs Ada in with an email and a password typed into a form. Passwords get reused, guessed, and typed into fake sites that look real. Android’s <em>Credential Manager</em> is one Jetpack API for signing in. It shows one system sheet with what Ada already saved for Recipes, such as a password in her password manager or a passkey. One tap, no typing.</p>
+<p>A <em>passkey</em> replaces the password. When Ada makes one, her phone makes a pair of keys: a private key that stays in her password manager, and a public key the server keeps. To sign in, the server sends a <em>challenge</em>, a new random text each time. After Ada unlocks with her fingerprint or screen lock, the phone signs it with the private key, and the server checks the signature with the public key. No secret is sent, and a stolen copy of the server’s data opens no accounts. A passkey only works for the domain it was made for, recipes.example.com, so a fake site can’t use it. It needs the same <code>assetlinks.json</code> file as App Links, with one more relation in its list: <code>"delegate_permission/common.get_login_creds"</code>, which lets the app use the site’s sign-ins. Making a passkey is a similar call, <code>createCredential</code> with a <code>CreatePublicKeyCredentialRequest</code> and your server’s JSON, usually offered right after a password sign-in. This lesson codes signing in with one Ada already has.</p>
+<p><code>CredentialManager.create(context)</code> makes the manager. A <code>GetCredentialRequest</code> lists what Recipes accepts: <code>GetPasswordOption()</code> and <code>GetPublicKeyCredentialOption(requestJson)</code>, with the JSON your server sent, which holds the challenge. <code>getCredential(context, request)</code> is a suspend function: it shows the sheet and waits. The context must be the Activity, and in a composable <code>LocalContext.current</code> is the Context it runs in.</p>
+<p>The answer’s <code>credential</code> can be several types, so <code>when</code> with <code>is</code> checks which: a <code>PublicKeyCredential</code> has <code>authenticationResponseJson</code>, the signed challenge for the server; a <code>PasswordCredential</code> has <code>id</code> and <code>password</code> for the old <code>signIn</code>. Either way the server answers with tokens, saved as before. If nothing is saved, or Ada closes the sheet, <code>getCredential</code> throws a <code>GetCredentialException</code>: show the form. Sign in with Google comes through the same sheet, with an option from Google’s own library.</p>`,
         visual(el) {
-          const opt = { passkey: true, password: true, google: true };
-          const dev = { passkey: false, password: true };
-          let user = null, busy = false, sheet = null;
-          const o = h('div', { class: 'out', 'aria-live': 'polite' });
-          const log = html => { line(o, html); trim(o, 7); };
-          const title = h('div', { class: 'sec-ph-title' }, 'News+');
-          const sub = h('div', { class: 'sec-ph-sub' }, 'Not signed in');
-          const phone = h('div', { class: 'phone sec-cm-phone' }, title, sub);
-          const saved = h('div', { class: 'sec-cm-chips' });
-          const server = h('div', { class: 'sec-cm-chips' });
-          const paint = () => {
-            saved.replaceChildren(
-              h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey · alice' : 'no passkey'),
-              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password · alice'),
-              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'Google · alice.dev'));
-            server.replaceChildren(
-              h('span', { class: 'sec-cm-chip sec-cm-on' }, 'password hash'),
-              h('span', { class: 'sec-cm-chip' + (dev.passkey ? ' sec-cm-on' : '') }, dev.passkey ? 'passkey public key' : 'no public key'));
-            sub.textContent = user ? `Welcome, Alice (${user})` : 'Not signed in';
-          };
-          const close = () => { if (sheet) { sheet.remove(); sheet = null; } busy = false; };
-          const wait = async ms => { await sleep(ms); return el.isConnected; };
-          const openSheet = (heading, entries, onCancel) => {
-            sheet = h('div', { class: 'sec-sheet sec-cm-sheet' }, h('b', {}, heading),
-              entries.map(([label, fn]) => act(label, () => { if (sheet) { close(); busy = true; fn(); } })),
-              act('Cancel', () => { if (sheet) { close(); onCancel(); } }));
-            phone.append(sheet);
-          };
-          async function finish(kind) {
-            if (kind === 'passkey') {
-              log('screen lock: <span class="good">fingerprint ok</span> <span class="muted">// unlocks the private key</span>');
-              if (!await wait(450)) return;
-              log('PublicKeyCredential → <span class="muted">authenticationResponseJson: challenge signed</span>');
-              if (!await wait(450)) return;
-              log('<span class="good">server: signature checks out with the stored public key</span>');
-            } else if (kind === 'password') {
-              log('PasswordCredential(id = "alice@example.com", password = ••••••)');
-              if (!await wait(450)) return;
-              log('<span class="good">server: password hash matches</span> <span class="muted">// a password can still be phished</span>');
-            } else {
-              log('CustomCredential <span class="muted">type = TYPE_GOOGLE_ID_TOKEN_CREDENTIAL</span>');
-              if (!await wait(450)) return;
-              log('GoogleIdTokenCredential.createFrom(data).idToken → server');
-              if (!await wait(450)) return;
-              log('<span class="good">server: token signature, audience and nonce ok</span>');
-            }
-            user = kind; paint(); replay(phone, 'pop-soft'); busy = false;
-          }
-          async function get(copycat) {
-            if (busy) return; busy = true;
-            o.replaceChildren();
-            log(`getCredential(<span class="muted">${Object.keys(opt).filter(k => opt[k]).join(' + ') || 'no options'}</span>)${copycat ? ' <span class="muted">// from a copycat app</span>' : ''}`);
-            if (!await wait(350)) return;
-            const entries = [];
-            if (copycat && (opt.passkey || opt.password)) log('<span class="muted">assetlinks.json for news.example does not list this app’s certificate</span>');
-            if (!copycat && opt.passkey && dev.passkey) entries.push(['Passkey · alice@example.com', () => finish('passkey')]);
-            if (!copycat && opt.password && dev.password) entries.push(['Password · alice@example.com', () => finish('password')]);
-            if (opt.google) entries.push(['Google · alice.dev@gmail.com', () => copycat ? copyGoogle() : finish('google')]);
-            if (!entries.length) { log('<span class="bad">NoCredentialException</span> <span class="muted">// show the normal sign-in form</span>'); replay(phone, 'shake'); busy = false; return; }
-            openSheet('Sign in to News+', entries, () => log('<span class="bad">GetCredentialCancellationException</span> <span class="muted">// don’t reopen it</span>'));
-          }
-          async function copyGoogle() {
-            log('CustomCredential → idToken sent to the copycat’s server');
-            if (!await wait(450)) return;
-            log('<span class="good">Your server never sees it.</span> <span class="muted">// the token’s audience is the copycat’s client ID, not yours</span>');
-            busy = false;
-          }
-          async function create() {
-            if (busy) return;
-            if (!user) { log('<span class="muted">Sign in first. A passkey is created for an account that already exists.</span>'); return; }
-            if (dev.passkey) { log('<span class="muted">A passkey already exists for this account.</span>'); return; }
-            busy = true; o.replaceChildren();
-            log('createCredential(CreatePublicKeyCredentialRequest(<span class="muted">challenge, rpId = news.example</span>))');
-            if (!await wait(350)) return;
-            openSheet('Create a passkey for alice@example.com?', [['Create with screen lock', async () => {
-              log('screen lock: <span class="good">fingerprint ok</span> <span class="muted">// provider makes the key pair</span>');
-              if (!await wait(450)) return;
-              log('registrationResponseJson → server <span class="muted">// public key only</span>');
-              if (!await wait(450)) return;
-              dev.passkey = true; paint();
-              log('<span class="good">server stored the public key.</span> Sign out and sign in again.');
-              busy = false;
-            }]], () => log('<span class="bad">CreateCredentialCancellationException</span> <span class="muted">// ask again later</span>'));
-          }
-          async function signOut() {
-            if (busy) return;
-            if (!user) { log('<span class="muted">Not signed in.</span>'); return; }
-            user = null; paint();
-            log('clearCredentialState(ClearCredentialStateRequest()) <span class="muted">// providers forget the session</span>');
-          }
-          const sw = (k, label) => toggle('sec-cm-' + k, label, opt[k], v => { opt[k] = v; });
-          paint();
-          log('<span class="muted">Sign in, create a passkey, sign out, then sign in with the passkey.</span>');
-          el.append(
-            h('div', { class: 'sec-cm' },
-              h('div', { class: 'viz' },
-                h('div', { class: 'sec-row' }, h('span', { class: 'sec-label' }, 'Options in the request')),
-                h('div', { class: 'sec-row' }, sw('passkey', 'Passkey').el, sw('password', 'Password').el, sw('google', 'Google').el),
-                h('div', { class: 'sec-cm-store' }, h('span', { class: 'sec-label' }, 'On the phone'), saved),
-                h('div', { class: 'sec-cm-store' }, h('span', { class: 'sec-label' }, 'On your server'), server),
-                h('div', { class: 'controls' },
-                  cmd('getCredential(request)', () => get(false)),
-                  cmd('createCredential(passkey)', create),
-                  cmd('clearCredentialState()', signOut),
-                  act('Same call from a copycat app', () => get(true))),
-                o),
-              phone));
-        },
-      },
-
-      // 6 ─────────────────────────────────────────────
-      {
-        id: 'biometric',
-        title: 'Biometric authentication',
-        tagline: 'A fingerprint should unlock a key, not just a callback.',
-        level: 'intermediate',
-        body: `
-<p><code>BiometricPrompt</code> from <code>androidx.biometric</code> shows the system’s own sheet for fingerprint, face or the device PIN. You never see the biometric data. First ask <code>BiometricManager.canAuthenticate()</code> whether the device has what you need enrolled, and always offer another way in, like a password.</p>
-<p>Android rates sensors. <code>BIOMETRIC_STRONG</code> (Class 3) meets strict spoofing limits and can unlock Keystore keys. <code>BIOMETRIC_WEAK</code> (Class 2) includes many face unlock systems; it is fine for convenience but can’t unlock keys. <code>DEVICE_CREDENTIAL</code> means the screen lock PIN, pattern or password.</p>
-<p>A prompt alone only gives you a callback, and on a rooted phone a hook can call <code>onAuthenticationSucceeded</code> for you. For anything that matters, pass a <code>CryptoObject</code> wrapping a <code>Cipher</code> from an auth-bound Keystore key. The secure hardware unlocks that one operation only after a real match, so a faked callback gets a cipher that still can’t decrypt. CryptoObject requires <code>BIOMETRIC_STRONG</code> (or <code>DEVICE_CREDENTIAL</code> on Android 11+). For signing in, look at passkeys with Credential Manager instead.</p>`,
-        code: `fun unlockToken(activity: FragmentActivity, iv: ByteArray, sealed: ByteArray, onToken: (String) -> Unit) {
-    val can = BiometricManager.from(activity).canAuthenticate(BIOMETRIC_STRONG)
-    if (can != BiometricManager.BIOMETRIC_SUCCESS) return showPasswordLogin()
-
-    // Key made with setUserAuthenticationParameters(0, AUTH_BIOMETRIC_STRONG): every use needs a prompt
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-        init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-    }
-
-    val prompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(activity),
-        object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                val unlocked = result.cryptoObject?.cipher ?: return
-                onToken(unlocked.doFinal(sealed).decodeToString())
-            }
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) showPasswordLogin()
-            }
-            // onAuthenticationFailed(): a non-matching finger. The prompt stays open.
-        })
-
-    val info = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Unlock your wallet")
-        .setNegativeButtonText("Use password")
-        .setAllowedAuthenticators(BIOMETRIC_STRONG)
-        .build()
-
-    prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
-}`,
-        remember: 'Pass a CryptoObject with BIOMETRIC_STRONG. A match unlocks the key, not just a callback.',
-        terms: [
-          { term: 'BiometricPrompt', def: 'The AndroidX API that shows the system authentication sheet for fingerprint, face or device credential and reports the result to a callback.' },
-          { term: 'BIOMETRIC_STRONG', def: 'Class 3 biometrics: sensors that meet Android’s strictest spoofing limits and can unlock Keystore keys.' },
-          { term: 'CryptoObject', def: 'A wrapper around a Cipher, Signature or Mac from an auth-bound key that BiometricPrompt authorizes for one operation.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Allow only Class 3 biometrics and tie the prompt to a cipher.', code: 'val info = BiometricPrompt.PromptInfo.Builder()\n    .setTitle("Confirm payment")\n    .setNegativeButtonText("Cancel")\n    .setAllowedAuthenticators([[BIOMETRIC_STRONG]])\n    .build()\n\nprompt.authenticate(info, BiometricPrompt.[[CryptoObject]](cipher))', why: 'Only Class 3 sensors can authorize Keystore operations, so CryptoObject needs <code>BIOMETRIC_STRONG</code>.' },
-          { type: 'bug', prompt: '<code>build()</code> throws <code>IllegalArgumentException</code>. Tap the line.', code: 'val info = BiometricPrompt.PromptInfo.Builder()\n    .setTitle("Confirm transfer")\n    .setSubtitle("120 EUR to Ada")\n    .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)\n    .setNegativeButtonText("Cancel")\n    .build()\nprompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))', bug: 4, fix: '    // remove it: with DEVICE_CREDENTIAL allowed, the sheet offers “Use PIN” instead of a negative button', why: 'When the device credential is allowed, the system provides the fallback itself. Setting a negative button as well is rejected.' },
-        ],
-        quiz: [
-          { q: 'Why pass a <code>CryptoObject</code> instead of just checking <code>onAuthenticationSucceeded</code>?', options: ['It makes the prompt faster', 'The secure hardware unlocks the key only after a real match, so a hooked callback gets nothing useful', 'It allows face unlock'], a: 1, why: 'A callback is just code and can be called by a hook. A Keystore operation authorized by the TEE can’t be faked from the app process.' },
-          { q: 'You call <code>authenticate(info, CryptoObject(cipher))</code> with <code>BIOMETRIC_WEAK</code>. What happens?', options: ['It works with face unlock', 'It throws: crypto-based auth is not supported for Class 2', 'It silently upgrades to STRONG'], a: 1, why: 'Class 2 sensors are not trusted to unlock keys. Use <code>BIOMETRIC_STRONG</code>, or drop the CryptoObject for convenience-only checks.' },
-          { q: 'The user touches the sensor with the wrong finger. Which callback runs?', options: ['<code>onAuthenticationError</code>', '<code>onAuthenticationFailed</code>, and the prompt stays open', 'None'], a: 1, why: 'A non-match is not an error. Errors are for cancel, lockout or a missing sensor, and they close the prompt.' },
-          { q: 'A phone has Class 2 face unlock and no fingerprint enrolled. What do <code>canAuthenticate(BIOMETRIC_WEAK)</code> and <code>canAuthenticate(BIOMETRIC_STRONG)</code> say?', options: ['Both succeed', 'WEAK succeeds, STRONG does not', 'Both fail, because face unlock is not a biometric'], a: 1, why: 'The answer is for one exact set of authenticators. Ask with the same set you will pass to the prompt.' },
-          { q: 'onAuthenticationError reports ERROR_LOCKOUT_PERMANENT. What should the app do?', options: ['Reopen the prompt in a loop until a match', 'Say what happened and offer the password, or a prompt that allows DEVICE_CREDENTIAL', 'Wait 30 seconds and show the biometric prompt again'], a: 1, why: 'Biometrics stay off until the user unlocks with their PIN, pattern or password. Waiting only helps with the temporary ERROR_LOCKOUT.' },
-        ],
-        deeper: [
-          {
-            title: 'Ask what this phone can do',
-            body: `<p><code>canAuthenticate(authenticators)</code> answers for one exact set of authenticators. The same phone can say yes to <code>BIOMETRIC_WEAK</code> and no to <code>BIOMETRIC_STRONG</code>, for example when face unlock is Class 2 and no fingerprint is enrolled. Ask with the same set you will pass to the prompt.</p>
-<p>Each answer needs its own UI. <code>BIOMETRIC_ERROR_NONE_ENROLLED</code> means the hardware is there, so offer setup: on Android 11 and later you can open <code>Settings.ACTION_BIOMETRIC_ENROLL</code>. <code>BIOMETRIC_ERROR_NO_HARDWARE</code> means hide the option. Either way, the password path stays.</p>`,
-            code: `when (BiometricManager.from(context).canAuthenticate(BIOMETRIC_STRONG)) {
-    BiometricManager.BIOMETRIC_SUCCESS -> showBiometricToggle()
-    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> showSetupButton {
-        startActivity(Intent(Settings.ACTION_BIOMETRIC_ENROLL).putExtra(
-            Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BIOMETRIC_STRONG))   // API 30+
-    }
-    else -> hideBiometricOption()   // no hardware, unavailable, update required…
-}`,
-            visual(el) {
-              const AUTH = ['BIOMETRIC_STRONG', 'BIOMETRIC_WEAK', 'BIOMETRIC_STRONG or DEVICE_CREDENTIAL'];
-              const DEV = [
-                { label: 'Fingerprint enrolled', r: ['SUCCESS', 'SUCCESS', 'SUCCESS'] },
-                { label: 'Face unlock (Class 2) only', r: ['ERROR_NONE_ENROLLED', 'SUCCESS', 'SUCCESS'] },
-                { label: 'Sensor, nothing enrolled', r: ['ERROR_NONE_ENROLLED', 'ERROR_NONE_ENROLLED', 'SUCCESS'] },
-                { label: 'No sensor', r: ['ERROR_NO_HARDWARE', 'ERROR_NO_HARDWARE', 'SUCCESS'] },
-              ];
-              const UI = { SUCCESS: ['Show “Unlock with fingerprint”', 'sec-safe'], ERROR_NONE_ENROLLED: ['Show “Set up fingerprint” → Settings', 'sec-warn'], ERROR_NO_HARDWARE: ['Hide the option, password only', ''] };
-              let d = 0, a = 0;
-              const grid = h('div', { class: 'sec-chks' });
-              const o = out('');
-              const paint = changed => {
-                grid.replaceChildren(...AUTH.map((t, i) => {
-                  const res = DEV[d].r[i];
-                  return h('div', { class: 'sec-chk' + (i === a ? ' sec-now' : '') + (changed && i === a ? ' pop' : '') },
-                    h('span', { class: 'sec-d2-mono' }, `canAuthenticate(${t})`),
-                    h('span', { class: 'sec-state' + (res === 'SUCCESS' ? ' sec-d2-ok' : '') }, res));
-                }));
-                const res = DEV[d].r[a];
-                say(o, `${hl('BiometricManager.BIOMETRIC_' + res)} <span class="muted">→ ${UI[res][0]}</span>`);
-                phoneTxt.textContent = UI[res][0];
-                phone.className = 'sec-card sec-d2-ui ' + UI[res][1];
-                replay(phone, 'pop');
-              };
-              const phoneTxt = h('b', {});
-              const phone = h('div', { class: 'sec-card sec-d2-ui' }, h('span', { class: 'sec-label' }, 'Settings screen in your app'), phoneTxt, h('small', {}, 'Password sign-in always stays available.'));
-              const dBtns = DEV.map((x, i) => act(x.label, () => { d = i; press(dBtns, dBtns[i]); paint(true); }));
-              const aBtns = AUTH.map((t, i) => act(t.replace('BIOMETRIC_', '').replace(' or DEVICE_CREDENTIAL', ' + PIN'), () => { a = i; press(aBtns, aBtns[i]); paint(true); }));
-              press(dBtns, dBtns[0]); press(aBtns, aBtns[0]);
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'Phone'), dBtns),
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'You ask'), aBtns),
-                grid, phone, o,
-                h('p', { class: 'tip' }, 'Every phone here has a PIN set. The + PIN row needs Android 11 or later.'));
-              paint(false);
-            },
-          },
-          {
-            title: 'Failed tries and lockout',
-            body: `<p>A wrong finger calls <code>onAuthenticationFailed</code>, and the prompt stays open. After too many failures in a row, the sensor locks. <code>ERROR_LOCKOUT</code> (7) is temporary and lifts after a short wait. Repeated lockouts lead to <code>ERROR_LOCKOUT_PERMANENT</code> (9): biometrics stay off until the user unlocks with their PIN, pattern or password.</p>
-<p>Both are errors, so the prompt closes. Don’t reopen it in a loop. Say what happened and offer the password, or a prompt that allows <code>DEVICE_CREDENTIAL</code>.</p>`,
-            visual(el) {
-              const LOCK_AT = 5, PERM_AT = 10, WAIT = 8;
-              let fails = 0, total = 0, until = 0, perm = false, ticking = false;
-              const live = alive(el);
-              const fp = h('span', { class: 'sec-fp', 'aria-hidden': 'true' });
-              const meter = h('span', {});
-              const stat = h('span', { class: 'sec-stat' });
-              const clock = h('span', { class: 'clock' });
-              const sheet = h('div', { class: 'sec-card sec-d2-sheet' }, h('b', {}, 'Confirm payment'), fp, stat, h('div', { class: 'sec-meter', 'aria-hidden': 'true' }, meter));
-              const o = out('');
-              const log = (html, cls) => { line(o, html, cls); trim(o, 4); };
-              const locked = () => perm || Date.now() < until;
-              const paint = () => {
-                stat.innerHTML = `failed in a row: <b>${fails}</b> · total: <b>${total}</b>`;
-                meter.style.width = `${Math.min(100, (total / PERM_AT) * 100)}%`;
-                meter.classList.toggle('sec-low', !total);
-                fp.classList.toggle('sec-no', locked());
-                sheet.classList.toggle('sec-bad', perm);
-                sheet.classList.toggle('sec-warn', !perm && locked());
-              };
-              const tick = () => {
-                if (!live()) { ticking = false; return; }
-                const left = Math.ceil((until - Date.now()) / 1000);
-                clock.textContent = perm ? 'biometrics off until PIN' : left > 0 ? `locked for ${left} s` : '';
-                if (left > 0 && !perm) setTimeout(tick, 250); else { ticking = false; paint(); }
-              };
-              const startTick = () => { if (!ticking) { ticking = true; tick(); } };
-              const wrong = () => {
-                if (perm) { log('<span class="muted">the sensor is disabled. Use the PIN.</span>'); return; }
-                if (locked()) { log('<span class="muted">locked: the sensor ignores touches</span>'); replay(sheet, 'shake'); return; }
-                fails++; total++;
-                if (total >= PERM_AT) { perm = true; log('onAuthenticationError(<span class="bad">9</span>, "Too many attempts. Fingerprint sensor disabled.")'); replay(sheet, 'shake'); startTick(); }
-                else if (fails >= LOCK_AT) { fails = 0; until = Date.now() + WAIT * 1000; log('onAuthenticationError(<span class="bad">7</span>, "Too many attempts. Try again later.")'); replay(sheet, 'shake'); startTick(); }
-                else { log(`onAuthenticationFailed <span class="muted">// try ${fails} of ${LOCK_AT}, prompt stays open</span>`); replay(fp, 'shake'); }
-                paint();
-              };
-              const right = () => {
-                if (locked()) { log('<span class="muted">locked: even the right finger is ignored</span>'); replay(sheet, 'shake'); return; }
-                fails = 0; paint(); replay(sheet, 'pop');
-                log('<span class="good">onAuthenticationSucceeded</span> <span class="muted">// the failed-in-a-row count resets</span>');
-              };
-              const pin = () => {
-                if (!locked()) { log('<span class="muted">nothing to unlock</span>'); return; }
-                perm = false; until = 0; fails = 0; total = 0; paint(); clock.textContent = ''; replay(sheet, 'pop');
-                log('<span class="good">PIN accepted.</span> Biometrics are back on.');
-              };
-              paint();
-              el.append(
-                sheet,
-                h('div', { class: 'controls' }, act('Wrong finger', wrong), act('Right finger', right), act('Unlock with PIN', pin), clock),
-                o,
-                h('p', { class: 'tip' }, `This demo locks after ${LOCK_AT} failures in a row and turns biometrics off after ${PERM_AT} in total. Real limits and wait times depend on the device.`));
-              log('<span class="muted">prompt open. Try the wrong finger a few times.</span>');
-            },
-          },
-          {
-            title: 'Sign a server challenge instead of decrypting',
-            body: `<p>For actions a server must trust, like approving a payment, use a signature. At enrollment, create an EC key pair that needs a biometric for every use, and send the public key to the server. To approve, the server sends a random challenge. The prompt unlocks a <code>Signature</code> through a <code>CryptoObject</code>, the app signs the challenge, and the server verifies it with the stored public key.</p>`,
-            code: `val spec = KeyGenParameterSpec.Builder("approve_key", KeyProperties.PURPOSE_SIGN)
-    .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-    .setDigests(KeyProperties.DIGEST_SHA256)
-    .setUserAuthenticationRequired(true)
-    .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)   // every use
-    .build()
-
-val signature = Signature.getInstance("SHA256withECDSA").apply {
-    initSign(keyStore.getKey("approve_key", null) as PrivateKey)
-}
-prompt.authenticate(info, BiometricPrompt.CryptoObject(signature))
-
-// in onAuthenticationSucceeded(result)
-val signer = result.cryptoObject?.signature ?: return
-signer.update(challenge)
-api.approve(paymentId, signer.sign())`,
-          },
-        ],
-        underHood: {
-          body: `<p>When you pass a <code>CryptoObject</code>, Keystore has already started the operation and given it a 64-bit challenge. BiometricPrompt hands that challenge to the biometric service, which passes it to the sensor’s trusted app in the TEE. After a real match, the trusted app creates a HardwareAuthToken: the challenge, the user’s secure ID, the authenticator type and a timestamp, sealed with an HMAC key that only secure hardware holds. The token goes to Keystore, and KeyMint lets <code>doFinal</code> run only if the token is genuine and carries that operation’s challenge.</p>
-<p>Time-bound keys skip the challenge. KeyMint checks that the latest token is recent enough for the key’s timeout. Either way the proof never passes through your app’s code, so a hook on the callback can’t make one.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Checking with the deprecated no-argument call',
-            bad: `if (BiometricManager.from(ctx).canAuthenticate() == BIOMETRIC_SUCCESS) {
-    prompt.authenticate(strongInfo, BiometricPrompt.CryptoObject(cipher))
-}`,
-            good: `if (BiometricManager.from(ctx).canAuthenticate(BIOMETRIC_STRONG) == BIOMETRIC_SUCCESS) {
-    prompt.authenticate(strongInfo, BiometricPrompt.CryptoObject(cipher))
-}`,
-            why: 'The old call checks for <code>BIOMETRIC_WEAK</code>. A phone with only Class 2 face unlock says yes, and then the crypto prompt fails. Ask with the exact authenticators you will use.',
-          },
-          {
-            title: 'A CryptoObject with a time-bound key',
-            bad: `// key made with setUserAuthenticationParameters(30, AUTH_BIOMETRIC_STRONG)
-val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))   // throws
-prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
-            good: `// key made with setUserAuthenticationParameters(0, AUTH_BIOMETRIC_STRONG)
-val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))   // ok: unlocked per operation
-prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
-            why: 'A key with a timeout above 0 checks the user at <code>init</code> and throws <code>UserNotAuthenticatedException</code> when no recent unlock exists. CryptoObject is for per-use keys. For a time-bound key, prompt without a CryptoObject, then init the cipher.',
-          },
-          {
-            title: 'Device credential with crypto on old Android',
-            bad: `// minSdk 24
-val info = PromptInfo.Builder()
-    .setTitle("Confirm payment")
-    .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
-    .build()
-prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
-            good: `val withPin = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-val info = PromptInfo.Builder()
-    .setTitle("Confirm payment")
-    .setAllowedAuthenticators(if (withPin) BIOMETRIC_STRONG or DEVICE_CREDENTIAL else BIOMETRIC_STRONG)
-    .apply { if (!withPin) setNegativeButtonText("Use password") }
-    .build()
-prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))`,
-            why: 'Crypto with <code>DEVICE_CREDENTIAL</code> needs Android 11 (API 30). Below that, this combination is not supported and the call fails. Fall back to <code>BIOMETRIC_STRONG</code> with a negative button.',
-          },
-        ],
-        visual(el) {
-          const wallet = (big, sub, tone = '') => `<div class="ui-m-bar">Wallet</div><div class="ui-m-body"><div class="ui-m-center"><b style="font-size:1.3rem${tone ? ';color:var(--' + tone + ')' : ''}">${big}</b><span class="ui-m-muted">${sub}</span><span class="ui-m-btn unlock">Unlock</span></div></div>`;
-          const locked = wallet('Locked', 'token sealed by an auth-bound key');
-          const sheet = `${locked}<div class="ui-m-sheet"><b>Unlock Wallet</b><span class="ui-m-muted">Touch the fingerprint sensor</span><span class="ui-m-btn ghost">Use password</span></div>`;
+          const signin = (extra = '') => `<div class="ui-m-bar">Recipes</div><div class="ui-m-body"><b>Welcome back</b><div class="ui-m-field">Email</div><div class="ui-m-field">Password</div><span class="ui-m-btn si">Sign in</span></div>${extra}`;
+          const sheet = '<div class="ui-m-sheet"><b>Sign in to Recipes</b><div class="ui-m-row pk"><span class="ui-m-av"></span><div>ada@example.com<br><span class="ui-m-muted">Passkey</span></div></div><div class="ui-m-row"><span class="ui-m-av"></span><div>ada@example.com<br><span class="ui-m-muted">Password</span></div></div></div>';
+          const lock = '<div class="ui-m-sheet"><b>Use your screen lock</b><span class="ui-m-muted">to sign in to recipes.example.com</span><div class="ui-m-spin"></div></div>';
+          const home = '<div class="ui-m-bar">Recipes</div><div class="ui-m-body"><div class="ui-m-row"><div>Tomato soup · 25 min</div></div><div class="ui-m-row"><div>Lemon pasta · 20 min</div></div><div class="ui-m-row"><div>Oslo pancakes · 15 min</div></div></div>';
           Lab.ui.phone(el, {
-            logTitle: 'What runs',
+            logTitle: 'App and server',
             predict: {
-              q: 'On a rooted phone, a Frida hook calls <code>onAuthenticationSucceeded()</code> with no finger on the sensor. Your callback then calls <code>cipher.doFinal()</code> on the sealed token. What happens?',
-              options: ['It decrypts: the callback said success', 'It fails: the secure hardware never unlocked the key', 'The phone asks for the PIN first'],
-              a: 1,
-              why: 'With a <code>CryptoObject</code>, the key is unlocked inside the TEE after a real match, and only for that cipher. A faked callback can’t do that part.',
+              q: 'A fake site that looks like Recipes asks for Ada’s passkey. What does it get?',
+              options: ['Nothing: her passkey only works for recipes.example.com', 'Her private key', 'Her password'],
+              a: 0,
+              why: 'The passkey is tied to the real domain, and the private key never leaves her password manager.',
             },
             frames: [
-              { screen: locked, log: '// key: setUserAuthenticationRequired(true), timeout 0', say: 'The token is sealed by a Keystore key that needs a strong biometric for every single use.' },
-              { tap: '.unlock', screen: sheet, log: ['cipher.init(DECRYPT_MODE, key, GCMParameterSpec(128, iv))', 'prompt.authenticate(info, CryptoObject(cipher))'], say: 'The app prepares a <code>Cipher</code> with that key and hands it to <code>BiometricPrompt</code> inside a <code>CryptoObject</code>.' },
-              { log: 'TEE: fingerprint matches, key unlocked for this cipher', say: 'The match is checked in secure hardware. Only then may this one cipher use the key.' },
-              { screen: wallet('1,240.00', 'cipher.doFinal() decrypted the token'), log: ['onAuthenticationSucceeded(result)', 'result.cryptoObject.cipher.doFinal(sealed)'], say: 'Your callback gets the unlocked cipher back and decrypts the token.' },
-              { screen: locked, log: '// next launch: rooted phone, Frida hook', say: 'Next launch, on a rooted phone. The attacker hooks your app and fires the success callback with no finger at all.' },
-              { log: ['onAuthenticationSucceeded(fake result)', '<span class="bad">cipher.doFinal() throws: key user not authenticated</span>'], screen: wallet('Locked', 'decryption failed, token still sealed', 'err'), say: 'The callback runs, but the hardware never unlocked the key, so decryption fails. The token stays sealed.' },
-              { screen: wallet('Open', 'no key involved', 'warm'), log: '// without CryptoObject: if (succeeded) showWallet()', say: 'If the app had only trusted the callback, the hook would open it. Anything that matters goes through a <code>CryptoObject</code>.' },
+              { screen: signin(), log: 'GET passkey/request  →  challenge "Zq81…", domain recipes.example.com', say: 'The app asks its server for a passkey request: a fresh challenge and the domain.' },
+              { tap: '.si', log: 'credentialManager.getCredential(context, request)', say: 'Ada taps Sign in. <code>getCredential</code> shows the system sheet and waits.' },
+              { screen: signin(sheet), say: 'The sheet lists what she saved for Recipes: a passkey and a password. The sheet is Android’s, not your app’s.' },
+              { tap: '.pk', say: 'She picks the passkey.' },
+              { screen: signin(lock), say: 'To use the private key, she unlocks with her fingerprint or screen lock.' },
+              { screen: signin(), log: ['PublicKeyCredential  →  authenticationResponseJson', 'POST passkey/login  →  200, access + refresh tokens'], say: 'The phone signs the challenge. The app sends the signed answer; the server checks it with Ada’s public key and returns tokens.' },
+              { screen: home, log: 'tokens encrypted into DataStore', say: 'The tokens are saved, encrypted as in the Keystore lesson. No password was typed or sent.' },
             ],
           });
         },
-      },
+        code: `// app/build.gradle.kts
+// implementation("androidx.credentials:credentials:1.6.0")
+// implementation("androidx.credentials:credentials-play-services-auth:1.6.0")   // for Android 13 and lower
 
-      // 7 ─────────────────────────────────────────────
-      {
-        id: 'privacy',
-        title: 'Privacy and permissions hygiene',
-        tagline: 'Ask for less, keep less, log nothing personal.',
-        level: 'intermediate',
-        body: `
-<p>Each permission is something you have to protect, explain and declare. Start from the feature and pick the smallest access that does the job. For a profile photo, the photo picker returns the one image the user chose and needs no permission at all. To find nearby stores, <code>ACCESS_COARSE_LOCATION</code> gives a position within about 3 square kilometers. Since Android 12 the user can pick approximate even if you ask for fine, so the feature must work with it. To invite one friend, let the user pick a contact with <code>ACTION_PICK</code> instead of reading the whole address book.</p>
-<p>Play makes you describe all of this in the Data safety section: which data you collect, which you share, why, and whether it is encrypted in transit. It must match what the app and every SDK in it actually do. Fewer permissions make that form shorter and more honest, and the install page less scary.</p>
-<p>Logs are the leak people forget. Logcat output can end up in bug reports and crash tools. Never log emails, tokens, locations or message text. Log an opaque user id or nothing, and strip <code>Log.d</code> and <code>Log.v</code> from release builds with an R8 <code>-assumenosideeffects</code> rule.</p>`,
-        code: `// 1. A profile photo: no permission, the user picks one image
-val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-    if (uri != null) viewModel.setAvatar(uri)
+// Two calls on your server: one hands out a fresh challenge, one checks the signed answer
+@Serializable
+data class PasskeyRequest(val requestJson: String)
+
+@Serializable
+data class PasskeyAnswer(val responseJson: String)
+
+interface RecipeApi {
+    // login, refresh and getRecipes as before
+    @GET("passkey/request")
+    suspend fun passkeyRequest(): PasskeyRequest
+
+    @POST("passkey/login")
+    suspend fun passkeyLogin(@Body answer: PasskeyAnswer): Tokens
 }
-Button(onClick = {
-    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-}) { Text("Choose photo") }
 
-// 2. Nearby stores: a city block is plenty
-val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    if (granted) viewModel.loadNearbyStores()
-}
-Button(onClick = { askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) { Text("Find stores") }
+// Session gets two small functions:
+//     suspend fun passkeyRequest(): String = api.passkeyRequest().requestJson
+//     suspend fun signInWithPasskey(responseJson: String) { save(api.passkeyLogin(PasskeyAnswer(responseJson))) }
 
-// 3. Logs: an opaque id, never the email or the token
-Log.i("Auth", "login ok for user \${session.userId}")
-
-// proguard-rules.pro: drop debug logs from release
-// -assumenosideeffects class android.util.Log { public static int d(...); public static int v(...); }`,
-        remember: 'Smallest access that works: picker over storage, coarse over fine. No personal data in logs.',
+@Composable
+fun SignInButton(session: Session, onSignedIn: () -> Unit, onShowForm: () -> Unit) {
+    val context = LocalContext.current                  // the Activity: the sheet opens over it
+    val scope = rememberCoroutineScope()
+    Button(onClick = {
+        scope.launch {
+            try {
+                val request = GetCredentialRequest(listOf(
+                    GetPasswordOption(),
+                    GetPublicKeyCredentialOption(session.passkeyRequest()),
+                ))
+                val result = CredentialManager.create(context).getCredential(context, request)
+                val credential = result.credential
+                when (credential) {
+                    is PublicKeyCredential -> session.signInWithPasskey(credential.authenticationResponseJson)
+                    is PasswordCredential -> session.signIn(credential.id, credential.password)
+                }
+                onSignedIn()
+            } catch (e: GetCredentialException) {
+                onShowForm()                            // nothing saved, or Ada closed the sheet
+            } catch (e: HttpException) {
+                onShowForm()                            // the server said no, for example 401 or 500
+            } catch (e: IOException) {
+                onShowForm()                            // offline: the form can say so
+            }
+        }
+    }) {
+        Text("Sign in")
+    }
+}`,
+        remember: 'Ask Credential Manager with a password option and a passkey option, send what comes back to your server, and fall back to the form on GetCredentialException.',
         terms: [
-          { term: 'Approximate location', def: 'A location estimate accurate to about 3 square kilometers, granted by ACCESS_COARSE_LOCATION or chosen by the user in the dialog.' },
-          { term: 'Data safety section', def: 'The Play Store form and listing section where an app declares what user data it collects and shares, and why.' },
-          { term: 'PII', def: 'Personally identifiable information: data such as a name, email, phone number or precise location that points to a specific person.' },
+          { term: 'Credential Manager', def: 'The Jetpack API for signing in. It shows one system sheet with the user’s saved passwords and passkeys for your app.' },
+          { term: 'passkey', def: 'A key pair that replaces a password. The private key stays in the user’s password manager, the server keeps the public key, and it only works for its own domain.' },
+          { term: 'challenge', def: 'A new random text the server sends for each sign-in. The phone signs it, so an old answer can’t be used again.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Let the user pick one image with no storage permission.', code: 'val pick = rememberLauncherForActivityResult(\n    ActivityResultContracts.[[PickVisualMedia]]()\n) { uri -> uri?.let(viewModel::setAvatar) }\n\npick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.[[ImageOnly]]))', why: 'The photo picker runs in a system process and hands back a read-only Uri for what the user chose. No <code>READ_MEDIA_IMAGES</code> needed.' },
-          { type: 'bug', prompt: 'This works, but it leaks personal data into every crash report. Tap the line.', code: 'suspend fun login(email: String, password: String): Result<Session> = runCatching {\n    val session = api.login(LoginRequest(email, password))\n    Log.i("Auth", "login ok: $email / ${session.accessToken}")\n    tokenStore.save(session)\n    session\n}', bug: 2, fix: '    Log.i("Auth", "login ok for user ${session.userId}")', why: 'The email is PII and the access token is a credential. Logs get copied into bug reports and crash tools. Log an opaque id instead.' },
+          { type: 'blank', prompt: 'Accept both a saved password and a passkey.', code: `val request = GetCredentialRequest(listOf(
+    [[GetPasswordOption]](),
+    [[GetPublicKeyCredentialOption]](session.passkeyRequest()),
+))`, why: 'Each option is one kind of credential the sheet may offer. The passkey option needs the server’s request JSON with the challenge.' },
+          { type: 'bug', prompt: 'Ada closes the sheet without choosing, and the app crashes. Tap the wrong line.', code: `try {
+    val result = CredentialManager.create(context).getCredential(context, request)
+    val credential = result.credential
+    when (credential) {
+        is PublicKeyCredential -> session.signInWithPasskey(credential.authenticationResponseJson)
+        is PasswordCredential -> session.signIn(credential.id, credential.password)
+    }
+    onSignedIn()
+} catch (e: IOException) {
+    onShowForm()
+}`, bug: 8, fix: '} catch (e: GetCredentialException) {', why: 'Closing the sheet throws a <code>GetCredentialException</code>, not an <code>IOException</code>. Nothing catches it, so the app crashes.' },
         ],
         quiz: [
-          { q: 'Your app lets users set a profile photo. Which permission do you need?', options: ['<code>READ_MEDIA_IMAGES</code>', '<code>READ_EXTERNAL_STORAGE</code>', 'None, use the photo picker'], a: 2, why: 'The photo picker gives you just the chosen image, without access to the rest of the library.' },
-          { q: 'You request <code>ACCESS_FINE_LOCATION</code> and <code>ACCESS_COARSE_LOCATION</code> on Android 12+. What can the user do?', options: ['Only allow or deny', 'Grant approximate location only', 'Nothing, fine is granted automatically'], a: 1, why: 'The dialog lets the user pick approximate. Your feature has to handle that answer gracefully.' },
-          { q: 'An analytics SDK in your app collects the device location. Does it go in your Data safety section?', options: ['No, it’s the SDK’s data', 'Yes, you declare everything your app and its SDKs collect', 'Only if you read it yourself'], a: 1, why: 'Play holds the app responsible for the data its SDKs collect and share.' },
-          { q: 'The user picked “Only this time” for location. You saved <code>hasLocation = true</code> in prefs. The next day the feature trusts that flag. What happens?', options: ['It works, because the grant lasts until the user revokes it', 'Location calls fail, because the one-time grant was revoked after the app went to the background', 'The prefs flag grants the permission again'], a: 1, why: 'A one-time grant lasts only while the app is in use. Check the current permission state each time the feature needs it.' },
-          { q: 'Which line leaks personal data?<pre class="code mini">fun onLogin(u: User) {\n  Log.i("auth", "login ${u.email}") // 1\n  analytics.track("login", u.opaqueId) // 2\n  nav.toHome() // 3\n}</pre>', options: ['Line 1', 'Line 2', 'Line 3'], a: 0, why: 'Logcat output can end up in bug reports and crash tools. Log an opaque id or nothing, never an email.' },
+          { q: 'What does the server keep for Ada’s passkey?', options: ['Only the public key', 'The private key', 'Her password'], a: 0, why: 'The public key can only check signatures. A stolen copy of it signs nothing.' },
+          { q: 'Why is there a new challenge for every sign-in?', options: ['So an old signed answer can’t be sent again', 'So the sheet looks different', 'Because passkeys run out'], a: 0, why: 'Each signature only fits its own challenge. A copied answer is useless the next time.' },
+          { q: 'Which context should <code>getCredential</code> get?', options: ['The Activity, for example <code>LocalContext.current</code> in a composable', 'The application context', 'None'], a: 0, why: 'The sheet opens over a screen, so it needs the Activity the user is looking at.' },
         ],
-        deeper: [
-          {
-            title: 'Ask in context, and handle no',
-            body: `<p>Ask for a permission when the user taps the feature that needs it. If they deny once, <code>shouldShowRequestPermissionRationale()</code> returns true: explain why in your own UI, then ask again. On Android 11 and later, a second denial counts as “don’t ask again”. After that, launching the request returns false at once, and no dialog appears.</p>
-<p>From then on, only the app’s settings page can grant it. Keep the rest of the app usable without the permission, and offer a button to settings instead of asking again and again.</p>`,
-            code: `val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    when {
-        granted -> openScanner()
-        activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> showWhyCamera()
-        else -> showOpenSettings()   // denied twice: the dialog won't come back
-    }
+        docs: [['Credential Manager', 'https://developer.android.com/identity/sign-in/credential-manager'], ['Sign in with passkeys', 'https://developer.android.com/identity/passkeys/sign-in-with-passkeys']],
+      },
+
+      {
+        id: 'biometric',
+        title: 'Biometrics',
+        tagline: 'Ask for a fingerprint, a face or the screen lock with BiometricPrompt.',
+        goals: ['Lock the app behind Android’s fingerprint, face or screen lock prompt', 'Check that the phone can do it before you ask', 'Explain what your app learns from the prompt'],
+        level: 'intermediate', introduces: ['BiometricPrompt', 'BiometricManager', 'canAuthenticate', 'BIOMETRIC_SUCCESS', 'BIOMETRIC_WEAK', 'BIOMETRIC_STRONG', 'DEVICE_CREDENTIAL', 'AuthenticationCallback', 'onAuthenticationSucceeded', 'PromptInfo', 'setAllowedAuthenticators', 'authenticate', 'FragmentActivity', 'getMainExecutor', 'viewModels'],
+        body: `
+<p>Ada stays signed in to Recipes for weeks, which is what she wants. But when her nephew borrows her unlocked phone, he can open Recipes and change her account. An app lock helps: before Recipes opens, ask for her fingerprint, her face or the phone’s screen lock. Android draws that request itself: the <code>BiometricPrompt</code>.</p>
+<p>Your app never sees a fingerprint. The phone checks it in secure hardware and tells your app one thing: it matched. You choose what counts. <code>BIOMETRIC_WEAK or DEVICE_CREDENTIAL</code> accepts any fingerprint or face the phone trusts, or the PIN, pattern or password. <code>BIOMETRIC_STRONG</code> accepts only the safest sensors, but together with <code>DEVICE_CREDENTIAL</code> it doesn’t work on Android 10 and lower, and Recipes runs from Android 8.0 (minSdk 26), so the app lock uses <code>BIOMETRIC_WEAK</code>. Before asking, <code>BiometricManager.from(this).canAuthenticate(allowed)</code> answers <code>BIOMETRIC_SUCCESS</code> if the phone has one of them set up.</p>
+<p>BiometricPrompt needs a <code>FragmentActivity</code>, a <code>ComponentActivity</code> with a little more inside, so <code>MainActivity</code> extends it now; <code>setContent</code> works the same. Make the prompt before the screen starts, as with the permission launcher; here that is <code>onCreate</code>, because it needs the Activity ready: <code>BiometricPrompt(this, ContextCompat.getMainExecutor(this), callback)</code>, where the executor runs the callback on the main thread. The callback is an <code>object :</code> that extends <code>BiometricPrompt.AuthenticationCallback</code> on the spot, with no name of its own. Override <code>onAuthenticationSucceeded</code> to unlock. A wrong finger is handled inside the prompt, and if Ada cancels, the screen stays locked. <code>PromptInfo.Builder()</code> sets the title and what counts, and <code>authenticate(info)</code> shows the prompt.</p>
+<p>The locked state lives in a small ViewModel, so a rotation doesn’t lock Recipes again. <code>by viewModels()</code> gives an Activity its ViewModel, the same one after rotation, as <code>hiltViewModel()</code> does in a composable. <code>LockViewModel</code> needs nothing, so it doesn’t need <code>@HiltViewModel</code>. A new start of the app is locked again.</p>`,
+        visual(el) {
+          const locked = '<div class="ui-m-bar">Recipes</div><div class="ui-m-center"><b>Recipes is locked</b><span class="ui-m-muted">App lock is on</span><span class="ui-m-btn ul">Unlock</span></div>';
+          const prompt = (msg = 'Touch the fingerprint sensor') => `${locked}<div class="ui-m-sheet"><b>Unlock Recipes</b><div class="ui-m-spin"></div><span class="ui-m-muted">${msg}</span><span class="ui-m-btn ghost">Use PIN</span></div>`;
+          const home = '<div class="ui-m-bar">Recipes</div><div class="ui-m-body"><div class="ui-m-row"><div>Tomato soup · 25 min</div></div><div class="ui-m-row"><div>Lemon pasta · 20 min</div></div><div class="ui-m-row"><div>Account: ada@example.com</div></div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'Your code',
+            predict: {
+              q: 'The nephew’s finger doesn’t match. What does your app receive?',
+              options: ['No unlock: the prompt says so and stays open', 'A copy of his fingerprint', '<code>onAuthenticationSucceeded</code>'],
+              a: 0,
+              why: 'The phone compares fingerprints in secure hardware. Your app only ever hears “succeeded”, and that didn’t happen.',
+            },
+            frames: [
+              { screen: locked, log: 'locked = true', say: 'Ada turned on App lock. When Recipes starts, MainActivity shows the locked screen.' },
+              { tap: '.ul', log: 'canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)  →  BIOMETRIC_SUCCESS', say: 'She taps Unlock. The phone has a fingerprint set up, so the app may ask.' },
+              { screen: prompt(), log: 'prompt.authenticate(info)', say: 'Android shows its own prompt, with your title. Your app can’t see inside it.' },
+              { screen: prompt('Not recognized'), say: 'Her nephew tries his finger. Not recognized: the prompt stays open, and Recipes stays locked.' },
+              { screen: prompt(), say: 'Ada touches the sensor.' },
+              { screen: home, log: ['onAuthenticationSucceeded(result)', 'locked = false'], say: 'It matches. All your app hears is “succeeded”, and it unlocks.' },
+            ],
+          });
+        },
+        code: `// app/build.gradle.kts
+// implementation("androidx.biometric:biometric:1.1.0")
+
+class LockViewModel : ViewModel() {
+    val locked = MutableStateFlow(true)            // kept through rotation; a new start is locked
 }
 
-fun openAppSettings(context: Context) = context.startActivity(
-    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-)`,
-            visual(el) {
-              let denials = 0, granted = false, explained = false;
-              const title = h('span', { class: 'sec-ph-title' }, 'Receipts');
-              const big = h('span', { class: 'sec-ph-sub' }, 'Tap Scan to read a receipt.');
-              const phone = h('div', { class: 'phone', 'aria-live': 'polite' }, title, big);
-              const stat = h('div', { class: 'sec-stat' });
-              const o = out('');
-              const log = html => { line(o, html); trim(o, 3); };
-              const rationale = () => denials === 1 && !granted;
-              const paint = () => { stat.innerHTML = `granted: <b>${granted}</b> · denials: <b>${denials}</b> · shouldShowRationale: <b>${rationale()}</b>`; };
-              const close = () => phone.querySelectorAll('.sec-sheet').forEach(s => s.remove());
-              const sheet = (...kids) => { close(); phone.append(h('div', { class: 'sec-sheet' }, ...kids)); };
-              const dialog = () => sheet(
-                h('b', {}, 'Allow Receipts to take pictures and record video?'),
-                act('While using the app', () => { granted = true; close(); big.textContent = 'Camera open. Point at a receipt.'; log('<span class="good">granted = true</span>'); paint(); replay(phone, 'pop'); }),
-                act('Only this time', () => { granted = true; close(); big.textContent = 'Camera open, this session only.'; log('<span class="good">granted = true</span> <span class="muted">// revoked soon after the app leaves the screen</span>'); paint(); replay(phone, 'pop'); }),
-                act('Don’t allow', () => {
-                  denials++; explained = false; close(); paint();
-                  big.textContent = denials >= 2 ? 'Scanning needs the camera.' : 'Tap Scan to read a receipt.';
-                  log(`granted = false <span class="muted">// denial ${denials}${denials >= 2 ? ': the dialog won’t show again' : ''}</span>`);
-                }));
-              const scan = () => {
-                if (granted) { big.textContent = 'Camera open. Point at a receipt.'; replay(phone, 'pop'); log('already granted: open the camera'); return; }
-                if (denials >= 2) {
-                  log('launch(CAMERA) → <span class="bad">false at once, no dialog</span>');
-                  sheet(h('b', {}, 'Camera is off for Receipts'), h('small', {}, 'Turn it on in Settings to scan.'),
-                    act('Open settings: allow camera', () => { granted = true; close(); big.textContent = 'Camera allowed from Settings.'; log('<span class="good">granted in Settings</span>'); paint(); replay(phone, 'pop'); }),
-                    act('Not now', () => { close(); log('<span class="muted">the rest of the app keeps working</span>'); }));
-                  replay(phone, 'shake'); return;
-                }
-                if (rationale() && !explained) {
-                  log('shouldShowRequestPermissionRationale → <b>true</b>: explain first');
-                  sheet(h('b', {}, 'Why the camera?'), h('small', {}, 'We read the total from a photo of the receipt. Nothing is uploaded.'),
-                    act('Continue', () => { explained = true; dialog(); log('launch(CAMERA)'); }));
-                  return;
-                }
-                log('launch(CAMERA)'); dialog();
-              };
-              paint();
-              el.append(
-                h('div', { class: 'sec-bio' },
-                  h('div', { class: 'viz' }, h('div', { class: 'controls' }, cmd('scanButton.onClick()', scan)), stat, o),
-                  phone));
-              log('<span class="muted">nothing asked yet</span>');
-            },
-          },
-          {
-            title: 'Precise or approximate: read what you got',
-            body: `<p>On Android 12 and later, request <code>ACCESS_FINE_LOCATION</code> and <code>ACCESS_COARSE_LOCATION</code> together. The dialog then lets the user pick Precise or Approximate, and While using the app or Only this time. Your callback gets a map. Precise means both entries are true. Approximate means only coarse is true.</p>
-<p>A one-time grant lasts while the app is in use and is revoked soon after it goes to the background. So check the current state each time a feature needs it, instead of storing “has location” in your own prefs.</p>`,
-            code: `val askLocation = rememberLauncherForActivityResult(
-    ActivityResultContracts.RequestMultiplePermissions()
-) { result ->
-    when {
-        result[Manifest.permission.ACCESS_FINE_LOCATION] == true -> startTurnByTurn()
-        result[Manifest.permission.ACCESS_COARSE_LOCATION] == true -> showNearbyStores()
-        else -> showCityPicker()
-    }
-}
+@AndroidEntryPoint
+class MainActivity : FragmentActivity() {          // BiometricPrompt needs a FragmentActivity
+    private val lock: LockViewModel by viewModels()
+    private lateinit var prompt: BiometricPrompt
+    private val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or
+        BiometricManager.Authenticators.DEVICE_CREDENTIAL      // a finger or face, or the screen lock
 
-askLocation.launch(arrayOf(
-    Manifest.permission.ACCESS_FINE_LOCATION,
-    Manifest.permission.ACCESS_COARSE_LOCATION,
-))`,
-            visual(el) {
-              let precise = true, grant = null, busy = false;
-              const map = h('div', { class: 'sec-d2-map', 'aria-hidden': 'true' });
-              const area = h('span', { class: 'sec-d2-area' }), dot = h('span', { class: 'sec-d2-dot' });
-              map.append(area, dot);
-              const res = h('div', { class: 'sec-manifest', 'aria-label': 'Permission result' });
-              const o = out('Pick precision, then answer the dialog.');
-              const precBtns = [[true, 'Precise'], [false, 'Approximate']].map(([v, t], i) => act(t, () => { if (busy) return; precise = v; press(precBtns, precBtns[i]); }));
-              press(precBtns, precBtns[0]);
-              const paint = () => {
-                const fine = !!grant && precise, coarse = !!grant;
-                res.replaceChildren(h('span', { class: 't-c' }, '// result map'),
-                  h('span', { class: 'drop-in' }, `ACCESS_FINE_LOCATION   = ${fine}`),
-                  h('span', { class: 'drop-in' }, `ACCESS_COARSE_LOCATION = ${coarse}`));
-                map.className = 'sec-d2-map' + (!grant ? '' : fine ? ' sec-d2-fine' : ' sec-d2-coarse');
-              };
-              const answer = kind => () => {
-                if (busy) return;
-                grant = kind; paint(); replay(map, 'pop');
-                say(o, !kind ? '<span class="bad">Denied.</span> Offer a city picker instead.'
-                  : precise ? `<span class="good">Precise${kind === 'once' ? ', this session only' : ''}.</span> A position within about 50 m, often better.`
-                  : `<span class="good">Approximate${kind === 'once' ? ', this session only' : ''}.</span> Only coarse is true: an area of about 3 km². Nearby stores still work. Turn-by-turn does not.`);
-              };
-              const bg = act('Send the app to the background', async () => {
-                if (busy) return;
-                if (grant !== 'once') { say(o, grant ? 'A “while using the app” grant stays after the app leaves the screen.' : 'Nothing granted yet.'); return; }
-                busy = true; say(o, '<span class="muted">app in the background…</span>');
-                await sleep(1200); if (!el.isConnected) return;
-                grant = null; paint(); replay(map, 'shake');
-                say(o, '<span class="bad">Revoked.</span> The one-time grant ended. The next request shows the dialog again.');
-                busy = false;
-              });
-              paint();
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'sec-label' }, 'In the dialog'), precBtns),
-                h('div', { class: 'controls' }, act('While using the app', answer('while')), act('Only this time', answer('once')), act('Don’t allow', answer(null))),
-                h('div', { class: 'sec-zones' }, h('div', { class: 'sec-zone' }, h('span', { class: 'sec-label' }, 'What the app sees'), map), h('div', { class: 'sec-zone' }, res)),
-                h('div', { class: 'controls' }, bg),
-                o);
-            },
-          },
-          {
-            title: 'Audit what your SDKs access',
-            body: `<p>Your Data safety answers must cover what SDKs do, and an SDK can read location or contacts using your app’s permissions. On Android 11 and later, data access auditing shows you. Register an <code>OnOpNotedCallback</code> in debug builds and log each access of private data with a stack trace. Attribution tags, set with <code>createAttributionContext()</code>, name the part of your app that made the call.</p>`,
-            code: `class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            getSystemService(AppOpsManager::class.java).setOnOpNotedCallback(mainExecutor,
-                object : AppOpsManager.OnOpNotedCallback() {
-                    override fun onNoted(op: SyncNotedAppOp) {
-                        Log.d("DataAccess", "\${op.op} tag=\${op.attributionTag}", Throwable())
-                    }
-                    override fun onSelfNoted(op: SyncNotedAppOp) { onNoted(op) }
-                    override fun onAsyncNoted(op: AsyncNotedAppOp) {
-                        Log.d("DataAccess", "\${op.op} async: \${op.message}")
-                    }
-                })
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    lock.locked.value = false
+                }
+            })
+        setContent {
+            val locked by lock.locked.collectAsStateWithLifecycle()
+            if (locked) {
+                LockedScreen(onUnlock = { unlock() })   // your composable: a lock icon and an Unlock button
+            } else {
+                RecipesScreen()
+            }
         }
     }
-}`,
-          },
-        ],
-        underHood: {
-          body: `<p>The photo picker runs in a system process, not in yours, so your app never sees the library. When the user picks an image, the system returns a <code>content://media/picker/…</code> Uri and grants your app read access to that one item. Where the system picker is missing, the AndroidX contract falls back to a backported picker or to <code>ACTION_OPEN_DOCUMENT</code>, still with no permission.</p>
-<p>Approximate location is made inside the system too. The location service snaps the real position to a coarse grid and adds a random offset that drifts slowly, updated about once an hour, so averaging many fixes can’t recover the real spot. It also strips speed, bearing and altitude before your app gets the fix.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Asking for everything at launch',
-            bad: `override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    askAll.launch(arrayOf(CAMERA, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, READ_CONTACTS))
-}`,
-            good: `scanButton.setOnClickListener {
-    if (ContextCompat.checkSelfPermission(this, CAMERA) == PERMISSION_GRANTED) openScanner()
-    else askCamera.launch(CAMERA)
-}`,
-            why: 'At launch the user can’t tell why you need each one, so many say no. Two denials and the dialog is gone for good. Ask when the user taps the feature.',
-          },
-          {
-            title: 'Treating any location grant as precise',
-            bad: `{ result ->
-    if (result.values.any { it }) startTurnByTurn()
-}`,
-            good: `{ result ->
-    when {
-        result[ACCESS_FINE_LOCATION] == true -> startTurnByTurn()
-        result[ACCESS_COARSE_LOCATION] == true -> showNearbyStores()
-        else -> showCityPicker()
+
+    private fun unlock() {
+        if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
+            lock.locked.value = false              // no screen lock on this phone: nothing to check with
+            return
+        }
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Recipes")
+            .setAllowedAuthenticators(allowed)
+            .build()
+        prompt.authenticate(info)
     }
 }`,
-            why: 'Approximate grants only coarse. Turn-by-turn on a fix that is off by a kilometer is worse than no feature. Branch on what was actually granted.',
-          },
-          {
-            title: 'Personal data in crash reports',
-            bad: `Firebase.crashlytics.setUserId(user.email)
-Firebase.crashlytics.setCustomKey("phone", user.phone)`,
-            good: `Firebase.crashlytics.setUserId(user.id)   // opaque, no personal data`,
-            why: 'Crash reports go to a third party and are kept for months. An email or phone number there is personal data you share, and it belongs in your Data safety form. An opaque id is enough to find a user’s reports.',
-          },
+        remember: 'Check canAuthenticate, then show BiometricPrompt with what counts; your app only learns that it succeeded.',
+        terms: [
+          { term: 'biometric', def: 'Something about your body the phone can check, such as a fingerprint or a face.' },
+          { term: 'BiometricPrompt', def: 'Android’s own prompt that asks for a fingerprint, a face or the screen lock, and tells your app whether it succeeded.' },
+          { term: 'device credential', def: 'The phone’s screen lock: its PIN, pattern or password. <code>DEVICE_CREDENTIAL</code> accepts it.' },
+          { term: 'FragmentActivity', def: 'A <code>ComponentActivity</code> with support for fragments, which BiometricPrompt uses inside.' },
         ],
-        predict: {
-          q: "Login logging changes from <code>$email</code> to <code>${user.id}</code>. What happens to the Data safety form?",
-          options: ["The email address entry goes away", "Nothing: logs never count as collected data", "You need a new permission to log the id"],
-          a: 0,
-          why: "Logs that reach crash tools are data you collect. Log an opaque id and there is no email to declare.",
-        },
+        challenges: [
+          { type: 'blank', prompt: 'Describe the prompt and show it.', code: `val info = BiometricPrompt.PromptInfo.Builder()
+    .setTitle("Unlock Recipes")
+    .[[setAllowedAuthenticators]](allowed)
+    .build()
+prompt.[[authenticate]](info)`, why: '<code>setAllowedAuthenticators</code> says what counts, and <code>authenticate</code> shows Android’s prompt.' },
+          { type: 'bug', prompt: 'App lock opens Recipes without ever showing the prompt. Tap the wrong line.', code: `private fun unlock() {
+    if (BiometricManager.from(this).canAuthenticate(allowed) == BiometricManager.BIOMETRIC_SUCCESS) {
+        lock.locked.value = false
+        return
+    }
+    prompt.authenticate(info)   // info built as above
+}`, bug: 1, fix: '    if (BiometricManager.from(this).canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {', why: 'With <code>==</code>, every phone that can show the prompt skips it and unlocks. Only a phone that can’t check anything should skip it.' },
+        ],
+        quiz: [
+          { q: 'What does your app learn from Ada’s fingerprint?', options: ['Only that it matched', 'An image of the fingerprint', 'Which finger she used'], a: 0, why: 'The fingerprint stays in secure hardware. The app gets <code>onAuthenticationSucceeded</code>, nothing more.' },
+          { q: 'Why does the app lock use <code>BIOMETRIC_WEAK or DEVICE_CREDENTIAL</code>?', options: ['<code>BIOMETRIC_STRONG</code> with <code>DEVICE_CREDENTIAL</code> doesn’t work on Android 10 and lower', 'Weak sensors are faster', 'Strong sensors need the internet'], a: 0, why: 'Recipes runs from Android 8.0, so it uses the pair that works on every version it supports.' },
+          { q: 'Why does <code>MainActivity</code> extend <code>FragmentActivity</code> now?', options: ['BiometricPrompt needs one', 'Hilt needs it', 'Compose needs it'], a: 0, why: 'BiometricPrompt from androidx.biometric is built on fragments. <code>setContent</code> keeps working, because a FragmentActivity is a ComponentActivity too.' },
+        ],
+        docs: [['Show a biometric authentication dialog', 'https://developer.android.com/identity/sign-in/biometric-auth']],
+      },
+
+      {
+        id: 'privacy',
+        title: 'Privacy',
+        tagline: 'Collect only what a feature needs, and ask for less.',
+        goals: ['Let the user pick one photo with no permission at all', 'Ask for approximate location when a city-sized area is enough', 'Explain what the Data safety form asks'],
+        level: 'intermediate', introduces: ['rememberLauncherForActivityResult', 'PickVisualMedia', 'PickVisualMediaRequest', 'ImageOnly', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+        body: `
+<p>Two new features: a photo for each recipe, and “Popular near you”. The easy way asks for all of Ada’s photos and her exact position. But every permission is a question she may refuse, everything you collect can leak, and Google Play asks you to declare it. The privacy rule is <em>data minimization</em>: collect only what a feature needs, keep it only as long as it needs, and choose a way that needs no permission when there is one.</p>
+<p>For the photo, use the <em>photo picker</em>, Android’s own screen. Ada picks one photo, and your app gets that one only: no permission, nothing in the manifest. In a composable, <code>rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia())</code> makes a launcher, the composable version of <code>registerForActivityResult</code>. <code>launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))</code> opens it with photos only. The lambda gets a <code>Uri</code>, or <code>null</code> if she closes the picker. Access lasts until the phone restarts or the app stops, so copy the photo into <code>filesDir</code> to keep it.</p>
+<p>For “near you”, a city-sized area is enough. <code>ACCESS_COARSE_LOCATION</code> gives an approximate location, an area of about 3 square kilometers. <code>ACCESS_FINE_LOCATION</code> is precise, often within 50 meters. Declare and ask for coarse only. An app that does need precise location asks for both in one request, and since Android 12 the user can still choose “Approximate”, so the app must work with that too.</p>
+<p>Before you publish, Google Play asks you to fill in the <em>Data safety</em> form: which data leaves the phone, why, and whether you share it with others, including what the libraries in your app send. An app that collects nothing fills it in too. The less you collect, the shorter that answer, and the less there is to protect.</p>`,
         visual(el) {
-          const feats = [
-            { id: 'photo', name: 'Profile photo', heavy: { perm: 'READ_MEDIA_IMAGES', access: 'reads all 2,413 photos' }, light: { perm: null, access: 'gets the 1 photo the user picked', src: 'PickVisualMedia()' }, ds: null },
-            { id: 'loc', name: 'Nearby stores', heavy: { perm: 'ACCESS_FINE_LOCATION', access: 'position within a few meters', ds: 'Precise location' }, light: { perm: 'ACCESS_COARSE_LOCATION', access: 'position within about 3 km²', ds: 'Approximate location', src: 'ACCESS_COARSE_LOCATION' } },
-            { id: 'contacts', name: 'Invite a friend', heavy: { perm: 'READ_CONTACTS', access: 'reads all 812 contacts', ds: 'Contacts' }, light: { perm: null, access: 'gets the 1 contact the user picked', src: 'Intent(ACTION_PICK)' } },
-            { id: 'logs', name: 'Login logging', heavy: { perm: null, access: 'Log.i("Auth", "login $email")', ds: 'Email address (crash logs)' }, light: { perm: null, access: 'Log.i("Auth", "login ${user.id}")', src: 'log user.id' } },
-          ];
-          const lean = {};
-          const manifest = h('div', { class: 'sec-manifest', 'aria-label': 'AndroidManifest.xml permissions' });
-          const ds = h('div', { class: 'sec-ds' });
-          const meter = h('span', {});
-          const stat = h('span', { class: 'sec-stat' });
-          const o = out('Every feature uses the heavy option. Slim them down one at a time.');
-          const rows = {};
-          const paint = changed => {
-            const perms = feats.map(f => [f, (lean[f.id] ? f.light : f.heavy).perm, f.heavy.perm]);
-            manifest.replaceChildren(h('span', { class: 't-c' }, '// uses-permission in AndroidManifest.xml'),
-              ...perms.flatMap(([f, p, hp]) => {
-                const linesOut = [];
-                if (hp && p !== hp) linesOut.push(h('span', { class: 'sec-gone' + (changed === f.id ? ' drop-in' : '') }, hp));
-                if (p) linesOut.push(h('span', { class: changed === f.id ? 'drop-in' : null }, p));
-                return linesOut;
-              }));
-            const types = feats.map(f => (lean[f.id] ? f.light : f.heavy).ds ? [(lean[f.id] ? f.light : f.heavy).ds, !!lean[f.id]] : null).filter(Boolean);
-            ds.replaceChildren(...(types.length ? types.map(([t, lite]) => h('span', { class: lite ? 'sec-lite' : null }, t)) : [h('span', { class: 'sec-lite' }, 'nothing sensitive')]));
-            const dangerous = feats.filter(f => (lean[f.id] ? f.light : f.heavy).perm).length;
-            const score = feats.reduce((s, f) => s + (lean[f.id] ? (f.light.perm ? 1 : 0) : 3), 0);
-            meter.style.width = `${(score / 12) * 100}%`;
-            meter.classList.toggle('sec-low', score <= 3);
-            stat.innerHTML = `permission prompts: <b>${dangerous}</b> · data exposure`;
-          };
-          const featRows = feats.map(f => {
-            const note = h('small', {}, f.heavy.access);
-            const btn = cmd(f.light.src, function () {
-              lean[f.id] = !lean[f.id];
-              this.setAttribute('aria-pressed', String(!!lean[f.id]));
-              row.classList.toggle('sec-lean', !!lean[f.id]);
-              note.textContent = (lean[f.id] ? f.light : f.heavy).access;
-              replay(row, 'pop');
-              paint(f.id);
-              const done = feats.every(x => lean[x.id]);
-              say(o, lean[f.id]
-                ? `<span class="good">${f.name}:</span> ${f.light.access}.${done ? ' All lean: one permission prompt left, and a short Data safety form.' : ''}`
-                : `<span class="bad">${f.name}:</span> back to ${f.heavy.access}.`);
-            }, { 'aria-pressed': 'false' });
-            const row = h('div', { class: 'sec-feat' }, h('div', {}, h('b', {}, f.name), note), btn);
-            rows[f.id] = row;
-            return row;
+          const detail = (extra = '', photo = '') => `<div class="ui-m-bar">← Lemon pasta</div><div class="ui-m-body">${photo}<b>Lemon pasta · 20 min</b><div class="ui-m-line"></div><span class="ui-m-btn ghost ph">Add photo</span><span class="ui-m-btn nr">Popular near you</span></div>${extra}`;
+          const picker = '<div class="ui-m-sheet"><b>Select a photo</b><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px"><div class="ui-m-img"></div><div class="ui-m-img p2"></div><div class="ui-m-img"></div><div class="ui-m-img"></div><div class="ui-m-img"></div><div class="ui-m-img"></div></div></div>';
+          const dialog = '<div class="ui-m-scrim"><div class="ui-m-dialog"><b>Allow Recipes to access this device’s location?</b><span class="ui-m-muted">Approximate</span><span class="ui-m-btn ghost ok">While using the app</span><span class="ui-m-btn ghost">Only this time</span><span class="ui-m-btn ghost">Don’t allow</span></div></div>';
+          const near = '<div class="ui-m-bar">← Popular near you</div><div class="ui-m-body"><span class="ui-m-muted">In your area</span><div class="ui-m-row"><div>Oslo pancakes</div></div><div class="ui-m-row"><div>Tomato soup</div></div></div>';
+          Lab.ui.phone(el, {
+            logTitle: 'Your code',
+            predict: {
+              q: 'Recipes uses the photo picker. Which permission must it ask for first?',
+              options: ['None', 'Access to all photos', 'The camera'],
+              a: 0,
+              why: 'The picker is Android’s own screen. Ada chooses, and the app only gets the photo she picked.',
+            },
+            frames: [
+              { screen: detail(), log: '// manifest: no photo permission', say: 'Ada wants a photo for her lemon pasta.' },
+              { tap: '.ph', log: 'pickPhoto.launch(PickVisualMediaRequest(ImageOnly))', say: 'She taps Add photo. No permission check: the picker needs none.' },
+              { screen: detail(picker), say: 'Android’s photo picker opens. It isn’t your app: Recipes sees nothing until she picks.' },
+              { tap: '.p2', log: 'uri = content://…   // this one photo', say: 'She picks one photo. Your lambda gets its <code>Uri</code>: access to that photo only.' },
+              { screen: detail('', '<div class="ui-m-img"></div>'), log: 'copied into filesDir', say: 'The app copies it into <code>filesDir</code>, so the recipe keeps it after a restart.' },
+              { tap: '.nr', log: 'askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION)', say: '“Near you” needs an area, not a street. The app asks for approximate location only.' },
+              { screen: detail(dialog, '<div class="ui-m-img"></div>'), say: 'Android’s dialog asks about approximate location. A smaller question gets fewer no’s.' },
+              { screen: near, log: 'granted = true   // an area of about 3 km²', say: 'She allows it. Recipes shows what is popular in her area, and never learns her street.' },
+            ],
           });
-          paint();
-          el.append(
-            h('div', { class: 'sec-feats' }, featRows),
-            manifest,
-            h('div', { class: 'sec-row' }, h('span', { class: 'sec-label' }, 'Data safety'), ds),
-            h('div', { class: 'sec-row' }, stat),
-            h('div', { class: 'sec-meter', 'aria-hidden': 'true' }, meter),
-            o);
         },
+        code: `// The photo picker: no permission, nothing in the manifest
+@Composable
+fun AddPhotoButton(onPicked: (Uri) -> Unit) {
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            onPicked(uri)                          // copy it into filesDir to keep it
+        }
+    }
+    Button(onClick = {
+        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }) {
+        Text("Add photo")
+    }
+}
+
+// AndroidManifest.xml: approximate location only
+// <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+@Composable
+fun NearYouButton(onAllowed: () -> Unit) {
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            onAllowed()                            // an area of about 3 km²: enough for "near you"
+        }
+    }
+    Button(onClick = { askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
+        Text("Popular near you")
+    }
+}`,
+        remember: 'Collect only what the feature needs: the photo picker instead of all photos, approximate instead of precise location, and an honest Data safety form.',
+        mistakes: [
+          { title: 'Asking for precise location when an area is enough', bad: `<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />`, good: `<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />`, why: 'Precise location shows Ada’s street. A bigger question gets more no’s, needs more care, and goes on the Data safety form.' },
+        ],
+        terms: [
+          { term: 'data minimization', def: 'Collecting only the data a feature needs, and keeping it only as long as it needs.' },
+          { term: 'photo picker', def: 'Android’s own screen for choosing photos. The app gets only the ones the user picks, with no permission.' },
+          { term: 'approximate location', def: 'A location good to an area of about 3 square kilometers, from <code>ACCESS_COARSE_LOCATION</code>.' },
+          { term: 'Data safety form', def: 'The form in Google Play where you declare which data your app collects and shares, and why. It is shown on the app’s store page.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Open the photo picker with photos only.', code: `val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.[[PickVisualMedia]]()) { uri ->
+    if (uri != null) {
+        onPicked(uri)
+    }
+}
+pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.[[ImageOnly]]))`, why: '<code>PickVisualMedia</code> is the photo picker, and <code>ImageOnly</code> leaves videos out.' },
+          { type: 'bug', prompt: '“Popular near you” only needs an area, but this asks for Ada’s exact position. Tap the line.', code: `Button(onClick = { askLocation.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) {
+    Text("Popular near you")
+}`, bug: 0, fix: 'Button(onClick = { askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {', why: 'Coarse location is enough for “near you” and is the smaller question to ask.' },
+        ],
+        quiz: [
+          { q: 'What does the Data safety form ask about?', options: ['Which data leaves the phone, why, and who it is shared with', 'How fast the app starts', 'Which Android versions it supports'], a: 0, why: 'It includes data sent by the libraries in your app, and every app on Google Play fills it in.' },
+          { q: 'An app asks for precise location on Android 12. What can Ada choose?', options: ['Approximate instead, so the app must work with that', 'Only precise or nothing', 'Her street name'], a: 0, why: 'Since Android 12 the user picks how precise. Plan for approximate.' },
+          { q: 'The picker gave the app a <code>Uri</code>. How long can it read the photo?', options: ['Until the phone restarts or the app stops, so copy it to keep it', 'Forever', 'For one second'], a: 0, why: 'The access is short on purpose. Copy the photo into <code>filesDir</code> if the recipe should keep it.' },
+        ],
+        docs: [['Minimize your permission requests', 'https://developer.android.com/privacy-and-security/minimize-permission-requests'], ['Photo picker', 'https://developer.android.com/training/data-storage/shared/photopicker']],
       },
     ],
   });
