@@ -1,1956 +1,892 @@
-/* Kotlin Multiplatform track. Same shape as tracks/kotlin.js.
-   Demo styles live in the css string below; every class is prefixed kmp-. */
+/* Kotlin Multiplatform track (optional).
+   Same shape as tracks/kotlin.js. Demos use the visual kit (Lab.ui); any track CSS goes in the css string, every class
+   starting with kmp-. */
 (() => {
-  const { h, sleep, hl, replay } = Lab;
-  const cmd = (src, onclick, props = {}) => h('button', { class: 'cmd', html: hl(src), onclick, ...props });
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const pick = (btns, i) => btns.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
-  const kt = src => h('div', { class: 'kt', html: hl(src) });
-
-  const css = `
-.kmp-label { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.kmp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 14px; min-width: 0; }
-.kmp-panel { display: grid; gap: 8px; align-content: start; padding: 12px; border-radius: 14px; border: 2px solid var(--line); background: var(--bg); min-width: 0; transition: border-color 0.25s, opacity 0.25s, background 0.25s; }
-.kmp-panel.kmp-on { border-color: var(--accent); background: var(--accent-soft); }
-.kmp-panel.kmp-dim { opacity: 0.4; }
-.kmp-panel .kt { white-space: pre; }
-.kmp-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; min-width: 0; }
-.kmp-name { font: 700 0.86rem var(--mono); overflow-wrap: anywhere; min-width: 0; }
-.kmp-flash { animation: kmp-flash 0.8s ease-out; }
-@keyframes kmp-flash { from { box-shadow: 0 0 0 5px var(--accent-soft); border-color: var(--accent); } }
-
-/* 1 source sets */
-.kmp-tree { display: grid; gap: 6px; min-width: 0; }
-.kmp-ss { display: grid; gap: 6px; margin-left: calc(var(--d) * 14px); padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); min-width: 0; transition: border-color 0.25s, opacity 0.25s, background 0.25s; }
-.kmp-ss.kmp-on { border-color: var(--accent); background: var(--accent-soft); }
-.kmp-ss.kmp-dim { opacity: 0.35; }
-.kmp-ss-note { font-size: 0.8rem; color: var(--muted); }
-.kmp-files { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.kmp-file { font: 600 0.76rem var(--mono); padding: 3px 8px; border-radius: 6px; background: var(--code-bg); color: var(--t-t); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kmp-file.kmp-common { color: var(--t-f); }
-.kmp-pipe { display: grid; gap: 10px; align-content: start; padding: 12px; border-radius: 14px; background: var(--bg); border: 1px dashed var(--line); min-width: 0; }
-.kmp-inbox { display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; padding: 6px; border-radius: 10px; background: var(--sunk); min-width: 0; }
-.kmp-steps { display: grid; gap: 6px; }
-.kmp-step { font: 600 0.8rem var(--mono); padding: 6px 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface); color: var(--muted); transition: border-color 0.2s, color 0.2s; }
-.kmp-step.kmp-on { border-color: var(--accent); color: var(--ink); }
-.kmp-art { display: grid; place-items: center; min-height: 54px; border-radius: 12px; border: 2px dashed var(--line); font: 700 0.9rem var(--mono); color: var(--muted); padding: 6px; text-align: center; overflow-wrap: anywhere; }
-.kmp-art.kmp-ready { border-style: solid; border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
-
-/* 2 expect / actual */
-.kmp-actuals { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.kmp-panel.kmp-missing { border-style: dashed; border-color: var(--err); background: var(--err-soft); }
-.kmp-result { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 52px; }
-.kmp-res { font: 600 0.95rem var(--mono); padding: 8px 14px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); max-width: 100%; overflow-wrap: anywhere; }
-.kmp-res.kmp-err { background: var(--err); }
-
-/* device frames */
-.kmp-devs { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-items: flex-start; padding: 12px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
-.kmp-dev-wrap { display: grid; gap: 6px; justify-items: center; min-width: 0; }
-.kmp-dev { position: relative; width: 140px; height: 232px; border: 7px solid var(--code-bg); border-radius: 22px; background: var(--surface); padding: 20px 9px 10px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; transition: border-color 0.25s; }
-.kmp-dev::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); background: var(--code-bg); }
-.kmp-and::before { width: 8px; height: 8px; border-radius: 50%; }
-.kmp-ios { border-radius: 28px; }
-.kmp-ios::before { width: 44px; height: 11px; border-radius: 999px; }
-.kmp-win { width: 230px; height: 170px; border: 2px solid var(--ink); border-radius: 10px; padding: 0; gap: 0; }
-.kmp-win::before { display: none; }
-.kmp-win-bar { display: flex; gap: 5px; align-items: center; padding: 6px 8px; background: var(--sunk); border-bottom: 1px solid var(--line); font: 600 0.68rem var(--mono); color: var(--muted); }
-.kmp-win-bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
-.kmp-win-body { display: flex; flex-direction: column; gap: 6px; padding: 10px; flex: 1; min-height: 0; }
-.kmp-dev.kmp-ask { border-color: var(--accent); }
-.kmp-scr-title { font: 700 0.86rem var(--display); }
-.kmp-and .kmp-scr-title { padding: 2px 0 4px; }
-.kmp-ios .kmp-scr-title { text-align: center; }
-.kmp-list { display: grid; gap: 4px; align-content: start; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-.kmp-li { font-size: 0.74rem; line-height: 1.25; padding: 5px 7px; overflow-wrap: anywhere; }
-.kmp-and .kmp-li { background: var(--sunk); border-radius: 8px; }
-.kmp-ios .kmp-li { border-bottom: 1px solid var(--line); padding-inline: 2px; }
-.kmp-li.kmp-new { animation: drop-in 0.42s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
-.kmp-empty { font-size: 0.74rem; color: var(--muted); text-align: center; margin: auto 0; }
-.kmp-foot { margin-top: auto; font: 600 0.62rem var(--mono); color: var(--muted); }
-.kmp-spin { width: 26px; height: 26px; margin: auto; border-radius: 50%; border: 3px solid var(--sunk); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
-
-/* 3 repository */
-.kmp-repo { display: grid; gap: 8px; padding: 12px; border-radius: 14px; border: 2px solid var(--ink); background: var(--surface); min-width: 0; }
-.kmp-layers { display: flex; flex-wrap: wrap; gap: 6px; }
-.kmp-layer { display: grid; gap: 1px; padding: 6px 10px; border-radius: 9px; border: 2px solid var(--line); background: var(--bg); min-width: 0; transition: border-color 0.2s, background 0.2s; }
-.kmp-layer b { font: 600 0.76rem var(--mono); }
-.kmp-layer small { font-size: 0.7rem; color: var(--muted); }
-.kmp-layer.kmp-on { border-color: var(--accent); background: var(--accent-soft); }
-.kmp-layer.kmp-ok { border-color: var(--ok); background: var(--ok-soft); }
-.kmp-layer.kmp-fail { border-color: var(--err); background: var(--err-soft); }
-
-/* 4 view model */
-.kmp-vm { display: grid; gap: 8px; padding: 12px; border-radius: 14px; border: 2px solid var(--ink); background: var(--surface); min-width: 0; transition: opacity 0.3s, border-color 0.3s; }
-.kmp-vm.kmp-gone { opacity: 0.5; border-style: dashed; }
-.kmp-state { justify-self: start; font: 600 0.84rem var(--mono); padding: 4px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; }
-.kmp-state.kmp-err { background: var(--err-soft); color: var(--err); }
-.kmp-jobs { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; align-items: center; }
-.kmp-job { font: 600 0.74rem var(--mono); padding: 4px 10px; border-radius: 999px; border: 2px solid var(--accent); color: var(--ink); }
-.kmp-job.kmp-run { animation: pulse 1s infinite; }
-.kmp-job.kmp-done { border-color: var(--ok); color: var(--ok); }
-.kmp-job.kmp-cancel { border-color: var(--err); color: var(--err); text-decoration: line-through; }
-.kmp-stale { outline: 2px dashed var(--warm); outline-offset: 3px; }
-
-/* 5 compose multiplatform */
-.kmp-code { display: grid; background: var(--code-bg); border-radius: 12px; padding: 10px 6px; overflow-x: auto; min-width: 0; }
-.kmp-line { font: 500 0.8rem/1.6 var(--mono); color: var(--code-ink); white-space: pre; padding: 0 8px; border-radius: 6px; transition: background 0.3s; }
-.kmp-line.kmp-hot { background: rgba(255, 212, 121, 0.18); }
-.kmp-logo { width: 34px; height: 34px; border-radius: 10px; align-self: center; background: var(--kmp-c, var(--accent)); transition: background 0.3s; flex: none; }
-.kmp-hello { font: 700 0.86rem var(--display); text-align: center; overflow-wrap: anywhere; }
-.kmp-btn { align-self: center; font: 700 0.72rem var(--body); padding: 5px 12px; border-radius: 999px; border: 0; background: var(--kmp-c, var(--accent)); color: var(--accent-ink); cursor: pointer; transition: background 0.3s; }
-.kmp-plat { font: 600 0.62rem var(--mono); color: var(--muted); text-align: center; overflow-wrap: anywhere; }
-.kmp-c-warm { --kmp-c: var(--warm); }
-.kmp-c-ok { --kmp-c: var(--ok); }
-.kmp-c-err { --kmp-c: var(--err); }
-
-/* 6 swift mapping */
-.kmp-map { display: grid; gap: 8px; min-width: 0; }
-.kmp-maphead, .kmp-row { display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; }
-.kmp-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; padding: 4px; border-radius: 12px; border: 2px solid transparent; cursor: pointer; }
-.kmp-row:hover { border-color: var(--line); }
-.kmp-row:focus-visible { outline: 2px solid var(--accent); }
-.kmp-row.kmp-on { border-color: var(--accent); background: var(--accent-soft); }
-.kmp-cell { font: 500 0.78rem/1.5 var(--mono); background: var(--code-bg); color: var(--code-ink); border-radius: 9px; padding: 7px 10px; white-space: pre; overflow-x: auto; min-width: 0; }
-.kmp-cell.kmp-skie { box-shadow: inset 3px 0 0 var(--ok); }
-.kmp-pass { position: relative; height: 20px; }
-.kmp-pass::before { content: ""; position: absolute; left: 4px; right: 8px; top: 9px; height: 2px; background: var(--line); }
-.kmp-pass::after { content: ""; position: absolute; right: 2px; top: 5px; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent var(--muted); }
-.kmp-dot { position: absolute; top: 4px; left: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); z-index: 1; animation: kmp-go 0.55s ease-in-out forwards; }
-@keyframes kmp-go { to { left: calc(100% - 14px); } }
-@media (max-width: 560px) {
-  .kmp-maphead { display: none; }
-  .kmp-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .kmp-pass { height: 18px; width: 20px; justify-self: center; transform: rotate(90deg); }
-}
-/* depth steps */
-.kmp-ss.kmp-leaf { border-style: dashed; }
-.kmp-tbtn { font: 600 0.74rem var(--mono); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
-.kmp-tbtn[aria-pressed="true"], .kmp-tbtn.kmp-fixed { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.kmp-tbtn.kmp-fixed { cursor: default; }
-.kmp-tpill { font: 700 0.72rem var(--mono); padding: 2px 9px; border-radius: 999px; }
-.kmp-tpill:empty { display: none; }
-.kmp-tpill.kmp-tok { background: var(--ok-soft); color: var(--ok); }
-.kmp-tpill.kmp-tbad { background: var(--err-soft); color: var(--err); }
-.kmp-tpill.kmp-twarn { background: var(--warm-soft); color: var(--warm); }
-.kmp-vms { display: grid; gap: 8px; align-content: start; flex: 1 1 220px; min-width: 0; }
-.kmp-vms .kmp-vm { padding: 8px 10px; gap: 4px; }
-/* depth pass 2 */
-.kmp-d2-node { font: inherit; color: var(--ink); text-align: left; cursor: pointer; box-sizing: border-box; justify-self: stretch; }
-.kmp-d2-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.kmp-d2-node[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--accent-soft); }
-.kmp-dev.kmp-d2-dark { background: var(--code-bg); color: var(--code-ink); --kmp-c: var(--t-t); }
-.kmp-dev.kmp-d2-dark .kmp-plat { color: var(--t-c); }
-.kmp-d2-stage { display: grid; justify-items: center; gap: 10px; padding: 12px; background: var(--bg); border: 1px dashed var(--line); border-radius: 12px; min-width: 0; }
-.kmp-d2-win { box-sizing: border-box; min-width: 150px; max-width: 100%; height: 190px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-content: start; padding: 8px; border: 2px solid var(--ink); border-radius: 12px; background: var(--surface); overflow: hidden; transition: width 0.25s; }
-.kmp-d2-win.kmp-d2-two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
-.kmp-d2-list, .kmp-d2-detail { display: grid; gap: 4px; align-content: start; min-width: 0; }
-.kmp-d2-detail { padding: 6px 8px; border-radius: 8px; background: var(--sunk); font-size: 0.78rem; line-height: 1.35; }
-.kmp-d2-detail b { font: 700 0.84rem var(--display); overflow-wrap: anywhere; }
-.kmp-d2-item { all: unset; box-sizing: border-box; display: block; font: 500 0.76rem var(--body); color: var(--ink); padding: 5px 8px; border-radius: 8px; background: var(--sunk); cursor: pointer; overflow-wrap: anywhere; }
-.kmp-d2-item:focus-visible { outline: 2px solid var(--accent); }
-.kmp-d2-item.kmp-on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-.kmp-d2-detail .kmp-d2-item { justify-self: start; background: var(--surface); }
-.kmp-d2-ann { display: grid; gap: 6px; padding: 8px; border-radius: 12px; border: 2px solid var(--line); min-width: 0; transition: border-color 0.2s; }
-.kmp-d2-ann.kmp-on { border-color: var(--accent); }
-.kmp-d2-arow { display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; }
-@media (max-width: 560px) { .kmp-d2-arow { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
-input#kmp-d2-width { flex: 1 1 180px; min-width: 0; accent-color: var(--accent); }
-`;
+  const css = ``;
 
   Lab.addTrack({
     id: 'kmp',
     title: 'Kotlin Multiplatform',
-    description: 'Write the logic once in Kotlin and ship it to Android, iOS and desktop, with shared or native UI.',
+    description: 'Share the Recipes app’s Kotlin with an iPhone app: targets and source sets, expect and actual, shared networking with Ktor, a shared Room database, shared ViewModels, Compose Multiplatform and calling Kotlin from Swift.',
     group: 'Shipping', requires: ['kotlin', 'arch'],
     css,
     lessons: [
       // 1 ─────────────────────────────────────────────
       {
-        id: 'shares',
-        title: 'What KMP shares',
-        tagline: 'One codebase, split into source sets, compiled per target.',
-        level: 'beginner',
+        id: 'what-kmp',
+        title: 'What Kotlin Multiplatform is',
+        tagline: 'Write the app’s rules once in Kotlin and run them on Android and on the iPhone.',
+        goals: ['Explain what Kotlin Multiplatform shares and what each platform keeps', 'Name the targets a shared module is built for', 'Read the layout of a KMP project: shared, androidApp and iosApp'],
+        level: 'intermediate', introduces: ['iosArm64', 'iosSimulatorArm64', 'baseName'],
         body: `
-<p>A Kotlin Multiplatform module splits its code into <em>source sets</em>. Code in <code>commonMain</code> is compiled for every target. Code in <code>androidMain</code> or <code>iosMain</code> only goes into that platform, so it can use Android or iOS APIs.</p>
-<p>Source sets form a tree. The default hierarchy template creates the middle levels for you: declare <code>iosArm64()</code> and <code>iosSimulatorArm64()</code> and you get <code>iosMain</code> and <code>appleMain</code> to share code between them. A file sees its own source set and every parent above it.</p>
-<p>The same Kotlin ends up in different forms. For Android it becomes JVM bytecode, then DEX inside your APK. For iOS, Kotlin/Native compiles it through LLVM to machine code and packs it into a framework that Xcode links. There is no JVM on the iPhone.</p>`,
-        code: `// shared/build.gradle.kts
+<p>Lin has an iPhone and asks for Recipes on it. iPhone apps are usually written in Swift, Apple’s language, with Xcode, Apple’s IDE, on a Mac. Writing Recipes again in Swift means every rule, like which recipes count as quick or how a refresh keeps the saved list when offline, exists twice. Sooner or later a fix lands in one copy and not the other.</p>
+<p><em>Kotlin Multiplatform</em> (KMP) compiles one Kotlin module for several platforms. Each platform it is built for is a <em>target</em>. For Android, Kotlin compiles to <em>JVM bytecode</em>, the format of the Java Virtual Machine (JVM), a program that runs compiled Java and Kotlin on computers. Android has no JVM: at build time it converts that bytecode, along with the rest of your app, for its own runtime, ART. iPhones have no such runtime, so for them <em>Kotlin/Native</em> compiles the same files to machine code, the phone’s own instructions, and packs it into a <em>framework</em>: a bundle of compiled code that an Xcode project can use. There are two iPhone targets: <code>iosArm64</code> for real iPhones and <code>iosSimulatorArm64</code> for the iPhone simulator on a Mac with an Apple chip.</p>
+<p>You decide what to share. Most apps share the logic: data classes, rules, the repository, ViewModels. The screens can stay native, Compose on Android and SwiftUI, Apple’s UI toolkit, much like Compose, on the iPhone, or be shared too. Google supports KMP for sharing business logic between Android and iOS, and it is stable. You can start small, with one shared module next to an existing app.</p>
+<p>A KMP project has three parts. <code>shared/</code> is the KMP module: an Android library and an iPhone framework at once. <code>androidApp/</code> is the Android app with <code>MainActivity</code>; since AGP 9 it must be a module of its own. <code>iosApp/</code> is the Xcode project, not a Gradle module. Building for the iPhone needs a Mac with Xcode; the Android side builds anywhere.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 320,
+            predict: {
+              q: 'Sam fixes a bug in <code>quickLabel</code>, inside <code>shared</code>. Where is it fixed?',
+              options: ['Only in the Android app', 'In both apps, once each one is rebuilt', 'Only on the iPhone'],
+              a: 1,
+              why: 'Both apps are built from the same Kotlin files, so one fix reaches both.',
+            },
+            nodes: [
+              { id: 'sh', label: 'shared<small>Recipe, quickLabel</small>', x: 50, y: 9 },
+              { id: 'and', label: 'Android target<small>Android code</small>', x: 22, y: 40 },
+              { id: 'ios', label: 'iPhone targets<small>iosArm64, iosSimulatorArm64</small>', x: 74, y: 40 },
+              { id: 'app', label: 'androidApp<small>the APK</small>', x: 22, y: 88, hidden: true },
+              { id: 'fw', label: 'Shared.framework<small>machine code</small>', x: 74, y: 64, hidden: true },
+              { id: 'xc', label: 'iosApp<small>Xcode project</small>', x: 74, y: 90, hidden: true },
+            ],
+            frames: [
+              { hl: ['sh'], say: 'One Gradle module, <code>shared</code>, holds Recipes’ rules in plain Kotlin: no Android code and no iPhone code.' },
+              { add: [['sh', 'and']], hl: ['and'], say: 'For the Android target, the Kotlin compiles to the same kind of code as the rest of an Android app.' },
+              { show: ['app'], add: [['and', 'app']], hl: ['app'], say: '<code>androidApp</code> depends on <code>shared</code> like on any module, and the shared code ends up in its APK.' },
+              { add: [['sh', 'ios']], hl: ['ios'], say: 'Kotlin/Native compiles the same files again for the iPhone targets: once for real iPhones, once for the simulator.' },
+              { show: ['fw'], add: [['ios', 'fw']], hl: ['fw'], say: 'The result is packed into a framework, here named <code>Shared</code>. It is machine code: the iPhone runs it directly, with no JVM or ART.' },
+              { show: ['xc'], add: [['fw', 'xc']], hl: ['xc'], say: 'The Xcode project <code>iosApp</code> uses the framework. Its Swift code can call <code>quickLabel</code>.' },
+              { hl: ['sh', 'app', 'xc'], say: 'A fix in <code>shared</code> reaches both phones the next time each app is built.' },
+            ],
+          });
+        },
+        code: `// settings.gradle.kts
+include(":shared")       // the KMP module: Recipes' rules, for every target
+include(":androidApp")   // the Android app, with MainActivity
+// iosApp/ is the Xcode project, not a Gradle module
+
+// gradle/libs.versions.toml
+// [plugins]
+// kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version = "2.4.21" }
+// androidMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version = "9.4.0" }
+
+// shared/build.gradle.kts
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidMultiplatformLibrary)
 }
 
 kotlin {
-    android {
-        namespace = "com.example.shared"
-        compileSdk = 36
-        minSdk = 24
+    android {                       // the Android target
+        namespace = "com.example.recipes.shared"
+        compileSdk = 37
+        minSdk = 26
     }
-    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
-        target.binaries.framework {
-            baseName = "Shared"
-            isStatic = true
-        }
+    iosArm64 {                      // real iPhones
+        binaries.framework { baseName = "Shared" }
     }
-    sourceSets {
-        commonMain.dependencies {
-            implementation(libs.kotlinx.coroutines.core)
-        }
-        androidMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
-        }
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
-        }
+    iosSimulatorArm64 {             // the simulator on a Mac with an Apple chip
+        binaries.framework { baseName = "Shared" }
     }
+}
+
+// androidApp/build.gradle.kts
+dependencies {
+    implementation(project(":shared"))
 }`,
-        remember: 'commonMain goes everywhere. androidMain becomes JVM bytecode. iosMain becomes native code in a framework.',
+        play: `data class Recipe(val id: Int, val title: String, val minutes: Int)
+
+// Recipes' rules: plain Kotlin, no Android and no iPhone code.
+// This file could move to shared/src/commonMain as it is.
+fun quickLabel(recipe: Recipe): String =
+    if (recipe.minutes <= 20) "\${recipe.title} · quick" else "\${recipe.title} · \${recipe.minutes} min"
+
+fun main() {
+    val recipes = listOf(Recipe(1, "Pancakes", 20), Recipe(2, "Lasagne", 75), Recipe(3, "Omelette", 10))
+    for (recipe in recipes) {
+        println(quickLabel(recipe))
+    }
+    // Add a recipe of your own and see which label it gets.
+}`,
+        remember: 'KMP compiles one Kotlin module for several targets: Android gets its usual code, the iPhone gets machine code in a framework.',
+        mistakes: [
+          { title: 'Making the shared module an Android app', bad: `// shared/build.gradle.kts
+plugins {
+    alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.androidApplication)   // com.android.application
+}`, good: `// shared/build.gradle.kts
+plugins {
+    alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.androidMultiplatformLibrary)
+}
+// MainActivity lives in androidApp, which depends on :shared`, why: 'Since AGP 9, the Kotlin Multiplatform plugin no longer works together with <code>com.android.application</code> or <code>com.android.library</code> in one module. The shared module uses <code>com.android.kotlin.multiplatform.library</code>, and the app is its own module.' },
+        ],
         terms: [
-          { term: 'source set', def: 'A group of Kotlin files with its own dependencies that is compiled for a specific set of targets.' },
-          { term: 'commonMain', def: 'The source set compiled for every target in a KMP module; it can only use multiplatform APIs.' },
-          { term: 'default hierarchy template', def: 'The Kotlin Gradle plugin rule that creates intermediate source sets such as iosMain and appleMain from the targets you declare.' },
-          { term: 'Kotlin/Native', def: 'The Kotlin compiler backend that uses LLVM to produce native binaries, such as iOS frameworks, without a virtual machine.' },
+          { term: 'Kotlin Multiplatform', def: 'Compiling one Kotlin module for several platforms, its <em>targets</em>, like the Android target or <code>iosArm64</code> for real iPhones, so the apps share that code. KMP for short.' },
+          { term: 'JVM', def: 'The Java Virtual Machine: a program that runs compiled Java and Kotlin (JVM bytecode) on computers. Android converts that bytecode for its own runtime, ART; iPhones run neither.' },
+          { term: 'Kotlin/Native', def: 'The Kotlin compiler that turns Kotlin into machine code, for platforms with no JVM or ART, such as the iPhone.' },
+          { term: 'framework', def: 'A bundle of compiled code an Xcode project can use. The shared module’s iPhone builds are packed into one, here <code>Shared</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Put the coroutines library where every target gets it, and the Darwin engine only where iOS gets it.', code: 'sourceSets {\n    [[commonMain]].dependencies {\n        implementation(libs.kotlinx.coroutines.core)\n    }\n    [[iosMain]].dependencies {\n        implementation(libs.ktor.client.darwin)\n    }\n}', why: 'Shared libraries go in <code>commonMain</code>. The Darwin engine uses Apple networking, so it belongs in <code>iosMain</code>.' },
-          { type: 'bug', prompt: 'The Android build works, but the iOS build fails to resolve a dependency. Tap the line.', code: 'kotlin {\n    android { namespace = "com.example.shared"; compileSdk = 36 }\n    iosArm64()\n    iosSimulatorArm64()\n    sourceSets {\n        commonMain.dependencies {\n            implementation(libs.ktor.client.core)\n            implementation(libs.ktor.client.okhttp)\n        }\n        iosMain.dependencies {\n            implementation(libs.ktor.client.darwin)\n        }\n    }\n}', bug: 7, fix: '        // move it: androidMain.dependencies { implementation(libs.ktor.client.okhttp) }', why: 'The OkHttp engine only exists for the JVM. A <code>commonMain</code> dependency must be published for every target, including iOS.' },
+          { type: 'blank', prompt: 'Build the shared module for real iPhones and for the simulator.', code: `kotlin {
+    android { /* namespace, compileSdk, minSdk */ }
+    [[iosArm64]] {
+        binaries.framework { baseName = "Shared" }
+    }
+    [[iosSimulatorArm64]] {
+        binaries.framework { baseName = "Shared" }
+    }
+}`, why: '<code>iosArm64</code> is the target for real iPhones; <code>iosSimulatorArm64</code> is the simulator on a Mac with an Apple chip.' },
+          { type: 'bug', prompt: '<code>MainActivity</code> can’t find <code>quickLabel</code>. Tap the wrong line.', code: `// androidApp/build.gradle.kts
+dependencies {
+    implementation(project(":androidApp"))
+}`, bug: 2, fix: '    implementation(project(":shared"))', why: 'The app must depend on the module that holds the shared code, <code>:shared</code>, not on itself.' },
         ],
         quiz: [
-          { q: 'Where can you call <code>android.content.Context</code>?', options: ['<code>commonMain</code>', '<code>androidMain</code>', 'Any source set'], a: 1, why: 'Only <code>androidMain</code> compiles against the Android SDK. <code>commonMain</code> must compile for iOS too.' },
-          { q: 'What does the iOS build of a KMP module produce?', options: ['A JAR that runs on a JVM inside the app', 'A native framework compiled by Kotlin/Native', 'JavaScript run by a WebView'], a: 1, why: 'Kotlin/Native compiles to machine code through LLVM. Xcode links the framework like any other.' },
-          { q: 'You target <code>iosArm64</code> and <code>iosSimulatorArm64</code>. Where does code for both go?', options: ['Copy it into both target source sets', '<code>iosMain</code>', '<code>androidMain</code>'], a: 1, why: 'The default hierarchy template creates <code>iosMain</code> as the shared parent of both iOS targets.' },
-          { q: 'commonMain has <code>import java.util.UUID</code>. The Android app builds. What happens when you build the iOS framework?', options: ['It fails: java.util is an unresolved reference for iOS', 'It works: UUID is mapped to NSUUID', 'It builds but crashes when the function runs'], a: 0, why: 'commonMain is compiled for every target, and java.util exists only on the JVM. Use a multiplatform API or put the JVM code in androidMain.' },
-          { q: 'You declare <code>iosArm64()</code> and <code>iosX64()</code>. On an Apple silicon Mac, the app does not link for the simulator. What fixes it?', options: ['Remove <code>iosArm64()</code>', 'Add <code>iosSimulatorArm64()</code>', 'Add <code>macosArm64()</code>'], a: 1, why: 'iosX64 is the simulator on Intel Macs. The simulator on Apple silicon needs the iosSimulatorArm64 binary, and iosArm64 is for real devices.' },
+          { q: 'What does an iPhone run from the shared module?', options: ['Kotlin code for a small JVM on the phone', 'Machine code in a framework, made by Kotlin/Native', 'The Kotlin source files, read as the app runs'], a: 1, why: 'iPhones have no JVM and no ART. Kotlin/Native compiles the shared code to machine code and packs it into a framework.' },
+          { q: 'Which target is the iPhone simulator on a Mac with an Apple chip?', options: ['<code>iosArm64</code>', '<code>iosSimulatorArm64</code>', 'The Android target'], a: 1, why: '<code>iosArm64</code> is for real iPhones; the simulator needs its own build, <code>iosSimulatorArm64</code>.' },
+          { q: 'With AGP 9, where does <code>MainActivity</code> go?', options: ['In <code>shared</code>', 'In its own <code>androidApp</code> module', 'In <code>iosApp</code>'], a: 1, why: 'The shared module is a library for every target. The Android app, with its activities, is a separate module that depends on it.' },
         ],
-        deeper: [
-          {
-            title: 'Your targets decide which source sets exist',
-            body: `
-<p>You never create <code>iosMain</code> or <code>appleMain</code> by hand. The default hierarchy template looks at the targets you declare and creates only the shared source sets they need. Add <code>macosArm64()</code> and <code>macosMain</code> appears next to <code>iosMain</code>, both under <code>appleMain</code> and <code>nativeMain</code>.</p>
-<p>Android and a desktop <code>jvm()</code> target never share a source set of their own. Each hangs directly under <code>commonMain</code>, so code for both goes in common, or behind an interface. Toggle targets below, then tap a source set to see which binaries get its code.</p>`,
-            visual(el) {
-              const TG = [
-                { id: 'android', fn: 'android { ... }', on: true },
-                { id: 'jvm', fn: 'jvm()', on: false },
-                { id: 'iosArm64', fn: 'iosArm64()', on: true },
-                { id: 'iosSimulatorArm64', fn: 'iosSimulatorArm64()', on: true },
-                { id: 'macosArm64', fn: 'macosArm64()', on: false },
-              ];
-              const isOn = id => TG.find(t => t.id === id).on;
-              const IOS = ['iosArm64', 'iosSimulatorArm64'], NAT = [...IOS, 'macosArm64'];
-              const SETS = [
-                { n: 'commonMain', d: 0, cov: TG.map(t => t.id) },
-                { n: 'androidMain', d: 1, cov: ['android'], leaf: true },
-                { n: 'jvmMain', d: 1, cov: ['jvm'], leaf: true },
-                { n: 'nativeMain', d: 1, cov: NAT },
-                { n: 'appleMain', d: 2, cov: NAT },
-                { n: 'iosMain', d: 3, cov: IOS },
-                { n: 'iosArm64Main', d: 4, cov: ['iosArm64'], leaf: true },
-                { n: 'iosSimulatorArm64Main', d: 4, cov: ['iosSimulatorArm64'], leaf: true },
-                { n: 'macosMain', d: 3, cov: ['macosArm64'] },
-                { n: 'macosArm64Main', d: 4, cov: ['macosArm64'], leaf: true },
-              ];
-              const live = s => s.cov.some(isOn);
-              const tree = h('div', { class: 'kmp-tree' });
-              const script = h('div', { class: 'kt' });
-              const o = out();
-              let sel = null, prev = new Set();
-              function render(fresh) {
-                const now = new Set();
-                tree.replaceChildren(...SETS.filter(live).map(s => {
-                  now.add(s.n);
-                  const n = s.cov.filter(isOn).length;
-                  s.el = h('button', { type: 'button', class: 'kmp-ss kmp-d2-node' + (s.leaf ? ' kmp-leaf' : '') + (fresh && !prev.has(s.n) ? ' drop-in' : ''), style: `--d:${s.d}`, 'aria-pressed': String(sel === s.n), onclick: () => show(s) },
-                    h('span', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, s.n), h('span', { class: 'kmp-ss-note' }, `${n} target${n > 1 ? 's' : ''}`)));
-                  return s.el;
-                }));
-                prev = now;
-                script.innerHTML = hl(['kotlin {', ...TG.filter(t => t.on).map(t => '    ' + t.fn), '}'].join('\n'));
-              }
-              function show(s) {
-                sel = s.n;
-                const ts = s.cov.filter(isOn);
-                SETS.filter(live).forEach(x => {
-                  const hit = x === s || Boolean(x.leaf && ts.includes(x.cov[0]));
-                  x.el.classList.toggle('kmp-on', hit);
-                  x.el.setAttribute('aria-pressed', String(x === s));
-                });
-                replay(s.el, 'kmp-flash');
-                say(o, ts.length === 1
-                  ? `<b>${s.n}</b> goes into one binary only: ${ts[0]}.`
-                  : `<b>${s.n}</b> is compiled into ${ts.length} binaries: ${ts.join(', ')}.`);
-              }
-              const btns = TG.map(t => {
-                const b = act(t.fn, () => {
-                  if (t.on && TG.filter(x => x.on).length === 1) { replay(b, 'shake'); say(o, 'Keep at least one target.'); return; }
-                  const before = new Set(SETS.filter(live).map(s => s.n));
-                  t.on = !t.on; b.setAttribute('aria-pressed', String(t.on));
-                  sel = null; render(true);
-                  const after = SETS.filter(live).map(s => s.n);
-                  say(o, t.on
-                    ? `Added ${t.fn}. The template created <span class="good">${after.filter(n => !before.has(n)).join(', ')}</span>.`
-                    : `Removed ${t.fn}. Gone: <span class="bad">${[...before].filter(n => !after.includes(n)).join(', ')}</span>.`);
-                });
-                b.setAttribute('aria-pressed', String(t.on));
-                return b;
-              });
-              render(false);
-              say(o, 'Toggle a target. Then tap a source set to see where its code ends up.');
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'targets'), btns),
-                h('div', { class: 'kmp-grid2' },
-                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'shared/build.gradle.kts'), script),
-                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'source sets the template made'), tree)),
-                o);
-            },
-          },
-          {
-            title: 'Tests live in the same tree',
-            body: `
-<p>Main source sets have test twins, such as <code>commonTest</code>, <code>jvmTest</code> and <code>iosTest</code>. A test in <code>commonTest</code> runs once per target, against that target’s actuals and dependencies. Write it with <code>kotlin.test</code>, which runs on JUnit on the JVM and on the Kotlin/Native test runner on iOS.</p>
-<p>Gradle runs iOS tests on a simulator target, such as <code>iosSimulatorArm64Test</code>. <code>./gradlew allTests</code> runs every target this machine can run and merges the reports. Run both platforms: a test that passes on the JVM can still fail on iOS, for example when it depends on the default locale or time zone.</p>`,
-            code: `// shared/src/commonTest/kotlin/GreetingTest.kt
-import kotlin.test.Test
-import kotlin.test.assertTrue
-
-class GreetingTest {
-    @Test
-    fun greetingNamesThePlatform() {
-        assertTrue(greet().startsWith("Hello from "))
-    }
-}
-
-// shared/build.gradle.kts
-sourceSets {
-    commonTest.dependencies {
-        implementation(libs.kotlin.test)
-    }
-}
-
-// ./gradlew allTests                 every target this machine can run
-// ./gradlew iosSimulatorArm64Test    only the iOS simulator`,
-          },
-        ],
-        underHood: {
-          body: `
-<p>Each target is its own compilation. For Android, the Kotlin/JVM compiler gets the files of <code>commonMain</code> and <code>androidMain</code> together, as if they were one module, and writes class files. Common code is not compiled once and shipped as a shared binary. It is compiled again for every target.</p>
-<p>Kotlin/Native works in two steps. It first compiles your sources into a <code>.klib</code>, a Kotlin library that stores the code as serialized compiler IR. The link task, such as <code>linkDebugFrameworkIosArm64</code>, then reads your klib and the klibs of all dependencies, runs LLVM and writes one binary that also contains the Kotlin/Native runtime and its garbage collector. Multiplatform libraries publish a variant per target, which is why every <code>commonMain</code> dependency must support every target you declare.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Using a JVM class in commonMain',
-            bad: `// commonMain
-import java.util.UUID
-
-fun newId(): String = UUID.randomUUID().toString()`,
-            good: `// commonMain
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
-
-@OptIn(ExperimentalUuidApi::class)
-fun newId(): String = Uuid.random().toString()`,
-            why: '<code>java.util</code> only exists on the JVM, so the iOS compilation fails with an unresolved reference. The standard library has a multiplatform <code>Uuid</code> since Kotlin 2.0.20, still behind an opt-in.',
-          },
-          {
-            title: 'Wiring the hierarchy by hand with dependsOn',
-            bad: `sourceSets {
-    val iosMain by creating { dependsOn(commonMain.get()) }
-    iosArm64Main.get().dependsOn(iosMain)
-    iosSimulatorArm64Main.get().dependsOn(iosMain)
-}`,
-            good: `kotlin {
-    iosArm64()
-    iosSimulatorArm64()
-    sourceSets {
-        iosMain.dependencies { implementation(libs.ktor.client.darwin) }
-    }
-}`,
-            why: 'This is the setup from before Kotlin 1.9.20. Any explicit <code>dependsOn</code> turns the default hierarchy template off, so <code>appleMain</code> and <code>nativeMain</code> disappear and Gradle warns that the template was not applied. Declare the targets and use the source sets it creates.',
-          },
-          {
-            title: 'No simulator target for Apple silicon',
-            bad: `kotlin {
-    android { /* ... */ }
-    iosArm64()
-    iosX64()
-}`,
-            good: `kotlin {
-    android { /* ... */ }
-    iosArm64()            // iPhone and iPad
-    iosSimulatorArm64()   // Simulator on Apple silicon Macs
-}`,
-            why: '<code>iosX64</code> is the simulator on Intel Macs. On an Apple silicon Mac, Xcode’s simulator needs the <code>iosSimulatorArm64</code> binary, and without that target the app does not link for the simulator.',
-          },
-        ],
-        visual(el) {
-          Lab.ui.graph(el, {
-            height: 320,
-            nodes: [
-              { id: 'common', label: 'commonMain<small>every target</small>', x: 50, y: 9 },
-              { id: 'and', label: 'androidMain', x: 17, y: 37 },
-              { id: 'apple', label: 'appleMain', x: 83, y: 37 },
-              { id: 'apk', label: 'APK<small>DEX</small>', x: 17, y: 65, tone: 'ok', hidden: true },
-              { id: 'ios', label: 'iosMain', x: 83, y: 65 },
-              { id: 'fw', label: 'Shared.framework<small>machine code</small>', x: 50, y: 65, tone: 'ok', hidden: true },
-              { id: 'arm', label: 'iosArm64Main', x: 50, y: 92 },
-              { id: 'sim', label: 'iosSimulator<wbr>Arm64Main', x: 83, y: 92 },
-            ],
-            predict: {
-              q: 'You build the framework for a real iPhone. Which source sets are compiled?',
-              options: ['Only <code>iosArm64Main</code>', '<code>commonMain</code>, <code>appleMain</code>, <code>iosMain</code> and <code>iosArm64Main</code>', 'All of them, <code>androidMain</code> included'],
-              a: 1,
-              why: 'A target compiles its own leaf source set plus every parent above it in the tree. <code>androidMain</code> is on another branch.',
-            },
-            frames: [
-              { add: [['common', 'and'], ['common', 'apple'], ['apple', 'ios'], ['ios', 'arm'], ['ios', 'sim']], say: 'The default hierarchy template builds this tree from the targets you declare. Each source set sees itself and everything above it.' },
-              { show: ['apk'], hl: ['common', 'and'], add: [['common', 'and', '', 'accent'], ['and', 'apk', 'JVM → D8', 'ok']], say: '<code>assembleDebug</code>: commonMain and androidMain become JVM bytecode, then D8 turns it into DEX inside the APK.' },
-              { show: ['fw'], hl: ['common', 'apple', 'ios', 'arm'], add: [['common', 'and'], ['and', 'apk'], ['common', 'apple', '', 'accent'], ['apple', 'ios', '', 'accent'], ['ios', 'arm', '', 'accent'], ['arm', 'fw', 'Kotlin/Native', 'ok']], say: 'Build for iPhone: four source sets go to Kotlin/Native, which compiles them through LLVM to arm64 machine code. No JVM on the phone.' },
-              { hl: ['common', 'apple', 'ios', 'sim'], remove: [['arm', 'fw']], add: [['ios', 'arm'], ['ios', 'sim', '', 'accent'], ['sim', 'fw', '', 'ok']], say: 'For the Simulator only the leaf changes. commonMain, appleMain and iosMain are the same code.' },
-              { hl: ['common'], add: [['common', 'apple'], ['apple', 'ios'], ['ios', 'sim']], say: 'So code in commonMain reaches every binary. That is also why it may only use APIs that exist on every target.' },
-            ],
-          });
-        },
+        docs: [['Kotlin Multiplatform (Android Developers)', 'https://developer.android.com/kotlin/multiplatform'], ['Recommended KMP project structure', 'https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html']],
       },
 
       // 2 ─────────────────────────────────────────────
       {
-        id: 'expect',
-        title: 'expect and actual',
-        tagline: 'Declare it once in common, implement it per platform.',
-        level: 'beginner',
+        id: 'shares',
+        title: 'commonMain and platform code',
+        tagline: 'Each file goes in the folder for the platforms it can run on.',
+        goals: ['Put code in commonMain, androidMain or iosMain', 'Tell which source sets a build compiles', 'Decide which parts of an app to share'],
+        level: 'intermediate', introduces: ['commonMain', 'androidMain', 'iosMain', 'UIDevice'],
         body: `
-<p>Sometimes common code needs something only the platform has: the OS version, a UUID, a file path. Declare it in <code>commonMain</code> with <code>expect</code>, and write the body in each platform source set with <code>actual</code>.</p>
-<p>The compiler checks the pairs. Every target must have exactly one matching <code>actual</code>, with the same name, parameters and return type. If iOS is missing one, the iOS build fails while Android still compiles.</p>
-<p>Use <code>expect</code> for small functions and properties. When the implementation needs dependencies, such as an Android <code>Context</code>, prefer a plain interface in <code>commonMain</code> and one class per platform, passed in through the constructor or a DI library like Koin. Interfaces are easier to fake in tests. Expect and actual classes are still Beta.</p>`,
-        code: `// commonMain/Platform.kt
-expect fun platformName(): String
+<p>Sam moves <code>Recipe</code> and <code>quickLabel</code> into <code>shared</code>, and both apps build. Then he moves a function that reads the Android version with <code>Build.VERSION.SDK_INT</code>, and the build stops: <code>Unresolved reference 'android'.</code> The iPhone has no <code>android</code> package, so code meant for every target can’t use it.</p>
+<p>So <code>shared/src</code> is split into <em>source sets</em>: folders that each go into some of the targets. <code>commonMain</code> goes into every target, so it may only use Kotlin and multiplatform libraries. <code>androidMain</code> goes only into the Android build and may use Android classes like <code>Context</code> and <code>Build</code>. <code>iosMain</code> goes only into the iPhone builds and may use Apple’s iPhone classes, like <code>UIDevice</code>, which describes the phone. Kotlin creates <code>iosMain</code> for you because you declared iPhone targets; both then share it, so a real iPhone and the simulator run the same code.</p>
+<p>A file sees its own source set and <code>commonMain</code>. <code>commonMain</code> sees neither of the others, and <code>androidMain</code> and <code>iosMain</code> never see each other. To decide what goes where, ask what a piece of code touches. Data classes, rules like <code>quickLabel</code>, coroutines, Flow and kotlinx.serialization work everywhere: share them. Notifications, permissions, WorkManager and Hilt are Android only, so they stay in the Android app. Start with models and rules, then move the data layer, then the ViewModels.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 300,
+            predict: {
+              q: 'Sam builds the app for the iPhone simulator. Which source sets are compiled?',
+              options: ['<code>commonMain</code> and <code>iosMain</code>', 'Only <code>iosMain</code>', 'All three, <code>androidMain</code> too'],
+              a: 0,
+              why: 'A build compiles its own source sets plus <code>commonMain</code> above them. <code>androidMain</code> is on the other branch.',
+            },
+            nodes: [
+              { id: 'common', label: 'commonMain<small>every target</small>', x: 50, y: 10 },
+              { id: 'and', label: 'androidMain<small>Android build</small>', x: 22, y: 46 },
+              { id: 'ios', label: 'iosMain<small>iPhone builds</small>', x: 76, y: 46 },
+              { id: 'arm', label: 'iosArm64<small>real iPhone</small>', x: 44, y: 86, hidden: true },
+              { id: 'sim', label: 'iosSimulator<wbr>Arm64<small>simulator</small>', x: 82, y: 86, hidden: true },
+            ],
+            frames: [
+              { hl: ['common'], say: '<code>shared/src</code> holds one folder per source set. <code>commonMain</code> is at the top: it goes into every target.' },
+              { add: [['common', 'and'], ['common', 'ios']], say: '<code>androidMain</code> and <code>iosMain</code> sit below it. Code in them can use everything in <code>commonMain</code>, but not each other.' },
+              { show: ['arm', 'sim'], add: [['ios', 'arm'], ['ios', 'sim']], hl: ['arm', 'sim'], say: 'Below <code>iosMain</code> are the two iPhone targets. Kotlin made <code>iosMain</code> so both get the same code.' },
+              { hl: ['common', 'ios', 'sim'], say: 'Building for the simulator compiles <code>commonMain</code> and <code>iosMain</code>. <code>androidMain</code> isn’t part of that build.' },
+              { hl: ['common', 'and'], say: 'Building the Android app compiles <code>commonMain</code> and <code>androidMain</code>. Nothing from <code>iosMain</code> gets in.' },
+              { hl: ['and'], say: 'A function using <code>Build.VERSION.SDK_INT</code> goes in <code>androidMain</code>. One using <code>UIDevice</code> goes in <code>iosMain</code>.' },
+              { hl: ['common'], say: 'Put <code>import android.os.Build</code> in a <code>commonMain</code> file and the build stops with <code>Unresolved reference \'android\'.</code>, because that code must also run on iPhones.' },
+            ],
+          });
+        },
+        code: `// shared/src/commonMain/kotlin/com/example/recipes/Recipe.kt   (every target)
+package com.example.recipes
 
-fun greet(): String = "Hello from \${platformName()}"
+data class Recipe(val id: Int = 0, val title: String, val minutes: Int, val favorite: Boolean = false)
 
-// androidMain/Platform.android.kt
-actual fun platformName(): String = "Android \${Build.VERSION.SDK_INT}"
+fun quickLabel(recipe: Recipe): String =
+    if (recipe.minutes <= 20) "\${recipe.title} · quick" else "\${recipe.title} · \${recipe.minutes} min"
 
-// iosMain/Platform.ios.kt
-actual fun platformName(): String =
-    UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
+// shared/src/androidMain/kotlin/com/example/recipes/Device.android.kt   (Android only)
+package com.example.recipes
 
-// Often better: an interface in commonMain, one class per platform, wired with DI
-interface Clipboard {
-    fun copy(text: String)
-}
+import android.os.Build
 
-// androidMain
-class AndroidClipboard(private val context: Context) : Clipboard {
-    override fun copy(text: String) {
-        val manager = context.getSystemService(ClipboardManager::class.java)
-        manager.setPrimaryClip(ClipData.newPlainText("text", text))
-    }
-}`,
-        remember: 'expect promises it in common. Each target keeps the promise with actual, or that target fails to build.',
+fun androidVersion(): String = "Android \${Build.VERSION.SDK_INT}"   // Android 36
+
+// shared/src/iosMain/kotlin/com/example/recipes/Device.ios.kt   (iPhone and simulator)
+package com.example.recipes
+
+import platform.UIKit.UIDevice   // Apple's iPhone classes live under platform.
+
+fun iosVersion(): String =
+    UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion   // iOS 26.0
+
+// commonMain can call quickLabel, but neither androidVersion nor iosVersion.`,
+        remember: 'commonMain goes into every target; androidMain only into Android; iosMain only into the iPhone builds.',
         terms: [
-          { term: 'expect', def: 'A modifier on a commonMain declaration that has no body there and must be implemented by every target.' },
-          { term: 'actual', def: 'A modifier on the platform implementation of an expect declaration, with the same signature.' },
+          { term: 'source set', def: 'A folder of a KMP module whose code goes into some of the targets, like <code>commonMain</code> or <code>iosMain</code>.' },
+          { term: 'commonMain', def: 'The source set compiled for every target. It may only use Kotlin and multiplatform libraries.' },
+          { term: 'platform code', def: 'Code that uses one platform’s own classes, like <code>Build</code> on Android or <code>UIDevice</code> on iOS. It goes in <code>androidMain</code> or <code>iosMain</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Declare a random ID function in common and implement it on Android.', code: '// commonMain\n[[expect]] fun randomId(): String\n\n// androidMain\n[[actual]] fun randomId(): String = UUID.randomUUID().toString()\n\n// iosMain\nactual fun randomId(): String = NSUUID().UUIDString', why: 'The common file promises the function with <code>expect</code>. Each platform file keeps the promise with <code>actual</code>.' },
-          { type: 'bug', prompt: 'Android builds. iOS reports that the actual does not match its expect. Tap the line.', code: '// commonMain\nexpect fun currentTimeMillis(): Long\n\n// androidMain\nactual fun currentTimeMillis(): Long = System.currentTimeMillis()\n\n// iosMain\nactual fun currentTimeMillis(): Int = (NSDate().timeIntervalSince1970 * 1000).toInt()', bug: 7, fix: 'actual fun currentTimeMillis(): Long = (NSDate().timeIntervalSince1970 * 1000).toLong()', why: 'An <code>actual</code> must match the <code>expect</code> signature exactly. <code>Int</code> also overflows for milliseconds since 1970.' },
+          { type: 'blank', prompt: 'Put each file in the right source set.', code: `shared/src/[[commonMain]]/kotlin/Recipe.kt      // every target
+shared/src/androidMain/kotlin/Device.android.kt // Android only
+shared/src/[[iosMain]]/kotlin/Device.ios.kt      // iPhone and simulator`, why: 'Code for every target goes in <code>commonMain</code>; code for both iPhone targets goes in <code>iosMain</code>.' },
+          { type: 'bug', prompt: 'The iPhone build fails with <code>Unresolved reference \'android\'.</code> Tap the line to change.', code: `// shared/src/commonMain/kotlin/Device.kt
+import android.os.Build
+
+fun androidVersion(): String = "Android \${Build.VERSION.SDK_INT}"`, bug: 0, fix: '// shared/src/androidMain/kotlin/Device.kt', why: 'The code is fine for Android. It is in the wrong folder: in <code>commonMain</code> it must also compile for iPhones, which have no <code>android</code> package.' },
         ],
-        predict: {
-      q: "You build the desktop app and call <code>greet()</code>. Which <code>actual</code> functions are in the desktop binary?",
-      options: ["All three","Only the one from <code>jvmMain</code>","None: <code>expect</code> is resolved at run time"],
-      a: 1,
-      why: "Each target is compiled from its own source sets. The compiler links the matching <code>actual</code>; the others are not in that binary at all.",
-    },
-    quiz: [
-          { q: 'An <code>expect fun</code> has an <code>actual</code> in <code>androidMain</code> only. The module targets Android and iOS. What happens?', options: ['iOS uses the Android version', 'The iOS compilation fails', 'It returns null on iOS'], a: 1, why: 'Every target needs its own <code>actual</code>. Android still compiles. iOS does not.' },
-          { q: 'Your Android implementation needs a <code>Context</code>. What fits best?', options: ['An <code>expect fun</code> that reads a global static Context', 'An interface in <code>commonMain</code>, an Android class that takes Context in its constructor, wired with DI', 'Pass Context through <code>commonMain</code> function parameters'], a: 1, why: 'An interface keeps common code free of Android types, and the platform class gets its dependencies the normal way.' },
-          { q: 'An expect fun has one actual in iosMain and another in iosArm64Main. What happens to the iosArm64 target?', options: ['The iosArm64Main actual wins because it is more specific', 'The iosMain actual wins because it is higher', 'The build fails: walking up from the target finds two actuals'], a: 2, why: 'For each target the compiler must find exactly one actual on the path to commonMain. None fails, and two fail too.' },
-          { q: '<pre>// commonMain\nexpect fun price(\n  cents: Long,\n  cur: String,\n): String\n\n// androidMain\nactual fun price(\n  cents: Long,\n  cur: String = "EUR",\n): String = ...</pre>Which part is the bug?', options: ['The default value <code>= "EUR"</code> on the actual', 'The <code>Long</code> type on the expect', 'expect functions cannot return String'], a: 0, why: 'Common callers only see the expect signature, so defaults belong there. The compiler rejects default values on an actual.' },
-          { q: 'commonMain/Platform.kt holds an expect fun, and androidMain/Platform.kt holds its actual. The Android build fails. Why?', options: ['expect and actual must be in the same file', 'Both files compile to a JVM class named PlatformKt, which is a duplicate', 'Android does not allow top-level functions'], a: 1, why: 'On the JVM, top-level functions live in a class named after the file. Add a platform suffix, such as Platform.android.kt.' },
+        quiz: [
+          { q: 'Which source set may use <code>Context</code>?', options: ['<code>commonMain</code>', '<code>androidMain</code>', '<code>iosMain</code>'], a: 1, why: '<code>Context</code> is an Android class, so only code that goes into the Android build may use it.' },
+          { q: 'What can a file in <code>iosMain</code> call?', options: ['Code in <code>iosMain</code> and <code>commonMain</code>', 'Only code in <code>iosMain</code>', 'Code in every source set, <code>androidMain</code> too'], a: 0, why: 'A file sees its own source set and <code>commonMain</code>. <code>androidMain</code> isn’t in the iPhone build at all.' },
+          { q: 'Which of these belongs in <code>commonMain</code>?', options: ['<code>MainActivity</code>', 'A WorkManager worker', '<code>quickLabel(recipe: Recipe)</code>'], a: 2, why: '<code>quickLabel</code> is plain Kotlin and works on every target. The other two are Android only.' },
         ],
-        deeper: [
-          {
-            title: 'Put the actual as high in the tree as it fits',
-            body: `
-<p>An <code>actual</code> doesn’t have to live in a leaf like <code>iosArm64Main</code>. It can sit in any source set between <code>commonMain</code> and the target, and it covers every target below it. One actual in <code>iosMain</code> serves the iPhone and the simulator. One in <code>appleMain</code> also serves macOS, since all of them can call the same Apple APIs.</p>
-<p>The rule is per target: walking up from the target to <code>commonMain</code>, the compiler must find exactly one actual. None fails that target. Two also fail. Add a macOS target below and see which placement works.</p>`,
-            visual(el) {
-              const T = [
-                { id: 'android', name: 'androidMain', d: 1, up: 'common', act: true },
-                { id: 'apple', name: 'appleMain', d: 1, up: 'common', act: false },
-                { id: 'ios', name: 'iosMain', d: 2, up: 'apple', act: true },
-                { id: 'arm', name: 'iosArm64', d: 3, up: 'ios', leaf: true },
-                { id: 'sim', name: 'iosSimulatorArm64', d: 3, up: 'ios', leaf: true },
-                { id: 'mac', name: 'macosMain', d: 2, up: 'apple', act: false },
-                { id: 'macarm', name: 'macosArm64', d: 3, up: 'mac', leaf: true },
-              ];
-              const byId = Object.fromEntries(T.map(t => [t.id, t]));
-              let busy = false;
-              const o = out();
-              const common = h('div', { class: 'kmp-ss', style: '--d:0' }, h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, 'commonMain'), h('span', { class: 'kmp-label' }, 'expect fun platformName()')));
-              for (const t of T) {
-                t.pill = h('span', { class: 'kmp-tpill' });
-                const head = h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, t.leaf ? `target: ${t.name}` : t.name));
-                if (t.leaf) head.append(t.pill);
-                else if (t.id === 'android') { head.append(h('span', { class: 'kmp-tbtn kmp-fixed' }, 'actual'), t.pill); }
-                else {
-                  t.btn = h('button', { class: 'kmp-tbtn', 'aria-pressed': String(t.act), onclick() {
-                    if (busy) return; t.act = !t.act; this.setAttribute('aria-pressed', String(t.act)); clear();
-                    say(o, `${t.act ? 'Added an' : 'Removed the'} actual ${t.act ? 'to' : 'from'} ${t.name}.`);
-                  } }, 'actual');
-                  head.append(t.btn);
-                }
-                t.el = h('div', { class: 'kmp-ss' + (t.leaf ? ' kmp-leaf' : ''), style: `--d:${t.d}` }, head);
-              }
-              const clear = () => { [common, ...T.map(t => t.el)].forEach(e => e.classList.remove('kmp-on', 'kmp-dim')); T.forEach(t => { t.pill.textContent = ''; t.pill.className = 'kmp-tpill'; }); };
-              const path = id => { const xs = []; for (let c = id; c && c !== 'common'; c = byId[c].up) xs.push(byId[c]); return xs; };
-              async function build() {
-                if (busy) return; busy = true; clear();
-                const targets = T.filter(t => t.leaf || t.id === 'android');
-                const bad = [];
-                for (const t of targets) {
-                  const p = path(t.id);
-                  [common, ...T.map(x => x.el)].forEach(e => e.classList.add('kmp-dim'));
-                  common.classList.remove('kmp-dim');
-                  p.forEach(x => { x.el.classList.remove('kmp-dim'); x.el.classList.add('kmp-on'); });
-                  say(o, `<span class="muted">compiling ${t.name}: ${p.slice().reverse().map(x => x.name).join(' ← ')} ← commonMain</span>`);
-                  await sleep(650); if (!el.isConnected) return;
-                  const n = p.filter(x => x.act).length;
-                  t.pill.textContent = n === 1 ? 'builds' : n ? 'two actuals' : 'no actual';
-                  t.pill.className = 'kmp-tpill ' + (n === 1 ? 'kmp-tok' : 'kmp-tbad');
-                  replay(t.pill, n === 1 ? 'pop' : 'shake');
-                  if (n !== 1) bad.push(`${t.name} (${n ? 'two actuals' : 'no actual'})`);
-                  p.forEach(x => x.el.classList.remove('kmp-on'));
-                }
-                [common, ...T.map(x => x.el)].forEach(e => e.classList.remove('kmp-dim'));
-                say(o, bad.length
-                  ? `<span class="bad">e:</span> ${bad.join(', ')} failed. Every target needs exactly one actual on its way up to commonMain.`
-                  : '<span class="good">ok:</span> every target found exactly one actual.');
-                busy = false;
-              }
-              say(o, 'Android and both iOS targets are covered. Build, then fix macOS.');
-              el.append(
-                h('div', { class: 'kmp-tree' }, common, T.map(t => t.el)),
-                h('div', { class: 'controls' }, cmd('./gradlew assemble', build)),
-                o);
-            },
-          },
-          {
-            title: 'Reuse a platform class with actual typealias',
-            body: `
-<p>Sometimes a platform already has a class that matches your <code>expect class</code> member for member. Then the actual can be a type alias, with no wrapper code. The JVM side below borrows <code>AtomicReference</code> from the JDK. iOS still writes a real class.</p>
-<p>Expect and actual classes are Beta. The compiler warns unless you opt in with the <code>-Xexpect-actual-classes</code> flag. For most cases, an interface is still the simpler tool.</p>`,
-            code: `// commonMain
-expect class AtomicRef<V>(value: V) {
-    fun get(): V
-    fun set(value: V)
-    fun compareAndSet(expect: V, update: V): Boolean
-}
-
-// jvmMain: an existing JDK class already matches
-actual typealias AtomicRef<V> = java.util.concurrent.atomic.AtomicReference<V>
-
-// iosMain: implement it
-actual class AtomicRef<V> actual constructor(value: V) {
-    /* ... */
-}
-
-// build.gradle.kts
-kotlin { compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") } }`,
-          },
-          {
-            title: 'Interfaces can be faked in tests. expect can’t.',
-            body: `
-<p>Code in <code>commonTest</code> runs on every target. An <code>expect fun</code> always resolves to the real actual, so a test of code that copies to the clipboard touches the real clipboard, or needs an Android <code>Context</code> that a unit test doesn’t have.</p>
-<p>With an interface, the code under test takes a <code>Clipboard</code>, and the test passes a fake that only records what it got. The same test then runs and passes on every target.</p>`,
-            code: `class FakeClipboard : Clipboard {
-    val copied = mutableListOf<String>()
-    override fun copy(text: String) { copied += text }
-}
-
-class ShareTest {
-    @Test
-    fun copiesTheLink() {
-        val clipboard = FakeClipboard()
-        ShareUseCase(clipboard).share(articleId = 42)
-        assertEquals(listOf("https://example.com/a/42"), clipboard.copied)
-    }
-}`,
-            visual(el) {
-              const MODES = [
-                { label: 'expect fun copyToClipboard()', test: 'ShareUseCase().share(42)\n// can only check the real clipboard',
-                  res: [['Android unit test (JVM)', 'bad', 'UninitializedPropertyAccessException: lateinit property appContext has not been initialized'],
-                    ['iosSimulatorArm64Test', 'warn', 'passed, but it wrote to the simulator’s real pasteboard and had to read it back from the OS']] },
-                { label: 'interface Clipboard + FakeClipboard', test: 'val fake = FakeClipboard()\nShareUseCase(fake).share(42)\nassertEquals(listOf(".../a/42"), fake.copied)',
-                  res: [['Android unit test (JVM)', 'ok', 'passed: fake.copied == [".../a/42"]'], ['iosSimulatorArm64Test', 'ok', 'passed: same test, same fake']] },
-              ];
-              let mode = 0, busy = false;
-              const testKt = h('div', { class: 'kt' });
-              const panels = MODES[0].res.map(([name]) => {
-                const res = h('div', { class: 'kmp-result' });
-                return { el: h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, name), res), res };
-              });
-              const o = out();
-              const btns = MODES.map((m, i) => act(m.label, () => { if (busy) return; mode = i; pick(btns, i); testKt.innerHTML = hl(m.test); replay(testKt, 'pop-soft'); panels.forEach(p => { p.res.replaceChildren(); p.el.classList.remove('kmp-on', 'kmp-missing'); }); }));
-              async function run() {
-                if (busy) return; busy = true;
-                panels.forEach(p => { p.res.replaceChildren(); p.el.classList.remove('kmp-on', 'kmp-missing'); });
-                say(o, '<span class="muted">./gradlew allTests</span>');
-                for (let i = 0; i < panels.length; i++) {
-                  const p = panels[i], [, kind, msg] = MODES[mode].res[i];
-                  p.el.classList.add('kmp-on'); p.res.append(h('div', { class: 'kmp-spin' }));
-                  await sleep(700); if (!el.isConnected) return;
-                  p.el.classList.remove('kmp-on'); if (kind === 'bad') { p.el.classList.add('kmp-missing'); replay(p.el, 'shake'); }
-                  p.res.replaceChildren(h('span', { class: `kmp-tpill ${kind === 'ok' ? 'kmp-tok' : kind === 'bad' ? 'kmp-tbad' : 'kmp-twarn'} drop-in` }, kind === 'ok' ? 'PASS' : kind === 'bad' ? 'FAIL' : 'PASS?'), h('span', { class: 'tip' }, msg));
-                }
-                say(o, mode
-                  ? '<span class="good">ok:</span> the fake runs everywhere, and the test checks exactly what was copied.'
-                  : '<span class="bad">expect:</span> the test can only reach the real platform code. One target crashes, the other leans on global OS state.');
-                busy = false;
-              }
-              pick(btns, 0); testKt.innerHTML = hl(MODES[0].test);
-              say(o, 'Pick a design, then run the shared test on both targets.');
-              el.append(
-                h('div', { class: 'controls' }, btns),
-                h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'commonTest/ShareTest.kt'), testKt),
-                h('div', { class: 'controls' }, cmd('./gradlew allTests', run)),
-                h('div', { class: 'kmp-grid2' }, panels.map(p => p.el)),
-                o);
-            },
-          },
-        ],
-        underHood: {
-          body: `
-<p>There is no runtime lookup. Each target is compiled on its own, from <code>commonMain</code> plus every source set on its path. During that compilation the compiler matches each <code>expect</code> declaration to the one <code>actual</code> it can see and checks that names, parameters, return types and modifiers agree.</p>
-<p>The <code>expect</code> declaration produces no code. Calls to it are compiled as direct calls to the actual, as if you had called that function by name. The Android binary contains only the Android actual and the iOS framework only the iOS one, so expect and actual cost nothing at runtime.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Default arguments on the actual',
-            bad: `// commonMain
-expect fun formatPrice(cents: Long, currency: String): String
-
-// androidMain
-actual fun formatPrice(cents: Long, currency: String = "EUR"): String = /* ... */`,
-            good: `// commonMain
-expect fun formatPrice(cents: Long, currency: String = "EUR"): String
-
-// androidMain
-actual fun formatPrice(cents: Long, currency: String): String = /* ... */`,
-            why: 'Common callers only see the expect signature, so defaults must live there. The compiler rejects an actual with default values.',
-          },
-          {
-            title: 'Same file name in common and platform code',
-            bad: `// commonMain/Platform.kt
-expect fun platformName(): String
-fun greet() = "Hello from " + platformName()
-
-// androidMain/Platform.kt
-actual fun platformName(): String = "Android"`,
-            good: `// commonMain/Platform.kt
-expect fun platformName(): String
-fun greet() = "Hello from " + platformName()
-
-// androidMain/Platform.android.kt
-actual fun platformName(): String = "Android"`,
-            why: 'On the JVM both files compile to a class named <code>PlatformKt</code>, and the Android build fails with a duplicate class name. Add the platform as a suffix, as the KMP wizard does.',
-          },
-          {
-            title: 'Writing expect for what the standard library already has',
-            bad: `// commonMain
-expect fun nowMillis(): Long
-// androidMain: System.currentTimeMillis(), iosMain: NSDate()...`,
-            good: `// commonMain
-import kotlin.time.Clock   // standard library since Kotlin 2.1.20, may need @OptIn(ExperimentalTime::class)
-
-fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()`,
-            why: 'Time, UUIDs, atomics, coroutines and serialization already have multiplatform APIs. Every expect you write is code to test on every target. Check the standard library and kotlinx first.',
-          },
-        ],
-        visual(el) {
-          const T = [
-            { label: 'Android', set: 'androidMain', src: 'actual fun platformName(): String =\n    "Android ${Build.VERSION.SDK_INT}"', result: 'Android 36' },
-            { label: 'iOS', set: 'iosMain', src: 'actual fun platformName(): String =\n    UIDevice.currentDevice.systemName() +\n    " " + UIDevice.currentDevice.systemVersion', result: 'iOS 26.0' },
-            { label: 'Desktop', set: 'jvmMain', src: 'actual fun platformName(): String =\n    "JVM " + System.getProperty("java.version")', result: 'JVM 21.0.4' },
-          ];
-          let cur = 0, busy = false, iosOk = true;
-          const common = h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'commonMain'),
-            kt('expect fun platformName(): String\n\nfun greet() = "Hello from ${platformName()}"'));
-          const panels = T.map(t => h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, t.set), kt(t.src)));
-          const result = h('div', { class: 'kmp-result' }, h('span', { class: 'kmp-label' }, 'greet()'));
-          const o = out('Pick a target, then call greet().');
-          const btns = T.map((t, i) => act(t.label, () => { if (busy) return; cur = i; pick(btns, i); clear(); }));
-          const box = h('input', { type: 'checkbox', id: 'kmp-ios-actual', checked: true, onchange() {
-            if (busy) { this.checked = iosOk; return; }
-            iosOk = this.checked; const p = panels[1];
-            p.classList.toggle('kmp-missing', !iosOk);
-            p.lastElementChild.replaceWith(kt(iosOk ? T[1].src : '// no actual here'));
-            replay(p, iosOk ? 'pop' : 'shake'); clear();
-            say(o, iosOk ? '<span class="good">ok:</span> every target has its actual again.' : '<span class="bad">e:</span> Expected function \'platformName\' has no actual declaration in module for Native. Android and Desktop still build.');
-          } });
-          const clear = () => { result.replaceChildren(h('span', { class: 'kmp-label' }, 'greet()')); panels.forEach(p => p.classList.remove('kmp-on', 'kmp-dim')); common.classList.remove('kmp-on'); };
-          async function call() {
-            if (busy) return; busy = true; clear();
-            common.classList.add('kmp-on'); replay(common, 'kmp-flash');
-            say(o, `<span class="muted">compiling for ${T[cur].label}: resolving expect fun platformName()</span>`);
-            await sleep(600); if (!el.isConnected) return;
-            panels.forEach((p, i) => p.classList.add(i === cur ? 'kmp-on' : 'kmp-dim'));
-            await sleep(500); if (!el.isConnected) return;
-            if (cur === 1 && !iosOk) {
-              replay(panels[1], 'shake');
-              result.append(h('span', { class: 'kmp-res kmp-err drop-in' }, 'build failed'));
-              say(o, '<span class="bad">e:</span> no actual for platformName() in iosMain. Turn it back on.');
-            } else {
-              result.append(h('span', { class: 'kmp-res drop-in' }, `"Hello from ${T[cur].result}"`));
-              say(o, `<span class="good">ok:</span> the ${T[cur].set} actual was linked in. The other actuals are not in this binary at all.`);
-            }
-            busy = false;
-          }
-          pick(btns, 0);
-          el.append(common, h('div', { class: 'kmp-actuals' }, panels),
-            h('div', { class: 'controls' }, btns, h('button', { class: 'btn primary small', onclick: call }, 'Call greet()'),
-              h('label', { class: 'switch', for: 'kmp-ios-actual' }, box, 'iosMain has actual')),
-            result, o);
-        },
+        docs: [['The basics of KMP project structure', 'https://kotlinlang.org/docs/multiplatform/multiplatform-discover-project.html']],
       },
 
       // 3 ─────────────────────────────────────────────
       {
-        id: 'data',
-        title: 'Sharing data and logic',
-        tagline: 'Networking, JSON, a database and settings, all in commonMain.',
-        level: 'intermediate',
+        id: 'expect',
+        title: 'expect and actual',
+        tagline: 'Common code asks for something, and each platform supplies it.',
+        goals: ['Declare an expect function in commonMain and its actual in each platform', 'Explain what the compiler checks about the pairs', 'Choose between expect/actual and an interface'],
+        level: 'intermediate', introduces: ['expect', 'actual'],
         body: `
-<p>The biggest win in KMP is the data layer. Ktor makes HTTP calls, kotlinx.serialization turns JSON into data classes, and a database caches the result. All of it lives in <code>commonMain</code>. Only small pieces are per platform: the Ktor engine (OkHttp on Android, Darwin on iOS) and where the database file goes.</p>
-<p><code>@Serializable</code> works through a compiler plugin, so there is no reflection. That matters on Kotlin/Native. For storage you can use SQLDelight (you write SQL, it generates Kotlin) or Room, which now runs on Android, iOS and desktop with the bundled SQLite driver. Small key-value data goes in DataStore or multiplatform-settings.</p>
-<p>Wrap it in one repository. The Android app and the iOS app each run their own copy of the same code.</p>`,
-        code: `@Entity
-@Serializable
-data class Article(@PrimaryKey val id: Long, val title: String)
-
-@Dao
-interface ArticleDao {
-    @Query("SELECT * FROM Article ORDER BY id DESC")
-    fun observeAll(): Flow<List<Article>>
-
-    @Upsert
-    suspend fun upsertAll(items: List<Article>)
-}
-
-class ArticleRepository(
-    private val client: HttpClient,
-    private val dao: ArticleDao,
-    private val prefs: DataStore<Preferences>,
-    private val now: () -> Long,
-) {
-    fun articles(): Flow<List<Article>> = dao.observeAll()
-
-    suspend fun refresh() {
-        val fresh: List<Article> = client.get("https://api.example.com/articles").body()
-        dao.upsertAll(fresh)
-        prefs.edit { it[LAST_SYNC] = now() }
-    }
-}
-
-// commonMain: one client config. The engine comes from the platform.
-fun createHttpClient(engine: HttpClientEngine) = HttpClient(engine) {
-    install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-}
-// androidMain: createHttpClient(OkHttp.create())
-// iosMain:     createHttpClient(Darwin.create())`,
-        remember: 'Ktor fetches, serialization decodes, Room or SQLDelight caches. Only the engine and file paths are per platform.',
-        terms: [
-          { term: 'HttpClientEngine', def: 'The Ktor component that does the actual network I/O, such as OkHttp on Android or Darwin on iOS.' },
-          { term: '@Serializable', def: 'A kotlinx.serialization annotation that makes the compiler plugin generate a serializer for the class, with no reflection.' },
-          { term: 'BundledSQLiteDriver', def: 'A SQLite driver that ships its own SQLite build, used by Room KMP so every platform runs the same database engine.' },
-          { term: 'multiplatform-settings', def: 'A library that wraps SharedPreferences on Android and NSUserDefaults on iOS behind one key-value API.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Make the JSON decode into <code>Weather</code>.', code: '@[[Serializable]]\ndata class Weather(val city: String, val tempC: Double)\n\nval client = HttpClient(engine) {\n    install([[ContentNegotiation]]) { json() }\n}\n\nsuspend fun load(city: String): Weather =\n    client.get("https://api.example.com/weather?city=$city").[[body]]()', why: '<code>@Serializable</code> generates the serializer, <code>ContentNegotiation</code> plugs JSON into Ktor, and <code>body()</code> decodes the response into the expected type.' },
-          { type: 'bug', prompt: 'The list scrolls with stutters on both platforms after every refresh. Tap the line.', code: 'fun getDatabase(builder: RoomDatabase.Builder<AppDatabase>): AppDatabase =\n    builder\n        .setDriver(BundledSQLiteDriver())\n        .setQueryCoroutineContext(Dispatchers.Main)\n        .build()', bug: 3, fix: '        .setQueryCoroutineContext(Dispatchers.IO)', why: 'Room runs its queries in this context. <code>Dispatchers.Main</code> puts disk work on the UI thread. Use <code>Dispatchers.IO</code>, which exists on Native too.' },
-        ],
-        quiz: [
-          { q: 'Which part of the Ktor setup has to differ between Android and iOS?', options: ['The JSON configuration', 'The engine, such as OkHttp or Darwin', 'The request URLs'], a: 1, why: 'The client config is shared. Only the engine that does the I/O is platform-specific.' },
-          { q: 'Why does kotlinx.serialization work on iOS where reflection-based JSON libraries do not?', options: ['It uses Objective-C runtime reflection', 'A compiler plugin generates the serializers at build time', 'iOS apps only use XML'], a: 1, why: 'The code is generated during compilation, so Kotlin/Native needs no runtime reflection.' },
-          { q: 'Where does a Room KMP database file path usually get decided?', options: ['In <code>commonMain</code>, hard-coded', 'In each platform source set, which creates the builder', 'Room picks it on its own'], a: 1, why: 'Android uses <code>context.getDatabasePath</code>, iOS uses its documents directory. Common code takes the builder and finishes the setup.' },
-          { q: '<pre>@Serializable\ndata class Article(\n  val id: Long,\n  val summary: String = "",\n)\nval json = Json {\n  ignoreUnknownKeys = true\n}</pre>The server sends <code>"summary": null</code>. What happens?', options: ['summary becomes ""', 'summary becomes "null"', 'Decoding throws a SerializationException'], a: 2, why: 'A default only helps when the key is missing. An explicit null for a non-null type throws, unless you turn on coerceInputValues.' },
-          { q: '<pre>suspend fun load(): List&lt;Item&gt; {\n  val c = HttpClient(engine)\n  return c.get(URL).body()\n}</pre>What is the problem?', options: ['A new client, with its own connection pool and threads, is made on every call and never closed', 'body() cannot decode lists', 'HttpClient cannot be used in a suspend function'], a: 0, why: 'Create one client for the app and inject it. Each client holds resources, and this one leaks every time.' },
-        ],
-        deeper: [
-          {
-            title: 'When the JSON changes under you',
-            body: `
-<p>The server team adds a field, drops one, or sends <code>null</code>. By default kotlinx.serialization is strict. An unknown key, a missing field without a default, or <code>null</code> for a non-null type throws a <code>SerializationException</code>. The refresh fails on both platforms, and the apps keep showing old data.</p>
-<p>Three settings make the model tolerant. <code>ignoreUnknownKeys</code> skips fields you don’t know. A default value makes a field optional. <code>coerceInputValues</code> turns a <code>null</code>, or an unknown enum value, into the property’s default. Decide which changes you accept, and test each one on purpose.</p>`,
-            code: `@Serializable
-data class Article(
-    val id: Long,
-    val title: String,
-    val summary: String = "",      // optional: a missing key is fine
-)
-
-val json = Json {
-    ignoreUnknownKeys = true       // new server fields don't break old apps
-    coerceInputValues = true       // "summary": null becomes ""
-}`,
-            visual(el) {
-              const P = [
-                { label: 'today’s JSON', json: '{\n  "id": 7,\n  "title": "KMP 2.3",\n  "summary": "What changed"\n}' },
-                { label: 'server adds author', json: '{\n  "id": 7,\n  "title": "KMP 2.3",\n  "summary": "What changed",\n  "author": "Ada"\n}' },
-                { label: 'server drops summary', json: '{\n  "id": 7,\n  "title": "KMP 2.3"\n}' },
-                { label: 'summary is null', json: '{\n  "id": 7,\n  "title": "KMP 2.3",\n  "summary": null\n}' },
-              ];
-              const S = { p: 1, ignore: false, def: false, coerce: false };
-              let busy = false;
-              const model = h('div', { class: 'kt' }), conf = h('div', { class: 'kt' }), payload = h('div', { class: 'kt' });
-              const result = h('div', { class: 'kmp-result' }, h('span', { class: 'kmp-label' }, 'result'));
-              const o = out();
-              const paint = () => {
-                model.innerHTML = hl(`@Serializable\ndata class Article(\n    val id: Long,\n    val title: String,\n    val summary: String${S.def ? ' = ""' : ''},\n)`);
-                const lines = [S.ignore && '    ignoreUnknownKeys = true', S.coerce && '    coerceInputValues = true'].filter(Boolean);
-                conf.innerHTML = hl(lines.length ? `val json = Json {\n${lines.join('\n')}\n}` : 'val json = Json   // strict defaults');
-                payload.innerHTML = hl(P[S.p].json);
-                result.replaceChildren(h('span', { class: 'kmp-label' }, 'result'));
-              };
-              async function decode() {
-                if (busy) return; busy = true;
-                result.replaceChildren(h('div', { class: 'kmp-spin' }));
-                say(o, '<span class="muted">json.decodeFromString&lt;Article&gt;(body)</span>');
-                await sleep(500); if (!el.isConnected) return;
-                let err = null, summary = '"What changed"', why = 'every key matched a property.';
-                if (S.p === 1) { if (S.ignore) why = 'the unknown "author" key was skipped.'; else err = 'Encountered an unknown key \'author\''; }
-                if (S.p === 2) { if (S.def) { summary = '""'; why = 'summary fell back to its default.'; } else err = 'Field \'summary\' is required for type with serial name \'Article\', but it was missing'; }
-                if (S.p === 3) {
-                  if (S.def && S.coerce) { summary = '""'; why = 'null was coerced to the default.'; }
-                  else err = 'Expected string literal but \'null\' literal was found' + (S.coerce ? '. Coercing needs a default value.' : '');
-                }
-                result.replaceChildren(err
-                  ? h('span', { class: 'kmp-res kmp-err drop-in' }, 'SerializationException')
-                  : h('span', { class: 'kmp-res drop-in' }, `Article(id=7, title="KMP 2.3", summary=${summary})`));
-                if (err) replay(payload, 'shake');
-                say(o, err ? `<span class="bad">e:</span> ${err}` : `<span class="good">ok:</span> ${why}`);
-                busy = false;
-              }
-              const btns = P.map((p, i) => act(p.label, () => { if (busy) return; S.p = i; pick(btns, i); paint(); replay(payload, 'pop-soft'); say(o, 'New payload. Decode it.'); }));
-              const sw = (id, label, key) => {
-                const box = h('input', { type: 'checkbox', id, onchange() { if (busy) { this.checked = S[key]; return; } S[key] = this.checked; paint(); say(o, 'Model changed. Decode again.'); } });
-                return h('label', { class: 'switch', for: id }, box, label);
-              };
-              pick(btns, S.p); paint();
-              say(o, 'Strict defaults, and the server just added a field. Decode it.');
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'payload'), btns),
-                h('div', { class: 'kmp-grid2' },
-                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'response body'), payload),
-                  h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-label' }, 'commonMain'), model, conf)),
-                h('div', { class: 'controls' }, sw('kmp-d2-ignore', 'ignoreUnknownKeys', 'ignore'), sw('kmp-d2-default', 'summary = ""', 'def'), sw('kmp-d2-coerce', 'coerceInputValues', 'coerce')),
-                h('div', { class: 'controls' }, cmd('json.decodeFromString<Article>(body)', decode)),
-                result, o);
-            },
-          },
-          {
-            title: 'Retries belong in the shared client',
-            body: `
-<p>Mobile networks drop requests all the time. By default Ktor doesn’t retry, so the first <code>503</code> or reset connection goes straight to your repository. The <code>HttpRequestRetry</code> plugin retries for you, and <code>HttpTimeout</code> stops a call that hangs. Both go in the shared client config, so Android and iOS behave the same.</p>
-<p>Back off between attempts. <code>exponentialDelay()</code> waits longer after each failure, which gives a struggling server room to recover instead of hammering it. Install the retry plugin before <code>HttpTimeout</code>.</p>`,
-            code: `fun createHttpClient(engine: HttpClientEngine) = HttpClient(engine) {
-    install(HttpRequestRetry) {
-        retryOnExceptionOrServerErrors(maxRetries = 3)
-        exponentialDelay()
-    }
-    install(HttpTimeout) {
-        requestTimeoutMillis = 15_000
-    }
-    install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-}`,
-            visual(el) {
-              const NETS = [
-                { label: 'good network', plan: ['200'] },
-                { label: 'flaky network', plan: ['503', 'reset', '200'] },
-                { label: 'server down', plan: ['503', '503', '503', '503'] },
-              ];
-              const S = { net: 1, retry: true };
-              let busy = false;
-              const track = h('div', { class: 'lane-track' });
-              const chips = h('div', { class: 'kmp-jobs' });
-              const conf = h('div', { class: 'kt' });
-              const o = out();
-              const paintConf = () => { conf.innerHTML = hl(S.retry ? 'install(HttpRequestRetry) {\n    retryOnExceptionOrServerErrors(maxRetries = 3)\n    exponentialDelay()\n}' : '// no HttpRequestRetry: one attempt, then the error'); };
-              async function refresh() {
-                if (busy) return; busy = true;
-                track.replaceChildren(); chips.replaceChildren();
-                const plan = NETS[S.net].plan, max = S.retry ? 4 : 1;
-                let x = 1, wait = 5, i = 0, ok = false;
-                for (; i < Math.min(max, plan.length); i++) {
-                  if (i) {
-                    track.append(h('div', { class: 'bar queued drop-in', style: `left:${x}%;width:${wait}%` }));
-                    say(o, `<span class="muted">backoff before attempt ${i + 1}</span>`);
-                    await sleep(250 + wait * 30); if (!el.isConnected) return;
-                    x += wait + 1; wait *= 2;
-                  }
-                  const bar = h('div', { class: 'bar run drop-in', style: `left:${x}%;width:8%` });
-                  track.append(bar);
-                  say(o, `<span class="muted">attempt ${i + 1}: GET /articles</span>`);
-                  await sleep(450); if (!el.isConnected) return;
-                  x += 9;
-                  const res = plan[i]; ok = res === '200';
-                  if (!ok) bar.className = 'bar block';
-                  chips.append(h('span', { class: `kmp-job drop-in ${ok ? 'kmp-done' : 'kmp-cancel'}` }, `${i + 1}: ${res === 'reset' ? 'connection reset' : res === '200' ? '200 OK' : '503'}`));
-                  if (ok) break;
-                }
-                const n = Math.min(i + 1, Math.min(max, plan.length));
-                say(o, ok
-                  ? `<span class="good">ok:</span> 200 after ${n} attempt${n > 1 ? 's' : ''}. The repository never saw the failures.`
-                  : `<span class="bad">e:</span> ${n === 1 ? 'one failure and no retry' : `still failing after ${n} attempts`}. The exception reaches refresh(), and the app keeps its cached rows.`);
-                busy = false;
-              }
-              const btns = NETS.map((n, i) => act(n.label, () => { if (busy) return; S.net = i; pick(btns, i); track.replaceChildren(); chips.replaceChildren(); say(o, `${n.label}. Refresh.`); }));
-              const box = h('input', { type: 'checkbox', id: 'kmp-d2-retry', checked: true, onchange() { if (busy) { this.checked = S.retry; return; } S.retry = this.checked; paintConf(); replay(conf, 'pop-soft'); } });
-              pick(btns, S.net); paintConf();
-              say(o, 'Flaky network, retries on. Refresh, then turn retries off and compare.');
-              el.append(
-                h('div', { class: 'controls' }, btns, h('label', { class: 'switch', for: 'kmp-d2-retry' }, box, 'HttpRequestRetry')),
-                conf,
-                h('div', { class: 'timeline' }, h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, 'attempts'), track)),
-                chips,
-                h('div', { class: 'controls' }, cmd('repository.refresh()', refresh)),
-                o);
-            },
-          },
-          {
-            title: 'Room KMP: each platform starts the builder',
-            body: `
-<p>On iOS, Room can’t find its generated classes by reflection. So the database names a constructor object with <code>@ConstructedBy</code>. You write the <code>expect</code>, and Room’s KSP processor generates the <code>actual</code> for every target.</p>
-<p>Each platform creates a builder with its own file path: the app’s database folder on Android, the documents directory on iOS. Common code takes that builder and adds what is the same everywhere, the bundled driver and the IO dispatcher.</p>`,
+<p>Recipes’ About text should name the system it runs on: “Recipes on Android 36” or “Recipes on iOS 26.0”. The text is the same on both phones, so it belongs in <code>commonMain</code>. But <code>commonMain</code> can’t call <code>Build</code> or <code>UIDevice</code>.</p>
+<p>Write <code>expect fun platformName(): String</code> in <code>commonMain</code>: a function with a name, parameters and a return type, but no body. It is a promise that each platform will supply one. In <code>androidMain</code> and in <code>iosMain</code>, in the same package, write <code>actual fun platformName(): String = ...</code> with the body for that platform. Common code calls <code>platformName()</code> like any function, and each target’s build uses its own <code>actual</code>.</p>
+<p>The compiler checks the pairs. Every target needs exactly one <code>actual</code> with the same name, parameters and return type. If <code>iosMain</code> has none, the iPhone build fails with an error saying <code>platformName</code> has no actual declaration, while the Android build still works. Name the files with the platform at the end, like <code>Platform.android.kt</code>, so they don’t clash with <code>Platform.kt</code> in <code>commonMain</code>.</p>
+<p>Use <code>expect</code> for small functions and values. When the platform part needs something passed in, like an Android <code>Context</code>, or a test should swap it for a fake, the Kotlin docs recommend an interface in <code>commonMain</code> and one class per platform, passed in through the constructor as in the DI lesson. Kotlin also has <code>expect class</code>, but it is still Beta and the compiler warns about it.</p>`,
+        visual(el) {
+          Lab.ui.codeStepper(el, {
             code: `// commonMain
-@Database(entities = [Article::class], version = 1)
-@ConstructedBy(AppDatabaseConstructor::class)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun articleDao(): ArticleDao
-}
-
-@Suppress("KotlinNoActualForExpect")   // Room's KSP processor writes the actuals
-expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
-    override fun initialize(): AppDatabase
-}
-
-fun buildDatabase(builder: RoomDatabase.Builder<AppDatabase>): AppDatabase =
-    builder.setDriver(BundledSQLiteDriver())
-        .setQueryCoroutineContext(Dispatchers.IO)
-        .build()
+expect fun platformName(): String
+fun aboutText(): String = "Recipes on \${platformName()}"
 
 // androidMain
-fun databaseBuilder(context: Context) = Room.databaseBuilder<AppDatabase>(
-    context = context,
-    name = context.getDatabasePath("news.db").absolutePath,
-)
+actual fun platformName(): String = "Android \${Build.VERSION.SDK_INT}"
 
 // iosMain
-@OptIn(ExperimentalForeignApi::class)
-fun databaseBuilder(): RoomDatabase.Builder<AppDatabase> {
-    val docs = NSFileManager.defaultManager.URLForDirectory(
-        directory = NSDocumentDirectory,
+actual fun platformName(): String =
+    UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion`,
+            outTitle: 'aboutText()',
+            predict: {
+              q: 'Lin runs the iPhone app and opens About. Which body does <code>platformName()</code> run?',
+              options: ['The one in <code>iosMain</code>', 'The one in <code>androidMain</code>', 'Both, and the app picks one as it runs'],
+              a: 0,
+              why: 'Each target is compiled from its own source sets. The iPhone build contains only the <code>iosMain</code> actual.',
+            },
+            frames: [
+              { line: 2, say: '<code>commonMain</code> promises <code>platformName()</code>: no parameters, a <code>String</code> back, and no body.' },
+              { line: 3, say: '<code>aboutText()</code> calls it like any function. It doesn’t know which phone it runs on.' },
+              { line: 6, out: 'Recipes on Android 36', say: 'Building the Android app, the compiler uses the <code>androidMain</code> actual. On an Android 16 phone the text is <code>Recipes on Android 36</code>.' },
+              { line: [9, 10], out: 'Recipes on iOS 26.0', say: 'Building for the iPhone, it uses the <code>iosMain</code> actual. On an iPhone with iOS 26.0: <code>Recipes on iOS 26.0</code>.' },
+              { line: 9, say: 'Each app holds only its own actual: the Android app has no <code>UIDevice</code> code in it at all.' },
+              { line: 2, say: 'Delete the <code>iosMain</code> actual and the iPhone build fails, saying <code>platformName</code> has no actual declaration. The Android build still works.' },
+            ],
+          });
+        },
+        code: `// shared/src/commonMain/kotlin/com/example/recipes/Platform.kt
+package com.example.recipes
+
+expect fun platformName(): String
+
+fun aboutText(): String = "Recipes on \${platformName()}"
+
+// shared/src/androidMain/kotlin/com/example/recipes/Platform.android.kt
+package com.example.recipes
+
+import android.os.Build
+
+actual fun platformName(): String = "Android \${Build.VERSION.SDK_INT}"
+
+// shared/src/iosMain/kotlin/com/example/recipes/Platform.ios.kt
+package com.example.recipes
+
+import platform.UIKit.UIDevice
+
+actual fun platformName(): String =
+    UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
+
+// aboutText() on Android 16:      Recipes on Android 36
+// aboutText() on iOS 26.0:        Recipes on iOS 26.0`,
+        remember: 'expect promises it in commonMain; each target keeps the promise with one actual, or that target doesn’t build.',
+        mistakes: [
+          { title: 'An expect class for something that needs a Context', bad: `// commonMain
+expect class Sharer {
+    fun share(text: String)
+}
+// androidMain needs a Context to share, but where does it come from?`, good: `// commonMain
+interface Sharer {
+    fun share(text: String)
+}
+
+// androidMain
+class AndroidSharer(private val context: Context) : Sharer {
+    override fun share(text: String) { /* start a share Intent */ }
+}`, why: 'An <code>expect class</code> is Beta and allows one implementation per target. An interface lets each platform class take what it needs in its constructor, and a test can pass a fake.' },
+        ],
+        terms: [
+          { term: 'expect', def: 'Marks a declaration in <code>commonMain</code> with no body: a promise that every target supplies one.' },
+          { term: 'actual', def: 'Marks the platform’s version of an <code>expect</code> declaration, in the same package, with the same name, parameters and type.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Promise an app version in common code and supply it on iOS.', code: `// commonMain
+[[expect]] fun appVersion(): String
+
+// iosMain
+[[actual]] fun appVersion(): String = "1.4"`, why: '<code>expect</code> declares it without a body in <code>commonMain</code>; <code>actual</code> gives each platform’s body.' },
+          { type: 'bug', prompt: 'The Android build fails: the actual doesn’t match. Tap the wrong line.', code: `// commonMain
+expect fun platformName(): String
+
+// androidMain
+actual fun platformName(): Int = Build.VERSION.SDK_INT`, bug: 4, fix: 'actual fun platformName(): String = "Android ${Build.VERSION.SDK_INT}"', why: 'An actual must match its expect exactly: the same name, parameters and return type. The promise was a <code>String</code>.' },
+        ],
+        quiz: [
+          { q: '<code>iosMain</code> has no actual for <code>platformName</code>. What happens?', options: ['The iPhone build fails; the Android build still works', 'The iPhone app crashes when it calls it', 'The iPhone uses the Android actual'], a: 0, why: 'The compiler checks every target. The one without an actual doesn’t build.' },
+          { q: 'What does an <code>expect fun</code> contain?', options: ['A default body the platforms may replace', 'Only its name, parameters and return type', 'A body for each platform'], a: 1, why: 'The <code>expect</code> has no body. The bodies are in the <code>actual</code> functions.' },
+          { q: 'Sharing needs an Android <code>Context</code>, and tests need a fake. What do the Kotlin docs recommend?', options: ['An <code>expect class</code>', 'An interface in <code>commonMain</code> and one class per platform, passed in', 'Copying the code into each app'], a: 1, why: 'Each class takes what it needs in its constructor, and a test can pass a fake that implements the interface.' },
+        ],
+        docs: [['Expected and actual declarations', 'https://kotlinlang.org/docs/multiplatform/multiplatform-expect-actual.html']],
+      },
+
+      // 4 ─────────────────────────────────────────────
+      {
+        id: 'data',
+        title: 'Shared networking with Ktor',
+        tagline: 'Ktor sends Recipes’ requests from commonMain; each platform supplies only the engine.',
+        goals: ['Call a server from commonMain with a Ktor HttpClient', 'Give each platform its own Ktor engine', 'Explain why Retrofit and other JVM-only libraries can’t go in commonMain'],
+        level: 'intermediate', introduces: ['HttpClient', 'HttpClientEngine', 'ContentNegotiation', 'OkHttp', 'Darwin'],
+        body: `
+<p>Sam wants the repository from the arch track in <code>shared</code>, so both apps load and save recipes the same way. It fetches recipes with Retrofit, and Retrofit only runs on the JVM, so the iPhone build can’t use it. Every library <code>commonMain</code> uses must be multiplatform itself. This lesson moves the network part; the next one moves the database.</p>
+<p>For the network, use <em>Ktor</em>, JetBrains’ multiplatform HTTP client. <code>HttpClient(engine) { install(ContentNegotiation) { json(...) } }</code> makes a client that decodes JSON with kotlinx.serialization, which already runs everywhere. <code>client.get(url).body()</code> sends a GET request and turns the answer into your type. The <em>engine</em> is the part that does the actual network work, and it comes from the platform: OkHttp on Android, Darwin, Apple’s own networking, on the iPhone. <code>commonMain</code> depends on <code>ktor-client-core</code>; <code>androidMain</code> and <code>iosMain</code> each add their engine.</p>
+<p>When a request fails, for example with no network, Ktor throws an <code>IOException</code>. Ktor’s errors use <code>kotlinx.io</code>, Kotlin’s multiplatform input/output library that Ktor brings along, so shared code catches <code>kotlinx.io.IOException</code>. On Android it is the same class as <code>java.io.IOException</code>. Build one <code>HttpClient</code> per app and pass it to the classes that need it through their constructor.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'api', label: 'RecipeApi', sub: 'commonMain' },
+              { id: 'client', label: 'HttpClient', sub: 'ContentNegotiation' },
+              { id: 'eng', label: 'Engine', sub: 'Darwin on iPhone' },
+              { id: 'srv', label: 'Server', sub: 'api.example.com' },
+            ],
+            predict: {
+              q: 'Lin’s iPhone is offline when <code>api.recipes()</code> runs. What happens?',
+              options: ['It returns an empty list', 'It throws an <code>IOException</code> from kotlinx.io', 'The app crashes inside Ktor'],
+              a: 1,
+              why: 'The engine can’t reach the server, so Ktor throws an <code>IOException</code>. The code that called <code>recipes()</code> decides what to do with it.',
+            },
+            frames: [
+              { at: 'api', packet: 'GET', say: 'Lin taps Refresh on her iPhone. <code>api.recipes()</code>, in <code>commonMain</code>, calls <code>client.get(...)</code>.' },
+              { at: 'client', packet: 'GET', say: 'The shared <code>HttpClient</code> builds the request. It doesn’t know which phone it runs on.' },
+              { at: 'eng', packet: 'GET', say: 'The engine does the network work. In the iPhone build it is Darwin, Apple’s own networking; in the Android build it is OkHttp.' },
+              { at: 'srv', packet: 'JSON', mark: { srv: 'ok' }, say: 'The server answers with a JSON list of recipes.' },
+              { at: 'api', packet: 'recipes', tone: 'ok', mark: { api: 'ok' }, say: '<code>ContentNegotiation</code> decodes the JSON with kotlinx.serialization, and <code>body()</code> returns a <code>List&lt;RecipeDto&gt;</code>.' },
+              { at: 'srv', packet: '✕', tone: 'err', mark: { srv: 'err' }, say: 'Later Lin is offline and taps Refresh again. The engine can’t reach the server.' },
+              { at: 'api', packet: 'IOException', tone: 'err', mark: { api: 'err' }, say: 'Ktor throws a <code>kotlinx.io.IOException</code>, on the iPhone and on Android alike. The caller catches it.' },
+            ],
+          });
+        },
+        code: `// shared/build.gradle.kts (plus the serialization plugin, as in the data track)
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("io.ktor:ktor-client-core:3.6.0")
+            implementation("io.ktor:ktor-client-content-negotiation:3.6.0")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:3.6.0")
+        }
+        androidMain.dependencies { implementation("io.ktor:ktor-client-okhttp:3.6.0") }
+        iosMain.dependencies { implementation("io.ktor:ktor-client-darwin:3.6.0") }
+    }
+}
+
+// commonMain/kotlin/com/example/recipes/data/RecipeApi.kt   (RecipeDto as in the data track)
+class RecipeApi(private val client: HttpClient) {
+    // throws kotlinx.io.IOException when offline
+    suspend fun recipes(): List<RecipeDto> = client.get("https://api.example.com/recipes").body()
+}
+
+fun createHttpClient(engine: HttpClientEngine): HttpClient = HttpClient(engine) {
+    install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+}
+
+// androidApp: val api = RecipeApi(createHttpClient(OkHttp.create()))
+// iosMain:    val api = RecipeApi(createHttpClient(Darwin.create()))`,
+        remember: 'In commonMain, Ktor’s HttpClient sends the requests; only the engine is per platform: OkHttp on Android, Darwin on the iPhone.',
+        mistakes: [
+          { title: 'A new HttpClient for every request', bad: `suspend fun loadRecipes(): List<RecipeDto> {
+    val client = createHttpClient(Darwin.create())
+    return client.get("https://api.example.com/recipes").body()
+}`, good: `class RecipeApi(private val client: HttpClient) {   // one client, passed in
+    suspend fun recipes(): List<RecipeDto> = client.get("https://api.example.com/recipes").body()
+}`, why: 'Each <code>HttpClient</code> sets up its own connections and threads, and this one is never closed. Make one client per app and pass it to the classes that need it.' },
+        ],
+        terms: [
+          { term: 'Ktor', def: 'JetBrains’ multiplatform HTTP client. <code>HttpClient</code> sends requests; plugins like <code>ContentNegotiation</code> add JSON decoding.' },
+          { term: 'engine', def: 'The part of Ktor that does the network work on one platform: OkHttp on Android, Darwin on the iPhone. Created with <code>OkHttp.create()</code> or <code>Darwin.create()</code>.' },
+          { term: 'kotlinx.io', def: 'Kotlin’s multiplatform input/output library, which Ktor brings along. Its <code>IOException</code> is what shared code catches; on Android it is <code>java.io.IOException</code>.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give each platform its Ktor engine.', code: `androidMain.dependencies { implementation("io.ktor:ktor-client-[[okhttp]]:3.6.0") }
+iosMain.dependencies { implementation("io.ktor:ktor-client-[[darwin]]:3.6.0") }`, why: 'Android uses the OkHttp engine; the iPhone uses Darwin, Apple’s own networking.' },
+          { type: 'bug', prompt: 'This is in <code>commonMain</code>, and the iPhone build can’t find <code>OkHttp</code>. Tap the wrong line.', code: `// commonMain
+fun createHttpClient(): HttpClient = HttpClient(OkHttp.create()) {
+    install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+}`, bug: 1, fix: 'fun createHttpClient(engine: HttpClientEngine): HttpClient = HttpClient(engine) {', why: 'OkHttp is the Android engine, added only to <code>androidMain</code>. Shared code takes the engine as a parameter, and each platform passes its own.' },
+        ],
+        quiz: [
+          { q: 'Why can’t the shared repository keep using Retrofit?', options: ['Retrofit only runs on the JVM, and <code>commonMain</code> is also built for the iPhone', 'Retrofit can’t decode JSON', 'Room doesn’t allow it'], a: 0, why: 'Every library in <code>commonMain</code> must work on every target. Ktor does; Retrofit doesn’t.' },
+          { q: 'What does a Ktor engine do?', options: ['Decodes JSON into data classes', 'The platform’s network work: OkHttp on Android, Darwin on the iPhone', 'Saves the answer in Room'], a: 1, why: 'The client and its plugins are shared. Only the engine that talks to the network is per platform.' },
+          { q: 'Shared code wants to handle “offline”. Which exception does it catch?', options: ['<code>kotlinx.io.IOException</code>', '<code>java.io.IOException</code>', 'None: Ktor returns an empty list'], a: 0, why: '<code>java.io</code> is a JVM package, missing on the iPhone. Ktor throws <code>kotlinx.io.IOException</code>, which exists on every target.' },
+        ],
+        docs: [['Ktor: create a cross-platform mobile app', 'https://ktor.io/docs/client-create-multiplatform-application.html'], ['Ktor client engines', 'https://ktor.io/docs/client-engines.html']],
+      },
+
+      // 5 ─────────────────────────────────────────────
+      {
+        id: 'local-db',
+        title: 'Room in shared code',
+        tagline: 'Room 3 keeps the saved recipes in commonMain; each platform only says where the file goes.',
+        goals: ['Move Room’s entity, DAO and database to commonMain', 'Set up BundledSQLiteDriver and Room’s code generator for every target', 'Build the database and the repository on each platform'],
+        level: 'intermediate', introduces: ['BundledSQLiteDriver', 'ConstructedBy', 'RoomDatabaseConstructor'],
+        body: `
+<p><code>RecipeApi</code> is shared now, but the repository also needs the saved recipes: <code>refresh()</code> writes to Room, and the screen reads Room’s Flow. Room 3 is multiplatform, and Google’s KMP guide uses it. <code>Recipe</code>, <code>RecipeDao</code> and <code>RecipesDatabase</code> move to <code>commonMain</code> unchanged, with two additions.</p>
+<p>First, <code>@ConstructedBy</code> names an <code>expect object</code> that Room’s KSP code generator fills in with an <code>actual</code> for every target, so KSP runs once per target: <code>kspAndroid</code>, <code>kspIosArm64</code> and <code>kspIosSimulatorArm64</code>. Second, the driver is <code>BundledSQLiteDriver</code>, which brings its own copy of SQLite, so every platform behaves the same.</p>
+<p>Only the file location is per platform: Android gives a <code>Context</code> and a name, the iPhone a path in the app’s Documents folder, which <code>NSFileManager</code>, Apple’s file helper, finds. Each app builds one database and one <code>HttpClient</code> and passes them to <code>RecipeRepository</code>. Two other multiplatform options exist: SQLDelight, which generates Kotlin from SQL you write in <code>.sq</code> files, and DataStore, for small settings.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'ui', label: 'Screen', sub: 'Android or iPhone' },
+              { id: 'repo', label: 'RecipeRepository', sub: 'commonMain' },
+              { id: 'room', label: 'Room', sub: 'BundledSQLiteDriver' },
+              { id: 'ktor', label: 'Ktor', sub: 'Darwin on iPhone' },
+              { id: 'srv', label: 'Server', sub: 'api.example.com' },
+            ],
+            predict: {
+              q: 'Lin’s iPhone is offline and she taps Refresh. What does the screen show?',
+              options: ['The recipes already saved in Room', 'An empty list', 'Nothing: the app crashes'],
+              a: 0,
+              why: 'The list comes from Room’s Flow. The failed request only throws inside <code>refresh()</code>, and the code that called it catches the error.',
+            },
+            frames: [
+              { at: 'ui', packet: 'open', say: 'Lin opens Recipes on her iPhone. The screen asks the shared <code>RecipeRepository</code> for recipes.' },
+              { at: 'room', packet: 'rows', mark: { room: 'ok' }, say: '<code>recipes</code> is Room’s Flow, the same <code>getAll()</code> as on Android. The saved rows arrive at once.' },
+              { at: 'ktor', packet: 'GET', say: 'She taps Refresh. <code>refresh()</code> calls <code>RecipeApi</code>, and on the iPhone Ktor’s Darwin engine sends the request.' },
+              { at: 'srv', packet: '✕', tone: 'err', mark: { srv: 'err' }, say: 'No network. The engine fails, and Ktor throws a <code>kotlinx.io.IOException</code>.' },
+              { at: 'repo', packet: 'IOException', tone: 'err', mark: { ktor: 'err' }, say: 'The exception leaves <code>refresh()</code> before <code>upsertAll</code>. Nothing was written to Room, so the saved rows are untouched.' },
+              { at: 'ui', packet: 'saved list', tone: 'ok', mark: { ui: 'ok' }, say: 'The caller catches it and shows “Offline: showing saved recipes”. On Android the same code runs, with OkHttp as the engine.' },
+            ],
+          });
+        },
+        code: `// shared/build.gradle.kts (plus the KSP and androidx.room3 plugins, as in the data track)
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("androidx.room3:room3-runtime:3.0.3")
+            implementation("androidx.sqlite:sqlite-bundled:2.7.1")
+        }
+    }
+}
+dependencies {                       // Room's code generator runs once per target
+    add("kspAndroid", "androidx.room3:room3-compiler:3.0.3")
+    add("kspIosArm64", "androidx.room3:room3-compiler:3.0.3")
+    add("kspIosSimulatorArm64", "androidx.room3:room3-compiler:3.0.3")
+}
+
+// commonMain: Recipe, RecipeDao and toRecipe() as in the data track
+@Database(entities = [Recipe::class], version = 1)
+@ConstructedBy(RecipesDatabaseConstructor::class)
+abstract class RecipesDatabase : RoomDatabase() {
+    abstract fun recipeDao(): RecipeDao
+}
+
+@Suppress("KotlinNoActualForExpect")   // Room's KSP writes the actual for every target
+expect object RecipesDatabaseConstructor : RoomDatabaseConstructor<RecipesDatabase> {
+    override fun initialize(): RecipesDatabase
+}
+
+fun buildDatabase(builder: RoomDatabase.Builder<RecipesDatabase>): RecipesDatabase =
+    builder.setDriver(BundledSQLiteDriver()).build()
+
+class RecipeRepository(private val dao: RecipeDao, private val api: RecipeApi) {
+    val recipes: Flow<List<Recipe>> = dao.getAll()
+
+    suspend fun refresh() {                       // throws kotlinx.io.IOException when offline
+        val favorites = dao.getAll().first().filter { it.favorite }.map { it.id }
+        dao.upsertAll(api.recipes().map { it.toRecipe(favorite = favorites.contains(it.id)) })
+    }
+}
+
+// androidApp, MainActivity.onCreate:
+// val db = buildDatabase(Room.databaseBuilder<RecipesDatabase>(applicationContext, "recipes.db"))
+// val repository = RecipeRepository(db.recipeDao(), RecipeApi(createHttpClient(OkHttp.create())))
+
+// iosMain/kotlin/com/example/recipes/IosRepository.kt
+fun iosRepository(): RecipeRepository {
+    val documents = NSFileManager.defaultManager.URLForDirectory(   // the app's Documents folder,
+        directory = NSDocumentDirectory,                            // as in Google's KMP guide
         inDomain = NSUserDomainMask,
         appropriateForURL = null,
         create = false,
         error = null,
     )
-    return Room.databaseBuilder<AppDatabase>(name = requireNotNull(docs?.path) + "/news.db")
+    val path = requireNotNull(documents?.path) + "/recipes.db"     // requireNotNull: stop with an error if null
+    val db = buildDatabase(Room.databaseBuilder<RecipesDatabase>(name = path))
+    return RecipeRepository(db.recipeDao(), RecipeApi(createHttpClient(Darwin.create())))
 }`,
-          },
+        remember: 'Room 3 runs in commonMain with BundledSQLiteDriver and KSP for every target. Only the database file location is per platform.',
+        terms: [
+          { term: 'BundledSQLiteDriver', def: 'A Room driver that brings its own SQLite, so the database behaves the same on every platform. It works in <code>commonMain</code>.' },
+          { term: '@ConstructedBy', def: 'Names the <code>expect object</code> that makes the database. Room’s KSP code generator writes its <code>actual</code> for every target.' },
         ],
-        underHood: {
-          body: `
-<p>None of this uses reflection, which Kotlin/Native barely has. The kotlinx.serialization compiler plugin adds a generated serializer to every <code>@Serializable</code> class at build time. It is plain code that reads and writes each property in order and knows which ones have defaults.</p>
-<p>Room does the same with KSP. For each target it generates <code>AppDatabase_Impl</code> and an implementation of every DAO, with the SQL checked against your entities at build time, plus the <code>actual object AppDatabaseConstructor</code> whose <code>initialize()</code> returns the generated database. On Android, Room could find <code>_Impl</code> by its class name. On iOS there is nothing to look up, so the constructor object does the job.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'A new HttpClient for every request',
-            bad: `suspend fun loadArticles(): List<Article> {
-    val client = HttpClient(engine) { install(ContentNegotiation) { json() } }
-    return client.get(ARTICLES_URL).body()
-}`,
-            good: `class ArticleApi(private val client: HttpClient) {   // one client, injected
-    suspend fun loadArticles(): List<Article> = client.get(ARTICLES_URL).body()
-}`,
-            why: 'Each client opens its own connection pool and threads, and this one is never closed. Create one client for the app, inject it, and call <code>close()</code> only when you shut it down.',
-          },
-          {
-            title: 'Forgetting @Serializable on a nested type',
-            bad: `@Serializable
-data class Article(val id: Long, val author: Author)
+        challenges: [
+          { type: 'blank', prompt: 'Let Room make the database on every target, with its own SQLite.', code: `@Database(entities = [Recipe::class], version = 1)
+@[[ConstructedBy]](RecipesDatabaseConstructor::class)
+abstract class RecipesDatabase : RoomDatabase() {
+    abstract fun recipeDao(): RecipeDao
+}
 
-data class Author(val name: String)`,
-            good: `@Serializable
-data class Article(val id: Long, val author: Author)
-
-@Serializable
-data class Author(val name: String)`,
-            why: 'Every type inside a serializable class needs its own serializer. The plugin stops the build with “Serializer has not been found for type \'Author\'”.',
-          },
+fun buildDatabase(builder: RoomDatabase.Builder<RecipesDatabase>): RecipesDatabase =
+    builder.setDriver([[BundledSQLiteDriver]]()).build()`, why: '<code>@ConstructedBy</code> points Room to the object KSP fills in per target; <code>BundledSQLiteDriver</code> brings the same SQLite to every platform.' },
+          { type: 'bug', prompt: 'This is in <code>commonMain</code>, and the iPhone build fails with <code>Unresolved reference \'AndroidSQLiteDriver\'.</code> Tap the wrong line.', code: `fun buildDatabase(builder: RoomDatabase.Builder<RecipesDatabase>): RecipesDatabase =
+    builder.setDriver(AndroidSQLiteDriver()).build()`, bug: 1, fix: '    builder.setDriver(BundledSQLiteDriver()).build()', why: '<code>AndroidSQLiteDriver</code> uses Android’s own SQLite, so it only exists on Android. <code>BundledSQLiteDriver</code> brings its own SQLite and works on every target.' },
         ],
+        quiz: [
+          { q: 'What is per platform in the Room setup?', options: ['The entity and the DAO', 'The SQL queries', 'Where the database file goes'], a: 2, why: 'Entity, DAO and database are in <code>commonMain</code>. Each platform only makes the builder with its own file location.' },
+          { q: 'Why does <code>room3-compiler</code> appear three times in <code>dependencies</code>?', options: ['Room’s code generator runs once per target, to write each <code>actual</code>', 'Each copy adds more tables', 'Gradle needs three copies to be safe'], a: 0, why: 'KSP runs for <code>kspAndroid</code>, <code>kspIosArm64</code> and <code>kspIosSimulatorArm64</code>, and each run writes that target’s <code>actual</code> for the database object.' },
+          { q: 'Lin is offline and taps Refresh. What happens to the saved recipes?', options: ['They are deleted', 'They stay: the request throws before anything is written', 'They are replaced by an empty list'], a: 1, why: '<code>api.recipes()</code> throws first, so <code>upsertAll</code> never runs and Room keeps its rows.' },
+        ],
+        docs: [['Set up Room for KMP', 'https://developer.android.com/kotlin/multiplatform/room']],
+      },
+      // 6 ─────────────────────────────────────────────
+      {
+        id: 'viewmodels',
+        title: 'Shared ViewModels',
+        tagline: 'One RecipesViewModel in commonMain, kept and cleared by each platform.',
+        goals: ['Move a ViewModel to commonMain with the multiplatform lifecycle library', 'Explain who keeps and clears a ViewModel on Android and on the iPhone', 'Keep a shared ViewModel free of Android and JVM classes'],
+        level: 'intermediate', introduces: ['ViewModelStore', 'ViewModelProvider', 'viewModelFactory', 'initializer'],
+        body: `
+<p>Both apps now share the repository, but each still has its own screen logic: the note, the Refresh button, the loading flag. The iPhone version already shows “Offline” differently from Android. That logic is <code>RecipesViewModel</code> from the arch track, and it can be shared too.</p>
+<p>Jetpack’s <code>androidx.lifecycle:lifecycle-viewmodel</code> is multiplatform since 2.8.0. Add it to <code>commonMain</code> and the class moves unchanged: <code>ViewModel</code>, <code>viewModelScope</code>, <code>StateFlow</code> and <code>init</code> all work on every target. Two things change: catch <code>kotlinx.io.IOException</code> instead of <code>java.io.IOException</code>, and drop Hilt, which only runs on Android, so the ViewModel takes its repository through a plain constructor. As in Google’s guide, add the library with <code>api(...)</code> instead of <code>implementation(...)</code> and list it with <code>export(...)</code> in the framework settings, so Swift sees the <code>ViewModel</code> class by name.</p>
+<p>What differs is who keeps the ViewModel and who clears it. On Android nothing changes: <code>viewModel { RecipesViewModel(repository) }</code> stores it in the Activity’s <code>ViewModelStore</code>, which survives rotation and is cleared when the Activity finishes. iOS doesn’t rebuild a screen when the phone turns, but something must still clear the ViewModel when the screen closes, or its work keeps running. In <code>iosMain</code>, make a <code>ViewModelStore</code> per screen and get the ViewModel from it: <code>ViewModelProvider.create(store, factory)[RecipesViewModel::class]</code> returns the store’s <code>RecipesViewModel</code>, making it the first time, and <code>viewModelFactory { initializer { ... } }</code> is the factory that says how to make one. Keep the holder in a Swift object that SwiftUI keeps alive for the screen (one marked <code>@StateObject</code>), and call <code>clear()</code> in its <code>deinit</code>, the code Swift runs when the object is thrown away. Google’s KMP ViewModel guide does the same with its <code>IosViewModelStoreOwner</code>. Reading <code>uiState</code> from SwiftUI needs a helper library; see Calling Kotlin from Swift.</p>`,
         visual(el) {
-          Lab.ui.flow(el, {
-            nodes: [
-              { id: 'ui', label: 'Screen', sub: 'Android or iOS' },
-              { id: 'repo', label: 'Repository', sub: 'commonMain' },
-              { id: 'room', label: 'Room', sub: 'bundled SQLite' },
-              { id: 'ktor', label: 'Ktor', sub: 'engine per platform' },
-              { id: 'api', label: 'Server', sub: 'GET /articles' },
-            ],
+          const list = (bar, note) => `<div class="ui-m-bar">${bar}</div><div class="ui-m-body"><div class="ui-m-row"><div>Omelette · quick</div></div><div class="ui-m-row"><div>Pancakes · quick</div></div><div class="ui-m-row"><div>Lasagne · 75 min</div></div>${note ? `<div class="ui-m-muted">${note}</div>` : ''}</div>`;
+          const home = label => `<div class="ui-m-center"><div class="ui-m-muted">${label}</div></div>`;
+          Lab.ui.phone(el, {
+            logTitle: 'RecipesViewModel',
             predict: {
-              q: 'The iPhone is offline and the user pulls to refresh. What does the screen show?',
-              options: ['An empty list with an error', 'The rows already stored in Room', 'A crash: Kotlin exceptions always crash iOS'],
+              q: 'On the iPhone, Lin closes the Recipes screen during a refresh, and nothing calls <code>clear()</code>. What happens to the refresh?',
+              options: ['It stops on its own', 'It keeps running, and the ViewModel stays in memory', 'The app crashes'],
               a: 1,
-              why: 'The repository reads Room first and catches the <code>IOException</code> from Ktor inside shared code, so the cached rows stay on screen.',
+              why: 'Only clearing the store ends <code>viewModelScope</code>. If nobody clears it, the ViewModel and its work live on.',
             },
             frames: [
-              { say: 'The Android app and the iOS app each run their own copy of the same <code>ArticleRepository</code>. Follow one refresh on iOS.' },
-              { at: 'ui', packet: 'refresh()', say: 'The iOS screen asks the shared ViewModel, which calls the repository.' },
-              { at: 'room', packet: '2 cached rows', tone: 'ok', say: 'First the repository emits what Room already has, so the screen is never empty.' },
-              { at: 'ktor', packet: 'GET /articles', say: 'Then Ktor fetches fresh data. On iOS it uses the Darwin engine, on Android OkHttp. The calling code is the same.' },
-              { at: 'api', packet: '200 JSON', tone: 'ok', mark: { api: 'ok' }, say: 'The server answers with JSON.' },
-              { at: 'ktor', packet: 'List<Article>', tone: 'ok', mark: { ktor: 'ok' }, say: 'kotlinx.serialization decodes it with serializers generated at compile time. No reflection, so it works on Kotlin/Native.' },
-              { at: 'room', packet: 'upsertAll(2 new)', tone: 'ok', mark: { room: 'ok' }, say: 'The repository writes the new rows into Room in one transaction.' },
-              { at: 'ui', packet: '4 rows', tone: 'ok', mark: { ui: 'ok' }, say: 'Room’s Flow emits again and the screen shows the new list.' },
-              { at: 'ktor', packet: 'IOException', tone: 'err', mark: { ktor: 'err', api: null }, say: 'Later, in a tunnel: Ktor throws <code>IOException</code>. The repository catches it.' },
-              { at: 'ui', packet: '4 cached rows', tone: 'warm', mark: { ui: 'warm' }, say: 'The screen keeps the rows from Room and shows a quiet “offline” note.' },
+              { screen: list('Recipes (Android)', ''), log: 'Android: created by viewModel { }', say: 'Android: <code>MainActivity</code> gets the shared <code>RecipesViewModel</code> with <code>viewModel { }</code>, as in the arch track.' },
+              { log: 'Android: rotated, same object', say: 'Lin turns the phone. The Activity is recreated; the ViewModel isn’t, because the Activity’s <code>ViewModelStore</code> keeps it.' },
+              { screen: home('Home screen'), log: 'Android: Back, onCleared(), viewModelScope cancelled', say: 'Back finishes the Activity. Android clears its store: <code>onCleared()</code> runs and any refresh in <code>viewModelScope</code> stops.' },
+              { screen: list('Recipes (iPhone)', 'Refreshing…'), log: 'iPhone: RecipesHolder made, created', say: 'iPhone: the same class, from the <code>Shared</code> framework. When the screen opens, Swift makes a <code>RecipesHolder</code>, which owns a <code>ViewModelStore</code>.' },
+              { log: 'iPhone: rotated, nothing rebuilt', say: 'iOS doesn’t rebuild a screen when the phone turns, so there is nothing to survive. Here the ViewModel holds the state and owns the work.' },
+              { screen: home('Home screen'), log: 'iPhone: closed, no clear(): refresh still running', say: 'Lin closes the screen during a refresh, and the Swift code never calls <code>clear()</code>. The ViewModel and its refresh live on, with nobody watching.' },
+              { log: 'iPhone: clear(), onCleared(), viewModelScope cancelled', say: 'With <code>holder.clear()</code> in the <code>deinit</code> of the Swift object that owns the screen, the iPhone gets what Android does: the store clears the ViewModel and cancels its scope.' },
             ],
           });
         },
-      },
+        code: `// shared/build.gradle.kts, as in Google's KMP ViewModel guide
+kotlin {
+    iosArm64 {
+        binaries.framework {
+            baseName = "Shared"
+            export("androidx.lifecycle:lifecycle-viewmodel:2.11.0")   // Swift sees ViewModel by name
+        }
+    }
+    // the same for iosSimulatorArm64
+    sourceSets {
+        commonMain.dependencies {
+            api("androidx.lifecycle:lifecycle-viewmodel:2.11.0")      // export needs api, not implementation
+        }
+    }
+}
 
-      // 4 ─────────────────────────────────────────────
-      {
-        id: 'viewmodels',
-        title: 'Shared ViewModels and coroutines',
-        tagline: 'One ViewModel, observed by Compose and by SwiftUI.',
-        level: 'intermediate',
-        body: `
-<p>The AndroidX <code>lifecycle-viewmodel</code> library is multiplatform. You can write a <code>ViewModel</code> in <code>commonMain</code>, launch work in <code>viewModelScope</code>, and expose a <code>StateFlow</code>. When the ViewModel is cleared, the scope is cancelled on every platform. On iOS the Swift side owns the ViewModel and must clear it when the screen goes away, usually through a <code>ViewModelStore</code>.</p>
-<p>Android collects the flow with <code>collectAsStateWithLifecycle()</code>. Swift is harder. Without help, Swift sees <code>StateFlow</code> as an Objective-C protocol: it can read <code>value</code> once, but collecting needs a hand-written <code>FlowCollector</code>.</p>
-<p>Two tools fix that. SKIE is a compiler plugin that turns flows into Swift <code>AsyncSequence</code>s and suspend functions into <code>async</code> functions with cancellation. KMP-NativeCoroutines uses annotations plus a small Swift library to do the same.</p>`,
-        code: `// commonMain
-class NewsViewModel(private val repo: ArticleRepository) : ViewModel() {
-    private val _state = MutableStateFlow<UiState>(UiState.Loading)
-    val state: StateFlow<UiState> = _state.asStateFlow()
+// commonMain/kotlin/com/example/recipes/ui/RecipesViewModel.kt
+import kotlinx.io.IOException      // not java.io: commonMain is also built for the iPhone
 
-    init { refresh() }
+class RecipesViewModel(private val repository: RecipeRepository) : ViewModel() {
+    private val _uiState = MutableStateFlow(RecipesUiState())
+    val uiState: StateFlow<RecipesUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repository.recipes.collect { list -> _uiState.value = _uiState.value.copy(recipes = list) }
+        }
+        refresh()
+    }
 
     fun refresh() {
         viewModelScope.launch {
-            _state.value = UiState.Loading
-            _state.value = try {
-                UiState.Success(repo.load())
+            try {
+                repository.refresh()
+                _uiState.value = _uiState.value.copy(note = "")
             } catch (e: IOException) {
-                UiState.Error(e.message ?: "Network error")
+                _uiState.value = _uiState.value.copy(note = "Offline: showing saved recipes")
             }
         }
     }
 }
 
-// Android (Compose)
-val state by viewModel.state.collectAsStateWithLifecycle()
+// androidApp, MainActivity: unchanged
+// setContent { val viewModel = viewModel { RecipesViewModel(repository) }; RecipesScreen(viewModel) }
 
-// iOS with SKIE (Swift)
-// for await state in viewModel.state { self.state = state }
+// iosMain/kotlin/com/example/recipes/RecipesHolder.kt: one per iPhone screen
+class RecipesHolder(repository: RecipeRepository) {
+    private val store = ViewModelStore()
+    val viewModel: RecipesViewModel = ViewModelProvider.create(
+        store,
+        viewModelFactory { initializer { RecipesViewModel(repository) } },
+    )[RecipesViewModel::class]
 
-// iOS with KMP-NativeCoroutines: annotate the Kotlin property
-@NativeCoroutinesState
-val uiState: StateFlow<UiState> = _state.asStateFlow()
-// for try await state in asyncSequence(for: viewModel.uiStateFlow) { ... }`,
-        remember: 'Write the ViewModel once. Android collects the StateFlow directly; Swift needs SKIE or KMP-NativeCoroutines to for-await it.',
+    fun clear() {
+        store.clear()              // onCleared() runs, viewModelScope is cancelled
+    }
+}
+// Swift keeps a RecipesHolder in a @StateObject for the screen and calls clear() in its deinit.`,
+        remember: 'The ViewModel class is shared; its owner is not. Android’s Activity clears it for you; on the iPhone, clear its ViewModelStore when the screen closes.',
+        mistakes: [
+          { title: 'Hilt annotations in commonMain', bad: `// commonMain
+@HiltViewModel
+class RecipesViewModel @Inject constructor(
+    private val repository: RecipeRepository,
+) : ViewModel()
+// Unresolved reference 'dagger'. (from import dagger.hilt...)`, good: `// commonMain
+class RecipesViewModel(private val repository: RecipeRepository) : ViewModel()
+
+// androidApp: viewModel { RecipesViewModel(repository) }
+// iosMain:    RecipesHolder(repository)`, why: 'Hilt only runs on Android, so its imports don’t exist for the iPhone build. Keep a plain constructor in shared code and let each app pass the repository in.' },
+        ],
         terms: [
-          { term: 'lifecycle-viewmodel (KMP)', def: 'The AndroidX ViewModel artifact published for Android, iOS, desktop and web, so ViewModel and viewModelScope work in commonMain.' },
-          { term: 'SKIE', def: 'A Kotlin compiler plugin from Touchlab that generates Swift-friendly APIs: flows as AsyncSequence, suspend as async, sealed types as Swift enums.' },
-          { term: 'KMP-NativeCoroutines', def: 'A library that exposes annotated Kotlin flows and suspend functions to Swift as async/await, Combine or RxSwift.' },
+          { term: 'ViewModelStore', def: 'Holds ViewModels for one screen. <code>clear()</code> clears every ViewModel in it, which runs <code>onCleared()</code> and cancels <code>viewModelScope</code>.' },
+          { term: 'ViewModelProvider', def: 'Gets a ViewModel from a store, making it the first time. <code>ViewModelProvider.create(store, factory)[RecipesViewModel::class]</code>.' },
+          { term: 'viewModelFactory', def: 'Describes how to make a ViewModel: <code>viewModelFactory { initializer { RecipesViewModel(repository) } }</code>.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Keep the mutable flow private and launch work that is cancelled with the ViewModel.', code: 'class TimerViewModel : ViewModel() {\n    private val _seconds = [[MutableStateFlow]](0)\n    val seconds: StateFlow<Int> = _seconds.[[asStateFlow]]()\n\n    fun start() {\n        [[viewModelScope]].launch {\n            while (true) { delay(1000); _seconds.value += 1 }\n        }\n    }\n}', why: 'Only the ViewModel can write. <code>viewModelScope</code> stops the loop when the ViewModel is cleared, on Android and iOS alike.' },
-          { type: 'bug', prompt: 'After the iOS screen closes, the network call keeps running and writes to a dead ViewModel. Tap the line.', code: 'class ProfileViewModel(private val repo: UserRepository) : ViewModel() {\n    private val _user = MutableStateFlow<User?>(null)\n    val user: StateFlow<User?> = _user.asStateFlow()\n\n    fun load(id: String) {\n        GlobalScope.launch {\n            _user.value = repo.user(id)\n        }\n    }\n}', bug: 5, fix: '        viewModelScope.launch {', why: '<code>GlobalScope</code> is not tied to anything, so clearing the ViewModel cancels nothing. <code>viewModelScope</code> is cancelled in <code>onCleared</code>.' },
-        ],
-        predict: {
-      q: "Swift collects the state through SKIE, and the shared ViewModel emits a new state. Which screens update?",
-      options: ["Only the Android screen","Both the Android and the iOS screen","Only the iOS screen"],
-      a: 1,
-      why: "SKIE turns the <code>StateFlow</code> into a Swift <code>AsyncSequence</code>, so SwiftUI receives every new value just as Compose does.",
-    },
-    quiz: [
-          { q: 'What happens to coroutines in <code>viewModelScope</code> when the ViewModel is cleared on iOS?', options: ['They keep running until the app exits', 'They are cancelled, same as on Android', 'viewModelScope does not exist on iOS'], a: 1, why: 'The KMP lifecycle library cancels the scope on every platform when the ViewModel is cleared.' },
-          { q: 'With no bridge library, what can Swift easily do with a Kotlin <code>StateFlow</code>?', options: ['<code>for await</code> over it', 'Read its current <code>value</code>; collecting needs a hand-written collector', 'Bind it with <code>@Published</code> automatically'], a: 1, why: 'Swift sees an Objective-C protocol. Reading <code>value</code> works; observing changes needs a <code>FlowCollector</code> or a tool like SKIE.' },
-          { q: 'With SKIE, how does SwiftUI observe <code>viewModel.state</code>?', options: ['<code>for await state in viewModel.state</code>', '<code>viewModel.state.observe(owner)</code>', '<code>viewModel.state.sink { }</code> only'], a: 0, why: 'SKIE exposes Kotlin flows as Swift <code>AsyncSequence</code>s, and cancels the Kotlin collection when the Swift task is cancelled.' },
-          { q: '<pre>viewModelScope.launch {\n  while (true) {\n    try {\n      delay(5_000)\n      _state.value = repo.poll()\n    } catch (e: Exception) {\n      log(e)\n    }\n  }\n}</pre>Swift calls clear() on the holder. What happens?', options: ['The loop stops, because the scope is cancelled', 'The catch swallows the CancellationException from delay, so the loop keeps spinning', 'The app crashes'], a: 1, why: 'Cancellation is delivered as an exception at the next suspension point. Catching every Exception eats it. Catch only what you expect, or rethrow CancellationException.' },
-          { q: 'Swift awaits a Kotlin suspend function through Kotlin’s own export, with no bridge library. The SwiftUI view disappears and its task is cancelled. What happens to the coroutine?', options: ['It stops at its next suspension point', 'It runs to the end, and the result is thrown away', 'The app crashes with a CancellationException'], a: 1, why: 'The plain export does not pass Swift’s cancellation on to Kotlin. SKIE and KMP-NativeCoroutines connect the two, so cancelling the task cancels the coroutine.' },
-        ],
-        deeper: [
-          {
-            title: 'On iOS, someone has to clear the ViewModel',
-            body: `
-<p>On Android, the Activity or navigation back stack owns a <code>ViewModelStore</code> and clears it when the screen is gone for good. SwiftUI knows nothing about that. If Swift just creates the ViewModel and drops the reference, <code>onCleared()</code> never runs and <code>viewModelScope</code> is never cancelled. A polling loop keeps running for a screen nobody can see.</p>
-<p>Give each iOS screen a small Kotlin holder that owns a <code>ViewModelStore</code>. Swift creates it when the screen appears and calls <code>clear()</code> when it goes away. Push and pop screens below.</p>`,
-            code: `// iosMain: one holder per screen, owned by Swift
-class NewsScreenHolder(repo: ArticleRepository) {
-    private val store = ViewModelStore()
-    val viewModel: NewsViewModel = ViewModelProvider.create(
-        store,
-        viewModelFactory { initializer { NewsViewModel(repo) } },
-    )[NewsViewModel::class]
-
-    fun clear() = store.clear()   // onCleared() runs, viewModelScope is cancelled
+          { type: 'blank', prompt: 'Make the ViewModel library available in shared code, and Swift-visible.', code: `commonMain.dependencies {
+    [[api]]("androidx.lifecycle:lifecycle-viewmodel:2.11.0")
 }
 
-// Swift
-// .onDisappear { holder.clear() }`,
-            visual(el) {
-              let clearOn = true, n = 0, busy = false;
-              const stack = [], vms = [];
-              const navList = h('div', { class: 'kmp-list' });
-              const nav = h('div', { class: 'kmp-dev kmp-ios', role: 'img', 'aria-label': 'iOS navigation stack' }, h('span', { class: 'kmp-scr-title' }, 'Navigation'), navList);
-              const vmBox = h('div', { class: 'kmp-vms' });
-              const o = out();
-              const paintNav = () => navList.replaceChildren(...(stack.length
-                ? stack.map((v, i) => h('div', { class: 'kmp-li' + (i === stack.length - 1 ? ' kmp-new' : '') }, `${i === stack.length - 1 ? '▸ ' : ''}NewsScreen #${v.n}`))
-                : [h('p', { class: 'kmp-empty' }, 'Home. No news screen open.')]));
-              function push() {
-                if (busy) return;
-                if (stack.length >= 3) { replay(nav, 'shake'); say(o, 'Three screens deep is enough. Pop one.'); return; }
-                const v = { n: ++n, ticks: 0, alive: true };
-                v.count = h('span', { class: 'kmp-state' }, 'polls: 0');
-                v.job = h('span', { class: 'kmp-job kmp-run' }, 'poll loop');
-                v.note = h('span', { class: 'kmp-label' }, 'on screen');
-                v.el = h('div', { class: 'kmp-vm drop-in' }, h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, `NewsViewModel #${v.n}`), v.note), v.count, h('div', { class: 'kmp-jobs' }, v.job));
-                stack.push(v); vms.push(v); vmBox.append(v.el);
-                while (vms.length > 5) { const old = vms.shift(); old.alive = false; old.el.remove(); }
-                paintNav();
-                say(o, `Pushed NewsScreen #${v.n}. Its ViewModel starts polling in viewModelScope.`);
-              }
-              function pop() {
-                if (busy) return;
-                const v = stack.pop();
-                if (!v) { replay(nav, 'shake'); say(o, 'Nothing to pop. Push a screen first.'); return; }
-                paintNav();
-                if (clearOn) {
-                  v.alive = false; v.el.classList.add('kmp-gone'); v.job.className = 'kmp-job kmp-cancel'; v.note.textContent = 'cleared';
-                  say(o, `<span class="good">holder.clear():</span> onCleared() ran and the poll loop of #${v.n} was cancelled.`);
-                } else {
-                  v.el.classList.add('kmp-stale'); v.note.textContent = 'no screen';
-                  const leaked = vms.filter(x => x.alive && !stack.includes(x)).length;
-                  say(o, `<span class="bad">leaked:</span> nobody cleared #${v.n}. ${leaked} ViewModel${leaked > 1 ? 's are' : ' is'} still polling for screens that are gone.`);
-                }
-              }
-              const box = h('input', { type: 'checkbox', id: 'kmp-d-clear', checked: true, onchange() { clearOn = this.checked; say(o, clearOn ? 'Popped screens clear their store again.' : 'Now Swift just drops the screen. Pop one and watch.'); } });
-              (async () => {
-                while (true) {
-                  await sleep(900); if (!el.isConnected) return;
-                  vms.forEach(v => { if (v.alive) { v.ticks++; v.count.textContent = `polls: ${v.ticks}`; } });
-                }
-              })();
-              paintNav(); push();
-              el.append(
-                h('div', { class: 'kmp-devs' }, h('div', { class: 'kmp-dev-wrap' }, nav, h('span', { class: 'kmp-label' }, 'SwiftUI')), vmBox),
-                h('div', { class: 'controls' }, act('push NewsScreen', push), act('pop', pop), h('label', { class: 'switch', for: 'kmp-d-clear' }, box, 'clear on disappear')),
-                o);
-            },
-          },
-          {
-            title: 'Cancellation has to cross the bridge',
-            body: `
-<p>SwiftUI cancels a view’s <code>.task</code> when the view disappears. Whether the Kotlin coroutine behind it stops depends on the bridge. Kotlin’s own export lets Swift <code>await</code> a suspend function, but it does not pass Swift’s cancellation on. The coroutine runs to the end, and its result is thrown away.</p>
-<p>SKIE and KMP-NativeCoroutines connect the two: cancelling the Swift task cancels the coroutine, which stops at its next suspension point, network call included.</p>`,
-            code: `// commonMain
-class SearchRepository(private val api: SearchApi) {
-    suspend fun search(query: String): List<SearchHit> {
-        delay(300)                 // debounce; a cancellation point
-        return api.search(query)   // Ktor calls are cancellable too
-    }
-}
+class RecipesViewModel(private val repository: RecipeRepository) : [[ViewModel]]()`, why: 'Google’s guide uses <code>api</code> instead of <code>implementation</code>, so the library can be exported to the framework that Swift uses. The class extends <code>ViewModel</code> as on Android.' },
+          { type: 'bug', prompt: 'This file is in <code>commonMain</code>, and the iPhone build fails with <code>Unresolved reference \'java\'.</code> Tap the wrong line.', code: `import java.io.IOException
 
-// Swift with SKIE: leaving the view cancels the task and the coroutine
-// .task(id: query) { hits = (try? await repo.search(query: query)) ?? [] }`,
-            visual(el) {
-              const BR = [
-                { label: 'Kotlin export', cancel: false, swift: '.task { hits = try? await repo.search(query: "kotlin") }' },
-                { label: 'SKIE', cancel: true, swift: '.task { hits = try? await repo.search(query: "kotlin") }' },
-                { label: 'KMP-NativeCoroutines', cancel: true, swift: '.task { hits = try? await asyncFunction(for: repo.search(query: "kotlin")) }' },
-              ];
-              let br = 0, run = 0, swiftP = 0, ktP = 0, swiftEnd = null, ktEnd = null;
-              const mkLane = name => { const bar = h('div', { class: 'bar run' }); const tr = h('div', { class: 'lane-track' }, bar); return { bar, row: h('div', { class: 'lane' }, h('span', { class: 'lane-name' }, name), tr) }; };
-              const sw = mkLane('Swift .task'), kt = mkLane('Kotlin coroutine');
-              const swiftLine = h('div', { class: 'kt' });
-              const o = out();
-              const paint = () => {
-                sw.bar.style.left = '0'; sw.bar.style.width = `${swiftP}%`; sw.bar.className = 'bar ' + (swiftEnd === 'cancel' ? 'block' : 'run');
-                kt.bar.style.left = '0'; kt.bar.style.width = `${ktP}%`; kt.bar.className = 'bar ' + (ktEnd === 'cancel' ? 'block' : ktEnd === 'wasted' ? 'queued' : 'run');
-              };
-              const btns = BR.map((b, i) => act(b.label, () => { if (run) return; br = i; pick(btns, i); swiftLine.innerHTML = hl(b.swift); replay(swiftLine, 'pop-soft'); }));
-              async function open() {
-                if (run) return;
-                const my = run = Date.now();
-                swiftP = 0; ktP = 0; swiftEnd = null; ktEnd = null; paint();
-                say(o, 'Search screen open. The task awaits repo.search().');
-                while (ktP < 100) {
-                  await sleep(60); if (!el.isConnected || run !== my) return;
-                  if (ktEnd === 'cancel') break;
-                  ktP = Math.min(100, ktP + 2); if (!swiftEnd) swiftP = ktP;
-                  paint();
-                }
-                if (ktEnd === 'cancel') return;
-                if (swiftEnd === 'cancel') {
-                  ktEnd = 'wasted'; paint();
-                  say(o, '<span class="bad">wasted:</span> the coroutine finished the network call and the parsing. Swift had already cancelled, so the result was thrown away.');
-                } else say(o, '<span class="good">done:</span> results arrived while the screen was still open.');
-                run = 0;
-              }
-              async function leave() {
-                if (!run || swiftEnd) { say(o, '<span class="muted">No search is running. Open the screen first.</span>'); return; }
-                swiftEnd = 'cancel'; paint(); replay(sw.row, 'shake');
-                if (BR[br].cancel) {
-                  await sleep(200); if (!el.isConnected) return;
-                  ktEnd = 'cancel'; paint(); run = 0;
-                  say(o, `<span class="good">${BR[br].label}:</span> the Swift task was cancelled, so the coroutine got a CancellationException and stopped at ${ktP}%.`);
-                } else {
-                  say(o, '<span class="muted">The Swift task is cancelled. The Kotlin coroutine doesn’t know…</span>');
-                }
-              }
-              pick(btns, 0); swiftLine.innerHTML = hl(BR[0].swift); paint();
-              say(o, 'Pick a bridge. Open the screen, then leave it before the search finishes.');
-              el.append(
-                h('div', { class: 'controls' }, btns), swiftLine,
-                h('div', { class: 'timeline' }, sw.row, kt.row),
-                h('div', { class: 'controls' }, act('open search screen', open), act('leave screen', leave)),
-                o);
-            },
-          },
-          {
-            title: 'Threads on iOS work the same way',
-            body: `
-<p><code>viewModelScope</code> runs on <code>Dispatchers.Main.immediate</code>. On iOS, <code>Dispatchers.Main</code> is the main dispatch queue, so state updates land on the UI thread on both platforms. <code>Dispatchers.IO</code> and <code>Default</code> exist on Kotlin/Native too, and since the new memory model, objects can move between threads freely. The same <code>withContext</code> code runs unchanged.</p>`,
-            code: `fun refresh() {
-    viewModelScope.launch {                                   // main thread on Android and iOS
-        val items = withContext(Dispatchers.IO) { repo.loadFromDisk() }
-        _state.value = UiState.Success(items)                 // back on main
-    }
-}`,
-          },
-        ],
-        underHood: {
-          body: `
-<p>Every ViewModel keeps a set of closeable objects. The first time you read <code>viewModelScope</code>, it creates a scope with a <code>SupervisorJob</code> and <code>Dispatchers.Main.immediate</code> (where a main dispatcher exists) and registers it as one of them. <code>ViewModelStore.clear()</code> calls the ViewModel’s internal clear, which runs <code>onCleared()</code> and closes those objects. Closing the scope cancels its job, and that cancels every coroutine launched in it. This code is the same on every platform.</p>
-<p>SKIE adds Swift code to the framework. For a flow, it generates an <code>AsyncSequence</code> that starts a Kotlin coroutine to collect the flow and hands each value to Swift. When the Swift task is cancelled, the sequence cancels that coroutine.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'A catch-all that swallows cancellation',
-            bad: `viewModelScope.launch {
-    while (true) {
-        try {
-            delay(5_000)
-            _state.value = repo.poll()
-        } catch (e: Exception) {
-            log(e)   // also catches CancellationException
+class RecipesViewModel(private val repository: RecipeRepository) : ViewModel() {
+    fun refresh() {
+        viewModelScope.launch {
+            try { repository.refresh() } catch (e: IOException) { /* show the note */ }
         }
     }
-}`,
-            good: `viewModelScope.launch {
-    while (isActive) {
-        try {
-            delay(5_000)
-            _state.value = repo.poll()
-        } catch (e: IOException) {
-            log(e)
-        }
-    }
-}`,
-            why: 'After <code>clear()</code>, <code>delay</code> throws <code>CancellationException</code>. The catch eats it and the loop spins again, so the coroutine never stops. Catch only the errors you expect, or rethrow cancellation.',
-          },
-          {
-            title: 'Handing Swift the mutable flow',
-            bad: `class NewsViewModel : ViewModel() {
-    val state = MutableStateFlow<UiState>(UiState.Loading)
-}`,
-            good: `class NewsViewModel : ViewModel() {
-    private val _state = MutableStateFlow<UiState>(UiState.Loading)
-    val state: StateFlow<UiState> = _state.asStateFlow()
-}`,
-            why: 'Swift sees a writable <code>value</code> property and can set state from the view. Then the ViewModel no longer owns its state, and Android and iOS can drift apart.',
-          },
+}`, bug: 0, fix: 'import kotlinx.io.IOException', why: '<code>java.io</code> is a JVM package, missing on the iPhone. Ktor throws <code>kotlinx.io.IOException</code>, which exists on every target.' },
         ],
-        visual(el) {
-          const BR = [
-            { label: 'No bridge', swift: 'let s = viewModel.state.value  // read once', live: false },
-            { label: 'SKIE', swift: 'for await s in viewModel.state { state = s }', live: true },
-            { label: 'KMP-NativeCoroutines', swift: 'for try await s in asyncSequence(for: viewModel.stateFlow) { state = s }', live: true },
-          ];
-          let br = 0, busy = false, open = true, gen = 0, count = 3;
-          const stateChip = h('span', { class: 'kmp-state' });
-          const jobs = h('div', { class: 'kmp-jobs' });
-          const vm = h('div', { class: 'kmp-vm' }, h('div', { class: 'kmp-head' }, h('span', { class: 'kmp-name' }, 'NewsViewModel (commonMain)'), h('span', { class: 'kmp-label' }, 'StateFlow<UiState>')), stateChip, h('span', { class: 'kmp-label' }, 'viewModelScope'), jobs);
-          const mkScreen = (name, cls) => { const body = h('div', { class: 'kmp-list' }); const dev = h('div', { class: `kmp-dev ${cls}`, role: 'img', 'aria-label': `${name} screen` }, h('span', { class: 'kmp-scr-title' }, 'News'), body); return { dev, body }; };
-          const and = mkScreen('Android', 'kmp-and'), ios = mkScreen('iOS', 'kmp-ios');
-          const swiftLine = h('div', { class: 'kt' });
-          const o = out('The ViewModel loaded 3 articles. Refresh it, switch the Swift bridge, or close the screen.');
-          let state = { k: 'Success', n: 3 }, iosState = state;
-          const label = s => s.k === 'Loading' ? 'UiState.Loading' : `UiState.Success(${s.n} articles)`;
-          const render = (scr, s) => scr.body.replaceChildren(...(s.k === 'Loading' ? [h('div', { class: 'kmp-spin' })] : Array.from({ length: Math.min(s.n, 5) }, (_, i) => h('div', { class: 'kmp-li kmp-new' }, `Article ${i + 1}`))));
-          const set = s => {
-            state = s; stateChip.textContent = label(s); replay(stateChip, 'pop');
-            render(and, s);
-            if (BR[br].live) { iosState = s; render(ios, s); ios.dev.classList.remove('kmp-stale'); }
-            else ios.dev.classList.toggle('kmp-stale', iosState !== s);
-          };
-          const btns = BR.map((b, i) => act(b.label, () => {
-            if (busy) return; br = i; pick(btns, i);
-            swiftLine.innerHTML = hl(b.swift); replay(swiftLine, 'pop-soft');
-            iosState = state; render(ios, state); ios.dev.classList.remove('kmp-stale');
-            say(o, b.live ? `<span class="good">${b.label}:</span> Swift now iterates the flow, so every new state re-renders the iOS screen.` : '<span class="muted">No bridge:</span> Swift reads <code>value</code> once. Refresh and watch iOS fall behind.');
-          }));
-          async function refresh() {
-            if (busy || !open) return; busy = true; const g = ++gen;
-            const job = h('span', { class: 'kmp-job kmp-run drop-in' }, `launch #${g}`); jobs.append(job);
-            while (jobs.children.length > 4) jobs.firstElementChild.remove();
-            set({ k: 'Loading' }); say(o, '<span class="muted">viewModelScope.launch { _state.value = UiState.Loading ... }</span>');
-            await sleep(1100); if (!el.isConnected) return;
-            if (g !== gen) return;
-            count = 2 + (count % 4); set({ k: 'Success', n: count });
-            job.className = 'kmp-job kmp-done';
-            say(o, BR[br].live ? '<span class="good">ok:</span> both screens got the new state.' : '<span class="bad">stale:</span> Android updated. iOS still shows what it read the first time.');
-            busy = false;
-          }
-          const closeBtn = act('Close screen', () => {
-            open = !open;
-            if (!open) {
-              gen++; busy = false;
-              jobs.querySelectorAll('.kmp-run').forEach(j => { j.className = 'kmp-job kmp-cancel'; });
-              vm.classList.add('kmp-gone'); closeBtn.textContent = 'Open screen';
-              say(o, '<span class="bad">onCleared():</span> viewModelScope cancelled. Running jobs stop on both platforms.');
-            } else {
-              vm.classList.remove('kmp-gone'); closeBtn.textContent = 'Close screen'; jobs.replaceChildren();
-              say(o, 'New screen, new ViewModel.'); refresh();
-            }
-          });
-          pick(btns, 0); swiftLine.innerHTML = hl(BR[0].swift);
-          stateChip.textContent = label(state); render(and, state); render(ios, state);
-          el.append(vm,
-            h('div', { class: 'kmp-devs' },
-              h('div', { class: 'kmp-dev-wrap' }, and.dev, h('span', { class: 'kmp-label' }, 'Compose')),
-              h('div', { class: 'kmp-dev-wrap' }, ios.dev, h('span', { class: 'kmp-label' }, 'SwiftUI'))),
-            h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'Swift side'), btns), swiftLine,
-            h('div', { class: 'controls' }, cmd('viewModel.refresh()', refresh), closeBtn), o);
-        },
+        quiz: [
+          { q: 'On Android, who clears the shared <code>RecipesViewModel</code>?', options: ['Swift code', 'The Activity’s ViewModelStore, when the Activity finishes', 'Nobody: it lives as long as the app'], a: 1, why: '<code>viewModel { }</code> puts it in the Activity’s store. Android clears that store when the Activity finishes, not on rotation.' },
+          { q: 'On the iPhone, what must happen when the Recipes screen closes?', options: ['Nothing: iOS clears ViewModels by itself', 'The screen calls <code>clear()</code> on the store that holds the ViewModel', 'The app restarts'], a: 1, why: 'iOS has no Activity to do it. Clearing the store runs <code>onCleared()</code> and cancels <code>viewModelScope</code>.' },
+          { q: 'Why does a shared ViewModel take its repository through a plain constructor?', options: ['Hilt only runs on Android', 'Constructors are faster', 'ViewModels can’t have parameters'], a: 0, why: 'Shared code must compile for the iPhone too, where Hilt doesn’t exist. Each app passes the repository in its own way.' },
+        ],
+        docs: [['Set up ViewModel for KMP', 'https://developer.android.com/kotlin/multiplatform/viewmodel']],
       },
 
-      // 5 ─────────────────────────────────────────────
+      // 7 ─────────────────────────────────────────────
       {
         id: 'compose-mp',
         title: 'Compose Multiplatform',
-        tagline: 'One composable, drawn on Android, iOS and desktop.',
-        level: 'intermediate',
+        tagline: 'The same composables draw the screen on Android and on the iPhone.',
+        goals: ['Move a Compose screen to commonMain with Compose Multiplatform', 'Show the shared screen from Android and from an iPhone app', 'Weigh a shared UI against a native one'],
+        level: 'intermediate', introduces: ['ComposeUIViewController', 'UIViewController'],
         body: `
-<p>Compose Multiplatform is JetBrains' port of Jetpack Compose. On Android it is Jetpack Compose. On iOS (stable since 1.8) and desktop it draws the UI itself with Skia. You write <code>@Composable</code> functions in <code>commonMain</code> and each platform hosts them: <code>setContent</code> on Android, <code>ComposeUIViewController</code> on iOS, <code>Window</code> on desktop.</p>
-<p>Shared resources go in <code>commonMain/composeResources</code>: images in <code>drawable</code>, strings in <code>values/strings.xml</code>, plus fonts and raw files. Add the <code>compose.components.resources</code> dependency and the plugin generates a <code>Res</code> class, so you write <code>painterResource(Res.drawable.logo)</code> and <code>stringResource(Res.string.greeting)</code>.</p>
-<p>Platform-specific bits stay small: an <code>expect</code> function, or a native view embedded with <code>UIKitView</code> on iOS or <code>AndroidView</code> on Android.</p>`,
-        code: `// commonMain/App.kt
-@Composable
-fun App() {
-    var count by remember { mutableIntStateOf(0) }
-    MaterialTheme {
-        Column(
-            Modifier.fillMaxSize().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Image(painterResource(Res.drawable.logo), contentDescription = null)
-            Text(stringResource(Res.string.greeting), style = MaterialTheme.typography.headlineSmall)
-            Button(onClick = { count++ }) { Text("Clicked $count times") }
-            Text("Running on \${getPlatform().name}")
+<p>The iPhone app shares the ViewModel, but its screen is still written separately, so every change to the list is made twice. <em>Compose Multiplatform</em>, from JetBrains, runs the Compose you know, <code>Column</code>, <code>Text</code>, <code>LazyColumn</code>, <code>Button</code>, <code>MaterialTheme</code>, <code>remember</code>, on the iPhone, on desktop and on the web. Its iPhone support is stable since version 1.8.0; the current version is 1.12.2. Desktop apps are stable too and the web is Beta, but this lesson stays with the two phones.</p>
+<p>The screen moves to <code>commonMain</code>. The Compose libraries come from JetBrains, as <code>org.jetbrains.compose...</code>, and so do the lifecycle helpers for <code>viewModel { }</code> and <code>collectAsStateWithLifecycle()</code>, as <code>org.jetbrains.androidx.lifecycle...</code>. On Android they are the same Jetpack libraries you used; for the other targets JetBrains builds them. In common code, always pass <code>viewModel</code> the <code>{ }</code> that makes the ViewModel: on Android the library can make one from its class alone, but on iOS it can’t. Inside <code>ComposeUIViewController</code>, Compose Multiplatform provides the <code>ViewModelStore</code> and clears it for you, so <code>RecipesHolder</code> is only needed for SwiftUI screens.</p>
+<p>Each platform needs a small entry point. Android’s <code>MainActivity</code>, in <code>androidApp</code>, calls <code>setContent { App(repository) }</code>. In <code>iosMain</code>, <code>ComposeUIViewController { App(repository) }</code> wraps the composable in a <code>UIViewController</code>, iOS’s container for one screen, much like an Activity. The Xcode project shows that view controller; the project wizard writes that Swift part for you. On the iPhone, Compose draws every pixel itself, so the screen looks like your Android one.</p>
+<p>That is the trade-off. A shared UI is written once; a native SwiftUI screen feels exactly like other iPhone apps. You can mix both, and many teams start with shared logic only. If one app keeps a native UI, the recommended layout splits shared code into a logic module and a UI module, so that app doesn’t depend on Compose.</p>`,
+        visual(el) {
+          Lab.ui.graph(el, {
+            height: 320,
+            predict: {
+              q: 'Sam renames the button in <code>App()</code> from Refresh to Update. Which apps show Update once they are rebuilt?',
+              options: ['Only Android', 'Android and the iPhone', 'Only the iPhone'],
+              a: 1,
+              why: 'Both entry points draw the same <code>App()</code> from <code>commonMain</code>.',
+            },
+            nodes: [
+              { id: 'app', label: 'App()<small>commonMain</small>', x: 50, y: 9 },
+              { id: 'act', label: 'MainActivity<small>setContent</small>', x: 25, y: 50 },
+              { id: 'mvc', label: 'MainView<wbr>Controller()<small>iosMain</small>', x: 75, y: 50 },
+              { id: 'and', label: 'Android phone', x: 25, y: 90, hidden: true, tone: 'ok' },
+              { id: 'iph', label: 'iPhone', x: 75, y: 90, hidden: true, tone: 'ok' },
+            ],
+            frames: [
+              { hl: ['app'], say: '<code>App()</code> is one composable in <code>commonMain</code>: the recipe list, the Refresh button and the note.' },
+              { add: [['act', 'app']], show: ['and'], hl: ['act'], say: 'Android: <code>MainActivity</code> in <code>androidApp</code> calls <code>setContent { App(repository) }</code>, as before.' },
+              { add: [['act', 'and']], say: 'On the Android phone it is a normal Compose screen.' },
+              { add: [['mvc', 'app']], hl: ['mvc'], say: 'iPhone: <code>MainViewController()</code> in <code>iosMain</code> wraps <code>App()</code> in <code>ComposeUIViewController</code>, a view controller iOS can show.' },
+              { show: ['iph'], add: [['mvc', 'iph']], hl: ['iph'], say: 'The Xcode project shows that view controller. Compose draws every pixel itself, so the list looks like the Android one.' },
+              { hl: ['iph'], say: 'Here <code>viewModel { }</code> works as on Android: <code>ComposeUIViewController</code> provides the <code>ViewModelStore</code> and clears it when the screen goes away.' },
+              { hl: ['app', 'and', 'iph'], say: 'Sam renames the button to Update. After a rebuild both apps say Update: one change, one place.' },
+            ],
+          });
+        },
+        code: `// shared/build.gradle.kts
+plugins {
+    alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.androidMultiplatformLibrary)
+    alias(libs.plugins.composeMultiplatform)   // org.jetbrains.compose, 1.12.2
+    alias(libs.plugins.composeCompiler)        // org.jetbrains.kotlin.plugin.compose, 2.4.21
+}
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("org.jetbrains.compose.runtime:runtime:1.12.2")
+            implementation("org.jetbrains.compose.foundation:foundation:1.12.2")
+            implementation("org.jetbrains.compose.material3:material3:1.12.0-alpha03")   // its own version line, still alpha
+            implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+            implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
         }
     }
 }
 
-// androidMain: MainActivity.onCreate
-setContent { App() }
-
-// iosMain: shown from SwiftUI through UIViewControllerRepresentable
-fun MainViewController() = ComposeUIViewController { App() }
-
-// jvmMain: desktop entry point
-fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "News") { App() }
-}`,
-        remember: 'Write the UI once in commonMain. Each platform only hosts it: setContent, ComposeUIViewController, Window.',
-        terms: [
-          { term: 'Compose Multiplatform', def: 'The JetBrains framework that runs Compose UI code on Android, iOS, desktop and web from one codebase.' },
-          { term: 'Res', def: 'The class Compose Multiplatform generates from composeResources, with typed accessors like Res.string.title and Res.drawable.logo.' },
-          { term: 'ComposeUIViewController', def: 'The iOS function that wraps a composable in a UIViewController so UIKit or SwiftUI can show it.' },
-          { term: 'UIKitView', def: 'A composable that embeds a native UIKit view, such as a map, inside Compose UI on iOS.' },
-        ],
-        challenges: [
-          { type: 'blank', prompt: 'Load the shared logo and title, and expose the screen to iOS.', code: 'Image([[painterResource]](Res.drawable.logo), contentDescription = null)\nText([[stringResource]](Res.string.title))\n\n// iosMain\nfun MainViewController() = [[ComposeUIViewController]] { App() }', why: 'The generated <code>Res</code> accessors go through <code>painterResource</code> and <code>stringResource</code>. iOS gets a <code>UIViewController</code> from <code>ComposeUIViewController</code>.' },
-          { type: 'bug', prompt: 'This compiles in an Android-only app but not in <code>commonMain</code>. Tap the line.', code: '@Composable\nfun Header() {\n    Column(Modifier.padding(16.dp)) {\n        Image(painterResource(Res.drawable.logo), contentDescription = null)\n        Text(stringResource(R.string.title))\n    }\n}', bug: 4, fix: '        Text(stringResource(Res.string.title))', why: '<code>R</code> is generated by the Android build only. Shared code uses the Compose Multiplatform <code>Res</code> class.' },
-        ],
-        predict: {
-      q: "You tap the button in the iOS frame twice. What does the Android frame’s counter show?",
-      options: ["2 as well","Its own value: each app keeps its own state","0, because it resets"],
-      a: 1,
-      why: "The code is shared, but each app runs its own copy with its own <code>remember</code> state.",
-    },
-    quiz: [
-          { q: 'Where does a shared <code>strings.xml</code> go?', options: ['<code>androidMain/res/values</code>', '<code>commonMain/composeResources/values</code>', 'In the Xcode project'], a: 1, why: 'Files under <code>composeResources</code> are packaged for every target and exposed through <code>Res</code>.' },
-          { q: 'How does an iOS app show a shared composable?', options: ['It wraps it with <code>ComposeUIViewController</code> and shows the UIViewController', 'It converts it to SwiftUI views at build time', 'It runs Android inside the iOS app'], a: 0, why: 'Compose draws into a UIViewController. SwiftUI hosts it with <code>UIViewControllerRepresentable</code>.' },
-          { q: 'On iOS, what draws a Compose Multiplatform <code>Button</code>?', options: ['A UIKit <code>UIButton</code>', 'Compose itself, rendering with Skia', 'WebKit'], a: 1, why: 'Compose renders its own pixels with Skia. Use <code>UIKitView</code> when you need a real native view.' },
-          { q: 'The phone is set to Spanish. <code>values-es/strings.xml</code> has no entry for <code>share</code>, but <code>values/strings.xml</code> does. What does <code>stringResource(Res.string.share)</code> show?', options: ['The text from values/strings.xml', 'The key name "share"', 'It throws because the Spanish string is missing'], a: 0, why: 'Compose picks the closest match and falls back to the folder without a qualifier when the qualified one has no entry.' },
-          { q: 'A shared ViewModel needs to show "Could not load". What fits best?', options: ['Call <code>stringResource(Res.string.load_failed)</code> in the ViewModel', 'Hard-code the English text in the ViewModel', 'Keep the <code>StringResource</code> in state and resolve it in the UI with stringResource'], a: 2, why: 'stringResource is a composable, so a ViewModel cannot call it. Resolving in the UI also updates the text when the language changes.' },
-        ],
-        deeper: [
-          {
-            title: 'Qualifiers pick the right resource',
-            body: `
-<p>Resources can have variants. Put Spanish strings in <code>composeResources/values-es/strings.xml</code> and a dark logo in <code>drawable-dark</code>. At runtime Compose picks the closest match for the device language and theme, and falls back to the folder without a qualifier when nothing matches. Your code keeps calling <code>Res.string.greeting</code>.</p>
-<p>Strings can take arguments and plurals. <code>stringResource(Res.string.greeting, name)</code> fills <code>%1$s</code>, and <code>pluralStringResource</code> picks the right form for the count, using the plural rules of the language.</p>`,
-            code: `// composeResources/values/strings.xml
-// <string name="greeting">Hello, %1$s!</string>
-// <plurals name="new_articles">
-//     <item quantity="one">%1$d new article</item>
-//     <item quantity="other">%1$d new articles</item>
-// </plurals>
-
-// composeResources/values-es/strings.xml
-// <string name="greeting">¡Hola, %1$s!</string>
-// <plurals name="new_articles">
-//     <item quantity="one">%1$d artículo nuevo</item>
-//     <item quantity="other">%1$d artículos nuevos</item>
-// </plurals>
-
-Text(stringResource(Res.string.greeting, user.name))
-Text(pluralStringResource(Res.plurals.new_articles, count, count))
-Image(painterResource(Res.drawable.logo), contentDescription = null)   // drawable-dark/ in dark theme`,
-            visual(el) {
-              const STR = {
-                en: ['Hello, Ada!', n => `${n} new article${n === 1 ? '' : 's'}`],
-                es: ['¡Hola, Ada!', n => n === 1 ? `${n} artículo nuevo` : `${n} artículos nuevos`],
-              };
-              const LANGS = [['en', 'English'], ['es', 'Español'], ['de', 'Deutsch']];
-              const S = { lang: 'en', dark: false, n: 1 };
-              const logo = h('div', { class: 'kmp-logo' });
-              const hello = h('div', { class: 'kmp-hello' });
-              const count = h('div', { class: 'kmp-plat' });
-              const dev = h('div', { class: 'kmp-dev kmp-and', role: 'img', 'aria-label': 'Phone running the shared App()' }, h('span', { class: 'kmp-scr-title' }, 'News'), logo, hello, count);
-              const files = h('div', { class: 'kmp-files' });
-              const o = out();
-              function paint() {
-                const lang = STR[S.lang] ? S.lang : 'en';
-                hello.textContent = STR[lang][0];
-                count.textContent = STR[lang][1](S.n);
-                dev.classList.toggle('kmp-d2-dark', S.dark);
-                files.replaceChildren(
-                  h('span', { class: 'kmp-file drop-in' }, `values${lang === 'en' ? '' : '-' + lang}/strings.xml`),
-                  h('span', { class: 'kmp-file drop-in' }, `drawable${S.dark ? '-dark' : ''}/logo.xml`));
-                replay(dev, 'pop-soft');
-              }
-              const langBtns = LANGS.map(([code, name], i) => act(name, () => {
-                S.lang = code; pick(langBtns, i); paint();
-                say(o, code === 'de'
-                  ? 'Device language is German. There is no <code>values-de</code>, so Compose falls back to <code>values/</code>.'
-                  : `Device language is ${name}. Compose reads <code>values${code === 'en' ? '' : '-' + code}/strings.xml</code>.`);
-              }));
-              const themeBtn = act('Dark theme', () => {
-                S.dark = !S.dark; themeBtn.setAttribute('aria-pressed', String(S.dark)); paint();
-                say(o, S.dark ? 'Dark theme: <code>Res.drawable.logo</code> now resolves to <code>drawable-dark/logo.xml</code>.' : 'Light theme: back to <code>drawable/logo.xml</code>.');
-              });
-              themeBtn.setAttribute('aria-pressed', 'false');
-              const more = cmd('count++', () => {
-                S.n = S.n >= 5 ? 1 : S.n + 1; paint();
-                say(o, `<span class="muted">pluralStringResource(Res.plurals.new_articles, ${S.n}, ${S.n})</span> picks “${STR[STR[S.lang] ? S.lang : 'en'][1](S.n)}”.`);
-              });
-              pick(langBtns, 0); paint();
-              say(o, 'Same code, three device settings. Switch the language, the theme and the count.');
-              el.append(
-                h('div', { class: 'kmp-grid2' },
-                  h('div', { class: 'kmp-devs' }, h('div', { class: 'kmp-dev-wrap' }, dev, h('span', { class: 'kmp-label' }, 'device'))),
-                  h('div', { class: 'kmp-panel' },
-                    h('span', { class: 'kmp-label' }, 'resolved files'), files,
-                    kt('Text(stringResource(Res.string.greeting, "Ada"))\nText(pluralStringResource(\n    Res.plurals.new_articles, count, count))'))),
-                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'language'), langBtns),
-                h('div', { class: 'controls' }, themeBtn, more),
-                o);
-            },
-          },
-          {
-            title: 'One layout for every window size',
-            body: `
-<p>Desktop windows resize, tablets rotate and phones fold, so shared UI can’t assume a phone screen. Read the space you have with <code>BoxWithConstraints</code>, or with the window size classes from the multiplatform <code>material3-adaptive</code> library, and switch layouts at a breakpoint such as 600 dp.</p>
-<p>The switch is plain Compose state, so it works the same in every host. Keep the selected item in state above the branch, and it survives the jump from one pane to two. Drag the width below, open an article, then cross 600 dp.</p>`,
-            code: `@Composable
-fun NewsLayout(articles: List<Article>) {
-    var selected by rememberSaveable { mutableStateOf<Long?>(null) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth < 600.dp) {
-            if (selected == null) ArticleList(articles, onOpen = { selected = it })
-            else ArticleDetail(id = selected, onBack = { selected = null })
-        } else {
-            Row {
-                ArticleList(articles, onOpen = { selected = it }, modifier = Modifier.width(320.dp))
-                ArticleDetail(id = selected, onBack = null)
+// commonMain/kotlin/com/example/recipes/ui/App.kt
+@Composable
+fun App(repository: RecipeRepository) {
+    MaterialTheme {
+        val viewModel = viewModel { RecipesViewModel(repository) }
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        Column {
+            Button(onClick = { viewModel.refresh() }) { Text("Refresh") }
+            Text(state.note)
+            LazyColumn {
+                items(state.recipes, key = { it.id }) { recipe -> Text(quickLabel(recipe)) }
             }
         }
     }
-}`,
-            visual(el) {
-              const ITEMS = ['Compose 1.9 notes', 'Room on iOS', 'Ktor 3 tips', 'SKIE explained'];
-              const S = { w: 360, sel: null };
-              const win = h('div', { class: 'kmp-d2-win', role: 'group', 'aria-label': 'App window' });
-              const label = h('span', { class: 'kmp-state' });
-              const o = out();
-              const range = h('input', { type: 'range', id: 'kmp-d2-width', min: '320', max: '1200', step: '20', value: '360', 'aria-label': 'Window width in dp' });
-              range.addEventListener('input', () => set(+range.value));
-              function render() {
-                const two = S.w >= 600;
-                win.style.width = `${Math.round((S.w / 1200) * 100)}%`;
-                win.classList.toggle('kmp-d2-two', two);
-                const list = h('div', { class: 'kmp-d2-list' }, ITEMS.map((t, i) => h('button', { type: 'button', class: 'kmp-d2-item' + (S.sel === i ? ' kmp-on' : ''), onclick: () => openItem(i) }, t)));
-                const detail = h('div', { class: 'kmp-d2-detail' }, S.sel == null
-                  ? h('p', { class: 'kmp-empty' }, 'Pick an article')
-                  : [h('b', {}, ITEMS[S.sel]), h('span', {}, 'The full article text goes here.'), two ? null : h('button', { type: 'button', class: 'kmp-d2-item', onclick: back }, '← Back')]);
-                win.replaceChildren(...(two ? [list, detail] : [S.sel == null ? list : detail]));
-                label.textContent = `maxWidth = ${S.w}.dp → ${two ? 'list + detail' : S.sel == null ? 'list' : 'detail'}`;
-              }
-              function set(w) {
-                const before = S.w >= 600;
-                S.w = w; range.value = String(w); render();
-                if (before !== (w >= 600)) {
-                  replay(win, 'pop-soft');
-                  say(o, `Crossed 600 dp. Same state, other layout. selected = ${S.sel == null ? 'null' : `"${ITEMS[S.sel]}"`}.`);
-                }
-              }
-              function openItem(i) { S.sel = i; render(); say(o, `selected = "${ITEMS[i]}". ${S.w >= 600 ? 'The detail pane updates in place.' : 'The list is replaced by the detail.'}`); }
-              function back() { S.sel = null; render(); say(o, 'selected = null. Back to the list.'); }
-              const presets = [['Phone 360 dp', 360], ['Tablet 840 dp', 840], ['Desktop 1200 dp', 1200]].map(([t, w]) => act(t, () => set(w)));
-              render();
-              say(o, 'A phone-width window shows only the list. Open an article, then widen it.');
-              el.append(
-                h('div', { class: 'kmp-d2-stage' }, label, win),
-                h('div', { class: 'controls' }, h('label', { class: 'kmp-label', for: 'kmp-d2-width' }, 'width'), range),
-                h('div', { class: 'controls' }, presets),
-                o);
-            },
-          },
-          {
-            title: 'Native views inside shared UI',
-            body: `
-<p>Some things should stay native: maps, video, web content, platform pickers. Declare an <code>expect</code> composable in common and let each platform embed its own view. <code>AndroidView</code> hosts an Android <code>View</code>. On iOS, <code>UIKitView</code> hosts a <code>UIView</code> and <code>UIKitViewController</code> a whole view controller.</p>
-<p>Skia doesn’t draw these views. Compose measures and places them, and the platform draws them. Test scrolling, clipping and anything drawn on top of them on a real device.</p>`,
-            code: `// commonMain
-@Composable
-expect fun MapPane(modifier: Modifier = Modifier)
-
-// androidMain
-@Composable
-actual fun MapPane(modifier: Modifier) {
-    AndroidView(factory = { context -> MapView(context) }, modifier = modifier)
 }
 
-// iosMain
-@OptIn(ExperimentalForeignApi::class)
-@Composable
-actual fun MapPane(modifier: Modifier) {
-    UIKitView(factory = { MKMapView() }, modifier = modifier)
-}`,
-          },
-        ],
-        underHood: {
-          body: `
-<p>The Compose compiler plugin is the same on every target. It rewrites each <code>@Composable</code> function to take a hidden <code>Composer</code> and change flags, and the runtime that keeps state in the slot table and schedules recomposition is shared Kotlin code. Only the bottom layer differs per platform.</p>
-<p>On Android, Compose Multiplatform resolves to Google’s Jetpack Compose artifacts and draws through Android’s own rendering. On iOS and desktop, Compose draws everything with Skia through Skiko, JetBrains’ Kotlin bindings for Skia. On iOS it renders into a Metal-backed view inside the <code>UIViewController</code>, and on desktop into a Swing window. Text input, accessibility and gestures are connected to each platform’s own systems separately.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'Android APIs inside a shared composable',
-            bad: `// commonMain
-@Composable
-fun SaveButton(onSave: () -> Unit) {
-    val context = LocalContext.current
-    Button(onClick = {
-        onSave()
-        Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
-    }) { Text("Save") }
-}`,
-            good: `// commonMain
-@Composable
-fun SaveButton(snackbar: SnackbarHostState, onSave: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    Button(onClick = {
-        onSave()
-        scope.launch { snackbar.showSnackbar("Saved") }
-    }) { Text("Save") }
-}`,
-            why: '<code>LocalContext</code> and <code>Toast</code> come from Android libraries, so commonMain stops compiling for iOS. Use a common Material component, or an <code>expect</code> function when you truly need the platform.',
-          },
-          {
-            title: 'Calling stringResource outside composition',
-            bad: `class NewsViewModel : ViewModel() {
-    fun onLoadFailed() {
-        _message.value = stringResource(Res.string.load_failed)   // not a composable
-    }
-}`,
-            good: `class NewsViewModel : ViewModel() {
-    fun onLoadFailed() {
-        viewModelScope.launch { _message.value = getString(Res.string.load_failed) }
-    }
-}`,
-            why: '<code>stringResource</code> is a composable, so it can’t be called from a ViewModel. The suspend <code>getString</code> reads the same resource from any coroutine. Often better: keep the <code>StringResource</code> in state and resolve it in the UI, so a language change updates the text.',
-          },
-        ],
-        visual(el) {
-          const GREET = ['Hello, KMP!', 'Hi there!', 'Welcome back', 'Hi from common'];
-          const COLORS = [['', 'accent'], ['kmp-c-warm', 'warm'], ['kmp-c-ok', 'ok'], ['kmp-c-err', 'err']];
-          let g = 0, c = 0, busy = false;
-          const lines = {};
-          const src = [
-            ['h', '@Composable fun App() {'],
-            ['', '  var count by remember { mutableIntStateOf(0) }'],
-            ['logo', '  Image(painterResource(Res.drawable.logo), null)'],
-            ['greet', '  Text(stringResource(Res.string.greeting))  // "Hello, KMP!"'],
-            ['btn', '  Button(onClick = { count++ }) { Text("Clicked $count") }'],
-            ['plat', '  Text("Running on ${getPlatform().name}")'],
-            ['', '}'],
-          ];
-          const codeBox = h('div', { class: 'kmp-code' }, src.map(([k, s]) => { const l = h('div', { class: 'kmp-line', html: hl(s) }); if (k) lines[k] = l; return l; }));
-          const FRAMES = [
-            { name: 'Android', host: 'setContent { App() }', plat: 'Android 36', cls: 'kmp-dev kmp-and' },
-            { name: 'iOS', host: 'ComposeUIViewController { App() }', plat: 'iOS 26.0', cls: 'kmp-dev kmp-ios' },
-            { name: 'Desktop', host: 'Window { App() }', plat: 'Java 21.0.4', cls: 'kmp-dev kmp-win' },
-          ];
-          const o = out('Three hosts run the same App(). Tap a button inside a frame, or edit the shared code.');
-          const frames = FRAMES.map(f => {
-            const st = { count: 0 };
-            const logo = h('div', { class: 'kmp-logo' });
-            const hello = h('div', { class: 'kmp-hello' });
-            const btn = h('button', { class: 'kmp-btn', onclick() { st.count++; paintBtn(); replay(btn, 'pop'); say(o, `<span class="muted">${f.name}:</span> count++ recomposed only this frame. Each app keeps its own state.`); } });
-            const paintBtn = () => { btn.textContent = `Clicked ${st.count}`; };
-            const content = [logo, hello, btn, h('div', { class: 'kmp-plat' }, `Running on ${f.plat}`)];
-            const dev = f.name === 'Desktop'
-              ? h('div', { class: f.cls, role: 'group', 'aria-label': 'Desktop window' }, h('div', { class: 'kmp-win-bar' }, h('i'), h('i'), h('i'), 'News'), h('div', { class: 'kmp-win-body' }, content))
-              : h('div', { class: f.cls, role: 'group', 'aria-label': `${f.name} phone` }, content);
-            paintBtn();
-            return { f, dev, logo, hello, paint() { hello.textContent = GREET[g]; dev.classList.remove('kmp-c-warm', 'kmp-c-ok', 'kmp-c-err'); if (COLORS[c][0]) dev.classList.add(COLORS[c][0]); } };
-          });
-          frames.forEach(fr => fr.paint());
-          async function edit(key, change, msg) {
-            if (busy) return; busy = true; change();
-            const l = lines[key]; l.classList.add('kmp-hot');
-            if (key === 'greet') l.innerHTML = hl(`  Text(stringResource(Res.string.greeting))  // "${GREET[g]}"`);
-            replay(l, 'pop-soft'); say(o, `<span class="muted">${msg}</span>`);
-            await sleep(450);
-            for (const fr of frames) { if (!el.isConnected) return; fr.paint(); replay(fr.dev, 'pop'); await sleep(260); }
-            l.classList.remove('kmp-hot');
-            say(o, '<span class="good">ok:</span> one edit in commonMain, three platforms updated. Counters kept their own values.');
-            busy = false;
-          }
-          el.append(codeBox,
-            h('div', { class: 'kmp-devs' }, frames.map(fr => h('div', { class: 'kmp-dev-wrap' }, fr.dev, h('span', { class: 'kmp-label' }, fr.f.host)))),
-            h('div', { class: 'controls' },
-              act('Edit strings.xml greeting', () => edit('greet', () => { g = (g + 1) % GREET.length; }, 'composeResources/values/strings.xml changed. Res.string.greeting has a new value.')),
-              act('Change logo color', () => edit('logo', () => { c = (c + 1) % COLORS.length; }, `Res.drawable.logo swapped for the ${COLORS[(c + 1) % COLORS.length][1]} version.`))),
-            o);
-        },
-      },
+// androidApp, MainActivity.onCreate
+setContent { App(repository) }
 
-      // 6 ─────────────────────────────────────────────
-      {
-        id: 'swift',
-        title: 'Interop with Swift and iOS',
-        tagline: 'What your Kotlin API looks like from the Swift side.',
-        level: 'advanced',
-        body: `
-<p>Kotlin/Native exports the shared module as a framework with an Objective-C header. Swift imports that header, so Swift sees your Kotlin API through Objective-C. Classes stay classes, interfaces become protocols, <code>List</code> becomes a Swift array, and an <code>object</code> is reached through <code>.shared</code>. Kotlin <code>Int</code> arrives as <code>Int32</code>, and top-level functions live on a class named after the file, like <code>PlatformKt</code>.</p>
-<p>A <code>suspend</code> function becomes a method with a completion handler, which Swift can also call with <code>await</code>. Exceptions only cross into Swift if the function declares them with <code>@Throws</code>. Anything else crashes the app. Suspend functions always pass <code>CancellationException</code> through.</p>
-<p>Sealed classes and enums lose their exhaustiveness: Swift sees a class hierarchy and needs <code>as?</code> casts with a default case. SKIE fixes that with real Swift enums and <code>onEnum(of:)</code>. Kotlin's own Swift export, which skips Objective-C, is still in Alpha.</p>`,
-        code: `// Kotlin, commonMain
-class UserRepository(private val api: UserApi) {
-    fun count(): Int = api.cachedCount()
-
-    @Throws(IOException::class, CancellationException::class)
-    suspend fun load(id: String): User = api.fetch(id)
-}
-
-object Logger {
-    fun log(message: String) = println(message)
-}
-
-sealed class UiState {
-    data object Loading : UiState()
-    data class Success(val user: User) : UiState()
-}
-
-// Swift, iOS app
-// import Shared
-//
-// let n: Int32 = repo.count()                  // Kotlin Int is Int32
-// Logger.shared.log(message: "start")          // object -> .shared
-// let user = try await repo.load(id: "42")     // suspend -> async throws
-//
-// if let s = state as? UiState.Success {       // no exhaustive switch
-//     print(s.user.name)
-// }
-//
-// With SKIE:
-// switch onEnum(of: state) {
-// case .loading: showSpinner()
-// case .success(let s): show(s.user)
-// }`,
-        remember: 'Swift sees Kotlin through Objective-C: Int is Int32, object is .shared, suspend is async, and only @Throws exceptions survive.',
+// iosMain/kotlin/com/example/recipes/MainViewController.kt
+fun MainViewController(): UIViewController {
+    val repository = iosRepository()            // IosRepository.kt, from the Room lesson
+    return ComposeUIViewController { App(repository) }
+}`,
+        remember: 'With Compose Multiplatform, App() lives in commonMain; Android shows it with setContent, the iPhone with ComposeUIViewController.',
         terms: [
-          { term: '@Throws', def: 'A Kotlin annotation that lists exceptions to turn into Swift errors; undeclared exceptions crash when they reach Swift.' },
-          { term: 'Objective-C export', def: 'The Kotlin/Native step that generates an Objective-C header for the framework, which is how Swift sees Kotlin types today.' },
-          { term: 'XCFramework', def: 'An Apple bundle that holds one framework per platform and architecture, such as device and simulator, for Xcode to link.' },
+          { term: 'Compose Multiplatform', def: 'JetBrains’ version of Compose that also runs on iOS, desktop and the web. Stable on iOS since 1.8.0.' },
+          { term: 'view controller', def: 'iOS’s container for one screen, a <code>UIViewController</code>. It plays the role an Activity plays on Android.' },
+          { term: 'ComposeUIViewController', def: 'Wraps composables in a <code>UIViewController</code>, so an iPhone app can show a Compose screen.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Make the Kotlin singleton and exception usable from Swift.', code: '// Kotlin\n[[object]] Analytics {\n    fun track(event: String) { /* ... */ }\n}\n\n@[[Throws]](IOException::class)\nfun readConfig(): String = loadFile("config.json")\n\n// Swift\nAnalytics.[[shared]].track(event: "open")\nlet config = try ConfigKt.readConfig()', why: 'A Kotlin <code>object</code> is reached through <code>.shared</code>. <code>@Throws</code> turns the IOException into a Swift error you can <code>try</code>.' },
-          { type: 'bug', prompt: 'This Swift file does not compile. Tap the line.', code: 'import Shared\n\nfunc summary(repo: UserRepository) -> String {\n    let total: Int = repo.count()\n    let names = repo.names()\n    return "\\(total) users: " + names.joined(separator: ", ")\n}', bug: 3, fix: '    let total = Int(repo.count())   // Kotlin Int arrives as Int32', why: 'Kotlin <code>Int</code> is 32-bit, so Swift sees <code>Int32</code>. Swift does not convert number types for you.' },
-        ],
-        predict: {
-      q: "Without SKIE, what does Swift get for <code>enum class Theme { LIGHT, DARK }</code>?",
-      options: ["A Swift enum with an exhaustive switch","A class with static members; a switch needs a default case","Nothing: enums are not exported"],
-      a: 1,
-      why: "Plain Objective-C export turns Kotlin enums into classes. SKIE can generate a real Swift enum instead.",
-    },
-    quiz: [
-          { q: 'Kotlin has <code>fun count(): Int</code>. What does Swift get?', options: ['<code>Int</code>', '<code>Int32</code>', '<code>NSNumber</code>'], a: 1, why: 'Kotlin <code>Int</code> is always 32-bit, so the header uses <code>int32_t</code>, which Swift imports as <code>Int32</code>.' },
-          { q: 'A Kotlin function throws an exception it did not declare with <code>@Throws</code>, and Swift called it. What happens?', options: ['Swift receives an <code>Error</code>', 'The app crashes', 'It returns nil'], a: 1, why: 'Only declared exceptions become Swift errors. Undeclared ones terminate the program.' },
-          { q: 'Without SKIE, how does Swift check which <code>UiState</code> it has?', options: ['An exhaustive <code>switch</code> over enum cases', '<code>as?</code> casts or <code>is</code> checks, with a fallback case', 'It cannot see sealed classes'], a: 1, why: 'Swift sees a class hierarchy, so the compiler cannot prove every case is handled. SKIE adds <code>onEnum(of:)</code> for that.' },
-          { q: 'Kotlin has <code>fun ids(): List&lt;Int&gt;</code>. What type does Swift see?', options: ['<code>[Int]</code>', '<code>[Int32]</code>', '<code>[KotlinInt]</code>'], a: 2, why: 'Numbers inside generic types must be objects in Objective-C, so they are boxed. KotlinInt is a subclass of NSNumber.' },
-          { q: 'The iOS app links two Kotlin frameworks, News and Profile. Passing an Article from one to the other does not compile. What fixes it?', options: ['One umbrella module that depends on both with api and lists them with export(), built as a single framework', 'Make Article an interface', 'Add @ObjCName to Article in both modules'], a: 0, why: 'Each framework carries its own copy of the runtime and of every type, so the two Articles are unrelated. One framework gives Swift one copy.' },
-          { q: '<pre>@Throws(IOException::class)\nsuspend fun load(id: String) =\n  api.fetch(id)</pre>What happens?', options: ['It works, and Swift gets IOException as an Error', 'It compiles, but cancellation crashes the app', 'The build fails: a suspend @Throws must list CancellationException or a superclass'], a: 2, why: 'Kotlin/Native requires cancellation to reach Swift as an error too. List CancellationException next to IOException.' },
-        ],
-        deeper: [
-          {
-            title: 'Which exceptions reach Swift',
-            body: `
-<p>A regular function with <code>@Throws</code> becomes a Swift <code>throws</code> function. A suspend function always gets an error parameter in its completion handler, so Swift can <code>try await</code> it. Either way, only the exception classes you listed, and their subclasses, arrive as a Swift <code>Error</code>. Any other exception terminates the app.</p>
-<p>Without the annotation, a suspend function passes only <code>CancellationException</code>, and a regular function passes nothing. With it, a suspend function must list <code>CancellationException</code> or a superclass, or the compiler rejects it. Pick a function kind, an annotation and an exception, then call it from Swift.</p>`,
-            visual(el) {
-              const EX = ['IOException', 'IllegalStateException', 'CancellationException'];
-              const MSG = { IOException: 'offline', IllegalStateException: 'no user', CancellationException: 'screen closed' };
-              const S = { suspend: true, ann: false, ex: 'IOException' };
-              let busy = false;
-              const ktCode = h('div', { class: 'kt' }), swCode = h('div', { class: 'kt' });
-              const swPanel = h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'Swift'), swCode);
-              const result = h('div', { class: 'kmp-result' }, h('span', { class: 'kmp-label' }, 'result'));
-              const o = out();
-              function paint() {
-                const ann = S.ann ? (S.suspend ? '@Throws(IOException::class, CancellationException::class)\n' : '@Throws(IOException::class)\n') : '';
-                ktCode.innerHTML = hl(`${ann}${S.suspend ? 'suspend ' : ''}fun load(id: String): User {\n    throw ${S.ex}("${MSG[S.ex]}")\n}`);
-                swCode.innerHTML = hl(S.suspend || S.ann
-                  ? `do {\n    let user = try ${S.suspend ? 'await ' : ''}repo.load(id: "42")\n} catch {\n    showError(error)\n}`
-                  : 'let user = repo.load(id: "42")\n// not a throws function: no try, no catch');
-                result.replaceChildren(h('span', { class: 'kmp-label' }, 'result'));
-                swPanel.classList.remove('kmp-missing', 'kmp-on');
-              }
-              async function call() {
-                if (busy) return; busy = true;
-                paint();
-                swPanel.classList.add('kmp-on');
-                result.replaceChildren(h('div', { class: 'kmp-spin' }));
-                say(o, `<span class="muted">Swift calls ${S.suspend ? 'the suspend function' : 'load()'}. Kotlin throws ${S.ex}.</span>`);
-                await sleep(600); if (!el.isConnected) return;
-                swPanel.classList.remove('kmp-on');
-                const passes = S.ex === 'IOException' ? S.ann : S.ex === 'CancellationException' ? S.suspend : false;
-                if (passes) {
-                  result.replaceChildren(h('span', { class: 'kmp-res drop-in' }, 'catch: Error'));
-                  say(o, `<span class="good">caught:</span> ${S.ex} arrived as an NSError, and Swift’s catch block ran.`);
-                } else {
-                  swPanel.classList.add('kmp-missing'); replay(swPanel, 'shake');
-                  result.replaceChildren(h('span', { class: 'kmp-res kmp-err drop-in' }, 'app terminated'));
-                  say(o, `<span class="bad">crash:</span> ${S.ex} is not declared for this function, so it can’t become a Swift error. The app terminates.`);
-                }
-                busy = false;
-              }
-              const kinds = [['fun', false], ['suspend fun', true]];
-              const kindBtns = kinds.map(([t, v], i) => act(t, () => { if (busy) return; S.suspend = v; pick(kindBtns, i); paint(); }));
-              const exBtns = EX.map((e, i) => act(e, () => { if (busy) return; S.ex = e; pick(exBtns, i); paint(); }));
-              const box = h('input', { type: 'checkbox', id: 'kmp-d2-throws', onchange() { if (busy) { this.checked = S.ann; return; } S.ann = this.checked; paint(); replay(ktCode, 'pop-soft'); } });
-              pick(kindBtns, 1); pick(exBtns, 0); paint();
-              say(o, 'A suspend function without @Throws throws IOException. Call it.');
-              el.append(
-                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'kind'), kindBtns, h('label', { class: 'switch', for: 'kmp-d2-throws' }, box, '@Throws')),
-                h('div', { class: 'controls' }, h('span', { class: 'kmp-label' }, 'throws'), exBtns),
-                h('div', { class: 'kmp-grid2' }, h('div', { class: 'kmp-panel' }, h('span', { class: 'kmp-name' }, 'Kotlin'), ktCode), swPanel),
-                h('div', { class: 'controls' }, cmd('repo.load(id: "42")', call)),
-                result, o);
-            },
-          },
-          {
-            title: 'Shape the Swift API with annotations',
-            body: `
-<p>You can change how a declaration looks in Swift without touching Kotlin callers. <code>@ObjCName</code> gives it another name in Objective-C and Swift. <code>@HiddenFromObjC</code> leaves it out of the header, which suits Kotlin-only helpers. <code>@ShouldRefineInSwift</code> keeps it but marks it <code>swift_private</code>, so Swift sees it with a <code>__</code> prefix, ready to be wrapped in a nicer Swift extension.</p>
-<p>The annotations are experimental. Opt in with <code>@OptIn(ExperimentalObjCName::class)</code> for the first, and <code>ExperimentalObjCRefinement</code> for the other two. Toggle them, then rebuild the framework.</p>`,
-            code: `@OptIn(ExperimentalObjCName::class, ExperimentalObjCRefinement::class)
-@ObjCName(swiftName = "UserStore")
-class UserRepositoryImpl(private val api: UserApi) {
-    @HiddenFromObjC
-    fun cacheKey(id: String): String = "user:$id"
-
-    @ShouldRefineInSwift
-    fun observe(): Flow<User> = api.userUpdates()
-}`,
-            visual(el) {
-              const ROWS = [
-                { ann: '@ObjCName(swiftName = "UserStore")', k: 'class UserRepositoryImpl', off: 'class UserRepositoryImpl', on: 'class UserStore', note: 'Swift gets a cleaner name. Kotlin code still says UserRepositoryImpl.' },
-                { ann: '@ObjCName("user")', k: 'fun findById(id: String): User?', off: 'func findById(id: String) -> User?', on: 'func user(id: String) -> User?', note: 'Only the Objective-C and Swift name changes.' },
-                { ann: '@HiddenFromObjC', k: 'fun cacheKey(id: String): String', off: 'func cacheKey(id: String) -> String', on: '// not in the header', note: 'A Kotlin-only helper no longer clutters the Swift API.' },
-                { ann: '@ShouldRefineInSwift', k: 'fun observe(): Flow<User>', off: 'func observe() -> Kotlinx_coroutines_coreFlow', on: 'func __observe() -> Kotlinx_coroutines_coreFlow\n// wrap it in a Swift extension', note: 'Still exported, but behind __ so you can offer a Swift-friendly wrapper.' },
-              ];
-              let busy = false;
-              const o = out();
-              const rows = ROWS.map(r => {
-                const st = { on: false, built: false };
-                const k = h('div', { class: 'kmp-cell' }), s = h('div', { class: 'kmp-cell' });
-                const pass = h('div', { class: 'kmp-pass', 'aria-hidden': 'true' });
-                const btn = h('button', { type: 'button', class: 'kmp-tbtn', 'aria-pressed': 'false' }, r.ann);
-                const x = { r, st, k, s, pass, btn };
-                btn.addEventListener('click', () => {
-                  if (busy) return;
-                  st.on = !st.on; btn.setAttribute('aria-pressed', String(st.on));
-                  paintK(x); s.classList.toggle('kmp-stale', st.on !== st.built);
-                  say(o, `${st.on ? 'Added' : 'Removed'} ${r.ann}. The header is out of date until you rebuild.`);
-                });
-                x.el = h('div', { class: 'kmp-d2-ann' }, h('div', { class: 'controls' }, btn), h('div', { class: 'kmp-d2-arow' }, k, pass, s));
-                return x;
-              });
-              const paintK = x => { x.k.innerHTML = hl((x.st.on ? x.r.ann + '\n' : '') + x.r.k); };
-              const paintS = x => { x.s.textContent = x.st.built ? x.r.on : x.r.off; x.s.classList.remove('kmp-stale'); };
-              rows.forEach(x => { paintK(x); paintS(x); });
-              async function build() {
-                if (busy) return;
-                const todo = rows.filter(x => x.st.on !== x.st.built);
-                if (!todo.length) { say(o, 'Nothing changed since the last build. Toggle an annotation first.'); return; }
-                busy = true;
-                say(o, '<span class="muted">./gradlew linkDebugFrameworkIosSimulatorArm64</span>');
-                for (const x of todo) {
-                  x.el.classList.add('kmp-on'); x.pass.append(h('span', { class: 'kmp-dot' }));
-                  await sleep(560); if (!el.isConnected) return;
-                  x.pass.replaceChildren(); x.st.built = x.st.on; paintS(x); replay(x.s, 'drop-in'); x.el.classList.remove('kmp-on');
-                  say(o, `<span class="good">Swift:</span> ${x.st.on ? x.r.note : 'back to the default name.'}`);
-                }
-                busy = false;
-              }
-              say(o, 'Toggle an annotation, then rebuild the framework.');
-              el.append(
-                h('div', { class: 'kmp-map' }, h('div', { class: 'kmp-maphead' }, h('span', { class: 'kmp-label' }, 'Kotlin'), h('span'), h('span', { class: 'kmp-label' }, 'Swift sees')), rows.map(x => x.el)),
-                h('div', { class: 'controls' }, cmd('./gradlew linkDebugFrameworkIosSimulatorArm64', build)),
-                o);
-            },
-          },
-          {
-            title: 'One framework per app',
-            body: `
-<p>Every Kotlin framework carries its own copy of the Kotlin runtime and of every library it uses. Link two of them into one app and Swift sees two unrelated <code>Kotlinx_coroutines_coreFlow</code> types and two copies of your shared models. An object from one framework can’t be passed to the other.</p>
-<p>Make one umbrella module for iOS. It depends on your feature modules with <code>api</code> and lists them with <code>export()</code>, so their public API appears in the single framework header.</p>`,
-            code: `// iosUmbrella/build.gradle.kts
-kotlin {
-    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
-        target.binaries.framework {
-            baseName = "Shared"
-            export(project(":feature:news"))
-            export(project(":feature:profile"))
-        }
-    }
+          { type: 'blank', prompt: 'Show the shared screen on the iPhone.', code: `fun MainViewController(): UIViewController {
+    val repository = iosRepository()
+    return [[ComposeUIViewController]] { [[App]](repository) }
+}`, why: '<code>ComposeUIViewController</code> turns the composable into a view controller the iPhone app can show.' },
+          { type: 'bug', prompt: '<code>App()</code> in <code>commonMain</code> fails with <code>Unresolved reference \'viewModel\'.</code> Tap the wrong line.', code: `kotlin {
     sourceSets {
-        commonMain.dependencies {
-            api(project(":feature:news"))
-            api(project(":feature:profile"))
+        androidMain.dependencies {
+            implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
         }
     }
-}`,
-          },
+}`, bug: 2, fix: '        commonMain.dependencies {', why: 'A library added to <code>androidMain</code> is only visible to Android code. <code>App()</code> is in <code>commonMain</code>, so the dependency must be there.' },
         ],
-        underHood: {
-          body: `
-<p>The link task writes two things: the machine code and an Objective-C header that describes it. Each exported Kotlin class becomes an Objective-C class wrapping the Kotlin object. Swift holds that wrapper with normal reference counting, and the Kotlin object stays alive as long as Swift holds a reference.</p>
-<p>Objective-C only has lightweight generics on classes. Generics on interfaces and functions are dropped, which is why a <code>Flow&lt;User&gt;</code>, an interface, reaches Swift without its type argument. Numbers inside generic types must be objects, so they are boxed: a <code>List&lt;Int&gt;</code> arrives as <code>[KotlinInt]</code>, where <code>KotlinInt</code> is a subclass of <code>NSNumber</code>. A suspend function becomes a method with a completion handler, and Swift’s own import rules let you call such a method with <code>await</code>.</p>`,
-        },
-        mistakes: [
-          {
-            title: 'A suspend @Throws without CancellationException',
-            bad: `@Throws(IOException::class)
-suspend fun load(id: String): User = api.fetch(id)`,
-            good: `@Throws(IOException::class, CancellationException::class)
-suspend fun load(id: String): User = api.fetch(id)`,
-            why: 'Kotlin/Native rejects it: “@Throws on suspend declaration must have kotlin.coroutines.cancellation.CancellationException (or any of its superclasses) listed”. Cancellation has to reach Swift as an error too.',
-          },
-          {
-            title: 'Expecting default arguments in Swift',
-            bad: `fun search(query: String, limit: Int = 20, newestFirst: Boolean = false): List<Hit>
-// Swift: repo.search(query: "kmp", limit: 20, newestFirst: false)`,
-            good: `fun search(query: String, limit: Int = 20, newestFirst: Boolean = false): List<Hit>
+        quiz: [
+          { q: 'What does <code>ComposeUIViewController</code> do?', options: ['Starts an Activity on the iPhone', 'Wraps composables in a view controller the iPhone app can show', 'Turns SwiftUI code into Compose'], a: 1, why: 'A view controller is iOS’s container for a screen. <code>ComposeUIViewController</code> puts a Compose screen in one.' },
+          { q: 'What is the status of Compose Multiplatform on iOS?', options: ['Stable since 1.8.0', 'Alpha', 'It only runs on Android and desktop'], a: 0, why: 'iOS support became stable in Compose Multiplatform 1.8.0. The web is still Beta.' },
+          { q: 'In common code, why do you always write <code>viewModel { RecipesViewModel(repository) }</code>?', options: ['Hilt needs it', 'On iOS the library can’t make a ViewModel from its class alone, so you say how', 'It makes the screen faster'], a: 1, why: 'The Kotlin docs: on iOS there is no way to make an object from its class alone, so common code passes the <code>{ }</code> that makes the ViewModel.' },
+        ],
+        docs: [['Compose Multiplatform entry points', 'https://kotlinlang.org/docs/multiplatform/compose-multiplatform-entry-points.html'], ['Stability of supported platforms', 'https://kotlinlang.org/docs/multiplatform/supported-platforms.html']],
+      },
 
-// a short overload for Swift callers
-fun search(query: String): List<Hit> = search(query, limit = 20, newestFirst = false)`,
-            why: 'Objective-C has no default arguments, so Swift sees every parameter as required. Add overloads for the common calls, or use SKIE, which can generate them.',
-          },
-          {
-            title: 'Exposing a MutableList to Swift',
-            bad: `class Cart {
-    val items: MutableList<Item> = mutableListOf()
-}`,
-            good: `class Cart {
-    private val _items = mutableListOf<Item>()
-    val items: List<Item> get() = _items
-    fun add(item: Item) { _items += item }
-}`,
-            why: 'A <code>MutableList</code> arrives as an <code>NSMutableArray</code>. Swift loses the element type and can change your Kotlin state behind your back. A read-only <code>List</code> arrives as a typed Swift array.',
-          },
-        ],
+      // 8 ─────────────────────────────────────────────
+      {
+        id: 'swift',
+        title: 'Calling Kotlin from Swift',
+        tagline: 'How your shared Kotlin looks from the Swift side of the iPhone app.',
+        goals: ['Call shared classes and functions from Swift', 'Mark a function with @Throws so Swift can catch its errors', 'Tell Objective-C headers and Swift export apart'],
+        level: 'intermediate', introduces: ['Throws', 'Int32'],
+        body: `
+<p>Ada writes one of Recipes’ iPhone screens in SwiftUI, and it needs <code>quickLabel</code> and the repository. Swift reads a lot like Kotlin: <code>let</code> is <code>val</code>, <code>var</code> is <code>var</code>, <code>func</code> is <code>fun</code>, and <code>print</code> is <code>println</code>. <code>import Shared</code> at the top of a Swift file makes the framework’s classes and functions visible. Ada also moved <code>quickLabel</code> out of <code>Recipe.kt</code> into its own file, <code>QuickLabel.kt</code>.</p>
+<p>The framework describes your Kotlin to Swift with a <em>header</em> written in Objective-C, Apple’s older language. So Swift sees Kotlin through Objective-C’s eyes. A class stays a class, and its constructor becomes a Swift initializer whose argument labels are your parameter names. <code>String</code> stays <code>String</code>, a <code>List</code> becomes a Swift array, and an interface becomes a protocol, Swift’s word for it. Kotlin’s <code>Int</code> becomes <code>Int32</code>, because Swift’s own <code>Int</code> is bigger. A top-level function sits on a class named after its file plus <code>Kt</code>: <code>quickLabel</code> in <code>QuickLabel.kt</code> is <code>QuickLabelKt.quickLabel(recipe:)</code>, and <code>iosRepository()</code> in <code>IosRepository.kt</code> is <code>IosRepositoryKt.iosRepository()</code>.</p>
+<p>A <code>suspend</code> function arrives with a completion handler, a callback for the result, and Swift can also call it with <code>try await</code>, which the Kotlin docs still call experimental. Errors need care: Swift must know which exceptions to expect. Mark the function <code>@Throws(Exception::class)</code> and the exception becomes a Swift error that <code>catch</code> handles. A <code>suspend</code> function without it passes on only cancellation; any other exception ends the app. A <code>Flow</code>, a ViewModel’s <code>StateFlow</code> too, has no Swift form in the header: Swift gets a Kotlin interface it can’t loop over. For SwiftUI screens that watch a shared ViewModel, use a helper library such as SKIE, KMP-NativeCoroutines or KMP-ObservableViewModel. With KMP-ObservableViewModel, SwiftUI holds the ViewModel and clears it when the screen goes away, so you don’t need <code>RecipesHolder</code>.</p>
+<p><em>Swift export</em>, Alpha since Kotlin 2.4, skips Objective-C and writes Swift directly: top-level functions without the <code>Kt</code> class, <code>suspend</code> as Swift <code>async</code>, and a <code>Flow</code> as an <code>AsyncSequence</code> Swift can loop over. It is opt-in and still changing; the header is the default.</p>`,
         visual(el) {
-          const ROWS = [
-            { k: 'class User(val name: String)', s: 'let u = User(name: "Ada")\nu.name  // String', note: 'Classes map to Swift classes. Constructor parameters become labels.' },
-            { k: 'fun count(): Int', s: 'func count() -> Int32', note: 'Kotlin Int is 32-bit. Wrap with Int(...) when Swift needs Int.' },
-            { k: 'val tags: List<String>', s: 'var tags: [String] { get }', note: 'Read-only collections become Swift arrays and dictionaries.' },
-            { k: 'object Logger', s: 'Logger.shared.log(message: "hi")', note: 'An object is a class with one instance, reached through .shared.' },
-            { k: 'enum class Theme { LIGHT, DARK }', s: 'Theme.light  // a class\nswitch needs default:', sk: 'enum Theme { case light, dark }\n// exhaustive switch', note: 'Plain export makes enums classes with static members. SKIE generates a real Swift enum.' },
-            { k: 'sealed class UiState', s: 'if let s = state as? UiState.Success\n{ ... } else { ... }', sk: 'switch onEnum(of: state) {\ncase .loading: ...\ncase .success(let s): ... }', note: 'Sealed hierarchies need casts in plain export. SKIE wraps them in an exhaustive Swift enum.' },
-            { k: '@Throws(IOException::class, CancellationException::class)\nsuspend fun load(): User', s: 'repo.load { user, error in ... }\n// or: try await repo.load()', sk: 'try await repo.load()\n// Task cancel cancels the coroutine', note: 'Suspend becomes a completion handler, which Swift can await. SKIE adds two-way cancellation.' },
-            { k: 'val state: StateFlow<UiState>', s: 'vm.state.value  // read once\n// collect needs a FlowCollector', sk: 'for await s in vm.state { ... }', note: 'Flows lose their generic type and have no async API without help. SKIE makes them AsyncSequences.' },
-          ];
-          let skie = false, busy = false;
-          const o = out('Each row shows a Kotlin declaration and what Swift sees. Tap a row to export it.');
-          const rows = ROWS.map((r, i) => {
-            const k = h('div', { class: 'kmp-cell', html: hl(r.k) });
-            const pass = h('div', { class: 'kmp-pass', 'aria-hidden': 'true' });
-            const s = h('div', { class: 'kmp-cell' });
-            const row = h('button', { class: 'kmp-row', 'aria-label': `Export ${r.k.split('\n').pop()}`, onclick: () => send(i) }, k, pass, s);
-            return { r, row, pass, s };
+          Lab.ui.codeStepper(el, {
+            code: `import Shared
+
+let recipe = Recipe(id: 1, title: "Pancakes", minutes: 20, favorite: false)
+print(QuickLabelKt.quickLabel(recipe: recipe))
+let minutes: Int32 = recipe.minutes
+let repository = IosRepositoryKt.iosRepository()
+
+Task {
+    do {
+        try await repository.refresh()
+    } catch {
+        print("Offline: showing saved recipes")
+    }
+}`,
+            varsTitle: 'Swift values',
+            predict: {
+              q: 'Suppose <code>refresh()</code> had no <code>@Throws</code>. Lin is offline and Ktor throws an <code>IOException</code> inside it. What happens on her iPhone?',
+              options: ['Swift’s <code>catch</code> block runs', 'The app is terminated', 'The exception is ignored and nothing happens'],
+              a: 1,
+              why: 'A <code>suspend</code> function without <code>@Throws</code> passes only cancellation to Swift. Any other Kotlin exception reaching Swift ends the program.',
+            },
+            frames: [
+              { line: 1, say: '<code>import Shared</code> makes every public class and function in the framework visible to this Swift file.' },
+              { line: 3, vars: { recipe: 'Recipe' }, say: 'Kotlin’s constructor is a Swift initializer. Each argument has a label: the Kotlin parameter name.' },
+              { line: 4, out: 'Pancakes · quick', say: '<code>quickLabel</code> is a top-level function in <code>QuickLabel.kt</code>, so Swift finds it on the class <code>QuickLabelKt</code>.' },
+              { line: 5, vars: { minutes: '20 (Int32)' }, say: 'Kotlin’s <code>Int</code> is 32 bits; Swift’s <code>Int</code> is bigger. So the value arrives as an <code>Int32</code>.' },
+              { line: 6, vars: { repository: 'RecipeRepository' }, say: '<code>iosRepository()</code> is in <code>IosRepository.kt</code>, so Swift finds it on <code>IosRepositoryKt</code>. It builds the iPhone’s database and <code>HttpClient</code>.' },
+              { line: [8, 10], say: '<code>refresh()</code> is a <code>suspend</code> function. Swift calls it with <code>try await</code> inside a <code>Task</code>, Swift’s way to start async work, like <code>launch</code>.' },
+              { line: 10, say: 'Lin is offline and Ktor throws. <code>refresh()</code> is marked <code>@Throws(Exception::class)</code>, so the exception becomes a Swift error.' },
+              { line: 12, out: 'Offline: showing saved recipes', say: 'The <code>catch</code> block runs and the app carries on. Without <code>@Throws</code>, the exception would have ended the app.' },
+            ],
           });
-          const swiftOf = x => (skie && x.r.sk) || x.r.s;
-          const paint = x => { x.s.textContent = swiftOf(x); x.s.classList.toggle('kmp-skie', skie && !!x.r.sk); };
-          rows.forEach(paint);
-          async function send(i) {
-            if (busy) return; busy = true;
-            const x = rows[i];
-            rows.forEach((y, j) => y.row.classList.toggle('kmp-on', j === i));
-            x.s.textContent = ''; x.pass.append(h('span', { class: 'kmp-dot' }));
-            say(o, '<span class="muted">Kotlin/Native: writing the Objective-C header...</span>');
-            await sleep(560); if (!el.isConnected) return;
-            x.pass.replaceChildren(); paint(x); replay(x.s, 'drop-in');
-            say(o, `<span class="good">Swift:</span> ${x.r.note}`);
-            busy = false;
-          }
-          async function playAll() {
-            for (let i = 0; i < rows.length; i++) { if (!el.isConnected) return; while (busy) { await sleep(60); if (!el.isConnected) return; } await send(i); await sleep(250); }
-          }
-          const sw = h('input', { type: 'checkbox', id: 'kmp-skie', onchange() {
-            skie = this.checked;
-            rows.filter(x => x.r.sk).forEach(x => { paint(x); replay(x.s, 'flip'); });
-            say(o, skie ? '<span class="good">SKIE on:</span> the green-edged rows now get Swift-native enums, async sequences and cancellation.' : 'SKIE off: plain Objective-C export.');
-          } });
-          el.append(h('div', { class: 'kmp-map' },
-            h('div', { class: 'kmp-maphead' }, h('span', { class: 'kmp-label' }, 'Kotlin'), h('span'), h('span', { class: 'kmp-label' }, 'Swift sees')),
-            rows.map(x => x.row)),
-          h('div', { class: 'controls' }, act('Export all', playAll), h('label', { class: 'switch', for: 'kmp-skie' }, sw, 'with SKIE')),
-          o);
         },
+        code: `// shared/src/commonMain/kotlin/com/example/recipes/QuickLabel.kt
+fun quickLabel(recipe: Recipe): String =
+    if (recipe.minutes <= 20) "\${recipe.title} · quick" else "\${recipe.title} · \${recipe.minutes} min"
+
+// shared/src/commonMain/kotlin/com/example/recipes/RecipeRepository.kt
+class RecipeRepository(private val dao: RecipeDao, private val api: RecipeApi) {
+    val recipes: Flow<List<Recipe>> = dao.getAll()
+
+    @Throws(Exception::class)       // Swift: refresh() async throws
+    suspend fun refresh() { /* as in the Room lesson */ }
+}
+
+// iosApp/RecipesSettings.swift (Swift)
+// import Shared
+//
+// let recipe = Recipe(id: 1, title: "Pancakes", minutes: 20, favorite: false)
+// print(QuickLabelKt.quickLabel(recipe: recipe))     // Pancakes · quick
+// let minutes: Int32 = recipe.minutes                // Kotlin Int is Int32 in Swift
+// let repository = IosRepositoryKt.iosRepository()   // from IosRepository.kt
+//
+// Task {
+//     do {
+//         try await repository.refresh()
+//     } catch {
+//         print("Offline: showing saved recipes")
+//     }
+// }`,
+        remember: 'Swift sees Kotlin through an Objective-C header: Int is Int32, top-level functions sit on FileKt, and a suspend function needs @Throws for Swift to catch its errors.',
+        mistakes: [
+          { title: 'A suspend function Swift calls, without @Throws', bad: `// commonMain
+suspend fun refresh() {
+    dao.upsertAll(api.recipes().map { it.toRecipe(favorite = false) })   // throws when offline
+}`, good: `// commonMain
+@Throws(Exception::class)
+suspend fun refresh() {
+    dao.upsertAll(api.recipes().map { it.toRecipe(favorite = false) })
+}`, why: 'Without <code>@Throws</code>, only cancellation reaches Swift as an error. The <code>IOException</code> from an offline phone would end the iPhone app instead of reaching Swift’s <code>catch</code>.' },
+        ],
+        terms: [
+          { term: 'Swift', def: 'Apple’s language for iPhone apps. <code>let</code> is like <code>val</code>, <code>func</code> like <code>fun</code>.' },
+          { term: 'header', def: 'A file in the framework that describes the Kotlin classes and functions, in Objective-C, so Swift can call them.' },
+          { term: '@Throws', def: 'Lists the exceptions a function may throw, so Swift gets them as errors it can <code>catch</code>: <code>@Throws(Exception::class)</code>.' },
+          { term: 'Swift export', def: 'A newer way, Alpha since Kotlin 2.4, to show Kotlin to Swift as Swift code directly, without the Objective-C header.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: '<code>formatMinutes</code> is a top-level function in <code>Minutes.kt</code>. Call it from Swift.', code: `import [[Shared]]
+
+print([[MinutesKt]].formatMinutes(minutes: 45))`, why: 'The framework is <code>Shared</code>. A top-level function sits on a class named after its file plus <code>Kt</code>.' },
+          { type: 'bug', prompt: 'Swift won’t build this: the types don’t match. Tap the wrong line.', code: `import Shared
+
+let recipe = Recipe(id: 1, title: "Pancakes", minutes: 20, favorite: false)
+let minutes: Int = recipe.minutes
+print(minutes)`, bug: 3, fix: 'let minutes: Int32 = recipe.minutes', why: 'Kotlin’s <code>Int</code> arrives in Swift as <code>Int32</code>, and Swift doesn’t turn it into its bigger <code>Int</code> by itself.' },
+        ],
+        quiz: [
+          { q: '<code>fun formatPrice(cents: Int): String</code> is in <code>Prices.kt</code>. How does Swift call it, with the Objective-C header?', options: ['<code>PricesKt.formatPrice(cents: 250)</code>', '<code>formatPrice(cents: 250)</code>', '<code>Shared.formatPrice(250)</code>'], a: 0, why: 'Each Kotlin file becomes a class named after it plus <code>Kt</code>, and its top-level functions sit on that class.' },
+          { q: 'What type does Kotlin’s <code>Int</code> have in Swift?', options: ['<code>Int</code>', '<code>Int32</code>', '<code>Double</code>'], a: 1, why: 'Kotlin’s <code>Int</code> is 32 bits. Swift’s <code>Int</code> is bigger, so the value arrives as <code>Int32</code>.' },
+          { q: 'What is the status of Swift export in Kotlin 2.4?', options: ['The default for every project', 'Alpha and opt-in; the Objective-C header is still the default', 'Removed'], a: 1, why: 'Swift export became Alpha in Kotlin 2.4. You turn it on yourself, and it is still changing.' },
+        ],
+        docs: [['Interoperability with Swift/Objective-C', 'https://kotlinlang.org/docs/native-objc-interop.html'], ['Swift export', 'https://kotlinlang.org/docs/native-swift-export.html']],
       },
     ],
   });

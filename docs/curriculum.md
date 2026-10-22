@@ -479,7 +479,8 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 - flags | Feature flags | Remote Config
 - updates | In-app updates | update flows
 - review | In-app review | review API
-- billing | Payments | Play Billing
+- billing | Payments | Play Billing: products, BillingClient connection, showing the price, launchBillingFlow
+- purchases | Handling purchases | purchase result, server verification, acknowledge within 3 days, queryPurchasesAsync (QueryPurchasesParams) after connect and in onResume
 - policy | Play policies | staying compliant
 
 ### capship: Project: ship it (project)
@@ -496,7 +497,8 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 - what-kmp | What KMP is | shared code, targets
 - shares | What to share | common, platform code
 - expect | expect and actual | platform APIs
-- data | Shared data layer | Ktor, SQLDelight
+- data | Shared networking with Ktor | HttpClient, engine per platform, kotlinx.io IOException
+- local-db | Room in shared code | Room 3 KMP with BundledSQLiteDriver (Google's KMP guide); SQLDelight and DataStore KMP named in one sentence
 - viewmodels | Shared ViewModels | lifecycle
 - compose-mp | Compose Multiplatform | shared UI
 - swift | Calling from Swift | interop
