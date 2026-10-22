@@ -1,948 +1,609 @@
-/* Cloud and DevOps basics track. Same shape as tracks/kotlin.js.
-   The servers, containers, pipelines, secrets, backends, telemetry and scaling around an Android app.
-   Product facts were checked against docs.docker.com, docs.github.com, firebase.google.com, supabase.com/docs,
-   docs.cloud.google.com and opentelemetry.io. Prices in demos are made-up "units", not real rates.
-   Demo styles live in the css string below; every class is prefixed cl-. */
+/* Cloud track (optional). Same shape as tracks/kotlin.js.
+   Where the Recipes server runs: rented machines, Docker images, a delivery pipeline, secrets, a ready-made backend,
+   logs/metrics/traces and scaling. Facts were checked in October 2026 against docs.docker.com, docs.github.com,
+   github.com (action versions), firebase.google.com, opentelemetry.io, ktor.io and kubernetes.io.
+   Docker, curl and git outputs come from real runs (Docker 29.8 with a locally built Java 21 base image). Image
+   digests and build times are shown as examples and labelled so; server start-up lines show Ktor's text, shortened. Numbers about traffic are example numbers and are labelled so.
+   Demos use the visual kit (Lab.ui); this track adds no CSS classes of its own (prefix cl- if you add some). */
 (() => {
-  const { h, sleep, replay } = Lab;
-  const act = (label, onclick, props = {}) => h('button', { class: 'cmd', onclick, ...props }, label);
-  const out = text => h('div', { class: 'out', 'aria-live': 'polite' }, text);
-  const say = (el, html) => { el.innerHTML = html; replay(el, 'pop-soft'); };
-  const press = (btns, on) => btns.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
-  const label = t => h('span', { class: 'cl-label' }, t);
-  const pill = (text, kind = '') => h('span', { class: 'cl-pill' + (kind ? ' cl-' + kind : '') }, text);
-
-  const css = `
-.cl-label { font: 600 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.cl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
-.cl-pill { font: 600 0.74rem var(--mono); padding: 3px 9px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; transition: background 0.25s, border-color 0.25s; }
-.cl-pill.cl-ok { border-color: var(--ok); background: var(--ok-soft); }
-.cl-pill.cl-err { border-color: var(--err); background: var(--err-soft); }
-.cl-pill.cl-warn { border-color: var(--warm); background: var(--warm-soft); }
-.cl-pill.cl-acc { border-color: var(--accent); background: var(--accent-soft); }
-.cl-pill.cl-ghost { border-style: dashed; color: var(--muted); background: transparent; }
-.cl-box { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: var(--sunk); border: 1px solid var(--line); min-width: 0; }
-.cl-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr)); gap: 8px; min-width: 0; }
-.cl-stat { padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
-.cl-stat b { display: block; font: 700 1.1rem var(--mono); color: var(--ink); }
-.cl-stat span { font-size: 0.78rem; color: var(--muted); }
-
-/* 1 hosting models */
-.cl-hours { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; align-items: end; height: 130px; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
-.cl-hr { position: relative; height: 100%; display: flex; align-items: flex-end; min-width: 0; }
-.cl-need { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; opacity: 0.25; transition: opacity 0.2s, background 0.2s; }
-.cl-hr.cl-lit .cl-need { opacity: 0.85; }
-.cl-hr.cl-over .cl-need { background: var(--err); opacity: 0.9; }
-.cl-hr.cl-short .cl-need { background: var(--warm); opacity: 0.9; }
-.cl-cap { position: absolute; left: 0; right: 0; bottom: 0; border-top: 2px solid var(--ink); background: var(--ok-soft); opacity: 0; transition: height 0.25s, opacity 0.2s; border-radius: 3px 3px 0 0; }
-.cl-hr.cl-lit .cl-cap { opacity: 0.55; }
-.cl-axis { display: flex; justify-content: space-between; font: 500 0.7rem var(--mono); color: var(--muted); padding: 0 6px; }
-.cl-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.78rem; color: var(--muted); }
-.cl-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
-
-/* 2 docker layers */
-.cl-file { display: grid; gap: 4px; padding: 10px; border-radius: 12px; background: var(--code-bg); color: var(--code-ink); font: 500 0.78rem/1.5 var(--mono); min-width: 0; }
-.cl-layer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; padding: 4px 8px; border-radius: 7px; border: 1px solid transparent; transition: background 0.2s, border-color 0.2s; min-width: 0; }
-.cl-layer code { background: none; padding: 0; color: inherit; overflow-wrap: anywhere; min-width: 0; flex: 1 1 180px; }
-.cl-layer .cl-st { font: 700 0.68rem var(--mono); padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.08); white-space: nowrap; }
-.cl-layer.cl-run { border-color: var(--t-s); background: rgba(255, 212, 121, 0.14); }
-.cl-layer.cl-run .cl-st { animation: pulse 0.8s infinite; }
-.cl-layer.cl-hit .cl-st { color: var(--t-k); }
-.cl-layer.cl-did .cl-st { color: var(--t-s); }
-.cl-layer.cl-did { background: rgba(255, 212, 121, 0.07); }
-
-/* 3 pipeline */
-.cl-pipe { display: grid; gap: 6px; min-width: 0; }
-.cl-stage { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); transition: background 0.25s, border-color 0.25s, opacity 0.25s; min-width: 0; }
-.cl-stage > span:nth-child(2) { overflow-wrap: anywhere; min-width: 0; font-size: 0.88rem; }
-.cl-stage small { font: 600 0.7rem var(--mono); color: var(--muted); text-align: right; }
-.cl-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); background: var(--bg); }
-.cl-stage.cl-on { border-color: var(--warm); background: var(--warm-soft); }
-.cl-stage.cl-on .cl-dot { border-color: var(--warm); animation: pulse 0.7s infinite; }
-.cl-stage.cl-pass { border-color: var(--ok); }
-.cl-stage.cl-pass .cl-dot { background: var(--ok); border-color: var(--ok); }
-.cl-stage.cl-fail { border-color: var(--err); background: var(--err-soft); }
-.cl-stage.cl-fail .cl-dot { background: var(--err); border-color: var(--err); }
-.cl-stage.cl-skip { opacity: 0.45; border-style: dashed; }
-.cl-stage.cl-wait { border-color: var(--accent); background: var(--accent-soft); }
-.cl-stage.cl-wait .cl-dot { border-color: var(--accent); }
-.cl-env { font: 700 0.62rem var(--mono); text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); margin-left: 6px; color: var(--muted); }
-
-/* 4 secret scanner */
-.cl-repo { display: grid; gap: 8px; min-width: 0; }
-.cl-fname { font: 700 0.72rem var(--mono); color: var(--t-c); padding-bottom: 2px; overflow-wrap: anywhere; }
-.cl-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 6px; border: 1px solid transparent; min-width: 0; }
-.cl-line > code { background: none; padding: 0; color: inherit; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; flex: 1 1 200px; }
-.cl-line.cl-flag { border-color: var(--t-e); background: rgba(255, 120, 120, 0.12); }
-.cl-line.cl-info { border-color: var(--t-s); background: rgba(255, 212, 121, 0.1); }
-.cl-line.cl-fixed { background: rgba(126, 226, 168, 0.12); }
-.cl-fix { font: 600 0.72rem var(--mono); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--t-k); background: transparent; color: var(--t-k); cursor: pointer; }
-.cl-why { flex-basis: 100%; font: 500 0.72rem/1.4 var(--mono); color: var(--t-c); }
-
-/* 5 baas picker */
-.cl-reqs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.cl-req { font: inherit; font-size: 0.8rem; text-align: left; padding: 7px 10px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
-.cl-req[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.cl-bars { display: grid; gap: 8px; min-width: 0; }
-.cl-bar { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 0.86rem; min-width: 0; }
-.cl-bar > span:first-child { font-weight: 600; overflow-wrap: anywhere; }
-.cl-track { height: 14px; border-radius: 7px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
-.cl-fill { height: 100%; width: 0; background: var(--accent); border-radius: 7px; transition: width 0.45s; }
-.cl-bar.cl-top .cl-fill { background: var(--ok); }
-.cl-bar b { font: 700 0.8rem var(--mono); text-align: right; }
-.cl-notes { display: grid; gap: 4px; font-size: 0.84rem; margin: 0; padding-left: 1.1em; }
-.cl-notes .cl-plus::marker { content: "+  "; color: var(--ok); }
-.cl-notes .cl-minus::marker { content: "−  "; color: var(--err); }
-.cl-notes .cl-zero::marker { content: "=  "; color: var(--muted); }
-
-/* 6 observability */
-.cl-logs { display: grid; gap: 2px; padding: 8px; border-radius: 12px; background: var(--code-bg); color: var(--code-ink); font: 500 0.74rem/1.5 var(--mono); min-width: 0; }
-.cl-log { padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; transition: opacity 0.25s, background 0.25s; }
-.cl-log.cl-dim { opacity: 0.25; }
-.cl-log.cl-match { background: rgba(255, 212, 121, 0.16); }
-.cl-log .cl-svc { color: var(--t-t); }
-.cl-log .cl-e { color: var(--t-e); }
-.cl-spans { display: grid; gap: 4px; min-width: 0; }
-.cl-span { display: grid; grid-template-columns: minmax(0, 8em) minmax(0, 1fr); gap: 8px; align-items: center; font: 500 0.74rem var(--mono); min-width: 0; }
-.cl-span > span:first-child { overflow-wrap: anywhere; }
-.cl-lane { position: relative; height: 16px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
-.cl-sbar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; background: var(--accent); width: 0; transition: width 0.5s; }
-.cl-sbar.cl-slow { background: var(--err); }
-.cl-crash { white-space: pre-wrap; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--err); background: var(--err-soft); font: 500 0.78rem/1.5 var(--mono); overflow-wrap: anywhere; }
-
-/* 7 scaling */
-.cl-lb { justify-self: center; padding: 8px 14px; border-radius: 10px; border: 2px solid var(--ink); background: var(--surface); font: 700 0.82rem var(--mono); text-align: center; }
-.cl-flow { position: relative; height: 26px; overflow: hidden; min-width: 0; }
-.cl-req-dot { position: absolute; top: 9px; left: 50%; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--accent); animation: cl-fall 0.6s ease-in forwards; }
-.cl-req-dot.cl-img { background: var(--warm); }
-@keyframes cl-fall { from { transform: translate(0, -10px); opacity: 1; } to { transform: translate(var(--dx, 0), 14px); opacity: 0; } }
-.cl-fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; min-width: 0; }
-.cl-inst { display: grid; gap: 4px; padding: 6px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--surface); font: 600 0.7rem var(--mono); min-width: 0; transition: border-color 0.2s, opacity 0.3s; }
-.cl-inst.cl-boot { border-style: dashed; opacity: 0.6; }
-.cl-inst.cl-hot { border-color: var(--err); }
-.cl-load { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
-.cl-load i { display: block; height: 100%; width: 0; background: var(--ok); transition: width 0.3s, background 0.3s; }
-.cl-inst.cl-warmi .cl-load i { background: var(--warm); }
-.cl-inst.cl-hot .cl-load i { background: var(--err); }
-.cl-cdn { padding: 6px 10px; border-radius: 10px; border: 1.5px dashed var(--line); font: 600 0.74rem var(--mono); color: var(--muted); text-align: center; }
-.cl-cdn.cl-cdn-on { border-style: solid; border-color: var(--warm); background: var(--warm-soft); color: var(--ink); }
-`;
+  // Terminal output is HTML: escape tool output before showing it.
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // A file shown in a terminal side panel.
+  const file = s => '<pre class="ui-out" style="white-space: pre-wrap; overflow-wrap: anywhere">' + esc(s) + '</pre>';
 
   Lab.addTrack({
     id: 'cloud',
-    title: 'Cloud and DevOps basics',
-    description: 'The servers, containers, pipelines, secrets and dashboards around your Android app, explained for app developers.',
-    requires: ['build'],
-    css,
+    title: 'Cloud',
+    description: 'Where your app’s server runs: rented machines, Docker images, delivery pipelines, secrets, ready-made backends, monitoring and scaling.',
+    requires: ['tools', 'sysdesign'],
+    css: '',
     lessons: [
-      // ---------------------------------------------------------------- 1
+      // 1 ─────────────────────────────────────────────
       {
         id: 'what-cloud',
-        title: 'What "the cloud" is',
-        tagline: 'Someone else\'s computers, rented by the hour or by the request, in a place you pick.',
-        level: 'beginner',
+        title: 'What the cloud is',
+        tagline: 'Computers you rent, in a place you pick, so your server keeps running when your laptop sleeps.',
+        goals: ['Say what renting a server in the cloud means', 'Pick a region and a managed database for a small server', 'Check from the terminal that a server answers, with <code>curl</code>'],
+        level: 'beginner', introduces: ['curl', 'localhost'],
         body: `
-<p>"The cloud" is a provider's data centers that you rent instead of buying servers. You pick a <b>region</b> (a geographic area, such as Belgium or Frankfurt), and inside it the provider runs several <b>zones</b>: separate groups of machines, so one fire or power cut does not take everything down.</p>
-<p>You can rent at different levels. A <b>virtual machine (VM)</b> is a whole computer you patch and run yourself. A <b>container service</b> runs your packaged app and adds copies when traffic grows. <b>Serverless</b> runs your code only while a request is being handled, and can drop to zero copies when nobody calls it. Higher levels mean less work for you and less control.</p>
-<p>A <b>managed service</b> is something the provider runs for you, like a database with backups and upgrades included. The price model is <b>pay per use</b>: you pay for what is switched on, so a server sized for the 09:00 push burst also costs money at 03:00. Try the three models on one day of traffic for a news app.</p>`,
-        predict: {
-          q: "A VM sized for 6 instances serves one day of news-app traffic. When does it fall short?",
-          options: ["During the quiet night", "At the 09:00 push burst and the evening peak", "Never: 6 covers the whole day"],
-          a: 1,
-          why: "A fixed size is too big most of the day and too small at the peaks. It does exactly what you sized it for.",
-        },
+<p>For the first tests, Mei ran the Recipes server on her laptop: the Kotlin program that answers the app’s requests with JSON, as in <a href="#data.http-basics">Talking to a server</a>, together with its database. It works until she closes the lid at night. Then every app that asks for new recipes gets an error. A real server has to run day and night, on a fast connection, and keep the data safe when a disk breaks.</p>
+<p><em>The cloud</em> means computers you rent from a provider, in its <em>data centers</em>: buildings full of servers, with power, cooling and fast connections. The simplest thing to rent is a <em>virtual machine</em> (VM): a computer made in software on one of the provider’s big machines. You choose how many processors (CPUs) and how much memory it has, and you pay for every hour it is switched on, used or not. You also choose a <em>region</em>, the area where its data center is, such as Frankfurt. Choose one near your users: every request has less distance to travel.</p>
+<p>A provider can also run whole parts for you. That is a <em>managed service</em>. With a managed database, the provider installs the database, keeps it updated and makes backups; you get an address and a password. Less work for you, a little less control. A common start: your own server on a VM, the data in a managed database in the same region.</p>
+<p>To check that a server answers, use <code>curl</code>, a terminal tool that sends one request and prints the answer. The app’s requests go to <code>https://recipes.example.com/v1/</code>, as in <a href="#sysdesign.api">Designing an API</a>, so the recipe list is <code>/v1/recipes</code>. The server also has an address just for checks, <code>/health</code>, which answers <code>ok</code> while it runs; the app never calls it, so it needs no <code>v1/</code>. With <code>-i</code>, curl also prints the status line, such as <code>HTTP/1.1 200 OK</code>, and the headers. On your own computer, the server’s address is <code>localhost</code>, which means “this computer”, and a number after it, such as <code>localhost:8080</code>, is the <em>port</em>: a numbered door on a computer where a server waits for requests.</p>`,
         visual(el) {
-          // Instances needed per hour for a news app: quiet night, push burst at 09:00, evening peak.
-          const NEED = [1, 0, 0, 0, 0, 0, 1, 3, 5, 9, 4, 3, 3, 4, 3, 3, 4, 5, 6, 7, 8, 5, 3, 2];
-          const MAX = 10;
-          const MODELS = {
-            vm: { name: 'VM (fixed 6)', rate: 1, cap: () => NEED.map(() => 6) },
-            ctr: { name: 'Containers (autoscale, min 1)', rate: 1, cap: () => { let prev = 1; return NEED.map(n => (prev = Math.max(1, Math.min(n, prev + 3)))); } },
-            sls: { name: 'Serverless (scale to zero)', rate: 1.5, cap: () => NEED.slice() },
-          };
-          const cols = NEED.map(n => {
-            const need = h('div', { class: 'cl-need', style: `height:${(n / MAX) * 100}%` });
-            const cap = h('div', { class: 'cl-cap', style: 'height:0' });
-            const c = h('div', { class: 'cl-hr', title: `${n} instances needed` }, cap, need); c.cap = cap; return c;
+          Lab.ui.graph(el, {
+            height: 280,
+            nodes: [
+              { id: 'apps', label: 'Recipes app<small>on many phones</small>', x: 20, y: 16 },
+              { id: 'laptop', label: 'Mei’s laptop<small>server and database</small>', x: 76, y: 16 },
+              { id: 'vm', label: 'Rented VM<small>Frankfurt region</small>', x: 76, y: 54, tone: 'ok', hidden: true },
+              { id: 'db', label: 'Managed database<small>Frankfurt region</small>', x: 76, y: 88, tone: 'ok', hidden: true },
+            ],
+            predict: {
+              q: 'At 23:00 Mei closes her laptop, where the Recipes server runs. What do the apps get when they ask for new recipes?',
+              options: ['No answer: their requests fail', 'The answers, only slower', 'The answers: the server keeps running on the internet'],
+              a: 0,
+              why: 'A closed laptop goes to sleep: its programs stop and it leaves the network. Nothing is left to answer at that address.',
+            },
+            frames: [
+              { add: [['apps', 'laptop', 'GET v1/recipes', 'ok']], say: 'During the first tests, <code>recipes.example.com</code> leads to Mei’s laptop. The Recipes server and its database both run there.' },
+              { add: [['apps', 'laptop', 'no answer', 'err']], gone: ['laptop'], say: '23:00: Mei closes the lid. Every request fails. The apps still show the recipes they saved, as in <a href="#data.caching">Caching</a>, but nothing new arrives.' },
+              { show: ['vm'], remove: [['apps', 'laptop']], add: [['apps', 'vm', 'GET v1/recipes', 'ok']], say: 'Mei rents a VM in the Frankfurt region, starts the server on it, and makes the address lead there. It runs all night, and she pays for every hour it is on.' },
+              { hl: ['vm'], say: 'The database still runs on the VM, so Mei has to install its updates and make backups herself. If the VM’s disk breaks, the recipes are gone.' },
+              { show: ['db'], add: [['vm', 'db', 'queries', 'ok']], say: 'She moves the data to a managed database. The provider installs it, updates it and backs it up. Mei’s server only needs its address and a password.' },
+              { hl: ['vm', 'db'], say: 'Both are in the Frankfurt region: near most Recipes users in Lisbon, Oslo and Berlin, and near each other, so every query is quick.' },
+              { say: 'The server is rented, not bought: Mei can choose a bigger VM later, or switch it off when it isn’t needed. The bill counts the hours it runs, not the requests.' },
+            ],
           });
-          const stats = h('div', { class: 'cl-stats' });
-          const o = out('');
-          let token = 0;
-          const stat = (v, t) => h('div', { class: 'cl-stat' }, h('b', {}, v), h('span', {}, t));
-          async function run(id, btn) {
-            press(btns, btn); const my = ++token;
-            const m = MODELS[id], cap = m.cap();
-            cols.forEach(c => { c.className = 'cl-hr'; c.cap.style.height = '0'; });
-            let cost = 0, over = 0, idle = 0, colds = 0;
-            for (let i = 0; i < 24; i++) {
-              await sleep(70); if (!el.isConnected || my !== token) return;
-              const c = cols[i], n = NEED[i], k = cap[i];
-              c.cap.style.height = `${(k / MAX) * 100}%`;
-              c.classList.add('cl-lit');
-              if (n > k) { c.classList.add(id === 'ctr' ? 'cl-short' : 'cl-over'); over++; }
-              if (id === 'sls' && n > 0 && i > 0 && NEED[i - 1] === 0) colds++;
-              idle += Math.max(0, k - n);
-              cost += id === 'sls' ? n * m.rate : k * m.rate;
-            }
-            stats.replaceChildren(stat(Math.round(cost) + ' u', 'cost for the day'), stat(String(over), 'hours short of capacity'), stat(String(idle), 'idle instance-hours'), stat(String(colds), 'cold starts'));
-            say(o, id === 'vm'
-              ? '<span class="bad">Fixed size: paid for 6 all night, still too small at 09:00 and 19:00–20:00.</span> <span class="muted">A VM does what you size it for, no more, no less.</span>'
-              : id === 'ctr'
-                ? '<span class="good">Cheaper and mostly right.</span> <span class="muted">At 09:00 the push burst grows faster than new instances start (amber). Autoscaling reacts, it does not predict.</span>'
-                : '<span class="good">Zero cost while idle at night.</span> <span class="muted">Each unit of work costs more, and the first request after a quiet stretch waits for a cold start.</span>');
-          }
-          const btns = [act('VM', e => run('vm', e.currentTarget)), act('Containers', e => run('ctr', e.currentTarget)), act('Serverless', e => run('sls', e.currentTarget))];
-          say(o, 'Pick a hosting model and watch it serve one day of traffic.');
-          el.append(
-            h('div', { class: 'controls' }, btns),
-            h('div', { class: 'cl-legend' }, h('span', {}, h('i', { class: 'cl-sw', style: 'background:var(--accent)' }), 'needed'), h('span', {}, h('i', { class: 'cl-sw', style: 'background:var(--ok-soft);border:1px solid var(--ink)' }), 'running'), h('span', {}, h('i', { class: 'cl-sw', style: 'background:var(--err)' }), 'overloaded')),
-            h('div', { class: 'cl-hours', role: 'img', 'aria-label': 'Instances needed and running for each hour of the day' }, cols),
-            h('div', { class: 'cl-axis' }, h('span', {}, '00'), h('span', {}, '06'), h('span', {}, '12'), h('span', {}, '18'), h('span', {}, '23')),
-            stats, o);
         },
-        code: `// A tiny Ktor API that runs the same on a laptop, a VM, or a container service.
-// Container platforms such as Cloud Run tell your app which port to listen on via PORT.
-fun main() {
-    val port = System.getenv("PORT")?.toInt() ?: 8080
-    embeddedServer(Netty, port = port) {
-        routing {
-            get("/health") { call.respondText("ok") }
-            get("/api/headlines") { call.respond(headlineRepo.latest()) }
-        }
-    }.start(wait = true)
-}`,
-        remember: 'Pick the highest level that fits: managed or serverless first, VMs only when you need the control. You pay for what is switched on, not for what is used.',
-        deeper: [
-          { title: 'Regions and zones', body: '<p>Put your backend in a region close to your users, so requests travel less. Inside a region, spread copies across zones. Google Cloud\'s docs describe zones as separate pieces of infrastructure so that one outage does not hit all your resources at once. Different regions give even more independence, at the cost of keeping data in sync across a longer distance.</p>' },
-          { title: 'IaaS, PaaS, serverless in one sentence each', body: '<p><b>VM (infrastructure)</b>: you get an OS and do the rest: updates, firewall, restarts. <b>Container service (platform)</b>: you hand over an image, the platform runs, restarts and scales it. <b>Serverless functions</b>: you hand over a function, it runs per event and you pay per call. They are not different worlds: Cloud Run, for example, runs containers and can still scale to zero.</p>' },
-          { title: 'Pay per use cuts both ways', body: '<p>On Cloud Run with request-based billing you pay only while requests are handled, and a service with no minimum instances costs nothing when idle. The flip side: a bug that loops calls, or a bot hammering an endpoint, also bills you per use. Set budgets and alerts on the billing account from day one.</p>' },
-        ],
-        underHood: {
-          body: '<p>A VM is a slice of a physical server made by a hypervisor; it boots a full OS. A container shares the host OS kernel and only packages your app and its files, so it starts in about the time your app takes to start. Serverless platforms keep a pool of warm machines and start your container or function on one when a request arrives. That start is the "cold start" you see as a slow first request.</p>',
-        },
-        mistakes: [
-          {
-            title: 'Sizing a fixed server for the peak',
-            bad: '# one big VM, always on\nmachine: 16 vCPU, 64 GB   # sized for the 09:00 push',
-            good: '# container service\nmin-instances: 1\nmax-instances: 20          # grows for the push, shrinks at night',
-            why: 'Traffic for a news or push-driven app has sharp peaks. A fixed size is either wasted at night or too small at the peak.',
-          },
-          {
-            title: 'Hard-coding the port',
-            bad: 'embeddedServer(Netty, port = 8080)',
-            good: 'embeddedServer(Netty, port = System.getenv("PORT")?.toInt() ?: 8080)',
-            why: 'The platform decides which port your container listens on and passes it in. Read it from the environment.',
-          },
-        ],
+        code: `# Terminal: is the server up? curl sends one GET request and prints the answer
+curl https://recipes.example.com/health
+# ok
+
+# On Mei's laptop. localhost means "this computer"; 8080 is the port,
+# the numbered door where the server waits for requests.
+# -i also prints the status line and the headers (shortened here: only two of them).
+curl -i http://localhost:8080/v1/recipes
+# HTTP/1.1 200 OK
+# Content-Type: application/json; charset=UTF-8
+#
+# [{"id":1,"title":"Pancakes","minutes":15},{"id":42,"title":"Tomato soup","minutes":25}]
+
+# After Mei stops the server, nothing answers:
+curl http://localhost:8080/health
+# curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn't connect to server`,
+        remember: 'The cloud is computers you rent: a VM in a region near your users for your server, a managed database for your data, paid for while they run.',
         terms: [
-          { term: 'Region / zone', def: 'A region is a geographic area of data centers. Zones are separate failure areas inside one region.' },
-          { term: 'Managed service', def: 'Something the provider runs for you (a database, a queue), including backups, patches and failover.' },
-          { term: 'Serverless', def: 'You deploy code, the platform runs it per request or event, and it can scale to zero when idle.' },
-          { term: 'Cold start', def: 'The delay while a new instance starts because none was running to take the request.' },
+          { term: 'the cloud', def: 'Computers you rent from a provider, in its data centers, instead of buying and running your own.' },
+          { term: 'virtual machine (VM)', def: 'A computer made in software on one of the provider’s big machines. You choose its size and pay for every hour it is switched on.' },
+          { term: 'region', def: 'The area where a provider’s data center is, such as Frankfurt. Choose one close to your users.' },
+          { term: 'managed service', def: 'A part the provider runs for you, such as a database it installs, updates and backs up. You get an address and a password.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Read the port that the container platform hands to your app.', code: 'val port = System.[[getenv]]("[[PORT]]")?.toInt() ?: 8080', why: 'Platforms like Cloud Run set PORT. The fallback keeps local runs working.' },
-          { type: 'bug', prompt: 'The service is meant to cost nothing at night when nobody uses it. Tap the setting that stops that.', code: 'service: headlines-api\nregion: europe-west1\nmin-instances: 3\nmax-instances: 20\nconcurrency: 80', bug: 2, fix: 'min-instances: 0', why: 'Minimum instances stay running (and billed) even with zero traffic. Zero lets the service scale to zero, at the price of cold starts.' },
+          { type: 'blank', prompt: 'Check from the terminal that the Recipes server answers.', code: `[[curl]] https://recipes.example.com/health
+# ok`, why: '<code>curl</code> sends one request to the address and prints the answer. The server’s <code>/health</code> address answers <code>ok</code> while it runs.' },
+          { type: 'bug', prompt: 'Mei wrote down her plan. Most Recipes users live in Lisbon, Oslo and Berlin. Tap the line that makes every request travel further than it needs to.', code: `Recipes server plan
+server:   a VM with 2 CPUs and 4 GB of memory
+region:   Sydney
+database: managed, in the same region as the server`, bug: 2, fix: 'region:   Frankfurt', why: 'Every request goes to the data center and back. A region in Europe keeps that trip short for users in Europe.' },
         ],
         quiz: [
-          { q: 'Your API runs on one VM sized for the morning push burst. What happens at 03:00?', options: ['It shuts down automatically', 'It keeps running and you keep paying for it', 'The provider moves it to a cheaper zone'], a: 1, why: 'A VM is billed while it is on. Nothing scales it down unless you set that up.' },
-          { q: 'Which trade-off fits serverless with scale to zero?', options: ['No idle cost, but the first request after a quiet period is slower', 'Fastest possible first request, higher idle cost', 'Full control over the OS'], a: 0, why: 'With no instance running, a new request has to wait for one to start: a cold start.' },
-          { q: 'Why spread instances across zones in a region?', options: ['Zones are cheaper', 'So one infrastructure failure does not take all copies down', 'Because Android apps need it'], a: 1, why: 'Zones are separate failure areas. Copies in two zones survive one zone failing.' },
-          { q: 'In the demo, why did the container service fall short at 09:00 even with autoscaling?', options: ['It has a fixed size', 'Traffic grew faster than new instances could start', 'Containers cannot scale'], a: 1, why: 'Autoscalers react to load they already see. A sudden burst, like a push to millions of devices, arrives before new instances are ready.' },
+          { q: 'Mei’s VM is switched on all month, but Recipes is mostly used in the evenings. What does she pay for?', options: ['Every hour it is switched on', 'Only the hours with requests', 'Nothing until it gets busy'], a: 0, why: 'A VM is billed while it is on, used or not. Switching it off, or choosing a smaller one, is what saves money.' },
+          { q: 'What does a managed database give Mei?', options: ['The provider installs, updates and backs it up; she gets an address and a password', 'A database inside the app on each phone', 'A VM on which she installs the database herself'], a: 0, why: 'A managed service is a part the provider runs for you. The server connects to it with its address and password.' },
+          { q: '<code>curl http://localhost:8080/health</code> prints <code>Failed to connect to localhost port 8080</code>. What does that mean?', options: ['Nothing on this computer answers at port 8080: the server isn’t running there', 'The server answered with an error page', 'The internet connection is down'], a: 0, why: '<code>localhost</code> is this computer. “Failed to connect” means no program answered there at all.' },
         ],
+        docs: [['The NIST Definition of Cloud Computing', 'https://csrc.nist.gov/pubs/sp/800/145/final'], ['curl manual', 'https://curl.se/docs/manpage.html']],
       },
 
-      // ---------------------------------------------------------------- 2
+      // 2 ─────────────────────────────────────────────
       {
         id: 'docker',
         title: 'Containers with Docker',
-        tagline: 'Package the app with everything it needs, so it runs the same on your laptop, in CI and in production.',
-        level: 'beginner',
+        tagline: 'Pack the server with Java and everything else it needs, so it runs the same on every machine.',
+        goals: ['Read a short Dockerfile line by line', 'Build an image and start a container from it', 'Connect a port with <code>-p</code> so you can reach the server'],
+        level: 'beginner', introduces: ['docker', 'FROM', 'WORKDIR', 'COPY', 'EXPOSE', 'CMD', 'buildFatJar'],
         body: `
-<p>An <b>image</b> is a read-only package: an OS base, a runtime such as a JDK, your app and its settings. A <b>container</b> is a running process started from an image, isolated from other processes. One image can start many containers, the same way one APK installs on many phones.</p>
-<p>A <b>Dockerfile</b> builds the image step by step. Each instruction makes a <b>layer</b>, and Docker caches layers. If a layer's input changes, that layer and <b>every layer after it</b> rebuild, even if their output would be the same. So put things that rarely change (base image, dependency list) first and your source code last.</p>
-<p>This is why "works on my machine" goes away: the machine is part of the image. CI, staging and production all run the exact same image. Edit files below and watch which layers come from cache.</p>`,
-        predict: {
-          q: "With the <code>COPY . .</code> Dockerfile, you build once, edit one source file and build again. What happens to the Gradle dependency step?",
-          options: ["It comes from cache", "It runs again, because <code>COPY . .</code> changed and every later layer rebuilds", "Docker recompiles only the changed file"],
-          a: 1,
-          why: "A layer is reused only when its instruction and inputs are unchanged. <code>COPY . .</code> includes <code>src</code>, so any edit invalidates it and everything after it.",
-        },
+<p>Gradle builds the whole Recipes server into one file, <code>recipes-server-all.jar</code>, with every library inside. A <em>JAR</em> is a Java program packed into one file; a <em>fat JAR</em> also holds every library it uses. (The server uses Ktor, a Kotlin library for servers, and Ktor’s Gradle task <code>buildFatJar</code> makes the file.) <code>java -jar recipes-server-all.jar</code> starts it. Mei copies the file to the VM, and it won’t start: the VM has an older Java than her laptop. She fixes that, and a month later Kofi sets up a second VM and forgets the same step. Each machine had to be prepared by hand.</p>
+<p><em>Docker</em> packs the server together with what it needs. An <em>image</em> is that package: the basic files of an operating system, Java, the server’s JAR and the command that starts it. A <em>container</em> is one running copy of an image, kept apart from the other programs on the machine. Every computer with Docker runs an image the same way: Mei’s laptop, the VM, a CI machine. It is a little like an APK: built once, installed on many phones.</p>
+<p>A <em>Dockerfile</em> describes the image, one instruction per line. <code>FROM</code> starts from an existing image: <code>eclipse-temurin:21-jre</code> already has Java 21, and the part after <code>:</code> is its <em>tag</em>, which picks a version. <code>WORKDIR</code> sets the folder inside the image, <code>COPY</code> copies a file from your project into it, and <code>CMD</code> is the command a container runs when it starts, written as a list in <code>[ ]</code> with double quotes. A line that starts with <code>#</code> is a comment.</p>
+<p><code>docker build -t recipes-server .</code> builds the image from the Dockerfile in this folder (the dot) and names it (<code>-t</code>). <code>docker run recipes-server</code> starts a container. A server waits for requests at a port, the numbered door from <a href="#cloud.what-cloud">the last lesson</a>; Recipes uses 8080. A container has its own ports, so <code>-p 8080:8080</code> connects port 8080 of your computer to port 8080 of the container. <code>EXPOSE 8080</code> in the Dockerfile only notes which port the server uses; it connects nothing.</p>`,
         visual(el) {
-          const GOOD = [
-            { src: 'FROM gradle:jdk21 AS build', deps: [], sec: 0, note: 'pulled' },
-            { src: 'WORKDIR /app', deps: [], sec: 0 },
-            { src: 'COPY settings.gradle.kts build.gradle.kts ./', deps: ['gradle'], sec: 1 },
-            { src: 'COPY gradle ./gradle', deps: ['gradle'], sec: 1 },
-            { src: 'RUN gradle dependencies --no-daemon', deps: [], sec: 85 },
-            { src: 'COPY src ./src', deps: ['src'], sec: 1 },
-            { src: 'RUN gradle installDist --no-daemon', deps: [], sec: 35 },
-          ];
-          const BAD = [
-            { src: 'FROM gradle:jdk21 AS build', deps: [], sec: 0, note: 'pulled' },
-            { src: 'WORKDIR /app', deps: [], sec: 0 },
-            { src: 'COPY . .', deps: ['gradle', 'src'], sec: 1 },
-            { src: 'RUN gradle installDist --no-daemon', deps: [], sec: 120 },
-          ];
-          let order = 'good', built = false, busy = false, token = 0;
-          const file = h('div', { class: 'cl-file', 'aria-live': 'polite' });
-          const total = h('span', { class: 'cl-pill cl-ghost' }, 'no build yet');
-          const o = out('');
-          let rows = [];
-          function paint() {
-            const L = order === 'good' ? GOOD : BAD;
-            rows = L.map(l => { const st = h('span', { class: 'cl-st' }, '—'); const r = h('div', { class: 'cl-layer' }, h('code', {}, l.src), st); r.st = st; return r; });
-            file.replaceChildren(...rows);
-          }
-          async function build(changed, why) {
-            if (busy) return; busy = true; const my = ++token;
-            const L = order === 'good' ? GOOD : BAD;
-            let dirty = !built, secs = 0;
-            rows.forEach(r => { r.className = 'cl-layer'; r.st.textContent = '…'; });
-            for (let i = 0; i < L.length; i++) {
-              const l = L[i], r = rows[i];
-              if (l.deps.some(d => changed.includes(d))) dirty = true;
-              if (dirty) {
-                r.classList.add('cl-run'); r.st.textContent = 'RUN';
-                await sleep(140 + l.sec * 6); if (!el.isConnected || my !== token) return;
-                r.classList.remove('cl-run'); r.classList.add('cl-did'); r.st.textContent = l.note && !built ? l.note : `${l.sec}s`; secs += l.sec;
-              } else {
-                await sleep(90); if (!el.isConnected || my !== token) return;
-                r.classList.add('cl-hit'); r.st.textContent = 'CACHED';
-              }
-            }
-            built = true; busy = false;
-            total.className = 'cl-pill ' + (secs > 60 ? 'cl-warn' : 'cl-ok'); total.textContent = `build: ${secs}s`;
-            say(o, why(secs));
-          }
-          const edit = () => build(['src'], s => order === 'good'
-            ? `<span class="good">Only the last two layers ran (${s}s).</span> <span class="muted">Dependencies came from cache because build.gradle.kts did not change.</span>`
-            : `<span class="bad">${s}s: dependencies downloaded again.</span> <span class="muted">COPY . . copies src too, so a one-line edit invalidates it and everything after it.</span>`);
-          const dep = () => build(['gradle'], s => `<span class="good">Dependency list changed: ${s}s.</span> <span class="muted">Everything from that COPY on reruns. Expected: dependencies really did change.</span>`);
-          const same = () => build([], () => (built ? '<span class="good">Nothing changed, every layer CACHED.</span> <span class="muted">The image is identical to the last one.</span>' : '<span class="muted">First build: no cache yet, so every layer runs.</span>'));
-          const flip = act('Switch to COPY . . order', e => {
-            if (busy) return;
-            order = order === 'good' ? 'bad' : 'good'; built = false; paint();
-            e.currentTarget.textContent = order === 'good' ? 'Switch to COPY . . order' : 'Switch to dependencies-first order';
-            total.className = 'cl-pill cl-ghost'; total.textContent = 'no build yet';
-            say(o, order === 'good' ? 'Dependencies-first order. Build once, then edit source.' : 'Everything copied in one step. Build once, then edit source.');
-          });
-          paint();
-          say(o, 'Build once, then edit a source file and build again.');
-          el.append(
-            h('div', { class: 'controls' }, act('docker build', same), act('Edit src/Routes.kt + build', edit), act('Add a dependency + build', dep)),
-            h('div', { class: 'cl-row' }, label('Dockerfile'), total, flip),
-            file, o);
-        },
-        code: `# Dockerfile for a Kotlin (Ktor) backend. Multi-stage: build with Gradle, run on a small JRE image.
-# (Docker comments must start a line: a # after an instruction is read as an argument.)
-FROM gradle:jdk21 AS build
+          const dockerfile = `FROM eclipse-temurin:21-jre
 WORKDIR /app
-# Build files rarely change. A directory source copies its contents, so name the target folder.
-COPY settings.gradle.kts build.gradle.kts ./
-COPY gradle ./gradle
-# Cached until the files above change
-RUN gradle dependencies --no-daemon
-# Source changes on every commit, so it comes last
-COPY src ./src
-RUN gradle installDist --no-daemon
-
-FROM eclipse-temurin:21-jre
-WORKDIR /app
-# installDist output is named after rootProject.name, here "api"
-COPY --from=build /app/build/install/api ./
-# Documents the port; it does not publish it
+COPY build/libs/recipes-server-all.jar app.jar
 EXPOSE 8080
-CMD ["./bin/api"]
-
-# Build and run, publishing host port 8080 to container port 8080:
-#   docker build -t headlines-api .
-#   docker run -p 8080:8080 -e DATABASE_URL=... headlines-api`,
-        remember: 'Order the Dockerfile from rarely changes to always changes. A changed layer rebuilds itself and everything after it.',
-        deeper: [
-          { title: 'Ports: EXPOSE is a note, -p is the switch', body: '<p><code>EXPOSE 8080</code> only records which port the app uses. Nothing outside can reach it until you publish it with <code>-p HOST:CONTAINER</code>. <code>docker run -p 8080:8080</code> sends traffic from your machine\'s port 8080 into the container\'s 8080. From an Android emulator, your machine is <code>10.0.2.2</code>, so the app can call <code>http://10.0.2.2:8080</code>.</p>' },
-          { title: 'Volumes: data that outlives the container', body: '<p>A container\'s own files vanish when you remove it. For a local Postgres you want data to survive, so mount a <b>volume</b>: storage managed by Docker that exists outside any one container. Remove and recreate the container and the data is still there.</p>', code: 'docker volume create pgdata\ndocker run -d --name db -e POSTGRES_PASSWORD=dev \\\n  -v pgdata:/var/lib/postgresql/data -p 5432:5432 postgres:17' },
-          { title: 'Multi-stage builds keep images small', body: '<p>The Gradle image with a full JDK is big. In a multi-stage build, the first stage compiles and the final stage copies only the built app onto a small runtime image. The final image has no build tools and no source, which means less to download and less to attack.</p>' },
-          { title: '.dockerignore', body: '<p>The build context is everything you send to <code>docker build</code>. A <code>.dockerignore</code> file (same pattern style as <code>.gitignore</code>) keeps out <code>build/</code>, <code>.gradle/</code>, <code>.git/</code> and local secret files. Smaller context, faster builds, and no <code>local.properties</code> baked into an image by accident.</p>', code: '.git\n.gradle\nbuild\n**/build\nlocal.properties\n*.jks' },
-        ],
-        underHood: {
-          body: '<p>Each layer is a set of file changes stored by content hash. An image is an ordered list of layers plus settings like <code>CMD</code>. When a container starts, Docker stacks the read-only layers and adds one thin writable layer on top for that container. That is why ten containers from one image share disk space, and why anything a container writes is lost when it is removed, unless it writes to a volume.</p>',
+CMD ["java", "-jar", "app.jar"]`;
+          const noConnect = "curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn't connect to server";
+          Lab.ui.terminal(el, {
+            panelTitle: 'Dockerfile',
+            predict: {
+              q: 'Mei starts the server with <code>docker run recipes-server</code>, without <code>-p</code>. Then she runs <code>curl http://localhost:8080/health</code> on her laptop. What does she get?',
+              options: ['<code>ok</code>: the Dockerfile says <code>EXPOSE 8080</code>', 'Failed to connect: nothing connects her laptop’s port 8080 to the container', 'The JSON list of recipes'],
+              a: 1,
+              why: 'The server listens on port 8080 inside the container. <code>EXPOSE</code> only notes that; <code>-p 8080:8080</code> is what connects a port of the laptop to it.',
+            },
+            frames: [
+              { panel: file(dockerfile), say: 'Mei’s server project. <code>./gradlew buildFatJar</code> has built <code>build/libs/recipes-server-all.jar</code>, and the Dockerfile (right) is in the top folder.' },
+              { cmd: 'docker build -t recipes-server .', out: esc(`[+] Building 1.5s (8/8) FINISHED                                 docker:default
+ => [1/3] FROM docker.io/library/eclipse-temurin:21-jre@sha256:…            0.7s
+ => [2/3] WORKDIR /app                                                     0.1s
+ => [3/3] COPY build/libs/recipes-server-all.jar app.jar                   0.1s
+ => exporting to image                                                     0.4s
+ => => naming to docker.io/library/recipes-server:latest                   0.0s`), say: 'Docker follows the instructions in order: start from the Java image, make the folder <code>/app</code>, copy the JAR in. The image is called <code>recipes-server</code>. (Output shortened: Docker prints more lines. Your digest after <code>sha256:</code> and your times will differ. The first build also downloads the Java image, which takes longer.)' },
+              { cmd: 'docker run recipes-server', out: '… Responding at http://0.0.0.0:8080', say: 'A container starts from the image and runs <code>CMD</code>: <code>java -jar app.jar</code>. Ktor’s start-up line says the server waits on port 8080 (shortened: the real line starts with the time). Mei’s own Java version doesn’t matter: Java 21 is inside the image.' },
+              { cmd: 'curl http://localhost:8080/health', out: esc(noConnect), say: 'In a second terminal window, curl can’t connect. The server listens on port 8080 of the <em>container</em>, and nothing connects the laptop’s port 8080 to it.' },
+              { cmd: 'docker run -p 8080:8080 recipes-server', out: '… Responding at http://0.0.0.0:8080', say: 'Mei stops the container with Ctrl+C in the first window and starts a new one with <code>-p 8080:8080</code>: the laptop’s port 8080 now leads to the container’s port 8080.' },
+              { cmd: 'curl http://localhost:8080/health', out: 'ok', say: 'Now the request reaches the server inside the container.' },
+              { cmd: 'curl http://localhost:8080/v1/recipes', out: esc('[{"id":1,"title":"Pancakes","minutes":15},{"id":42,"title":"Tomato soup","minutes":25}]'), say: 'The same answer as when Mei ran the JAR herself.' },
+              { say: 'On the VM, the same image and the same <code>docker run -p 8080:8080 recipes-server</code> give the same server. The VM only needs Docker; Java travels inside the image.' },
+            ],
+          });
         },
+        code: `# Dockerfile, in the top folder of the server project
+# Start from an image that already has Java 21
+FROM eclipse-temurin:21-jre
+# Work in the folder /app inside the image
+WORKDIR /app
+# Copy the server, built by Gradle, into the image
+COPY build/libs/recipes-server-all.jar app.jar
+# The server listens on port 8080
+EXPOSE 8080
+# The command a container runs when it starts
+CMD ["java", "-jar", "app.jar"]
+
+# Terminal, in the same folder
+./gradlew buildFatJar                    # the server and every library in one file: build/libs/recipes-server-all.jar
+docker build -t recipes-server .         # build an image called recipes-server from the Dockerfile here (.)
+docker run -p 8080:8080 recipes-server   # start a container; this computer's port 8080 leads to the container's 8080
+# … Responding at http://0.0.0.0:8080      (Ktor's start-up line, shortened: it starts with the time)`,
+        remember: 'A Dockerfile describes an image: FROM, WORKDIR, COPY, CMD. docker build makes it, docker run starts a container, and -p connects a port.',
         mistakes: [
-          {
-            title: 'Copying everything before installing dependencies',
-            bad: 'COPY . .\nRUN gradle installDist',
-            good: 'COPY settings.gradle.kts build.gradle.kts ./\nCOPY gradle ./gradle\nRUN gradle dependencies\nCOPY src ./src\nRUN gradle installDist',
-            why: 'Any source edit invalidates <code>COPY . .</code>, so dependencies download again on every build.',
-          },
-          {
-            title: 'Passing secrets as build arguments',
-            bad: 'ARG DB_PASSWORD\nENV DB_PASSWORD=$DB_PASSWORD',
-            good: '# pass at run time instead\ndocker run -e DB_PASSWORD=... headlines-api',
-            why: 'Docker\'s docs warn that build args and env set in the Dockerfile persist in the image. Anyone who can pull it can read them.',
-          },
+          { title: 'A comment after an instruction', bad: `EXPOSE 8080   # the server's port`, good: `# the server's port
+EXPOSE 8080`, why: 'In a Dockerfile, <code>#</code> starts a comment only at the beginning of a line. Anywhere else it is part of the instruction, so this build stops with <code>ERROR: failed to build: failed to solve: invalid containerPort: #</code>.' },
         ],
         terms: [
-          { term: 'Image', def: 'An immutable package of layers: base OS, runtime, app and settings.' },
-          { term: 'Container', def: 'An isolated running process started from an image, with its own thin writable layer.' },
-          { term: 'Layer cache', def: 'Docker reuses a layer when its instruction and inputs are unchanged; a change rebuilds it and all layers after it.' },
-          { term: 'Volume', def: 'Docker-managed storage whose contents live outside any one container\'s lifecycle.' },
+          { term: 'image', def: 'A package with everything a program needs to run: basic system files, Java, your JAR and the start command. <code>docker build</code> makes one from a Dockerfile.' },
+          { term: 'container', def: 'One running copy of an image, kept apart from the other programs on the machine. <code>docker run</code> starts one.' },
+          { term: 'Dockerfile', def: 'A text file of instructions for building an image: <code>FROM</code>, <code>WORKDIR</code>, <code>COPY</code>, <code>EXPOSE</code>, <code>CMD</code>.' },
+          { term: 'port', def: 'A numbered door on a computer where a server waits for requests, such as 8080. <code>-p 8080:8080</code> connects a port of your computer to one of the container.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Run the image and publish host port 8080 to the container\'s port 8080.', code: 'docker [[run]] [[-p|--publish]] 8080:8080 headlines-api', why: '<code>-p HOST:CONTAINER</code> publishes the port. <code>EXPOSE</code> alone does not.' },
-          { type: 'bug', prompt: 'Every one-line code change re-downloads all Gradle dependencies. Tap the line to blame.', code: 'FROM gradle:jdk21 AS build\nWORKDIR /app\nCOPY . .\nRUN gradle dependencies --no-daemon\nRUN gradle installDist --no-daemon', bug: 2, fix: 'COPY settings.gradle.kts build.gradle.kts ./', why: 'Copy only the build files (and the <code>gradle</code> folder, with <code>COPY gradle ./gradle</code>) before resolving dependencies, then copy <code>src</code> in a later layer.' },
+          { type: 'blank', prompt: 'Start a container so that <code>curl http://localhost:8080/health</code> on this computer reaches the server.', code: `docker run [[-p]] 8080:8080 recipes-server`, why: '<code>-p 8080:8080</code> connects port 8080 of this computer to port 8080 of the container. Without it, nothing outside the container reaches the server.' },
+          { type: 'bug', prompt: '<code>docker build</code> stops with an error that ends in <code>"/recipes-server-all.jar": not found</code>. Gradle puts the JAR in <code>build/libs</code>. Tap the line.', code: `FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY recipes-server-all.jar app.jar
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]`, bug: 2, fix: 'COPY build/libs/recipes-server-all.jar app.jar', why: '<code>COPY</code> looks for the file from the folder you build in. The JAR is in <code>build/libs</code>, so the path must say so.' },
         ],
         quiz: [
-          { q: 'You edit one Kotlin file. In the dependencies-first Dockerfile, which layers rebuild?', options: ['All of them', 'COPY src and every layer after it', 'Only the FROM line'], a: 1, why: 'The COPY src layer\'s input changed, so it and all later layers run again. Earlier layers come from cache.' },
-          { q: 'The Dockerfile says <code>EXPOSE 8080</code>. You run <code>docker run headlines-api</code>. Can your browser open localhost:8080?', options: ['Yes, EXPOSE published it', 'No, nothing is published without -p or -P', 'Only on Linux'], a: 1, why: 'EXPOSE documents the port. Publishing needs <code>-p 8080:8080</code> (or <code>-P</code> for all exposed ports).' },
-          { q: 'You remove a Postgres container that had no volume and start a new one. Where is the data?', options: ['In the new container', 'Gone, it lived in the removed container\'s writable layer', 'In the image'], a: 1, why: 'Without a volume, writes go to the container\'s own layer, which is deleted with it.' },
-          { q: 'Which is the main reason containers end "works on my machine" arguments?', options: ['They are faster than VMs', 'The runtime, libraries and settings travel inside the image, so every environment runs the same thing', 'Docker fixes bugs automatically'], a: 1, why: 'The image carries the environment. CI, staging and production run the identical image.' },
-          { q: 'One image, five containers. How many copies of the image layers are on disk?', options: ['Five', 'One shared set, plus a thin writable layer per container', 'None until a container writes'], a: 1, why: 'Read-only layers are shared. Each container only adds its own small writable layer.' },
+          { q: 'What is the difference between an image and a container?', options: ['An image is the package; a container is one running copy of it', 'They are two words for the same thing', 'A container is the package; an image is a running copy'], a: 0, why: 'One image can start many containers, the way one APK installs on many phones.' },
+          { q: 'Why does the server start on the VM now, although the VM has an old Java?', options: ['Java 21 is inside the image, so the VM’s own Java doesn’t matter', 'Docker updates the VM’s Java', 'The fat JAR contains Java'], a: 0, why: '<code>FROM eclipse-temurin:21-jre</code> puts Java 21 in the image. The VM only needs Docker.' },
+          { q: 'What does <code>EXPOSE 8080</code> do?', options: ['It notes which port the server uses; it connects nothing', 'It connects port 8080 of the computer to the container', 'It starts the server on port 8080'], a: 0, why: 'Only <code>-p 8080:8080</code> on <code>docker run</code> connects a port of your computer to the container.' },
         ],
+        docs: [['What is a container?', 'https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/'], ['Dockerfile reference', 'https://docs.docker.com/reference/dockerfile/']],
       },
 
-      // ---------------------------------------------------------------- 3
+      // 3 ─────────────────────────────────────────────
       {
         id: 'pipelines',
-        title: 'CI/CD pipelines',
-        tagline: 'Every push goes through the same build, test, sign and deploy stages, so releasing is boring.',
-        level: 'intermediate',
+        title: 'Pipelines: CI/CD',
+        tagline: 'Every change that reaches main is tested, packed into an image and delivered, without anyone typing a step.',
+        goals: ['Explain what continuous delivery adds to CI', 'Read a workflow that tests the server, builds its image and uploads it to a registry', 'Go back to an earlier version by its image tag'],
+        level: 'intermediate', introduces: ['permissions', 'GITHUB_TOKEN', 'secrets', 'sha', 'actor'],
         body: `
-<p><b>CI</b> (continuous integration) builds and tests every change; you met it in <a href="#tools.ci">CI on every pull request</a>. <b>CD</b> (continuous delivery) goes further: after the tests pass, the pipeline signs the build and ships it somewhere real. A failed stage stops everything after it, so a broken test never reaches users.</p>
-<p>Ship through <b>environments</b>: <b>dev</b> for daily builds, <b>staging</b> that mirrors production with test data, and <b>prod</b>. In GitHub Actions an environment can hold its own secrets and require a reviewer before a job that uses it runs. That approval is your "are we sure?" button.</p>
-<p>For the app, a pipeline can upload the signed bundle to the Play <b>internal testing</b> track (see <a href="#build.tracks">Play testing tracks</a>). For the backend, it builds a container image and deploys it to a host. Follow a push that fails a test, then a clean one that waits for approval.</p>`,
+<p>Every release, Mei runs the tests, builds the JAR, builds the image, puts it on the VM and restarts the server: five steps, twenty minutes. One Friday she is in a hurry and skips the tests, and a bug reaches every user. Steps that must happen every time, in the same order, are a job for a machine.</p>
+<p>In <a href="#tools.ci">Continuous integration</a> a GitHub Actions workflow checked every pull request. <em>Continuous delivery</em> (CD) goes one step further: when a change reaches <code>main</code> and passes the checks, the workflow also builds what you ship and delivers it, ready to release. When the last step also starts it on the server automatically, it is called <em>continuous deployment</em>; both are shortened to CD. The chain of steps from a push to a running server is called a <em>pipeline</em>. The Recipes server’s workflow runs <code>./gradlew test buildFatJar</code> first. If a test fails, the step fails and the steps after it don’t run, as in the CI lesson, so nothing broken is shipped.</p>
+<p>The image goes to a <em>registry</em>: an online store for images, the way GitHub stores code. GitHub has one at <code>ghcr.io</code>. <code>docker/login-action</code> logs in to it, and <code>docker/build-push-action</code> runs <code>docker build</code> and then uploads the image (<em>push</em>).</p>
+<p>Logging in needs a password. <code>\${{ secrets.GITHUB_TOKEN }}</code> gives it: GitHub replaces <code>\${{ }}</code> with a value before the step runs, and <code>GITHUB_TOKEN</code> is a password GitHub makes for each run. <code>permissions:</code> says what that password may do, here upload images (<code>packages: write</code>).</p>
+<p>Every image gets the tag <code>\${{ github.sha }}</code>: the hash of the commit, the id <code>git log</code> shows, in its full 40-character form. So you always know which commit is running, and going back is starting the image with an earlier tag. The last link, making the cloud run the new image, depends on the provider: many can watch the registry, or a last step tells them. Recipes does this, so every change that passes the tests reaches users: continuous deployment.</p>`,
         visual(el) {
           Lab.ui.flow(el, {
             nodes: [
-              { id: 'push', label: 'git push', sub: 'main' },
-              { id: 'build', label: 'Build', sub: 'AAB + API image' },
-              { id: 'test', label: 'Test', sub: 'unit tests' },
-              { id: 'sign', label: 'Sign', sub: 'upload key' },
-              { id: 'stg', label: 'Staging', sub: 'API + Play internal' },
-              { id: 'prod', label: 'Production', sub: 'needs a reviewer' },
+              { id: 'push', label: 'push', sub: 'to main' },
+              { id: 'test', label: 'test', sub: 'gradlew test' },
+              { id: 'image', label: 'image', sub: 'build + push' },
+              { id: 'reg', label: 'ghcr.io', sub: 'one tag per commit' },
+              { id: 'server', label: 'server', sub: 'runs one tag' },
             ],
             predict: {
-              q: 'A clean commit passes every stage up to staging. The <code>production</code> environment has a required reviewer. What happens next?',
-              options: ['It deploys to production at once', 'The job waits until a reviewer approves it', 'The pipeline rebuilds the image from source first'],
-              a: 1,
-              why: 'A job that uses a protected environment pauses until a required reviewer approves it. That is the "are we sure?" button.',
+              q: 'Two hours after a release, users find a bug in the new version. The registry still has every image, one per commit. What is the quickest way back?',
+              options: ['Run the image with the previous commit’s tag', 'Rebuild the old version by hand on the VM', 'Wait for a fix: a release can’t be undone'],
+              a: 0,
+              why: 'The old image is still in the registry, tagged with its commit hash. Starting it again takes a minute, and nothing has to be rebuilt.',
             },
             frames: [
-              { say: 'Every push runs the same stages, in order. First push: a commit that breaks a unit test.' },
-              { at: 'push', packet: 'commit 4e1f', say: 'A push to <code>main</code> starts the workflow.' },
-              { at: 'build', packet: 'commit 4e1f', mark: { build: 'ok' }, say: 'Build: <code>bundleRelease</code> for the app and a container image for the API.' },
-              { at: 'test', packet: '1 test failed', tone: 'err', mark: { test: 'err', sign: 'muted', stg: 'muted', prod: 'muted' }, say: '<code>HeadlineParserTest</code> fails. Every later stage is skipped: nothing is signed, nobody gets the build.' },
-              { at: 'push', packet: 'commit 9b07', mark: { build: '', test: '', sign: '', stg: '', prod: '' }, say: 'The fix is pushed. The pipeline starts again from the first stage.' },
-              { at: 'test', packet: 'all passed', tone: 'ok', mark: { build: 'ok', test: 'ok' }, say: 'Build and tests pass this time.' },
-              { at: 'sign', packet: 'signed AAB', tone: 'ok', mark: { sign: 'ok' }, say: 'The upload key comes from a secret. If that secret did not exist, the step would get an empty string and fail here.' },
-              { at: 'stg', packet: 'GET /health 200', tone: 'ok', mark: { stg: 'ok' }, say: 'The API goes to staging and the bundle to the Play internal track. A smoke test checks <code>/health</code>.' },
-              { at: 'prod', packet: 'waiting', tone: 'warm', mark: { prod: 'warm' }, say: 'The production job pauses. It needs a reviewer to approve it.' },
-              { at: 'prod', packet: 'deployed', tone: 'ok', mark: { prod: 'ok' }, say: 'Approved. The same image that passed staging goes to production.' },
+              { at: 'server', packet: '4de786f', mark: { server: 'ok' }, say: 'The server runs the image tagged with commit <code>4de786f…</code> (tags are shortened here; the real ones have 40 characters). Kofi merges a pull request into <code>main</code>.' },
+              { at: 'push', packet: 'commit 9c1e2a7', mark: { server: '' }, say: 'The push to <code>main</code> starts <code>server.yml</code> on a fresh machine: check out, set up Java and Gradle.' },
+              { at: 'test', packet: 'tests pass', tone: 'ok', mark: { push: 'ok', test: 'ok' }, say: '<code>./gradlew test buildFatJar</code>: the tests pass, then Gradle builds the fat JAR. Had a test failed, the run would stop here and nothing would be shipped.' },
+              { at: 'image', packet: 'docker build', mark: { image: 'warm' }, say: 'The login step signs in to <code>ghcr.io</code> with <code>GITHUB_TOKEN</code>. Then <code>build-push-action</code> builds the image from the Dockerfile, with the new JAR inside.' },
+              { at: 'reg', packet: ':9c1e2a7', tone: 'ok', mark: { image: 'ok', reg: 'ok' }, say: 'It uploads the image as <code>ghcr.io/recipes-team/recipes-server:9c1e2a7…</code>. The image for <code>4de786f…</code> stays there too.' },
+              { at: 'server', packet: '9c1e2a7', tone: 'ok', mark: { server: 'ok' }, say: 'The cloud starts a container from the new tag and stops the old one: continuous deployment. Nobody typed a step, and the tests ran every time.' },
+              { at: 'server', packet: 'bug!', tone: 'err', mark: { server: 'err' }, say: 'Two hours later, users report that the shopping list is empty. The tests didn’t cover that.' },
+              { at: 'server', packet: '4de786f', tone: 'warm', mark: { server: 'warm' }, say: 'Mei tells the cloud to run tag <code>4de786f…</code> again. A minute later, users have the old version back, and the team fixes the bug in peace. The fix becomes the next commit, <code>e436816</code>.' },
             ],
           });
         },
-        code: `# .github/workflows/release.yml (shortened)
+        code: `# .github/workflows/server.yml, in the server's repository
+name: Server CD
+
 on:
   push:
-    branches: [main]
+    branches: [main]                # what was merged; pull requests get their own CI
 
 jobs:
-  app:
+  deliver:
     runs-on: ubuntu-latest
+    permissions:                    # what GITHUB_TOKEN may do in this job:
+      contents: read                #   read the repository
+      packages: write               #   upload images to ghcr.io
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
-        with: { distribution: temurin, java-version: 17 }
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew testReleaseUnitTest
-      - name: Restore upload keystore
-        run: echo "$KEYSTORE_BASE64" | base64 --decode > app/upload.jks
-        env:
-          KEYSTORE_BASE64: \${{ secrets.KEYSTORE_BASE64 }}
-      - name: Build, sign and upload to the internal track
-        run: ./gradlew publishReleaseBundle   # Gradle Play Publisher, default track: internal
-        env:
-          KEYSTORE_PASSWORD: \${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: \${{ secrets.KEY_PASSWORD }}
-          ANDROID_PUBLISHER_CREDENTIALS: \${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-
-  api-prod:
-    needs: app
-    runs-on: ubuntu-latest
-    environment: production          # required reviewer + prod-only secrets
-    steps:
-      - uses: actions/checkout@v6
-      # (Google Cloud auth step omitted)
-      - run: gcloud run deploy headlines-api --source . --region europe-west1`,
-        remember: 'One pipeline, same artifact, every stage: build, test, sign, deploy to staging, then a human approves production.',
-        deeper: [
-          { title: 'Uploading to Play from CI', body: '<p>Two common tools talk to the Google Play Developer API. <b>Gradle Play Publisher</b> (plugin <code>com.github.triplet.play</code>, 4.1.1 at the time of writing) adds tasks like <code>publishBundle</code>; its default track is <code>internal</code>. Its README says it is in maintenance mode: issues are ignored, pull requests are not. <b>fastlane</b>\'s <code>upload_to_play_store</code> (alias <code>supply</code>) does the same from Ruby; its default track is <code>production</code>, so pass <code>track: "internal"</code> explicitly.</p><p>Both need a Google Cloud service account with the Play Developer API turned on, invited in Play Console under Users and permissions. The very first upload of a new app must be done by hand in Play Console, because the API cannot register a new app.</p>', code: '// app/build.gradle.kts\nplugins {\n    id("com.android.application")\n    id("com.github.triplet.play") version "4.1.1"\n}\nplay {\n    track.set("internal")\n    // credentials come from ANDROID_PUBLISHER_CREDENTIALS in CI\n}' },
-          { title: 'Build once, promote the same thing', body: '<p>Do not rebuild for production. Build one container image (tagged with the commit SHA) and one signed bundle, test those, and promote <i>the same files</i> from staging to production. A rebuild can pull a newer dependency or base image, and then what you tested is not what you shipped.</p>' },
-          { title: 'Environments and approvals', body: '<p>In GitHub, a job with <code>environment: production</code> must pass that environment\'s protection rules before it runs or reads its secrets. Rules include required reviewers (up to 6, one approval is enough), a wait timer, and which branches may deploy. Put production secrets only in the production environment, so a pull request job can never see them.</p>' },
-          { title: 'Roll forward, roll back', body: '<p>Pair the pipeline with a way out. On the backend, keep the previous image so you can switch back in seconds. On the app you cannot pull a version off phones, so use staged rollouts and <a href="#launch.flags">feature flags</a> to turn a broken feature off without a new release.</p>' },
-        ],
-        mistakes: [
-          {
-            title: 'Rebuilding for each environment',
-            bad: 'deploy-staging: ./gradlew build && deploy\ndeploy-prod:    ./gradlew build && deploy',
-            good: 'build:   image tagged :$GITHUB_SHA\nstaging: deploy :$GITHUB_SHA\nprod:    deploy :$GITHUB_SHA (after approval)',
-            why: 'Two builds are two different artifacts. Promote the exact one you tested.',
-          },
-          {
-            title: 'Assuming fastlane uploads to internal',
-            bad: 'upload_to_play_store(aab: "app-release.aab")',
-            good: 'upload_to_play_store(aab: "app-release.aab", track: "internal")',
-            why: 'fastlane\'s default track is <code>production</code>. Be explicit about where the build goes.',
-          },
-        ],
+      - run: ./gradlew test buildFatJar           # tests first: if one fails, nothing is shipped
+      - uses: docker/login-action@v4              # log in to the registry
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}           # the user who started the run
+          password: \${{ secrets.GITHUB_TOKEN }}   # a password GitHub makes for this run
+      - uses: docker/build-push-action@v7         # docker build, then upload the image
+        with:
+          context: .                              # build from the files here, with the new JAR
+          push: true
+          tags: ghcr.io/recipes-team/recipes-server:\${{ github.sha }}`,
+        remember: 'CD: every push to main is tested, built into an image tagged with its commit hash and uploaded to a registry. Going back is running an earlier tag.',
         terms: [
-          { term: 'Continuous delivery', def: 'Every change that passes the pipeline is built, signed and deployed to at least one real environment automatically.' },
-          { term: 'Environment', def: 'A named deploy target (dev, staging, prod) with its own config, secrets and protection rules.' },
-          { term: 'Artifact', def: 'The built output that moves through the pipeline: a signed AAB or a container image.' },
-          { term: 'Smoke test', def: 'A quick check after deploy (does /health answer?) that catches a dead deployment early.' },
+          { term: 'continuous delivery, continuous deployment (CD)', def: 'After CI’s checks pass on <code>main</code>, the workflow also builds what you ship and delivers it, every time, in the same order. In continuous deployment, it also starts the new version on the server automatically.' },
+          { term: 'pipeline', def: 'The chain of steps from a push to a running server: test, build, upload, run. A failed step stops the steps after it.' },
+          { term: 'registry', def: 'An online store for images, such as <code>ghcr.io</code>. Workflows upload (push) images to it; servers download them from it.' },
+          { term: 'GITHUB_TOKEN', def: 'A password GitHub makes for each workflow run. <code>permissions:</code> says what it may do, such as <code>packages: write</code> to upload images.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Make the job wait for the production environment\'s reviewers and use its secrets.', code: 'api-prod:\n  needs: app\n  runs-on: ubuntu-latest\n  [[environment]]: [[production]]', why: 'A job that references an environment must pass its protection rules before it runs or reads its secrets.' },
-          { type: 'bug', prompt: 'This lane was meant to send builds to testers, but users got them. Tap the line.', code: 'lane :beta do\n  gradle(task: "bundle", build_type: "Release")\n  upload_to_play_store(\n    aab: lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]\n  )\nend', bug: 3, fix: '    aab: lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH], track: "internal"', why: 'Without <code>track</code>, fastlane uploads to <code>production</code>.' },
+          { type: 'blank', prompt: 'Tag each image with the hash of the commit it was built from.', code: `tags: ghcr.io/recipes-team/recipes-server:\${{ github.[[sha]] }}`, why: '<code>github.sha</code> is the commit hash that started the run. With it, every image says exactly which code is inside.' },
+          { type: 'bug', prompt: 'The login works, but the registry refuses to take the image. Tap the line.', code: `deliver:
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    packages: read`, bug: 4, fix: '    packages: write', why: '<code>packages: read</code> only lets <code>GITHUB_TOKEN</code> download images. Uploading one needs <code>packages: write</code>.' },
         ],
         quiz: [
-          { q: 'Put the stages in order.', options: ['Build → Sign → Test → Deploy', 'Build → Test → Sign → Deploy staging → Approve → Deploy prod', 'Deploy staging → Build → Test → Deploy prod'], a: 1, why: 'Test before you sign and ship anything, and let staging prove the deploy before a human approves production.' },
-          { q: 'The unit test stage fails. What happens to the deploy stages?', options: ['They run anyway', 'They are skipped', 'Only production is skipped'], a: 1, why: 'A failed stage stops the stages that depend on it. That is the point of the pipeline.' },
-          { q: 'The workflow reads <code>${{ secrets.KEYSTORE_BASE64 }}</code>, but nobody created that secret. What does the step get?', options: ['An error before the job starts', 'An empty string', 'The value from your laptop'], a: 1, why: 'GitHub evaluates an unset secret to an empty string, so the failure shows up later, when decoding or signing.' },
-          { q: 'Why must the first release of a new app be uploaded by hand in Play Console?', options: ['Google wants a human to read the code', 'The Play Developer API cannot register a new app', 'CI cannot sign apps'], a: 1, why: 'Gradle Play Publisher\'s README says registering the app cannot be done through the API. After that, CI can take over.' },
-          { q: 'Staging passed with image <code>:a1b2c3</code>. Which trade-off fits "rebuild from main for production"?', options: ['Safer, because it is fresh', 'Riskier: the new build may differ from what you tested', 'No difference'], a: 1, why: 'A rebuild can pick up different dependencies or base images. Promote the tested artifact.' },
+          { q: 'The step <code>./gradlew test buildFatJar</code> fails on a push to <code>main</code>. What does the server run afterwards?', options: ['The image it already ran: nothing new was built or uploaded', 'The new code, with the failing test', 'Nothing: the server stops'], a: 0, why: 'A failed step stops the steps after it. No image is built or uploaded, so the server keeps its current version.' },
+          { q: 'Why tag each image with <code>\${{ github.sha }}</code>?', options: ['You know which commit is running, and can start any earlier one again', 'It makes the image smaller', 'GitHub refuses images without it'], a: 0, why: 'The tag is the commit hash. Going back to an earlier version is running the image with that commit’s tag.' },
+          { q: 'Where does <code>\${{ secrets.GITHUB_TOKEN }}</code> come from?', options: ['GitHub makes it for each run of the workflow', 'Mei types her own GitHub password into the file', 'Docker sends it to GitHub'], a: 0, why: 'GitHub creates <code>GITHUB_TOKEN</code> automatically for every run. No password is written in the workflow.' },
         ],
+        docs: [['Publishing Docker images', 'https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images'], ['Workflow syntax for GitHub Actions', 'https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax']],
       },
 
-      // ---------------------------------------------------------------- 4
+      // 4 ─────────────────────────────────────────────
       {
         id: 'secrets',
-        title: 'Configuration and secrets',
-        tagline: 'Config lives in the environment, secrets live in a vault, and neither lives in git.',
-        level: 'intermediate',
+        title: 'Secrets',
+        tagline: 'Passwords and keys stay out of the code: the server asks for them by name, and a secret manager hands them over.',
+        goals: ['Read a secret from an environment variable in Kotlin', 'Keep a workflow’s secrets in GitHub’s repository secrets', 'Say what a secret manager does and what to do when a secret leaks'],
+        level: 'intermediate', introduces: ['System', 'getenv', 'env'],
         body: `
-<p>The same build runs in dev, staging and prod, so anything that differs between them (database URL, API base URL, log level) comes from <b>configuration</b>, usually <b>environment variables</b>. The code reads <code>System.getenv("DATABASE_URL")</code> and does not care where it runs.</p>
-<p>A <b>secret</b> is config that grants access: passwords, private keys, server API keys. Keep secrets in a <b>secret manager</b> (GitHub Actions secrets, Google Cloud Secret Manager and similar) and inject them at run time. Once a secret is in a git commit, deleting it in the next commit is not enough: it is still in history and in every clone. <b>Rotate it.</b></p>
-<p>Not every key is a secret. Firebase says its API keys in <code>google-services.json</code> only identify your project, and access is controlled by Security Rules and App Check. They are fine in the app, as long as they are restricted to Firebase APIs. A server key, a database password or a Play service account file is a real secret. The demo follows one leaked password from commit to rotation. For the app side, see <a href="#security.secrets">secrets in the app</a>.</p>`,
+<p>The Recipes server now connects to the managed database, so it needs the database’s password, and the key for the nutrition service: another company’s server that tells Recipes the calories of a recipe. In <a href="#security.secrets">API keys and secrets</a> you saw that real secrets belong on the server. Kofi put the database password in <code>Server.kt</code> as a <code>const val</code> and pushed. Now everyone who can read the repository has it, and so does every clone and every CI machine. Deleting the line in the next commit doesn’t help: Git keeps every earlier version.</p>
+<p>So the code only names the secret, and gets its value from outside. An <em>environment variable</em> is a named value that a program receives from whoever starts it. <code>System.getenv("DATABASE_PASSWORD")</code> reads one; it gives <code>null</code> when it isn’t set, so <code>?: throw Exception(...)</code> stops the server at once with a clear message. On your laptop, <code>docker run -e DATABASE_PASSWORD=...</code> starts a container with that variable set.</p>
+<p>In the cloud, secrets live in a <em>secret manager</em>: a service that stores each secret encrypted, decides which programs and people may read it, keeps every version, and records who read or changed it. When the cloud starts the server’s container, it reads the secret and sets <code>DATABASE_PASSWORD</code>. The workflow’s own secrets, such as the key a deploy step needs, go in GitHub: <b>Settings › Secrets and variables › Actions</b>, then <code>\${{ secrets.NAME }}</code>, like <code>GITHUB_TOKEN</code>. <code>env:</code> hands it to one step as an environment variable, and GitHub hides its value in the logs.</p>
+<p>If a secret leaks anyway, <em>rotate</em> it: make a new password at the database, save it as a new version in the secret manager and restart the server. The old password stops working, so the copy in Git’s history is worth nothing.</p>`,
         visual(el) {
           Lab.ui.terminal(el, {
             predict: {
-              q: 'A <code>.env</code> file with the database password was pushed. You delete it with <code>git rm</code> and commit again. Can someone with a clone still read the password?',
-              options: ['No, the file is deleted', 'Yes, it is still in the earlier commit', 'Only if the repository is public'],
-              a: 1,
-              why: 'A commit removes the file from the newest snapshot only. Every earlier commit, in every clone, still holds it. The real fix is to rotate the password.',
+              q: 'Kofi removed the password from <code>Server.kt</code> in a new commit and pushed. Can someone with a copy of the repository still read it?',
+              options: ['Yes: the earlier commit still has it', 'No: the file no longer contains it', 'Only Kofi can, on his laptop'],
+              a: 0,
+              why: 'A new commit changes only the newest version. Every earlier commit, in every clone, still holds the password. That is why it has to be changed.',
             },
             frames: [
-              { say: 'Yesterday someone committed <code>.env</code> with the database URL, password included, and pushed it.' },
-              { cmd: 'git rm --cached .env', out: "rm '.env'", say: 'Stop tracking the file. <code>--cached</code> keeps your local copy.' },
-              { cmd: 'echo ".env" >> .gitignore', say: 'Ignore it from now on, so it can’t be added again by accident.' },
-              { cmd: 'git commit -am "Stop tracking .env"', out: '[main 5c2e9a1] Stop tracking .env\n 2 files changed, 1 insertion(+), 1 deletion(-)\n delete mode 100644 .env', say: 'The newest commit no longer has the file. That only fixes the future.' },
-              { cmd: 'git log --oneline -- .env', out: '5c2e9a1 Stop tracking .env\n8d41b07 Add local config', say: 'History still has the commit that added it.' },
-              { cmd: 'git show 8d41b07:.env', out: '<span style="color:var(--err)">DATABASE_URL=postgres://admin:s3cr3t@10.0.0.4/news</span>', say: 'Anyone with a clone, a fork or a CI cache can print it. Treat the password as leaked.' },
-              { cmd: 'gcloud secrets versions add db-password --data-file=new-password.txt', out: 'Created version [2] of the secret [db-password].', say: 'Rotate it: set a new password on the database and store it in the secret manager. The old value in history is now useless.' },
-              { say: 'The app reads <code>System.getenv("DATABASE_URL")</code>, and the platform injects the new value at run time. No secret is in git.' },
+              { say: 'Yesterday Kofi put the database password into <code>Server.kt</code> and pushed. This morning he took it out again, in a new commit.' },
+              { cmd: 'git log --oneline', out: '1e782a8 Remove the database password\n5c28103 Connect to the database\ne436816 Fix the empty shopping list', say: 'The history still has the commit that added it, right after the shopping-list fix from the last lesson.' },
+              { cmd: 'git show 5c28103', out: esc(`commit 5c28103c41fae0ad8b77d0e800b09b3676b10d84
+Author: Kofi <kofi@example.com>
+
+    Connect to the database
+
++const val DB_PASSWORD = "plum-river-7731"`), say: 'Anyone with a clone can print it. (Shortened: the date and the rest of the change are cut.) The team treats the password as leaked.' },
+              { say: 'Mei rotates it: she sets a new password on the managed database and saves it in the secret manager as version 2 of the secret <code>recipes-db-password</code>. The password in the history no longer opens anything.' },
+              { cmd: 'docker run -p 8080:8080 recipes-server', out: esc('Exception in thread "main" java.lang.Exception: DATABASE_PASSWORD is not set\n\tat ServerKt.main(Server.kt:6)\n\tat ServerKt.main(Server.kt)'), say: 'The server now reads <code>System.getenv("DATABASE_PASSWORD")</code>. Started without it, it stops at once and says why, instead of failing later at the first query.' },
+              { cmd: 'docker run -e DATABASE_PASSWORD=local-dev-password -p 8080:8080 recipes-server', out: '… Responding at http://0.0.0.0:8080', say: 'On her laptop, Mei hands the container the password of her own test database with <code>-e</code>.' },
+              { say: 'In the cloud, the platform reads version 2 from the secret manager and starts the container with <code>DATABASE_PASSWORD</code> set. The password is in no new commit or image, and no line of code. Old images in the registry, built from commit <code>5c28103</code>, still hold the old one: one more reason the rotation matters.' },
             ],
           });
         },
-        code: `// app/build.gradle.kts: signing values come from the environment (CI secrets) or local, ignored files.
-android {
-    signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "upload.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-            keyPassword = System.getenv("KEY_PASSWORD")
-        }
-    }
-    buildTypes {
-        release { signingConfig = signingConfigs.getByName("release") }
-    }
-}
+        code: `// Server.kt: the code names the secret; its value comes from outside
+val dbPassword = System.getenv("DATABASE_PASSWORD")
+    ?: throw Exception("DATABASE_PASSWORD is not set")
 
-// Backend: read config once at startup and fail fast if it is missing.
-val databaseUrl = System.getenv("DATABASE_URL")
-    ?: error("DATABASE_URL is not set")`,
-        remember: 'Config from the environment, secrets from a secret manager, nothing secret in git. A leaked secret gets rotated, not just deleted.',
-        deeper: [
-          { title: 'The keystore in CI', body: '<p>GitHub secrets are text, so a keystore file goes in as Base64 and the workflow decodes it to a file before the build. GitHub\'s docs note Base64 is an encoding, not encryption, and that secrets larger than 48 KB need a different approach (encrypt the file, commit it, store the passphrase as a secret). Keep the passwords in separate secrets. Delete the decoded file at the end, or rely on the runner being thrown away.</p>', code: 'base64 -i upload.jks | pbcopy        # macOS: copy, then paste into a repo secret\n# in the workflow:\necho "$KEYSTORE_BASE64" | base64 --decode > app/upload.jks' },
-          { title: 'Upload key vs app signing key', body: '<p>With Play App Signing, Google holds the <b>app signing key</b> that signs what users install. You hold only the <b>upload key</b>. If the upload key leaks or is lost, you can request an upload key reset in Play Console and keep publishing. That is a strong reason to use Play App Signing: the key that lives in CI is the one that can be replaced. More in <a href="#build.signing">Signing</a>.</p>' },
-          { title: 'Secret managers on the server', body: '<p>On the backend, store secrets in a manager such as Google Cloud Secret Manager. It keeps versions (so you can roll back), limits who can read each secret with IAM roles, and makes rotation a routine change instead of a code change. Your container reads the value as an env var or a mounted file at start.</p>' },
-          { title: 'Fork pull requests get no secrets', body: '<p>GitHub does not pass secrets (other than <code>GITHUB_TOKEN</code>) to workflows triggered from forks, and Dependabot runs have no access either. So signing and deploy jobs should run on pushes to your own branches, not on outside pull requests.</p>' },
-        ],
-        underHood: {
-          body: '<p>Secret scanners match known shapes: provider prefixes like <code>sk_live_</code> or <code>AIza</code>, PEM headers like <code>-----BEGIN PRIVATE KEY-----</code>, and high-entropy strings near words like <code>password</code>. GitHub masks secret values in Actions logs when they appear as-is, but its docs say not to print them anyway, and a value that is transformed (Base64, split) will not be masked. Use <code>::add-mask::</code> for derived values you must handle.</p>',
-          code: '- run: |\n    TOKEN=$(./fetch-token.sh)\n    echo "::add-mask::$TOKEN"\n    echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"',
-        },
+# Terminal, on your laptop: -e sets an environment variable in the container
+docker run -e DATABASE_PASSWORD=local-dev-password -p 8080:8080 recipes-server
+
+# .github/workflows/server.yml: a repository secret, handed to one step.
+# (deploy.sh is the team's small script that tells the cloud to run a new tag.)
+      - run: ./deploy.sh \${{ github.sha }}
+        env:
+          CLOUD_TOKEN: \${{ secrets.CLOUD_TOKEN }}   # Settings › Secrets and variables › Actions`,
+        remember: 'Code names a secret, the environment hands over its value: a secret manager in the cloud, repository secrets in GitHub. A leaked secret is rotated, not only deleted.',
         mistakes: [
-          {
-            title: 'Deleting the leaked key in a new commit',
-            bad: 'git rm play-service-account.json\ngit commit -m "remove key"',
-            good: '# 1. revoke the key in Google Cloud and create a new one\n# 2. store the new one as a CI secret\n# 3. then remove the file and ignore it',
-            why: 'The old commit still has the key, and so does every clone and fork. Only revoking it makes it useless.',
-          },
-          {
-            title: 'Putting a server key in the app',
-            bad: 'buildConfigField("String", "PAYMENT_SECRET", "\\"sk_live_...\\"")',
-            good: '// app calls your backend; the backend holds PAYMENT_SECRET\napi.createPayment(orderId)',
-            why: 'Anything in an APK can be extracted. Keys that grant server-side power stay on the server.',
-          },
+          { title: 'Printing a secret to check it', bad: `println("Connecting with password $dbPassword")`, good: `println("Connecting to the database")`, why: 'Server logs are read by many people and tools. GitHub hides its secrets in workflow logs, but your server’s own logs print whatever you give them.' },
         ],
         terms: [
-          { term: 'Environment variable', def: 'A named value the OS passes to a process at start. The usual way to hand config to a container.' },
-          { term: 'Secret manager', def: 'A service that stores secrets with access control, versions and audit, and hands them to apps at run time.' },
-          { term: 'Rotation', def: 'Replacing a secret with a new value and revoking the old one.' },
-          { term: 'Push protection', def: 'GitHub secret scanning that blocks a push when it detects known credential formats.' },
+          { term: 'environment variable', def: 'A named value a program receives from whoever starts it. <code>System.getenv("NAME")</code> reads it, or gives <code>null</code>.' },
+          { term: 'secret manager', def: 'A cloud service that stores secrets encrypted, decides who may read each one, keeps every version and records each read and change.' },
+          { term: 'repository secret', def: 'A secret stored in a GitHub repository’s settings and used in a workflow as <code>\${{ secrets.NAME }}</code>. Its value is hidden in the logs.' },
+          { term: 'rotate', def: 'Replace a secret with a new value and make the old one stop working. The answer to a leak.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Decode the keystore from a repository secret into a file in CI.', code: 'run: echo "$KEYSTORE_BASE64" | base64 [[--decode|-d]] > app/upload.jks\nenv:\n  KEYSTORE_BASE64: ${{ [[secrets]].KEYSTORE_BASE64 }}', why: 'The secret holds Base64 text. The <code>secrets</code> context reads it and <code>base64 --decode</code> turns it back into the file.' },
-          { type: 'bug', prompt: 'One line puts a real secret into the APK. Tap it.', code: 'defaultConfig {\n    applicationId = "com.example.news"\n    buildConfigField("String", "API_BASE", "\\"https://api.example.com\\"")\n    buildConfigField("String", "DB_PASSWORD", "\\"s3cr3t\\"")\n}', bug: 3, fix: '    // DB_PASSWORD stays on the server; the app only knows API_BASE', why: 'A base URL is config. A database password is a secret, and anything in BuildConfig ships in the APK.' },
+          { type: 'blank', prompt: 'Read the nutrition service’s key from an environment variable, and stop at once if it isn’t set.', code: `val nutritionKey = System.[[getenv]]("NUTRITION_KEY")
+    ?: [[throw]] Exception("NUTRITION_KEY is not set")`, why: '<code>System.getenv</code> gives <code>null</code> when the variable isn’t set; <code>?: throw</code> turns that into a clear message at start.' },
+          { type: 'bug', prompt: 'This workflow works, but anyone who can read the repository can use the cloud’s key. Tap the line.', code: `      - run: ./deploy.sh \${{ github.sha }}
+        env:
+          CLOUD_TOKEN: ct_live_8f2a91d4`, bug: 2, fix: '          CLOUD_TOKEN: \${{ secrets.CLOUD_TOKEN }}', why: 'The key is written in the file, so it is in Git’s history. Store it as a repository secret and let GitHub fill it in. (The key in the history must be rotated too.)' },
         ],
         quiz: [
-          { q: 'A Play service account JSON was pushed to a private repo last week. What do you do first?', options: ['Delete the file in a new commit', 'Revoke the key and create a new one', 'Make the repo private again'], a: 1, why: 'The key is in history and in clones. Revoking it is the only thing that makes the leak harmless.' },
-          { q: 'Which of these is fine to ship inside the app?', options: ['A Firebase API key restricted to Firebase APIs', 'A database password', 'A Play service account private key'], a: 0, why: 'Firebase says its keys only identify the project; Security Rules and App Check control access. The others grant real power.' },
-          { q: 'Which line is the problem? (1) <code>val url = System.getenv("API_BASE")</code> (2) <code>ARG DB_PASSWORD</code> in a Dockerfile (3) <code>env: KEY: ${{ secrets.KEY }}</code>', options: ['Line 1', 'Line 2', 'Line 3'], a: 1, why: 'Docker build args persist in the image. Pass secrets at run time or with a build secret mount.' },
-          { q: 'Why is Play App Signing helpful if the CI keystore leaks?', options: ['It encrypts the APK', 'The leaked key is only the upload key, and Play can reset it', 'It deletes leaked keys automatically'], a: 1, why: 'Google holds the app signing key. You can request an upload key reset and keep updating the same app.' },
+          { q: 'The database password was in a commit that was pushed. What makes the leak harmless?', options: ['Rotate it: a new password, and the old one stops working', 'Delete the line in a new commit', 'Make the repository private'], a: 0, why: 'Earlier commits and every clone still hold the old password. Only changing it makes that copy useless.' },
+          { q: 'What does <code>System.getenv("DATABASE_PASSWORD")</code> give when the variable isn’t set?', options: ['<code>null</code>', 'An empty text, <code>""</code>', 'A crash'], a: 0, why: 'Its type is <code>String?</code>. That is why the code adds <code>?: throw Exception(...)</code>.' },
+          { q: 'A workflow uses <code>\${{ secrets.CLOUD_TOKEN }}</code>, but nobody created that secret. What does the step get?', options: ['An empty text', 'An error before the run starts', 'The value from Mei’s laptop'], a: 0, why: 'GitHub gives an empty text for a secret that isn’t set, so the step fails later, when it tries to use the key.' },
         ],
+        docs: [['Using secrets in GitHub Actions', 'https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets']],
       },
 
-      // ---------------------------------------------------------------- 5
+      // 5 ─────────────────────────────────────────────
       {
         id: 'baas',
-        title: 'Backend-as-a-service',
-        tagline: 'Firebase, Supabase or your own server: pick by your data, your team and how easily you can leave.',
-        level: 'intermediate',
+        title: 'Backend as a service',
+        tagline: 'Sign-in, a database and file storage that someone else runs, used straight from the app.',
+        goals: ['Say what a backend as a service gives you and what it costs you', 'Read documents from Cloud Firestore in Kotlin', 'Protect the data with Security Rules'],
+        level: 'beginner', introduces: ['firestore', 'allow'],
         body: `
-<p>A <b>backend-as-a-service (BaaS)</b> gives you auth, a database, file storage and server functions behind an SDK, with no servers to run. It is the fastest way to a working app. The cost is <b>lock-in</b>: your data model and code start to depend on one vendor.</p>
-<p><b>Firebase</b> (Google) centers on Cloud Firestore, a document database with offline persistence on by default on Android, plus Auth, Storage and Cloud Functions. Cloud Functions and Cloud Storage need the pay-as-you-go Blaze plan. <b>Supabase</b> gives every project a full Postgres database, with Auth, Row Level Security policies, Storage, Realtime and Edge Functions (TypeScript on Deno). It can be self-hosted with Docker. <b>Your own server</b> (for example Ktor plus Postgres in a container) gives full control and the most work.</p>
-<p>Push notifications do not decide this: FCM works with any backend that can call its API (see <a href="#push.fcm">FCM</a>). The demo follows one app as its requirements change.</p>`,
+<p>Noor leads a cooking club and wants a small app: members sign in and share shopping lists. For Recipes, the team runs a server, builds an image, keeps a pipeline, a managed database and secrets. For one person and a small app, that is a lot to look after.</p>
+<p>A <em>backend as a service</em> (BaaS) is a backend someone else runs: sign-in, a database and file storage, which the app uses through the provider’s library. You already use Firebase for push, crash reports and Remote Config. It also has Firebase Authentication for sign-in, Cloud Storage for files, and <em>Cloud Firestore</em>, a database of <em>documents</em>: each document is a set of named fields, and documents are grouped in collections, such as the collection <code>lists</code> with a document <code>weekend</code>. Cloud Functions runs your own code on Firebase’s servers when something happens. Cloud Functions and Cloud Storage need the pay-as-you-go Blaze plan. Supabase and Appwrite offer similar services, built on open-source parts you can also run yourself.</p>
+<p>The app reads Firestore directly, with no server of Noor’s in between. So who checks who may read what? <em>Security Rules</em>: rules you write in Firebase, which Firebase checks for every request from an app before it reads or writes anything. <code>allow read, write: if request.auth != null;</code> lets only signed-in users in. Signed in isn’t the same as allowed: anyone can make an account, so real rules also check <em>who</em>, for example <code>request.auth.uid == resource.data.owner</code> (only the list’s owner). Never rely on the app’s own code for this: anyone can change an APK, and the project’s details are inside every copy.</p>
+<p>What it costs: the start is fast and there is no server to look after, but as the app grows you pay for every read, write and stored byte, and your app depends on one provider. That is <em>vendor lock-in</em>. Keep the Firestore calls in one repository, as in <a href="#arch.repository">Repositories</a>, so a move later touches one class, not every screen.</p>`,
         visual(el) {
           Lab.ui.graph(el, {
             height: 290,
             nodes: [
-              { id: 'app', label: 'Android app<small>screens, ViewModels</small>', x: 50, y: 12 },
-              { id: 'src', label: 'HeadlineSource<small>your interface</small>', x: 50, y: 48, hidden: true },
-              { id: 'fb', label: 'Firestore<small>Firebase SDK</small>', x: 17, y: 86, tone: 'warm' },
-              { id: 'sb', label: 'Supabase<small>Postgres</small>', x: 50, y: 86, tone: 'ok', hidden: true },
-              { id: 'own', label: 'Your Ktor API<small>+ Postgres</small>', x: 83, y: 86, hidden: true },
+              { id: 'app', label: 'Club app<small>Firebase library</small>', x: 22, y: 14 },
+              { id: 'auth', label: 'Authentication<small>who is signed in</small>', x: 22, y: 52, hidden: true },
+              { id: 'rules', label: 'Security Rules<small>checked on every request</small>', x: 70, y: 52, tone: 'warm', hidden: true },
+              { id: 'fs', label: 'Cloud Firestore<small>lists/weekend</small>', x: 70, y: 88 },
+              { id: 'other', label: 'A stranger’s script<small>with the project’s details</small>', x: 70, y: 14, tone: 'err', hidden: true },
             ],
             predict: {
-              q: 'The screens call Firestore directly in dozens of places. A new rule says the data must live on servers your company runs. What has to change?',
-              options: ['Only the Gradle dependency', 'Every place that calls Firestore, and the data itself', 'Nothing: point the Firebase SDK at your own server'],
-              a: 1,
-              why: 'Firestore runs only on Google’s infrastructure. Its queries and document shapes are spread through the code, and its data does not map directly to tables.',
+              q: 'The club app reads Firestore directly, with no server of Noor’s in between. What stops a stranger’s script from reading every list?',
+              options: ['Security Rules, which Firebase checks for every request', 'The app’s own code, which checks before each read', 'Nothing: with a BaaS the data is open'],
+              a: 0,
+              why: 'The app’s code runs on phones, where anyone can change it. The rules run on Firebase’s side, so every request passes them, whoever sends it.',
             },
             frames: [
-              { add: [['app', 'fb', 'SDK calls', 'warm']], say: 'Day one with Firebase: the app talks to Firestore through its SDK. Auth, the database and an offline cache come with it, and you run no servers.' },
-              { hl: ['app', 'fb'], say: 'Fast, but Firestore queries, listeners and document shapes end up in many screens. That is what lock-in looks like in code.' },
-              { show: ['src'], remove: [['app', 'fb']], add: [['app', 'src', 'calls'], ['src', 'fb', 'one class', 'warm']], say: 'Wrap it. Screens depend on your own <code>HeadlineSource</code> interface, and only one implementation knows Firestore.' },
-              { show: ['sb', 'own'], say: 'Now the requirements change: data must stay on servers you run. Supabase can be self-hosted with Docker. Your own server gives full control and the most work.' },
-              { remove: [['src', 'fb']], add: [['src', 'own', 'new impl', 'ok']], gone: ['fb'], say: 'You write one new implementation. The screens do not change. Moving the data is still real work.' },
+              { add: [['app', 'fs', 'get lists']], say: 'Noor’s app reads the collection <code>lists</code> straight from Firestore, through the Firebase library. She runs no server, no image and no pipeline.' },
+              { show: ['auth'], add: [['app', 'auth', 'sign in', 'ok']], say: 'Members sign in with Firebase Authentication. From then on, every request says who is asking.' },
+              { show: ['rules'], remove: [['app', 'fs']], add: [['app', 'rules', 'get lists'], ['rules', 'fs', 'allowed', 'ok']], say: 'Every request passes the Security Rules first. The rule <code>if request.auth != null</code> lets signed-in members read and write.' },
+              { show: ['other'], add: [['other', 'rules', 'not signed in', 'err']], say: 'Someone copies the project’s details out of the APK and sends requests from a script. Not signed in: refused. But this rule only stops anonymous requests: the script could make an account and sign in, so the club’s real rules also check that a list belongs to the member who asks.' },
+              { remove: [['other', 'rules']], add: [['other', 'fs', 'if true', 'err']], hl: ['fs'], say: 'With the rule <code>allow read, write: if true;</code>, the same script could read every list and delete them all. With a BaaS, the rules are your server’s checks.' },
+              { remove: [['other', 'fs']], gone: ['other'], hl: ['app'], say: 'If the club app ever moves away from Firebase, every Firestore call has to change. Kept in one repository class, that is one file.' },
+              { say: 'For Noor: a working app in a weekend, and no server to look after. The price: a bill for each read and write as the club grows, and a provider that is hard to leave.' },
             ],
           });
         },
-        code: `// Keep the BaaS behind your own interface, so the rest of the app does not know which one you chose.
-interface HeadlineSource {
-    suspend fun latest(category: String): List<Headline>
+        code: `// app/build.gradle.kts (the Firebase BoM is already there from the FCM lesson)
+dependencies {
+    implementation("com.google.firebase:firebase-firestore")
 }
 
-class FirestoreHeadlines(private val db: FirebaseFirestore) : HeadlineSource {
-    override suspend fun latest(category: String): List<Headline> =
-        db.collection("headlines")
-            .whereEqualTo("category", category)        // e.g. "sports", "business"
-            .orderBy("publishedAt", Query.Direction.DESCENDING)
-            .limit(20)
-            .get().await()
-            .toObjects(Headline::class.java)
-}
+// Read every document in the collection "lists"
+val db = Firebase.firestore
+db.collection("lists")
+    .get()
+    .addOnSuccessListener { result ->
+        for (document in result) {
+            Log.d("Club", "\${document.id} => \${document.data}")
+        }
+    }
+// Club: weekend => {items=[eggs, flour], owner=ada}
 
-// Moving to Supabase or your own API later means a new HeadlineSource, not a rewrite.`,
-        remember: 'Start with a BaaS if it fits your data, but keep it behind your own interface. The cheapest migration is the one you planned for.',
-        deeper: [
-          { title: 'Security moves to rules and policies', body: '<p>With a BaaS the app talks to the database directly, so the database must decide who can read what. In Firebase that is <b>Security Rules</b>; in Supabase it is Postgres <b>Row Level Security</b> policies. A missing rule is the classic BaaS breach: the app works, and so does anyone else\'s script.</p>', code: '-- Supabase: users can read only their own saved articles\nalter table saved_articles enable row level security;\ncreate policy "own rows" on saved_articles\n  for select using (auth.uid() = user_id);' },
-          { title: 'Free tiers have shapes', body: '<p>Firebase Spark includes Firestore with daily quotas (50K reads and 20K writes per day for the Standard edition) and Auth, but not Cloud Functions or Cloud Storage. Supabase Free gives two free projects, a 500 MB database per project, and pauses projects with low activity over 7 days. Read the pricing pages for the numbers that matter to your app: they change.</p>' },
-          { title: 'Kotlin clients', body: '<p>Firebase ships official Android SDKs. For Supabase, the Kotlin client <code>supabase-kt</code> is documented on supabase.com but is a community library, not an official one. Your own server can share Kotlin models with the app through a <a href="#kmp">Kotlin Multiplatform</a> module.</p>' },
-          { title: 'Mixing is normal', body: '<p>Many apps use Firebase for FCM, Crashlytics and Remote Config while their data lives in their own Postgres. Pick per job: the push and crash tools are free on the Spark plan and do not lock in your data.</p>' },
-        ],
-        mistakes: [
-          {
-            title: 'BaaS calls spread through the UI',
-            bad: '@Composable fun Feed() {\n    LaunchedEffect(Unit) { Firebase.firestore.collection("headlines").get() }\n}',
-            good: 'class FeedViewModel(private val source: HeadlineSource) : ViewModel()',
-            why: 'When the SDK is called from screens, switching vendors means touching every screen. Behind an interface, it is one class.',
-          },
-          {
-            title: 'Leaving the database open "for now"',
-            bad: 'match /{document=**} {\n  allow read, write: if true;\n}',
-            good: 'match /users/{uid}/saved/{id} {\n  allow read, write: if request.auth != null && request.auth.uid == uid;\n}',
-            why: 'With a BaaS, rules are your backend. An open rule means anyone with your project id can read and write everything.',
-          },
-        ],
+// firestore.rules, published in the Firebase console
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /lists/{listId} {
+      allow read, write: if request.auth != null;   // only signed-in users
+    }
+  }
+}`,
+        remember: 'A BaaS runs sign-in, a database and storage for you. Security Rules are its checks, and keeping its calls in one repository keeps you free to leave.',
         terms: [
-          { term: 'BaaS', def: 'Backend-as-a-service: hosted auth, database, storage and functions used through an SDK.' },
-          { term: 'Vendor lock-in', def: 'How hard and costly it is to move your data and code to another provider.' },
-          { term: 'Row Level Security', def: 'Postgres policies that decide, per row, which user can read or change it.' },
-          { term: 'Security Rules', def: 'Firebase\'s rules language that decides who can read or write Firestore, Realtime Database and Storage data.' },
+          { term: 'backend as a service (BaaS)', def: 'A backend someone else runs (sign-in, a database, file storage), used from the app through the provider’s library. Firebase is one.' },
+          { term: 'Cloud Firestore', def: 'Firebase’s database of documents. Each document is a set of named fields; documents are grouped in collections.' },
+          { term: 'Security Rules', def: 'Rules you write in Firebase that decide who may read or write which data. Firebase checks them on every request from an app.' },
+          { term: 'vendor lock-in', def: 'How hard and costly it is to move your app and its data to another provider.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Turn on per-row access control for a Supabase table.', code: 'alter table saved_articles enable [[row level security]];', why: 'Without RLS enabled, policies do nothing and the table is open to the client API key.' },
-          { type: 'bug', prompt: 'This Firestore rule lets any visitor rewrite every user\'s data. Tap the line.', code: 'rules_version = \'2\';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /users/{uid}/{doc=**} {\n      allow read, write: if true;\n    }\n  }\n}', bug: 4, fix: '      allow read, write: if request.auth != null && request.auth.uid == uid;', why: 'Check that the signed-in user owns the path. <code>if true</code> allows everyone.' },
+          { type: 'blank', prompt: 'Read the documents of the collection <code>lists</code>.', code: `val db = Firebase.firestore
+db.[[collection]]("lists")
+    .get()
+    .addOnSuccessListener { result ->
+        for (document in result) {
+            Log.d("Club", document.id)
+        }
+    }`, why: '<code>collection("lists")</code> picks the collection, and <code>get()</code> reads its documents. The result is a list of documents you can loop through.' },
+          { type: 'bug', prompt: 'With these rules, anyone with the project’s details can read and delete every list. Tap the line.', code: `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /lists/{listId} {
+      allow read, write: if true;
+    }
+  }
+}`, bug: 4, fix: '      allow read, write: if request.auth != null;', why: '<code>if true</code> allows every request. <code>request.auth != null</code> lets only signed-in users in.' },
         ],
         quiz: [
-          { q: 'Your news app needs joins between articles, authors and tags, and the data must be on servers your company runs. Which trade-off fits?', options: ['Firebase: fastest to start', 'Supabase self-hosted or your own server: SQL and you run it', 'Any of them, it does not matter'], a: 1, why: 'Relational data favors Postgres, and "we run it" rules out Firebase, which runs only on Google\'s infrastructure.' },
-          { q: 'You need a Cloud Function that runs when a document is written. Which Firebase plan?', options: ['Spark', 'Blaze', 'Either'], a: 1, why: 'Firebase\'s pricing page lists Cloud Functions as Blaze only.' },
-          { q: 'Does choosing Supabase stop you from sending FCM push notifications?', options: ['Yes, FCM needs Firebase as the database', 'No, any backend can call FCM', 'Only on Android 13+'], a: 1, why: 'FCM is a separate service. Your Supabase function or own server can send messages through its API.' },
-          { q: 'What does wrapping Firestore in a <code>HeadlineSource</code> interface buy you?', options: ['Faster queries', 'One place to change if you switch backends, and an easy fake for tests', 'Offline support'], a: 1, why: 'The rest of the app depends on your interface, not the vendor SDK.' },
+          { q: 'Noor wants her own code to run on Firebase’s servers each time a list changes. What does she need?', options: ['Cloud Functions, on the pay-as-you-go Blaze plan', 'Nothing extra: it works on the free plan', 'Her own VM'], a: 0, why: 'Cloud Functions runs your code on Firebase’s servers, and it needs the Blaze plan.' },
+          { q: 'Can an app whose data lives on its own server still use Firebase Cloud Messaging?', options: ['Yes: any server can send messages through FCM', 'No: FCM needs Firestore', 'Only with Cloud Functions'], a: 0, why: 'FCM is a separate service. In the FCM lesson, your server sends the message; where your data lives doesn’t matter.' },
+          { q: 'What keeps vendor lock-in small?', options: ['All Firestore calls in one repository class', 'Calling Firestore from every screen', 'Using the free plan'], a: 0, why: 'The rest of the app talks to your repository, so switching providers means rewriting one class.' },
         ],
+        docs: [['Cloud Firestore', 'https://firebase.google.com/docs/firestore'], ['Get started with Cloud Firestore Security Rules', 'https://firebase.google.com/docs/firestore/security/get-started']],
       },
 
-      // ---------------------------------------------------------------- 6
+      // 6 ─────────────────────────────────────────────
       {
         id: 'observability',
-        title: 'Observability',
-        tagline: 'Logs, metrics and traces, joined by one request id, so a crash on a phone points to the server line that caused it.',
-        level: 'intermediate',
+        title: 'Logs, metrics and traces',
+        tagline: 'When users say “it’s slow”, the server’s own records tell you when, what and where.',
+        goals: ['Tell logs, metrics and traces apart, and what each one answers', 'Find the slow part of a request in a trace', 'Add the OpenTelemetry Java agent to the server’s image'],
+        level: 'intermediate', introduces: ['ENV', 'javaagent', 'OTEL_SERVICE_NAME', 'OTEL_EXPORTER_OTLP_ENDPOINT'],
         body: `
-<p><b>Observability</b> is being able to answer "what is going wrong, and where?" from the data your system sends out. OpenTelemetry groups that data into signals. <b>Logs</b> are timestamped events ("payment failed for order 812"). <b>Metrics</b> are numbers over time (requests per second, error rate, p95 latency). <b>Traces</b> follow one request through every service it touches, as a tree of timed <b>spans</b>.</p>
-<p><b>Dashboards</b> show metrics at a glance. <b>Alerts</b> page someone when a metric stays bad, such as "error rate above 2% for 5 minutes". Alert on what users feel (errors, latency), not on every CPU blip.</p>
-<p>The glue is an id. The app sends a request id (or a W3C <code>traceparent</code> header) with each call, and records it in the crash report (see <a href="#launch.crashes">Crash reporting</a>). On the server every log line carries the same id. Try it: make a request fail, then follow the id.</p>`,
-        predict: {
-          q: "A crash report carries the request id the app sent. You filter the server logs by that id. Whose lines show up?",
-          options: ["Only the gateway’s", "Lines from every service that request touched", "Every request from that minute"],
-          a: 1,
-          why: "Each service logs the id it received with the request, so one filter pulls one request’s story out of everyone else’s traffic.",
-        },
+<p>Monday, 09:00: users write that opening a recipe takes ages. Crashlytics, from <a href="#launch.crashes">Crash reporting</a>, shows no new crashes: nothing broke, it is only slow. Somewhere between the server, the database and the nutrition service, time goes missing. Without records from the server, the team can only guess.</p>
+<p><em>Observability</em> means a system tells you what it is doing. It sends three kinds of records, called signals. <em>Logs</em> record events, one line each, with the time: <code>GET /v1/recipes/42 200 2412ms</code>. <em>Metrics</em> are numbers measured over time, such as requests per minute, how many fail and how long they take: good for charts and for alarms. A <em>trace</em> follows one request through every part it touches. Each step is a <em>span</em>, with a start and an end, so the slow step stands out.</p>
+<p><em>OpenTelemetry</em> (OTel) is an open standard, with free tools, for making all three. Most monitoring services can read it, so you can switch services without changing your code. For a server that runs on Java, the OpenTelemetry Java agent does it without code changes: <code>java -javaagent:opentelemetry-javaagent.jar -jar app.jar</code> loads the agent before the server, and it measures incoming requests, database calls and calls to other services. <code>OTEL_SERVICE_NAME</code> gives the server a name in the records, and <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> says where to send them, often to an OpenTelemetry Collector, a program that receives the data and passes it on.</p>
+<p>In the Dockerfile, <code>ENV</code> sets an environment variable that every container of the image gets. Read the signals in order: the metric shows <em>when</em> it started, the log shows <em>what</em> happened, and the trace shows <em>where</em> the time went.</p>`,
         visual(el) {
-          const ID = 'a91f-3c7e';
-          const LOGS = [
-            ['09:00:01.120', 'gateway', 'GET /api/headlines 200 41ms', '5d02-91aa'],
-            ['09:00:01.402', 'gateway', 'GET /api/headlines/812 → feed', ID],
-            ['09:00:01.405', 'feed', 'load article 812', ID],
-            ['09:00:01.511', 'auth', 'token ok user=4471', '77c1-0b2e'],
-            ['09:00:01.530', 'feed', 'query related(812) on postgres', ID],
-            ['09:00:02.050', 'gateway', 'GET /api/weather 200 18ms', '0e3b-6612'],
-            ['09:00:04.531', 'feed', 'ERROR query timeout after 3000ms', ID, true],
-            ['09:00:04.533', 'gateway', 'GET /api/headlines/812 503 3131ms', ID, true],
-            ['09:00:04.900', 'gateway', 'GET /api/headlines 200 38ms', 'c4d8-2f19'],
-          ];
-          const SPANS = [['app: openArticle', 0, 100], ['gateway', 4, 96], ['feed: loadArticle', 6, 92], ['postgres: related()', 12, 86, true]];
-          const logRows = LOGS.map(([t, svc, msg, id, err]) => h('div', { class: 'cl-log' }, `${t} `, h('span', { class: 'cl-svc' }, svc.padEnd(7)), ' ', err ? h('span', { class: 'cl-e' }, msg) : msg, ` req=${id}`));
-          logRows.forEach((r, i) => { r.id = LOGS[i][3]; });
-          const crash = h('div', { class: 'cl-crash', hidden: true }, `Crashlytics · non-fatal · ArticleDetailViewModel\nHttpException: HTTP 503 · last_request_id=${ID}`);
-          const spanBars = SPANS.map(([n, s, w, slow]) => { const b = h('i', { class: 'cl-sbar' + (slow ? ' cl-slow' : ''), style: `left:${s}%` }); b.w = w; return h('div', { class: 'cl-span' }, h('span', {}, n), h('div', { class: 'cl-lane' }, b)); });
-          const trace = h('div', { class: 'cl-box', hidden: true }, label(`trace ${ID} · 3.13 s`), h('div', { class: 'cl-spans' }, spanBars));
-          const logs = h('div', { class: 'cl-logs', 'aria-label': 'Server logs' }, logRows);
-          const o = out('');
-          let failed = false;
-          const fail = () => {
-            failed = true; crash.hidden = false; replay(crash, 'shake');
-            say(o, '<span class="bad">A user opened article 812 and saw an error.</span> <span class="muted">The crash report has the request id the app sent. The server logs are mixed with everyone else\'s traffic.</span>');
-          };
-          const find = () => {
-            if (!failed) fail();
-            logRows.forEach(r => { r.classList.toggle('cl-dim', r.id !== ID); r.classList.toggle('cl-match', r.id === ID); });
-            say(o, `<span class="good">Filtered by req=${ID}: 5 lines across 2 services.</span> <span class="muted">The feed service timed out waiting for Postgres. Now open the trace to see where the time went.</span>`);
-          };
-          const showTrace = async () => {
-            if (!failed) find();
-            trace.hidden = false; spanBars.forEach(r => { r.querySelector('.cl-sbar').style.width = '0'; });
-            for (const r of spanBars) { await sleep(180); if (!el.isConnected) return; const b = r.querySelector('.cl-sbar'); b.style.width = b.w + '%'; }
-            say(o, '<span class="good">The postgres span takes almost the whole 3.1 s.</span> <span class="muted">Logs told you what failed; the trace shows where the time went. Next: a metric and alert on p95 latency for that query.</span>');
-          };
-          say(o, 'Make a request fail on the phone.');
-          el.append(h('div', { class: 'controls' }, act('Open article 812 (fails)', fail), act('Search logs by request id', find), act('Open trace', showTrace)), crash, label('server logs, all users'), logs, trace, o);
+          Lab.ui.timeline(el, {
+            lanes: ['server', 'data&shy;base', 'nutri&shy;tion'],
+            span: 2500,
+            unit: 'ms',
+            predict: {
+              q: 'The server’s log line says <code>GET /v1/recipes/42 200 2412ms</code>. What does it tell you?',
+              options: ['The request worked but took 2.4 seconds; not which part was slow', 'The database is slow', 'The request failed'],
+              a: 0,
+              why: '200 means it worked, and 2412ms is the time for the whole request. Which part took that time is what a trace shows.',
+            },
+            frames: [
+              { say: 'The metric for <code>GET /v1/recipes/42</code>: about 150 ms all last week, about 2,400 ms since 09:00 today. (Example numbers.) The metric shows <em>that</em> it got slow, and <em>when</em>.' },
+              { bars: [{ lane: 0, from: 0, to: 2412, label: 'GET /v1/recipes/42' }], say: 'One trace of a slow request. The first span is the server handling it: 2,412 ms, the same as the log line.' },
+              { bars: [{ lane: 1, from: 30, to: 90, label: 'load recipe', tone: 'ok' }], say: 'Inside it, the database span: loading recipe 42 takes 60 ms. Not the problem.' },
+              { bars: [{ lane: 2, from: 110, to: 2380, label: 'GET calories: 2.27 s', tone: 'err' }], say: 'The call to the nutrition service takes 2,270 ms, almost all of the request. That service got slow this morning.' },
+              { say: 'The log lines of this request carry the trace’s id, so the team can read exactly what the server wrote while it waited.' },
+              { say: 'The fix: keep the calories on the server for a day, as in <a href="#sysdesign.caching">Caching on the server</a>, and stop waiting after 500 ms. The next morning the metric is back at about 150 ms.' },
+            ],
+          });
         },
-        code: `// OkHttp interceptor: tag every request with an id, and remember the last one for crash reports.
-class RequestIdInterceptor : Interceptor {
-    override fun intercept(chain: Interceptor.Chain): Response {
-        val id = UUID.randomUUID().toString()
-        Firebase.crashlytics.setCustomKeys { key("last_request_id", id) }
-        val request = chain.request().newBuilder()
-            .header("X-Request-Id", id)
-            .build()
-        return chain.proceed(request)
-    }
-}
+        code: `# Dockerfile: the same server, now sending logs, metrics and traces
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY build/libs/recipes-server-all.jar app.jar
+# The OpenTelemetry Java agent, downloaded from its releases page
+COPY opentelemetry-javaagent.jar opentelemetry-javaagent.jar
+# The server's name in every log, metric and trace
+ENV OTEL_SERVICE_NAME=recipes-server
+EXPOSE 8080
+# Load the agent first, then start the server
+CMD ["java", "-javaagent:opentelemetry-javaagent.jar", "-jar", "app.jar"]
 
-// Server (Ktor): read the id and put it on every log line for this call.
-install(CallId) {
-    retrieveFromHeader("X-Request-Id")
-    generate { UUID.randomUUID().toString() }   // for calls that arrive without one
-}
-install(CallLogging) { callIdMdc("req") }       // log pattern: ... req=%X{req}`,
-        remember: 'Logs say what happened, metrics say how much, traces say where. One request id ties a phone\'s crash to the server\'s logs.',
-        deeper: [
-          { title: 'Traces and traceparent', body: '<p>OpenTelemetry\'s default propagator uses the W3C Trace Context headers. A <code>traceparent</code> header carries a version, the 32-hex-digit trace id, the parent span id and flags. Every service that receives it continues the same trace, so your gateway, API and database spans line up in one view.</p>', code: 'traceparent: 00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01\n#            ver trace-id                         parent-span-id   flags' },
-          { title: 'Structured logs', body: '<p>Log JSON, not prose. <code>{"level":"error","req":"a91f-3c7e","article":812,"msg":"query timeout"}</code> can be filtered and counted; "something went wrong!!" cannot. Never log tokens, passwords or full personal data: logs are copied to more places than your database.</p>' },
-          { title: 'Alerts that mean something', body: '<p>Alert on symptoms users feel: error rate, p95 latency, failed logins. Require it to last a few minutes so one slow request does not wake anyone. Each alert should link to a dashboard and say what to check first. An alert nobody acts on trains the team to ignore all alerts.</p>' },
-        ],
-        underHood: {
-          body: '<p>A span records a name, start and end time, its trace id, its own id and its parent\'s id. The tracing backend builds the tree from those parent links. Most systems sample traces (keep, say, 10% plus every error) because storing every span of every request is expensive. Logs and metrics are usually kept in full, which is why the request id in each log line matters even when the trace was not sampled.</p>',
-        },
-        mistakes: [
-          {
-            title: 'Logs without a correlation id',
-            bad: 'log.error("query timeout")',
-            good: 'log.error("query timeout article={}", id)   // req=%X{req} added by the pattern',
-            why: 'With thousands of requests per minute, a log line you cannot tie to one request is noise.',
-          },
-          {
-            title: 'Logging the auth token "to debug"',
-            bad: 'log.info("headers={}", call.request.headers.entries())',
-            good: 'log.info("path={} user={}", call.request.path(), userId)',
-            why: 'Headers include Authorization. Logs go to dashboards, exports and people who should not see tokens.',
-          },
-        ],
+# Terminal: where the records go is set when the container starts,
+# here a Collector that the team runs at the address collector.
+# 4318: the port where a Collector receives OpenTelemetry data
+docker run -e OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 -p 8080:8080 recipes-server`,
+        remember: 'Metrics show when, logs show what, traces show where. OpenTelemetry makes all three; on Java, its agent needs no code changes.',
         terms: [
-          { term: 'Metric', def: 'A number measured over time, such as error rate or p95 latency.' },
-          { term: 'Trace / span', def: 'A trace is one request\'s path through the system; each span is one timed step in it.' },
-          { term: 'Correlation id', def: 'An id sent with a request and logged by every service, so you can find all lines for one call.' },
-          { term: 'p95 latency', def: 'The time under which 95% of requests finish. It shows the slow tail that averages hide.' },
+          { term: 'log', def: 'A record of one event, with its time, such as <code>GET /v1/recipes/42 200 2412ms</code>.' },
+          { term: 'metric', def: 'A number measured over time, such as requests per minute or how long they take. Shown in charts and used for alarms.' },
+          { term: 'trace, span', def: 'A trace follows one request through every part it touches. Each step in it is a span, with a start and an end.' },
+          { term: 'OpenTelemetry', def: 'An open standard, with free tools, for making logs, metrics and traces that most monitoring services can read.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Attach the request id to every outgoing call.', code: 'val request = chain.request().newBuilder()\n    .[[header|addHeader]]("X-Request-Id", id)\n    .build()\nreturn chain.[[proceed]](request)', why: 'The interceptor adds the header and passes the new request down the chain.' },
-          { type: 'bug', prompt: 'Crash reports always show a request id, but it never matches anything in the server logs. Tap the line.', code: 'override fun intercept(chain: Interceptor.Chain): Response {\n    val id = UUID.randomUUID().toString()\n    Firebase.crashlytics.setCustomKeys { key("last_request_id", id) }\n    val request = chain.request().newBuilder()\n        .header("X-Request-Id", UUID.randomUUID().toString())\n        .build()\n    return chain.proceed(request)\n}', bug: 4, fix: '        .header("X-Request-Id", id)', why: 'The app records one id and sends a different one. Use the same value in both places.' },
+          { type: 'blank', prompt: 'Give the server its name in every log, metric and trace.', code: `[[ENV]] [[OTEL_SERVICE_NAME]]=recipes-server`, why: '<code>ENV</code> sets an environment variable in the image, and the agent reads <code>OTEL_SERVICE_NAME</code> for the service’s name.' },
+          { type: 'bug', prompt: 'The server runs, but it sends no traces at all. Tap the line.', code: `FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY build/libs/recipes-server-all.jar app.jar
+COPY opentelemetry-javaagent.jar opentelemetry-javaagent.jar
+ENV OTEL_SERVICE_NAME=recipes-server
+CMD ["java", "-jar", "app.jar", "-javaagent:opentelemetry-javaagent.jar"]`, bug: 5, fix: 'CMD ["java", "-javaagent:opentelemetry-javaagent.jar", "-jar", "app.jar"]', why: 'Java reads its own options only before <code>-jar app.jar</code>. Everything after it goes to the server as input, so the agent is never loaded.' },
         ],
         quiz: [
-          { q: 'Users say "the app is slow sometimes." Which signal shows it best at a glance?', options: ['A log search for ERROR', 'A p95 latency metric on a dashboard', 'One trace picked at random'], a: 1, why: 'A latency metric over time shows when and how much. Then traces explain the slow cases.' },
-          { q: 'You found the failing log line by request id. What do you open next to see which service spent the time?', options: ['The trace for that request', 'The CPU metric of the database', 'The Play Console'], a: 0, why: 'The trace shows each span\'s duration, so the slow hop stands out.' },
-          { q: 'Which alert rule fits best?', options: ['CPU above 50% for 10 seconds', 'Error rate above 2% for 5 minutes', 'Any ERROR log line'], a: 1, why: 'It tracks what users feel and ignores short blips, so it fires rarely and means something.' },
-          { q: 'What does the trace id in <code>traceparent</code> let services do?', options: ['Encrypt the request', 'Join their spans into one trace', 'Skip authentication'], a: 1, why: 'Each service that receives the header continues the same trace instead of starting a new one.' },
+          { q: 'Which signal tells you how many requests failed each minute last week?', options: ['A metric', 'One trace', 'One log line'], a: 0, why: 'A metric is a number measured over time, made for questions like “how many, and when”.' },
+          { q: 'One request was slow. Which signal shows which part of it took the time?', options: ['Its trace', 'The error-count metric', 'The crash report'], a: 0, why: 'A trace has a span for every step of that request, each with a start and an end.' },
+          { q: 'What does the OpenTelemetry Java agent need from you?', options: ['Loading it with <code>-javaagent:</code> and a few environment variables', 'A call to it in every function', 'A new server written for it'], a: 0, why: 'The agent measures requests, database calls and calls to other services by itself. You start Java with it and set its environment variables.' },
         ],
+        docs: [['OpenTelemetry signals', 'https://opentelemetry.io/docs/concepts/signals/'], ['Java agent: getting started', 'https://opentelemetry.io/docs/zero-code/java/agent/getting-started/']],
       },
 
-      // ---------------------------------------------------------------- 7
+      // 7 ─────────────────────────────────────────────
       {
         id: 'scaling',
-        title: 'Scaling basics',
-        tagline: 'More traffic: a bigger machine, or more machines behind a load balancer, and a CDN for what does not change.',
-        level: 'intermediate',
+        title: 'Scaling',
+        tagline: 'More traffic: a bigger machine, or more copies of the server behind a load balancer.',
+        goals: ['Compare vertical and horizontal scaling', 'Work out how many copies of the server a peak needs', 'Explain why the copies must keep nothing in their own memory'],
+        level: 'intermediate', introduces: [],
         body: `
-<p><b>Vertical scaling</b> is a bigger machine: more CPU and memory. It is simple and has a ceiling, and the machine is still one point of failure. <b>Horizontal scaling</b> is more machines doing the same job, with a <b>load balancer</b> in front spreading requests across them and sending traffic only to healthy ones.</p>
-<p>Horizontal scaling only works if servers are <b>stateless</b>: any instance can answer any request, because sessions, carts and uploads live in a shared database, cache or bucket, not in one server\'s memory. Then an <b>autoscaler</b> can add instances when load rises and remove them when it falls.</p>
-<p>A <b>CDN</b> (content delivery network) caches responses at edge locations near users: images, app config, the headline list for 60 seconds. A cache hit never reaches your servers. Every instance and every gigabyte costs money, so watch the cost counter while you send a breaking-news push.</p>`,
-        predict: {
-          q: "After the push, traffic falls back to normal. Autoscaling is on. What does the cost counter do?",
-          options: ["Keeps rising at the peak rate: the extra instances stay", "Rises more slowly as the autoscaler removes idle instances", "Stops completely"],
-          a: 1,
-          why: "You pay for every running instance. When load stays low, the autoscaler removes instances, but the minimum it keeps running still bills.",
-        },
+<p>Saturday, 20:00: a cooking show on TV mentions Recipes. Requests jump from 300 to 2,000 per second. One copy of the server handles about 500 (example numbers). The VM’s processors run at full speed, requests wait in line, and the app shows errors. To <em>scale</em> is to give the server room for more work.</p>
+<p><em>Vertical scaling</em> means a bigger machine: more processors and memory. It needs no change to the code. But the VM restarts to change size, the biggest size has a limit, and it is still one machine: if it fails, Recipes is down.</p>
+<p><em>Horizontal scaling</em> means more copies of the same server, started from the same image, with a <em>load balancer</em> in front, as in <a href="#sysdesign.realtime">Real-time at scale</a>: a server that hands each request to one of the copies. It also asks each copy for <code>/health</code> every few seconds and stops sending requests to a copy that doesn’t answer. Four copies of 500 handle 2,000. With autoscaling, the cloud adds copies when they get busy and removes them when it is quiet, between a smallest and a largest number you set.</p>
+<p>This only works if the server is <em>stateless</em>: a copy keeps nothing about users in its own memory between requests. Ada’s next request may reach another copy, and the autoscaler may remove this one. Favorites, sign-ins and lists live in the shared database, which every copy uses. That database is usually the part you scale last, often by giving the managed database a bigger size.</p>`,
         visual(el) {
-          const CAP = 10;
-          let traffic = 12, auto = true, cdn = false, stateful = false;
-          let fleet = [{ boot: 0 }, { boot: 0 }];
-          let hiTicks = 0, loTicks = 0, dropped = 0, lost = 0, cost = 0, tick = 0;
-          const root = h('div', { class: 'cl-box' });
-          const lb = h('div', { class: 'cl-lb' }, 'load balancer');
-          const flow = h('div', { class: 'cl-flow', 'aria-hidden': 'true' });
-          const fleetEl = h('div', { class: 'cl-fleet' });
-          const cdnEl = h('div', { class: 'cl-cdn' }, 'CDN off: images hit the servers');
-          const stats = h('div', { class: 'cl-stats' });
-          const o = out('');
-          const stat = (v, t) => h('div', { class: 'cl-stat' }, h('b', {}, v), h('span', {}, t));
-          function render(load) {
-            fleetEl.replaceChildren(...fleet.map((f, i) => {
-              const pct = f.boot ? 0 : Math.min(100, Math.round(load * 100));
-              const bar = h('i', { style: `width:${pct}%` });
-              const cls = 'cl-inst' + (f.boot ? ' cl-boot' : pct >= 100 ? ' cl-hot' : pct >= 70 ? ' cl-warmi' : '');
-              return h('div', { class: cls }, h('span', {}, `#${i + 1} ${f.boot ? 'starting' : pct + '%'}`), h('div', { class: 'cl-load' }, bar));
-            }));
-            stats.replaceChildren(stat(String(fleet.filter(f => !f.boot).length), 'serving'), stat(String(dropped), 'requests dropped (5xx)'), stat(cost.toFixed(0) + ' u', 'cost so far'), stat(String(lost), 'sessions lost'));
-          }
-          function step() {
-            if (!root.isConnected) { clearInterval(timer); return; }
-            tick++;
-            fleet.forEach(f => { if (f.boot) f.boot--; });
-            const ready = fleet.filter(f => !f.boot).length || 1;
-            const origin = cdn ? traffic * 0.4 : traffic;      // 60% of requests are images
-            const load = origin / (ready * CAP);
-            if (load > 1) dropped += Math.round(origin - ready * CAP);
-            cost += fleet.length * 0.5 + (cdn ? traffic * 0.02 : 0);
-            if (auto) {
-              hiTicks = load > 0.7 ? hiTicks + 1 : 0;
-              loTicks = load < 0.3 ? loTicks + 1 : 0;
-              if (hiTicks >= 2 && fleet.length < 12) { fleet.push({ boot: 3 }); hiTicks = 0; }
-              if (loTicks >= 5 && fleet.length > 2) { fleet.pop(); loTicks = 0; if (stateful) lost += 40; }
-            }
-            const n = Math.min(6, Math.ceil(traffic / 8));
-            for (let i = 0; i < n; i++) {
-              const img = i < n * 0.6;
-              const d = h('i', { class: 'cl-req-dot' + (img ? ' cl-img' : ''), style: `--dx:${Math.round((Math.random() - 0.5) * 300)}px` });
-              flow.append(d); setTimeout(() => d.remove(), 650);
-            }
-            render(load);
-          }
-          const timer = setInterval(step, 450);
-          const tBtns = [
-            act('Normal traffic', e => { traffic = 12; press(tBtns, e.currentTarget); say(o, '<span class="muted">Back to normal. Watch idle instances get removed after a while.</span>'); }),
-            act('Breaking news push', e => { traffic = 75; press(tBtns, e.currentTarget); say(o, auto ? '<span class="bad">Traffic jumps 6x.</span> <span class="muted">Requests drop until new instances finish starting. Autoscaling reacts with a delay.</span>' : '<span class="bad">Traffic jumps 6x and the fleet stays at its size.</span> <span class="muted">Turn autoscaling on.</span>'); }),
-          ];
-          const autoBtn = act('Autoscaling: on', e => { auto = !auto; e.currentTarget.textContent = 'Autoscaling: ' + (auto ? 'on' : 'off'); e.currentTarget.setAttribute('aria-pressed', String(auto)); }, { 'aria-pressed': 'true' });
-          const cdnBtn = act('CDN for images', e => {
-            cdn = !cdn; e.currentTarget.setAttribute('aria-pressed', String(cdn));
-            cdnEl.className = 'cl-cdn' + (cdn ? ' cl-cdn-on' : ''); cdnEl.textContent = cdn ? 'CDN on: images served from the edge' : 'CDN off: images hit the servers';
-            say(o, cdn ? '<span class="good">60% of requests now stop at the CDN.</span> <span class="muted">The same push needs far fewer instances. The CDN has its own per-request cost, much smaller here.</span>' : '<span class="muted">Every image request reaches your servers again.</span>');
-          }, { 'aria-pressed': 'false' });
-          const stBtn = act('Sessions in server memory', e => {
-            stateful = !stateful; e.currentTarget.setAttribute('aria-pressed', String(stateful));
-            say(o, stateful ? '<span class="bad">Now each instance holds its users\' sessions in memory.</span> <span class="muted">When the autoscaler removes one, those users are logged out. Send a push, then go back to normal.</span>' : '<span class="good">Stateless again: sessions live in a shared store.</span> <span class="muted">Removing an instance loses nothing.</span>');
-          }, { 'aria-pressed': 'false' });
-          press(tBtns, tBtns[0]);
-          say(o, 'Send a breaking news push and watch the fleet.');
-          root.append(lb, flow, fleetEl, cdnEl);
-          el.append(h('div', { class: 'controls' }, tBtns), h('div', { class: 'controls' }, autoBtn, cdnBtn, stBtn), root, stats, o);
-          render(traffic / (fleet.length * CAP));
+          Lab.ui.graph(el, {
+            height: 300,
+            nodes: [
+              { id: 'req', label: 'Requests', x: 50, y: 8 },
+              { id: 'lb', label: 'Load balancer<small>asks /health</small>', x: 50, y: 36, tone: 'warm', hidden: true },
+              { id: 'c1', label: 'Copy 1<small>500/s max</small>', x: 13, y: 66 },
+              { id: 'c2', label: 'Copy 2', x: 38, y: 66, hidden: true },
+              { id: 'c3', label: 'Copy 3', x: 62, y: 66, hidden: true },
+              { id: 'c4', label: 'Copy 4', x: 87, y: 66, hidden: true },
+              { id: 'db', label: 'Managed database<small>shared by all copies</small>', x: 50, y: 93, tone: 'ok' },
+            ],
+            predict: {
+              q: 'Recipes runs four copies behind a load balancer. Copy 2 crashes. What happens to the requests it would have got?',
+              options: ['The load balancer sends them to the other copies', 'They fail until someone restarts copy 2', 'They wait inside copy 2 until it is back'],
+              a: 0,
+              why: 'Copy 2 stops answering <code>/health</code>, so the load balancer stops sending it requests. The other copies take them.',
+            },
+            frames: [
+              { add: [['req', 'c1', '300/s', 'ok'], ['c1', 'db']], say: 'A normal evening: one copy of the server on one VM, 300 requests per second out of the 500 it can handle. (Example numbers.)' },
+              { add: [['req', 'c1', '2,000/s', 'err']], hl: ['c1'], say: '20:00, the cooking show: 2,000 per second. Four times what one copy can do. Requests wait, then fail.' },
+              { hl: ['c1'], say: 'Vertical: a VM with four times the processors could cope. But it restarts to change size, there is a biggest size, and it is still one machine that can fail.' },
+              { show: ['lb', 'c2', 'c3', 'c4'], remove: [['req', 'c1']], add: [['req', 'lb', '2,000/s'], ['lb', 'c1', '', 'ok'], ['lb', 'c2', '', 'ok'], ['lb', 'c3', '', 'ok'], ['lb', 'c4', '', 'ok'], ['c2', 'db'], ['c3', 'db'], ['c4', 'db']], say: 'Horizontal: four copies of the same image, and a load balancer that shares out the requests. 2,000 ÷ 500 = 4.' },
+              { gone: ['c2'], add: [['lb', 'c2', '', 'err']], say: 'Copy 2 crashes and stops answering <code>/health</code>. The load balancer skips it, and the other three take its share. But three copies handle 1,500, less than 2,000: requests wait again until the autoscaler adds a copy. That is why teams run one spare: five copies, not four.' },
+              { back: ['c2'], add: [['lb', 'c2', '', 'ok']], say: 'The autoscaler sees busy copies and starts a new one from the image. A minute later it takes requests.' },
+              { hl: ['c1', 'c3'], say: 'Ada saves a favorite; copy 1 handles it. Her next request reaches copy 3. If copy 1 had kept the favorite in its own memory, copy 3 wouldn’t know it. Stored in the shared database, every copy sees it.' },
+              { gone: ['c3', 'c4'], remove: [['lb', 'c3'], ['lb', 'c4']], add: [['req', 'lb', '300/s'], ['lb', 'c1', '', 'ok'], ['lb', 'c2', '', 'ok']], say: 'Late at night it is quiet again. The autoscaler removes copies down to the smallest number Mei set, two, and the bill shrinks with them.' },
+            ],
+          });
         },
-        code: `// Stateless Ktor route: nothing is kept in this instance's memory between requests,
-// and the response tells the CDN it may cache it for 60 seconds.
-get("/api/headlines") {
-    val category = call.request.queryParameters["category"] ?: "top"
-    call.response.header(HttpHeaders.CacheControl, "public, max-age=60")
-    call.respond(headlineRepo.latest(category))   // reads from the shared database
+        code: `// Example numbers: how many copies does the cooking show need?
+val perCopy = 500           // requests per second one copy can handle
+val peak = 2000             // requests per second during the show
+println(peak / perCopy)     // 4
+// Int division rounds down: 2100 / 500 gives 4, but 2,100 per second needs 5 copies.
+// When it doesn't divide evenly, round up.
+
+// Stateless: every copy reads and writes the same database
+interface FavoritesStore {
+    fun add(userId: String, recipeId: Int)
+    fun forUser(userId: String): List<Int>
 }
 
-// User-specific data: never cacheable by a CDN.
-get("/api/me/saved") {
-    call.response.header(HttpHeaders.CacheControl, "private, no-store")
-    call.respond(savedRepo.forUser(call.userId()))  // session lives in a shared store, not a local map
-}`,
-        remember: 'Scale out, not up: stateless instances behind a load balancer, an autoscaler to add and remove them, and a CDN so most requests never reach them.',
-        deeper: [
-          { title: 'Health checks', body: '<p>A load balancer keeps asking each instance something like <code>GET /health</code>. Instances that stop answering are taken out of rotation, and traffic moves to the healthy ones. Keep the health endpoint cheap and honest: if the instance cannot reach its database, say so.</p>' },
-          { title: 'How a real autoscaler decides', body: '<p>Cloud Run, for example, targets 60% CPU and request concurrency by default and adds instances when load goes past the target. It can scale to zero, and when no instance is free a new one starts; requests wait a while for it and fail with 429 if none frees up in time. Every service has a maximum instances limit, which also caps your bill when something goes wrong.</p>' },
-          { title: 'Pushes are a self-made traffic spike', body: '<p>Sending one push to a million devices makes many of them open the app within a minute. Spread the send over a few minutes, make the first screen read from a CDN-cached endpoint, and set minimum instances before a planned big push. See <a href="#push.messages">push messages</a> for the client side.</p>' },
-          { title: 'The database scales last', body: '<p>Stateless app servers are easy to multiply. The shared database is not. Read replicas, caching and connection pooling come next, and a sudden fleet of 50 instances can exhaust database connections. Cap max instances to what the database can take.</p>' },
-        ],
-        mistakes: [
-          {
-            title: 'Sessions in a local map',
-            bad: 'val sessions = mutableMapOf<String, User>()   // per instance',
-            good: 'val user = sessionStore.get(token)            // Redis or the database, shared',
-            why: 'The next request may land on another instance, and scale-down deletes this one. Users get logged out at random.',
-          },
-          {
-            title: 'Letting a CDN cache personal data',
-            bad: 'get("/api/me/saved") {\n    call.response.header(HttpHeaders.CacheControl, "public, max-age=300")\n}',
-            good: 'get("/api/me/saved") {\n    call.response.header(HttpHeaders.CacheControl, "private, no-store")\n}',
-            why: '<code>public</code> lets the edge cache one user\'s list and serve it to the next user who asks for the same URL.',
-          },
-        ],
+// MemoryFavorites keeps a map in this copy's memory: another copy can't see it,
+// and it is lost when the autoscaler removes this copy.
+// DatabaseFavorites uses the shared database.
+val favorites: FavoritesStore = DatabaseFavorites(database)`,
+        remember: 'Vertical: a bigger machine, simple but limited. Horizontal: more stateless copies behind a load balancer, added and removed as traffic changes.',
         terms: [
-          { term: 'Load balancer', def: 'Spreads incoming requests across instances and routes around unhealthy ones.' },
-          { term: 'Stateless server', def: 'An instance that keeps no user data between requests, so any instance can serve any request.' },
-          { term: 'Autoscaling', def: 'Adding and removing instances automatically based on load, within a min and max.' },
-          { term: 'CDN', def: 'A network of edge caches near users; a cache hit is answered without reaching your origin servers.' },
+          { term: 'vertical scaling', def: 'Giving the server a bigger machine: more processors and memory. No code changes, but there is a limit and it stays one machine.' },
+          { term: 'horizontal scaling', def: 'Running more copies of the same server. With autoscaling, the cloud adds and removes copies as traffic changes.' },
+          { term: 'load balancer', def: 'A server in front of the copies that hands each request to one of them, and skips copies that don’t answer <code>/health</code>.' },
+          { term: 'stateless', def: 'A server that keeps nothing about users in its own memory between requests, so any copy can answer any request.' },
         ],
         challenges: [
-          { type: 'blank', prompt: 'Let the CDN cache the public headline list for 60 seconds.', code: 'call.response.header(HttpHeaders.CacheControl, "[[public]], max-age=[[60]]")', why: '<code>public</code> allows shared caches like a CDN to store it; <code>max-age</code> is in seconds.' },
-          { type: 'bug', prompt: 'After autoscaling kicks in, users are randomly logged out. Tap the line.', code: 'class AuthService(private val db: UserDb) {\n    private val sessions = mutableMapOf<String, Long>()\n    fun login(user: Long): String {\n        val token = newToken()\n        sessions[token] = user\n        return token\n    }\n}', bug: 1, fix: '    private val sessions: SessionStore = RedisSessionStore()', why: 'An in-memory map exists on one instance only. Keep sessions in a shared store so any instance can read them.' },
+          { type: 'blank', prompt: 'Work out how many copies a peak of 3,000 requests per second needs. (Example numbers.)', code: `val perCopy = 500           // requests per second one copy can handle
+val peak = 3000
+val copies = peak / [[perCopy]]
+println(copies)             // 6`, why: 'Each copy takes 500 per second, so 3,000 needs 3,000 ÷ 500 = 6 copies.' },
+          { type: 'bug', prompt: 'Recipes now runs four copies, and users say their favorites appear and disappear. Tap the line.', code: `interface FavoritesStore {
+    fun add(userId: String, recipeId: Int)
+    fun forUser(userId: String): List<Int>
+}
+// MemoryFavorites keeps a map in this copy's memory; DatabaseFavorites uses the shared database
+val favorites: FavoritesStore = MemoryFavorites()`, bug: 5, fix: 'val favorites: FavoritesStore = DatabaseFavorites(database)', why: 'Each copy has its own memory, so a favorite saved on copy 1 is missing on copy 3. The shared database is the same for every copy.' },
         ],
         quiz: [
-          { q: 'What happens to sessions kept in instance memory when the autoscaler removes that instance?', options: ['They move to another instance', 'They are lost and those users are logged out', 'The load balancer saves them'], a: 1, why: 'Memory dies with the instance. That is why horizontally scaled servers keep state in shared storage.' },
-          { q: 'Which trade-off fits vertical scaling?', options: ['Simple, but there is a size ceiling and still one machine to fail', 'Unlimited, but requires stateless code', 'Free, but slow'], a: 0, why: 'A bigger machine needs no code changes, but it has a maximum size and stays a single point of failure.' },
-          { q: 'A push goes out and 60% of the requests are for article images. What cuts server load the most?', options: ['A bigger database', 'A CDN in front of the images', 'More logging'], a: 1, why: 'Cache hits at the edge never reach your servers, so most of the spike disappears.' },
-          { q: 'Why can a brand-new instance not help with the first seconds of a spike?', options: ['It has to start before it can take requests', 'Load balancers ignore new instances', 'It needs a new Docker image'], a: 0, why: 'Start time is the gap between "autoscaler decided" and "instance serving". Minimum instances or a CDN cover that gap.' },
-          { q: 'Which response must never be <code>public</code> in Cache-Control?', options: ['/api/headlines', '/api/me/saved', '/images/812.webp'], a: 1, why: 'It is per-user. A shared cache would serve one user\'s data to others.' },
+          { q: 'What is the catch with vertical scaling?', options: ['The biggest machine has a limit, and it is still one machine that can fail', 'The code has to be rewritten', 'It only works with containers'], a: 0, why: 'A bigger machine needs no code change, but it can only grow so far, and when it fails, everything is down.' },
+          { q: 'Why must the copies be stateless?', options: ['The next request may reach another copy, and removed copies lose their memory', 'Load balancers can’t send requests to servers with memory', 'Stateless servers are always faster'], a: 0, why: 'Anything kept in one copy’s memory is missing on the others, and gone when the autoscaler removes that copy.' },
+          { q: 'At the peak, 2,100 requests per second arrive, and one copy handles 500. How many copies does Recipes need? (Example numbers.)', options: ['5', '4', '2,100'], a: 0, why: '2,100 ÷ 500 = 4.2. Four copies handle only 2,000, so round up: 5. (In Kotlin, <code>2100 / 500</code> gives 4, because Int division rounds down.)' },
         ],
+        docs: [['Horizontal and vertical scaling (Kubernetes docs)', 'https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/']],
       },
     ],
   });

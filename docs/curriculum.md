@@ -158,6 +158,22 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 - tech-debt | Technical debt | shortcuts, paying back
 - teamwork | Working in a team | communication, ownership
 
+### cs: Data structures and algorithms (optional; assume Stage 1 only. Each lesson names the matching Kotlin type)
+- big-o | How fast is it? | Big O in plain words
+- arrays-lists | Arrays and lists | index access, inserting (List, ArrayList)
+- hashing | Hash maps | hashing, collisions (HashMap, mapOf)
+- sets | Sets | membership, no duplicates (HashSet, setOf)
+- stacks-queues | Stacks and queues | LIFO, FIFO (ArrayDeque)
+- recursion | Recursion | a function calling itself, base case
+- two-pointers | Two pointers | technique
+- binary-search | Binary search | halving
+- sorting | Sorting | how sorts work (sorted, sortedBy)
+- trees | Trees | binary trees, traversal
+- heaps | Heaps and priority queues | smallest first (PriorityQueue)
+- graphs | Graphs | BFS, DFS
+- dp | Dynamic programming | remembering answers
+- method | Solving a problem step by step | a method
+
 ---
 
 ## Stage 3: Think in objects (assume Stage 1)
@@ -505,33 +521,34 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 
 ---
 
-## Stage 10: Beyond the app (assume Stages 1, 3–9, plus the net and db tracks from Stage 2)
+## Stage 10: Beyond the app (assume Stages 1, 3–9; net and db from Stage 2 are optional, so explain what is needed in plain sentences)
 
-### sysdesign: System design
+### sysdesign: System design (server and scale side; the data track already taught the app side of caching, offline, real-time and paging: recap, don't repeat)
 - approach | How to approach a system design | requirements, estimates, components
 - api | Designing an API | resources, versioning
-- pagination | Pagination | cursors vs offsets
-- caching | Caching | layers of cache
-- offline | Offline first | sync, conflicts
-- realtime | Real-time updates | WebSockets, polling
+- pagination | Pagination on the server | cursors vs offsets
+- caching | Caching on the server | layers of cache, CDN
+- offline | Sync and conflicts | the server side of offline first
+- realtime | Real-time at scale | WebSockets, polling, connections
 - push-scale | Push at scale | fan-out
 - media | Media at scale | CDNs, upload
 - reliability | Reliability | retries, idempotency
 - news-feed | Design: news feed | end-to-end
 - chat | Design: chat app | end-to-end
 
-### backend: Backend basics
+### backend: Backend basics (optional)
 - what | What a backend does | server, API, database
 - http | HTTP on the server | routes, handlers
 - ktor | A server in Kotlin | Ktor
 - rest | REST APIs | resources, status codes
 - sql | Using a database | queries from code
-- auth | Authentication | tokens, sessions
+- passwords | Storing passwords | signup, Argon2id hashes, the login check
+- tokens | Tokens | JWT access token, authenticate, refresh tokens used once, logout
 - testing | Testing a server | test client
 - deploy | Deploying | containers, hosting
 - client | Connecting your app | the Android client
 
-### cloud: Cloud
+### cloud: Cloud (optional)
 - what-cloud | What the cloud is | servers you rent
 - docker | Containers | Docker
 - pipelines | Pipelines | CI/CD
@@ -542,18 +559,42 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 
 ---
 
-## Stage 11: Problem solving (assume Stage 1; Stage 3 helps)
+## Stage 11: Building with AI (assume Stages 1, 3–10; backend/cloud optional. No brand-led lessons: tool names at most once, neutrally)
 
-### cs: Data structures and algorithms
-- big-o | How fast is it? | Big O in plain words
-- arrays-lists | Arrays and lists | index access, inserting
-- hashing | Hash maps | hashing, collisions
-- stacks-queues | Stacks and queues | LIFO, FIFO
-- recursion | Recursion | a function calling itself, base case
-- two-pointers | Two pointers | technique
-- binary-search | Binary search | halving
-- sorting | Sorting | how sorts work
-- trees | Trees | binary trees, traversal
-- graphs | Graphs | BFS, DFS
-- dp | Dynamic programming | remembering answers
-- interview | Solving a problem step by step | a method
+### aidev: Working with AI tools
+- what-agents | What AI coding tools are | assistants vs agents, how they work in plain words
+- limits | Where AI goes wrong | made-up APIs, outdated versions, confident mistakes
+- context | Giving good context | clear small tasks, project instruction files
+- review | Reviewing AI code | a checklist from testing, perf, a11y, security
+- tests-first | Tests as a safety net | write the test, then let the agent change code
+- agents | Agents that run tasks | multi-step tasks, permissions, refactors, CI fixes
+- tools | Connecting tools | MCP in plain words
+- safety | Security, privacy and licences | secrets, private code, licences
+- workflow | A day with an agent | plan, small diffs, commits, review
+
+### aiapps: AI features in apps
+- what | What an AI feature is | models, prompts, tokens
+- server | Calling a model safely | your server holds the key
+- streaming | Streaming answers | Flow into Compose
+- structured | Structured output | JSON from a model, parsing, validating
+- on-device | On-device models | privacy, offline
+- costs | Cost and limits | tokens, rate limits, caching
+- failures | When the model is wrong | checks, UI for uncertainty, safety
+- evals | Testing AI features | example sets, comparing outputs
+
+### capai: Project: AI in the news app (project)
+- agent-feature | A feature with an agent | plan, review, fix what it got wrong
+- summary | Summarise an article | server call, streaming
+- offline | An on-device fallback | on-device model
+- recap | Review | what to keep checking
+
+---
+
+## Stage 12: Show your work (assume everything required before)
+
+### portfolio: Show your work
+- repo | A repository others can read | README, structure
+- ci | CI that proves it works | tests on every push
+- publish | Publishing your app | store listing, screenshots
+- explain | Explaining your decisions | write-ups, trade-offs
+- keep-learning | Keep learning | docs, changelogs, release notes

@@ -104,7 +104,7 @@ const Lab = (() => {
   // (it joins that stage, optional if `optional: true`) or lands in "More" at the end.
   const STAGES = [
     { title: 'Programming basics', blurb: 'From your first line of code to Kotlin and Git', tracks: ['start', 'kotlin', 'git', 'kdeep'], optional: ['kdeep'] },
-    { title: 'Computer science foundations', blurb: 'What runs under your app: OS, network, database, concurrency', tracks: ['os', 'net', 'db', 'concurrency', 'sweng'], optional: ['os', 'net', 'db', 'concurrency', 'sweng'] },
+    { title: 'Computer science foundations', blurb: 'What runs under your app, and the data structures and algorithms behind it', tracks: ['os', 'net', 'db', 'concurrency', 'sweng', 'cs'], optional: ['os', 'net', 'db', 'concurrency', 'sweng', 'cs'] },
     { title: 'Think in objects', blurb: 'Design code that is easy to change', tracks: ['oop', 'solid', 'patterns', 'capkotlin'] },
     { title: 'Your first app', blurb: 'Screens, state and navigation', tracks: ['android', 'compose', 'tools', 'views', 'runtime'], optional: ['views', 'runtime'] },
     { title: 'Async and data', blurb: 'Load, store and stream without freezing the UI', tracks: ['coroutines', 'flow', 'data'] },
@@ -112,8 +112,7 @@ const Lab = (() => {
     { title: 'Quality', blurb: 'Tested, fast and usable by everyone', tracks: ['testing', 'perf', 'a11y', 'compose2', 'capquality'], optional: ['compose2'] },
     { title: 'Platform features', blurb: 'Push, background work, security and media', tracks: ['push', 'background', 'security', 'media'], optional: ['media'] },
     { title: 'Ship it', blurb: 'Build, sign, release and keep the app healthy', tracks: ['build', 'launch', 'capship', 'kmp'], optional: ['kmp'] },
-    { title: 'Beyond the app', blurb: 'System design, a Kotlin backend and the cloud around it', tracks: ['sysdesign', 'backend', 'cloud'] },
-    { title: 'Problem solving', blurb: 'Data structures, algorithms and a routine for hard problems', tracks: ['cs'] },
+    { title: 'Beyond the app', blurb: 'System design, a Kotlin backend and the cloud around it', tracks: ['sysdesign', 'backend', 'cloud'], optional: ['backend', 'cloud'] },
   ];
   const opened = new Set(); // finished stages the learner unfolded by hand this visit
   let stageCache;
