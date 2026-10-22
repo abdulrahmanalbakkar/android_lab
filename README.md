@@ -1,6 +1,6 @@
 # Android Lab
 
-Interactive lessons for Kotlin and Android. Each lesson has an animated demo, a one-line rule to remember, practice challenges, and a quiz that comes back on a spaced-review schedule.
+Interactive lessons that take a complete beginner from their first line of code to shipping Android apps. Each lesson starts with what you'll be able to do (with an "I already know this" quick check to skip it), and has an animated demo, a one-line rule to remember, practice challenges, and a quiz that comes back on a spaced-review schedule.
 
 Plain HTML, CSS and JavaScript, no dependencies. The only build-like step is `node tools/catalog.js` after editing a track. Serve the folder (for example `python3 -m http.server`) to try it locally; lessons load on demand, and offline support needs http(s).
 
@@ -8,8 +8,8 @@ Live at https://abdulrahmanalbakkar.github.io/android_lab/
 
 ## Features
 
-- **Roadmap** (`#home`): numbered stages from Programming basics to Problem solving, each topic one row with its lesson count and progress. Optional topics and projects are labelled, and finished stages fold to their heading.
-- **Track pages** (`#<track>`) and **lesson pages** (`#<track>.<lesson>`): demo, code, "Pin this" rule, optional Go deeper / Under the hood / Common mistakes, practice, terms and a quiz.
+- **Roadmap** (`#home`): 12 numbered stages from Programming basics to Show your work, each topic one row with its lesson count and progress. Optional topics and projects are labelled, and finished stages fold to their heading.
+- **Track pages** (`#<track>`) and **lesson pages** (`#<track>.<lesson>`): demo, code, "In this lesson" goals with an "I already know this" quick check, "Pin this" rule, optional Common mistakes, a "Run it" program for pure Kotlin, practice, terms and a quiz.
 - **Capstone projects**: guided builds shown as a double-bordered card at the end of their stage. A project page shows "What you'll build" and its steps; each step links the lessons to review first.
 - **Test yourself** (`#practice`; old `#interview` links redirect): timed, mixed-topic questions drawn from every quiz. Pick topics or a preset, 10/20/30 questions and no limit, 30 s or 60 s per question. Results show a per-topic breakdown, explanations for every miss, and a button that adds the misses to Review. Best scores are kept per setup.
 - **Spaced review** (`#review`): quiz questions come back after 1, 3, 7, 21 and 60 days while you keep getting them right.
@@ -21,13 +21,21 @@ Live at https://abdulrahmanalbakkar.github.io/android_lab/
 - **Official docs**: each lesson links 1–3 official pages, listed in `js/docs.js` (keys are `track.lesson`).
 - Light and dark themes (System, Light, Dark), works offline once visited, installable as an app.
 
-Progress lives in this browser's `localStorage` under `android-lab:v1`.
+Progress lives in this browser's `localStorage` under `android-lab:v1`. On the home page, "Using another browser or computer?" gives a progress code to copy and paste into another browser; loading it merges the progress.
+
+Each track page also has **Already know this? Test out**: a short quiz over the track that marks it done at 80% or more.
+
+## Curriculum and lesson rules
+
+`docs/curriculum.md` lists every lesson in order, what it teaches, and the rules each lesson follows (one idea per lesson, use only what earlier lessons taught, neutral international examples). Each lesson has `goals` (2–3 lines), and lists the code words it teaches in `introduces`.
+
+`node tools/prereq.js` checks the whole site: no lesson may use a code word before the lesson that `introduces` it (stage order comes from `STAGES` in `js/app.js`; optional tracks can't be depended on). `ignore` lists plain English words a lesson uses as text. Run it after every change, next to `node tools/catalog.js`.
 
 ## Add a track
 
 1. Copy the shape of `tracks/kotlin.js` into `tracks/<name>.js` and call `Lab.addTrack({...})`.
 2. Put it on the roadmap by adding its id to a stage in `STAGES` in `js/app.js` (or give the track `stage: '<stage title>'`, plus `optional: true` if it's optional). The header comment in `js/app.js` lists the other optional fields (`requires`, `hue`, lesson `deeper` / `underHood` / `mistakes`).
-3. Run `node tools/catalog.js`. It rebuilds `js/catalog.js` and checks for duplicate ids and missing quizzes.
+3. Run `node tools/catalog.js` and `node tools/prereq.js`. The first rebuilds `js/catalog.js` and checks for duplicate ids and missing quizzes.
 
 **Run step 3 after every change to a track file**, then commit `js/catalog.js` with it. The page loads only the catalog (titles, terms and quizzes, about 140 KB gzipped) and fetches a track's full file the first time one of its lessons opens. If a track file and the catalog disagree, the browser console says so.
 

@@ -1119,11 +1119,12 @@ android {
         tagline: 'Testing tracks first, then production, then updates that go out in stages.',
         goals: ['Take News from internal testing to production', 'Roll out an update in stages and halt it when crashes rise', 'Keep older versions working with the server’s messages'],
         level: 'intermediate', introduces: [],
-        refs: ['build.tracks', 'launch.crashes', 'launch.policy'],
+        refs: ['build.tracks', 'build.automation', 'launch.crashes', 'launch.policy'],
         body: `
 <p>The bundle is ready; the readers are not on it yet. In Play Console, News 1.0 goes to the <code>internal testing</code> track first: up to 100 testers, the team, who get it within minutes. They install it from Play, which is the real path: Play’s own signature, real pushes, real links. A personal developer account created after 13 November 2023 must also run a closed test with at least 12 testers for 14 days before it can publish to production. Before the first release, Play Console also asks you to fill in the Data safety form, as in the launch track: what data the app collects and shares, such as the installation ID News sends to your server.</p>
 <p>Then <code>production</code>. A first release goes out to everyone at once; staged rollouts are for updates. News 1.1, <code>versionCode = 2</code>, goes to 10% of readers first. Watch crashes in Android vitals, as in the launch track, then raise it to 50% and 100%. If crashes jump, <b>Halt rollout</b> stops new readers from getting 1.1. Readers who have it keep it, so the fix is a new release with a higher <code>versionCode</code>, rolled out the same way.</p>
-<p>During a rollout, and for months after, several versions read the same pushes. So the server only adds keys, never renames or reuses them, and News’s <code>else</code> branch ignores types it doesn’t know. That is the whole path: a story breaks, your server sends one data message to each installation ID, FCM wakes the phone, News posts the alert on the right channel and books a sync, and a tap opens the article, already in Room, with the list behind it.</p>`,
+<p>During a rollout, and for months after, several versions read the same pushes. So the server only adds keys, never renames or reuses them, and News’s <code>else</code> branch ignores types it doesn’t know. That is the whole path: a story breaks, your server sends one data message to each installation ID, FCM wakes the phone, News posts the alert on the right channel and books a sync, and a tap opens the article, already in Room, with the list behind it.</p>
+<p>Updates don’t have to be built on your laptop. When they come often, News can get the <code>release.yml</code> workflow Recipes got in the build track, with the same three secret names (<code>UPLOAD_KEYSTORE_BASE64</code>, <code>UPLOAD_PASSWORD</code>, <code>PLAY_SERVICE_ACCOUNT_JSON</code>), holding News’s own upload key and password and a service account invited for News, and the same <code>setting</code> function in <code>app/build.gradle.kts</code>. Two lines change: News has no flavors, so the build step runs <code>./gradlew bundleRelease</code>, and <code>fastlane supply</code> uploads <code>app-release.aab</code> with <code>--package_name com.example.news</code>. News used versionCode 1 to 3 by hand, and 100 plus <code>github.run_number</code> stays above them. Then every push to <code>main</code> reaches the testers; production, and every staged rollout, stays your click in Play Console.</p>`,
         visual(el) {
           const tracks = s => checks([['Internal testing', s[0], 'up to 100 testers, within minutes'], ['Closed testing', s[1], 'new personal accounts: 12 testers, 14 days'], ['Production', s[2]]]);
           demo(el, {
@@ -1164,6 +1165,21 @@ android {
 # Messages stay compatible with every version
 # The server adds keys and types; it never renames or reuses them
 # The app's when (message.data["type"]) keeps its else branch
+
+# Later updates: .github/workflows/release.yml, as for Recipes in the build track
+# Secrets: UPLOAD_KEYSTORE_BASE64, UPLOAD_PASSWORD, PLAY_SERVICE_ACCOUNT_JSON
+# app/build.gradle.kts: the setting function; versionCode = 100 + RUN_NUMBER (1 to 3 were by hand)
+      # checkout, Java, Gradle and the decode step, as for Recipes
+      - run: ./gradlew bundleRelease                # News has no flavors
+        env:
+          UPLOAD_STORE_FILE: \${{ runner.temp }}/upload.jks
+          UPLOAD_PASSWORD: \${{ secrets.UPLOAD_PASSWORD }}
+          RUN_NUMBER: \${{ github.run_number }}
+      # ruby/setup-ruby and gem install fastlane, as for Recipes
+      - run: fastlane supply --aab app/build/outputs/bundle/release/app-release.aab --track internal --package_name com.example.news
+        env:
+          SUPPLY_JSON_KEY_DATA: \${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+# Production stays a person's click: Create new release > Add from library
 
 # The whole path
 # your server -> FCM -> NewsMessagingService.onMessageReceived

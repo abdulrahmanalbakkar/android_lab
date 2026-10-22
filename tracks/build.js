@@ -827,6 +827,140 @@ android {
         ],
         docs: [['Set up an open, closed or internal test', 'https://support.google.com/googleplay/android-developer/answer/9845334'], ['Version your app', 'https://developer.android.com/studio/publish/versioning']],
       },
+
+      {
+        id: 'automation',
+        title: 'Automating releases',
+        tagline: 'A workflow builds the signed bundle and sends it to internal testing; a person decides what reaches production.',
+        goals: ['Keep the upload key, its password and a Play key in repository secrets, and hand them to steps with <code>env:</code>', 'Build the signed bundle on GitHub with a <code>versionCode</code> from <code>github.run_number</code>', 'Upload it to internal testing with <code>fastlane supply</code>, and leave production to a person'],
+        level: 'intermediate', introduces: ['getenv', 'env', 'run_number', 'base64', 'fastlane', 'supply', 'gem'],
+        body: `
+<p>Every release of Recipes is Lin at her laptop: raise <code>versionCode</code> by hand, run <code>./gradlew bundleProdRelease</code>, open Play Console, upload. It takes half an hour, a forgotten <code>versionCode</code> gets the upload refused, and while Lin is away nobody can release, because the key is on her laptop. The CI lesson’s workflow already builds every pull request on a clean machine. A second workflow, <code>release.yml</code>, can build the signed bundle and send it to internal testing on every push to <code>main</code>.</p>
+<p>That machine needs the upload key and its password, and neither may be in Git. A <em>repository secret</em> holds them: <b>Settings › Secrets and variables › Actions › New repository secret</b>. A secret is text and a keystore is a file, so first write the file as text with Base64, a way to spell any file in letters and digits (it hides nothing): <code>base64 -w 0 ~/keys/recipes-upload.jks > upload.base64</code>. Paste what that file holds as the secret <code>UPLOAD_KEYSTORE_BASE64</code>, delete the file, and add <code>UPLOAD_PASSWORD</code>. In the workflow, <code>\${{ secrets.UPLOAD_PASSWORD }}</code> reads a secret, and <code>env:</code> hands it to one step as an <em>environment variable</em>, a named value that the programs in that step can read. In a command, <code>$UPLOAD_KEYSTORE_BASE64</code> reads one, and <code>base64 --decode</code> turns the text back into <code>upload.jks</code>, in <code>\${{ runner.temp }}</code>: a folder on the machine that is emptied after the job.</p>
+<p>Gradle reads an environment variable with <code>System.getenv("UPLOAD_PASSWORD")</code>, which gives <code>null</code> when it isn’t set. So <code>app/build.gradle.kts</code> gets a small function, <code>setting</code>: the environment variable first, <code>local.properties</code> second, so Lin’s own builds still find her key. The machine has no <code>local.properties</code> (it isn’t in Git), so the file is only read when <code>exists()</code> says it is there. For the number, <code>\${{ github.run_number }}</code> is the run’s place in line: 1 for the workflow’s first run, then 2, 3 and on. Recipes used up to 17 by hand, so <code>versionCode</code> is 100 plus the run number: run 42 builds 142. Every run gets a new, higher number, and nobody types it. On Lin’s computer <code>RUN_NUMBER</code> isn’t set, so a local build gets 100; only the workflow’s bundles go to Play.</p>
+<p>For the upload, Play needs to know the workflow. In Google Cloud, turn on the <b>Google Play Android Developer API</b>, make a <em>service account</em>, an account for a program, and download its JSON key. Invite its email in Play Console under <b>Users and permissions</b>, for Recipes only, with <b>View app information</b> and <b>Release apps to testing tracks</b>, and nothing that releases to production. Then store the key as the secret <code>PLAY_SERVICE_ACCOUNT_JSON</code>. <em>fastlane</em>, a free tool for releasing apps, written in Ruby and installed with <code>gem install fastlane</code>, uploads with <code>fastlane supply</code> and <code>--track internal</code>. Play only updates an app that has a first upload, which Recipes already has. Production stays a person’s click: when the testers are happy, Lin opens <b>Production › Create new release › Add from library</b>, picks 142 and starts a staged rollout. fastlane’s <code>screengrab</code> can also take store screenshots in every language on an emulator, and Gradle Play Publisher is a Gradle plugin that does the same upload as a Gradle task.</p>`,
+        visual(el) {
+          Lab.ui.flow(el, {
+            nodes: [
+              { id: 'push', label: 'push', sub: 'to main' },
+              { id: 'key', label: 'decode', sub: 'upload.jks' },
+              { id: 'bundle', label: 'bundle', sub: 'bundleProdRelease' },
+              { id: 'supply', label: 'supply', sub: 'service account' },
+              { id: 'internal', label: 'Internal', sub: 'testers' },
+              { id: 'prod', label: 'Production', sub: 'a person decides' },
+            ],
+            predict: {
+              q: 'This is run 42 of <code>release.yml</code>, and <code>versionCode = 100 + (setting("RUN_NUMBER")?.toInt() ?: 0)</code>. Which <code>versionCode</code> does the bundle get?',
+              options: ['42', '142', '18, one more than the last upload by hand'],
+              a: 1,
+              why: 'The workflow passes <code>\${{ github.run_number }}</code>, 42, as <code>RUN_NUMBER</code>. Gradle adds 100, so the bundle gets 142, above the 17 Lin used by hand.',
+            },
+            frames: [
+              { at: 'push', packet: 'run 42', say: 'Lin merges a pull request into <code>main</code>. <code>on: push</code> matches, and run 42 of <code>release.yml</code> starts on a fresh machine: checkout, Java and Gradle, as in the CI lesson.' },
+              { at: 'key', mark: { push: 'ok' }, say: '<code>env:</code> hands the secret <code>UPLOAD_KEYSTORE_BASE64</code> to this step, and <code>base64 --decode</code> writes it back as <code>upload.jks</code> in <code>\${{ runner.temp }}</code>. The key never touched Git.' },
+              { at: 'bundle', packet: '142', mark: { key: 'ok' }, say: '<code>./gradlew bundleProdRelease</code> gets <code>UPLOAD_STORE_FILE</code>, <code>UPLOAD_PASSWORD</code> and <code>RUN_NUMBER</code> through <code>env:</code>. <code>setting</code> finds them, so the bundle is signed with the upload key and gets versionCode 142.' },
+              { at: 'supply', mark: { bundle: 'ok' }, say: '<code>fastlane supply</code> signs in as the service account with the JSON key from <code>PLAY_SERVICE_ACCOUNT_JSON</code>, and uploads <code>app-prod-release.aab</code> with <code>--track internal</code>.' },
+              { at: 'internal', tone: 'ok', mark: { supply: 'ok', internal: 'ok' }, say: 'Version 142 is on internal testing. Within minutes, the team installs it from Play. Nobody typed a number or opened a laptop with the key on it.' },
+              { at: 'internal', tone: 'ok', mark: { prod: 'err' }, say: 'Could the workflow go further? No: the service account can release to testing tracks only, with no permission to release to production. That step belongs to a person.' },
+              { at: 'prod', tone: 'ok', mark: { prod: 'ok' }, say: 'The testers are happy. Lin opens <b>Production › Create new release › Add from library</b>, picks 142, and starts a staged rollout at 5%, as in the tracks lesson.' },
+              { at: 'push', packet: 'run 43', mark: { push: '', key: '', bundle: '', supply: '', internal: '', prod: '' }, say: 'The next merge into <code>main</code> starts run 43, which builds versionCode 143 for the testers. Production stays on 142 until Lin decides.' },
+            ],
+          });
+        },
+        code: `# Once, on Lin's computer: the keystore as text, for the secret UPLOAD_KEYSTORE_BASE64
+base64 -w 0 ~/keys/recipes-upload.jks > upload.base64
+# (on a Mac: base64 -i ~/keys/recipes-upload.jks -o upload.base64)
+# Repository secrets: UPLOAD_KEYSTORE_BASE64, UPLOAD_PASSWORD, PLAY_SERVICE_ACCOUNT_JSON
+
+# .github/workflows/release.yml
+name: Release to internal testing
+
+on:
+  push:
+    branches: [main]                 # every merge into main becomes a test release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v6
+      - run: echo "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > "\${{ runner.temp }}/upload.jks"
+        env:                         # text back into the keystore file
+          UPLOAD_KEYSTORE_BASE64: \${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+      - run: ./gradlew bundleProdRelease
+        env:
+          UPLOAD_STORE_FILE: \${{ runner.temp }}/upload.jks
+          UPLOAD_PASSWORD: \${{ secrets.UPLOAD_PASSWORD }}
+          RUN_NUMBER: \${{ github.run_number }}    # run 42 -> versionCode 142
+      - uses: ruby/setup-ruby@v1     # fastlane is written in Ruby
+        with:
+          ruby-version: '3.4'
+      - run: gem install fastlane
+      - run: fastlane supply --aab app/build/outputs/bundle/prodRelease/app-prod-release.aab --track internal --package_name com.example.recipes
+        env:                         # the service account's JSON key
+          SUPPLY_JSON_KEY_DATA: \${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+// app/build.gradle.kts: the parts that change
+val localProperties = Properties()
+val localFile = rootProject.file("local.properties")
+if (localFile.exists()) {            // the CI machine has no local.properties
+    localProperties.load(localFile.inputStream())
+}
+// The environment variable on CI, local.properties on Lin's computer
+fun setting(name: String): String? = System.getenv(name) ?: localProperties.getProperty(name)
+
+android {
+    defaultConfig {
+        versionCode = 100 + (setting("RUN_NUMBER")?.toInt() ?: 0)   // run 42 -> 142
+    }
+    signingConfigs {
+        create("upload") {
+            storeFile = setting("UPLOAD_STORE_FILE")?.let { file(it) }
+            storePassword = setting("UPLOAD_PASSWORD")
+            keyAlias = "upload"
+            keyPassword = setting("UPLOAD_PASSWORD")
+        }
+    }
+}`,
+        remember: 'Secrets go in repository secrets and reach a step through env:. CI builds the signed bundle with versionCode from github.run_number and uploads it to internal testing; a person promotes it to production.',
+        mistakes: [
+          { title: 'The Play key committed to the repository', bad: `      # play-key.json sits in the repository, next to the code
+      - run: fastlane supply --aab app/build/outputs/bundle/prodRelease/app-prod-release.aab --track internal --package_name com.example.recipes --json_key play-key.json`, good: `      - run: fastlane supply --aab app/build/outputs/bundle/prodRelease/app-prod-release.aab --track internal --package_name com.example.recipes
+        env:
+          SUPPLY_JSON_KEY_DATA: \${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}`, why: 'Anyone who can read the repository, and its history, could upload as your workflow. Like the upload key, the JSON key lives only in a repository secret, and <code>SUPPLY_JSON_KEY_DATA</code> hands its text to <code>fastlane supply</code>.' },
+        ],
+        terms: [
+          { term: 'repository secret', def: 'A value stored in a GitHub repository’s settings, such as a password. A workflow reads it with <code>\${{ secrets.NAME }}</code>; it is never in the code.' },
+          { term: 'environment variable', def: 'A named value that the programs of a step can read. <code>env:</code> sets it in a workflow, <code>$NAME</code> reads it in a command, and <code>System.getenv("NAME")</code> in Gradle.' },
+          { term: 'service account', def: 'An account for a program instead of a person. Invited in Play Console with <b>Release apps to testing tracks</b> and no production permission, it can upload test releases but not publish to production.' },
+          { term: 'fastlane', def: 'A free tool for releasing apps. <code>fastlane supply</code> uploads a bundle to a Google Play track.' },
+        ],
+        challenges: [
+          { type: 'blank', prompt: 'Give the build step the password from the secrets, and the run number for <code>versionCode</code>.', code: `- run: ./gradlew bundleProdRelease
+  env:
+    UPLOAD_STORE_FILE: \${{ runner.temp }}/upload.jks
+    UPLOAD_PASSWORD: \${{ [[secrets]].UPLOAD_PASSWORD }}
+    RUN_NUMBER: \${{ github.[[run_number]] }}`, why: '<code>secrets.UPLOAD_PASSWORD</code> reads the repository secret, and <code>github.run_number</code> goes up by one with every run, so each bundle gets a new, higher <code>versionCode</code>.' },
+          { type: 'bug', prompt: 'This upload is meant for the testers only, but nothing says where it goes, and fastlane then picks production. Tap the line.', code: `- uses: ruby/setup-ruby@v1
+  with:
+    ruby-version: '3.4'
+- run: gem install fastlane
+- run: fastlane supply --aab app/build/outputs/bundle/prodRelease/app-prod-release.aab --package_name com.example.recipes
+  env:
+    SUPPLY_JSON_KEY_DATA: \${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}`, bug: 4, fix: '- run: fastlane supply --aab app/build/outputs/bundle/prodRelease/app-prod-release.aab --track internal --package_name com.example.recipes', why: 'Without <code>--track</code>, <code>fastlane supply</code> uses production. <code>--track internal</code> sends every build to the testers, and production stays a person’s decision.' },
+        ],
+        quiz: [
+          { q: 'Why is the keystore turned into Base64 before it becomes a secret?', options: ['A secret is text: Base64 writes the file as text, and <code>base64 --decode</code> turns it back', 'Base64 encrypts the key', 'Gradle can only read Base64 keystores'], a: 0, why: 'Base64 only changes how the file is written, it hides nothing. The secret is what keeps it safe.' },
+          { q: 'Run 42 failed at the upload step, and Lin clicks <b>Re-run</b>. Which <code>versionCode</code> does the new attempt build?', options: ['142 again: a re-run keeps its run number', '143', '1'], a: 0, why: '<code>github.run_number</code> doesn’t change on a re-run. That is fine here: 142 never reached Play, so the number is still free.' },
+          { q: 'Version 142 works well for the testers. Who puts it in production?', options: ['A person, in Play Console: <b>Create new release › Add from library</b>', 'The workflow, on its next run', 'Play, after 14 days on internal testing'], a: 0, why: 'The service account can only release to testing tracks. Choosing what every user gets stays a person’s click.' },
+        ],
+        docs: [['Using secrets in GitHub Actions', 'https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets'], ['fastlane supply', 'https://docs.fastlane.tools/actions/supply/']],
+      },
     ],
   });
 })();

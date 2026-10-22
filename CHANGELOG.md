@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-22: every lesson rebuilt for complete beginners
+
+- **Zero to hero:** every track was rewritten so a reader who has never programmed can follow it. One idea per lesson, more and shorter lessons, and each lesson uses only what earlier lessons taught. `node tools/prereq.js` checks this for the whole site (each lesson lists the code words it teaches in `introduces`).
+- **Real outputs:** printed results, compiler messages and tool output come from real runs (kotlinc, git, sqlite3, Gradle, curl, keytool, Docker). Anything that couldn't be run is labelled as an example. Android APIs and versions were checked against the official docs (Oct 2026 versions, listed in `docs/authoring/conventions.md`).
+- **Every track reviewed:** each track went through a beginner-reader review and a fix pass.
+- **What each lesson is about:** a "In this lesson" box with 2–3 goals, an "I already know this" quick check to skip a lesson, and "Already know this? Test out" for a whole track.
+- **Stages:** 12 stages. Data structures and algorithms moved into Stage 2 (optional, after Kotlin). Backend and Cloud are optional in "Beyond the app".
+- **New tracks:** First steps, Working with AI tools, AI features in apps, Project: AI in the news app, Show your work. New lessons include release automation (CI builds, signs and uploads to the internal track with fastlane), sets, heaps, and Hilt modules.
+- **Progress code:** "Using another browser or computer?" on the home page copies a progress code to paste in another browser.
+- **Docs:** `docs/curriculum.md` (every lesson in order and the rules), `docs/authoring/` (how to write, review and fix lessons), and `tools/peek.js`, `tools/check_track.py`, `tools/shots.py`.
+- **Progress reset:** lesson ids changed, so old saved progress no longer matches.
+- **Service worker cache:** version bumped to v15.
+
 ## 2026-10-18: visual demos, predict first, runnable Kotlin
 
 - **Visual kit** (`js/ui.js`): six step players for demos (phone screen, timeline, graph of boxes and arrows, pipeline flow, code stepper, terminal). Each has Back, Play/Pause, Next and Reset, shows one idea per step, and follows the system's reduce-motion setting.
