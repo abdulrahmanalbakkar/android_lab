@@ -488,6 +488,7 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 - signing | Signing | keys, Play App Signing
 - bundles | App bundles | AAB
 - tracks | Release tracks | internal, closed, open, production
+- automation | Automating releases | CI builds the signed bundle, versionCode from CI, upload to the internal track (fastlane supply), screengrab mentioned
 
 ### launch: Launch and grow
 - crashes | Crash reporting | Crashlytics
