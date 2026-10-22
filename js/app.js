@@ -113,6 +113,7 @@ const Lab = (() => {
     { title: 'Platform features', blurb: 'Push, background work, security and media', tracks: ['push', 'background', 'security', 'media'], optional: ['media'] },
     { title: 'Ship it', blurb: 'Build, sign, release and keep the app healthy', tracks: ['build', 'launch', 'capship', 'kmp'], optional: ['kmp'] },
     { title: 'Beyond the app', blurb: 'System design, a Kotlin backend and the cloud around it', tracks: ['sysdesign', 'backend', 'cloud'], optional: ['backend', 'cloud'] },
+    { title: 'Building with AI', blurb: 'Work with AI tools and add AI features to apps', tracks: ['aidev', 'aiapps', 'capai'] },
   ];
   const opened = new Set(); // finished stages the learner unfolded by hand this visit
   let stageCache;

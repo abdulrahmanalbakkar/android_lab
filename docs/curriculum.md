@@ -575,7 +575,8 @@ Format: `id | Title | teaches`. Track ids stay the same where a track continues 
 ### aiapps: AI features in apps
 - what | What an AI feature is | models, prompts, tokens
 - server | Calling a model safely | your server holds the key
-- streaming | Streaming answers | Flow into Compose
+- streaming | Streaming answers | server-sent events into a Flow, text as it arrives
+- stopping | Stopping an answer | cancel with a Job; the server stops its model call too
 - structured | Structured output | JSON from a model, parsing, validating
 - on-device | On-device models | privacy, offline
 - costs | Cost and limits | tokens, rate limits, caching
