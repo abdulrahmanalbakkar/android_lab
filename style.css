@@ -811,3 +811,11 @@ input.blank.wrong { border-color: var(--t-e); color: var(--t-e); }
 .skip-note { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-weight: 700; }
 .done-note.warn { background: var(--warm-soft); }
 .test-out { margin-top: 8px; }
+
+/* Moving progress to another browser (home card) */
+.move { margin-top: 0.75rem; font-size: 0.9rem; }
+.move summary { cursor: pointer; color: var(--muted, inherit); }
+.move p { margin: 0.5rem 0; }
+.move-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.move-code { width: 100%; box-sizing: border-box; margin-top: 0.5rem; font: 0.75rem/1.4 var(--mono, monospace); word-break: break-all; }
+.move-note:empty { display: none; }

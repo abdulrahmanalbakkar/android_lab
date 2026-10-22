@@ -219,7 +219,8 @@ const Lab = (() => {
       h('div', { class: 'today-top' }, h('span', { class: 'flash-label' }, state.last ? 'Pick up where you left off' : 'Start here'), h('span', {}, `${doneTotal}/${pins.length} done`)),
       next && row('#' + key(next.t, next.l), state.last ? 'Continue' : 'First lesson', next.l.title, `${next.t.title} · ${next.l.tagline || ''}`, true),
       due ? row('#review', 'Review', `${due} card${due > 1 ? 's' : ''} due`, 'Answer them before you forget') : row('#review', 'Review', 'Nothing due', 'Quiz answers come back here on a schedule'),
-      row('#practice', 'Practice', 'Test yourself', 'A mixed quiz from the topics you pick, optional timer'));
+      row('#practice', 'Practice', 'Test yourself', 'A mixed quiz from the topics you pick, optional timer'),
+      progressBox());
 
     const topics = tracks.filter(t => !isProject(t)).length;
     return h('div', { class: 'wrap home' },
@@ -230,6 +231,43 @@ const Lab = (() => {
           h('p', { class: 'hero-meta' }, `${stages().length} stages · ${topics} topics · ${pins.length} lessons`)),
         card),
       syllabusView(next && next.t));
+  }
+
+  // ---------- moving progress to another browser: a code you copy here and paste there ----------
+  // ponytail: no server, so no sync. The code is the saved state, base64-encoded; loading merges it into this browser's.
+  const CODE_PREFIX = 'AL1:';
+  const toCode = () => CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  function fromCode(text) {
+    const t = String(text || '').trim();
+    if (!t.startsWith(CODE_PREFIX)) throw new Error('not a progress code');
+    const s = JSON.parse(decodeURIComponent(escape(atob(t.slice(CODE_PREFIX.length)))));
+    if (!s || typeof s.done !== 'object') throw new Error('not a progress code');
+    return s;
+  }
+  function mergeProgress(s) {
+    Object.assign(state.done, s.done || {});
+    for (const [k, c] of Object.entries(s.cards || {})) if (!state.cards[k] || (c && c.box > state.cards[k].box)) state.cards[k] = c;
+    if (!state.last && s.last) state.last = s.last;
+    migrate(); save();
+  }
+  function progressBox() {
+    const note = h('p', { class: 'move-note', role: 'status' });
+    const out = h('textarea', { class: 'move-code', readonly: true, rows: 3, 'aria-label': 'Your progress code', hidden: true });
+    const inp = h('textarea', { class: 'move-code', rows: 3, 'aria-label': 'Paste a progress code', placeholder: 'Paste a progress code here', hidden: true });
+    const load = h('button', { class: 'btn small', hidden: true, onclick() {
+      try { mergeProgress(fromCode(inp.value)); note.textContent = 'Progress loaded.'; setTimeout(render, 600); }
+      catch (e) { note.textContent = 'That doesn’t look like a progress code. Copy it again and paste the whole code.'; }
+    } }, 'Load it');
+    return h('details', { class: 'move' },
+      h('summary', {}, 'Using another browser or computer?'),
+      h('p', {}, 'Your progress is saved in this browser only. Copy your progress code here, then paste it on the other browser.'),
+      h('div', { class: 'move-actions' },
+        h('button', { class: 'btn small', onclick() {
+          out.value = toCode(); out.hidden = false; out.select();
+          (navigator.clipboard ? navigator.clipboard.writeText(out.value) : Promise.reject()).then(() => { note.textContent = 'Copied. Paste it in the other browser.'; }, () => { note.textContent = 'Select the code and copy it.'; });
+        } }, 'Copy my progress code'),
+        h('button', { class: 'btn small', onclick() { inp.hidden = false; load.hidden = false; inp.focus(); } }, 'Paste a code')),
+      out, inp, load, note);
   }
 
   // ---------- roadmap ----------
