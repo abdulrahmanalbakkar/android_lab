@@ -497,7 +497,7 @@ const Lab = (() => {
 
     const bench = h('section', { class: 'bench', 'aria-label': 'Interactive demo' },
       h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick: resetViz }, 'Reset')),
-      guess(l.predict, viz), viz);
+      viz, guess(l.predict, viz));
     const snippet = code(l.code);
     const run = l.play ? runView(l.play) : null;
     const pin = h('aside', { class: 'pin' }, h('span', { class: 'pin-label' }, 'Pin this'), h('p', {}, l.remember));
@@ -511,7 +511,7 @@ const Lab = (() => {
           h('h3', {}, h('span', { class: 'step-n', 'aria-hidden': 'true' }, String(i + 1)), d.title),
           h('div', { class: 'prose', html: d.body }),
           v && h('div', { class: 'bench mini' },
-            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); showViz(d.visual, v); } }, 'Reset')), guess(d.predict, v), v),
+            h('div', { class: 'bench-head' }, h('span', { class: 'bench-label' }, 'Try it'), h('button', { class: 'btn small', onclick() { v.replaceChildren(); showViz(d.visual, v); } }, 'Reset')), v, guess(d.predict, v)),
           d.code ? code(d.code) : null);
         if (v) showViz(d.visual, v);
         return li;

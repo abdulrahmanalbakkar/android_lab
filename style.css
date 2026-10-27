@@ -745,7 +745,7 @@ input.blank.wrong { border-color: var(--t-e); color: var(--t-e); }
 .ui .t-err { --tc: var(--err); --tcs: var(--err-soft); } .ui .t-warm { --tc: var(--warm); --tcs: var(--warm-soft); }
 .ui .t-muted { --tc: var(--muted); --tcs: var(--sunk); }
 .ui-stage { min-width: 0; background: var(--bg); border-radius: 14px; padding: 14px; }
-.ui-locked .ui-stage, .ui-locked .ui-say { opacity: 0.45; filter: saturate(0.4); }
+.ui-locked .ui-ctl { opacity: 0.45; pointer-events: none; }
 .ui-say { margin: 0; min-height: 1.6em; font-size: 0.98rem; line-height: 1.5; overflow-wrap: anywhere; }
 .ui-say code { font: 500 0.88em var(--mono); background: var(--sunk); padding: 1px 5px; border-radius: 5px; }
 .ui-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -778,7 +778,7 @@ input.blank.wrong { border-color: var(--t-e); color: var(--t-e); }
 .ui-skip { font: 600 0.82rem var(--body); background: none; border: 0; color: var(--muted); cursor: pointer; text-decoration: underline; }
 .ui-why:empty { display: none; }
 .ui-why { font-size: 0.95rem; line-height: 1.5; }
-.viz.ui-locked { opacity: 0.45; filter: saturate(0.4); pointer-events: none; }
+.viz.ui-locked :is(.controls, .cmd, button) { opacity: 0.45; pointer-events: none; }
 
 /* Phone */
 .ui-phone-stage { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-items: flex-start; }

@@ -68,8 +68,9 @@
     }
     const root = h('div', { class: 'ui' });
     const lock = on => { root.classList.toggle('ui-locked', on); [reset, back, next, play].forEach(x => (x.disabled = on)); if (!on) go(i); };
+    root.append(stage, say);
     if (p) predict(root, p, () => { lock(false); play.focus({ preventScroll: true }); });
-    root.append(stage, say, ctl);
+    root.append(ctl);
     el.append(root);
     go(0);
     if (p) lock(true);
