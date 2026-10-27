@@ -80,7 +80,12 @@ const Lab = (() => {
     for (const t of tracks) for (const l of t.lessons) l.quiz.forEach((q, i) => out.push({ id: `${key(t, l)}.${i}`, q, t, l }));
     return out;
   }
-  const dueCards = (now = Date.now()) => allCards().filter(c => state.cards[c.id] && state.cards[c.id].due <= now);
+  const dueCards = (now = Date.now()) => allCards().filter(c => state.cards[c.id] && !state.cards[c.id].retired && state.cards[c.id].due <= now);
+  function retireCard(id) { state.cards[id] = { retired: true }; }
+  function retireTrack(t) {
+    for (const l of t.lessons) l.quiz.forEach((_, i) => retireCard(`${key(t, l)}.${i}`));
+    save();
+  }
   const nextLesson = t => t.lessons.find(l => !state.done[key(t, l)]) || t.lessons[0];
   const doneCount = t => t.lessons.filter(l => state.done[key(t, l)]).length;
   const trackById = id => tracks.find(x => x.id === id);
@@ -247,7 +252,11 @@ const Lab = (() => {
   }
   function mergeProgress(s) {
     Object.assign(state.done, s.done || {});
-    for (const [k, c] of Object.entries(s.cards || {})) if (!state.cards[k] || (c && c.box > state.cards[k].box)) state.cards[k] = c;
+    for (const [k, c] of Object.entries(s.cards || {})) {
+      if (!c) continue;
+      if (c.retired) state.cards[k] = { retired: true };
+      else if (!state.cards[k] || (!state.cards[k].retired && c.box > (state.cards[k].box || 0))) state.cards[k] = c;
+    }
     if (!state.last && s.last) state.last = s.last;
     migrate(); save();
   }
@@ -434,7 +443,10 @@ const Lab = (() => {
       opts[q.a].classList.add('right');
       why.innerHTML = `<b>${ok ? 'Right.' : 'Not quite.'}</b> ${q.why || ''}`;
       why.hidden = false;
-      if (record) { state.cards[id] = schedule(state.cards[id], ok, Date.now()); save(); }
+      if (record) {
+        if (!state.cards[id] || !state.cards[id].retired) state.cards[id] = schedule(state.cards[id], ok, Date.now());
+        save();
+      }
       onAnswer(ok);
     } }));
     box.append(h('div', { class: 'opts' }, opts), why);
@@ -1033,35 +1045,97 @@ const Lab = (() => {
   }
 
   function reviewView() {
-    const queue = dueCards().sort(() => Math.random() - 0.5);
-    const seen = new Set();
-    const total = queue.length;
-    const title = h('h1', {}, total ? `${total} card${total > 1 ? 's' : ''} due` : 'Nothing due right now');
-    const slot = h('div', { class: 'quiz' });
-    function show() {
-      slot.replaceChildren();
-      if (!queue.length) {
-        const upcoming = Object.values(state.cards).map(c => c.due).filter(d => d > Date.now());
+    const root = h('div', { class: 'wrap review' });
+    function decks(didFinish) {
+      const due = dueCards();
+      updateNav('review');
+      if (!due.length) {
+        const active = Object.values(state.cards).filter(c => c && !c.retired);
+        const upcoming = active.map(c => c.due).filter(d => d > Date.now());
         const days = upcoming.length ? Math.max(1, Math.round((Math.min(...upcoming) - Date.now()) / DAY)) : 0;
-        slot.append(h('div', { class: 'empty' },
-          h('p', {}, !Object.keys(state.cards).length
-            ? 'Answer the quiz at the end of any lesson. Its questions show up here when they are due.'
-            : `${total ? 'Done for now. ' : ''}The next card comes back in ${days} day${days > 1 ? 's' : ''}.`),
-          h('a', { class: 'btn primary', href: '#home' }, 'Back to the map')));
+        root.replaceChildren(
+          h('header', { class: 'lesson-head' },
+            h('p', { class: 'eyebrow' }, 'Spaced review'),
+            h('h1', {}, 'Nothing due right now')),
+          h('div', { class: 'empty' },
+            h('p', {}, !active.length
+              ? 'Answer the quiz at the end of any lesson. Its questions show up here by topic when they are due.'
+              : `${didFinish ? 'Done for now. ' : ''}The next card comes back in ${days} day${days > 1 ? 's' : ''}.`),
+            h('a', { class: 'btn primary', href: '#home' }, 'Back to the map')));
         return;
       }
-      const c = queue.shift();
-      const first = !seen.has(c.id); seen.add(c.id);
-      slot.append(h('p', { class: 'eyebrow' }, `${c.t.title} · ${c.l.title} · ${queue.length} left after this`),
-        questionView(c.q, c.id, ok => {
-          if (!ok) queue.push(c); // missed cards return at the end of this session too
-          slot.append(h('div', { class: 'actions' },
-            h('button', { class: 'btn primary', onclick: show }, queue.length ? 'Next card' : 'Finish'),
-            h('a', { class: 'btn', href: '#' + key(c.t, c.l) }, 'Reopen lesson')));
-        }, first));
+      const byTrack = new Map();
+      for (const c of due) {
+        const list = byTrack.get(c.t) || [];
+        list.push(c);
+        byTrack.set(c.t, list);
+      }
+      const groups = [...byTrack.entries()].sort((a, b) => tracks.indexOf(a[0]) - tracks.indexOf(b[0]));
+      root.replaceChildren(
+        h('header', { class: 'lesson-head' },
+          h('p', { class: 'eyebrow' }, 'Spaced review'),
+          h('h1', {}, `${due.length} card${due.length > 1 ? 's' : ''} due across ${groups.length} topic${groups.length > 1 ? 's' : ''}`),
+          h('p', { class: 'lede' }, 'Pick a topic to review its questions, or dismiss topics you don’t want to see again.'),
+          h('div', { class: 'actions' },
+            groups.length > 1 ? h('button', { type: 'button', class: 'btn small', onclick: () => session(due.slice(), null) }, `Review all ${due.length} mixed →`) : null,
+            h('button', { type: 'button', class: 'btn small ghost', onclick() {
+              due.forEach(c => retireCard(c.id));
+              save();
+              decks(true);
+            } }, 'Dismiss all due cards'))),
+        h('ul', { class: 'rv-decks', 'aria-label': 'Topics due for review' }, groups.map(([t, cards]) =>
+          h('li', { class: 'rv-deck', style: `--hue:${hue(t)}` },
+            h('button', { type: 'button', class: 'rv-deck-go', onclick: () => session(cards.slice(), t) },
+              h('span', { class: 'sy-dot', 'aria-hidden': 'true' }),
+              h('span', { class: 'rv-deck-body' },
+                h('b', {}, t.title),
+                h('small', {}, `${ stageOf(t) || 'Topic' } · ${cards.length} question${cards.length > 1 ? 's' : ''} due`)),
+              h('span', { class: 'rv-deck-cta' }, 'Review →')),
+            h('button', { type: 'button', class: 'btn small ghost rv-deck-drop', 'aria-label': `Never review ${t.title} again`, title: 'Don’t ask from this topic again', onclick() {
+              retireTrack(t);
+              decks(true);
+            } }, 'Don’t ask again')))));
     }
-    show();
-    return h('div', { class: 'wrap review' }, h('div', { class: 'lesson-head' }, h('p', { class: 'eyebrow' }, 'Spaced review'), title), slot);
+
+    function session(cards, t) {
+      const queue = cards.sort(() => Math.random() - 0.5);
+      const seen = new Set();
+      function show() {
+        updateNav('review');
+        if (!queue.length) { decks(true); return; }
+        const c = queue.shift();
+        const first = !seen.has(c.id); seen.add(c.id);
+        const slot = h('div', { class: 'quiz' });
+        const dropBtn = h('button', { type: 'button', class: 'btn small ghost', onclick() {
+          retireCard(c.id);
+          for (let i = queue.length - 1; i >= 0; i--) if (queue[i].id === c.id) queue.splice(i, 1);
+          save();
+          show();
+        } }, 'Don’t ask this again');
+        const skipBtn = h('button', { type: 'button', class: 'btn small ghost', onclick: show }, queue.length ? 'Skip for now' : 'Finish');
+        const preActions = h('div', { class: 'actions rv-card-ctl' }, skipBtn, dropBtn);
+        const qEl = questionView(c.q, c.id, ok => {
+          if (!ok) queue.push(c); // missed cards return at the end of this session too
+          preActions.remove();
+          slot.append(h('div', { class: 'actions' },
+            h('button', { type: 'button', class: 'btn primary', onclick: show }, queue.length ? 'Next card →' : 'Finish'),
+            h('a', { class: 'btn', href: '#' + key(c.t, c.l) }, 'Reopen lesson'),
+            dropBtn));
+        }, first);
+        slot.append(qEl, preActions);
+        root.replaceChildren(
+          h('div', { class: 'iv-top' },
+            h('p', { class: 'eyebrow', style: `--hue:${hue(c.t)}` },
+              h('span', { class: 'line-swatch', 'aria-hidden': 'true' }),
+              `${c.t.title} · ${c.l.title} · ${queue.length} left after this`),
+            h('button', { type: 'button', class: 'btn small ghost', onclick: () => decks(false) }, '← All topics')),
+          slot);
+      }
+      show();
+    }
+
+    decks(false);
+    return root;
   }
 
   function start() {
