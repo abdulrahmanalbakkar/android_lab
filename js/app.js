@@ -718,27 +718,45 @@ const Lab = (() => {
     input.addEventListener('blur', () => setTimeout(close, 150));
   }
 
-  // ---------- theme: System -> Light -> Dark ----------
+  // ---------- theme: System -> Light -> Dark, plus Color Palettes ----------
   const THEME_KEY = 'android-lab:theme';
+  const PALETTE_KEY = 'android-lab:palette';
   const MODES = ['system', 'light', 'dark'];
+  const PALETTES = [
+    { id: 'green', label: 'Android Green', light: '#F4F8F5', dark: '#0B130F' },
+    { id: 'slate', label: 'Neutral Slate', light: '#F6F7F8', dark: '#0E1012' },
+    { id: 'blue', label: 'Ocean Blue', light: '#F4F7FB', dark: '#0B111B' },
+    { id: 'violet', label: 'Kotlin Violet', light: '#F7F5FB', dark: '#100C18' },
+    { id: 'amber', label: 'Warm Amber', light: '#FAF7F2', dark: '#130F0B' },
+  ];
   const ICONS = {
     system: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg>',
     light: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6" fill="currentColor"/><path d="M10 1.8v2.4M10 15.8v2.4M1.8 10h2.4M15.8 10h2.4M4.2 4.2l1.7 1.7M14.1 14.1l1.7 1.7M4.2 15.8l1.7-1.7M14.1 5.9l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
     dark: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.6A7 7 0 0 1 7.4 3.5a7 7 0 1 0 9.1 9.1z" fill="currentColor"/></svg>',
   };
   function getMode() { try { const m = localStorage.getItem(THEME_KEY); return MODES.includes(m) ? m : 'system'; } catch (e) { return 'system'; } }
+  function getPalette() { try { const p = localStorage.getItem(PALETTE_KEY); return PALETTES.some(x => x.id === p) ? p : 'green'; } catch (e) { return 'green'; } }
   function setMode(m) {
     try { if (m === 'system') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, m); } catch (e) { /* not remembered */ }
     applyMode(m);
   }
+  function setPalette(p) {
+    try { if (p === 'green') localStorage.removeItem(PALETTE_KEY); else localStorage.setItem(PALETTE_KEY, p); } catch (e) { /* not remembered */ }
+    applyPalette(p);
+  }
+  function updateThemeMeta() {
+    const m = getMode();
+    const pal = PALETTES.find(x => x.id === getPalette()) || PALETTES[0];
+    document.querySelectorAll('meta[name="theme-color"]').forEach(x => {
+      const media = x.getAttribute('media') || '';
+      const isDarkMeta = media.includes('dark');
+      x.content = m === 'system' ? (isDarkMeta ? pal.dark : pal.light) : m === 'dark' ? pal.dark : pal.light;
+    });
+  }
   function applyMode(m) {
     const root = document.documentElement;
     if (m === 'system') root.removeAttribute('data-theme'); else root.dataset.theme = m;
-    // Browser chrome follows a forced theme too; 'system' restores the media-matched pair from index.html.
-    document.querySelectorAll('meta[name="theme-color"]').forEach(x => {
-      if (!x.dataset.c) x.dataset.c = x.content;
-      x.content = m === 'system' ? x.dataset.c : m === 'dark' ? '#0B130F' : '#F4F8F5';
-    });
+    updateThemeMeta();
     const btn = document.getElementById('theme-btn');
     if (!btn) return;
     const nextMode = MODES[(MODES.indexOf(m) + 1) % MODES.length];
@@ -747,7 +765,22 @@ const Lab = (() => {
     btn.setAttribute('aria-label', `Theme: ${name(m)}. Switch to ${name(nextMode)}`);
     btn.title = `Theme: ${name(m)} (t)`;
   }
+  function applyPalette(p) {
+    const root = document.documentElement;
+    if (p === 'green') root.removeAttribute('data-palette'); else root.dataset.palette = p;
+    updateThemeMeta();
+    const btn = document.getElementById('palette-btn');
+    if (!btn) return;
+    const idx = Math.max(0, PALETTES.findIndex(x => x.id === p));
+    const cur = PALETTES[idx], next = PALETTES[(idx + 1) % PALETTES.length];
+    btn.setAttribute('aria-label', `Color palette: ${cur.label}. Switch to ${next.label}`);
+    btn.title = `Color: ${cur.label} — click for ${next.label} (c)`;
+  }
   const cycleMode = () => setMode(MODES[(MODES.indexOf(getMode()) + 1) % MODES.length]);
+  const cyclePalette = () => {
+    const idx = Math.max(0, PALETTES.findIndex(x => x.id === getPalette()));
+    setPalette(PALETTES[(idx + 1) % PALETTES.length].id);
+  };
   // The t shortcut flips what you actually see, so it never looks like a no-op.
   function flipVisible() {
     const m = getMode();
@@ -756,7 +789,7 @@ const Lab = (() => {
   }
 
   // ---------- keyboard shortcuts ----------
-  const SHORTCUTS = [['←  →', 'Previous / next lesson'], ['/', 'Search'], ['m', 'Map'], ['r', 'Review'], ['p', 'Test yourself'], ['g', 'Glossary'], ['t', 'Light / dark theme'], ['1  –  4', 'Answer (interview)'], ['Enter', 'Next question (interview)'], ['?', 'This list']];
+  const SHORTCUTS = [['←  →', 'Previous / next lesson'], ['/', 'Search'], ['m', 'Map'], ['r', 'Review'], ['p', 'Test yourself'], ['g', 'Glossary'], ['t', 'Light / dark theme'], ['c', 'Color palette'], ['1  –  4', 'Answer (interview)'], ['Enter', 'Next question (interview)'], ['?', 'This list']];
   let keysDialog;
   function showKeys() {
     if (!keysDialog) {
@@ -790,6 +823,7 @@ const Lab = (() => {
       case 'g': go('#glossary'); break;
       case 'p': go('#practice'); break;
       case 't': e.preventDefault(); flipVisible(); break;
+      case 'c': e.preventDefault(); cyclePalette(); break;
       case '?': e.preventDefault(); showKeys(); break;
       default:
     }
@@ -1139,8 +1173,9 @@ const Lab = (() => {
   }
 
   function start() {
-    load(); applyMode(getMode()); setupSearch();
+    load(); applyMode(getMode()); applyPalette(getPalette()); setupSearch();
     const tb = document.getElementById('theme-btn'); if (tb) tb.addEventListener('click', cycleMode);
+    const pb = document.getElementById('palette-btn'); if (pb) pb.addEventListener('click', cyclePalette);
     const kb = document.getElementById('keys-btn'); if (kb) kb.addEventListener('click', showKeys);
     addEventListener('keydown', onKey);
     addEventListener('scroll', paintReadbar, { passive: true });

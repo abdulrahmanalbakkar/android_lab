@@ -25,7 +25,7 @@
 <meta name="twitter:title" content="Android Lab: learn Kotlin and Android by playing with it">
 <meta name="twitter:description" content="Learn Android from the ground up: Kotlin, apps, architecture and the computer science underneath. Live demos and quizzes in every lesson.">
 <meta name="twitter:image" content="https://abdulrahmanalbakkar.github.io/android_lab/og.png?v=2">
-<script>try { var m = localStorage.getItem('android-lab:theme'); if (m === 'light' || m === 'dark') document.documentElement.dataset.theme = m; } catch (e) {}</script>
+<script>try { var m = localStorage.getItem('android-lab:theme'); if (m === 'light' || m === 'dark') document.documentElement.dataset.theme = m; var p = localStorage.getItem('android-lab:palette'); if (p && p !== 'green') document.documentElement.dataset.palette = p; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -45,13 +45,16 @@
       <input id="search" type="search" placeholder="Search lessons, tracks, terms  /" aria-label="Search lessons, tracks and terms" role="combobox" aria-controls="search-results" aria-expanded="false" autocomplete="off" spellcheck="false">
       <div id="search-results" class="search-results" role="listbox" hidden></div>
     </div>
-    <button id="theme-btn" class="theme-btn" type="button" aria-label="Theme: System. Switch to Light"></button>
+    <div class="theme-ctl">
+      <button id="palette-btn" class="theme-btn palette-btn" type="button" aria-label="Color palette: Green. Switch to Slate"><span class="palette-dot" aria-hidden="true"></span></button>
+      <button id="theme-btn" class="theme-btn" type="button" aria-label="Theme: System. Switch to Light"></button>
+    </div>
   </div>
   <div id="readbar" class="readbar" hidden><span></span></div>
 </header>
 <main id="app"></main>
 <footer class="foot">
-  <p class="foot-keys"><span><kbd>←</kbd><kbd>→</kbd> lessons</span><span><kbd>/</kbd> search</span><span><kbd>m</kbd> map</span><span><kbd>r</kbd> review</span><span><kbd>p</kbd> test yourself</span><span><kbd>g</kbd> glossary</span><span><kbd>t</kbd> theme</span><button id="keys-btn" type="button"><kbd>?</kbd> all shortcuts</button></p>
+  <p class="foot-keys"><span><kbd>←</kbd><kbd>→</kbd> lessons</span><span><kbd>/</kbd> search</span><span><kbd>m</kbd> map</span><span><kbd>r</kbd> review</span><span><kbd>p</kbd> test yourself</span><span><kbd>g</kbd> glossary</span><span><kbd>t</kbd> theme</span><span><kbd>c</kbd> color</span><button id="keys-btn" type="button"><kbd>?</kbd> all shortcuts</button></p>
   <p class="foot-credit">Built by <a href="https://abdulrahmanalbakkar.github.io/">Abdulrahman Albakkar</a></p>
 </footer>
 <script src="js/app.js"></script>

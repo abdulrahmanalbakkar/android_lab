@@ -43,6 +43,90 @@
 }
 :root[data-theme="light"] { color-scheme: light; }
 
+/* Color palettes: Neutral Slate, Ocean Blue, Kotlin Violet, Warm Amber */
+:root[data-palette="slate"] {
+  --bg: #F6F7F8; --surface: #FFFFFF; --sunk: #ECEEF0; --ink: #16181A; --muted: #5C6268; --line: #DFE3E7;
+  --accent: #22262A; --accent-ink: #FFFFFF; --accent-soft: #E5E8EC;
+  --code-bg: #111316; --code-ink: #E8ECEF;
+  --hi: #38BDF8;
+  --shadow: 0 1px 2px rgba(15, 20, 28, 0.06), 0 12px 32px -18px rgba(15, 20, 28, 0.24);
+  --header-bg: rgba(246, 247, 248, 0.86);
+}
+:root[data-palette="blue"] {
+  --bg: #F4F7FB; --surface: #FFFFFF; --sunk: #E8EFF7; --ink: #111A28; --muted: #526176; --line: #DAE3EE;
+  --accent: #0969DA; --accent-ink: #FFFFFF; --accent-soft: #DCEBFF;
+  --code-bg: #0C1420; --code-ink: #E4ECF5;
+  --hi: #47A8FF;
+  --shadow: 0 1px 2px rgba(10, 25, 45, 0.06), 0 12px 32px -18px rgba(10, 25, 45, 0.26);
+  --header-bg: rgba(244, 247, 251, 0.86);
+}
+:root[data-palette="violet"] {
+  --bg: #F7F5FB; --surface: #FFFFFF; --sunk: #EDE8F6; --ink: #1A1426; --muted: #605573; --line: #E2DBF0;
+  --accent: #6D3CE8; --accent-ink: #FFFFFF; --accent-soft: #E9E0FF;
+  --code-bg: #120E1D; --code-ink: #EAE4F5;
+  --hi: #B28CFF;
+  --shadow: 0 1px 2px rgba(25, 12, 45, 0.06), 0 12px 32px -18px rgba(25, 12, 45, 0.26);
+  --header-bg: rgba(247, 245, 251, 0.86);
+}
+:root[data-palette="amber"] {
+  --bg: #FAF7F2; --surface: #FFFFFF; --sunk: #F1EBE2; --ink: #221A12; --muted: #695D51; --line: #E6DDD0;
+  --accent: #B45309; --accent-ink: #FFFFFF; --accent-soft: #FCE8D5;
+  --code-bg: #18130E; --code-ink: #F2EAE1;
+  --hi: #F59E0B;
+  --shadow: 0 1px 2px rgba(35, 22, 10, 0.06), 0 12px 32px -18px rgba(35, 22, 10, 0.26);
+  --header-bg: rgba(250, 247, 242, 0.86);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="slate"]:not([data-theme="light"]) {
+    --bg: #0E1012; --surface: #15181C; --sunk: #1E2228; --ink: #E8ECEF; --muted: #9BA3AC; --line: #272C33;
+    --accent: #F0F3F6; --accent-ink: #0E1012; --accent-soft: #242A32;
+    --code-bg: #08090B; --code-ink: #E8ECEF;
+    --hi: #38BDF8; --header-bg: rgba(14, 16, 18, 0.84);
+  }
+  :root[data-palette="blue"]:not([data-theme="light"]) {
+    --bg: #0B111B; --surface: #111A27; --sunk: #192536; --ink: #E4ECF5; --muted: #97A7BC; --line: #213044;
+    --accent: #58A6FF; --accent-ink: #05162B; --accent-soft: #152C47;
+    --code-bg: #060A10; --code-ink: #E4ECF5;
+    --hi: #58A6FF; --header-bg: rgba(11, 17, 27, 0.84);
+  }
+  :root[data-palette="violet"]:not([data-theme="light"]) {
+    --bg: #100C18; --surface: #171224; --sunk: #211A33; --ink: #EAE4F5; --muted: #A499B8; --line: #2C2342;
+    --accent: #B490FF; --accent-ink: #160930; --accent-soft: #261947;
+    --code-bg: #09060E; --code-ink: #EAE4F5;
+    --hi: #B490FF; --header-bg: rgba(16, 12, 24, 0.84);
+  }
+  :root[data-palette="amber"]:not([data-theme="light"]) {
+    --bg: #130F0B; --surface: #1C1611; --sunk: #271F18; --ink: #F2EAE1; --muted: #B2A394; --line: #342920;
+    --accent: #F5A65B; --accent-ink: #241103; --accent-soft: #382311;
+    --code-bg: #0B0806; --code-ink: #F2EAE1;
+    --hi: #F59E0B; --header-bg: rgba(19, 15, 11, 0.84);
+  }
+}
+:root[data-theme="dark"][data-palette="slate"] {
+  --bg: #0E1012; --surface: #15181C; --sunk: #1E2228; --ink: #E8ECEF; --muted: #9BA3AC; --line: #272C33;
+  --accent: #F0F3F6; --accent-ink: #0E1012; --accent-soft: #242A32;
+  --code-bg: #08090B; --code-ink: #E8ECEF;
+  --hi: #38BDF8; --header-bg: rgba(14, 16, 18, 0.84);
+}
+:root[data-theme="dark"][data-palette="blue"] {
+  --bg: #0B111B; --surface: #111A27; --sunk: #192536; --ink: #E4ECF5; --muted: #97A7BC; --line: #213044;
+  --accent: #58A6FF; --accent-ink: #05162B; --accent-soft: #152C47;
+  --code-bg: #060A10; --code-ink: #E4ECF5;
+  --hi: #58A6FF; --header-bg: rgba(11, 17, 27, 0.84);
+}
+:root[data-theme="dark"][data-palette="violet"] {
+  --bg: #100C18; --surface: #171224; --sunk: #211A33; --ink: #EAE4F5; --muted: #A499B8; --line: #2C2342;
+  --accent: #B490FF; --accent-ink: #160930; --accent-soft: #261947;
+  --code-bg: #09060E; --code-ink: #EAE4F5;
+  --hi: #B490FF; --header-bg: rgba(16, 12, 24, 0.84);
+}
+:root[data-theme="dark"][data-palette="amber"] {
+  --bg: #130F0B; --surface: #1C1611; --sunk: #271F18; --ink: #F2EAE1; --muted: #B2A394; --line: #342920;
+  --accent: #F5A65B; --accent-ink: #241103; --accent-soft: #382311;
+  --code-bg: #0B0806; --code-ink: #F2EAE1;
+  --hi: #F59E0B; --header-bg: rgba(19, 15, 11, 0.84);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-padding-top: 88px; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; overflow-wrap: break-word; }
@@ -73,9 +157,11 @@ kbd { font: 600 0.78rem var(--mono); min-width: 1.7em; display: inline-block; te
 .top nav a:hover { color: var(--ink); }
 .top nav a.on { color: var(--ink); background: var(--sunk); }
 .badge { font-size: 0.72rem; min-width: 1.5em; padding: 0 0.45em; border-radius: 999px; background: var(--warm); color: var(--surface); text-align: center; line-height: 1.5em; }
+.theme-ctl { display: flex; align-items: center; gap: 6px; flex: none; }
 .theme-btn { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; padding: 0; }
 .theme-btn:hover { border-color: var(--accent); }
 .theme-btn svg { width: 18px; height: 18px; }
+.palette-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: inset 0 0 0 2px var(--surface), 0 0 0 1.5px var(--accent); }
 .readbar { position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; pointer-events: none; }
 .readbar span { display: block; height: 100%; background: var(--lc); transform: scaleX(0); transform-origin: left; }
 
@@ -422,8 +508,8 @@ dialog.keys::backdrop { background: rgba(5, 15, 10, 0.45); }
 @media (max-width: 640px) {
   .top-in { flex-wrap: wrap; padding-block: 8px; column-gap: 10px; }
   .top nav { margin-left: auto; }
-  .search { order: 3; flex: 1 1 calc(100% - 50px); max-width: none; margin-left: 0; }
-  .theme-btn { order: 4; }
+  .search { order: 3; flex: 1 1 calc(100% - 96px); max-width: none; margin-left: 0; }
+  .theme-ctl { order: 4; }
 }
 @media (max-width: 400px) {
   .top nav a { padding: 6px 7px; font-size: 0.9rem; }
