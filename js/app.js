@@ -150,6 +150,9 @@ const Lab = (() => {
     const route = decodeURIComponent(location.hash.slice(1));
     const to = MOVED[route] || MOVED_TRACKS[route] || (route === 'interview' ? 'practice' : null);
     if (to) { location.replace('#' + to); return; }
+    const oldSide = document.querySelector('#app .side');
+    const oldSideOl = oldSide && oldSide.querySelector('ol');
+    const prevTrack = here.t;
     let view; here = {};
     if (route === 'review') view = reviewView();
     else if (route === 'glossary') view = glossaryView();
@@ -163,7 +166,17 @@ const Lab = (() => {
       else if (t && lid == null) { here = { t }; view = trackView(t); }
       else view = homeView();
     }
+    const sideTop = oldSide && prevTrack && here.t === prevTrack ? oldSide.scrollTop : null;
+    const sideLeft = oldSideOl && prevTrack && here.t === prevTrack ? oldSideOl.scrollLeft : null;
     document.getElementById('app').replaceChildren(view);
+    const newSide = document.querySelector('#app .side');
+    if (newSide) {
+      const newSideOl = newSide.querySelector('ol');
+      if (sideTop != null) newSide.scrollTop = sideTop;
+      if (sideLeft != null && newSideOl) newSideOl.scrollLeft = sideLeft;
+      const curItem = newSide.querySelector('li.cur');
+      if (curItem) curItem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
     document.title = [here.l && here.l.title, here.t && here.t.title, route === 'review' && 'Review', route === 'glossary' && 'Glossary', route === 'practice' && 'Test yourself', 'Android Lab'].filter(Boolean).join(' · ');
     updateNav(route);
     window.scrollTo(0, 0);

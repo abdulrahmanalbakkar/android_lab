@@ -3,7 +3,7 @@
    time a lesson from them opens. Everything is network-first with the cache as the offline fallback, so a deploy
    shows up on the next load and a visited lesson still works offline. Bump VERSION to drop every old cache at once. Paths are relative to this file, so the
    site works from a subpath such as /android_lab/. */
-const VERSION = 'v18';
+const VERSION = 'v19';
 const CACHE = 'android-lab-' + VERSION;
 const CORE = ['./', 'index.html', 'style.css', 'js/app.js', 'js/ui.js', 'favicon.svg', 'manifest.webmanifest', 'icon-512.png', 'icon-192.png', 'icon-maskable-512.png', 'js/catalog.js', 'js/docs.js'];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
